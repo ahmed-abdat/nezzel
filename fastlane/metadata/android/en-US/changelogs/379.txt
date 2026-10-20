@@ -1,0 +1,4 @@
+0.4.5
+• A new update screen: one button takes you from download to install
+• What's new shows once after each update, and anytime from About
+• An interrupted update download picks up where it stopped

@@ -96,10 +96,10 @@ class SavedSelectionTest {
     }
     @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi") fun arabicSelectionUsesPluralCategoriesAndLatinDigits() = render { a, _, _ ->
         longPress(a, "Family")
-        selectedCount(a, "تم تحديد ملف واحد")
+        selectedCount(a, "ملف واحد محدد")
         click(a, context.getString(R.string.saved_select_all))
-        selectedCount(a, "تم تحديد ملفين")
-        listOf(0, 3, 11, 100).zip(listOf("لم يتم تحديد ملفات", "تم تحديد 3 ملفات", "تم تحديد 11 ملفًا", "تم تحديد 100 ملف")).forEach { (count, expected) ->
+        selectedCount(a, "ملفان محددان")
+        listOf(0, 3, 11, 100).zip(listOf("لا ملفات محددة", "3 ملفات محددة", "11 ملفًا محددًا", "100 ملف محدد")).forEach { (count, expected) ->
             assertEquals(expected, context.resources.getQuantityString(R.plurals.saved_selected, count, count.toString()))
         }
     }

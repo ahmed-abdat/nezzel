@@ -71,4 +71,11 @@ class ManifestReleaseTest {
         json.getJSONObject("notes").remove("ar")
         assertEquals(release.notes("en"), parse(json)!!.notes("ar"))
     }
+    @Test fun rejectsSizesWhoseTwoCopiesAndMarginWouldOverflow() {
+        val json = manifest()
+        json.getJSONObject("apk").put("size", 4_611_686_018_393_833_471L)
+        assertNotNull(parse(json))
+        json.getJSONObject("apk").put("size", 4_611_686_018_393_833_472L)
+        assertNull(parse(json))
+    }
 }

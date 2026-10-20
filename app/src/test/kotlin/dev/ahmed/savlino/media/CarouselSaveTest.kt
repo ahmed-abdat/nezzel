@@ -45,8 +45,8 @@ class CarouselSaveTest {
         assertEquals(2, result.saved.size)
         assertEquals(3, result.total)
         val context = RuntimeEnvironment.getApplication()
-        for ((language, expected) in listOf("en" to "Saved 2 of 3 photos. Some photos could not be saved.",
-            "ar" to "تم حفظ 2 من أصل 3. تعذّر حفظ البقية.")) {
+        for ((language, expected) in listOf("en" to "Saved 2 of 3 photos — the rest couldn’t be saved",
+            "ar" to "تم حفظ 2 من أصل 3، وتعذّر حفظ البقية")) {
             val configuration = android.content.res.Configuration(context.resources.configuration).apply {
                 setLocale(java.util.Locale.forLanguageTag("$language-u-nu-latn"))
             }

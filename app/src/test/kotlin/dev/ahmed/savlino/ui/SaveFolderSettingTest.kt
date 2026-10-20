@@ -70,7 +70,7 @@ class SaveFolderSettingTest {
                 compose.onAllNodesWithText(activity.getString(R.string.save_folder_default)).fetchSemanticsNodes().isEmpty()
             }
             assertTrue(activity.contentResolver.persistedUriPermissions.isEmpty())
-            assertEquals("تعذّر الحفظ في المجلد المختار. اختره مجددًا من الإعدادات.", activity.getString(R.string.save_folder_error))
+            assertEquals("تعذّر الحفظ في المجلد الذي اخترته، اختره مجددًا من الإعدادات", activity.getString(R.string.save_folder_error))
         } finally { controller.pause().stop().destroy() }
     }
 }

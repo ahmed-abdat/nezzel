@@ -20,6 +20,10 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.ahmed.savlino.update.AppUpdates
+import dev.ahmed.savlino.update.WhatsNewSheet
+import dev.ahmed.savlino.update.openUpdateReleasePage
+import dev.ahmed.savlino.jobs.NezzelApplication
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Space
@@ -58,7 +62,11 @@ private val ltr = TextDirection.Ltr
  * notice and the licences dialog. The engine version is not repeated here; Settings shows it in its engine row.
  */
 @Composable
-internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: () -> Unit = {}) {
+internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: () -> Unit = {},
+    language: String = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language,
+    updates: AppUpdates? = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates) {
+    val context = LocalContext.current
+    var showWhatsNew by rememberSaveable { mutableStateOf(false) }
     var showLicences by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Text(stringResource(R.string.about), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
@@ -85,11 +93,22 @@ internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: (
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
         }
+        if (updates?.available == true) Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .clickable(role = Role.Button) {
+                if (updates.currentNotes() != null) showWhatsNew = true else openUpdateReleasePage(context, versionName)
+            }.padding(vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            Text(stringResource(R.string.update_whats_new), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+        }
         CrashReportActions()
         Text(stringResource(R.string.about_warranty), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (showLicences) LicencesDialog { showLicences = false }
+    if (showWhatsNew && !showLicences) updates?.currentNotes()?.let { notes ->
+        WhatsNewSheet(notes, language) { showWhatsNew = false }
+    }
 }
 
 @Composable

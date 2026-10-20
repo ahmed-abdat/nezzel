@@ -1,28 +1,28 @@
-Nezzel is an ad-free Android app for saving videos, audio and photos from supported public links. Share or paste a link, review the available options, then tap Download or Save.
+Nezzel is an ad-free Android app for saving videos, audio and photos from supported public links — share or paste a link, review the available options, then tap Download or Save
 
-Processing runs on your device, with Arabic and English support and no Nezzel account or tracking. Some links won’t work; private, sign-in-required and protected content aren’t supported.
+Processing runs on your device, with Arabic and English support and no Nezzel account or tracking — some links won’t work, and private, sign-in-required and protected content aren’t supported
 
 Features
-• Actual video and audio options returned by the engine. Unknown sizes stay unknown; estimates are labelled.
-• Audio extraction and MP3 conversion.
-• Public photo posts, photo selection for supported carousels, and original GIF image saves. GIF previews stay still.
-• Download queue, cancellation, explicit retry, notifications, and saved-file Open, Share and Delete.
-• Save to Download/Nezzel or a folder chosen through Android’s system picker.
-• Arabic and English, RTL layout, light/dark themes and font scaling.
+• Video and audio options come from the download engine, with unknown sizes left unknown and estimates labelled
+• Audio extraction and MP3 conversion
+• Public photo posts, photo selection for supported carousels, and original GIF image saves, with still GIF previews
+• Download queue, cancellation, manual retry, notifications, and Open, Share and Delete for saved files
+• Save to Download/Nezzel or a folder chosen through Android’s system picker
+• Arabic and English, RTL layout, light and dark themes and font scaling
 
 Tested link types
-Completed saves on a Galaxy A34 include public video cases from YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat Spotlight, Pinterest, Bluesky, Telegram, Dailymotion and Vimeo, plus direct MP4 links. Audio-only M4A and MP3 conversion were also saved from YouTube.
+Completed saves on a Galaxy A34 include public videos from YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat Spotlight, Pinterest, Bluesky, Telegram, Dailymotion and Vimeo, plus direct MP4 links — audio-only M4A and MP3 conversion were also saved from YouTube
 
-Photo saves passed for Facebook, Instagram, X, LinkedIn, Bluesky and a direct JPEG. An original LinkedIn GIF was saved and played with animation.
+Photo saves passed for Facebook, Instagram, X, LinkedIn, Bluesky and a direct JPEG — an original LinkedIn GIF was also saved and played with animation
 
-Options were inspected successfully for SoundCloud tracks, Mixcloud mixes, Bandcamp tracks, videos from Imgur, Odysee, 9GAG, Bilibili and Streamable, Twitch and Kick clips, and Telegram photo posts. Saving was not checked for these cases.
+Options were inspected successfully for SoundCloud tracks, Mixcloud mixes, Bandcamp tracks, videos from Imgur, Odysee, 9GAG, Bilibili and Streamable, Twitch and Kick clips, and Telegram photo posts — saving was not checked for these cases
 
-These are examples, not a promise for every URL. Rumble blocked requests in testing. Private, sign-in-required and DRM-protected content is outside scope.
+These are examples, with no promise that every URL will work — Rumble blocked requests in testing, and private, sign-in-required and DRM-protected content is outside scope
 
 Privacy
-No ads, account, embedded browser, analytics or telemetry. Processing stays on your device; requests go directly to source sites/CDNs and upstream engine-update infrastructure. Automatic option loading may fetch metadata and previews while the app is in the foreground or accepts a shared/pasted link. Turn off Show options automatically for manual inspection. No background clipboard monitoring. Saving media always needs explicit confirmation.
+No ads, account, embedded browser, analytics or telemetry — processing stays on your device, with requests sent directly to source sites/CDNs and upstream engine-update infrastructure — automatic option loading may fetch metadata and previews while the app is in the foreground or accepts a shared/pasted link — turn off Show options automatically for manual inspection — no background clipboard monitoring, and saving media always needs explicit confirmation
 
 Requirements and availability
-Android 10+ and arm64-v8a only. Native 16 KB page-size compatibility is unresolved; current device evidence is for 4 KB pages. Store metadata does not announce availability on F-Droid or another store. Public APK distribution still needs matching corresponding source and complete third-party notices.
+Android 10+ and arm64-v8a only — native 16 KB page-size compatibility is unresolved, and current device evidence is for 4 KB pages — store metadata does not announce availability on F-Droid or another store — public APK distribution still needs matching corresponding source and complete third-party notices
 
-Copyright (C) 2026 Hululsoft. Nezzel is GPL-3.0-or-later; third-party components retain their own terms. Download only content you have the right to save. Contact: contact@hululsoft.mr.
+Copyright (C) 2026 Hululsoft — Nezzel is GPL-3.0-or-later; third-party components retain their own terms — download only content you have the right to save — contact: contact@hululsoft.mr

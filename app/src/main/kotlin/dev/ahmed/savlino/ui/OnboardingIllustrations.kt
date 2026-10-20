@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -49,7 +50,7 @@ private fun TourGlyph(glyph: Int, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NezzelMark(modifier: Modifier = Modifier) {
+internal fun NezzelMark(modifier: Modifier = Modifier) {
     Surface(modifier, shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
         Icon(painterResource(R.drawable.nezzel_launcher_foreground), null,
             Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -146,5 +147,35 @@ private fun SavedIllustration() {
         TourGlyph(R.drawable.ic_download, Modifier.size(48.dp).testTag("tour_downloads"))
         Text(stringResource(R.string.downloads), style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Decorative static update emblem; offsets follow start/end in RTL. */
+@Composable
+internal fun UpdateIllustration(compact: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+        if (!compact) {
+            listOf(Triple(R.drawable.ic_movie, (-72).dp, (-40).dp),
+                Triple(R.drawable.ic_music, 72.dp, (-40).dp),
+                Triple(R.drawable.ic_image, 72.dp, 40.dp)).forEach { (glyph, x, y) ->
+                Surface(Modifier.offset(x = x, y = y).size(40.dp).alpha(0.6f), shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(painterResource(glyph), null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+        Box(Modifier.size(if (compact) 56.dp else 88.dp)) {
+            NezzelMark(Modifier.fillMaxSize())
+            Surface(Modifier.align(Alignment.BottomEnd).size(32.dp), shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_download), null, Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary)
+                }
+            }
+        }
     }
 }

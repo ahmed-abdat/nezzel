@@ -185,13 +185,13 @@ class OnboardingTest {
         compose.onNodeWithText("احفظ من رابط").assertIsDisplayed()
         compose.onNodeWithTag("onboarding_pager").performTouchInput { swipeRight() }
         compose.onNodeWithText("أضف رابطًا").assertIsDisplayed()
-        compose.onNodeWithContentDescription("الصفحة 2 من 4. أضف رابطًا").assertExists()
+        compose.onNodeWithContentDescription("الصفحة 2 من 4، أضف رابطًا").assertExists()
     }
 
     @Test fun pagePositionAnnouncesSettledHeadingAndBackReturns() = screen {
         fun assertPosition(page: Int, title: String) {
             compose.onNodeWithTag("onboarding_position")
-                .assertContentDescriptionEquals("Page $page of 4. $title")
+                .assertContentDescriptionEquals("Page $page of 4, $title")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion,
                     androidx.compose.ui.semantics.LiveRegionMode.Polite))
         }
@@ -334,17 +334,17 @@ class OnboardingTest {
         val english = strings("values"); val arabic = strings("values-ar")
         val expectedEnglish = mapOf(
             "onboarding_anywhere_title" to "Save from a link",
-            "onboarding_anywhere_body" to "Save videos, audio and photos from supported public links. No ads or Nezzel account.",
-            "onboarding_anywhere_illustration" to "Video, audio and photo symbols beside Nezzel.",
+            "onboarding_anywhere_body" to "Save videos, audio and photos from supported public links, with no ads or Nezzel account",
+            "onboarding_anywhere_illustration" to "Video, audio and photo symbols beside Nezzel",
             "onboarding_copy_title" to "Bring a link",
-            "onboarding_copy_body" to "Copy a link and open Nezzel, paste it here, or choose Nezzel from Share.\\n\\nOptions and previews load automatically by default. You can turn this off in Settings.",
-            "onboarding_copy_illustration" to "Copy or share a link to open it in Nezzel.",
+            "onboarding_copy_body" to "Copy a link and open Nezzel, paste it here, or choose Nezzel from Share\\n\\nOptions and previews load automatically by default — you can turn this off in Settings",
+            "onboarding_copy_illustration" to "Copy or share a link to open it in Nezzel",
             "onboarding_quality_title" to "Choose what to save",
-            "onboarding_quality_body" to "Video and audio options vary by link. For photos, select the ones you want. Sizes may be estimated or unknown.",
-            "onboarding_quality_illustration" to "Example: select a video quality or photos to save.",
+            "onboarding_quality_body" to "Video and audio options vary by link, and you choose which photos to save — sizes may be estimated or unknown",
+            "onboarding_quality_illustration" to "Example: select a video quality or photos to save",
             "onboarding_saved_title" to "Tap to save",
-            "onboarding_saved_body" to "Tap Download for video or audio, or Save for photos. Find your files in Downloads. Change the save folder in Settings.",
-            "onboarding_saved_illustration" to "Example: a saved file appears in Downloads.",
+            "onboarding_saved_body" to "Tap Download for video or audio, or Save for photos — find your files in Downloads and change the save folder in Settings",
+            "onboarding_saved_illustration" to "Example: a saved file appears in Downloads",
             "onboarding_skip" to "Skip",
             "onboarding_next" to "Next",
             "onboarding_back" to "Back",
@@ -352,17 +352,17 @@ class OnboardingTest {
         )
         val expectedArabic = mapOf(
             "onboarding_anywhere_title" to "احفظ من رابط",
-            "onboarding_anywhere_body" to "احفظ الفيديو والصوت والصور من الروابط العامة المدعومة. بلا إعلانات أو حساب في Nezzel.",
-            "onboarding_anywhere_illustration" to "رموز الفيديو والصوت والصور بجانب Nezzel.",
+            "onboarding_anywhere_body" to "احفظ الفيديو والصوت والصور من الروابط العامة المدعومة بلا إعلانات أو حساب في Nezzel",
+            "onboarding_anywhere_illustration" to "رموز الفيديو والصوت والصور بجانب Nezzel",
             "onboarding_copy_title" to "أضف رابطًا",
-            "onboarding_copy_body" to "انسخ الرابط وافتح Nezzel، أو الصقه هنا، أو اختر Nezzel من قائمة المشاركة.\\n\\nتُجلب الخيارات والمعاينات تلقائيًا. يمكنك إيقاف ذلك من الإعدادات.",
-            "onboarding_copy_illustration" to "انسخ رابطًا أو شاركه لفتحه في Nezzel.",
+            "onboarding_copy_body" to "انسخ رابطًا وافتح Nezzel، أو الصقه هنا، أو اختر Nezzel من قائمة المشاركة\\n\\nيجلب التطبيق الخيارات والمعاينات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات",
+            "onboarding_copy_illustration" to "انسخ رابطًا أو شاركه لفتحه في Nezzel",
             "onboarding_quality_title" to "اختر ما تريد حفظه",
-            "onboarding_quality_body" to "تختلف خيارات الفيديو والصوت حسب الرابط. وللصور، حدّد ما تريد حفظه. قد يكون الحجم تقديريًا أو غير معروف.",
-            "onboarding_quality_illustration" to "مثال: اختيار جودة فيديو أو صور لحفظها.",
+            "onboarding_quality_body" to "تختلف خيارات الفيديو والصوت حسب الرابط، وللصور حدّد ما تريد حفظه، وقد يكون الحجم تقديريًا أو غير معروف",
+            "onboarding_quality_illustration" to "مثال: اختيار جودة فيديو أو صور لحفظها",
             "onboarding_saved_title" to "اضغط للحفظ",
-            "onboarding_saved_body" to "اضغط «تنزيل» للفيديو والصوت، أو «حفظ» للصور. تجد ملفاتك في «التنزيلات»، ويمكنك تغيير مجلد الحفظ من الإعدادات.",
-            "onboarding_saved_illustration" to "مثال: ظهور ملف محفوظ في التنزيلات.",
+            "onboarding_saved_body" to "اضغط «تنزيل» للفيديو أو الصوت، أو «حفظ» للصور، وستجد ملفاتك في «التنزيلات»، ويمكنك تغيير مجلد الحفظ من الإعدادات",
+            "onboarding_saved_illustration" to "مثال: ظهور ملف محفوظ في التنزيلات",
             "onboarding_skip" to "تخطّي",
             "onboarding_next" to "التالي",
             "onboarding_back" to "السابق",

@@ -113,6 +113,7 @@ class MainActivity : AppCompatActivity() {
                     onAcceptSuggestion = { links.inspectSuggestion() },
                     onAutomaticOptions = { preferences.automaticOptions = it; links.automaticOptions = it },
                     onAllowNotifications = ::allowNotifications,
+                    notificationRationaleShowing = showNotificationRationale,
                     onHowItWorks = { replayingOnboarding = true; onboarding = true },
                     onLanguage = { AppLocale.choose(this, it) },
                     onTheme = { preferences.theme = it; theme = it; AppLocale.applyTheme(it) },

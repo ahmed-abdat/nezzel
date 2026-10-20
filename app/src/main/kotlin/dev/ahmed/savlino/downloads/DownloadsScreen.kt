@@ -66,15 +66,21 @@ fun visibleJobs(jobs: List<DownloadProgress>) = jobs.filter { !it.terminal || it
 fun runningCount(jobs: List<DownloadProgress>) = jobs.count { !it.terminal || it.awaitingSchedule }
 
 @Composable
-fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: String, onNavigate: (String) -> Unit) {
+fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: String, updateAvailable: Boolean = false, onNavigate: (String) -> Unit) {
     val rail = LocalConfiguration.current.screenHeightDp < 480
     val count = runningCount(jobs)
     val failed = jobs.any { it.phase == DownloadPhase.FAILED }
+    val settingsLabel = stringResource(R.string.settings_update_accessibility)
     val label = stringResource(when { count > 0 -> R.string.downloads_running_accessibility; failed -> R.string.downloads_failed_accessibility; else -> R.string.downloads }, NezzelFormat.count(count, language))
     @Composable fun DestinationIcon(destination: String) {
         when (destination) {
             "Home" -> Icon(Icons.Default.Home, null)
-            "Settings" -> Icon(Icons.Default.Settings, null)
+            "Settings" -> BadgedBox(badge = {
+                if (updateAvailable) {
+                    val description = stringResource(R.string.update_available_title)
+                    Badge(Modifier.semantics { contentDescription = description }, containerColor = MaterialTheme.colorScheme.primary)
+                }
+            }) { Icon(Icons.Default.Settings, null) }
             else -> {
                 // M3 small badge on the icon's top-end corner (BadgedBox mirrors it in RTL): a dot, never a digit pill that
                 // grows with font scale. Primary while downloads run, error after a failure; the item's label carries the count.
@@ -92,7 +98,7 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
             windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical)) {
             destinations.forEach { (destination, text) ->
                 NavigationRailItem(selected = route == destination, onClick = { onNavigate(destination) },
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { if (destination == "Downloads") contentDescription = label },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { if (destination == "Downloads") contentDescription = label else if (destination == "Settings" && updateAvailable) contentDescription = settingsLabel },
                     icon = { DestinationIcon(destination) }, label = { NavLabel(stringResource(text)) }, alwaysShowLabel = true,
                     colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
                         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer))
@@ -102,7 +108,7 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
         NavigationBar(modifier = Modifier.testTag("navigation_bar"), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
             destinations.forEach { (destination, text) ->
                 NavigationBarItem(selected = route == destination, onClick = { onNavigate(destination) },
-                    modifier = Modifier.semantics { if (destination == "Downloads") contentDescription = label },
+                    modifier = Modifier.semantics { if (destination == "Downloads") contentDescription = label else if (destination == "Settings" && updateAvailable) contentDescription = settingsLabel },
                     icon = { DestinationIcon(destination) }, label = { NavLabel(stringResource(text)) }, alwaysShowLabel = true,
                     colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
                         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer))

@@ -51,6 +51,7 @@ fun NezzelApp(
     onAllowNotifications: () -> Unit = {},
     onAutomaticOptions: (Boolean) -> Unit = {},
     onHowItWorks: () -> Unit = {},
+    notificationRationaleShowing: Boolean = false,
 ) {
     var updateBack by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
     SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads")) updateBack = links.destination }
@@ -62,7 +63,9 @@ fun NezzelApp(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val updates = (context.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available }
-    LaunchedEffect(updates) {
+    val updateState by (updates?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AppUpdateState()) }).collectAsState()
+    LaunchedEffect(updates, language) {
+        updates?.refreshWhatsNew()
         if (updates?.consumeUpdated() == true) snackbar.showSnackbar(context.getString(R.string.update_done, NezzelFormat.isolate(BuildConfig.VERSION_NAME)))
     }
     val destinations = remember(context) { SaveDestinations(context) }
@@ -122,6 +125,14 @@ fun NezzelApp(
     CompositionLocalProvider(LocalReducedMotion provides reduced) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
+        // Onboarding replaces this composition in MainActivity. Other modals take priority;
+        // keep the pending record intact until its own dismiss callback runs.
+        val whatsNew = updateState.whatsNew
+        if (updates != null && whatsNew != null && links.destination == "Home" &&
+            links.optionsState == OptionsState.Hidden && !links.moreFormats && !links.hasPendingShare &&
+            !links.hasPendingNotificationChoice && !notificationRationaleShowing) {
+            WhatsNewSheet(whatsNew, language, updates::dismissWhatsNew)
+        }
         if (links.destination == "AppUpdate" && updates != null) {
             Box(Modifier.fillMaxSize()) {
                 AppUpdateRoute(updates, language) { links.navigate(updateBack) }
@@ -131,7 +142,8 @@ fun NezzelApp(
             OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
         } else {
             NavigationScaffold(links.destination, jobs, language, links::navigate,
-                snackbarHost = { if (!showOptions) SnackbarHost(snackbar) }) {
+                snackbarHost = { if (!showOptions) SnackbarHost(snackbar) },
+                updateAvailable = updateState.badge(BuildConfig.VERSION_CODE.toLong())) {
                 // Tabs are peers: fade-through, no travel. The old screen is gone before the new one settles.
                 AnimatedContent(links.destination, contentAlignment = Alignment.TopStart, transitionSpec = {
                     if (reduced) EnterTransition.None togetherWith ExitTransition.None
@@ -163,15 +175,15 @@ fun NezzelApp(
 @Composable
 internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, language: String,
                                 onNavigate: (String) -> Unit, snackbarHost: @Composable () -> Unit = {},
-                                content: @Composable () -> Unit) {
+                                updateAvailable: Boolean = false, content: @Composable () -> Unit) {
     val rail = LocalConfiguration.current.screenHeightDp < 480
     // Protect both physical edges (cutout or three-button navigation, including reverse landscape).
     // Consume once for the row so nested Scaffolds do not apply these horizontal insets again.
     val sideInsets = if (rail) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier
     Row(Modifier.fillMaxSize().then(sideInsets)) {
-        if (rail) DownloadNavigation(route, jobs, language, onNavigate)
+        if (rail) DownloadNavigation(route, jobs, language, updateAvailable, onNavigate)
         Scaffold(modifier = Modifier.weight(1f).fillMaxHeight(), contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = { if (!rail) DownloadNavigation(route, jobs, language, onNavigate) },
+            bottomBar = { if (!rail) DownloadNavigation(route, jobs, language, updateAvailable, onNavigate) },
             snackbarHost = snackbarHost) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { content() }
         }
@@ -213,7 +225,7 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
                 if (updater?.available == true) {
                     val update by updater.state.collectAsState()
                     if (update.card(BuildConfig.VERSION_CODE.toLong())) update.release?.let { release ->
-                        UpdateCard(release, { links.navigate("AppUpdate") }, updater::dismiss)
+                        UpdateCard(release, language, { links.navigate("AppUpdate") }, updater::dismiss)
                     }
                 }
                 links.downloads?.let { downloads ->
@@ -348,7 +360,7 @@ private fun SettingsScreen(
             (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.let { updates ->
                 UpdateSettings(updates) { links.navigate("AppUpdate") }
             }
-            dev.ahmed.savlino.ui.AboutSection(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, onHowItWorks)
+            dev.ahmed.savlino.ui.AboutSection(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, onHowItWorks, language = language)
         }
     }
 }

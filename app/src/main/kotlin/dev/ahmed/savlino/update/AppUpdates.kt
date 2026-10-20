@@ -2,24 +2,40 @@ package dev.ahmed.savlino.update
 
 import android.content.Context
 import android.content.Intent
+import android.os.storage.StorageManager
 import androidx.work.*
 import dev.ahmed.savlino.BuildConfig
 import dev.ahmed.savlino.locale.AppPreferences
+import org.json.JSONObject
+import org.json.JSONArray
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
+
+internal fun updateCheckJitterMillis(random: Random = Random.Default): Long = random.nextLong(TimeUnit.HOURS.toMillis(6) + 1)
+internal fun requiredUpdateSpace(size: Long): Long = 2 * size + AppUpdates.MARGIN
+internal fun hasUpdateSpace(context: Context, size: Long, allocatable: () -> Long = {
+    val storage = context.getSystemService(StorageManager::class.java)
+    storage.getAllocatableBytes(storage.getUuidForPath(context.cacheDir))
+}, usable: () -> Long = { context.cacheDir.usableSpace }): Boolean =
+    (try { allocatable() } catch (_: Exception) { usable() }) >= requiredUpdateSpace(size)
 
 enum class UpdateStage { IDLE, DOWNLOADING, VERIFYING, READY, INSTALLING, ERROR }
 enum class UpdateFailure { NETWORK, SPACE, VERIFY, INSTALL }
 enum class UpdateCheck { NONE, CHECKING, LATEST, AVAILABLE, FAILED }
+class WhatsNew(val version: String, val english: List<String>, val arabic: List<String>) {
+    fun notes(language: String): List<String> = if (language == "ar" && arabic.isNotEmpty()) arabic else english
+}
 data class AppUpdateState(val automatic: Boolean = true, val release: Release? = null, val skipped: Long? = null,
     val dismissed: Boolean = false, val check: UpdateCheck = UpdateCheck.NONE, val stage: UpdateStage = UpdateStage.IDLE,
     val bytes: Long = 0, val failure: UpdateFailure? = null, val transfer: Release? = null,
-    val confirmation: Intent? = null) {
-    fun card(current: Long) = !dismissed && release?.let { UpdatePolicy.offer(it.code, current, skipped) } == true
+    val confirmation: Intent? = null, val lastChecked: Long? = null, val whatsNew: WhatsNew? = null) {
+    fun badge(current: Long) = release?.let { UpdatePolicy.offer(it.code, current, skipped) } == true
+    fun card(current: Long) = !dismissed && badge(current)
 }
 
 /** Process-owned work; no Activity or file survives as an authorization to install. */
@@ -30,16 +46,12 @@ class AppUpdates internal constructor(private val context: Context, private val 
     internal val prefs = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
     private val appPrefs = AppPreferences(context)
     private val mutable = MutableStateFlow(AppUpdateState(automatic = appPrefs.appUpdates,
-        release = if (available) prefs.getString("release", null)?.toByteArray()?.let { bytes ->
-            when (prefs.getString("release-format", null)) {
-                "manifest" -> Release.parseManifest(bytes)
-                "api", null -> Release.parse(bytes)
-                else -> null
-            }
-        }
-            ?.takeIf { it.code > BuildConfig.VERSION_CODE } else null,
-        skipped = prefs.getLong("skipped", -1).takeIf { it > 0 }))
+        release = if (available) cachedRelease()?.takeIf { it.code > BuildConfig.VERSION_CODE } else null,
+        skipped = prefs.getLong("skipped", -1).takeIf { it > 0 },
+        lastChecked = prefs.getLong("success", 0).takeIf { prefs.contains("success") },
+        whatsNew = readWhatsNew()))
     val state: StateFlow<AppUpdateState> = mutable.asStateFlow()
+    init { currentNotes() } // Discard notes retained by an older build, even before About opens
     private val checkGate = Mutex()
     private val filesGate = Mutex()
     private var transfer: Job? = null
@@ -50,13 +62,36 @@ class AppUpdates internal constructor(private val context: Context, private val 
     /** Activity calls once per process startup; a cold worker/receiver must not cause another check. */
     private var started = false
     private var swept = false
-    private fun sweepOnce() { if (!swept) { cleanFiles(); swept = true } }
+    private fun partMatches(release: Release): Boolean = try {
+        val identity = JSONObject(File(directory, release.name + ".part.json").readText())
+        identity.getLong("code") == release.code && identity.getLong("size") == release.size &&
+            identity.getString("sha256").equals(release.digest, ignoreCase = true) &&
+            File(directory, release.name + ".part").let { it.isFile && it.length() in 1..release.size }
+    } catch (_: Exception) { false }
+    /** Must run under filesGate on IO, including when Download precedes start. */
+    private fun sweepOnce() {
+        if (swept) return
+        val release = state.value.release
+        val ready = release?.let { File(directory, it.name) }?.takeIf {
+            prefs.getLong("ready-code", -1) == release.code && prefs.getString("ready-file", null) == release.name
+        }
+        val part = release?.takeIf(::partMatches)?.let { setOf(it.name + ".part", it.name + ".part.json") }.orEmpty()
+        directory.listFiles()?.filter { it != ready && it.name !in part }?.forEach { it.delete() }
+        if (ready != null && UpdateVerifier.verify(context, ready, release)) {
+            readyFile = ready
+            mutable.update { it.copy(stage = UpdateStage.READY, transfer = release, bytes = release.size) }
+        } else {
+            ready?.delete()
+            prefs.edit().remove("ready-code").remove("ready-file").commit()
+        }
+        swept = true
+    }
     @Synchronized fun start() {
         if (!available || started) return
         started = true
         schedule()
         scope.launch {
-            filesGate.withLock { sweepOnce() }
+            withContext(Dispatchers.IO) { filesGate.withLock { sweepOnce() } }
             check(manual = false)
         }
     }
@@ -72,7 +107,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
         if (!available || !appPrefs.appUpdates) { work.cancelUniqueWork(WORK); return }
         work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<AppUpdateWorker>(24, TimeUnit.HOURS)
-                .setInitialDelay(24, TimeUnit.HOURS)
+                .setInitialDelay(DAY + updateCheckJitterMillis(), TimeUnit.MILLISECONDS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
                 .build())
     }
@@ -87,10 +122,11 @@ class AppUpdates internal constructor(private val context: Context, private val 
         try {
             val (parsed, bytes, format) = withContext(Dispatchers.IO) { httpFactory().use { it.latestRelease() } }
             val release = parsed.takeIf { it.code > BuildConfig.VERSION_CODE }
-            if (!prefs.edit().putLong("success", System.currentTimeMillis()).putString("release", bytes.toString(Charsets.UTF_8))
+            val checked = System.currentTimeMillis()
+            if (!prefs.edit().putLong("success", checked).putString("release", bytes.toString(Charsets.UTF_8))
                     .putString("release-format", format).commit())
                 throw java.io.IOException()
-            mutable.update { it.copy(release = release, dismissed = if (it.release?.code == release?.code) it.dismissed else false,
+            mutable.update { it.copy(release = release, lastChecked = checked, dismissed = if (it.release?.code == release?.code) it.dismissed else false,
                 check = if (manual) { if (release == null) UpdateCheck.LATEST else UpdateCheck.AVAILABLE } else it.check) }
             if (notify) postNotification()
         } catch (cancelled: CancellationException) {
@@ -122,14 +158,24 @@ class AppUpdates internal constructor(private val context: Context, private val 
         transfer = scope.launch(Dispatchers.IO) {
             filesGate.withLock {
                 sweepOnce()
-                cleanFiles()
+                if (readyFile != null && state.value.transfer?.code == release.code &&
+                    state.value.transfer?.digest == release.digest) return@withLock
+                val resume = partMatches(release)
+                val keep = if (resume) setOf(release.name + ".part", release.name + ".part.json") else emptySet()
+                cleanFiles(keep)
                 mutable.update { it.copy(stage = UpdateStage.DOWNLOADING, transfer = release, failure = null, bytes = 0) }
                 var file: File? = null
+                var keepPart = false
                 try {
                     if (!directory.exists() && !directory.mkdirs()) throw java.io.IOException()
-                    if (directory.usableSpace < release.size + MARGIN) { fail(UpdateFailure.SPACE); return@withLock }
+                    if (!hasUpdateSpace(context, release.size)) { fail(UpdateFailure.SPACE); return@withLock }
                     file = File(directory, release.name + ".part")
-                    httpFactory().use { client ->
+                    File(directory, release.name + ".part.json").outputStream().use { out ->
+                        out.write(JSONObject().put("code", release.code).put("size", release.size)
+                            .put("sha256", release.digest).toString().toByteArray())
+                        out.fd.sync()
+                    }
+                    if (file.length() != release.size) httpFactory().use { client ->
                         http = client
                         client.download(release, file) { bytes -> mutable.update { it.copy(bytes = bytes) } }
                     }
@@ -137,14 +183,29 @@ class AppUpdates internal constructor(private val context: Context, private val 
                     mutable.update { it.copy(stage = UpdateStage.VERIFYING) }
                     if (!UpdateVerifier.verify(context, file, release)) { fail(UpdateFailure.VERIFY); return@withLock }
                     currentCoroutineContext().ensureActive()
-                    readyFile = file
-                    mutable.update { it.copy(stage = UpdateStage.READY) }
+                    val ready = File(directory, release.name)
+                    if (!file.renameTo(ready)) throw java.io.IOException()
+                    if (!prefs.edit().putString("ready-file", ready.name).putLong("ready-code", release.code).commit()) {
+                        ready.delete(); throw java.io.IOException()
+                    }
+                    File(directory, release.name + ".part.json").delete()
+                    readyFile = ready
+                    mutable.update { it.copy(stage = UpdateStage.READY, bytes = release.size) }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (failure: Exception) {
                     currentCoroutineContext().ensureActive()
-                    fail(if (isNoSpace(failure)) UpdateFailure.SPACE else UpdateFailure.NETWORK)
+                    val reason = if (isNoSpace(failure)) UpdateFailure.SPACE else UpdateFailure.NETWORK
+                    keepPart = reason == UpdateFailure.NETWORK && file?.isFile == true && file.length() in 1..release.size
+                    if (keepPart) mutable.update { it.copy(stage = UpdateStage.ERROR, failure = reason, confirmation = null) }
+                    else fail(reason)
                 }
-                finally { http = null; if (readyFile != file) file?.delete() }
+                finally {
+                    http = null
+                    if (!keepPart) {
+                        file?.delete()
+                        File(directory, release.name + ".part.json").delete()
+                    }
+                }
             }
         }
     }
@@ -160,17 +221,81 @@ class AppUpdates internal constructor(private val context: Context, private val 
         }
     }
     internal fun fail(failure: UpdateFailure) {
+        if (failure == UpdateFailure.INSTALL) clearInstall()
         cleanFiles()
         mutable.update { it.copy(stage = UpdateStage.ERROR, failure = failure, confirmation = null) }
     }
     internal fun holdConfirmation(intent: Intent) { mutable.update { it.copy(stage = UpdateStage.INSTALLING, confirmation = intent) } }
     internal fun takeConfirmation(): Intent? = mutable.getAndUpdate { it.copy(confirmation = null) }.confirmation
     internal fun installing() { mutable.update { it.copy(stage = UpdateStage.INSTALLING) } }
-    internal fun cleanFiles() { readyFile = null; directory.listFiles()?.forEach { it.delete() } }
-    fun consumeUpdated(): Boolean {
-        if (!available || prefs.getLong("install-code", -1) != BuildConfig.VERSION_CODE.toLong()) return false
+    internal fun installed() {
         cleanFiles()
-        return prefs.edit().remove("install-code").remove("install-session").commit()
+        mutable.update { it.copy(release = null, transfer = null, stage = UpdateStage.IDLE, confirmation = null) }
+    }
+    internal fun cleanFiles(keep: Set<String> = emptySet()) {
+        readyFile = null
+        prefs.edit().remove("ready-file").remove("ready-code").commit()
+        directory.listFiles()?.filter { it.name !in keep }?.forEach { it.delete() }
+    }
+    internal fun recordInstall(session: Int, release: Release): Boolean = prefs.edit()
+        .putInt("install-session", session).putLong("install-code", release.code)
+        .putString("install-notes", JSONObject().put("version", release.version)
+            .put("en", JSONArray(release.english)).put("ar", JSONArray(release.arabic)).toString()).commit()
+    internal fun clearInstall(): Boolean {
+        val editor = prefs.edit()
+        // Only a completed update to this build can become About's retained notes.
+        readWhatsNew()?.let { notes -> editor.putString("current-notes", encodeNotes(notes)) }
+        val cleared = editor.remove("install-code").remove("install-session").remove("install-notes").commit()
+        if (cleared) mutable.update { it.copy(whatsNew = null) }
+        return cleared
+    }
+    private fun decodeNotes(raw: String?): WhatsNew? = try {
+        val json = JSONObject(raw ?: "{}")
+        fun notes(language: String): List<String> = json.optJSONArray(language)?.let { array ->
+            (0 until array.length()).map { array.getString(it) }
+        }.orEmpty()
+        val english = notes("en")
+        val arabic = notes("ar")
+        if (english.isEmpty() && arabic.isEmpty()) null else WhatsNew(json.getString("version"), english, arabic)
+    } catch (_: Exception) { null }
+    private fun encodeNotes(notes: WhatsNew): String = JSONObject().put("code", BuildConfig.VERSION_CODE)
+        .put("version", notes.version).put("en", JSONArray(notes.english)).put("ar", JSONArray(notes.arabic)).toString()
+    private fun cachedRelease(): Release? = prefs.getString("release", null)?.toByteArray()?.let { bytes ->
+        when (prefs.getString("release-format", null)) {
+            "manifest" -> Release.parseManifest(bytes)
+            "api", null -> Release.parse(bytes)
+            else -> null
+        }
+    }
+    private fun readWhatsNew(): WhatsNew? {
+        if (!available || prefs.getLong("install-code", -1) != BuildConfig.VERSION_CODE.toLong()) return null
+        decodeNotes(prefs.getString("install-notes", null))?.let { return it }
+        // 0.4.4 records install-code but not install-notes; its cached offer is the release that was just installed.
+        // Copy its notes now: the next successful check replaces that cache.
+        val migrated = cachedRelease()?.takeIf { it.code == BuildConfig.VERSION_CODE.toLong() }
+            ?.takeIf { it.english.isNotEmpty() || it.arabic.isNotEmpty() }?.let { WhatsNew(it.version, it.english, it.arabic) } ?: return null
+        prefs.edit().putString("install-notes", JSONObject().put("version", migrated.version)
+            .put("en", JSONArray(migrated.english)).put("ar", JSONArray(migrated.arabic)).toString()).commit()
+        return migrated
+    }
+    fun currentNotes(): WhatsNew? {
+        if (!available) return null
+        val raw = prefs.getString("current-notes", null)
+        val current = try { JSONObject(raw ?: "{}").optLong("code", -1) == BuildConfig.VERSION_CODE.toLong() }
+            catch (_: Exception) { false }
+        if (raw != null && !current) prefs.edit().remove("current-notes").commit()
+        // A pending first presentation is also available from About before it is dismissed.
+        return readWhatsNew() ?: if (current) decodeNotes(raw) else null
+    }
+    internal fun refreshWhatsNew() { mutable.update { it.copy(whatsNew = readWhatsNew()) } }
+    fun dismissWhatsNew() {
+        if (state.value.whatsNew == null) return
+        clearInstall()
+    }
+    fun consumeUpdated(): Boolean {
+        if (!available || state.value.whatsNew != null || prefs.getLong("install-code", -1) != BuildConfig.VERSION_CODE.toLong()) return false
+        cleanFiles()
+        return clearInstall()
     }
     private fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.take(10).any {
         it is android.system.ErrnoException && it.errno == android.system.OsConstants.ENOSPC || it.message?.contains("ENOSPC") == true

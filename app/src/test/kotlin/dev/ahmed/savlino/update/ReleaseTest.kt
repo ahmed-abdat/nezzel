@@ -54,4 +54,12 @@ not a bullet
         assertNull(parse(release().put("tag_name", "vwrong")))
         assertNull(parse(release().put("draft", true)))
     }
+    @Test fun rejectsSizesWhoseTwoCopiesAndMarginWouldOverflow() {
+        val json = release()
+        val apk = json.getJSONArray("assets").getJSONObject(0)
+        apk.put("size", 4_611_686_018_393_833_471L)
+        assertNotNull(parse(json))
+        apk.put("size", 4_611_686_018_393_833_472L)
+        assertNull(parse(json))
+    }
 }

@@ -31,11 +31,15 @@ object NezzelFormat {
     fun count(value: Int, language: String): String = number(value.toDouble(), language, 0)
     /** "Oct 12" / "12 أكتوبر", with Latin digits in every language. */
     fun shortDate(epochMillis: Long, language: String): String {
-        val locale = java.util.Locale.forLanguageTag(numericTag(language))
+        val locale = Locale.forLanguageTag(numericTag(language))
         val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMd")
         return java.time.format.DateTimeFormatter.ofPattern(pattern, locale)
             .format(java.time.Instant.ofEpochMilli(epochMillis).atZone(java.time.ZoneId.systemDefault()))
     }
+    fun shortDateTime(epochMillis: Long, language: String): String =
+        java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT)
+            .withLocale(Locale.forLanguageTag(numericTag(language)))
+            .format(java.time.Instant.ofEpochMilli(epochMillis).atZone(java.time.ZoneId.systemDefault()))
     fun isolate(value: String): String = "\u2066$value\u2069"
     /** First-strong isolate: the text takes the direction of its first strong character (names of unknown script). */
     fun firstStrong(value: String): String = "\u2068$value\u2069"

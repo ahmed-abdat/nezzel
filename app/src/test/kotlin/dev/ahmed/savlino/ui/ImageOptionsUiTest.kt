@@ -82,7 +82,7 @@ class ImageOptionsUiTest {
     }
 
     @Test fun englishSheetIsHonestAboutTheLinkAndTheImage() = assertSheet("en", "Shared link")
-    @Test @Config(qualifiers = "ar") fun arabicSheetIsHonestAboutTheLinkAndTheImage() = assertSheet("ar", "رابط تمت مشاركته")
+    @Test @Config(qualifiers = "ar") fun arabicSheetIsHonestAboutTheLinkAndTheImage() = assertSheet("ar", "رابط شاركته")
 
     @Test fun englishSeparatePreviewNeverSuppliesSavedImageDimensions() = assertUnknownDimensions("en")
     @Test @Config(qualifiers = "ar") fun arabicSeparatePreviewNeverSuppliesSavedImageDimensions() = assertUnknownDimensions("ar")
@@ -183,8 +183,8 @@ class ImageOptionsUiTest {
     @Test @Config(qualifiers = "ar") fun arabicPartialCountsAvoidIncorrectCountedNouns() {
         val context = RuntimeEnvironment.getApplication()
         assertEquals("المعروض: 1 من أصل 2", context.getString(R.string.image_available_of, "1", "2"))
-        assertEquals("تم حفظ 1 من أصل 2. تعذّر حفظ البقية.", context.getString(R.string.image_save_partial_count, "1", "2"))
-        assertEquals("أُلغي الحفظ. تم حفظ 1 من أصل 2.", context.getString(R.string.image_save_cancelled_count, "1", "2"))
+        assertEquals("تم حفظ 1 من أصل 2، وتعذّر حفظ البقية", context.getString(R.string.image_save_partial_count, "1", "2"))
+        assertEquals("أُلغي الحفظ بعد حفظ 1 من أصل 2", context.getString(R.string.image_save_cancelled_count, "1", "2"))
     }
 
     @Test fun enumeratedButUnselectableSiblingsKeepSinglePhotoFactsAndFullFrame() {
@@ -265,9 +265,9 @@ class ImageOptionsUiTest {
     }
 
     @Test fun englishSourceRefusalAndImageTypeCopy() = assertRefusalCopy("en", "Can’t read this post",
-        "Nezzel couldn’t read the image in this post. Try again later.", "Image type not supported")
+        "Nezzel couldn’t read the image in this post — try again later", "Image type not supported")
     @Test @Config(qualifiers = "ar") fun arabicSourceRefusalAndImageTypeCopy() = assertRefusalCopy("ar", "تعذّرت قراءة هذا المنشور",
-        "لم يتمكن Nezzel من قراءة الصورة في هذا المنشور. أعد المحاولة لاحقًا.", "نوع الصورة غير مدعوم")
+        "لم يستطع Nezzel قراءة الصورة في هذا المنشور، أعد المحاولة لاحقًا", "نوع الصورة غير مدعوم")
 
     /** A refused post/link never reads as an image-type problem; a real unsupported type still does. */
     private fun assertRefusalCopy(language: String, title: String, body: String, typeTitle: String) {
@@ -283,9 +283,9 @@ class ImageOptionsUiTest {
     }
 
     @Test fun englishDirectImageRefusalSaysImageNotPost() = assertDirectRefusal("en", "Can’t read this image",
-        "Nezzel couldn’t read this image. Try again later.", "Can’t read this post")
+        "Nezzel couldn’t read this image — try again later", "Can’t read this post")
     @Test @Config(qualifiers = "ar") fun arabicDirectImageRefusalSaysImageNotPost() = assertDirectRefusal("ar",
-        "تعذّرت قراءة هذه الصورة", "لم يتمكن Nezzel من قراءة هذه الصورة. أعد المحاولة لاحقًا.", "تعذّرت قراءة هذا المنشور")
+        "تعذّرت قراءة هذه الصورة", "لم يستطع Nezzel قراءة هذه الصورة، أعد المحاولة لاحقًا", "تعذّرت قراءة هذا المنشور")
 
     private fun assertDirectRefusal(language: String, title: String, body: String, postTitle: String) {
         val (labels, context) = sheetLabels(language) {

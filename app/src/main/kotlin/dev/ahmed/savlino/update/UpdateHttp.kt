@@ -8,11 +8,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
-internal open class UpdateHttp(private val version: String) : Closeable {
+internal open class UpdateHttp(private val version: String, private val calls: Call.Factory? = null) : Closeable {
     private val clientState = lazy { OkHttpClient.Builder().cookieJar(CookieJar.NO_COOKIES).cache(null)
         .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE).proxy(Proxy.NO_PROXY)
         .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
@@ -25,14 +26,14 @@ internal open class UpdateHttp(private val version: String) : Closeable {
     private val client get() = clientState.value
     @Volatile private var active: Call? = null
     @Volatile private var closed = false
-    private fun response(initial: String, json: Boolean, metadata: Boolean = false): Response {
+    private fun response(initial: String, json: Boolean, metadata: Boolean = false, offset: Long = 0): Response {
         var url = initial
         repeat(6) { hop ->
             if (closed || !UpdatePolicy.allowed(url)) throw IOException()
             val request = Request.Builder().url(url.toHttpUrl()).header("User-Agent", "Nezzel/$version")
                 .header("Accept", if (json) "application/vnd.github+json" else "application/octet-stream")
-                .header("Accept-Encoding", "identity").build()
-            val call = client.newCall(request)
+                .header("Accept-Encoding", "identity").apply { if (offset > 0) header("Range", "bytes=$offset-") }.build()
+            val call = (calls ?: client).newCall(request)
             if (metadata) call.timeout().timeout(15, TimeUnit.SECONDS)
             active = call
             if (closed) call.cancel()
@@ -42,7 +43,7 @@ internal open class UpdateHttp(private val version: String) : Closeable {
                 call.cancel(); response.close()
                 url = next?.takeIf { hop < 5 } ?: throw IOException()
             } else {
-                if (response.code != 200 || response.header("Content-Encoding")?.let { it != "identity" } == true) {
+                if ((response.code != 200 && !(offset > 0 && response.code == 206)) || response.header("Content-Encoding")?.let { it != "identity" } == true) {
                     call.cancel(); response.close(); throw IOException()
                 }
                 return response
@@ -72,17 +73,28 @@ internal open class UpdateHttp(private val version: String) : Closeable {
         out.toByteArray()
     }
     open suspend fun download(release: Release, file: File, progress: (Long) -> Unit) {
-        response(release.url, false).use { response ->
+        val offset = file.length().takeIf { it in 1 until release.size } ?: 0L
+        response(release.url, false, offset = offset).use { response ->
+            val append = response.code == 206
+            if (append) {
+                val range = Regex("bytes ([0-9]+)-([0-9]+)/([0-9]+)").matchEntire(response.header("Content-Range").orEmpty())
+                val values = range?.groupValues?.drop(1)?.map { it.toLongOrNull() }
+                if (values != listOf(offset, release.size - 1, release.size)) { active?.cancel(); throw IOException() }
+            }
+            val start = if (append) offset else 0L
+            val remaining = release.size - start
             val length = response.body.contentLength()
-            if (length >= 0 && length != release.size) { active?.cancel(); throw IOException() }
-            file.outputStream().use { out ->
-                var copied = 0L
-                read(response, release.size) { bytes, count -> out.write(bytes, 0, count); copied += count; progress(copied) }
+            if (length >= 0 && length != remaining) { active?.cancel(); throw IOException() }
+            FileOutputStream(file, append).use { out ->
+                var copied = start
+                progress(copied)
+                read(response, remaining) { bytes, count -> out.write(bytes, 0, count); copied += count; progress(copied) }
                 if (copied != release.size) throw IOException()
                 out.fd.sync()
             }
         }
     }
+
     private suspend fun read(response: Response, limit: Long, consume: (ByteArray, Int) -> Unit) {
         var total = 0L
         val buffer = ByteArray(8192)

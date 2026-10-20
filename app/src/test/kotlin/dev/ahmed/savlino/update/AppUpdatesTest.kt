@@ -26,6 +26,8 @@ class AppUpdatesTest {
     @Before fun setup() {
         context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("nezzel", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("nezzel-portable", Context.MODE_PRIVATE).edit().clear().commit()
+        java.io.File(context.cacheDir, "updates").deleteRecursively()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
     }
     @After fun teardown() { scope.cancel(); WorkManagerTestInitHelper.closeWorkDatabase() }
@@ -37,6 +39,41 @@ class AppUpdatesTest {
         updates.setAutomatic(false)
         assertFalse(AppPreferences(context).appUpdates)
         assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork(AppUpdates.WORK).get().all { it.state.isFinished })
+    }
+    @Test fun schedulingKeepsExistingWorkAndItsJitter() {
+        val updates = AppUpdates(production, scope)
+        updates.setAutomatic(true)
+        val work = WorkManager.getInstance(context)
+        val first = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().single { !it.state.isFinished }
+        assertTrue(first.initialDelayMillis in 86_400_000L..108_000_000L)
+        updates.setAutomatic(true)
+        val kept = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().single { !it.state.isFinished }
+        assertEquals(first.id, kept.id)
+        assertEquals(first.initialDelayMillis, kept.initialDelayMillis)
+    }
+    @Test fun jitterIncludesBothBoundsAndUsesInjectedRandom() {
+        fun fixed(upper: Boolean) = object : kotlin.random.Random() {
+            override fun nextBits(bitCount: Int): Int = error("Use nextLong")
+            override fun nextLong(until: Long): Long = if (upper) until - 1 else 0
+        }
+        assertEquals(0L, updateCheckJitterMillis(fixed(false)))
+        assertEquals(21_600_000L, updateCheckJitterMillis(fixed(true)))
+        val random = kotlin.random.Random(42)
+        val values = List(1000) { updateCheckJitterMillis(random) }
+        assertTrue(values.all { it in 0L..21_600_000L })
+        assertTrue(values.distinct().size > 1)
+    }
+    @Test fun allocatableSpaceMustFitTwoCopiesAndMargin() {
+        val needed = 69_206_016L // Two 1 MiB copies plus 64 MiB.
+        assertEquals(needed, requiredUpdateSpace(1_048_576))
+        assertTrue(hasUpdateSpace(context, 1_048_576, { needed }, { error("No fallback on success") }))
+        assertFalse(hasUpdateSpace(context, 1_048_576, { needed - 1 }, { Long.MAX_VALUE }))
+    }
+    @Test fun storageFailureFallsBackToUsableSpaceWithSameThreshold() {
+        val unavailable = { throw java.io.IOException("Storage unavailable") }
+        assertTrue(hasUpdateSpace(context, 1_048_576, unavailable, { 69_206_016 }))
+        assertFalse(hasUpdateSpace(context, 1_048_576, unavailable, { 69_206_015 }))
+        assertFalse(hasUpdateSpace(context, 1_048_576, { throw SecurityException() }, { 0 }))
     }
     @Test fun acceptancePackageNeverSchedulesOrOffers() {
         val variant = object : ContextWrapper(context) { override fun getPackageName() = "dev.ahmed.savlino.acceptance" }
@@ -146,6 +183,36 @@ class AppUpdatesTest {
         .put("apk", org.json.JSONObject().put("name", "update.apk").put("size", 100).put("sha256", "a".repeat(64)))
         .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("Fixed"))).toString().toByteArray()
 
+    private fun updatedFrom044(cachedCode: Long): AppUpdates {
+        val code = dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong()
+        val manifest = org.json.JSONObject().put("schema", 1).put("version", "0.4.5").put("versionCode", cachedCode)
+            .put("apk", org.json.JSONObject().put("name", "update.apk").put("size", 100).put("sha256", "a".repeat(64)))
+            .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("Fixed")).put("ar", org.json.JSONArray().put("أُصلح")))
+        // What 0.4.4 leaves behind: install-code and its cached offer, no install-notes
+        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().clear().putLong("install-code", code)
+            .putString("release", manifest.toString()).putString("release-format", "manifest").commit()
+        return AppUpdates(production, scope)
+    }
+    @Test fun updateFrom044ShowsCachedReleaseNotesOnce() {
+        val updates = updatedFrom044(dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong())
+        val whatsNew = updates.state.value.whatsNew!!
+        assertEquals(listOf("Fixed"), whatsNew.notes("en"))
+        assertEquals(listOf("أُصلح"), whatsNew.notes("ar"))
+        assertFalse(updates.consumeUpdated())
+        // A later check replaces the cached offer; the migrated notes must survive it
+        updates.prefs.edit().putString("release", "{}").putString("release-format", "api").commit()
+        assertEquals(listOf("Fixed"), AppUpdates(production, scope).state.value.whatsNew?.notes("en"))
+        updates.dismissWhatsNew()
+        assertNull(updates.state.value.whatsNew)
+        val restarted = AppUpdates(production, scope)
+        assertNull(restarted.state.value.whatsNew)
+        assertEquals(listOf("Fixed"), restarted.currentNotes()?.notes("en"))
+    }
+    @Test fun updateFrom044WithOtherCachedReleaseFallsBackToSnackbar() {
+        val updates = updatedFrom044(dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong() + 1)
+        assertNull(updates.state.value.whatsNew)
+        assertTrue(updates.consumeUpdated())
+    }
     @Test fun manifestSuccessSkipsApiAndRestoresItsCache() = runBlocking {
         val requests = mutableListOf<String>()
         val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
@@ -210,6 +277,204 @@ class AppUpdatesTest {
         check.cancelAndJoin()
         assertEquals(0, apiRequests)
         assertEquals(UpdateCheck.NONE, updates.state.value.check)
+    }
+
+    private suspend fun settle() = withTimeout(5000) { scope.coroutineContext[Job]!!.children.toList().joinAll() }
+    private fun archive(file: java.io.File, code: Long) {
+        val signer = android.content.pm.Signature("01020304")
+        fun identity(version: Long) = android.content.pm.PackageInfo().apply {
+            packageName = production.packageName
+            longVersionCode = version
+            signingInfo = android.content.pm.SigningInfo().also {
+                org.robolectric.Shadows.shadowOf(it).setSignatures(arrayOf(signer))
+            }
+        }
+        val manager = org.robolectric.Shadows.shadowOf(context.packageManager)
+        manager.installPackage(identity(dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong()))
+        manager.setPackageArchiveInfo(file.absolutePath, identity(code))
+    }
+    private suspend fun downloaded(): AppUpdates {
+        val bytes = "verified apk".toByteArray()
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        val manifest = org.json.JSONObject(manifestBytes().toString(Charsets.UTF_8))
+        manifest.getJSONObject("apk").put("size", bytes.size).put("sha256", digest)
+        val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun manifest() = manifest.toString().toByteArray()
+            override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
+                file.writeBytes(bytes)
+                archive(file, release.code)
+                archive(java.io.File(file.parentFile, release.name), release.code)
+            }
+        } }
+        updates.check(manual = true)
+        updates.download(); settle()
+        assertEquals(UpdateStage.READY, updates.state.value.stage)
+        return updates
+    }
+    @Test fun verifiedDownloadRestoresReadyAcrossProcessRestart() = runBlocking {
+        val first = downloaded()
+        val restored = AppUpdates(production, scope) { error("No network for a ready download") }
+        restored.start(); settle()
+        assertEquals(UpdateStage.READY, restored.state.value.stage)
+        assertEquals(99999L, restored.state.value.transfer?.code)
+        assertEquals(first.readyFile, restored.readyFile)
+        restored.download(); settle()
+        assertEquals(UpdateStage.READY, restored.state.value.stage)
+    }
+    @Test fun tamperedReadyDownloadIsDeletedOnRestart() = runBlocking {
+        val first = downloaded()
+        val file = first.readyFile!!
+        file.writeText("tampered apk")
+        val restored = AppUpdates(production, scope) { error("Check is throttled") }
+        restored.start(); settle()
+        assertEquals(UpdateStage.IDLE, restored.state.value.stage)
+        assertNull(restored.readyFile)
+        assertFalse(file.exists())
+    }
+    @Test fun interruptedPartSurvivesRestartButAnotherReleaseIsDiscarded() = runBlocking {
+        cachedRelease()
+        val lengths = mutableListOf<Long>()
+        fun updater() = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
+                lengths += file.length()
+                file.appendText("partial")
+                throw java.io.IOException("offline")
+            }
+        } }
+        updater().also { it.download(); settle() }
+        updater().also { it.download(); settle() }
+        assertEquals(listOf(0L, 7L), lengths)
+        val json = org.json.JSONObject(context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).getString("release", null)!!)
+        json.put("body", "<!-- nezzel:versionCode=100000 -->")
+        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().putString("release", json.toString()).commit()
+        updater().also { it.download(); settle() }
+        assertEquals(listOf(0L, 7L, 0L), lengths)
+    }
+    @Test fun verificationFailureDeletesPartInsteadOfResumingIt() = runBlocking {
+        cachedRelease()
+        val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
+                file.writeText("bad apk"); archive(file, release.code)
+            }
+        } }
+        updates.download(); settle()
+        assertEquals(UpdateFailure.VERIFY, updates.state.value.failure)
+        assertTrue(updates.directory.listFiles().orEmpty().isEmpty())
+    }
+    @Test fun badgeSurvivesCardDismissalButNotSkipOrInstalledVersion() {
+        val updates = cachedRelease()
+        assertTrue(updates.state.value.badge(1))
+        updates.dismiss()
+        assertFalse(updates.state.value.card(1))
+        assertTrue(updates.state.value.badge(1))
+        assertFalse(updates.state.value.badge(99999))
+        updates.skip(99999)
+        assertFalse(updates.state.value.badge(1))
+        assertFalse(AppUpdateState().badge(1))
+    }
+    @Test fun lastCheckedOnlyAdvancesOnSuccessfulCheckAndRestores() = runBlocking {
+        val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun manifest() = manifestBytes()
+        } }
+        assertNull(updates.state.value.lastChecked)
+        updates.check(manual = true)
+        val checked = updates.state.value.lastChecked!!
+        assertTrue(checked > 0)
+        val failed = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun manifest(): ByteArray = throw java.io.IOException()
+            override suspend fun latest(): ByteArray = throw java.io.IOException()
+        } }
+        failed.check(manual = true)
+        assertEquals(checked, failed.state.value.lastChecked)
+    }
+    private fun pendingInstall(english: List<String>, arabic: List<String> = emptyList(), code: Long = dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong()) {
+        val updates = AppUpdates(production, scope)
+        assertTrue(updates.recordInstall(123, Release("0.4.5", code, "update.apk", 100, "https://github.com/asset", "a".repeat(64), english, arabic)))
+    }
+    @Test fun whatsNewPersistsUntilDismissedAndSuppressesSnackbar() {
+        pendingInstall(listOf("Fixed"), listOf("تحسينات"))
+        val updates = AppUpdates(production, scope)
+        assertEquals("0.4.5", updates.state.value.whatsNew?.version)
+        assertEquals(listOf("Fixed"), updates.state.value.whatsNew?.notes("en"))
+        assertFalse(updates.consumeUpdated())
+        assertNotNull(AppUpdates(production, scope).state.value.whatsNew)
+        updates.dismissWhatsNew()
+        assertNull(updates.state.value.whatsNew)
+        assertNull(AppUpdates(production, scope).state.value.whatsNew)
+        assertFalse(updates.consumeUpdated())
+    }
+    @Test fun whatsNewKeepsBothLanguagesWithoutReloading() {
+        pendingInstall(listOf("Fixed"), listOf("تحسينات"))
+        val notes = AppUpdates(production, scope).state.value.whatsNew!!
+        assertEquals(listOf("Fixed"), notes.notes("en"))
+        assertEquals(listOf("تحسينات"), notes.notes("ar"))
+        pendingInstall(listOf("Fixed"))
+        assertEquals(listOf("Fixed"), AppUpdates(production, scope).state.value.whatsNew?.notes("ar"))
+    }
+    @Test fun currentNotesSurviveDismissClearAndRestartInBothLanguages() {
+        pendingInstall(listOf("Fixed"), listOf("تحسينات"))
+        val updates = AppUpdates(production, scope)
+        assertEquals(listOf("تحسينات"), updates.currentNotes()?.notes("ar"))
+        updates.dismissWhatsNew()
+        assertTrue(updates.clearInstall())
+        val restarted = AppUpdates(production, scope)
+        assertNull(restarted.state.value.whatsNew)
+        assertEquals(listOf("Fixed"), restarted.currentNotes()?.notes("en"))
+        assertEquals(listOf("تحسينات"), restarted.currentNotes()?.notes("ar"))
+    }
+    @Test fun currentNotesForAnotherBuildAreRemoved() {
+        val updates = AppUpdates(production, scope)
+        updates.prefs.edit().putString("current-notes", org.json.JSONObject()
+            .put("code", dev.ahmed.savlino.BuildConfig.VERSION_CODE - 1)
+            .put("version", "0.4.4").put("en", org.json.JSONArray().put("Old"))
+            .put("ar", org.json.JSONArray()).toString()).commit()
+        assertNull(AppUpdates(production, scope).currentNotes())
+        assertFalse(updates.prefs.contains("current-notes"))
+    }
+    @Test fun noNotesUsesSnackbarOnceAndUnrelatedInstallsShowNothing() {
+        val fresh = AppUpdates(production, scope)
+        assertNull(fresh.state.value.whatsNew); assertFalse(fresh.consumeUpdated())
+        pendingInstall(listOf("Future"), code = dev.ahmed.savlino.BuildConfig.VERSION_CODE + 1L)
+        val unrelated = AppUpdates(production, scope)
+        assertNull(unrelated.state.value.whatsNew); assertFalse(unrelated.consumeUpdated())
+        pendingInstall(emptyList())
+        val noNotes = AppUpdates(production, scope)
+        assertNull(noNotes.state.value.whatsNew)
+        assertTrue(noNotes.consumeUpdated())
+        assertFalse(AppUpdates(production, scope).consumeUpdated())
+    }
+
+    @Test fun failedInstallClearsPendingWhatsNewAndSnackbar() {
+        pendingInstall(listOf("Fixed"))
+        val updates = AppUpdates(production, scope)
+        updates.fail(UpdateFailure.INSTALL)
+        assertNull(updates.state.value.whatsNew)
+        val restored = AppUpdates(production, scope)
+        assertNull(restored.state.value.whatsNew)
+        assertFalse(restored.consumeUpdated())
+    }
+    @Test fun failedFutureInstallNeverBecomesCurrentNotes() {
+        pendingInstall(listOf("Future"), code = dev.ahmed.savlino.BuildConfig.VERSION_CODE + 1L)
+        val updates = AppUpdates(production, scope)
+        updates.fail(UpdateFailure.INSTALL)
+        assertNull(updates.currentNotes())
+        assertNull(AppUpdates(production, scope).currentNotes())
+    }
+    @Test fun installedClearsSettingsBadge() {
+        val updates = cachedRelease()
+        updates.installed()
+        assertFalse(updates.state.value.badge(1))
+        assertNull(updates.state.value.release)
+    }
+
+    @Test fun lastCheckedDateAndTimeUseLatinDigitsInBothLanguages() {
+        val epoch = java.time.Instant.parse("2024-10-20T13:05:00Z").toEpochMilli()
+        for (language in listOf("en", "ar")) {
+            val formatted = dev.ahmed.savlino.locale.NezzelFormat.shortDateTime(epoch, language)
+            assertTrue("$language: $formatted", formatted.contains("2024"))
+            assertTrue(Regex("[0-9]{1,2}:[0-9]{2}").containsMatchIn(formatted))
+            assertFalse(formatted.any { it in '٠'..'٩' || it in '۰'..'۹' })
+        }
     }
 
 }

@@ -6,6 +6,18 @@ Version entries describe existing builds, not public APK availability.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-10-20
+
+### Added
+
+- What's new: after an update, a sheet shows that version's notes once in the app language (Got it, Back or swipe closes it); About → What's new opens it again. Users updating from 0.4.4 get it from the cached release notes.
+- Settings shows when Nezzel last checked for updates, and a dot on the Settings tab (announced by TalkBack) while an update is offered.
+
+### Changed
+
+- Update screen redesign: hero illustration, notes box with a link to the full notes, plain trust lines, one action slot that carries download progress, install and errors, plus Not now and Skip this version. The Home card leads with the first release note.
+- Update downloads resume a matching partial file (HTTP Range) and a verified download survives a restart; space check asks for two copies; daily checks are jittered; a failed install offers the release page.
+
 ## [0.4.4] - 2026-10-20
 
 ### Added

@@ -8,7 +8,7 @@ import org.json.JSONTokener
 
 /** Untrusted release data; never use its generated toString in diagnostics. */
 class Release(val version: String, val code: Long, val name: String, val size: Long,
-              val url: String, val digest: String, private val english: List<String>, private val arabic: List<String>) {
+              val url: String, val digest: String, internal val english: List<String>, internal val arabic: List<String>) {
     fun notes(language: String): List<String> = if (language == "ar" && arabic.isNotEmpty()) arabic else english
     companion object {
         const val API = "https://api.github.com/repos/ahmed-abdat/nezzel/releases/latest"
@@ -44,7 +44,7 @@ class Release(val version: String, val code: Long, val name: String, val size: L
                 val apk = json.getJSONObject("apk")
                 val name = (apk.get("name") as? String)?.takeIf(::validName) ?: return null
                 val size = positiveInteger(apk.get("size")) ?: return null
-                if (size > Long.MAX_VALUE - 64L * 1024 * 1024) return null
+                if (size > (Long.MAX_VALUE - 64L * 1024 * 1024) / 2) return null
                 val digest = apk.get("sha256") as? String ?: return null
                 if (!Regex("[0-9a-fA-F]{64}").matches(digest)) return null
                 val notes = json.getJSONObject("notes")
@@ -80,7 +80,7 @@ class Release(val version: String, val code: Long, val name: String, val size: L
                 val name = apk.getString("name")
                 if (!validName(name)) return null
                 val size = apk.get("size").let { if (it is Int || it is Long) (it as Number).toLong() else return null }
-                if (size <= 0 || size > Long.MAX_VALUE - 64L * 1024 * 1024) return null
+                if (size <= 0 || size > (Long.MAX_VALUE - 64L * 1024 * 1024) / 2) return null
                 val url = apk.get("browser_download_url") as? String ?: return null
                 if (!UpdatePolicy.allowed(url)) return null
                 val digest = apk.get("digest") as? String ?: return null

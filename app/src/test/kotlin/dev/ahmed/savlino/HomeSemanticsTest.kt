@@ -32,17 +32,17 @@ class HomeSemanticsTest {
     }
     @Test @Config(qualifiers = "en")
     fun distinctShareShowsShortEnglishFirstLinkNotice() = assertMultipleLinkNotice(
-        "3 links found. Starting with the first.")
+        "3 links found — starting with the first")
 
     @Test @Config(qualifiers = "ar")
     fun distinctShareShowsShortArabicFirstLinkNotice() = assertMultipleLinkNotice(
-        "وُجدت 3 روابط، سنبدأ بالأول.")
+        "وجدنا 3 روابط، سنبدأ بالأول")
 
     @Test fun repeatedIdenticalShareDoesNotShowMultipleLinkNotice() = assertMultipleLinkNotice(
-        "3 links found. Starting with the first.", repeated = true)
+        "3 links found — starting with the first", repeated = true)
 
     @Test fun distinctPasteShowsFirstLinkNotice() = assertMultipleLinkNotice(
-        "3 links found. Starting with the first.", paste = true)
+        "3 links found — starting with the first", paste = true)
 
     @Test fun automaticShareShowsNoticeInsideTheOptionsWindow() {
         val app = org.robolectric.RuntimeEnvironment.getApplication() as dev.ahmed.savlino.jobs.IsolatedTestApplication
@@ -62,7 +62,7 @@ class HomeSemanticsTest {
             assertTrue(links.optionsState is dev.ahmed.savlino.ui.OptionsState.Error)
             val modalTexts = texts(windowViews(controller.get()).filter { it !== controller.get().window.decorView }
                 .flatMap(::roots).flatMap { descendants(it.semanticsOwner.unmergedRootSemanticsNode) })
-            assertTrue("Notice must be visible above the modal sheet", "3 links found. Starting with the first." in modalTexts)
+            assertTrue("Notice must be visible above the modal sheet", "3 links found — starting with the first" in modalTexts)
         } finally { controller.pause().stop().destroy(); store.close(); app.coordinatorOverride = null }
     }
 
@@ -121,11 +121,11 @@ class HomeSemanticsTest {
     }
     @Test @Config(qualifiers = "en")
     fun coordinatorFailureShowsLocalizedPoliteError() = assertCoordinatorError(
-        "Downloads are unavailable. Reopen Nezzel to try again.")
+        "Downloads are unavailable — reopen Nezzel to try again")
 
     @Test @Config(qualifiers = "ar")
     fun coordinatorFailureShowsArabicPoliteError() = assertCoordinatorError(
-        "التنزيلات غير متاحة. أعد فتح Nezzel لإعادة المحاولة.")
+        "التنزيل غير متاح، أغلق Nezzel وافتحه مجددًا لإعادة المحاولة")
 
     private fun assertCoordinatorError(expected: String) {
         val app = org.robolectric.RuntimeEnvironment.getApplication() as dev.ahmed.savlino.jobs.IsolatedTestApplication
