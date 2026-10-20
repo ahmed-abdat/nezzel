@@ -109,7 +109,7 @@ dependencies {
     }
     implementation(libs.work.runtime)
     testImplementation(libs.work.testing)
-    testImplementation(libs.okhttp)
+    implementation(libs.okhttp)
     implementation(project(":core"))
     implementation(project(":engine"))
     implementation(platform(libs.compose.bom))

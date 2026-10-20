@@ -328,4 +328,37 @@
     <string name="company_link_failed">Couldn’t open this link.</string>
     <string name="open_file_failed">Couldn’t open this file.</string>
     <string name="audio_only_type">Audio only · %1$s</string>
+
+    <!-- App updates: owner-approved GitHub checks, explicit installation. -->
+    <string name="update_available_title">Update available</string>
+    <string name="update_card_version">Nezzel %1$s</string>
+    <string name="update_action">Update</string>
+    <string name="update_not_now">Not now</string>
+    <string name="update_screen_title">App update</string>
+    <string name="update_current">You have %1$s</string>
+    <string name="update_whats_new">What\'s new</string>
+    <string name="update_keeps_data">Your files and settings stay as they are.</string>
+    <string name="update_download">Download update · %1$s</string>
+    <string name="update_skip">Skip this version</string>
+    <string name="update_progress">%1$s of %2$s</string>
+    <string name="update_verifying">Checking the update…</string>
+    <string name="update_installing">Installing the update…</string>
+    <string name="update_install">Install update</string>
+    <string name="update_permission_title">Allow Nezzel to install updates</string>
+    <string name="update_permission_body">Android asks once. Turn on “Allow from this source”, then come back here.</string>
+    <string name="update_permission_action">Open settings</string>
+    <string name="update_failed_network">Couldn\'t download the update. Check your connection, then try again.</string>
+    <string name="update_failed_space">Not enough free space for the update (%1$s needed).</string>
+    <string name="update_failed_verify">This update couldn\'t be verified, so it wasn\'t installed.</string>
+    <string name="update_not_installed">The update wasn\'t installed.</string>
+    <string name="update_done">Updated to %1$s</string>
+    <string name="settings_updates_heading">App updates</string>
+    <string name="settings_updates_auto">Check for app updates</string>
+    <string name="settings_updates_auto_body">Checks GitHub once a day. Nothing installs until you tap.</string>
+    <string name="settings_updates_check_now">Check now</string>
+    <string name="update_latest">You have the latest version.</string>
+    <string name="update_check_failed">Couldn\'t check for updates. Try again later.</string>
+    <string name="update_channel">App updates</string>
+    <string name="update_notification_title">Nezzel %1$s is available</string>
+    <string name="update_notification_text">Tap to see what\'s new and update.</string>
 </resources>

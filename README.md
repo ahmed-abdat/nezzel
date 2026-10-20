@@ -125,11 +125,14 @@ The bundled yt-dlp version is 2025.11.12. Startup maintenance checks upstream ST
 
 No analytics or telemetry. Processing stays on the device; requests go directly to source sites/CDNs and upstream engine-update infrastructure. This is not an offline app. Automatic option loading can fetch metadata and previews when Nezzel is foregrounded or accepts a shared/pasted link; turn off **Show options automatically** for manual inspection. There is no background clipboard monitoring. Saving media always requires an explicit action. Local job records support progress and retry; source URLs for retryable jobs have bounded retention. URLs and clipboard contents must never be logged.
 
+App updates are checked through GitHub at most once a day after a successful automatic check while **Check for app updates** is on (default). Settings can turn this off or check manually. The primary request downloads `nezzel-update.json` from the latest release on `github.com` (with redirects to GitHub release-asset hosts). If that fetch or manifest is unavailable or invalid, Nezzel tries `api.github.com` once. GitHub sees your IP address and the Nezzel version in the User-Agent. No cookies, account or device identifiers are sent. Update notifications use permission already granted for downloads; updates never request notification permission. APK downloads happen only after you tap Download update, and Android asks you to confirm installation. The downloaded APK must match its SHA-256 digest, this app's package and signing certificates, and the release version code. Files and settings are preserved.
+
 | Permission | Purpose |
 | --- | --- |
 | `INTERNET` | Inspection, previews, downloads and engine updates |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` | User-confirmed download work |
-| `POST_NOTIFICATIONS` | Download progress/results on Android 13+; denial does not prevent downloads |
+| `POST_NOTIFICATIONS` | Download progress/results and app updates on Android 13+; denial does not prevent downloads |
+| `REQUEST_INSTALL_PACKAGES` | User-confirmed app updates through Android PackageInstaller |
 | `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED` | WorkManager execution, connectivity constraints and rescheduling |
 | App-scoped `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX internal receiver protection; signature-level, no user prompt |
 

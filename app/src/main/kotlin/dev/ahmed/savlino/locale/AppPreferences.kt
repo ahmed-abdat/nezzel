@@ -50,6 +50,9 @@ class AppPreferences(context: Context) {
     var suggestionsEnabled: Boolean
         get() = prefs.getBoolean("suggestions", true)
         set(value) { prefs.edit().putBoolean("suggestions", value).apply() }
+    var appUpdates: Boolean
+        get() = prefs.getBoolean("app_updates", true)
+        set(value) { prefs.edit().putBoolean("app_updates", value).commit() }
     var automaticOptions: Boolean
         get() = prefs.getBoolean("automatic_options", true)
         set(value) { prefs.edit().putBoolean("automatic_options", value).apply() }

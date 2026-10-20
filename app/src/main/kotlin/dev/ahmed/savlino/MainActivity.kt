@@ -65,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preferences = AppPreferences(this)
+        val openUpdate = intent.action == dev.ahmed.savlino.update.UpdateNotifications.OPEN
         val launchShare = ShareInput.from(intent)
         replayingOnboarding = launchShare == null && savedInstanceState?.getBoolean("onboardingReplay") == true
         onboarding = if (launchShare != null) {
@@ -87,6 +88,9 @@ class MainActivity : AppCompatActivity() {
                     images = media.inspect, imageSaver = media.saver) as T
             }
         })[LinkViewModel::class.java]
+        val appUpdates = (application as NezzelApplication).appUpdates
+        appUpdates.start()
+        if (savedInstanceState == null && openUpdate && appUpdates.available) links.navigate("AppUpdate")
         links.notificationPrompt = ::beforeConfirmedDownload
         showNotificationRationale = savedInstanceState?.getBoolean("notificationRationale") == true && links.hasPendingNotificationChoice
         refreshPreferences()
@@ -96,7 +100,7 @@ class MainActivity : AppCompatActivity() {
             (application as NezzelApplication).startMaintenanceAfterOnboarding()
         }
         // Consume the launch envelope; the ViewModel owns accepted/queued user state thereafter.
-        intent = Intent(this, MainActivity::class.java)
+        setIntent(Intent(this, MainActivity::class.java))
         setContent {
             // Guards may clear without a new focus/resume event (e.g. restored Settings -> Home).
             // Re-use the same once-per-entry foreground reader; the ViewModel rechecks eligibility.
@@ -144,6 +148,11 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == dev.ahmed.savlino.update.UpdateNotifications.OPEN && (application as NezzelApplication).appUpdates.available) {
+            links.navigate("AppUpdate")
+            setIntent(Intent(this, MainActivity::class.java))
+            return
+        }
         val share = ShareInput.from(intent)
         links.onNewShare(share)
         if (onboarding && share != null) finishOnboarding()

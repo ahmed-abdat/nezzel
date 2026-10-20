@@ -8,6 +8,7 @@ import kotlinx.coroutines.*
 open class NezzelApplication : Application(), Configuration.Provider {
     open val downloads by lazy { DownloadCoordinator(this) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val appUpdates by lazy { dev.ahmed.savlino.update.AppUpdates(this, scope) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */
     open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope) }
     override val workManagerConfiguration: Configuration

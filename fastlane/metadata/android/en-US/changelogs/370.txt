@@ -1,0 +1,3 @@
+0.4.4
+• Nezzel tells you when a new version is out and updates in a few taps.
+• Every update is checked before it installs: same app, same signature. You can turn checks off in Settings.

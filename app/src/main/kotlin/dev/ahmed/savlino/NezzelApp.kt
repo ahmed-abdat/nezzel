@@ -1,6 +1,7 @@
 package dev.ahmed.savlino
 
 import android.os.Build
+import dev.ahmed.savlino.update.*
 import dev.ahmed.savlino.storage.SaveDestinations
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -51,13 +52,19 @@ fun NezzelApp(
     onAutomaticOptions: (Boolean) -> Unit = {},
     onHowItWorks: () -> Unit = {},
 ) {
-    BackHandler(links.destination != "Home") { links.navigate("Home") }
+    var updateBack by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
+    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads")) updateBack = links.destination }
+    BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack else "Home") }
     val reduced = rememberReducedMotion()
     val snackbar = remember { SnackbarHostState() }
     val library = rememberLibraryState(snackbar)
     val jobs by (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val updates = (context.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available }
+    LaunchedEffect(updates) {
+        if (updates?.consumeUpdated() == true) snackbar.showSnackbar(context.getString(R.string.update_done, NezzelFormat.isolate(BuildConfig.VERSION_NAME)))
+    }
     val destinations = remember(context) { SaveDestinations(context) }
     val removeFailed: (String) -> Unit = { id -> scope.launch { links.downloads?.removeFailed(id) } }
     val retry: (String) -> Unit = { id ->
@@ -115,7 +122,12 @@ fun NezzelApp(
     CompositionLocalProvider(LocalReducedMotion provides reduced) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
-        if (links.moreFormats && !links.hasPendingShare) {
+        if (links.destination == "AppUpdate" && updates != null) {
+            Box(Modifier.fillMaxSize()) {
+                AppUpdateRoute(updates, language) { links.navigate(updateBack) }
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+            }
+        } else if (links.moreFormats && !links.hasPendingShare) {
             OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
         } else {
             NavigationScaffold(links.destination, jobs, language, links::navigate,
@@ -196,6 +208,13 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
                     if (jobs.isEmpty() && library.media.isEmpty() && links.text.isEmpty())
                         Text(stringResource(R.string.home_subtitle), style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                val updater = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates
+                if (updater?.available == true) {
+                    val update by updater.state.collectAsState()
+                    if (update.card(BuildConfig.VERSION_CODE.toLong())) update.release?.let { release ->
+                        UpdateCard(release, { links.navigate("AppUpdate") }, updater::dismiss)
+                    }
                 }
                 links.downloads?.let { downloads ->
                     val coordinatorError by downloads.error.collectAsState()
@@ -325,6 +344,9 @@ private fun SettingsScreen(
                         EngineUpdateStatus.BUSY -> R.string.engine_update_busy
                     }), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
+            }
+            (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.let { updates ->
+                UpdateSettings(updates) { links.navigate("AppUpdate") }
             }
             dev.ahmed.savlino.ui.AboutSection(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, onHowItWorks)
         }
