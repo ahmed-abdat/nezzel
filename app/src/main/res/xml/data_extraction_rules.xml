@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Include-only: all other preferences, databases, files and engine state are excluded. -->
+        <include domain="sharedpref" path="nezzel-portable.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <!-- Include-only: all other preferences, databases, files and engine state are excluded. -->
+        <include domain="sharedpref" path="nezzel-portable.xml" />
+    </device-transfer>
+</data-extraction-rules>

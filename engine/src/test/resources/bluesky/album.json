@@ -1,0 +1,40 @@
+{
+  "thread": {
+    "$type": "app.bsky.feed.defs#threadViewPost",
+    "post": {
+      "uri": "at://did:plc:abcdefghijklmnopqrstuvwx/app.bsky.feed.post/3synthetic001",
+      "author": {
+        "did": "did:plc:abcdefghijklmnopqrstuvwx",
+        "handle": "synthetic.test",
+        "displayName": "Synthetic author"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "text": "Synthetic caption"
+      },
+      "embed": {
+        "$type": "app.bsky.embed.images#view",
+        "images": [
+          {
+            "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:abcdefghijklmnopqrstuvwx/bafkreisynthetic1@jpeg",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:abcdefghijklmnopqrstuvwx/bafkreisynthetic1",
+            "alt": "Synthetic description",
+            "aspectRatio": {
+              "width": 1200,
+              "height": 1600
+            }
+          },
+          {
+            "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:abcdefghijklmnopqrstuvwx/bafkreisynthetic2@jpeg",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:abcdefghijklmnopqrstuvwx/bafkreisynthetic2",
+            "alt": "Synthetic description",
+            "aspectRatio": {
+              "width": 1200,
+              "height": 1600
+            }
+          }
+        ]
+      }
+    }
+  }
+}

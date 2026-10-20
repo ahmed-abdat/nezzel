@@ -1,0 +1,44 @@
+{
+ "id": "fixture-imgur",
+ "extractor": "Imgur",
+ "extractor_key": "Imgur",
+ "duration": null,
+ "is_live": null,
+ "_type": "video",
+ "title": "Fixture imgur",
+ "webpage_url": "https://example.invalid/imgur",
+ "formats": [
+  {
+   "ext": "gif",
+   "width": 916,
+   "height": 390,
+   "filesize": 47551124,
+   "acodec": "none",
+   "preference": -10,
+   "protocol": "https",
+   "video_ext": "gif",
+   "audio_ext": "none",
+   "abr": 0,
+   "vbr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "format_id": "0",
+   "url": "https://cdn.example.invalid/imgur/0"
+  },
+  {
+   "format_id": "twitter",
+   "ext": "mp4",
+   "width": null,
+   "height": null,
+   "protocol": "https",
+   "video_ext": "mp4",
+   "audio_ext": "none",
+   "vbr": null,
+   "abr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "filesize_approx": null,
+   "url": "https://cdn.example.invalid/imgur/1"
+  }
+ ]
+}

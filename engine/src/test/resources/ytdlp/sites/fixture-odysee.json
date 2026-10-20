@@ -1,0 +1,29 @@
+{
+ "id": "fixture-odysee",
+ "extractor": "lbry",
+ "extractor_key": "LBRY",
+ "duration": 554,
+ "is_live": false,
+ "_type": "video",
+ "title": "Fixture odysee",
+ "webpage_url": "https://example.invalid/odysee",
+ "formats": [
+  {
+   "format_id": "original",
+   "quality": 1,
+   "ext": "mp4",
+   "filesize": 196947353,
+   "width": 1920,
+   "height": 1080,
+   "vcodec": null,
+   "protocol": "https",
+   "video_ext": "mp4",
+   "audio_ext": "none",
+   "vbr": null,
+   "abr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "url": "https://cdn.example.invalid/odysee/0"
+  }
+ ]
+}

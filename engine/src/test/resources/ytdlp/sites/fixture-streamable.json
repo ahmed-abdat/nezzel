@@ -1,0 +1,48 @@
+{
+ "id": "fixture-streamable",
+ "extractor": "Streamable",
+ "extractor_key": "Streamable",
+ "duration": 61.516,
+ "is_live": null,
+ "_type": "video",
+ "title": "Fixture streamable",
+ "webpage_url": "https://example.invalid/streamable",
+ "formats": [
+  {
+   "format_id": "mp4-mobile",
+   "width": 640,
+   "height": 360,
+   "filesize": 12171177,
+   "fps": 30,
+   "vbr": 1512.284,
+   "vcodec": "h264",
+   "acodec": null,
+   "protocol": "https",
+   "ext": "mp4",
+   "video_ext": "mp4",
+   "audio_ext": "none",
+   "abr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "url": "https://cdn.example.invalid/streamable/0"
+  },
+  {
+   "format_id": "mp4",
+   "width": 1280,
+   "height": 720,
+   "filesize": 19286494,
+   "fps": 30,
+   "vbr": 2374.146,
+   "vcodec": "h264",
+   "acodec": null,
+   "protocol": "https",
+   "ext": "mp4",
+   "video_ext": "mp4",
+   "audio_ext": "none",
+   "abr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "url": "https://cdn.example.invalid/streamable/1"
+  }
+ ]
+}

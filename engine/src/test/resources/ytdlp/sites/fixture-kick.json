@@ -1,0 +1,28 @@
+{
+ "id": "fixture-kick",
+ "extractor": "kick:clips",
+ "extractor_key": "KickClip",
+ "duration": 43.0,
+ "is_live": null,
+ "_type": "video",
+ "title": "Fixture kick",
+ "webpage_url": "https://example.invalid/kick",
+ "formats": [
+  {
+   "format_id": "0",
+   "ext": "mp4",
+   "protocol": "m3u8_native",
+   "preference": null,
+   "quality": null,
+   "has_drm": false,
+   "video_ext": "mp4",
+   "audio_ext": "none",
+   "vbr": null,
+   "abr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "filesize_approx": null,
+   "url": "https://cdn.example.invalid/kick/0"
+  }
+ ]
+}

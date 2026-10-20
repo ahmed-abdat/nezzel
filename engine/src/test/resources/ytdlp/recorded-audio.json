@@ -1,0 +1,58 @@
+{
+  "formats": [
+    {
+      "format_id": "hls_mp3_1_0",
+      "ext": "mp3",
+      "acodec": "mp3",
+      "vcodec": "none",
+      "abr": 128,
+      "tbr": 128,
+      "filesize_approx": 3402512
+    },
+    {
+      "format_id": "http_mp3_1_0",
+      "ext": "mp3",
+      "acodec": "mp3",
+      "vcodec": "none",
+      "abr": 128,
+      "tbr": 128,
+      "filesize_approx": 3402512
+    },
+    {
+      "format_id": "hls_aac_96k",
+      "ext": "m4a",
+      "acodec": "mp4a.40.2",
+      "vcodec": "none",
+      "abr": 96,
+      "tbr": 96,
+      "filesize_approx": 2551884
+    },
+    {
+      "format_id": "hls_aac_160k",
+      "ext": "m4a",
+      "acodec": "mp4a.40.2",
+      "vcodec": "none",
+      "abr": 160,
+      "tbr": 160,
+      "filesize_approx": 4253140
+    },
+    {
+      "format_id": "hls_aac_256k",
+      "ext": "m4a",
+      "acodec": "mp4a.40.2",
+      "vcodec": "none",
+      "abr": 256,
+      "tbr": 256,
+      "filesize_approx": 6805024
+    },
+    {
+      "format_id": "download",
+      "ext": "mp3",
+      "filesize": 8504480,
+      "vcodec": "none",
+      "abr": null,
+      "tbr": null,
+      "acodec": "mp3"
+    }
+  ]
+}

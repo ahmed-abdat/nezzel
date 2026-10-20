@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Include-only: all other preferences, databases, files and engine state are excluded. -->
+    <include domain="sharedpref" path="nezzel-portable.xml" />
+</full-backup-content>

@@ -1,0 +1,8 @@
+0.4.2
+• Telegram and Bluesky photo-post readers.
+• Facebook progressive video options and better playback compatibility.
+• Restored options for Pinterest, Kick and Streamable cases.
+• Clearer English/Arabic hints and onboarding.
+• Saved-image dimensions no longer use thumbnail dimensions.
+• Better default video selection and saved-file labels.
+Includes original GIF saving from 0.4.1. This build has not been publicly published.

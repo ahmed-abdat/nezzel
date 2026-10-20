@@ -1,0 +1,317 @@
+package dev.ahmed.savlino.engine.facebook
+
+import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.*
+import dev.ahmed.savlino.engine.mediahttp.*
+import dev.ahmed.savlino.engine.mediaimage.*
+import java.io.ByteArrayOutputStream
+import java.net.URLEncoder
+import javax.net.ssl.SSLSocket
+import kotlinx.coroutines.runBlocking
+import org.junit.Test
+import kotlin.test.*
+
+class FacebookInspectionTest : PublicImageTestBase() {
+    private val html = mapOf("Content-Type" to "text/html; charset=utf-8")
+    private val png = mapOf("Content-Type" to "image/png")
+    private val storyTarget = "/story.php?story_fbid=900000000000001&id=42"
+
+    /** Share link → story.php (desktop page) → CDN image, as recorded live; everything else is 404. */
+    private fun facebook(page: String = "photo-post.html", image: ByteArray = raster(),
+        override: (RecordedMediaRequest, SSLSocket) -> Boolean = { _, _ -> false }): (RecordedMediaRequest, SSLSocket) -> Unit =
+        { request, socket ->
+            val host = request.headers["host"].orEmpty()
+            if (!override(request, socket)) when {
+                host == "www.facebook.com" && request.target.startsWith("/share/p/") ->
+                    socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com$storyTarget&rdid=synthetic"))
+                host == "www.facebook.com" && request.target == storyTarget ->
+                    socket.reply(body = facebookFixture(page).toByteArray(), headers = html)
+                host == "scontent.example.fbcdn.net" -> socket.reply(body = image, headers = png)
+                else -> socket.reply(404)
+            }
+        }
+
+    private fun PublicImageFixture.inspectFacebook(url: String, revision: Long = 1) = runBlocking {
+        inspector.inspect(inspector.newOperation(imageSource(url, revision), IMAGE_IDENTITY), ImageSourceType.FACEBOOK)
+    }
+
+    @Test fun shareLinkRedirectsToStoryAndFetchesTheAttachmentWithBrowserHeaders() {
+        fixture(respond = facebook()) { f ->
+            inspected(f.inspectFacebook(FB_SHARE)).use { result ->
+                assertEquals(1, result.inspection.items.size)
+                assertIs<ImageSaveAvailability.Available>(result.saveAvailability)
+                assertTrue(result.discovery.previewQuality, "photo page 404 → truthful smaller copy")
+                assertEquals(listOf("/share/p/1SyntheticAb/", storyTarget, photoTarget, "/1.jpg"), f.server.requests.map { it.target })
+                val page = f.server.requests[1]
+                assertEquals("www.facebook.com", page.headers["host"])
+                val agent = page.headers["user-agent"].orEmpty()
+                assertTrue(agent.contains("Chrome/") && !agent.contains("Mobile") && !agent.contains("okhttp"), "desktop Chrome UA")
+                assertTrue(page.headers["accept"].orEmpty().startsWith("text/html"))
+                assertTrue(page.headers["accept-language"].orEmpty().isNotBlank())
+                assertEquals("navigate", page.headers["sec-fetch-mode"])
+                assertEquals("none", page.headers["sec-fetch-site"])
+                assertEquals("document", page.headers["sec-fetch-dest"])
+                assertEquals("identity", page.headers["accept-encoding"])
+                for (request in f.server.requests) {
+                    assertNull(request.headers["cookie"]); assertNull(request.headers["authorization"])
+                }
+                assertEquals("scontent.example.fbcdn.net", f.server.requests[3].headers["host"])
+                assertNull(f.server.requests[3].headers["referer"])
+            }
+        }
+    }
+
+    @Test fun mobileAndWebHostsAreNormalisedToWwwBeforeTheFirstRequest() {
+        fixture(respond = facebook()) { f ->
+            inspected(f.inspectFacebook("https://m.facebook.com/story.php?story_fbid=900000000000001&id=42&mibextid=x")).close()
+            assertEquals("www.facebook.com", f.server.requests.first().headers["host"])
+            assertEquals(storyTarget, f.server.requests.first().target)
+        }
+    }
+
+    private val photoTarget = "/photo/?fbid=900000000000002"
+    /** The photo-post attachment's own photo page: currMedia carries the larger copy (declared 2048). */
+    private fun photoPage(id: String = "900000000000002") = facebookFixture("photo-page.html")
+        .replace("\"id\":\"900000000000001\"", "\"id\":\"$id\"").replace(cdn(1), cdn(50)).toByteArray()
+    private fun withPhotoPage(reply: (SSLSocket) -> Unit) = facebook(override = { request, socket ->
+        if (request.target.startsWith("/photo/")) { reply(socket); true } else false
+    })
+    private fun pageRequests(f: PublicImageFixture) = f.server.requests.count { it.headers["host"] == "www.facebook.com" }
+
+    @Test fun previewAttachmentFetchesItsOwnPhotoPageAndTakesTheLargerMatchedImage() {
+        fixture(respond = withPhotoPage { it.reply(body = photoPage(), headers = html) }) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                assertFalse(result.discovery.previewQuality, "full-size copy from the photo page")
+                assertEquals(ImageDiscovery(1, DiscoveryCompleteness.COMPLETE), result.discovery)
+                assertEquals(listOf(storyTarget, photoTarget, "/50.jpg"), f.server.requests.map { it.target })
+                val photo = f.server.requests[1]
+                assertEquals("navigate", photo.headers["sec-fetch-mode"])
+                assertTrue(photo.headers["user-agent"].orEmpty().contains("Chrome/"))
+                assertNull(photo.headers["cookie"])
+                assertEquals(2, pageRequests(f))
+            }
+        }
+    }
+
+    @Test fun failedOrUnmatchedPhotoPageFallsBackToTheSmallerCopyLabelledPreview() {
+        val replies: List<(SSLSocket) -> Unit> = listOf(
+            { it.reply(500) },
+            { it.reply(302, headers = mapOf("Location" to "https://www.facebook.com/login/")) },
+            { it.reply(302, headers = mapOf("Location" to "https://evil.example/photo")) },
+            { it.reply(body = facebookFixture("unavailable.html").toByteArray(), headers = html) },
+            { it.reply(body = photoPage("900000000000077"), headers = html) },
+            { it.reply(declared = 10L * 1024 * 1024 + 1, headers = html) })
+        for (reply in replies) fixture(respond = withPhotoPage(reply)) { f ->
+            inspected(f.inspectFacebook(FB_SHARE)).use { result ->
+                assertTrue(result.discovery.previewQuality, "truthful smaller-copy label")
+                assertEquals("/1.jpg", f.server.requests.last().target)
+                assertEquals(photoTarget, f.server.requests[2].target)
+                assertTrue(pageRequests(f) <= 3, "share redirect + story + one photo page")
+                assertEquals(2, f.server.requests.count { it.target == storyTarget || it.target == photoTarget })
+            }
+        }
+    }
+
+    @Test fun neverMoreThanTwoFacebookPageFetchesPerOperation() {
+        fixture(respond = withPhotoPage { it.reply(body = photoPage(), headers = html) }) { f ->
+            f.http.client.newOperation(MediaHttpOperation.PAGES_AND_IMAGE).use { token ->
+                assertSuccess(f.http.client.fetchFacebookPage(token, "https://www.facebook.com$storyTarget")).close()
+                assertSuccess(f.http.client.fetchFacebookPage(token, "https://www.facebook.com$photoTarget")).close()
+                assertFailure(f.http.client.fetchFacebookPage(token, "https://www.facebook.com$storyTarget"), MediaHttpFailure.RESOURCE_LIMIT)
+            }
+            assertEquals(2, f.server.requests.size)
+            f.http.client.newOperation(MediaHttpOperation.PAGE_AND_IMAGE).use { token ->
+                assertFailure(f.http.client.fetchFacebookPage(token, "https://www.facebook.com$storyTarget"), MediaHttpFailure.INVALID_CONTEXT)
+            }
+            assertEquals(2, f.server.requests.size, "a one-page (LinkedIn) operation cannot fetch Facebook pages")
+        }
+    }
+
+    @Test fun facebookPageCapIsTenMibAtTheBoundary() {
+        fun padded(size: Int): ByteArray {
+            val page = facebookFixture("album-post.html").toByteArray()
+            return page + ByteArray(size - page.size) { ' '.code.toByte() }
+        }
+        for (size in listOf(3 * 1024 * 1024 + 1, 10 * 1024 * 1024)) fixture(respond = facebook(override = { request, socket ->
+            if (request.target == storyTarget) { socket.reply(body = padded(size), headers = html); true } else false
+        })) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { assertEquals(18, it.discovery.claimedCount) }
+        }
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target == storyTarget) { socket.reply(declared = 10L * 1024 * 1024 + 1, headers = html); true } else false
+        })) { f ->
+            failed(f.inspectFacebook(FB_STORY), ImageFailure.BUDGET, ImagePhase.PAGE)
+            assertEquals(1, f.server.requests.size)
+        }
+    }
+
+    @Test fun albumFetchesOnlyTheFirstNodeAndReportsPartialEighteen() {
+        fixture(respond = facebook("album-post.html")) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                assertEquals(5, result.inspection.items.size)
+                assertEquals(listOf(1, 0, 0, 0, 0), result.inspection.items.map { it.renditions.size })
+                assertEquals(ImageDiscovery(5, DiscoveryCompleteness.PARTIAL, 18), result.discovery)
+                assertEquals(listOf(storyTarget, "/2.jpg"), f.server.requests.map { it.target })
+            }
+        }
+    }
+
+    @Test fun offDomainRedirectsAreRejectedBeforeAnyFurtherRequest() {
+        for (location in listOf("https://evil.example/share", "https://www.facebook.com.evil.example/story.php?story_fbid=1&id=2",
+                "https://l.facebook.com/l.php?u=https%3A%2F%2Fevil.example", "http://www.facebook.com$storyTarget",
+                "https://www.facebook.com/somepage")) {
+            fixture(respond = facebook(override = { request, socket ->
+                if (request.target.startsWith("/share/")) { socket.reply(302, headers = mapOf("Location" to location)); true } else false
+            })) { f ->
+                failed(f.inspectFacebook(FB_SHARE), ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE)
+                assertEquals(1, f.server.requests.size)
+                assertEquals(1, f.http.dnsCalls.get())
+            }
+        }
+    }
+
+    @Test fun loginNextIsUnwrappedOnceAndAPersistentLoginWallIsPrivate() {
+        val next = URLEncoder.encode("https://www.facebook.com$storyTarget", "UTF-8")
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target.startsWith("/share/")) {
+                socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com/login/?next=$next")); true
+            } else false
+        })) { f ->
+            inspected(f.inspectFacebook(FB_SHARE)).close()
+            assertEquals(listOf("/share/p/1SyntheticAb/", storyTarget, photoTarget, "/1.jpg"), f.server.requests.map { it.target },
+                "the login page itself is never requested")
+        }
+        for (location in listOf("https://www.facebook.com/login/", "https://m.facebook.com/login.php?next=$next",
+                "https://www.facebook.com/login/?next=" + URLEncoder.encode("https://evil.example/x", "UTF-8"))) {
+            fixture(respond = facebook(override = { request, socket ->
+                if (request.target == storyTarget) { socket.reply(302, headers = mapOf("Location" to location)); true } else false
+            })) { f ->
+                val failure = failed(f.inspectFacebook(FB_STORY), ImageFailure.PRIVATE, ImagePhase.PAGE)
+                assertNull(failure.statusCode)
+                assertEquals(1, f.server.requests.size)
+            }
+        }
+    }
+
+    @Test fun loginPageWithCdnOgImageIsPrivateWithoutAnyImageRequest() {
+        val wall = facebookFixture("login-page.html").replace("</head>", "<meta property=\"og:image\" content=\"${cdn(7)}\" /></head>")
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target == storyTarget) { socket.reply(body = wall.toByteArray(), headers = html); true } else false
+        })) { f ->
+            failed(f.inspectFacebook(FB_STORY), ImageFailure.PRIVATE, ImagePhase.PAGE)
+            assertEquals(listOf(storyTarget), f.server.requests.map { it.target })
+        }
+    }
+
+    @Test fun shortlinksAreNeverATerminalOrHopTargetAndLookalikeLoginPathsAreNotUnwrapped() {
+        val next = URLEncoder.encode("https://www.facebook.com$storyTarget", "UTF-8")
+        for (location in listOf("https://www.facebook.com/share/p/2OtherShare/", "https://fb.watch/other/",
+                "https://www.facebook.com/login.evil?next=$next", "https://www.facebook.com/checkpoint.evil/?next=$next",
+                "https://www.facebook.com/loginx/?next=$next")) {
+            fixture(respond = facebook(override = { request, socket ->
+                if (request.target.startsWith("/share/p/1")) { socket.reply(302, headers = mapOf("Location" to location)); true }
+                else if (request.target.startsWith("/share/p/2")) { socket.reply(body = facebookFixture("photo-post.html").toByteArray(), headers = html); true }
+                else false
+            })) { f ->
+                failed(f.inspectFacebook(FB_SHARE), ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE)
+                assertEquals(1, f.server.requests.size, "no follow-up request")
+            }
+        }
+        // A share page answered directly (no redirect) is not a resolved post either.
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target.startsWith("/share/")) { socket.reply(body = facebookFixture("photo-post.html").toByteArray(), headers = html); true } else false
+        })) { f ->
+            failed(f.inspectFacebook(FB_SHARE), ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE)
+            assertTrue(f.server.requests.none { it.headers["host"] == "scontent.example.fbcdn.net" })
+        }
+    }
+
+    @Test fun http400ShellUnavailableAndVideoPagesAreTypedFailures() {
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target == storyTarget) { socket.reply(400, body = facebookFixture("http400-shell.html").toByteArray(), headers = html); true } else false
+        })) { f ->
+            assertEquals(400, failed(f.inspectFacebook(FB_STORY), ImageFailure.HTTP, ImagePhase.PAGE).statusCode)
+        }
+        fixture(respond = facebook("unavailable.html")) { f ->
+            failed(f.inspectFacebook(FB_STORY), ImageFailure.PRIVATE, ImagePhase.PAGE)
+            assertEquals(1, f.server.requests.size)
+        }
+        fixture(respond = facebook("video-post.html")) { f ->
+            failed(f.inspectFacebook(FB_STORY), ImageFailure.NO_MEDIA, ImagePhase.PAGE)
+            assertEquals(1, f.server.requests.size, "a video thumbnail is never fetched as the image")
+        }
+    }
+
+    @Test fun imageRedirectMayNotLeaveTheScontentCdn() {
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target == "/1.jpg") {
+                socket.reply(302, headers = mapOf("Location" to "https://external.example.fbcdn.net/1.jpg")); true
+            } else false
+        })) { f ->
+            failed(f.inspectFacebook(FB_STORY), ImageFailure.SOURCE_REFUSED, ImagePhase.IMAGE)
+            assertTrue(f.server.requests.none { it.headers["host"] == "external.example.fbcdn.net" })
+        }
+    }
+
+    @Test fun cdnRuleRejectsAnOffCdnFirstUrlAtTheTransport() {
+        fixture { f ->
+            f.http.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { token ->
+                assertFailure(f.http.client.fetch(token, PublicMediaRequest("https://media.test/1.jpg", MediaHttpPurpose.IMAGE,
+                    hostRule = MediaHostRule.FACEBOOK_CDN)), MediaHttpFailure.INVALID_CONTEXT)
+            }
+            assertEquals(0, f.server.requests.size)
+            f.http.client.newOperation(MediaHttpOperation.PAGE_AND_IMAGE).use { token ->
+                assertFailure(f.http.client.fetchFacebookPage(token, "https://media.test/story.php"), MediaHttpFailure.INVALID_CONTEXT)
+            }
+            assertEquals(0, f.server.requests.size)
+        }
+    }
+
+    @Test fun saveRefetchesTheExactFixturePhotoThroughTheRealValidator() {
+        val bytes = raster(48, 30)
+        fixture(respond = facebook(image = bytes)) { f ->
+            inspected(f.inspectFacebook(FB_SHARE)).use { result ->
+                val selection = assertNotNull(result.inspection.selection(firstRendition(result).ref))
+                val sink = ByteArrayOutputStream()
+                val saved = assertIs<ImageSaveResult.Success>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                assertContentEquals(bytes, sink.toByteArray())
+                assertEquals(imageDigest(bytes), assertNotNull(saved.image.proof).completeBodySha256)
+                assertEquals(48, saved.image.width)
+                assertEquals(5, f.server.requests.size, "Save refetches the asset only")
+                assertEquals("/1.jpg", f.server.requests.last().target)
+                assertEquals("scontent.example.fbcdn.net", f.server.requests.last().headers["host"])
+            }
+        }
+    }
+
+    @Test fun saveStaysOnTheCdnWhenTheCdnRedirectsAway() {
+        val redirectSave = java.util.concurrent.atomic.AtomicBoolean()
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target == "/1.jpg" && redirectSave.get()) {
+                socket.reply(302, headers = mapOf("Location" to "https://external.example.fbcdn.net/1.jpg")); true
+            } else false
+        })) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                val selection = assertNotNull(result.inspection.selection(firstRendition(result).ref))
+                redirectSave.set(true)
+                val sink = ByteArrayOutputStream()
+                assertIs<ImageSaveResult.Failure>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                assertEquals(0, sink.size())
+                assertTrue(f.server.requests.none { it.headers["host"] == "external.example.fbcdn.net" })
+            }
+        }
+    }
+
+    @Test fun facadeRoutesFacebookToTheReaderAndOtherTypesCannotBorrowIt() {
+        fixture(respond = facebook()) { f ->
+            val facade = MediaSourceInspector(f.inspector, LegacyMediaInspectionAdapter(FakeEngine(InspectResult.Failure(DownloadError.Unsupported))))
+            inspected(runBlocking { facade.inspect(imageSource(FB_SHARE), "fb", MediaSourceRoute.FACEBOOK) }).close()
+            assertEquals(4, f.server.requests.size)
+            failed(runBlocking { facade.inspect(imageSource(POST, 2), "li-as-fb", MediaSourceRoute.FACEBOOK) },
+                ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE)
+            failed(runBlocking { facade.inspect(imageSource(FB_SHARE, 3), "fb-as-li", MediaSourceRoute.LINKEDIN) },
+                ImageFailure.SOURCE_REFUSED)
+            assertEquals(4, f.server.requests.size, "mismatched routes make no request")
+        }
+    }
+}

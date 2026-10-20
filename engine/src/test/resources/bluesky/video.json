@@ -1,0 +1,22 @@
+{
+  "thread": {
+    "$type": "app.bsky.feed.defs#threadViewPost",
+    "post": {
+      "uri": "at://did:plc:abcdefghijklmnopqrstuvwx/app.bsky.feed.post/3synthetic001",
+      "author": {
+        "did": "did:plc:abcdefghijklmnopqrstuvwx",
+        "handle": "synthetic.test",
+        "displayName": "Synthetic author"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "text": "Synthetic caption"
+      },
+      "embed": {
+        "$type": "app.bsky.embed.video#view",
+        "playlist": "https://video.bsky.app/watch/synthetic/playlist.m3u8",
+        "thumbnail": "https://video.bsky.app/watch/synthetic/thumbnail.jpg"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+ "id": "fixture-bandcamp",
+ "extractor": "Bandcamp",
+ "extractor_key": "Bandcamp",
+ "duration": 9.8485,
+ "is_live": null,
+ "_type": "video",
+ "title": "Fixture bandcamp",
+ "webpage_url": "https://example.invalid/bandcamp",
+ "formats": [
+  {
+   "format_id": "mp3-128",
+   "ext": "mp3",
+   "vcodec": "none",
+   "acodec": "mp3",
+   "abr": 128,
+   "protocol": "https",
+   "audio_ext": "mp3",
+   "video_ext": "none",
+   "vbr": 0,
+   "tbr": 128,
+   "filesize_approx": 157576,
+   "url": "https://cdn.example.invalid/bandcamp/0"
+  }
+ ]
+}

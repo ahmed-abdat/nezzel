@@ -1,0 +1,417 @@
+package dev.ahmed.savlino.engine
+
+import android.content.Context
+import dev.ahmed.savlino.domain.*
+import java.io.File
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.withLock
+
+sealed interface EngineUpdateResult {
+    data class Success(val oldVersion: String, val newVersion: String) : EngineUpdateResult
+    /** [usingBuiltIn]: the updated yt-dlp failed its self-test and the bundled one was restored. */
+    data class Failure(val error: DownloadError, val usingBuiltIn: Boolean = false) : EngineUpdateResult
+}
+
+/** Engine timeouts and recovery (lead 2026-10-19, docs/OPEN_DECISIONS.md). */
+internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 120_000, val stallMs: Long = 180_000,
+    val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000)
+
+/** Construction/availability are inert. Startup warm-up extracts and probes local binaries only. */
+class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
+    private val limits: EngineLimits = EngineLimits(), private val infoCache: YtdlpInfoCache? = null) : EngineAdapter {
+    constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir))
+    private val unavailable = UnavailableEngine()
+    private class Operation {
+        // Never pass externally supplied IDs to the library's child-process shell command.
+        val processId = UUID.randomUUID().toString()
+        val cancelled = AtomicBoolean()
+        val cancellation = CompletableDeferred<Unit>()
+        val finished = AtomicBoolean()
+        /** Set by the canceller when [deadline] passes; reported as retryable Network, never as a user cancel. */
+        val timedOut = AtomicBoolean()
+        @Volatile var deadline = NO_DEADLINE
+        fun expireIn(ms: Long) { deadline = System.nanoTime() + ms * 1_000_000 }
+    }
+    private class PendingCancellation {
+        val deadline = System.nanoTime() + CANCELLATION_WINDOW_MS * 1_000_000
+    }
+    private val lifecycleLock = Any()
+    private val operations = mutableMapOf<String, Operation>()
+    private val pendingCancellation = mutableMapOf<String, PendingCancellation>()
+    private val recentlyFinished = linkedMapOf<String, Unit>()
+    private val waitingState = MutableStateFlow<Set<String>>(emptySet())
+    override val waitingOperations = waitingState.asStateFlow()
+    override val isAvailable get() = runtime.initialization.isAvailable
+    override val preparing: StateFlow<Boolean> get() = runtime.initialization.preparing
+    override fun retryInitialization() = runtime.initialization.requestRetry()
+
+    override suspend fun warmUp(): Boolean = operation("warm-${UUID.randomUUID()}", { false }) { current ->
+        if (!initialize()) return@operation false
+        version(current)
+        true
+    }
+
+    override suspend fun installedVersion(): String? {
+        runtime.initialization.installedVersion?.let { return it }
+        // While an update is unresolved the binary is not readable; report Unknown instead of waiting on it.
+        if (pendingUpdate?.isActive == true) return null
+        return operation("version-${UUID.randomUUID()}", { null }) { current ->
+            if (initialize()) version(current) else null
+        }
+    }
+
+    override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult =
+        operation(operationId, { InspectResult.Failure(it) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+            if (!initialize()) return@operation unavailable.inspect(source, operationId)
+            // After initialization: a one-time extraction must not consume the network budget.
+            current.expireIn(limits.inspectMs)
+            val version = version(current)
+            inspectOnce(current, source, version)
+        }
+
+    private suspend fun inspectOnce(current: Operation, source: LinkRevision, version: String): InspectResult {
+        val empty = YtdlpErrorMapper.EmptyInspection()
+        val json = try {
+            execute(current, YtdlpCommand.inspect(source), empty::accept)
+        } catch (error: Exception) {
+            if (error is CancellationException || error is YtdlpExecutionFailure) throw error
+            val message = error.message.orEmpty()
+            empty.accept(message)
+            if (empty.isEmptyFailure(message)) {
+                val mapped = empty.error(source.link.rawUrl, DownloadError.Failed)
+                if (mapped != DownloadError.Failed) throw YtdlpExecutionFailure(mapped)
+            }
+            throw error
+        }
+        if (json.isBlank()) return InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.Failed))
+        val inspection = try {
+            YtdlpMetadataMapper.map(json, source, version)
+        } catch (error: UnsupportedMetadataException) {
+            if (!error.emptyResult) throw error
+            return InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.Unsupported))
+        }
+        return if (inspection.formats.isEmpty()) InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.NoFormats))
+        else {
+            infoCache?.remember(inspection, json)
+            InspectResult.Success(inspection)
+        }
+    }
+
+    override fun prepareDownload(command: DownloadCommand) { infoCache?.prepare(command) }
+
+    override suspend fun download(command: DownloadCommand, directory: File,
+        progress: (EngineEvent) -> Unit): TransferResult = operation(command.jobId, { TransferResult.Failure(it) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+        if (!initialize()) return@operation unavailable.download(command, directory, progress)
+        if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
+        // Validate before launching yt-dlp. Caller owns staging cleanup; adapter never touches public storage.
+        prepareDownload(command)
+        val infoJson = infoCache?.freshFile(command.jobId)
+        var bytes = -1L
+        suspend fun transfer(info: File?) {
+            val args = YtdlpCommand.download(command, directory, info)
+            val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1)
+            val diagnostics = YtdlpDiagnostics()
+            current.expireIn(limits.stallMs)
+            try {
+                execute(current, args) { line ->
+                    diagnostics.accept(line)
+                    // Post-processors write no transfer bytes; a long remux is not a stall.
+                    if (POSTPROCESSORS.any(line::startsWith)) current.deadline = NO_DEADLINE
+                    if (!current.cancelled.get()) mapper.map(line)?.let { event ->
+                        when (event) {
+                            is EngineEvent.Progress -> if (event.bytesDownloaded > bytes) {
+                                bytes = event.bytesDownloaded; current.expireIn(limits.stallMs)
+                            }
+                            EngineEvent.Merging -> current.deadline = NO_DEADLINE
+                        }
+                        progress(event)
+                    }
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException || current.cancelled.get()) throw error
+                if ((error is YtdlpExecutionFailure && error.expiredUrl) ||
+                    diagnostics.failure().expiredUrl || YtdlpDiagnostics.expiredUrl(error.message.orEmpty()))
+                    throw YtdlpExecutionFailure(if (error is YtdlpExecutionFailure) error.error
+                        else diagnostics.failure().error.takeUnless { it == DownloadError.Failed }
+                            ?: YtdlpErrorMapper.map(error.message.orEmpty()), expiredUrl = true)
+                throw error
+            }
+        }
+        try { transfer(infoJson) }
+        catch (error: Exception) {
+            if (error is CancellationException) throw error
+            currentCoroutineContext().ensureActive()
+            checkCancelled(current)
+            val retry = infoJson != null && error is YtdlpExecutionFailure && error.expiredUrl
+            if (!retry || bytes > 0 || !clearEmptyStaging(directory)) throw error
+            infoCache.remove(command.jobId)
+            // One expired-info retry, using the same exact confirmed IDs from the URL.
+            transfer(null)
+        }
+        current.deadline = NO_DEADLINE
+        checkCancelled(current)
+        val output = try {
+            val root = directory.canonicalFile
+            val manifest = File(root, "result-path.txt")
+            require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
+            val paths = manifest.readLines().filter { it.isNotBlank() }
+            require(paths.size == 1)
+            val files = requireNotNull(root.listFiles()).filter { it.name != "result-path.txt" }
+            require(files.size == 1)
+            val file = files.single()
+            require(file.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
+            require(!java.nio.file.Files.isSymbolicLink(file.toPath()))
+            require(File(paths.single()).canonicalFile == file.canonicalFile)
+            val output = StagedOutput.validate(root, listOf(file))
+            require(output.file.parentFile == root)
+            output
+        } catch (_: IllegalArgumentException) {
+            throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+        }
+        // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
+        // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
+        if (command.format.hasVideo && !command.format.animatedGif && output.file.extension.equals("mp4", ignoreCase = true)) {
+            try { runtime.rewriteTitle(output.file, command.filename.substringBeforeLast('.'), current.processId) }
+            catch (cancel: CancellationException) { throw cancel }
+            catch (_: Exception) { /* Optional polish must never fail an otherwise successful transfer. */ }
+            checkCancelled(current)
+        }
+        TransferResult.Success(output)
+    }
+
+    private fun clearEmptyStaging(directory: File): Boolean = try {
+        val files = directory.listFiles()
+        files != null && files.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && it.length() == 0L } &&
+            files.all { it.delete() }
+    } catch (_: Exception) { false }
+
+    /**
+     * Caller schedules authorized maintenance. The engine owns the updater: it runs in [updateScope] holding the
+     * exclusive gate from the first version read until the new yt-dlp passed its self-test or the bundled one was
+     * restored. The caller only stops waiting after [EngineLimits.updateMs]; the gate stays closed until then.
+     */
+    override suspend fun updateYtdlp(): EngineUpdateResult {
+        val task = synchronized(updateOwner) {
+            pendingUpdate?.takeIf { it.isActive } ?: updateScope.async { runUpdate() }.also { pendingUpdate = it }
+        }
+        return withTimeoutOrNull(limits.updateMs) { task.await() } ?: EngineUpdateResult.Failure(DownloadError.Network)
+    }
+    private suspend fun runUpdate(): EngineUpdateResult = operation("update-${UUID.randomUUID()}",
+        { EngineUpdateResult.Failure(it) }, exclusive = true) { current ->
+        if (!initialize()) return@operation EngineUpdateResult.Failure(DownloadError.EngineUnavailable)
+        val old = version(current)
+        // An updater can replace the binary and then fail; never retain the previous pin.
+        runtime.initialization.installedVersion = null
+        val outcome = runCatching { runtime.update() }
+        val updated = probe()
+        if (updated != null) {
+            runtime.initialization.installedVersion = updated
+            outcome.getOrThrow()
+            EngineUpdateResult.Success(old, updated)
+        } else {
+            runtime.restoreBundledYtdlp()
+            probe()?.let { runtime.initialization.installedVersion = it }
+            EngineUpdateResult.Failure(DownloadError.Failed, usingBuiltIn = true)
+        }
+    }
+
+    /** No-network `--version` under its own deadline and canceller; null when it fails or hangs (tree destroyed). */
+    private suspend fun probe(): String? = operation("probe-${UUID.randomUUID()}", { null }, gated = false) { current ->
+        executeVersion(current).trim().takeIf { it.isNotBlank() }?.also(runtime::rememberWarmedVersion)
+    }
+
+    override fun cancel(operationId: String) {
+        synchronized(lifecycleLock) {
+            operations[operationId]?.let { current ->
+                if (!current.finished.get()) { current.cancelled.set(true); current.cancellation.complete(Unit) }
+                return
+            }
+            // A brief pre-registration window, never a permanent tombstone for an unknown ID.
+            if (operationId in recentlyFinished) return
+            if (pendingCancellation.containsKey(operationId)) return
+            val pending = PendingCancellation()
+            pendingCancellation[operationId] = pending
+            cancellationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                delay(CANCELLATION_WINDOW_MS)
+                synchronized(lifecycleLock) { pendingCancellation.remove(operationId, pending) }
+            }
+        }
+    }
+    private fun initialize() = runtime.initialization.ensure(runtime::resetPartialInstall, runtime::needsExtraction,
+        runtime::initialize)
+    private suspend fun version(current: Operation): String = runtime.initialization.versionGate.withLock {
+        // Every holder's actual process is bounded; admission and extraction retain their own waits.
+        runtime.initialization.installedVersion ?: (runtime.warmedVersion() ?: executeVersion(current).trim().also {
+            require(it.isNotBlank())
+            runtime.rememberWarmedVersion(it)
+        }).also { runtime.initialization.installedVersion = it }
+    }
+    private suspend fun executeVersion(current: Operation): String {
+        val previous = current.deadline
+        val selfTest = System.nanoTime() + limits.selfTestMs * 1_000_000
+        current.deadline = if (previous == NO_DEADLINE || selfTest - previous < 0) selfTest else previous
+        try { return execute(current, VERSION_ARGS) }
+        finally { current.deadline = previous } // Do not spend a later media operation under the probe's budget.
+    }
+    private fun checkCancelled(current: Operation) {
+        if (current.cancelled.get()) throw OperationCancelled()
+    }
+    private suspend fun execute(current: Operation, args: List<String>, line: (String) -> Unit = {}): String {
+        checkCancelled(current)
+        // ProcessTree adopts the single new child whose argv matches; two live children with the same argv
+        // (two version reads, a re-inspected link) could adopt each other's tree. The wrapper hides the PID,
+        // so identical argv never runs concurrently. Waiting honours cancel and deadlines.
+        while (!synchronized(runningArgv) { runningArgv.add(args) }) { delay(20); checkCancelled(current) }
+        try {
+            checkCancelled(current)
+            var callbackFailure: Exception? = null
+            val result = runtime.execute(args, current.processId) { text ->
+                if (!current.cancelled.get()) try { line(text) } catch (failure: Exception) {
+                    // Upstream callback runs on its reader thread: do not throw and strand the child.
+                    callbackFailure = failure; current.cancelled.set(true)
+                }
+            }
+            callbackFailure?.let { throw it }
+            checkCancelled(current)
+            return result
+        } finally { synchronized(runningArgv) { runningArgv.remove(args) } }
+    }
+    private class OperationCancelled : Exception()
+
+    private suspend fun <T> operation(id: String, failure: (DownloadError) -> T, lockTimeoutMs: Long? = null,
+        exclusive: Boolean = false, gated: Boolean = true, body: suspend (Operation) -> T): T = coroutineScope {
+        val current = Operation()
+        synchronized(lifecycleLock) {
+            if (operations.containsKey(id)) return@coroutineScope failure(DownloadError.ExecutionRestricted)
+            operations[id] = current
+            recentlyFinished.remove(id)
+            pendingCancellation.remove(id)?.let { pending ->
+                if (System.nanoTime() - pending.deadline < 0) current.cancelled.set(true)
+            }
+        }
+        val parent = currentCoroutineContext().job
+        // Independent of parent cancellation so registration retries survive until execute unwinds.
+        val canceller = launch(NonCancellable + Dispatchers.IO) {
+            var destroyed = false
+            while (!current.finished.get()) {
+                try { runtime.observe(current.processId) } catch (_: Exception) { /* Retry transient proc reads. */ }
+                if (!parent.isActive) current.cancelled.set(true)
+                val deadline = current.deadline
+                if (deadline != NO_DEADLINE && System.nanoTime() - deadline >= 0 && !current.cancelled.get()) {
+                    current.timedOut.set(true); current.cancelled.set(true)
+                }
+                if (current.cancelled.get()) current.cancellation.complete(Unit)
+                if (current.cancelled.get() && !destroyed) {
+                    destroyed = try { runtime.destroy(current.processId) } catch (_: Exception) { false }
+                }
+                delay(50)
+            }
+        }
+        var permits = 0
+        try {
+            val acquire: suspend () -> Unit = { permits = if (exclusive) gate.lockExclusive() else gate.lockShared() }
+            if (gated) {
+                waitingState.update { it + id }
+                try {
+                    // Admission has its own budget. Never spend the metadata/network deadline on replacement.
+                    // cancel(id) must interrupt this wait even though it does not cancel the caller's coroutine.
+                    val awaitAdmission: suspend () -> Unit = {
+                        val admission = async { acquire() }
+                        try {
+                            select<Unit> {
+                                admission.onAwait { }
+                                current.cancellation.onAwait { throw OperationCancelled() }
+                            }
+                        } finally { withContext(NonCancellable) { admission.cancelAndJoin() } }
+                    }
+                    // A null limit preserves the updater/version path's untimed, cancellable admission.
+                    // Do not add a media timeout while first extraction holds a share; updateMs still bounds its caller.
+                    val admitted = if (lockTimeoutMs == null) { awaitAdmission(); Unit }
+                        else withTimeoutOrNull(EngineReadiness.remainingMillis(lockTimeoutMs)) { awaitAdmission() }
+                    if (admitted == null) {
+                        // The pinned updater has no safe abort API: a timeout must never bypass its writer gate.
+                        current.timedOut.set(true); current.cancelled.set(true)
+                    }
+                } finally { waitingState.update { it - id } }
+            } // Ungated probes are nested inside an operation that already holds the writer gate.
+            withContext(Dispatchers.IO) {
+                checkCancelled(current)
+                val result = body(current)
+                currentCoroutineContext().ensureActive()
+                checkCancelled(current)
+                result
+            }
+        } catch (cancel: CancellationException) {
+            current.cancelled.set(true)
+            throw cancel
+        } catch (error: Exception) {
+            // Never log raw engine output: it may contain source URLs/cookies, even in debug.
+            failure(when {
+                current.timedOut.get() -> DownloadError.Network
+                current.cancelled.get() -> DownloadError.Cancelled
+                error is UnsupportedMetadataException -> DownloadError.Unsupported
+                error is YtdlpExecutionFailure -> error.error
+                else -> YtdlpErrorMapper.map(error.message.orEmpty())
+            })
+        } finally {
+            synchronized(lifecycleLock) {
+                current.finished.set(true)
+                pendingCancellation.remove(id)
+                recentlyFinished[id] = Unit
+                if (recentlyFinished.size > 128) recentlyFinished.remove(recentlyFinished.keys.first())
+            }
+            // Do not cancel an in-flight TERM/grace/KILL after Python exits: descendants
+            // can still hold descriptors or write staging. Cleanup belongs to the caller.
+            withContext(NonCancellable) { canceller.join() }
+            synchronized(lifecycleLock) { operations.remove(id, current) }
+            gate.unlock(permits)
+        }
+    }
+    private companion object {
+        /**
+         * Process-wide. Executions share it: 0.18.1 `executeImpl` builds a fresh ProcessBuilder, buffers and env
+         * per call, keys processes in a synchronized map by our UUIDs and forces `--no-cache-dir`; its static
+         * paths are written only by the synchronized `init`. Update/rollback rewrite yt-dlp, so they are exclusive.
+         */
+        val gate = NativeGate()
+        const val CANCELLATION_WINDOW_MS = 500L
+        const val NO_DEADLINE = Long.MIN_VALUE
+        val VERSION_ARGS = listOf("--ignore-config", "--version")
+        val POSTPROCESSORS = listOf("[Fixup", "[ffmpeg]", "[VideoRemuxer]", "[VideoConvertor]", "[Metadata]", "[MoveFiles]")
+        val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val updateOwner = Any()
+        /** The one updater; a second request joins it instead of starting another. */
+        @Volatile var pendingUpdate: Deferred<EngineUpdateResult>? = null
+        val runningArgv = HashSet<List<String>>()
+    }
+}
+
+/** Shared/exclusive gate for suspending callers; the FIFO semaphore keeps a waiting update from starving. */
+internal class NativeGate(private val permits: Int = 8) {
+    init { require(permits > 1) } // unlock() tells exclusive from shared by the count held.
+    private val shared = kotlinx.coroutines.sync.Semaphore(permits)
+    private val writer = kotlinx.coroutines.sync.Mutex()
+    suspend fun lockShared(): Int { shared.acquire(); return 1 }
+    suspend fun lockExclusive(): Int {
+        writer.lock()
+        var held = 0
+        try { repeat(permits) { shared.acquire(); held++ } }
+        catch (cancelled: CancellationException) { repeat(held) { shared.release() }; writer.unlock(); throw cancelled }
+        return permits
+    }
+    fun unlock(held: Int) {
+        if (held == 0) return
+        repeat(held) { shared.release() }
+        if (held == permits) writer.unlock()
+    }
+    suspend fun <T> shared(block: suspend () -> T): T { val held = lockShared(); try { return block() } finally { unlock(held) } }
+    suspend fun <T> exclusive(block: suspend () -> T): T { val held = lockExclusive(); try { return block() } finally { unlock(held) } }
+}

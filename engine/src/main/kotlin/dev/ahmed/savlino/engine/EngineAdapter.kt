@@ -1,0 +1,68 @@
+package dev.ahmed.savlino.engine
+
+import dev.ahmed.savlino.domain.*
+import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/** Intake may warm local binaries only. Inspect requires Check; download requires an explicitly confirmed command.
+ * Real adapters dispatch blocking work to IO, disable playlists/config execution, use exact IDs,
+ * and terminate all subprocesses on cancellation (including a cancel before registration).
+ * CancellationException propagates for coroutine cancellation; cancel(id) returns typed Cancelled.
+ */
+interface EngineAdapter {
+    val isAvailable: Boolean
+    /** May initialize local binaries on IO; never inspects a URL or updates over the network. */
+    suspend fun installedVersion(): String? = null
+    /** Local extraction and one version probe per installed engine, on IO. No URL inspection, updater, or network. */
+    suspend fun warmUp(): Boolean = false
+    /** True while the bundled engine is unpacked for the first time (one-time "Preparing engine…"). */
+    val preparing: StateFlow<Boolean> get() = notPreparing
+    /** Operation IDs suspended at the native maintenance barrier; never URLs. */
+    val waitingOperations: StateFlow<Set<String>> get() = notWaiting
+    /** User Retry after a failed local initialization: skip the remaining backoff. */
+    fun retryInitialization() = Unit
+    /** STABLE binary maintenance; caller owns cadence and transfer exclusion. */
+    suspend fun updateYtdlp(): EngineUpdateResult = EngineUpdateResult.Failure(DownloadError.EngineUnavailable)
+    suspend fun inspect(source: LinkRevision, operationId: String): InspectResult
+    /** Local best-effort persistence of already inspected metadata, after explicit confirmation. */
+    fun prepareDownload(command: DownloadCommand) = Unit
+    suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult
+    fun cancel(operationId: String)
+}
+
+private val notWaiting: StateFlow<Set<String>> = MutableStateFlow<Set<String>>(emptySet()).asStateFlow()
+private val notPreparing: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
+
+sealed interface InspectResult {
+    data class Success(val inspection: Inspection) : InspectResult
+    data class Failure(val error: DownloadError) : InspectResult
+}
+
+sealed interface EngineEvent {
+    /** Cumulative transfer bytes across streams; estimates never become exact implicitly. */
+    data class Progress(val bytesDownloaded: Long, val total: Size = Size.Unknown,
+        val fragmentIndex: Long? = null, val fragmentCount: Long? = null) : EngineEvent
+    /** Unmeasured post-processing, including lossless extraction and explicit audio conversion. */
+    data object Merging : EngineEvent
+}
+
+sealed interface TransferResult {
+    data class Success(val output: StagedOutput) : TransferResult
+    data class Failure(val error: DownloadError) : TransferResult
+}
+
+/** A single nonempty staged file, not a published/saved download. */
+class StagedOutput private constructor(val file: File) {
+    companion object {
+        fun validate(directory: File, outputs: List<File>): StagedOutput {
+            require(outputs.size == 1)
+            val root = directory.canonicalFile
+            val file = outputs.single().canonicalFile
+            require(root.isDirectory && file != root && file.toPath().startsWith(root.toPath()))
+            require(file.isFile && file.length() > 0)
+            return StagedOutput(file)
+        }
+    }
+}

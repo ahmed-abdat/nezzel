@@ -1,0 +1,27 @@
+{
+ "id": "fixture-twitch",
+ "extractor": "twitch:clips",
+ "extractor_key": "TwitchClips",
+ "duration": 32,
+ "is_live": null,
+ "_type": "video",
+ "title": "Fixture twitch",
+ "webpage_url": "https://example.invalid/twitch",
+ "formats": [
+  {
+   "format_id": "1080",
+   "height": 1080,
+   "fps": 0.0,
+   "protocol": "https",
+   "ext": "mp4",
+   "video_ext": "mp4",
+   "audio_ext": "none",
+   "vbr": null,
+   "abr": null,
+   "tbr": null,
+   "dynamic_range": "SDR",
+   "filesize_approx": null,
+   "url": "https://cdn.example.invalid/twitch/0"
+  }
+ ]
+}

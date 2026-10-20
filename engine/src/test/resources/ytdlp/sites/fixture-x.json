@@ -1,0 +1,68 @@
+{
+  "extractor_key": "Twitter",
+  "formats": [
+    {
+      "format_id": "hls-audio",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "vcodec": "none",
+      "acodec": "mp4a.40.2",
+      "tbr": 128,
+      "url": "https://example.invalid/a.m3u8"
+    },
+    {
+      "format_id": "http-256",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 180,
+      "tbr": 256,
+      "url": "https://example.invalid/256/v.mp4"
+    },
+    {
+      "format_id": "hls-227",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "height": 180,
+      "vcodec": "avc1.64001f",
+      "acodec": "none",
+      "tbr": 227,
+      "url": "https://example.invalid/227.m3u8"
+    },
+    {
+      "format_id": "http-832",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 360,
+      "tbr": 832,
+      "url": "https://example.invalid/832/v.mp4"
+    },
+    {
+      "format_id": "hls-666",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "height": 360,
+      "vcodec": "avc1.64001f",
+      "acodec": "none",
+      "tbr": 666,
+      "url": "https://example.invalid/666.m3u8"
+    },
+    {
+      "format_id": "http-2176",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 720,
+      "tbr": 2176,
+      "url": "https://example.invalid/2176/v.mp4"
+    },
+    {
+      "format_id": "hls-1959",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "height": 720,
+      "vcodec": "avc1.64001f",
+      "acodec": "none",
+      "tbr": 1959,
+      "url": "https://example.invalid/1959.m3u8"
+    }
+  ]
+}

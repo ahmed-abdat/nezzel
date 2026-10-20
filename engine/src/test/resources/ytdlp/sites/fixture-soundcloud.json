@@ -1,0 +1,30 @@
+{
+ "id": "fixture-soundcloud",
+ "extractor": "soundcloud",
+ "extractor_key": "Soundcloud",
+ "duration": 143.206,
+ "is_live": null,
+ "_type": "video",
+ "title": "Fixture soundcloud",
+ "webpage_url": "https://example.invalid/soundcloud",
+ "formats": [
+  {
+   "format_id": "hls_aac_96k",
+   "ext": "m4a",
+   "acodec": "mp4a.40.2",
+   "vcodec": "none",
+   "abr": 96,
+   "protocol": "m3u8_native",
+   "container": "m4a_dash",
+   "quality": -1,
+   "format_note": null,
+   "preference": null,
+   "audio_ext": "m4a",
+   "video_ext": "none",
+   "vbr": 0,
+   "tbr": 96,
+   "filesize_approx": 1718471,
+   "url": "https://cdn.example.invalid/soundcloud/0"
+  }
+ ]
+}

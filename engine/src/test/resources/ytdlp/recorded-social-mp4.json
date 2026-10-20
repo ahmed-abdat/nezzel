@@ -1,0 +1,15 @@
+{
+  "formats": [
+    {
+      "format_id": "hls-2176",
+      "tbr": 2176,
+      "ext": "mp4",
+      "width": 1280,
+      "height": 720,
+      "vcodec": "avc1.640020",
+      "acodec": "mp4a.40.2",
+      "abr": 0,
+      "filesize_approx": 38990299
+    }
+  ]
+}

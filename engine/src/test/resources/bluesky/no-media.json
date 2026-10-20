@@ -1,0 +1,24 @@
+{
+  "thread": {
+    "$type": "app.bsky.feed.defs#threadViewPost",
+    "post": {
+      "uri": "at://did:plc:abcdefghijklmnopqrstuvwx/app.bsky.feed.post/3synthetic001",
+      "author": {
+        "did": "did:plc:abcdefghijklmnopqrstuvwx",
+        "handle": "synthetic.test",
+        "displayName": "Synthetic author"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "text": "Synthetic caption"
+      },
+      "embed": {
+        "$type": "app.bsky.embed.external#view",
+        "external": {
+          "uri": "https://example.org/",
+          "thumb": "https://example.org/decoy.jpg"
+        }
+      }
+    }
+  }
+}

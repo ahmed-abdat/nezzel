@@ -1,0 +1,12 @@
+{"id":"fixture123","title":"اختبار 720p 2026","formats":[
+ {"format_id":"sb0","ext":"mhtml","vcodec":"none","acodec":"none"},
+ {"format_id":"18","ext":"mp4","vcodec":"avc1.42001E","acodec":"mp4a.40.2","width":640,"height":360,"filesize":1200000},
+ {"format_id":"136","ext":"mp4","vcodec":"avc1.4d401f","acodec":"none","width":1280,"height":720,"filesize":3000000},
+ {"format_id":"137","ext":"mp4","vcodec":"avc1.640028","acodec":"none","width":1920,"height":1080,"filesize_approx":8000000},
+ {"format_id":"160","ext":"mp4","vcodec":"avc1.4d400c","acodec":"none","height":144},
+ {"format_id":"248","ext":"webm","vcodec":"vp9","acodec":"none","height":1080},
+ {"format_id":"140","ext":"m4a","vcodec":"none","acodec":"mp4a.40.2","abr":128,"filesize":1000000},
+ {"format_id":"251","ext":"webm","vcodec":"none","acodec":"opus","abr":160,"filesize_approx":1100000},
+ {"format_id":"drm","ext":"mp4","vcodec":"avc1","acodec":"aac","has_drm":true},
+ {"format_id":"unknown","ext":"mp4"}
+]}

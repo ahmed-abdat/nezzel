@@ -1,0 +1,118 @@
+package dev.ahmed.savlino.downloads
+
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.*
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.core.graphics.Insets
+import androidx.core.view.DisplayCutoutCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import dev.ahmed.savlino.R
+import dev.ahmed.savlino.NavigationScaffold
+import dev.ahmed.savlino.jobs.DownloadPhase
+import dev.ahmed.savlino.jobs.DownloadProgress
+import dev.ahmed.savlino.locale.ThemePref
+import dev.ahmed.savlino.ui.theme.NezzelTheme
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.annotation.Config
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29], qualifiers = "en-w800dp-h360dp-mdpi")
+class NavigationLayoutTest {
+    @get:Rule val compose = createEmptyComposeRule()
+
+    @Test fun landscapeShowsRailAndAllDestinationsWorkWithRunningAndFailedSemantics() = navigation(true)
+
+    @Test @Config(qualifiers = "en-w360dp-h800dp-mdpi")
+    fun portraitKeepsBarAndDestinationsWork() = navigation(false)
+
+    @Test @Config(qualifiers = "en-w800dp-h480dp-mdpi")
+    fun height480KeepsBar() = navigation(false)
+
+    @Test @Config(qualifiers = "ar-w800dp-h360dp-mdpi")
+    fun arabicLandscapeKeepsLabelsAndBadgeAtLargeText() = navigation(true, rtl = true)
+
+    @Test fun landscapeDestinationsRemainReachableAtDoubleFont() = navigation(true, fontScale = 2f)
+
+    @Test @Config(qualifiers = "ar-w800dp-h360dp-mdpi")
+    fun arabicLandscapeDestinationsRemainReachableAtDoubleFont() = navigation(true, rtl = true, fontScale = 2f)
+
+    @Test @Config(sdk = [35]) fun landscapeProtectsCutoutAndNavigationBarAtBothEdges() = navigation(true, sideInsets = true)
+
+    @Test @Config(sdk = [35], qualifiers = "ar-w800dp-h360dp-mdpi")
+    fun arabicLandscapeProtectsCutoutAndNavigationBarAtBothEdges() = navigation(true, rtl = true, sideInsets = true)
+
+    private fun navigation(rail: Boolean, rtl: Boolean = false, sideInsets: Boolean = false, fontScale: Float = 1.3f) {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        val activity = controller.get()
+        var route by mutableStateOf("Home")
+        var jobs by mutableStateOf(listOf(
+            DownloadProgress("a", "one", DownloadPhase.DOWNLOADING),
+            DownloadProgress("b", "two", DownloadPhase.FAILED)))
+        lateinit var composeView: android.view.View
+        try {
+            activity.setContent {
+                val view = LocalView.current
+                SideEffect { composeView = view }
+                CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                    LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
+                    NezzelTheme(if (rtl) ThemePref.Dark else ThemePref.Light, false) {
+                        NavigationScaffold(route, jobs, if (rtl) "ar" else "en", { route = it }) {
+                            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                                .testTag("screen_content"))
+                        }
+                    }
+                }
+            }
+            if (sideInsets) compose.runOnIdle {
+                ViewCompat.dispatchApplyWindowInsets(composeView, WindowInsetsCompat.Builder()
+                    .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 24, 0))
+                    .setDisplayCutout(DisplayCutoutCompat(android.graphics.Rect(30, 0, 0, 0), emptyList()))
+                    .build())
+            }
+            compose.onNodeWithTag(if (rail) "navigation_rail" else "navigation_bar").assertIsDisplayed()
+            compose.onNodeWithTag(if (rail) "navigation_bar" else "navigation_rail").assertDoesNotExist()
+            val navigation = compose.onNodeWithTag(if (rail) "navigation_rail" else "navigation_bar").fetchSemanticsNode().boundsInRoot
+            val content = compose.onNodeWithTag("screen_content").fetchSemanticsNode().boundsInRoot
+            if (sideInsets) {
+                assertTrue("Cutout must be excluded: $navigation / $content", minOf(content.left, navigation.left) >= 30f)
+                assertTrue("Side navigation bar must be excluded", maxOf(content.right, navigation.right) <= composeView.width - 24f)
+                assertEquals("Horizontal insets are consumed once", 800f - 30f - 24f, content.width + navigation.width, 1f)
+            }
+            if (rail) {
+                assertTrue("Rail must leave the full height to content", content.height >= navigation.height)
+                if (rtl) assertTrue("Arabic rail belongs at start (right)", content.right <= navigation.left)
+                else assertTrue("English rail belongs at start (left)", navigation.right <= content.left)
+            } else {
+                assertTrue("Portrait bar stays below content", content.bottom <= navigation.top)
+            }
+            for ((destination, label) in listOf("Settings" to R.string.settings, "Downloads" to R.string.downloads, "Home" to R.string.home)) {
+                val item = compose.onNode(hasText(activity.getString(label)) and hasClickAction())
+                if (rail) item.performScrollTo()
+                item.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                item.performClick().assertIsSelected()
+                compose.runOnIdle { assertEquals(destination, route) }
+            }
+            compose.onNodeWithContentDescription(activity.getString(R.string.downloads_running_accessibility, "1")).assertExists()
+            compose.runOnIdle { jobs = jobs.takeLast(1) }
+            compose.onNodeWithContentDescription(activity.getString(R.string.downloads_failed_accessibility)).assertExists()
+        } finally { controller.pause().stop().destroy() }
+    }
+}

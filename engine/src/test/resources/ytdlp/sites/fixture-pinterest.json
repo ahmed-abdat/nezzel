@@ -1,0 +1,55 @@
+{
+  "id": "fixture-pinterest",
+  "extractor": "pinterest",
+  "extractor_key": "Pinterest",
+  "duration": 20,
+  "is_live": false,
+  "title": "Fixture pinterest",
+  "webpage_url": "https://example.invalid/pinterest",
+  "formats": [
+    {
+      "format_id": "hls-audio",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "vcodec": "none",
+      "tbr": 64,
+      "url": "https://cdn.example.invalid/pinterest/audio.m3u8"
+    },
+    {
+      "format_id": "hls-234",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "vcodec": "avc1.4d401f",
+      "acodec": "none",
+      "height": 234,
+      "url": "https://cdn.example.invalid/pinterest/234.m3u8"
+    },
+    {
+      "format_id": "hls-360",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "vcodec": "avc1.4d401f",
+      "acodec": "none",
+      "height": 360,
+      "url": "https://cdn.example.invalid/pinterest/360.m3u8"
+    },
+    {
+      "format_id": "hls-540",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "vcodec": "avc1.4d401f",
+      "acodec": "none",
+      "height": 540,
+      "url": "https://cdn.example.invalid/pinterest/540.m3u8"
+    },
+    {
+      "format_id": "hls-720",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "vcodec": "avc1.4d401f",
+      "acodec": "none",
+      "height": 720,
+      "url": "https://cdn.example.invalid/pinterest/720.m3u8"
+    }
+  ]
+}

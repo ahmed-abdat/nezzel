@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nezzel_brand_teal">#006B5E</color>
+    <color name="nezzel_brand_teal_dark">#82D5C5</color>
+    <color name="nezzel_brand_mark">@color/nezzel_brand_teal</color>
+</resources>

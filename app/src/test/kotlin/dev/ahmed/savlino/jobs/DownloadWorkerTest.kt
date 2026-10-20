@@ -1,0 +1,889 @@
+package dev.ahmed.savlino.jobs
+
+import android.content.*
+import android.content.pm.ProviderInfo
+import android.content.pm.ServiceInfo
+import android.database.MatrixCursor
+import android.net.Uri
+import android.os.ParcelFileDescriptor
+import android.provider.MediaStore
+import androidx.work.*
+import androidx.work.testing.TestListenableWorkerBuilder
+import androidx.work.testing.WorkManagerTestInitHelper
+import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.*
+import dev.ahmed.savlino.storage.*
+import kotlinx.coroutines.*
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowContentResolver
+import org.robolectric.Shadows.shadowOf
+import java.io.File
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33, 35], manifest = Config.NONE)
+class DownloadWorkerTest {
+    private val app get() = RuntimeEnvironment.getApplication()
+
+    @Test fun deniedNotificationsStillPublishOnceScrubUrlAndReportRealStages() = runBlocking {
+        shadowOf(app).denyPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        val stages = mutableListOf<DownloadPhase>()
+        fixture(FakeEngine(steps = listOf(
+            FakeEngine.Step.Emit(EngineEvent.Progress(2, Size.Exact(4))),
+            FakeEngine.Step.Emit(EngineEvent.Merging),
+            FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))
+        ))).use { f ->
+            val worker = f.worker("success")
+            f.store.enqueue(command("success"))
+            assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC, worker.getForegroundInfo().foregroundServiceType)
+            val result = f.coordinator.execute("success", {}, { stages += it.phase })
+            assertEquals(JobStage.COMPLETED, result!!.stage)
+            assertNull(result.sourceUrl)
+            assertEquals("exact/source", f.engine.commands.single().format.sourceFormatId)
+            assertEquals("engine-42", f.engine.commands.single().engineVersion)
+            assertEquals(listOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING, DownloadPhase.JOINING,
+                DownloadPhase.SAVING, DownloadPhase.COMPLETED), stages)
+            assertFalse(File(app.filesDir, "downloads/success").exists())
+            assertEquals(1, f.provider.rows.size)
+            val row = f.provider.rows.values.single()
+            assertEquals(0, row.getAsInteger(MediaStore.Downloads.IS_PENDING))
+            assertEquals("Download/Nezzel/", row.getAsString(MediaStore.Downloads.RELATIVE_PATH))
+            assertArrayEquals(byteArrayOf(1, 2, 3, 4), f.provider.file.readBytes())
+        }
+    }
+
+    @Test fun activeRowsStayNewestFirstWhenAnOlderJobUpdates() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Network)))).use { f ->
+            f.store.enqueue(command("older")); f.store.enqueue(command("newer"))
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - 1000, "older"))
+            f.coordinator.initialize()
+            f.coordinator.execute("older", {}, {})
+            assertEquals(listOf("newer", "older"), dev.ahmed.savlino.downloads.visibleJobs(f.coordinator.progress.value).map { it.jobId })
+        }
+    }
+
+    @Test fun completionEventIsNewOnlyAndUpdatingAnotherJobKeepsFailedRows() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            f.store.enqueue(command("failed-first")); f.store.fail("failed-first", DownloadError.Network)
+            f.coordinator.initialize()
+            val received = kotlinx.coroutines.channels.Channel<DownloadProgress>(1)
+            val collector = launch(start = CoroutineStart.UNDISPATCHED) { f.coordinator.completed.collect { received.send(it) } }
+            try {
+                f.store.enqueue(command("finished-next"))
+                f.coordinator.execute("finished-next", {}, {})
+                val finished = withTimeout(5000) { received.receive() }
+                assertEquals("finished-next", finished.jobId)
+                assertEquals(DownloadPhase.COMPLETED, finished.phase)
+                assertNotNull(finished.publishedUri)
+                assertTrue(f.coordinator.progress.value.any { it.jobId == "failed-first" && it.phase == DownloadPhase.FAILED })
+                assertTrue(f.coordinator.completed.replayCache.isEmpty())
+                assertFalse(f.coordinator.progress.value.any { it.jobId == "finished-next" })
+            } finally { collector.cancelAndJoin() }
+        }
+    }
+
+    @Test fun actualWorkerCompletesWithNotificationsDeniedAndReportsStages() = runBlocking {
+        shadowOf(app).denyPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        fixture(FakeEngine(steps = listOf(
+            FakeEngine.Step.Emit(EngineEvent.Progress(2, Size.Exact(4))),
+            FakeEngine.Step.Emit(EngineEvent.Merging),
+            FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))
+        ))).use { f ->
+            f.store.enqueue(command("denied"))
+            assertEquals(ListenableWorker.Result.success(), f.worker("denied").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("denied")!!.stage)
+            assertNull(f.store.get("denied")!!.sourceUrl)
+            assertEquals(listOf("PREPARING", "DOWNLOADING", "JOINING", "SAVING", "COMPLETED"), f.phases)
+            assertEquals(1, f.provider.rows.size)
+        }
+    }
+
+    @Test fun workerWaitsForStartupRecoveryBeforeStartingTransfer() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            f.store.enqueue(command("old")); f.store.startTransfer("old")
+            File(app.filesDir, "downloads/old").apply { mkdirs(); resolve("partial").writeText("bytes") }
+            f.store.enqueue(command("new"))
+            f.provider.onOpen = {
+                assertEquals(JobStage.FAILED, f.store.get("old")!!.stage)
+                assertEquals(DownloadError.Interrupted, f.store.get("old")!!.error)
+                assertFalse(File(app.filesDir, "downloads/old").exists())
+            }
+            assertEquals(ListenableWorker.Result.success(), f.worker("new").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("new")!!.stage)
+        }
+    }
+
+    @Test fun unknownSizeWithAmpleSpaceTransfersWithoutInventingTotal() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))),
+            freeBytes = 1_140_850_688L).use { f ->
+            f.store.enqueue(command("unknown", Size.Unknown))
+            assertEquals(ListenableWorker.Result.success(), f.worker("unknown").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("unknown")!!.stage)
+            assertEquals(Size.Unknown, f.engine.commands.single().format.size)
+        }
+    }
+
+    @Test fun unknownReserveRejectsOneByteBelow1GiBPlusMargin() = runBlocking {
+        fixture(FakeEngine(), freeBytes = 1_140_850_687L).use { f ->
+            f.store.enqueue(command("unknown-reserve", Size.Unknown))
+            assertEquals(ListenableWorker.Result.failure(), f.worker("unknown-reserve").doWork())
+            assertEquals(DownloadError.InsufficientSpace, f.store.get("unknown-reserve")!!.error)
+            assertEquals(0, f.attempts.get())
+            assertFalse(File(app.filesDir, "downloads/unknown-reserve").exists())
+        }
+    }
+
+    @Test fun estimatedBudgetIncludes25PercentAndMargin() = runBlocking {
+        // 100 MiB estimate: aggregate 125 MiB reserve + 64 MiB margin = 189 MiB.
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))),
+            freeBytes = 198_180_864L).use { f ->
+            f.store.enqueue(command("estimate-fits", Size.Estimated(104_857_600L)))
+            assertEquals(ListenableWorker.Result.success(), f.worker("estimate-fits").doWork())
+            assertEquals(Size.Estimated(104_857_600L), f.engine.commands.single().format.size)
+        }
+    }
+
+    @Test fun estimatedBudgetRejectsBelow25PercentAndMargin() = runBlocking {
+        fixture(FakeEngine(), freeBytes = 198_180_863L).use { f ->
+            f.store.enqueue(command("estimate-full", Size.Estimated(104_857_600L)))
+            assertEquals(ListenableWorker.Result.failure(), f.worker("estimate-full").doWork())
+            assertEquals(DownloadError.InsufficientSpace, f.store.get("estimate-full")!!.error)
+            assertTrue(f.engine.commands.isEmpty())
+        }
+    }
+
+    @Test fun unknownStagingEnospcFailsWithSpaceErrorAndCleansPartial() = runBlocking {
+        fixture(FakeEngine(), downloadFailure = java.io.IOException("write failed: ENOSPC (No space left on device)")).use { f ->
+            f.store.enqueue(command("unknown-full", Size.Unknown))
+            f.worker("unknown-full").doWork()
+            assertEquals(1, f.attempts.get())
+            assertEquals(DownloadError.InsufficientSpace, f.store.get("unknown-full")!!.error)
+            assertNotNull(f.store.get("unknown-full")!!.sourceUrl)
+            assertFalse(File(app.filesDir, "downloads/unknown-full").exists())
+            assertTrue(f.provider.rows.isEmpty())
+        }
+    }
+
+    @Test fun expiredQueueInLiveProcessFailsWithoutEngineAndPostsFailure() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.coordinator.initialize()
+            f.store.enqueue(command("expired-live"))
+            // Age the queued row after startup so startup recovery cannot enforce this expiry.
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - 86_400_001L, "expired-live"))
+            val staging = File(app.filesDir, "downloads/expired-live").apply {
+                mkdirs(); resolve("partial.mp4").writeBytes(byteArrayOf(1))
+            }
+            assertEquals(ListenableWorker.Result.failure(), f.worker("expired-live").doWork())
+            val row = f.store.get("expired-live")!!
+            assertEquals(JobStage.FAILED, row.stage)
+            assertEquals(DownloadError.FormatExpired, row.error)
+            assertNull(row.sourceUrl)
+            assertFalse(row.retryable)
+            assertFalse(staging.exists())
+            assertEquals(0, f.attempts.get())
+            assertTrue(f.provider.rows.isEmpty())
+            assertEquals(DownloadError.FormatExpired, f.coordinator.progress.value.single().error)
+            val notification = resultNotification()
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_expired_error),
+                notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
+        }
+    }
+
+    @Test fun cancellationWinsExpiredQueueInLiveProcessBeforeAnyTransfer() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            f.coordinator.initialize()
+            f.store.enqueue(command("expired-cancel"))
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - 86_400_001L, "expired-cancel"))
+            f.coordinator.requestCancellation("expired-cancel")
+            assertEquals(ListenableWorker.Result.success(), f.worker("expired-cancel").doWork())
+            val row = f.store.get("expired-cancel")!!
+            assertEquals(JobStage.CANCELLED, row.stage)
+            assertEquals(DownloadError.Cancelled, row.error)
+            assertNull(row.sourceUrl)
+            assertEquals(0, f.attempts.get())
+            assertTrue(f.provider.rows.isEmpty())
+        }
+    }
+
+    @Test fun publicationEnospcKeepsSpaceErrorAbandonsPendingAndCleansStaging() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.store.enqueue(command("publish-full"))
+            f.provider.onOpen = {
+                assertEquals(JobStage.PENDING_INSERTED, f.store.get("publish-full")!!.stage)
+                assertEquals(1, f.provider.rows.values.single().getAsInteger(MediaStore.Downloads.IS_PENDING))
+                throw java.io.IOException("write failed", android.system.ErrnoException("write", android.system.OsConstants.ENOSPC))
+            }
+            assertEquals(ListenableWorker.Result.failure(), f.worker("publish-full").doWork())
+            val row = f.store.get("publish-full")!!
+            assertEquals(JobStage.FAILED, row.stage)
+            assertEquals(DownloadError.InsufficientSpace, row.error)
+            assertNotNull(row.sourceUrl)
+            assertNull(row.pendingUri)
+            assertTrue(row.retryable)
+            assertEquals(1, f.attempts.get())
+            assertFalse(File(app.filesDir, "downloads/publish-full").exists())
+            assertTrue(f.provider.rows.isEmpty())
+            assertFalse(f.provider.file.exists())
+            val notification = resultNotification()
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_space_error),
+                notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
+        }
+    }
+
+    @Test fun arabicNotificationsUseLatinDigitsAndUnknownNeverGetsPercent() {
+        val config = android.content.res.Configuration(app.resources.configuration)
+        config.setLocale(java.util.Locale.forLanguageTag("ar-u-nu-latn"))
+        val context = app.createConfigurationContext(config)
+        val measured = DownloadProgress("digits", "clip.mp4", DownloadPhase.DOWNLOADING, 2, Size.Exact(4))
+        assertEquals(50, measured.percent)
+        val text = DownloadNotifications.text(context, measured)
+        assertTrue(text.contains("50%"))
+        assertFalse(text.any { it in '\u0660'..'\u0669' || it in '\u06f0'..'\u06f9' })
+        assertNull(measured.copy(total = Size.Unknown).percent)
+        assertNull(measured.copy(total = Size.Estimated(4)).percent)
+    }
+
+    @Test fun workerFailureKeepsTypedErrorAndRemovesStaging() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Network)))).use { f ->
+            f.store.enqueue(command("failure"))
+            assertEquals(ListenableWorker.Result.failure(), f.worker("failure").doWork())
+            assertEquals(JobStage.FAILED, f.store.get("failure")!!.stage)
+            assertEquals(DownloadError.Network, f.store.get("failure")!!.error)
+            assertFalse(File(app.filesDir, "downloads/failure").exists())
+            assertTrue(f.provider.rows.isEmpty())
+        }
+    }
+
+    @Test fun cancelWhileEngineWaitsStopsItAndCleansJournalAndStaging() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Emit(EngineEvent.Merging), FakeEngine.Step.AwaitCancellation))).use { f ->
+            f.store.enqueue(command("cancel"))
+            val running = async(Dispatchers.Default) { f.worker("cancel").doWork() }
+            withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+            f.coordinator.cancel("cancel")
+            withTimeout(5000) { running.await() }
+            assertEquals(JobStage.CANCELLED, f.store.get("cancel")!!.stage)
+            assertNull(f.store.get("cancel")!!.sourceUrl)
+            assertFalse(File(app.filesDir, "downloads/cancel").exists())
+            assertTrue(f.provider.rows.isEmpty())
+        }
+    }
+
+    @Test fun cancelDuringPublicationDeletesPendingRowAndStaging() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            f.store.enqueue(command("copy-cancel"))
+            f.provider.onOpen = { f.coordinator.requestCancellation("copy-cancel") }
+            f.worker("copy-cancel").doWork()
+            assertEquals(JobStage.CANCELLED, f.store.get("copy-cancel")!!.stage)
+            assertTrue(f.provider.rows.isEmpty())
+            assertFalse(File(app.filesDir, "downloads/copy-cancel").exists())
+        }
+    }
+
+    @Test
+    @Config(manifest = "AndroidManifest.xml")
+    fun notificationPendingIntentCancelsTheActualApplicationJob() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+            f.store.enqueue(command("notification-cancel"))
+            val running = async(Dispatchers.Default) { f.worker("notification-cancel").doWork() }
+            withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+            val receiver = DownloadCancelReceiver()
+            app.registerReceiver(receiver, IntentFilter(DownloadNotifications.CANCEL), Context.RECEIVER_NOT_EXPORTED)
+            try {
+                val info = DownloadNotifications(app).foreground(f.coordinator.progress.value.single())
+                info.notification.actions.single().actionIntent.send()
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                withTimeout(5000) { running.await() }
+            } finally { app.unregisterReceiver(receiver) }
+            assertEquals(JobStage.CANCELLED, f.store.get("notification-cancel")!!.stage)
+            assertFalse(File(app.filesDir, "downloads/notification-cancel").exists())
+        }
+    }
+
+    @Test fun systemStopDuringPublicationIsInterruptedAndCleansPendingRow() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.store.enqueue(command("copy-stop"))
+            val opened = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            f.provider.onOpen = { opened.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
+            val worker = f.worker("copy-stop")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            try {
+                assertTrue(withContext(Dispatchers.IO) { opened.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+                worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
+                running.cancel()
+                withTimeout(5000) { f.engineStopped.await() }
+            } finally { release.countDown() }
+            running.join()
+            assertEquals(JobStage.FAILED, f.store.get("copy-stop")!!.stage)
+            assertEquals(DownloadError.Interrupted, f.store.get("copy-stop")!!.error)
+            val notification = resultNotification()
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_interrupted_error),
+                notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
+            assertTrue(f.provider.rows.isEmpty())
+            assertFalse(File(app.filesDir, "downloads/copy-stop").exists())
+        }
+    }
+
+    @Test fun coroutineStopCancelsEngineBeforeRemovingStaging() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+            f.store.enqueue(command("wm-stop"))
+            val running = launch(Dispatchers.Default) { f.worker("wm-stop").doWork() }
+            withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+            running.cancelAndJoin()
+            assertEquals(JobStage.FAILED, f.store.get("wm-stop")!!.stage)
+            assertEquals(DownloadError.Interrupted, f.store.get("wm-stop")!!.error)
+            assertFalse(File(app.filesDir, "downloads/wm-stop").exists())
+        }
+    }
+
+    @Test fun zeroByteConnectivityStopReturnsWorkerRetry() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Cancelled)))).use { f ->
+            f.store.enqueue(command("network-retry"))
+            val worker = f.worker("network-retry")
+            worker.stop(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
+            assertEquals(ListenableWorker.Result.retry(), worker.doWork())
+            assertEquals(JobStage.ENQUEUED, f.store.get("network-retry")!!.stage)
+            assertTrue(f.coordinator.progress.value.single().waiting)
+            assertEquals(DownloadPhase.PREPARING, f.coordinator.progress.value.single().phase)
+            assertNotNull(f.store.get("network-retry")!!.sourceUrl)
+            assertEquals(1, f.store.all().size)
+            assertFalse(File(app.filesDir, "downloads/network-retry").exists())
+        }
+    }
+
+    @Test @Config(sdk = [29, 33, 35])
+    fun connectivityStopBeforeBytesReturnsSameRowToQueueAndReruns() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+            shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
+            f.store.enqueue(command("network-zero"))
+            val worker = f.worker("network-zero")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+            worker.stop(if (android.os.Build.VERSION.SDK_INT >= 31) WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY
+                else WorkInfo.STOP_REASON_UNKNOWN)
+            running.cancelAndJoin()
+            val row = f.store.get("network-zero")!!
+            assertEquals(JobStage.ENQUEUED, row.stage)
+            assertNotNull(row.sourceUrl)
+            assertEquals(1, f.store.all().size)
+            assertFalse(File(app.filesDir, "downloads/network-zero").exists())
+            val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("network-zero").get()
+            assertEquals(1, work.size)
+            assertEquals(NetworkType.CONNECTED, work.single().constraints.requiredNetworkType)
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { rerun ->
+                assertEquals(ListenableWorker.Result.success(), rerun.worker("network-zero").doWork())
+                assertEquals(JobStage.COMPLETED, rerun.store.get("network-zero")!!.stage)
+                assertEquals(1, rerun.store.all().size)
+                assertEquals(1, rerun.provider.rows.size)
+            }
+        }
+    }
+
+    @Test @Config(sdk = [29, 33, 35])
+    fun connectivityStopAfterBytesFailsRetryableNetworkAndCleansPartial() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Emit(EngineEvent.Progress(2, Size.Exact(4))),
+            FakeEngine.Step.AwaitCancellation))).use { f ->
+            shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
+            f.store.enqueue(command("network-partial"))
+            val worker = f.worker("network-partial")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            withTimeout(5000) { while (f.coordinator.progress.value.none { it.bytes == 2L }) yield() }
+            worker.stop(if (android.os.Build.VERSION.SDK_INT >= 31) WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY
+                else WorkInfo.STOP_REASON_UNKNOWN)
+            running.cancelAndJoin()
+            val row = f.store.get("network-partial")!!
+            assertEquals(JobStage.FAILED, row.stage)
+            assertEquals(DownloadError.Network, row.error)
+            assertTrue(row.retryable)
+            assertNotNull(row.sourceUrl)
+            assertFalse(File(app.filesDir, "downloads/network-partial").exists())
+        }
+    }
+
+    @Test fun cancellationRacingWorkerStartStopsSignalBeforeAnyTransfer() = runBlocking {
+        val cancelling = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val first = java.util.concurrent.atomic.AtomicBoolean(true)
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation)), cancelHook = {
+            if (first.compareAndSet(true, false)) {
+                cancelling.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            }
+        }).use { f ->
+            f.coordinator.initialize()
+            f.store.enqueue(command("start-race"))
+            val cancel = async(Dispatchers.Default) { f.coordinator.cancel("start-race") }
+            try {
+                assertTrue(withContext(Dispatchers.IO) { cancelling.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+                val started = CompletableDeferred<Unit>()
+                val worker = async(Dispatchers.Default) {
+                    f.coordinator.execute("start-race", { started.complete(Unit) }, {})
+                }
+                withTimeout(5000) { started.await() }
+                release.countDown()
+                withTimeout(5000) { cancel.await(); worker.await() }
+            } finally { release.countDown() }
+            assertEquals(JobStage.CANCELLED, f.store.get("start-race")!!.stage)
+            assertNull(f.store.get("start-race")!!.sourceUrl)
+            assertTrue(f.engine.commands.isEmpty())
+            assertFalse(File(app.filesDir, "downloads/start-race").exists())
+        }
+    }
+
+    @Test fun cancellationAfterCommitStillPostsSavedWithOpenAndShare() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.store.enqueue(command("late-stop"))
+            val committed = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            f.provider.onCommit = { committed.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
+            val worker = f.worker("late-stop")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            try {
+                assertTrue(withContext(Dispatchers.IO) { committed.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+                worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
+                running.cancel()
+                withTimeout(5000) { f.engineStopped.await() }
+            } finally { release.countDown() }
+            running.join()
+            assertSaved(f, "late-stop")
+        }
+    }
+
+    @Test fun coordinatorCancelAfterCompletedKeepsSavedFileAndActions() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.store.enqueue(command("late-cancel"))
+            f.worker("late-cancel").doWork()
+            f.coordinator.cancel("late-cancel")
+            assertSaved(f, "late-cancel")
+        }
+    }
+
+    @Test @Config(manifest = "AndroidManifest.xml")
+    fun notificationCancelAfterCompletedKeepsSavedFileAndActions() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.store.enqueue(command("late-receiver"))
+            val cancelIntent = DownloadNotifications(app).foreground(DownloadProgress("late-receiver", "clip.mp4",
+                DownloadPhase.PREPARING)).notification.actions.single().actionIntent
+            f.worker("late-receiver").doWork()
+            val receiver = DownloadCancelReceiver()
+            app.registerReceiver(receiver, IntentFilter(DownloadNotifications.CANCEL), Context.RECEIVER_NOT_EXPORTED)
+            try {
+                cancelIntent.send()
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                withTimeout(5000) {
+                    while ((app as NezzelApplication).scope.coroutineContext[Job]!!.children.any()) yield()
+                }
+            } finally { app.unregisterReceiver(receiver) }
+            assertSaved(f, "late-receiver")
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun burstBoundsUiAndReporterWhilePreservingMeasuredFileAndOrderedTerminal() = runBlocking {
+        val firstReport = CompletableDeferred<Unit>()
+        val releaseReporter = CompletableDeferred<Unit>()
+        val burstDone = CompletableDeferred<Unit>()
+        val releaseEngine = CompletableDeferred<Unit>()
+        val callbacks = java.util.concurrent.atomic.AtomicInteger()
+        val ui = java.util.Collections.synchronizedList(mutableListOf<DownloadProgress>())
+        val reports = java.util.Collections.synchronizedList(mutableListOf<DownloadProgress>())
+        fixture(FakeEngine(), clock = { 0L }, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(1, Size.Exact(10_000))); callbacks.incrementAndGet()
+            firstReport.await()
+            for (n in 2L..10_000L) { emit(EngineEvent.Progress(n, Size.Exact(10_000))); callbacks.incrementAndGet() }
+            burstDone.complete(Unit); releaseEngine.await()
+            emit(EngineEvent.Merging)
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("burst"))
+            val collect = launch(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+                f.coordinator.progress.collect { values -> values.firstOrNull { it.jobId == "burst" }?.let { ui += it } }
+            }
+            val running = async(Dispatchers.Default) { f.coordinator.execute("burst", {}, { event ->
+                reports += event
+                if (event.phase == DownloadPhase.DOWNLOADING && firstReport.complete(Unit)) releaseReporter.await()
+            }) }
+            var beforeRelease = 0
+            try {
+                withTimeout(5000) { burstDone.await() }
+                beforeRelease = ui.count { it.phase == DownloadPhase.DOWNLOADING }
+            } finally { releaseReporter.complete(Unit); releaseEngine.complete(Unit) }
+            try {
+                assertEquals(JobStage.COMPLETED, withTimeout(5000) { running.await() }!!.stage)
+                println("MEASURE coordinator callbacks=${callbacks.get()} uiBeforeRelease=$beforeRelease reports=${reports.size}")
+                assertTrue("UI publishes=$beforeRelease for10000 callbacks", beforeRelease <= 1)
+                assertTrue("reports=${reports.size}", reports.size <= 7)
+                assertEquals(10_000L, reports.last { it.phase == DownloadPhase.DOWNLOADING }.bytes)
+                assertEquals(listOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING, DownloadPhase.JOINING,
+                    DownloadPhase.SAVING, DownloadPhase.COMPLETED), reports.map { it.phase }.distinct())
+                assertEquals(1, reports.count { it.terminal })
+                assertTrue(reports.last().terminal)
+                assertEquals(4L, reports.last().bytes)
+                assertArrayEquals(byteArrayOf(1, 2, 3, 4), f.provider.file.readBytes())
+                assertEquals(1, f.provider.rows.size)
+                assertNull(f.store.get("burst")!!.sourceUrl)
+                assertTrue(reports.filter { it.phase != DownloadPhase.DOWNLOADING }.all {
+                    it.bytesPerSecond == null && it.remainingTransferSeconds == null && it.stalled == null
+                })
+            } finally { running.cancelAndJoin(); collect.cancelAndJoin() }
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun workerPersistenceIsBoundedForTenThousandCallbacksAndFlushesFinalTransferBytes() = runBlocking {
+        fixture(FakeEngine(), clock = { 0L }, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+            repeat(10_000) { emit(EngineEvent.Progress(it + 1L, Size.Exact(10_000))) }
+            emit(EngineEvent.Merging)
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            f.store.enqueue(command("persist-burst"))
+            assertEquals(ListenableWorker.Result.success(), f.worker("persist-burst").doWork())
+            println("MEASURE worker callbacks=10000 persistenceWrites=${f.phases.size}")
+            assertTrue("persistence writes=${f.phases.size}", f.phases.size <= 7)
+            val transfer = f.progressData.filter { it.getString("phase") == "DOWNLOADING" }
+            assertEquals(10_000L, transfer.last().getLong("bytes", -1))
+            assertEquals(1, f.phases.count { it == "COMPLETED" })
+            assertEquals("COMPLETED", f.phases.last())
+            assertEquals(1, f.provider.rows.size)
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun silentStallClearsVisibleMetricsAndTickerStopsAtTerminal() = runBlocking {
+        val now = java.util.concurrent.atomic.AtomicLong()
+        val ticks = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.RENDEZVOUS)
+        val ready = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), clock = { now.get() }, nextTick = { ticks.receive() }, script = { _, _, emit ->
+            emit(EngineEvent.Progress(0, Size.Exact(20_000)))
+            now.set(2000); emit(EngineEvent.Progress(2000, Size.Exact(20_000)))
+            ready.complete(Unit); release.await()
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("silent-stall"))
+            val running = async(Dispatchers.Default) { f.coordinator.execute("silent-stall", {}, {}) }
+            try {
+                withTimeout(5000) { ready.await() }
+                val observedRate = f.coordinator.progress.value.single().bytesPerSecond
+                assertNotNull("Coordinator must publish measured rate after2s before silent stall", observedRate)
+                assertEquals(1000.0, observedRate!!, 0.001)
+                now.set(7000); withTimeout(5000) { ticks.send(Unit) }
+                withTimeout(5000) { while (f.coordinator.progress.value.single().stalled != true) yield() }
+                val stalled = f.coordinator.progress.value.single()
+                assertNull(stalled.bytesPerSecond); assertNull(stalled.remainingTransferSeconds)
+                assertEquals(2000L, stalled.bytes)
+            } finally { release.complete(Unit); withTimeout(5000) { running.await() } }
+            val terminal = f.coordinator.progress.value.single()
+            assertTrue(terminal.terminal)
+            assertNull(terminal.stalled); assertNull(terminal.bytesPerSecond); assertNull(terminal.remainingTransferSeconds)
+            assertTrue(ticks.trySend(Unit).isFailure)
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun sameJobIdExecuteRetryStartsNewObservationWindow() = runBlocking {
+        val now = java.util.concurrent.atomic.AtomicLong()
+        val attempted = java.util.concurrent.atomic.AtomicInteger()
+        val warmups = mutableListOf<DownloadProgress>()
+        val measured = mutableListOf<DownloadProgress>()
+        lateinit var coordinator: DownloadCoordinator
+        fixture(FakeEngine(), clock = { now.get() }, nextTick = { awaitCancellation() }, script = { _, _, emit ->
+            val attempt = attempted.incrementAndGet()
+            now.set((attempt - 1) * 10_000L)
+            emit(EngineEvent.Progress(0, Size.Unknown))
+            warmups += coordinator.progress.value.single()
+            now.addAndGet(2000); emit(EngineEvent.Progress(2000, Size.Exact(10_000)))
+            measured += coordinator.progress.value.single()
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            coordinator = f.coordinator
+            coordinator.initialize(); f.store.enqueue(command("same-attempt"))
+            coordinator.execute("same-attempt", {}, {})
+            assertTrue(coordinator.retry("same-attempt"))
+            coordinator.execute("same-attempt", {}, {})
+            assertEquals(2, attempted.get())
+            assertTrue(warmups.all { it.bytesPerSecond == null && it.remainingTransferSeconds == null && it.stalled == false })
+            assertEquals(listOf(1000.0, 1000.0), measured.map { it.bytesPerSecond })
+            assertEquals(listOf(8L, 8L), measured.map { it.remainingTransferSeconds })
+            assertEquals(1, f.store.all().size)
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun reportedHlsFragmentsReachLiveRowsAndWorkerReportsWithoutInventingTime() = runBlocking {
+        val now = java.util.concurrent.atomic.AtomicLong()
+        val snapshots = mutableListOf<DownloadProgress>()
+        val reports = mutableListOf<DownloadProgress>()
+        val reportedFragments = CompletableDeferred<Unit>()
+        lateinit var coordinator: DownloadCoordinator
+        fixture(FakeEngine(), clock = { now.get() }, nextTick = { awaitCancellation() }, script = { _, _, emit ->
+            now.set(2000)
+            emit(EngineEvent.Progress(160_900_000, Size.Estimated(156_700_000), 25, 100))
+            snapshots += coordinator.progress.value.single()
+            withTimeout(5000) { reportedFragments.await() }
+            now.set(4000)
+            emit(EngineEvent.Progress(161_000_000, Size.Unknown))
+            snapshots += coordinator.progress.value.single()
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            coordinator = f.coordinator
+            coordinator.initialize(); f.store.enqueue(command("hls-fragments"))
+            coordinator.execute("hls-fragments", {}, {
+                reports += it
+                if (it.fragmentIndex == 25L && it.fragmentCount == 100L) reportedFragments.complete(Unit)
+            })
+            val measured = snapshots.first()
+            assertEquals(25L, measured.fragmentIndex); assertEquals(100L, measured.fragmentCount)
+            assertEquals(25, measured.visiblePercent); assertNull(measured.exactTransferTotal)
+            assertNull(measured.remainingTransferSeconds)
+            assertNull(snapshots.last().visiblePercent); assertNull(snapshots.last().remainingTransferSeconds)
+            assertTrue(reports.any { it.fragmentIndex == 25L && it.fragmentCount == 100L && it.visiblePercent == 25 })
+            assertNull(coordinator.progress.value.single().fragmentIndex)
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun invalidNegativeCounterIsAbsentAndOverTotalNeverLooksComplete() = runBlocking {
+        val snapshots = mutableListOf<DownloadProgress>()
+        val now = java.util.concurrent.atomic.AtomicLong()
+        lateinit var coordinator: DownloadCoordinator
+        fixture(FakeEngine(), clock = { now.get() }, nextTick = { awaitCancellation() }, script = { _, _, emit ->
+            for (bytes in listOf(0L, 2L, -1L, 120L)) {
+                now.addAndGet(2000); emit(EngineEvent.Progress(bytes, Size.Exact(100)))
+                snapshots += coordinator.progress.value.single()
+            }
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            coordinator = f.coordinator
+            coordinator.initialize(); f.store.enqueue(command("invalid-count"))
+            coordinator.execute("invalid-count", {}, {})
+            assertNull(snapshots[2].bytes); assertNull(snapshots[2].percent)
+            assertNull(snapshots[2].bytesPerSecond); assertNull(snapshots[2].remainingTransferSeconds)
+            assertEquals(120L, snapshots[3].bytes); assertNull(snapshots[3].percent)
+            assertEquals(JobStage.FAILED, f.store.get("invalid-count")!!.stage)
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun cancellationDuringBlockedBurstReporterReachesEngineAndDeliversOneTerminal() = runBlocking {
+        val reportEntered = CompletableDeferred<Unit>()
+        val blockReporter = CompletableDeferred<Unit>()
+        val burstDone = CompletableDeferred<Unit>()
+        val terminals = mutableListOf<DownloadProgress>()
+        fixture(FakeEngine(), clock = { 0L }, nextTick = { awaitCancellation() }, script = { _, _, emit ->
+            emit(EngineEvent.Progress(1)); reportEntered.await()
+            repeat(9999) { emit(EngineEvent.Progress(it + 2L)) }
+            burstDone.complete(Unit); awaitCancellation()
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("cancel-burst"))
+            val running = launch(Dispatchers.Default) {
+                f.coordinator.execute("cancel-burst", { WorkInfo.STOP_REASON_UNKNOWN }, {}, { event ->
+                    if (event.phase == DownloadPhase.DOWNLOADING) { reportEntered.complete(Unit); blockReporter.await() }
+                }, { terminals += it })
+            }
+            try {
+                withTimeout(5000) { burstDone.await() }
+                f.coordinator.requestCancellation("cancel-burst"); running.cancel()
+                withTimeout(5000) { f.engineStopped.await(); running.join() }
+                assertFalse(blockReporter.isCompleted)
+                assertEquals(listOf(DownloadPhase.CANCELLED), terminals.map { it.phase })
+                assertEquals(JobStage.CANCELLED, f.store.get("cancel-burst")!!.stage)
+                assertNull(f.store.get("cancel-burst")!!.sourceUrl)
+                assertFalse(File(app.filesDir, "downloads/cancel-burst").exists())
+                assertTrue(f.provider.rows.isEmpty())
+            } finally { blockReporter.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun failureAndUserCancellationFlushClearedMetricsBeforeSingleTerminal() = runBlocking {
+        for (cancel in listOf(false, true)) {
+            val now = java.util.concurrent.atomic.AtomicLong()
+            val measuredReport = CompletableDeferred<Unit>()
+            val reports = mutableListOf<DownloadProgress>()
+            lateinit var coordinator: DownloadCoordinator
+            val id = if (cancel) "clear-cancel" else "clear-failure"
+            fixture(FakeEngine(), clock = { now.get() }, nextTick = { awaitCancellation() }, script = { _, _, emit ->
+                emit(EngineEvent.Progress(0, Size.Exact(10_000)))
+                now.set(2000); emit(EngineEvent.Progress(2000, Size.Exact(10_000)))
+                measuredReport.await()
+                if (cancel) coordinator.requestCancellation(id)
+                TransferResult.Failure(if (cancel) DownloadError.Cancelled else DownloadError.Network)
+            }).use { f ->
+                coordinator = f.coordinator
+                coordinator.initialize(); f.store.enqueue(command(id))
+                withTimeout(5000) { coordinator.execute(id, {}, { event ->
+                    reports += event
+                    if (event.bytesPerSecond != null) measuredReport.complete(Unit)
+                }) }
+                assertTrue("Setup must deliver a measured sample before ending transfer", measuredReport.isCompleted)
+                val lastTransfer = reports.last { it.phase == DownloadPhase.DOWNLOADING }
+                assertNull("Failure/cancel pre-terminal flush must clear measured rate", lastTransfer.bytesPerSecond)
+                assertNull(lastTransfer.remainingTransferSeconds); assertNull(lastTransfer.stalled)
+                assertEquals(2000L, lastTransfer.bytes)
+                assertEquals(1, reports.count { it.terminal })
+                assertEquals(if (cancel) DownloadPhase.CANCELLED else DownloadPhase.FAILED, reports.last().phase)
+                assertEquals(if (cancel) JobStage.CANCELLED else JobStage.FAILED, f.store.get(id)!!.stage)
+                assertTrue(f.provider.rows.isEmpty())
+                assertFalse(File(app.filesDir, "downloads/$id").exists())
+            }
+        }
+    }
+
+    @Test @Config(sdk = [33])
+    fun lateEngineProgressCannotReopenTransferAfterJoining() = runBlocking {
+        val now = java.util.concurrent.atomic.AtomicLong()
+        val reports = mutableListOf<DownloadProgress>()
+        var afterLateProgress: DownloadProgress? = null
+        lateinit var coordinator: DownloadCoordinator
+        fixture(FakeEngine(), clock = { now.get() }, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(0, Size.Exact(10_000)))
+            now.set(2000); emit(EngineEvent.Progress(2000, Size.Exact(10_000)))
+            emit(EngineEvent.Merging)
+            now.set(4000); emit(EngineEvent.Progress(4000, Size.Exact(10_000)))
+            now.set(6000); emit(EngineEvent.Progress(6000, Size.Exact(10_000)))
+            afterLateProgress = coordinator.progress.value.single()
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            coordinator = f.coordinator
+            coordinator.initialize(); f.store.enqueue(command("late-progress"))
+            coordinator.execute("late-progress", {}, { reports += it })
+            assertNotNull(afterLateProgress)
+            assertEquals("Postprocessing phase must not regress on a late byte callback", DownloadPhase.JOINING, afterLateProgress!!.phase)
+            assertNull(afterLateProgress!!.bytesPerSecond); assertNull(afterLateProgress!!.remainingTransferSeconds)
+            val joined = reports.indexOfFirst { it.phase == DownloadPhase.JOINING }
+            assertTrue(joined >= 0)
+            assertFalse(reports.drop(joined + 1).any { it.phase == DownloadPhase.DOWNLOADING })
+            assertEquals(1, reports.count { it.terminal })
+            assertEquals(DownloadPhase.COMPLETED, reports.last().phase)
+            assertArrayEquals(byteArrayOf(1, 2, 3, 4), f.provider.file.readBytes())
+        }
+    }
+
+    private fun resultNotification(): android.app.Notification {
+        // Manual doWork() does not run WorkManager's foreground-service cleanup. Immediate phase
+        // delivery can leave its active ID in the shadow beside the separate result ID (:finished).
+        val notifications = shadowOf(app.getSystemService(android.app.NotificationManager::class.java)).allNotifications
+        val results = notifications.filter { it.channelId == DownloadNotifications.COMPLETED_CHANNEL }
+        assertEquals("Exactly one result notification must be delivered", 1, results.size)
+        val others = notifications.filter { it.channelId != DownloadNotifications.COMPLETED_CHANNEL }
+        assertTrue("Only one expected active notification may remain before foreground cleanup", others.size <= 1)
+        others.forEach { active ->
+            assertEquals(DownloadNotifications.CHANNEL, active.channelId)
+            assertTrue(active.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0)
+            assertEquals(listOf(app.getString(dev.ahmed.savlino.R.string.cancel)), active.actions.map { it.title.toString() })
+        }
+        return results.single()
+    }
+
+    private fun assertSaved(f: Fixture, id: String) {
+        assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+        assertNull(f.store.get(id)!!.sourceUrl)
+        assertEquals(1, f.provider.rows.size)
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4), f.provider.file.readBytes())
+        val notification = resultNotification()
+        assertTrue(notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString()
+            .startsWith(app.getString(dev.ahmed.savlino.R.string.download_saved)))
+        assertEquals(listOf(app.getString(dev.ahmed.savlino.R.string.open_file), app.getString(dev.ahmed.savlino.R.string.share_file)),
+            notification.actions.map { it.title.toString() })
+    }
+
+    private fun fixture(engine: FakeEngine, freeBytes: Long = Long.MAX_VALUE,
+        downloadFailure: Exception? = null, cancelHook: () -> Unit = {},
+        clock: () -> Long = { android.os.SystemClock.elapsedRealtime() }, nextTick: suspend () -> Unit = { delay(250) },
+        script: (suspend (DownloadCommand, File, (EngineEvent) -> Unit) -> TransferResult)? = null): Fixture {
+        WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
+            .setWorkerFactory(object : WorkerFactory() {
+                override fun createWorker(context: Context, name: String, params: WorkerParameters) =
+                    object : Worker(context, params) { override fun doWork() = Result.success() }
+            }).build())
+        val provider = TestDownloadsProvider(File(app.cacheDir, "provider.mp4"), app.packageName)
+        provider.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
+        ShadowContentResolver.registerProviderInternal("media", provider)
+        val space = SpaceBudget(app.filesDir, app.cacheDir, FreeSpace { freeBytes })
+        val publisher = MediaStorePublisher(app.contentResolver, space, app.packageName) { }
+        val store = JobStore(app)
+        val engineStopped = CompletableDeferred<Unit>()
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val observedEngine = object : EngineAdapter by engine {
+            override fun cancel(operationId: String) { cancelHook(); engine.cancel(operationId); engineStopped.complete(Unit) }
+            override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult {
+                attempts.incrementAndGet()
+                if (downloadFailure != null) {
+                    directory.resolve("partial.mp4").writeBytes(byteArrayOf(1))
+                    throw downloadFailure
+                }
+                return script?.invoke(command, directory, progress) ?: engine.download(command, directory, progress)
+            }
+        }
+        val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick)
+        (app as IsolatedTestApplication).coordinatorOverride = coordinator
+        return Fixture(engine, provider, store, coordinator, engineStopped, attempts)
+    }
+    private inner class Fixture(val engine: FakeEngine, val provider: TestDownloadsProvider, val store: JobStore,
+        val coordinator: DownloadCoordinator, val engineStopped: CompletableDeferred<Unit>, val attempts: java.util.concurrent.atomic.AtomicInteger) : AutoCloseable {
+        val phases = mutableListOf<String>()
+        val progressData = mutableListOf<Data>()
+        fun worker(id: String) = TestListenableWorkerBuilder<DownloadWorker>(app)
+            .setInputData(workDataOf(DownloadWorker.JOB_ID to id))
+            .setWorkerFactory(DownloadWorker.Factory(coordinator))
+            .setProgressUpdater { _, _, data ->
+                phases += data.getString("phase")!!
+                progressData += data
+                com.google.common.util.concurrent.SettableFuture.create<Void>().apply { set(null) }
+            }.build()
+        override fun close() = store.close()
+    }
+}
+
+/** Provider boundary only: actual SQLite, filesystem, pending publication/copy/commit run above it. */
+internal class TestDownloadsProvider(val file: File, private val owner: String) : ContentProvider() {
+    val rows = linkedMapOf<Long, ContentValues>()
+    var onOpen: () -> Unit = {}
+    var onCommit: () -> Unit = {}
+    private var nextId = 0L
+    override fun onCreate() = true
+    override fun getType(uri: Uri) = "video/mp4"
+    override fun insert(uri: Uri, values: ContentValues?): Uri {
+        val id = ++nextId
+        rows[id] = ContentValues(values!!).apply { put(MediaStore.Downloads.OWNER_PACKAGE_NAME, owner) }
+        return ContentUris.withAppendedId(uri, id)
+    }
+    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, order: String?): MatrixCursor {
+        val columns = projection ?: arrayOf(MediaStore.Downloads._ID)
+        val id = uri.lastPathSegment?.toLongOrNull()
+        return MatrixCursor(columns).apply {
+            rows.filterKeys { id == null || it == id }.forEach { (key, row) ->
+                addRow(columns.map { if (it == MediaStore.Downloads._ID) key else row[it] }.toTypedArray())
+            }
+        }
+    }
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?): Int {
+        val row = rows[ContentUris.parseId(uri)] ?: return 0
+        values?.let(row::putAll)
+        if (values?.getAsInteger(MediaStore.Downloads.IS_PENDING) == 0) onCommit()
+        return 1
+    }
+    override fun delete(uri: Uri, selection: String?, args: Array<out String>?): Int =
+        if (rows.remove(ContentUris.parseId(uri)) != null) { file.delete(); 1 } else 0
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+        onOpen()
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_CREATE or
+            ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_TRUNCATE)
+    }
+}

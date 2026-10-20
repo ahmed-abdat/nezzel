@@ -1,0 +1,8 @@
+0.4.3
+• New look: simpler welcome pages and clearer Home, Settings and quality choices.
+• Share several links at once: Nezzel opens the first and offers the next.
+• Links inside shared text or Arabic sentences now work.
+• Facebook videos keep their real title.
+• Thumbnails for files saved to a chosen folder.
+• Crash reports you can share from About (never sent automatically).
+• Ready for newer phones that use 16 KB memory pages.
