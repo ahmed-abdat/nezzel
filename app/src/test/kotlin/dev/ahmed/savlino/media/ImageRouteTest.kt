@@ -42,6 +42,9 @@ class ImageRouteTest {
         assertEquals(MediaSourceRoute.FACEBOOK, route("https://m.facebook.com/story.php?story_fbid=123&id=456"))
         assertEquals(MediaSourceRoute.FACEBOOK, route("https://www.facebook.com/nasa/photos/a.1/987654321/"))
         assertEquals(MediaSourceRoute.FACEBOOK, route("https://www.facebook.com/share/p/AbC123xyz/"))
+        // Plain share links name no kind: the page fetch finds a photo, or redirects a landing video to yt-dlp.
+        assertEquals(MediaSourceRoute.FACEBOOK, route("https://www.facebook.com/share/1AbC23xyZ/"))
+        assertEquals(MediaSourceRoute.FACEBOOK, route("https://m.facebook.com/share/19AbCdEfG?mibextid=abc"))
     }
 
     @Test fun facebookVideosAndReelsStayOnTheLegacyEngine() {

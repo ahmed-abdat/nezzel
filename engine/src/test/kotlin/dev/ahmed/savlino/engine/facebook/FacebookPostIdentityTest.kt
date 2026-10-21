@@ -12,6 +12,8 @@ class FacebookPostIdentityTest {
             Triple("https://www.facebook.com/share/p/1AbC-_9/", FacebookLinkKind.SHARE, "https://www.facebook.com/share/p/1AbC-_9/"),
             Triple("https://m.facebook.com/share/v/Xyz12?mibextid=abc", FacebookLinkKind.SHARE, "https://www.facebook.com/share/v/Xyz12"),
             Triple("https://web.facebook.com/share/r/Q1/", FacebookLinkKind.SHARE, "https://www.facebook.com/share/r/Q1/"),
+            Triple("https://www.facebook.com/share/1AbC-_9/", FacebookLinkKind.SHARE, "https://www.facebook.com/share/1AbC-_9/"),
+            Triple("https://m.facebook.com/share/19Xyz?mibextid=abc", FacebookLinkKind.SHARE, "https://www.facebook.com/share/19Xyz"),
             Triple("https://facebook.com/story.php?story_fbid=123456789&id=42&rdid=x", FacebookLinkKind.STORY,
                 "https://www.facebook.com/story.php?story_fbid=123456789&id=42"),
             Triple("https://m.facebook.com/permalink.php?id=42&story_fbid=pfbid0AbCd", FacebookLinkKind.PERMALINK,

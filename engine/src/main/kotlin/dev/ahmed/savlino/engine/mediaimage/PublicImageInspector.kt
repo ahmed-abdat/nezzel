@@ -233,7 +233,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         } catch (_: java.io.IOException) {
             return Fetched.Failed(failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE))
         } finally { page.close() }
-        // Only a shortlink (share/{p,v,r}, fb.watch) carries no id of its own, so only its landing reel/watch/video
+        // Only a shortlink (share/, share/{p,v,r}, fb.watch) carries no id of its own, so only its landing reel/watch/video
         // URL may name the video. An id-bearing link always needs its own bound story's attachment below.
         if (requested.isShortlink) resolved.videoId?.let { return videoRedirect(operation, it) }
         val parsed = when (val result = facebookParser.parse(html.bytes, resolved, requested, html.length)) {

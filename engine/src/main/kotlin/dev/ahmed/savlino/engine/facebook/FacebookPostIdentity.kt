@@ -25,7 +25,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
         private val numeric = Regex("[0-9]{1,25}")
         private val storyId = Regex("[0-9]{1,25}|pfbid[A-Za-z0-9]{1,80}")
         private val segment = Regex("[A-Za-z0-9._-]{1,100}")
-        private val share = Regex("/share/([pvr])/(${token.pattern})/?")
+        private val share = Regex("/share/(?:([pvr])/)?(${token.pattern})/?")
         private val shortlink = Regex("/(${token.pattern})/?")
         private val posts = Regex("/(?:groups/)?(${segment.pattern})/(?:posts|permalink)/(?:[^/]{1,512}/)?([0-9]{1,25}|pfbid[A-Za-z0-9]{1,80})/?")
         private val photos = Regex("/(${segment.pattern})/photos/(?:[a-z]{1,8}\\.[0-9]{1,25}/)?([0-9]{1,25})/?")
