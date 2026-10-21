@@ -31,6 +31,10 @@ internal object MediaHttpPolicy {
     internal fun isLinkedInPageEntry(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) && isLinkedInPost(normalizeLinkedInEntry(url)) ||
         (url.host == "lnkd.in" && Regex("/p/[A-Za-z0-9_-]+/?").matches(url.encodedPath))
 
+    /** LinkedIn's own sign-up or login wall; never followed, only named. */
+    internal fun isLinkedInLoginWall(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) &&
+        Regex("/(?:signup(?:/[a-z-]+)?|authwall|login|uas/login|checkpoint/[a-z/-]+)/?").matches(url.encodedPath)
+
     /** Only a shortlink may establish the post; every later post/activity hop must keep that identity. */
     internal fun allowsLinkedInPageHop(from: HttpUrl, to: HttpUrl): Boolean {
         if (!isLinkedInPageEntry(from) || !isLinkedInPost(to)) return false

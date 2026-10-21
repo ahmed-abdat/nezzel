@@ -394,6 +394,15 @@ class MediaHttpImageTransferTest {
         } }
     }
 
+    @Test fun linkedinSignupAndLoginRedirectsAreNamedLoginWalls() {
+        fun url(value: String) = checkNotNull(MediaHttpPolicy.parse(value))
+        // A members-only post sends logged-out visitors to /signup/cold-join (owner's link, 2026-10-21).
+        listOf("https://www.linkedin.com/signup/cold-join", "https://www.linkedin.com/authwall", "https://www.linkedin.com/login",
+            "https://linkedin.com/uas/login").forEach { assertTrue(MediaHttpPolicy.isLinkedInLoginWall(url(it)), it) }
+        listOf("https://www.linkedin.com/posts/synthetic-activity-123", "https://other.test/login",
+            "https://www.linkedin.com/feed/update/urn:li:activity:123").forEach { assertFalse(MediaHttpPolicy.isLinkedInLoginWall(url(it)), it) }
+    }
+
     @Test fun linkedinPageTransitionsAllowOnlyShortlinkToPostThenPostsAndActivity() {
         fun url(value: String) = checkNotNull(MediaHttpPolicy.parse(value))
         assertTrue(MediaHttpPolicy.allowsLinkedInPageHop(url("https://lnkd.in/p/fixture"),
@@ -425,7 +434,7 @@ class MediaHttpImageTransferTest {
 
     @Test fun linkedinPageOffProviderAndInvalidPathRedirectsStopBeforeNextDns() {
         for (location in listOf("https://other.test/posts/fixture", "https://lnkd.in/p/fixture",
-            "/login", "/posts/", "/feed/update/urn:li:activity:abc", "/posts/elsewhere",
+            "/login", "/signup/cold-join", "/posts/", "/feed/update/urn:li:activity:abc", "/posts/elsewhere",
             "/feed/update/urn:li:activity:999")) fixture(respond = { request, socket ->
             if (request.target == "/posts/allowed") socket.reply(headers = mapOf("Content-Type" to "text/html"))
             else socket.reply(302, headers = mapOf("Location" to location))
@@ -436,8 +445,9 @@ class MediaHttpImageTransferTest {
             }
             h.client.newOperation(MediaHttpOperation.PAGE_AND_IMAGE).use { token ->
                 val before = h.dnsCalls.get()
+                // LinkedIn's own login or sign-up wall is named, never followed.
                 assertFailure(h.client.fetchLinkedInPage(token, "https://www.linkedin.com/posts/start"),
-                    MediaHttpFailure.INVALID_CONTEXT)
+                    if (location == "/login" || location == "/signup/cold-join") MediaHttpFailure.LOGIN_REQUIRED else MediaHttpFailure.INVALID_CONTEXT)
                 assertEquals(before + 1, h.dnsCalls.get(), "next forbidden hop never resolves")
                 assertEquals(1, token.budget.snapshot().requests)
             }

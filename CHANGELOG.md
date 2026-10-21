@@ -23,6 +23,7 @@ Version entries describe existing builds, not public APK availability.
 ### Fixed
 
 - Last pick: a quality chosen in All qualities is remembered (by resolution, closest lower one when missing) and the «Last pick» badge no longer marks an older preset.
+- LinkedIn photo posts with more photos than the grid shows ("+1") now load every photo; a members-only post says it isn't public instead of "couldn't read this link".
 - A video+audio download's percent can no longer fall back when the second part starts reporting fragments.
 - Show in Files on a chosen folder passes read access to that folder only; What's new always uses one version both languages have.
 - Video+audio downloads show a real percent and time left from the first byte when the site reported exact sizes (before, the ring spun until the audio part started); once set, the total holds.

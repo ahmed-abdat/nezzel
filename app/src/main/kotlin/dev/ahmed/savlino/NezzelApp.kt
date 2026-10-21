@@ -215,8 +215,13 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
             Column(verticalArrangement = Arrangement.spacedBy(Space.xl)) {
                 // Title and subtitle are one section child, so the pair sits 4dp apart and 24dp above the field.
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    Text(stringResource(R.string.app_name), Modifier.heightIn(min = 48.dp).wrapContentHeight().semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+                    // The mark beside the name, as in Settings' app card (owner 2026-10-21: "only the name without the logo").
+                    Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        dev.ahmed.savlino.ui.NezzelMark(Modifier.size(36.dp))
+                        Text(stringResource(R.string.app_name), Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+                    }
                     // First run: nothing saved or running yet, so say what this place is for.
                     if (jobs.isEmpty() && library.media.isEmpty() && links.text.isEmpty())
                         Text(stringResource(R.string.home_subtitle), style = MaterialTheme.typography.bodyLarge,

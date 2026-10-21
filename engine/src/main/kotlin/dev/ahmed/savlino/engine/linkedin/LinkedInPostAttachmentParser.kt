@@ -86,14 +86,21 @@ class LinkedInPostAttachmentParser {
         val items = list.children()
         if (items.size > MAX_CANDIDATES) throw Budget()
         val ordered = LinkedHashSet<String>()
+        var more: Int? = null
         for ((index, item) in items.withIndex()) {
             // Every item must be an explicit attachment evidenced by the post's JSON-LD; one
             // unmarked, unevidenced or differently shaped neighbour makes the whole list ambiguous.
             val url = attachmentUrl(item, index) ?: return noMedia()
             if (url !in evidenced) return noMedia()
             ordered += url
+            // Only the last tile may carry the "+N" overlay for photos the grid doesn't show.
+            overlayCount(item)?.let { if (index != items.lastIndex) return noMedia() else more = it }
         }
         if (ordered.isEmpty()) return noMedia()
+        // The grid shows 5 tiles and "+N" (owner's 6-photo post, 2026-10-21): the hidden photos come from the post's own
+        // JSON-LD, in its order, only when exactly N evidenced images are not on the grid.
+        val hidden = more?.let { n -> evidenced.filter { it !in ordered }.takeIf { it.size == n } }
+        hidden?.let(ordered::addAll)
         if (ordered.size == 1) {
             val og = document.select("meta[property=og:image]").map { it.attr("content") }.distinct()
             if (og != ordered.toList()) return noMedia()
@@ -105,6 +112,7 @@ class LinkedInPostAttachmentParser {
             claimed != null && claimed > discovered -> DiscoveryCompleteness.PARTIAL
             evidenced.size > discovered -> DiscoveryCompleteness.PARTIAL
             claimed != null && claimed == discovered && evidenced.size == discovered -> DiscoveryCompleteness.COMPLETE
+            hidden != null && evidenced.size == discovered -> DiscoveryCompleteness.COMPLETE
             else -> DiscoveryCompleteness.UNKNOWN
         }
         val title = PostText.firstLine(post["headline"] as? String) ?: PostText.firstLine(post["articleBody"] as? String)
@@ -316,12 +324,26 @@ class LinkedInPostAttachmentParser {
     private fun attachmentUrl(item: Element, index: Int): String? {
         if (item.tagName() != "li" || item.ownText().isNotBlank()) return null
         if (item.attributes().any { !itemAttribute(it.key, it.value, index) }) return null
-        val image = item.children().singleOrNull()?.takeIf { it.tagName() == "img" } ?: return null
+        val children = item.children()
+        // An image, plus at most LinkedIn's exact "+N" overlay after it.
+        if (children.size == 2 && overlayCount(item) == null || children.size !in 1..2) return null
+        val image: Element = children[0].takeIf { it.tagName() == "img" } ?: return null
         if (image.attributes().any { !imageAttribute(it.key, it.value) }) return null
         val url = image.attr("data-delayed-url").takeIf(String::isNotBlank) ?: return null
         val src = image.attr("src")
         if (src.isNotBlank() && src != url && !src.startsWith("data:")) return null
         return url
+    }
+
+    /** N from a tile's `<div data-test-id="feed-images-content__overlay"> +N </div>` second child, else null. */
+    private fun overlayCount(item: Element): Int? {
+        val children = item.children()
+        if (children.size != 2) return null
+        val overlay: Element = children[1]
+        if (overlay.tagName() != "div" || overlay.children().isNotEmpty()) return null
+        if (overlay.attributes().any { it.key != "class" && !(it.key == "data-test-id" && it.value == OVERLAY_TEST_ID) }) return null
+        if (overlay.attr("data-test-id") != OVERLAY_TEST_ID) return null
+        return Regex("\\+([1-9][0-9]{0,2})").matchEntire(overlay.ownText().trim())?.groupValues?.get(1)?.toInt()
     }
 
     /**
@@ -428,6 +450,7 @@ class LinkedInPostAttachmentParser {
         val HIDDEN_STYLE = Regex("(?i)(?:display\\s*:\\s*none|visibility\\s*:\\s*(?:hidden|collapse))")
         val HIDDEN_CONTAINERS = setOf("template", "noscript", "script", "style", "textarea")
         const val ATTACHMENT_ITEM_TEST_ID = "feed-images-content__list-item"
+        const val OVERLAY_TEST_ID = "feed-images-content__overlay"
         val IMAGE_ATTRIBUTES = setOf("class", "alt", "src", "data-delayed-url", "loading", "width", "height")
         val json: JsonFactory = JsonFactory().disable(JsonParser.Feature.AUTO_CLOSE_SOURCE)
     }

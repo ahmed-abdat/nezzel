@@ -441,6 +441,9 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             val located = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
                                 ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             val next = if (facebookPage) facebookHop(located, seen) else located
+                            // A members-only post sends logged-out visitors to sign up or log in (2026-10-21).
+                            if (linkedInPage && MediaHttpPolicy.isLinkedInLoginWall(next))
+                                throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
                             if (linkedInPage && !MediaHttpPolicy.allowsLinkedInPageHop(url, next))
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             requireHostRule(request, next)
