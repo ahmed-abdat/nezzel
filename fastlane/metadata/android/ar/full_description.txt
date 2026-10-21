@@ -11,7 +11,7 @@ Nezzel تطبيق Android لحفظ الفيديو والصوت والصور من
 • واجهة بالعربية والإنجليزية، ووضع فاتح وداكن، ودعم تكبير الخط
 
 الروابط التي جرّبناها
-نجحنا في حفظ أمثلة لفيديوهات عامة على هاتف Galaxy A34 من YouTube وFacebook وInstagram وTikTok وX وLinkedIn وSnapchat Spotlight وPinterest وBluesky وTelegram وDailymotion وVimeo، إلى جانب روابط MP4 مباشرة، وحفظنا أيضًا الصوت بصيغة M4A وحوّلناه إلى MP3 من YouTube
+نجحنا في حفظ أمثلة لفيديوهات عامة على هاتف أندرويد حقيقي من YouTube وFacebook وInstagram وTikTok وX وLinkedIn وSnapchat Spotlight وPinterest وBluesky وTelegram وDailymotion وVimeo، إلى جانب روابط MP4 مباشرة، وحفظنا أيضًا الصوت بصيغة M4A وحوّلناه إلى MP3 من YouTube
 
 نجحنا في حفظ صور من Facebook وInstagram وX وLinkedIn وBluesky ورابط JPEG مباشر، وحفظنا ملف GIF أصليًا من LinkedIn وشغّلناه بحركته
 

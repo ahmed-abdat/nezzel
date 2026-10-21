@@ -12,7 +12,7 @@ Nezzel تطبيق أندرويد لحفظ الفيديو والصوت والصو
 
 تتم المعالجة على جهازك، بواجهة عربية وإنجليزية ودون حساب في Nezzel. قد لا يعمل كل رابط؛ فالتطبيق لا يدعم المحتوى الخاص أو المحمي أو الذي يتطلب تسجيل الدخول.
 
-**التثبيت والتحديث:** نزّل ملف APK من [صفحة الإصدارات](https://github.com/ahmed-abdat/nezzel/releases) وافتحه على هاتفك. لتصلك التحديثات تلقائيًا، أضف رابط هذا المستودع في تطبيق [Obtainium](https://github.com/ImranR98/Obtainium). كل إصدار جديد يُثبَّت فوق القديم ويحتفظ بملفاتك وإعداداتك.
+**التثبيت والتحديث:** نزّل ملف APK من [صفحة الإصدارات](https://github.com/ahmed-abdat/nezzel/releases) وافتحه على هاتفك. يتحقق Nezzel من وجود إصدار جديد ويسألك قبل تنزيله، ويمكنك أيضًا إضافة رابط هذا المستودع في تطبيق [Obtainium](https://github.com/ImranR98/Obtainium). كل إصدار جديد يُثبَّت فوق القديم ويحتفظ بملفاتك وإعداداتك.
 
 ## Features
 
@@ -27,7 +27,7 @@ Nezzel تطبيق أندرويد لحفظ الفيديو والصوت والصو
 
 ## Tested sites
 
-These link types passed checks on a real phone (Galaxy A34) in October 2026. **Saved** means a download or image save completed; **Options** means inspection passed but saving was not checked. This is not a guarantee for every URL or a full Android compatibility matrix.
+These link types passed checks on a real Android phone in October 2026. **Saved** means a download or image save completed; **Options** means inspection passed but saving was not checked. This is not a guarantee for every URL or a full Android compatibility matrix.
 
 ### Video
 
@@ -80,7 +80,7 @@ Screenshots coming soon: Home, quality selection, Downloads, and Arabic RTL.
 
 Download `nezzel-<version>.apk` from [GitHub Releases](https://github.com/ahmed-abdat/nezzel/releases) and open it on your phone. Android may ask you to allow installation from the app opening the APK.
 
-**Updates:** Nezzel does not check for app updates itself. To get them automatically, add `https://github.com/ahmed-abdat/nezzel` in [Obtainium](https://github.com/ImranR98/Obtainium), or watch this repository's releases on GitHub. Every release is signed with the same key, so a new APK installs over the old one and keeps your files and settings. The download engine (yt-dlp) updates itself weekly inside the app.
+**Updates:** Nezzel checks GitHub for new versions and asks before downloading one (you can turn this off in Settings). You can also add `https://github.com/ahmed-abdat/nezzel` in [Obtainium](https://github.com/ImranR98/Obtainium), or watch this repository's releases on GitHub. Every release is signed with the same key, so a new APK installs over the old one and keeps your files and settings. The download engine (yt-dlp) updates itself weekly inside the app.
 
 Requires **Android 10+ (API 29)** and **arm64-v8a**. Other CPU architectures are not packaged. Native libraries are 16 KB page-aligned; device testing so far is on 4 KB-page phones.
 

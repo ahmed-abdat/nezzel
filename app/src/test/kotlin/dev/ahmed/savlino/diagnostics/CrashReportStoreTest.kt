@@ -8,7 +8,7 @@ import org.junit.rules.TemporaryFolder
 
 class CrashReportStoreTest {
     @get:Rule val temporary = TemporaryFolder()
-    private val metadata = CrashMetadata("0.4.2", 310, 35, "SM-A346B")
+    private val metadata = CrashMetadata("0.4.2", 310, 35, "TestPhone 1")
     private fun store(directory: File = File(temporary.root, "crash")) = CrashReportStore(directory, metadata)
     private fun failure(): Throwable = try {
         throw IllegalStateException("https://example.invalid/x content://private/1 /storage/title 'Secret title'",
@@ -22,7 +22,7 @@ class CrashReportStoreTest {
         listOf("https:", "example.invalid", "content:", "/storage", "/data", "Secret title").forEach {
             assertFalse("Leaked $it", it in text)
         }
-        listOf("0.4.2", "310", "35", "SM-A346B", "Thread: main", "Timestamp:",
+        listOf("0.4.2", "310", "35", "TestPhone 1", "Thread: main", "Timestamp:",
             "java.lang.IllegalStateException", "Caused by: java.lang.IllegalArgumentException",
             "dev.ahmed.savlino.diagnostics.CrashReportStoreTest.failure").forEach { assertTrue("Missing $it", it in text) }
         val files = File(temporary.root, "crash").listFiles()!!

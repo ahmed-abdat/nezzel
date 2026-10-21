@@ -11,7 +11,7 @@ Features
 • Arabic and English, RTL layout, light and dark themes and font scaling
 
 Tested link types
-Completed saves on a Galaxy A34 include public videos from YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat Spotlight, Pinterest, Bluesky, Telegram, Dailymotion and Vimeo, plus direct MP4 links — audio-only M4A and MP3 conversion were also saved from YouTube
+Completed saves on a real Android phone include public videos from YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat Spotlight, Pinterest, Bluesky, Telegram, Dailymotion and Vimeo, plus direct MP4 links — audio-only M4A and MP3 conversion were also saved from YouTube
 
 Photo saves passed for Facebook, Instagram, X, LinkedIn, Bluesky and a direct JPEG — an original LinkedIn GIF was also saved and played with animation
 
