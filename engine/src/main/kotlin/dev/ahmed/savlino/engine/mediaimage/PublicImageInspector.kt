@@ -61,7 +61,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
 
     fun newOperation(source: LinkRevision, identity: MediaAdapterIdentity): ImageInspectionOperation {
         val kind = when {
-            LinkedInPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_IMAGE
+            LinkedInPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL
             FacebookPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_IMAGE
             XPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             InstagramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
@@ -125,7 +125,14 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                 return result
             } finally {
                 // A context whose inspection was never admitted must not keep occupying a transport slot.
-                if (result !is MediaInspectResult.Success) (asset as? Fetched.Asset)?.postContext?.let(http::forgetLinkedInPost)
+                if (result !is MediaInspectResult.Success) {
+                    val contexts = when (asset) {
+                        is Fetched.Asset -> listOfNotNull(asset.postContext)
+                        is Fetched.Carousel -> asset.assets.mapNotNull { it.postContext }.distinct()
+                        else -> emptyList()
+                    }
+                    contexts.forEach(http::forgetLinkedInPost)
+                }
             }
         } finally {
             operation.token.close()
@@ -197,7 +204,9 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         }
         operation.fetchPhase = ImagePhase.IMAGE
         terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
-        // Metadata may enumerate several attachments; only the first evidenced one is fetched.
+        if (parsed.candidates.size > 1) return fetchCarousel(operation, parsed.candidates.map { it.url },
+            parsed.discovery, MediaHostRule.ANY, MediaMetadata(parsed.title, parsed.author),
+            previewUrls = emptyList(), pageContext = target)
         val first = parsed.candidates.first().url
         val validity = MediaInspectionValidity.processLocal()
         return fetchAsset(operation, PublicMediaRequest(first, MediaHttpPurpose.IMAGE, target)) { bytes, image ->
@@ -368,60 +377,77 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             MediaMetadata(parsed.title, parsed.author), parsed.previewCandidates)
     }
 
-    /** Small CDN renditions share 2 MiB; each gets at most 192 KiB. Originals remain Save-only capabilities. */
+    /** Small CDN renditions share 2 MiB; LinkedIn validates its evidenced images with the full per-image limit. */
     private fun fetchCarousel(operation: ImageInspectionOperation, urls: List<String>, discovery: ImageDiscovery,
-        rule: MediaHostRule, metadata: MediaMetadata, previewUrls: List<String>): Fetched {
+        rule: MediaHostRule, metadata: MediaMetadata, previewUrls: List<String>, pageContext: MediaHttpTarget? = null): Fetched {
         val validity = MediaInspectionValidity.processLocal()
         val assets = ArrayList<Fetched.Asset>()
+        val linkedIn = pageContext != null
         val optionalPreviews = rule == MediaHostRule.TELEGRAM_CDN || rule == MediaHostRule.BLUESKY_CDN
-        val thumbnails = optionalPreviews || urls.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0
+        val thumbnails = !linkedIn && (optionalPreviews || urls.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0)
+        val candidates = urls.take(operation.token.operation.maxImages)
+        var postContext: MediaHttpPostContext? = null
+        var contextAttempted = false
+        var completed = false
         var last: Fetched.Failed? = null
         var notPreviewed = 0
         var unavailable = discovery.unavailableCount
-        for ((position, url) in urls.take(20).withIndex()) {
-            val retired = terminal(operation)
-            if (retired != null) {
-                if (retired == ImageFailure.NETWORK && operation.token.checkActive() == MediaHttpFailure.TIMEOUT && assets.isNotEmpty()) {
-                    notPreviewed += minOf(urls.size, 20) - position
+        try {
+            for ((position, url) in candidates.withIndex()) {
+                val retired = terminal(operation)
+                if (retired != null) {
+                    if (retired == ImageFailure.NETWORK && operation.token.checkActive() == MediaHttpFailure.TIMEOUT && assets.isNotEmpty()) {
+                        notPreviewed += candidates.size - position
+                        break
+                    }
+                    return Fetched.Failed(failure(retired, ImagePhase.IMAGE))
+                }
+                if (operation.token.budget.imageLimit() <= 0) {
+                    notPreviewed += candidates.size - position
                     break
                 }
-                return Fetched.Failed(failure(retired, ImagePhase.IMAGE))
-            }
-            if (operation.token.budget.imageLimit() <= 0) {
-                notPreviewed += minOf(urls.size, 20) - position
-                break
-            }
-            val previewUrl = if (thumbnails) previewUrls[position] else url
-            val fetched = fetchAsset(operation, PublicMediaRequest(previewUrl, MediaHttpPurpose.IMAGE, hostRule = rule),
-                thumbnail = thumbnails) { bytes, image ->
-                Fetched.Asset(bytes, image, url, 1, discovery, validity, null, false, rule, metadata, position,
-                    previewOnly = previewUrl != url)
-            }
-            when (fetched) {
-                is Fetched.Asset -> assets += fetched
-                is Fetched.Failed -> {
-                    last = fetched
-                    if (fetched.result.reason == ImageFailure.BUDGET) {
-                        notPreviewed++
-                        // The page proves the attachment; only its preview exceeded the byte cap.
-                        // Keep a Save capability with declared type and no dimensions/size/proof.
-                        if (optionalPreviews && fetched.declaredFormat != null) assets += Fetched.Asset(null,
-                            originalImageMetadata(url, MediaImageMetadata(fetched.declaredFormat)), url, 1,
-                            discovery, validity, null, false, rule, metadata, position, previewOnly = true)
-                    } else unavailable++
+                val previewUrl = if (thumbnails) previewUrls[position] else url
+                val fetched = fetchAsset(operation, PublicMediaRequest(previewUrl, MediaHttpPurpose.IMAGE, pageContext, rule),
+                    thumbnail = thumbnails) { bytes, image ->
+                    if (pageContext != null && !contextAttempted) {
+                        contextAttempted = true
+                        references.evictForNewContext().forEach(http::forgetLinkedInPost)
+                        postContext = http.rememberLinkedInPost(operation.token, pageContext,
+                            MediaHttpSaveBinding(operation.source, operation.identity, validity))
+                    }
+                    Fetched.Asset(bytes, image, url, 1, discovery, validity, postContext, linkedIn, rule, metadata, position,
+                        previewOnly = previewUrl != url)
                 }
-                else -> Unit
+                when (fetched) {
+                    is Fetched.Asset -> assets += fetched
+                    is Fetched.Failed -> {
+                        last = fetched
+                        if (fetched.result.reason == ImageFailure.BUDGET) {
+                            notPreviewed++
+                            // The page proves the attachment; only its preview exceeded the byte cap.
+                            // Keep a Save capability with declared type and no dimensions/size/proof.
+                            if (optionalPreviews && fetched.declaredFormat != null) assets += Fetched.Asset(null,
+                                originalImageMetadata(url, MediaImageMetadata(fetched.declaredFormat)), url, 1,
+                                discovery, validity, null, false, rule, metadata, position, previewOnly = true)
+                        } else unavailable++
+                    }
+                    else -> Unit
+                }
             }
+            if (assets.isEmpty()) return if (discovery.hasVideo && operation.state == ImageInspectionOperation.State.ACTIVE)
+                Fetched.Video(MediaInspectResult.VideoRedirect(operation.source, photosUnavailable = true))
+                else if (thumbnails && notPreviewed > 0) Fetched.Failed(failure(ImageFailure.PREVIEW_LIMIT, ImagePhase.IMAGE))
+                else last ?: Fetched.Failed(failure(ImageFailure.BUDGET, ImagePhase.IMAGE))
+            val resultDiscovery = discovery.copy(discoveredCount = assets.size, unavailableCount = unavailable,
+                notPreviewedCount = notPreviewed,
+                completeness = if (unavailable + notPreviewed > 0) DiscoveryCompleteness.PARTIAL else discovery.completeness)
+            val result = if (!optionalPreviews && assets.size == 1 && unavailable == 0 && notPreviewed == 0 && discovery.cappedCount == 0)
+                assets.single() else Fetched.Carousel(assets, resultDiscovery)
+            completed = true
+            return result
+        } finally {
+            if (!completed) postContext?.let(http::forgetLinkedInPost)
         }
-        if (assets.isEmpty()) return if (discovery.hasVideo && operation.state == ImageInspectionOperation.State.ACTIVE)
-            Fetched.Video(MediaInspectResult.VideoRedirect(operation.source, photosUnavailable = true))
-            else if (thumbnails && notPreviewed > 0) Fetched.Failed(failure(ImageFailure.PREVIEW_LIMIT, ImagePhase.IMAGE))
-            else last ?: Fetched.Failed(failure(ImageFailure.BUDGET, ImagePhase.IMAGE))
-        val resultDiscovery = discovery.copy(discoveredCount = assets.size, unavailableCount = unavailable,
-            notPreviewedCount = notPreviewed,
-            completeness = if (unavailable + notPreviewed > 0) DiscoveryCompleteness.PARTIAL else discovery.completeness)
-        if (!optionalPreviews && assets.size == 1 && unavailable == 0 && notPreviewed == 0 && discovery.cappedCount == 0) return assets.single()
-        return Fetched.Carousel(assets, resultDiscovery)
     }
 
     /** Canonical `watch/?v={id}` at the caller's revision; no media URL, preview or reference is produced. */

@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
                 return LinkViewModel(extras.createSavedStateHandle(),
                     engine = downloads.engine, downloads = downloads, coordinatorScope = (application as NezzelApplication).scope,
                     initialPreset = preferences.lastPreset, rememberPreset = { preferences.lastPreset = it },
+                    initialHeight = preferences.lastHeight, rememberHeight = { preferences.lastHeight = it },
                     rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
                     images = media.inspect, imageSaver = media.saver) as T
             }
@@ -105,9 +106,9 @@ class MainActivity : AppCompatActivity() {
             // Guards may clear without a new focus/resume event (e.g. restored Settings -> Home).
             // Re-use the same once-per-entry foreground reader; the ViewModel rechecks eligibility.
             if (!onboarding) ClipboardEntryEffect(links, ::suggestClipboard)
-            NezzelTheme(theme, wallpaper) { rejected ->
+            NezzelTheme(theme, wallpaper) {
                 if (onboarding) dev.ahmed.savlino.ui.OnboardingScreen(::finishOnboarding)
-                else NezzelApp(links, language, theme, wallpaper, suggestions, rejected,
+                else NezzelApp(links, language, theme, wallpaper, suggestions,
                     onPaste = { if (resumed && hasWindowFocus()) links.paste(getSystemService(ClipboardManager::class.java).plainText()) },
                     onDismissSuggestion = links::dismissSuggestion,
                     onAcceptSuggestion = { links.inspectSuggestion() },

@@ -32,9 +32,12 @@ class ActualFormatsTest {
     @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     private val source = LinkRevision(LinkInput.parse("https://example.org/media")!!, 1)
     private val first = Format("video-one", "mp4", true, true, videoCodec = "avc1.4d401f", audioCodec = "aac", height = 720, bitrateKbps = 1000)
-    private val second = first.copy(id = "video-two", sourceFormatId = "video-two", hasAudio = false, audioCodec = null, audioFormatId = "audio-two", requiresMerge = true)
+    private val second = first.copy(id = "video-two", videoCodec = "av01.0.05M.08", sourceFormatId = "video-two",
+        hasAudio = false, audioCodec = null, audioFormatId = "audio-two", requiresMerge = true)
     private val audio = Format("audio-one", "m4a", false, true, audioCodec = "aac", bitrateKbps = 128)
-    private val rows = listOf(first, second, audio, audio.copy(id = "audio-two", sourceFormatId = "audio-two"),
+    // An exact twin of the first video (same quality, type, codec and size) is left out of Other versions.
+    private val twin = first.copy(id = "video-twin", sourceFormatId = "video-twin")
+    private val rows = listOf(first, second, twin, audio, audio.copy(id = "audio-two", bitrateKbps = 96, sourceFormatId = "audio-two"),
         Format("convert128", "mp3", false, true, conversion = AudioConversion.MP3_128, sourceFormatId = audio.id, sourceContainer = "m4a"),
         Format("convert320", "mp3", false, true, conversion = AudioConversion.MP3_320, sourceFormatId = audio.id, sourceContainer = "m4a"))
     private fun renderAndChoose() {
@@ -68,22 +71,18 @@ class ActualFormatsTest {
                 node.config.getOrNull(SemanticsProperties.Text).orEmpty().joinToString(" ") { it.text }
             }
             assertEquals("Every rendition must have a distinct description", 6, descriptions.toSet().size)
-            for (id in listOf("video-two", "audio-two")) {
-                val sourceLabel = context.getString(R.string.format_source_detail, NezzelFormat.isolate(id))
-                val container = if (id.startsWith("audio")) "M4A" else "MP4"
-                compose.onNode(isSelectable() and hasText(sourceLabel, substring = true) and
-                    hasText(container, substring = true)).assertExists()
+            // Plain facts only: file type plus a short codec name or audio rate; never ids, merge partners or video rates.
+            compose.onNode(isSelectable() and hasText("MP4", substring = true) and hasText("AV1", substring = true)).assertExists()
+            compose.onNode(isSelectable() and hasText("M4A", substring = true) and hasText("96", substring = true)).assertExists()
+            listOf("video-two", "audio-two", "video-twin", "1000", "av01").forEach { hidden ->
+                compose.onAllNodes(hasText(hidden, substring = true), useUnmergedTree = true).assertCountEquals(0)
             }
-            val secondRow = compose.onNode(isSelectable() and hasText("video-two", substring = true))
+            val secondRow = compose.onNode(isSelectable() and hasText("AV1", substring = true))
             secondRow.performScrollTo().assertHasClickAction()
             val bounds = secondRow.fetchSemanticsNode().boundsInRoot
             val density = context.resources.displayMetrics.density
             assertTrue("48dp row target", bounds.height / density >= 48f)
             assertTrue("Row fits narrow screen", bounds.left >= -.5f && bounds.right <= context.resources.displayMetrics.widthPixels + .5f)
-            val detail = descriptions.single { it.contains("video-two") }
-            assertTrue("Actual video codec", detail.contains("avc1.4d401f"))
-            assertTrue("Actual bitrate", detail.contains("1000"))
-            assertTrue("Exact audio merge partner", detail.contains("audio-two"))
             compose.onAllNodes(hasText("", substring = true), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
                 val results = mutableListOf<TextLayoutResult>()
                 node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(results)

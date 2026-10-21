@@ -43,7 +43,7 @@ import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 @Composable
 fun NezzelApp(
     links: LinkViewModel, language: String, theme: ThemePref, wallpaper: Boolean,
-    suggestions: Boolean, wallpaperRejected: Boolean, onPaste: () -> Unit,
+    suggestions: Boolean, onPaste: () -> Unit,
     onDismissSuggestion: () -> Unit, onAcceptSuggestion: () -> Unit,
     onLanguage: (String) -> Unit, onTheme: (ThemePref) -> Unit,
     onWallpaper: (Boolean) -> Unit, onSuggestions: (Boolean) -> Unit,
@@ -152,14 +152,15 @@ fun NezzelApp(
                         fadeOut(tween(70, easing = Motion.EaseOut))
                 }, label = "destination") { route ->
                     when (route) {
-                        "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions, wallpaperRejected,
+                        "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks)
                         "Downloads" -> DownloadsScreen(jobs, language,
                             { id -> links.cancelDownload(id) },
                             removeFailed, library.open, library.share, library.openWith,
                             library.showFiles, library.delete, { links.navigate("Home"); onPaste() },
                             retry, libraryLoad = library.load, onLibraryRetry = library.onRetry,
-                            onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected)
+                            onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
+                            canShowFiles = library.canShowFiles)
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
                             onRemove = removeFailed, onRetry = retry)
                     }
@@ -302,114 +303,3 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsScreen(
-    links: LinkViewModel, language: String, theme: ThemePref, wallpaper: Boolean, suggestions: Boolean, rejected: Boolean,
-    onLanguage: (String) -> Unit, onTheme: (ThemePref) -> Unit,
-    onWallpaper: (Boolean) -> Unit, onSuggestions: (Boolean) -> Unit,
-    onAutomaticOptions: (Boolean) -> Unit,
-    onHowItWorks: () -> Unit,
-) {
-    Scaffold(topBar = { ScreenHeader(stringResource(R.string.settings)) }) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState()).padding(Space.l),
-            verticalArrangement = Arrangement.spacedBy(Space.xl)) {
-            // A heading sits 8dp over its own control and 24dp under the group before it.
-            Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                Text(stringResource(R.string.language), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                Choices(listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en)), language, onLanguage)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                Text(stringResource(R.string.appearance), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                Choices(listOf(ThemePref.System to stringResource(R.string.theme_system), ThemePref.Light to stringResource(R.string.theme_light),
-                    ThemePref.Dark to stringResource(R.string.theme_dark)), theme, onTheme)
-                if (Build.VERSION.SDK_INT >= 31) {
-                    SwitchSetting(stringResource(R.string.match_wallpaper),
-                        stringResource(if (rejected) R.string.wallpaper_rejected else R.string.wallpaper_help), wallpaper, onWallpaper)
-                }
-            }
-            // Switch rows stack like list items: no gap, each 72dp.
-            Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                Text(stringResource(R.string.link_handling), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                SwitchSetting(stringResource(R.string.copied_suggestions), stringResource(R.string.copied_help), suggestions, onSuggestions)
-                SwitchSetting(stringResource(R.string.automatic_options), stringResource(R.string.automatic_options_help), links.automaticOptions, onAutomaticOptions)
-            }
-            dev.ahmed.savlino.ui.SaveFolderSetting()
-            links.downloads?.let { downloads ->
-                val engine by downloads.maintenance.state.collectAsState()
-                Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                    Text(stringResource(R.string.download_tools), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.engine_version, NezzelFormat.isolate(engine.version ?: stringResource(R.string.engine_version_unknown))),
-                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        TextButton(onClick = links::updateEngine,
-                            enabled = engine.status != EngineUpdateStatus.UPDATING,
-                            modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.engine_update_now)) }
-                    }
-                    if (engine.status == EngineUpdateStatus.UPDATING) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    val builtIn = engine.usingBuiltIn && engine.status in setOf(EngineUpdateStatus.IDLE, EngineUpdateStatus.FAILED)
-                    Text(stringResource(if (builtIn) R.string.engine_update_rolled_back else when (engine.status) {
-                        EngineUpdateStatus.IDLE -> R.string.engine_update_help
-                        EngineUpdateStatus.UPDATING -> R.string.engine_updating
-                        EngineUpdateStatus.SUCCEEDED -> R.string.engine_updated
-                        EngineUpdateStatus.FAILED -> R.string.engine_update_failed
-                        EngineUpdateStatus.BUSY -> R.string.engine_update_busy
-                    }), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                }
-            }
-            (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.let { updates ->
-                UpdateSettings(updates) { links.navigate("AppUpdate") }
-            }
-            dev.ahmed.savlino.ui.AboutSection(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, onHowItWorks, language = language)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun <T> Choices(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val labelStyle = MaterialTheme.typography.labelLarge
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Include the selected checkmark and button padding when deciding whether every label fits.
-        val requiredWidth = with(density) {
-            options.maxOf { (_, label) -> measurer.measure(label, labelStyle, maxLines = 1).size.width.toDp() + 64.dp } * options.size
-        }
-        if (isLargeText() || requiredWidth > maxWidth) {
-            Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                options.forEach { (value, label) ->
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(value == selected,
-                        role = Role.RadioButton, onClick = { onSelect(value) }), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                        RadioButton(value == selected, onClick = null); Text(label, Modifier.weight(1f))
-                    }
-                }
-            }
-        } else {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                options.forEachIndexed { index, (value, label) ->
-                    SegmentedButton(selected = value == selected, onClick = { onSelect(value) },
-                        shape = SegmentedButtonDefaults.itemShape(index, options.size), modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                }
-            }
-        }
-    }
-}
-
-/**
- * A two-line list row on the screen's own 16dp gutter (a ListItem would add a second 16dp inset).
- * The whole row is one Switch target, so tapping the description toggles too; the switch itself only draws.
- */
-@Composable
-internal fun SwitchSetting(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange)
-        .padding(vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked, onCheckedChange = null)
-    }
-}

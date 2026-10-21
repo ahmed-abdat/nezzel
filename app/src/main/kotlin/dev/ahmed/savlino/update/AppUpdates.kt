@@ -285,7 +285,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
             catch (_: Exception) { false }
         if (raw != null && !current) prefs.edit().remove("current-notes").commit()
         // A pending first presentation is also available from About before it is dismissed.
-        return readWhatsNew() ?: if (current) decodeNotes(raw) else null
+        return readWhatsNew() ?: (if (current) decodeNotes(raw) else null) ?: BundledWhatsNew.read(context.assets)
     }
     internal fun refreshWhatsNew() { mutable.update { it.copy(whatsNew = readWhatsNew()) } }
     fun dismissWhatsNew() {

@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
@@ -71,7 +72,7 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                         else -> R.string.onboarding_saved_illustration
                     })
                     val illustration: @Composable (Modifier) -> Unit = { modifier ->
-                        TourIllustration(page, description,
+                        TourIllustration(page, description, active = pager.settledPage == page, modifier =
                             modifier.graphicsLayer {
                                 translationX = if (reduced) 0f else
                                     (pager.currentPage - page + pager.currentPageOffsetFraction) * .25f * size.width * direction
@@ -83,13 +84,14 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                             alpha = (1f - offset).coerceIn(0f, 1f)
                             translationY = offset * 24.dp.toPx()
                         }, verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                            Text(title, Modifier.fillMaxWidth().semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                            Text(title, Modifier.fillMaxWidth().semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold)
                             Text(body, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     BoxWithConstraints(Modifier.fillMaxSize()) {
-                        val heroHeight = (maxHeight * .45f).coerceIn(160.dp, 280.dp)
+                        val heroHeight = (maxHeight * .5f).coerceIn(160.dp, 340.dp)
                         // Keep the scaled drawing inside the pager; only long landscape copy scrolls.
                         if (landscape) Row(Modifier.fillMaxSize().padding(vertical = Space.s),
                             horizontalArrangement = Arrangement.spacedBy(Space.xl), verticalAlignment = Alignment.CenterVertically) {

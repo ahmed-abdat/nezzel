@@ -4,6 +4,24 @@ import org.junit.Test
 import kotlin.test.*
 
 class CarouselBudgetTest {
+    @Test fun linkedInCarouselAllowsAllSixtyFourCandidatesWithinSharedLimits() {
+        OperationToken(MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL, Any(), retired = {}).use { token ->
+            token.begin(MediaHttpPurpose.PAGE); token.endFetch()
+            assertEquals(MediaHttpFailure.RESOURCE_LIMIT,
+                assertFailsWith<MediaHttpException> { token.begin(MediaHttpPurpose.PAGE) }.reason)
+            repeat(64) { token.begin(MediaHttpPurpose.IMAGE); token.endFetch() }
+            assertEquals(MediaHttpFailure.RESOURCE_LIMIT,
+                assertFailsWith<MediaHttpException> { token.begin(MediaHttpPurpose.IMAGE) }.reason)
+            repeat(68) { token.budget.request() }
+            assertEquals(MediaHttpFailure.REQUEST_LIMIT,
+                assertFailsWith<MediaHttpException> { token.budget.request() }.reason)
+            token.budget.consumed(6 * 1024 * 1024) // Page bytes do not consume the image budget.
+            assertEquals(2 * 1024 * 1024, token.budget.imageLimit())
+            token.budget.consumed(2 * 1024 * 1024, image = true)
+            assertEquals(0, token.budget.imageLimit())
+        }
+    }
+
     @Test fun carouselSharesImageBytesAndLimitsImagesAndRequests() {
         val token = OperationToken(MediaHttpOperation.PAGE_AND_CAROUSEL, Any(), retired = {})
         token.use {

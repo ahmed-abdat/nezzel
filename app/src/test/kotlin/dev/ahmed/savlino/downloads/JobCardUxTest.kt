@@ -199,7 +199,7 @@ class JobCardUxTest {
     /** Every meta part on one line on a 360dp phone: percent, short time left and shared-unit bytes; speed stays in the notification. */
     private fun meteredRow(width: Int) =
         host(content = { Column(Modifier.width(width.dp).padding(16.dp)) { JobRow(downloading, {}, {}, {}) } }) { _ ->
-            listOf(NezzelFormat.isolate("25%"), context.getString(R.string.download_row_remaining, NezzelFormat.isolate("0:30")), NezzelFormat.isolate("25/100\u00a0MB"))
+            listOf(NezzelFormat.isolate("25%"), context.getString(R.string.download_row_remaining, NezzelFormat.isolate("0:30")), context.getString(R.string.download_row_bytes, NezzelFormat.isolate("25"), NezzelFormat.isolate("100\u00a0MB")))
                 .forEach { compose.onNodeWithText(it, useUnmergedTree = true).assertExists() }
             compose.onNodeWithText("/s", substring = true, useUnmergedTree = true).assertDoesNotExist()
             compose.onNodeWithText(context.getString(R.string.download_transferring), useUnmergedTree = true).assertDoesNotExist()

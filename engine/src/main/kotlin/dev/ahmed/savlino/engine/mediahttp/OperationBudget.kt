@@ -25,6 +25,7 @@ class OperationBudget internal constructor(private val operation: MediaHttpOpera
             MediaHttpOperation.PAGE_AND_IMAGE -> 5
             MediaHttpOperation.PAGES_AND_IMAGE -> 7
             MediaHttpOperation.PAGE_AND_CAROUSEL, MediaHttpOperation.PAGES_AND_CAROUSEL -> 24
+            MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL -> 68
         }
         if (requests >= limit)
             throw MediaHttpException(MediaHttpFailure.REQUEST_LIMIT)
@@ -95,14 +96,15 @@ class OperationToken internal constructor(val operation: MediaHttpOperation, int
             MediaHttpPurpose.PAGE -> {
                 val pages = when (operation) {
                     MediaHttpOperation.DIRECT_IMAGE -> 0
-                    MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL -> 1
+                    MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL,
+                    MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL -> 1
                     MediaHttpOperation.PAGES_AND_IMAGE, MediaHttpOperation.PAGES_AND_CAROUSEL -> 2
                 }
                 if (pageClaims >= pages || imageClaims > 0) throw MediaHttpException(MediaHttpFailure.RESOURCE_LIMIT)
                 pageClaims++
             }
             MediaHttpPurpose.IMAGE -> {
-                if (imageClaims >= if (operation.isCarousel) 20 else 1)
+                if (imageClaims >= operation.maxImages)
                     throw MediaHttpException(MediaHttpFailure.RESOURCE_LIMIT)
                 imageClaims++
             }

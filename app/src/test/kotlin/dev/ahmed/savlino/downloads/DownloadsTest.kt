@@ -46,11 +46,14 @@ class DownloadsTest {
         assertEquals(true, n.config.getOrNull(SemanticsActions.OnClick)?.action?.invoke())
     }
     private fun screen(media: List<SavedMedia> = listOf(video, audio), jobs: List<DownloadProgress> = emptyList(),
-        remove: (String) -> Unit = {}, delete: (SavedMedia) -> Unit = {}, check: (ComponentActivity) -> Unit) {
+        remove: (String) -> Unit = {}, delete: (SavedMedia) -> Unit = {},
+        showFiles: ((SavedMedia) -> Unit)? = null, canShowFiles: (SavedMedia) -> Boolean = { true },
+        check: (ComponentActivity) -> Unit) {
         val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                DownloadsScreen(jobs, "en", {}, remove, {}, {}, {}, null, delete, {}, libraryLoad = LibraryLoadState.Ready(media))
+                DownloadsScreen(jobs, "en", {}, remove, {}, {}, {}, showFiles, delete, {},
+                    libraryLoad = LibraryLoadState.Ready(media), canShowFiles = canShowFiles)
             } }
             nodes(c.get()); check(c.get())
         } finally { c.pause().stop().destroy() }
@@ -83,6 +86,19 @@ class DownloadsTest {
             node.config.getOrNull(SemanticsActions.OnClick)?.label == "Open" &&
                 node.config.isMergingSemanticsOfDescendants && texts(descendants(node)).any { it.contains("Family") }
         })
+    }
+    @Test fun showInFilesPassesTheItemWhoseSheetWasOpened() {
+        var shown: SavedMedia? = null
+        screen(media = listOf(audio), showFiles = { shown = it }) { a ->
+            click(a, "More actions"); click(a, "Show in Files")
+            assertEquals(audio, shown)
+        }
+    }
+    @Test fun unavailableFolderActionIsHiddenForThatItem() = screen(media = listOf(video),
+        showFiles = { error("Unavailable action") }, canShowFiles = { it.uri != video.uri }) { a ->
+        click(a, "More actions")
+        assertFalse(texts(nodes(a)).contains("Show in Files"))
+        assertTrue(texts(nodes(a)).contains("Share"))
     }
     @Test fun deleteNeedsConfirmationAndCancelLeavesProviderRow() {
         val provider = LibraryProvider()

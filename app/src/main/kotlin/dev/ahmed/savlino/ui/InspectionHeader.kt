@@ -41,13 +41,11 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
                     Spacer(Modifier.fillMaxWidth(.65f).height(12.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceContainerHighest))
                 }
             }
-            val metadata = listOfNotNull(inspection?.uploader?.let(NezzelFormat::firstStrong),
-                inspection?.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) })
-            if (metadata.isNotEmpty()) Text(metadata.joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content),
+            // One line of facts (duration · channel · site) keeps the sheet short; the host stays an LTR island.
+            val metadata = listOfNotNull(inspection?.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) },
+                inspection?.uploader?.let(NezzelFormat::firstStrong), NezzelFormat.isolate(host))
+            Text(metadata.joinToString(" · "), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(NezzelFormat.isolate(host), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

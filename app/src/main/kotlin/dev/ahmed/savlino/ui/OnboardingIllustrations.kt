@@ -1,6 +1,8 @@
 package dev.ahmed.savlino.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -8,26 +10,45 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 
 /** Static examples, complete from their first frame. No intake, results or job progress. */
 @Composable
-internal fun TourIllustration(page: Int, description: String, modifier: Modifier) {
+internal fun TourIllustration(page: Int, description: String, modifier: Modifier, active: Boolean = false) {
     Surface(modifier.clearAndSetSemantics { contentDescription = description; role = Role.Image },
         shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        val colors = MaterialTheme.colorScheme
+        val dark = colors.surface.luminance() < 0.5f
         BoxWithConstraints(contentAlignment = Alignment.Center) {
+            // The first page shows where links come from; the rest share a soft brand tint from the top start corner
+            if (page == 0) {
+                SiteLogoWall(tile = 64.dp)
+                Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(colors.surfaceContainerLow.copy(alpha = 0.85f),
+                    colors.surfaceContainerLow.copy(alpha = if (dark) 0.5f else 0.3f)))))
+            } else Box(Modifier.matchParentSize().background(Brush.linearGradient(
+                listOf(colors.primaryContainer.copy(alpha = if (dark) 0.35f else 0.55f), Color.Transparent))))
             // Only decorative examples scale to fit. Instructions outside the art keep normal font scaling.
             val stage = 320.dp
             val scale = minOf(maxWidth / stage, maxHeight / stage, 1f)
@@ -37,7 +58,7 @@ internal fun TourIllustration(page: Int, description: String, modifier: Modifier
                     0 -> MediaIllustration()
                     1 -> CopyIllustration()
                     2 -> OptionsIllustration()
-                    else -> SavedIllustration()
+                    else -> SavedIllustration(active)
                 }
             }
         }
@@ -50,10 +71,12 @@ private fun TourGlyph(glyph: Int, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun NezzelMark(modifier: Modifier = Modifier) {
-    Surface(modifier, shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+internal fun NezzelMark(modifier: Modifier = Modifier, ring: Dp = 0.dp,
+    container: Color = MaterialTheme.colorScheme.primaryContainer, glyph: Color = MaterialTheme.colorScheme.onPrimaryContainer) {
+    Surface(modifier, shape = CircleShape, color = container,
+        border = if (ring > 0.dp) BorderStroke(ring, MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.7f)) else null) {
         Icon(painterResource(R.drawable.nezzel_launcher_foreground), null,
-            Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            Modifier.fillMaxSize(), tint = glyph)
     }
 }
 
@@ -61,7 +84,7 @@ internal fun NezzelMark(modifier: Modifier = Modifier) {
 private fun MediaIllustration() {
     Column(horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(36.dp)) {
-        NezzelMark(Modifier.size(104.dp).testTag("tour_mark"))
+        NezzelMark(Modifier.size(112.dp).testTag("tour_mark"), ring = 6.dp)
         Row(horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
             listOf(R.drawable.ic_movie to "tour_video", R.drawable.ic_music to "tour_audio",
                 R.drawable.ic_image to "tour_photo").forEach { (glyph, tag) ->
@@ -75,26 +98,47 @@ private fun MediaIllustration() {
     }
 }
 
+/** A small piece of the real interface, floating on the tinted card. */
+@Composable
+private fun SnapshotCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(modifier.width(280.dp), shape = RoundedCornerShape(20.dp),
+        color = if (colors.surface.luminance() < 0.5f) colors.surfaceContainerHigh else colors.surfaceContainerLowest,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.6f))) {
+        Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.s), content = content)
+    }
+}
+
+/** A grey bar standing in for a title we don't invent. */
+@Composable
+private fun Placeholder(width: Dp, height: Dp = 10.dp) {
+    Box(Modifier.width(width).height(height).background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape))
+}
+
 @Composable
 private fun CopyIllustration() {
-    Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-        listOf(R.string.onboarding_copy_action, R.string.onboarding_share_action).forEachIndexed { index, label ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                if (index == 0) TourGlyph(R.drawable.ic_paste)
-                else Icon(Icons.Filled.Share, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                NezzelMark(Modifier.size(48.dp))
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.m)) {
+        SnapshotCard {
+            listOf(Triple(SiteLogos.youtube, R.string.onboarding_copy_action, true),
+                Triple(SiteLogos.tiktok, R.string.onboarding_share_action, false)).forEachIndexed { index, (logo, label, copy) ->
+                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    LogoTile(logo, 40.dp)
+                    if (copy) TourGlyph(R.drawable.ic_paste, Modifier.size(20.dp))
+                    else Icon(Icons.Filled.Share, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    NezzelMark(Modifier.size(36.dp))
+                }
             }
         }
-        Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
-            Row(Modifier.padding(Space.m), verticalAlignment = Alignment.CenterVertically,
+        // The link field as Home draws it: a pill with the link kept left to right
+        Surface(Modifier.width(280.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+            Row(Modifier.padding(horizontal = Space.m, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                TourGlyph(R.drawable.ic_link)
+                TourGlyph(R.drawable.ic_link, Modifier.size(20.dp))
                 Text(stringResource(R.string.onboarding_example_url), Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr))
             }
@@ -104,77 +148,76 @@ private fun CopyIllustration() {
 
 @Composable
 private fun OptionsIllustration() {
-    Column(Modifier.width(280.dp), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Space.l)) {
-        Text(stringResource(R.string.onboarding_example), style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        // A single preset and a separate photo example; no invented size or simulated media tabs.
-        Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.secondaryContainer) {
-            Row(Modifier.padding(Space.l), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                TourGlyph(R.drawable.ic_movie)
-                Text(stringResource(R.string.quality_full_hd), Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                Icon(Icons.Filled.Check, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+            Text(stringResource(R.string.onboarding_example), Modifier.padding(horizontal = Space.m, vertical = Space.xs),
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
-        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Row(Modifier.padding(Space.m), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                TourGlyph(R.drawable.ic_image, Modifier.size(40.dp))
-                Icon(Icons.Filled.Check, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+        // Real tier names and hints, never a size: the example must not invent numbers
+        SnapshotCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                LogoTile(SiteLogos.youtube, 40.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Placeholder(140.dp); Placeholder(90.dp, 8.dp) }
             }
+            OptionRow(stringResource(R.string.quality_title, stringResource(R.string.quality_full_hd), "1080p"),
+                stringResource(R.string.quality_full_hd_hint), selected = true)
+            OptionRow(stringResource(R.string.quality_title, stringResource(R.string.quality_hd), "720p"),
+                stringResource(R.string.quality_hd_hint), selected = false)
+            OptionRow(stringResource(R.string.audio_only), null, selected = false)
         }
     }
 }
 
 @Composable
-private fun SavedIllustration() {
-    Column(Modifier.width(280.dp), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Space.l)) {
-        Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.primaryContainer) {
-            Row(Modifier.padding(Space.l), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                TourGlyph(R.drawable.ic_movie)
-                Text(stringResource(R.string.download_saved), Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Icon(Icons.Filled.Check, null, Modifier.size(32.dp).testTag("tour_saved_check"),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
+private fun OptionRow(title: String, hint: String?, selected: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().background(if (selected) colors.primaryContainer else Color.Transparent, RoundedCornerShape(12.dp))
+        .padding(horizontal = Space.s, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        Box(Modifier.size(20.dp).then(if (selected) Modifier.background(colors.primary, CircleShape)
+            else Modifier.border(2.dp, colors.outline, CircleShape)), contentAlignment = Alignment.Center) {
+            if (selected) Icon(Icons.Filled.Check, null, Modifier.size(14.dp), tint = colors.onPrimary)
         }
-        TourGlyph(R.drawable.ic_download, Modifier.size(48.dp).testTag("tour_downloads"))
-        Text(stringResource(R.string.downloads), style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.labelLarge,
+                color = if (selected) colors.onPrimaryContainer else colors.onSurface)
+            if (hint != null) Text(hint, style = MaterialTheme.typography.bodySmall,
+                color = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant)
+        }
     }
 }
 
-/** Decorative static update emblem; offsets follow start/end in RTL. */
 @Composable
-internal fun UpdateIllustration(compact: Boolean, modifier: Modifier = Modifier) {
-    Box(modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
-        if (!compact) {
-            listOf(Triple(R.drawable.ic_movie, (-72).dp, (-40).dp),
-                Triple(R.drawable.ic_music, 72.dp, (-40).dp),
-                Triple(R.drawable.ic_image, 72.dp, 40.dp)).forEach { (glyph, x, y) ->
-                Surface(Modifier.offset(x = x, y = y).size(40.dp).alpha(0.6f), shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+private fun SavedIllustration(active: Boolean) {
+    // The check is drawn from the first frame and pops once each time this page settles
+    val reduced = rememberReducedMotion()
+    val pop = remember { Animatable(1f) }
+    LaunchedEffect(active, reduced) {
+        if (active && !reduced) { pop.snapTo(0.5f); pop.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMediumLow)) }
+    }
+    val colors = MaterialTheme.colorScheme
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
+        SnapshotCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                LogoTile(SiteLogos.tiktok, 52.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Placeholder(120.dp)
+                    Text(stringResource(R.string.download_saved), style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                }
+                Surface(Modifier.size(36.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value }, shape = CircleShape, color = colors.primary) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(painterResource(glyph), null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Filled.Check, null, Modifier.size(22.dp).testTag("tour_saved_check"), tint = colors.onPrimary)
                     }
                 }
             }
         }
-        Box(Modifier.size(if (compact) 56.dp else 88.dp)) {
-            NezzelMark(Modifier.fillMaxSize())
-            Surface(Modifier.align(Alignment.BottomEnd).size(32.dp), shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(painterResource(R.drawable.ic_download), null, Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary)
-                }
+        // The Downloads tab as the navigation bar shows it when selected
+        Surface(shape = CircleShape, color = colors.secondaryContainer) {
+            Row(Modifier.padding(horizontal = Space.l, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                Icon(painterResource(R.drawable.ic_download), null, Modifier.size(20.dp).testTag("tour_downloads"),
+                    tint = colors.onSecondaryContainer)
+                Text(stringResource(R.string.downloads), style = MaterialTheme.typography.labelLarge, color = colors.onSecondaryContainer)
             }
         }
     }

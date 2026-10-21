@@ -33,7 +33,7 @@ class LinkedInInspectionTest : PublicImageTestBase() {
         }
     }
 
-    @Test fun actualActivityAndPostPagesEnumerateTwoButFetchOnlyFirstDomAttachment() {
+    @Test fun actualActivityAndPostPagesFetchBothAttachmentsInDomOrder() {
         for (entry in listOf(POST, ACTIVITY)) fixture(respond = { request, socket ->
             if (request.target.startsWith("/posts/") || request.target.startsWith("/feed/"))
                 socket.reply(body = linkedInHtml(listOf(ASSET, SECOND_ASSET), listOf(SECOND_ASSET, ASSET), og = null),
@@ -43,9 +43,10 @@ class LinkedInInspectionTest : PublicImageTestBase() {
             inspected(runBlocking { f.inspector.inspect(f.inspector.newOperation(imageSource(entry), IMAGE_IDENTITY), ImageSourceType.LINKEDIN) }).use { result ->
                 assertEquals(2, result.discovery.discoveredCount)
                 assertEquals(2, result.inspection.items.size)
-                assertEquals(listOf(1, 0), result.inspection.items.map { it.renditions.size })
-                assertEquals("/asset-two?sig=synthetic", f.server.requests.last().target)
-                assertEquals(2, f.server.requests.size, "metadata enumeration never prefetches the second image")
+                assertEquals(listOf(1, 1), result.inspection.items.map { it.renditions.size })
+                assertEquals(listOf("/asset-two?sig=synthetic", "/asset-one?sig=Ab%2fCD%2B%3d"),
+                    f.server.requests.drop(1).map { it.target })
+                assertEquals(3, f.server.requests.size)
             }
         }
     }
@@ -131,32 +132,43 @@ class LinkedInInspectionTest : PublicImageTestBase() {
         }
     }
 
-    @Test fun sixtyFifthPostContextEvictsOldestAndEvictedSelectionSaveIsTypedUnavailable() {
+    @Test fun sixtyFifthPostContextEvictsOldestAndKeepsEveryCarouselSiblingSaveable() {
+        val carousel = (1..5).map { "https://media.licdn.com/synthetic-carousel-$it" }
+        var assets = listOf(ASSET)
         fixture(respond = { request, socket ->
-            if (request.target.startsWith("/posts/")) socket.reply(body = linkedInHtml(), headers = mapOf("Content-Type" to "text/html"))
+            if (request.target.startsWith("/posts/")) socket.reply(body = linkedInHtml(assets), headers = mapOf("Content-Type" to "text/html"))
             else socket.reply(body = raster(), headers = mapOf("Content-Type" to "image/png"))
         }) { f ->
             var oldest: MediaSelection? = null
-            var newest: MediaSelection? = null
+            var newest = emptyList<MediaSelection>()
             repeat(65) { index ->
+                if (index == 64) assets = carousel
                 inspected(runBlocking { f.inspector.inspect(f.inspector.newOperation(imageSource(POST, index.toLong()), IMAGE_IDENTITY), ImageSourceType.LINKEDIN) }).use { result ->
                     assertIs<ImageSaveAvailability.Available>(result.saveAvailability, "bounded store evicts instead of exhausting")
                     val selection = assertNotNull(result.inspection.selection(firstRendition(result).ref))
                     if (index == 0) oldest = selection
-                    if (index == 64) newest = selection
+                    if (index == 64) newest = result.inspection.items.map { item ->
+                        assertNotNull(result.inspection.selection(item.renditions.single().ref))
+                    }
                 }
             }
-            assertEquals(130, f.server.requests.size)
+            assertEquals(5, newest.size)
+            val contexts = newest.map { assertNotNull(assertNotNull(f.store.resolve(it)).postContext) }
+            assertTrue(contexts.all { it === contexts.first() })
+            assertEquals(134, f.server.requests.size)
             val before = f.http.dnsCalls.get()
             val evictedSink = ByteArrayOutputStream()
             val evicted = assertIs<ImageSaveResult.Failure>(runBlocking { f.saver.transfer(f.saver.newOperation(oldest!!), evictedSink) })
             assertEquals(ImageFailure.SAVE_UNAVAILABLE, evicted.reason)
             assertEquals(0, evictedSink.size()); assertEquals(before, f.http.dnsCalls.get())
-            assertEquals(130, f.server.requests.size, "evicted context never reaches the network")
-            val sink = ByteArrayOutputStream()
-            assertIs<ImageSaveResult.Success>(runBlocking { f.saver.transfer(f.saver.newOperation(newest!!), sink) })
-            assertContentEquals(raster(), sink.toByteArray())
-            assertEquals(POST, f.server.requests.last().headers["referer"])
+            assertEquals(134, f.server.requests.size, "evicted context never reaches the network")
+            for (selection in newest) {
+                val sink = ByteArrayOutputStream()
+                assertIs<ImageSaveResult.Success>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                assertContentEquals(raster(), sink.toByteArray())
+                assertEquals(POST, f.server.requests.last().headers["referer"])
+            }
+            assertEquals(139, f.server.requests.size)
         }
     }
 }

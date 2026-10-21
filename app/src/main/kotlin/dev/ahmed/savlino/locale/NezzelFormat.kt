@@ -42,5 +42,19 @@ object NezzelFormat {
             .format(java.time.Instant.ofEpochMilli(epochMillis).atZone(java.time.ZoneId.systemDefault()))
     fun isolate(value: String): String = "\u2066$value\u2069"
     /** First-strong isolate: the text takes the direction of its first strong character (names of unknown script). */
+    /** Short "when": the time for today, month and day this year, the full date only for older checks. Latin digits. */
+    fun checkedAt(epochMillis: Long, language: String, now: Long = System.currentTimeMillis()): String {
+        val zone = java.time.ZoneId.systemDefault()
+        val day = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
+        val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val skeleton = when {
+            day == today -> "jmm"
+            day.year == today.year -> "MMMdjmm"
+            else -> "yMMMdjmm"
+        }
+        return android.icu.text.DateFormat.getInstanceForSkeleton(skeleton, android.icu.util.ULocale.forLanguageTag(numericTag(language)))
+            .format(java.util.Date(epochMillis))
+    }
+
     fun firstStrong(value: String): String = "\u2068$value\u2069"
 }

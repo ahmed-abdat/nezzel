@@ -22,7 +22,7 @@ Run `./gradlew --stop` even if a check fails. First-run dependency downloads nee
 
 - Match surrounding Kotlin, Compose, naming and formatting. Keep domain logic in `:core`, engine details in `:engine`, Android presentation/storage in `:app`.
 - Add UI strings to both `app/src/main/res/values/strings.xml` and `app/src/main/res/values-ar/strings.xml`. No hard-coded user-facing text; use plurals where needed.
-- Use start/end layout directions. Keep URLs and filenames LTR within Arabic layouts. Check English/Arabic, light/dark, large text and TalkBack; touch targets are at least 48 dp. No purple accents, including dynamic colors.
+- Use start/end layout directions. Keep URLs and filenames LTR within Arabic layouts. Check English/Arabic, light/dark, large text and TalkBack; touch targets are at least 48 dp. Nezzel's own palette is teal; wallpaper colors (Android 12+) are the user's opt-in choice.
 - Offer only engine-returned formats. Unknown sizes remain unknown; estimates must be labelled. Keep fakes in test fixtures and never invent progress or successful saves.
 - Never log URLs, clipboard contents, cookies or credentials. Use synthetic IDs and reserved example domains in tests. Do not commit real page dumps, device serials, signing keys or private links.
 - Preserve foreground-only clipboard access, draft/modal guards and explicit Download/Save confirmation. No account login, background clipboard monitoring or new transfer path without a reviewed scope decision.

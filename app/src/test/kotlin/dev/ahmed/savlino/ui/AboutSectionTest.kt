@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.semantics.*
 import dev.ahmed.savlino.R
@@ -22,6 +23,27 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [29], qualifiers = "en-w360dp-h1600dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AboutSectionTest {
+    private fun bundledWhatsNew() {
+        context.getSharedPreferences("app-updates", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        val app = context as dev.ahmed.savlino.jobs.NezzelApplication
+        app.appUpdates.refreshWhatsNew()
+        val bundled = dev.ahmed.savlino.update.BundledWhatsNew.read(context.assets)!!
+        renderThemed({ nodes(it) }, {
+            AboutSection("0.4.6-test2", dev.ahmed.savlino.BuildConfig.VERSION_CODE)
+        }) { a ->
+            click(clickable(a, context.getString(R.string.update_whats_new)))
+            val all = nodes(a)
+            assertTrue(all.any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" })
+            assertTrue(texts(all).contains(context.getString(R.string.whats_new_title, NezzelFormat.isolate(bundled.version))))
+            val language = context.resources.configuration.locales[0].language
+            assertTrue(texts(all).contains(bundled.notes(language).first()))
+            assertNull(org.robolectric.Shadows.shadowOf(a).nextStartedActivity)
+        }
+    }
+    @Test fun whatsNewWithoutCachedNotesOpensBundledSheetEnglish() = bundledWhatsNew()
+    @Test @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
+    fun whatsNewWithoutCachedNotesOpensBundledSheetArabic() = bundledWhatsNew()
+
     @Test fun facebookIntentDeliversPageWithFreshTaskFlags() {
         val intent = hululsoftFacebookIntent()
         assertEquals(android.content.Intent.ACTION_VIEW, intent.action)
@@ -33,7 +55,7 @@ class AboutSectionTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private fun nodes(a: ComponentActivity): List<SemanticsNode> { compose.waitForIdle(); return semanticsNodes(a) }
     private fun render(check: (ComponentActivity) -> Unit) =
-        renderThemed({ nodes(it) }, { AboutSection("1.2.3", 42) }, check)
+        renderThemed({ nodes(it) }, { Column { dev.ahmed.savlino.update.UpdateSettings(null) {}; AboutSection("1.2.3", 42); LicencesLink() } }, check)
     private fun clickable(a: ComponentActivity, label: String): SemanticsNode = nodes(a).last { node ->
         node.config.getOrNull(SemanticsActions.OnClick) != null && descendants(node).any {
             label in texts(listOf(it)) || it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(label)
@@ -41,28 +63,32 @@ class AboutSectionTest {
     }
     private fun click(node: SemanticsNode) { assertEquals(true, node.config[SemanticsActions.OnClick].action?.invoke()) }
 
-    private fun assertVersions(all: List<String>) {
-        assertTrue(all.contains(context.getString(R.string.about_version, NezzelFormat.isolate("1.2.3"))))
-        assertTrue(all.contains(context.getString(R.string.about_build, 42)))
-        // The engine version lives in Settings' engine row only.
-        assertFalse(all.any { it.startsWith(context.getString(R.string.engine_version, "").trim()) })
-        assertTrue(all.contains(context.getString(R.string.about_body)))
-        assertTrue(all.contains(context.getString(R.string.about_warranty)))
+    // The app card above About carries the version; the notice and warranty open with the licences.
+    private fun assertVersions(a: ComponentActivity) {
+        val all = texts(nodes(a))
+        val version = context.getString(R.string.about_version, NezzelFormat.isolate(dev.ahmed.savlino.BuildConfig.VERSION_NAME))
+        // Plain card: the version only; the build number is for support (Settings → Advanced).
+        assertTrue(all.contains(version))
+        assertFalse(all.contains(context.getString(R.string.about_body)))
+        click(clickable(a, context.getString(R.string.about_licences)))
+        val licences = texts(nodes(a))
+        assertTrue(licences.contains(context.getString(R.string.about_body)))
+        assertTrue(licences.contains(context.getString(R.string.about_warranty)))
     }
 
     @Test fun showsAppEngineVersionsAndNoticeInEnglish() = render { a ->
         val all = texts(nodes(a))
         assertTrue(all.contains("Nezzel"))
-        assertVersions(all)
+        assertVersions(a)
         assertTrue(context.getString(R.string.about_body).contains("github.com/ahmed-abdat/nezzel"))
-        assertTrue(all.contains("Provided as is, without warranty."))
+        assertEquals("Provided as is, without warranty", context.getString(R.string.about_warranty))
     }
 
     @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
     @Test fun showsAppEngineVersionsAndNoticeInArabic() = render { a ->
         val all = texts(nodes(a))
         assertTrue(all.contains("Nezzel"))
-        assertVersions(all)
+        assertVersions(a)
         assertTrue(context.getString(R.string.about_body).contains("yt-dlp"))
         assertTrue(context.getString(R.string.about_body).contains("\u2066github.com/ahmed-abdat/nezzel\u2069"))
     }

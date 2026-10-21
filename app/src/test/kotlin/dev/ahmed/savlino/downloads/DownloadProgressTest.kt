@@ -29,7 +29,7 @@ class DownloadProgressTest {
     private val rate = "2.5\u00a0MB/s"
     private val remaining get() = if (language == "ar") "متبقٍّ ≈ \u20660:30\u2069" else "≈ \u20660:30\u2069 left"
     private val notificationRemaining get() = if (language == "ar") "متبقٍّ للتنزيل ≈ \u20660:30\u2069" else "≈ \u20660:30\u2069 left to download"
-    private val bytes = "25/100\u00a0MB"
+    private val bytes get() = context.getString(R.string.download_row_bytes, "\u206625\u2069", "\u2066100\u00a0MB\u2069")
     private val active get() = DownloadProgress("a", "Actual-file.mp4", DownloadPhase.DOWNLOADING,
         bytes = 25_000_000, total = Size.Exact(100_000_000), bytesPerSecond = 2_500_000.0,
         remainingTransferSeconds = 30, stalled = false)
@@ -71,7 +71,7 @@ class DownloadProgressTest {
             val layout = mutableListOf<TextLayoutResult>()
             assertEquals(true, n.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layout))
             // Numbers are LTR tokens; "time left" is a localized sentence with an isolated duration.
-            assertEquals(if (label == remaining) TextDirection.Content else TextDirection.Ltr, layout.single().layoutInput.style.textDirection)
+            assertEquals(if (label == remaining || label == bytes) TextDirection.Content else TextDirection.Ltr, layout.single().layoutInput.style.textDirection)
             val result = layout.single()
             assertFalse("Metric clipped at 200%: $label; constraints=${result.layoutInput.constraints}, size=${result.size}, widthOverflow=${result.didOverflowWidth}, heightOverflow=${result.didOverflowHeight}", result.hasVisualOverflow)
             assertFalse("Arabic-Indic digit leaked: $label", layout.single().layoutInput.text.text.any { it in '\u0660'..'\u0669' })

@@ -16,7 +16,7 @@ class MediaReferenceStore : Closeable {
     private val lock = Any()
     private var entries: List<StoredImageReference> = emptyList()
     private var previews: List<OwnedImagePreview> = emptyList()
-    private val postContexts = LinkedHashMap<MediaHttpPostContext, StoredImageReference>()
+    private val postContexts = LinkedHashMap<MediaHttpPostContext, List<StoredImageReference>>()
     private val evicted = ArrayDeque<StoredImageReference>()
     private val saves = LinkedHashSet<SaveAdmission>()
     private var closed = false
@@ -72,10 +72,10 @@ class MediaReferenceStore : Closeable {
             retireSavesLocked()
             entries = references.toList()
             previews = ownedPreviews.toList()
-            for (reference in references) {
-                val context = reference.postContext ?: continue
-                evictLocked(dropped)
-                postContexts[context] = reference
+            // Carousel siblings share one issuance slot and must be evicted together.
+            for ((context, siblings) in references.filter { it.postContext != null }.groupBy { checkNotNull(it.postContext) }) {
+                if (context !in postContexts) evictLocked(dropped)
+                postContexts[context] = siblings
             }
             old
         }
@@ -93,7 +93,7 @@ class MediaReferenceStore : Closeable {
             val oldest = postContexts.entries.first()
             postContexts.remove(oldest.key)
             dropped += oldest.key
-            evicted.addLast(oldest.value)
+            evicted.addAll(oldest.value)
             while (evicted.size > MAX_POST_CONTEXTS) evicted.removeFirst()
         }
     }

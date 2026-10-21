@@ -33,7 +33,7 @@ internal fun CrashReportActions() {
     }
     if (!available) return
     val shareLabel = stringResource(R.string.crash_share)
-    CrashActionRow(shareLabel, enabled = !busy) {
+    CrashActionRow(shareLabel, R.drawable.ic_ms_bug_report, enabled = !busy) {
         busy = true
         scope.launch {
             try {
@@ -49,7 +49,7 @@ internal fun CrashReportActions() {
             } finally { busy = false }
         }
     }
-    CrashActionRow(stringResource(R.string.crash_delete), enabled = !busy) {
+    CrashActionRow(stringResource(R.string.crash_delete), R.drawable.ic_ms_delete, enabled = !busy) {
         busy = true
         scope.launch {
             try {
@@ -61,12 +61,8 @@ internal fun CrashReportActions() {
 }
 
 @Composable
-private fun CrashActionRow(label: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .padding(vertical = Space.s), contentAlignment = androidx.compose.ui.Alignment.CenterStart) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
+private fun CrashActionRow(label: String, icon: Int, enabled: Boolean, onClick: () -> Unit) =
+    SettingsNavRow(label, icon, enabled = enabled, chevron = false, onClick = onClick)
 
 private suspend fun <T> reportIo(block: () -> T): T? = withContext(Dispatchers.IO) {
     try { block() }

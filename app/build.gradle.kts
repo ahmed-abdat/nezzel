@@ -1,6 +1,46 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+@CacheableTask
+abstract class GenerateWhatsNewAssets : DefaultTask() {
+    @get:Input abstract val versionCode: Property<Int>
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val englishChangelogs: DirectoryProperty
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val arabicChangelogs: DirectoryProperty
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val destination = outputDirectory.get().asFile.resolve("whats-new")
+        destination.mkdirs()
+        val languages = listOf("en" to englishChangelogs, "ar" to arabicChangelogs).map { (language, directory) ->
+            language to directory.get().asFile
+        }
+        // One version for both languages: the exact build's notes, else the newest version both have. A newer note in
+        // only one language would ship two different versions and the sheet would reject both.
+        fun versions(dir: java.io.File) = dir.listFiles().orEmpty()
+            .filter { it.isFile && it.extension == "txt" }.mapNotNull { it.nameWithoutExtension.toIntOrNull() }.toSet()
+        val common = languages.map { versions(it.second) }.reduce { a, b -> a intersect b }
+        val version = versionCode.get().takeIf { it in common } ?: common.maxOrNull()
+        for ((language, changelogs) in languages) {
+            val target = destination.resolve("$language.txt")
+            if (version != null) changelogs.resolve("$version.txt").copyTo(target, overwrite = true) else target.delete()
+        }
+    }
 }
 
 android {
@@ -62,6 +102,16 @@ android {
             signingConfig = signingConfigs.findByName("release")
         }
     }
+}
+
+androidComponents.onVariants { variant ->
+    val notes = tasks.register<GenerateWhatsNewAssets>("generate${variant.name.replaceFirstChar { it.uppercaseChar() }}WhatsNewAssets") {
+        versionCode.set(variant.outputs.single().versionCode)
+        englishChangelogs.set(rootProject.layout.projectDirectory.dir("fastlane/metadata/android/en-US/changelogs"))
+        arabicChangelogs.set(rootProject.layout.projectDirectory.dir("fastlane/metadata/android/ar/changelogs"))
+        outputDirectory.set(layout.buildDirectory.dir("generated/whats-new/${variant.name}"))
+    }
+    variant.sources.assets?.addGeneratedSourceDirectory(notes, GenerateWhatsNewAssets::outputDirectory)
 }
 
 kotlin { jvmToolchain(17) }

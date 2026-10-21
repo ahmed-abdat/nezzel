@@ -33,7 +33,16 @@ class AppPreferences(context: Context) {
     }
     var lastPreset: Preset?
         get() = Preset.entries.find { it.name == prefs.getString("lastPreset", null) && it != Preset.AUDIO_MP3 }
-        set(value) { prefs.edit().putString("lastPreset", value?.name).apply() }
+        set(value) { prefs.edit().putString("lastPreset", value?.name).apply {
+            if (value != null) remove("lastHeight")
+        }.apply() }
+    /** A confirmed All qualities video pick replaces the older preset in the same write. */
+    var lastHeight: Int?
+        get() = prefs.getInt("lastHeight", 0).takeIf { it > 0 }
+        set(value) { prefs.edit().apply {
+            if (value != null && value > 0) { putInt("lastHeight", value); remove("lastPreset") }
+            else remove("lastHeight")
+        }.apply() }
     val storedLanguage: String? get() = portable.getString("language", null)?.takeIf { it == "ar" || it == "en" }
     fun language(system: String, platformChoice: String?): String =
         platformChoice?.takeIf { it == "ar" || it == "en" } ?: storedLanguage ?: phoneLanguage(system)

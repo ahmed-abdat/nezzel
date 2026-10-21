@@ -35,6 +35,7 @@ data class SavedMedia(
     val uri: Uri, val filename: String, val title: String, val mimeType: String,
     val size: Long?, val addedSeconds: Long, val height: Int?, val bitrateKbps: Int?, val durationMillis: Long?,
     val width: Int? = null,
+    val relativePath: String? = null,
 ) {
     val kind: SavedMediaKind? get() = when {
         mimeType.startsWith("image/") -> SavedMediaKind.IMAGE
@@ -78,7 +79,7 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
 
     fun query(): List<SavedMedia> = (queryMediaStore() + destinations?.savedFiles().orEmpty()).sortedByDescending { it.addedSeconds }
     private fun queryMediaStore(cancellation: CancellationSignal? = null): List<SavedMedia> {
-        val columns = listOf("_id", "_display_name", "title", "mime_type", "_size", "date_added", "height", "width", "duration") +
+        val columns = listOf("_id", "_display_name", "title", "mime_type", "_size", "date_added", "height", "width", "duration", MediaStore.MediaColumns.RELATIVE_PATH) +
             if (Build.VERSION.SDK_INT >= 30) listOf("bitrate") else emptyList()
         val cursor = resolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, columns.toTypedArray(),
             "owner_package_name = ? AND (relative_path = ? OR relative_path = ?) AND is_pending = ? AND (mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ?)",
@@ -98,7 +99,7 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
                     filename, title, mime,
                     number("_size")?.takeIf { it >= 0 }, number("date_added") ?: 0,
                     dimension("height"), number("bitrate")?.takeIf { it > 0 }?.div(1000)?.toInt(),
-                    number("duration")?.takeIf { it > 0 }, width = dimension("width")))
+                    number("duration")?.takeIf { it > 0 }, width = dimension("width"), relativePath = string(MediaStore.MediaColumns.RELATIVE_PATH)))
             } }
         }
     }
@@ -209,6 +210,4 @@ object MediaActions {
             .putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             .apply { clipData = clip }, null)
     }
-    fun files() = Intent(Intent.ACTION_VIEW).setDataAndType(
-        DocumentsContract.buildRootUri("com.android.providers.downloads.documents", "downloads"), "vnd.android.document/root")
 }

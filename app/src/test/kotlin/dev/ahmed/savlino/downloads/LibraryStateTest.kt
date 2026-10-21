@@ -67,6 +67,36 @@ class LibraryStateTest {
         ShadowContentResolver.registerProviderInternal("media", provider)
         try { check(provider, Registry()) } finally { provider.queryGate?.countDown(); provider.requestGate?.countDown(); work.close(); provider.db.close() }
     }
+    @Test fun showFilesResolvesEachItemsFolderAndKeepsUnknownItemsUnavailable() {
+        val manager = org.robolectric.Shadows.shadowOf(context.packageManager)
+        val files = ComponentName("com.android.documentsui", "com.android.documentsui.FilesActivity")
+        manager.addActivityIfNotPresent(files).apply { exported = true; enabled = true }
+        manager.addIntentFilterForActivity(files, IntentFilter(Intent.ACTION_VIEW).apply {
+            addCategory(Intent.CATEGORY_DEFAULT)
+            addDataScheme("content")
+            addDataType(android.provider.DocumentsContract.Document.MIME_TYPE_DIR)
+        })
+        val media = SavedMedia(Uri.parse("content://media/external/downloads/1"),
+            "clip.mp4", "Clip", "video/mp4", null, 0, null, null, null)
+        val saf = media.copy(uri = Uri.parse("content://provider.documents/tree/saved-folder/document/clip"))
+        val unknown = media.copy(uri = Uri.parse("content://unknown.documents/document/clip"))
+        val observe = { kotlinx.coroutines.flow.flowOf(Result.success(listOf(media, saf, unknown))) }
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        var state: LibraryState? = null
+        try {
+            controller.get().setContent { state = rememberLibraryState(remember { SnackbarHostState() }, observe, work) }
+            await { state?.media?.size == 3 }
+            assertTrue(state!!.canShowFiles(media))
+            assertTrue(state!!.canShowFiles(saf))
+            assertFalse(state!!.canShowFiles(unknown))
+            compose.runOnIdle { state!!.showFiles!!.invoke(media) }
+            val first = org.robolectric.Shadows.shadowOf(controller.get()).nextStartedActivity
+            assertEquals("primary:Download/Nezzel", android.provider.DocumentsContract.getDocumentId(first.data!!))
+            compose.runOnIdle { state!!.showFiles!!.invoke(saf) }
+            val second = org.robolectric.Shadows.shadowOf(controller.get()).nextStartedActivity
+            assertEquals("content://provider.documents/tree/saved-folder/document/saved-folder", second.data.toString())
+        } finally { controller.pause().stop().destroy(); work.close() }
+    }
     @Test @Config(sdk = [35]) fun ownFileDeletesDirectlyWithoutSystemConsentRequest() = fixture { provider, registry ->
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         var state: LibraryState? = null

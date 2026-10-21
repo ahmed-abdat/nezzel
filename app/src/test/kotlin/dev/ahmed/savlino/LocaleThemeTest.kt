@@ -86,18 +86,6 @@ class LocaleThemeTest {
         assertEquals("1:02:15", NezzelFormat.duration(3735))
         assertEquals("63%", NezzelFormat.percent(63, "ar"))
     }
-    @Test fun violetGuardUsesCam16HueAndChecksAllThreeAccents() {
-        assertEquals(27.408, hctHue(0xffff0000.toInt()), 0.01)
-        assertEquals(282.788, hctHue(0xff0000ff.toInt()), 0.01)
-        assertTrue(passesVioletGuard(NezzelLightColors))
-        for (candidate in listOf(
-            NezzelLightColors.copy(primary = Color.Blue),
-            NezzelLightColors.copy(secondary = Color.Blue),
-            NezzelLightColors.copy(tertiary = Color.Blue))) {
-            assertFalse(passesVioletGuard(candidate))
-            assertEquals(NezzelLightColors, guardedScheme(candidate, false))
-        }
-    }
     @Test fun dismissalPersistenceKeepsNewestFiftyInOrderAcrossStores() {
         var p = prefs()
         repeat(55) { index ->
@@ -108,19 +96,15 @@ class LocaleThemeTest {
         p.dismissedHashes = p.dismissedHashes + "newest"
         assertFalse(AppPreferences(RuntimeEnvironment.getApplication()).dismissedHashes.contains(5.toString().padStart(64, '0')))
     }
-    @Test fun violetGuardRejectsContainersTintAndInverseAccent() {
-        for (candidate in listOf(
-            NezzelLightColors.copy(primaryContainer = Color.Blue),
-            NezzelLightColors.copy(secondaryContainer = Color.Blue),
-            NezzelLightColors.copy(tertiaryContainer = Color.Blue),
-            NezzelLightColors.copy(surfaceTint = Color.Blue),
-            NezzelLightColors.copy(inversePrimary = Color.Blue))) {
-            assertEquals(NezzelLightColors, guardedScheme(candidate, false))
-        }
+    @Test fun wallpaperSchemeFollowsAnyHueIncludingPurple() {
+        val purple = NezzelLightColors.copy(primary = Color(0xff6750a4), secondary = Color.Blue, tertiary = Color.Magenta)
+        val scheme = wallpaperScheme(purple, false)
+        assertEquals(purple.primary, scheme.primary)
+        assertEquals(purple.tertiary, scheme.tertiary)
     }
     @Test fun dynamicSchemeKeepsStaticErrorRoles() {
         val candidate = NezzelDarkColors.copy(error = Color.Green, onError = Color.Blue)
-        assertEquals(NezzelDarkColors.error, guardedScheme(candidate, true).error)
-        assertEquals(NezzelDarkColors.onError, guardedScheme(candidate, true).onError)
+        assertEquals(NezzelDarkColors.error, wallpaperScheme(candidate, true).error)
+        assertEquals(NezzelDarkColors.onError, wallpaperScheme(candidate, true).onError)
     }
 }

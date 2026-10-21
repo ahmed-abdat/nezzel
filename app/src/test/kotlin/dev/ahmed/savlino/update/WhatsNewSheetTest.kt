@@ -50,7 +50,7 @@ class WhatsNewSheetTest {
         var rationale by mutableStateOf(true)
         val links = LinkViewModel(SavedStateHandle())
         renderThemed({ nodes(it) }, {
-            NezzelApp(links, language, ThemePref.Light, false, false, false,
+            NezzelApp(links, language, ThemePref.Light, false, false,
                 {}, {}, {}, {}, {}, {}, {}, notificationRationaleShowing = rationale)
         }) { a ->
             fun visible() = nodes(a).any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" }
@@ -79,7 +79,7 @@ class WhatsNewSheetTest {
             checkLink() // UnavailableEngine returns a local error; no network
         }
         renderThemed({ nodes(it) }, {
-            NezzelApp(links, language, ThemePref.Light, false, false, false, {}, {}, {}, {}, {}, {}, {})
+            NezzelApp(links, language, ThemePref.Light, false, false, {}, {}, {}, {}, {}, {}, {})
         }) { a ->
             fun visible() = nodes(a).any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" }
             assertFalse(visible())
@@ -119,14 +119,6 @@ class WhatsNewSheetTest {
     @Test fun aboutReopensRetainedNotesEnglish() = about()
     @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun aboutReopensRetainedNotesArabic() = about()
 
-    @Test fun aboutWithoutNotesOpensCurrentReleaseTag() = renderThemed({ nodes(it) }, {
-        AboutSection("0.4.5", BuildConfig.VERSION_CODE)
-    }) { a ->
-        click(a, app.getString(R.string.update_whats_new))
-        assertEquals("https://github.com/ahmed-abdat/nezzel/releases/tag/v0.4.5",
-            org.robolectric.Shadows.shadowOf(a).nextStartedActivity?.dataString)
-    }
-
     @Test fun aboutHidesWhatsNewWhenUpdaterIsUnavailable() {
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val disabled = AppUpdates(object : android.content.ContextWrapper(app) {
@@ -143,7 +135,7 @@ class WhatsNewSheetTest {
         if (updated) record(count = 0)
         val links = LinkViewModel(SavedStateHandle())
         renderThemed({ nodes(it) }, {
-            NezzelApp(links, language, ThemePref.Light, false, false, false, {}, {}, {}, {}, {}, {}, {})
+            NezzelApp(links, language, ThemePref.Light, false, false, {}, {}, {}, {}, {}, {}, {})
         }) { a ->
             val all = nodes(a)
             assertFalse(all.any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" })

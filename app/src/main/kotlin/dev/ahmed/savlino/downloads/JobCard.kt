@@ -149,24 +149,27 @@ private fun JobThumb(icon: Int, container: Color, content: Color) {
 private fun transfer(job: DownloadProgress): TransferParts? =
     DownloadNotifications.transferParts(LocalContext.current, job)?.let { if (job.ringFraction() == null) it.copy(percent = null) else it }
 
-/** One piece of the meta line; each stays its own text (and its own TalkBack stop). */
+/** One piece of the meta line; each stays its own text (and its own TalkBack stop). [trailing] sits at the line's end. */
 private class MetaPart(val text: String, val color: Color, val bold: Boolean = false,
-                       val direction: TextDirection = TextDirection.Ltr, val live: Boolean = false)
+                       val direction: TextDirection = TextDirection.Ltr, val live: Boolean = false, val trailing: Boolean = false)
 
 private fun exactTotal(job: DownloadProgress) = (job.total as? Size.Exact)?.bytes?.takeIf { it > 0 }
 
-/** "12/30 MB" when both share a unit, "900 KB/1.2 GB" otherwise; only against an exact total. */
+/** "12 of 30 MB" when both share a unit, "900 KB of 1.2 GB" otherwise; only against an exact total. */
+@Composable
 private fun rowBytes(job: DownloadProgress, language: String): String? {
     val total = job.exactTransferTotal ?: return null
     val done = job.bytes?.takeIf { it in 0..total } ?: return null
     val a = NezzelFormat.size(done, language); val b = NezzelFormat.size(total, language)
     val unit = a.substringAfter(' ', "")
-    return NezzelFormat.isolate(if (unit.isNotEmpty() && unit == b.substringAfter(' ', "")) "${a.substringBefore(' ')}/$b" else "$a/$b")
+    val shared = unit.isNotEmpty() && unit == b.substringAfter(' ', "")
+    return stringResource(R.string.download_row_bytes, NezzelFormat.isolate(if (shared) a.substringBefore(' ') else a), NezzelFormat.isolate(b))
 }
 
 /**
- * The meta line's parts, most important first. While the ring shows a real fraction: percent · time left · bytes
- * (speed stays in the notification). Every other phase: its word, then the bytes or size the journal knows.
+ * The meta line's parts, most important first. While the ring shows a real fraction: how much (percent · bytes) at the
+ * start and how long (time left) at the end, so each reads at a glance (owner 2026-10-21); a narrow line drops bytes
+ * first, then time left. Speed stays in the notification. Every other phase: its word, then the bytes or size it knows.
  */
 @Composable
 private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
@@ -184,10 +187,12 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
     val percent = parts?.percent?.takeIf { job.percent != 100 }
     if (parts != null && percent != null) return listOfNotNull(MetaPart(percent, scheme.onSurface, bold = true),
         parts.remaining?.let { job.remainingTransferSeconds?.let { seconds -> MetaPart(stringResource(R.string.download_row_remaining,
-            NezzelFormat.isolate(NezzelFormat.duration(seconds))), quiet, direction = TextDirection.Content) } },
-        MetaPart(rowBytes(job, language) ?: parts.bytes, quiet))
+            NezzelFormat.isolate(NezzelFormat.duration(seconds))), quiet, direction = TextDirection.Content, trailing = true) } },
+        MetaPart(rowBytes(job, language) ?: parts.bytes, quiet, direction = TextDirection.Content))
     val bytes = if (parts != null) rowBytes(job, language) ?: parts.bytes else null
-    return listOfNotNull(MetaPart(word, scheme.primary, direction = TextDirection.Content, live = true), bytes?.let { MetaPart(it, quiet) })
+    // Without bytes yet (queued, preparing), the chosen quality tells two rows of the same video apart.
+    val quality = job.qualityHeight?.let { MetaPart(stringResource(R.string.video_quality, NezzelFormat.count(it, language)), quiet) }
+    return listOfNotNull(MetaPart(word, scheme.primary, direction = TextDirection.Content, live = true), bytes?.let { MetaPart(it, quiet) } ?: quality)
 }
 
 @Composable
@@ -240,15 +245,26 @@ private fun MetaLine(all: List<MetaPart>, busiest: List<MetaPart>, lines: Int) {
         }
         val count = (all.size downTo 2).firstOrNull { fits(all.take(it)) && fits(busiest.take(it)) } ?: 1
         val shown = all.take(count)
-        FlowRow(Modifier.fillMaxWidth()) {
-            shown.forEachIndexed { index, part ->
-                // Row follows layout direction, so in Arabic the dot still lands between two parts.
-                Row(Modifier.width(IntrinsicSize.Max)) {
-                    // Numbers are already measured to fit; only a long phase word needs the cap.
-                    Text(part.text, style = style(part), color = part.color, maxLines = if (part.live) lines else Int.MAX_VALUE,
-                        modifier = if (part.live) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier)
-                    if (index < shown.lastIndex) Text(separator, Modifier.clearAndSetSemantics {}, style = base, color = part.color)
+        // Large text flows every part in order; one line splits how much (start) from how long (end).
+        val split = lines == 1
+        val lead = if (split) shown.filterNot { it.trailing } else shown
+        @Composable fun part(part: MetaPart) =
+            // Numbers are already measured to fit; only a long phase word needs the cap.
+            Text(part.text, style = style(part), color = part.color, maxLines = if (part.live) lines else Int.MAX_VALUE,
+                modifier = if (part.live) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(Modifier.weight(1f)) {
+                lead.forEachIndexed { index, it ->
+                    // Row follows layout direction, so in Arabic the dot still lands between two parts.
+                    Row(Modifier.width(IntrinsicSize.Max)) {
+                        part(it)
+                        if (index < lead.lastIndex) Text(separator, Modifier.clearAndSetSemantics {}, style = base, color = it.color)
+                    }
                 }
+            }
+            // Time left keeps its own end of the line; the separator's width is its gap, already counted by fits().
+            if (split) shown.filter { it.trailing }.forEach {
+                Row(Modifier.width(IntrinsicSize.Max).padding(start = with(LocalDensity.current) { gap.toDp() })) { part(it) }
             }
         }
     }

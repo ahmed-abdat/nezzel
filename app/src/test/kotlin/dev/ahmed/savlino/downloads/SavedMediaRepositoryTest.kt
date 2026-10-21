@@ -35,6 +35,7 @@ class SavedMediaRepositoryTest {
         assertEquals(listOf("content://media/external/downloads/2", "content://media/external/downloads/1"), list.map { it.uri.toString() })
         assertEquals(listOf("MP3", "MP4"), list.map { it.format })
         assertEquals(720, list.last().height)
+        assertEquals("Download/Nezzel/", list.last().relativePath)
         assertNull(list.first().size)
         assertEquals(listOf("Saved 2"), filterMedia(list, MediaFilter.AUDIO).map { it.title })
         assertTrue(filterMedia(list, MediaFilter.VIDEO, "2").isEmpty())

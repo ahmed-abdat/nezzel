@@ -78,7 +78,7 @@ class SelectionSemanticsTest {
                 }
                 val nodes = semantics(activity)
                 val labels = texts(nodes)
-                assertTrue(labels.toString(), labels.any { it.startsWith(context.getString(R.string.preset_balanced) + " · ") })
+                assertTrue(labels.toString(), labels.any { it == context.getString(R.string.preset_balanced) })
                 assertTrue(labels.contains("رحلة بحرية 🌊"))
                 assertTrue(labels.any { it.contains("قناة البحر") && it.contains("3:45") })
                 assertTrue(labels.any { it.contains("youtube.com") })
@@ -116,7 +116,7 @@ class SelectionSemanticsTest {
             activity.setContent { NezzelTheme(ThemePref.Dark, false) { OptionsSheetContent(vm, "en", vm::dismissOptions) } }
             val nodes = semantics(activity)
             val labels = texts(nodes)
-            val balanced = labels.filter { it.startsWith(activity.getString(R.string.preset_balanced) + " · ") }
+            val balanced = labels.filter { it == activity.getString(R.string.preset_balanced) }
             assertEquals(labels.toString(), 1, balanced.size)
             // "Last used" is the amber badge inside that row, not hint text.
             assertFalse(balanced.single(), balanced.single().contains(activity.getString(R.string.last_used)))
@@ -124,7 +124,7 @@ class SelectionSemanticsTest {
             assertEquals(listOf(activity.getString(R.string.last_used)), texts(descendants(badge)))
             assertTrue(nodes.any { row -> row.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
                 descendants(row).any { it.id == badge.id } && texts(descendants(row)).any { t -> t in balanced } })
-            assertFalse(labels.toString(), labels.any { it.startsWith(activity.getString(R.string.preset_small) + " · ") })
+            assertFalse(labels.toString(), labels.any { it == activity.getString(R.string.preset_small) })
             assertEquals(1, nodes.count { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
                 it.config.getOrNull(SemanticsProperties.Selected) == true && texts(descendants(it)).any { t -> t in balanced } })
         } finally { vm.dismissOptions(); controller.pause().stop().destroy() }

@@ -10,9 +10,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * PAGES_AND_IMAGE: Facebook — at most two page
  * fetches (post, then its photo page) and one image. PAGES_AND_CAROUSEL: Bluesky, at most two API
  * reads (handle resolution + post), with the same carousel image/request/deadline budgets.
+ * LINKEDIN_PAGE_AND_CAROUSEL: one page + up to 64 images, 68 requests including redirects,
+ * sharing the same 2 MiB image budget and 15 s fetch deadline.
  */
-enum class MediaHttpOperation { DIRECT_IMAGE, PAGE_AND_IMAGE, PAGES_AND_IMAGE, PAGE_AND_CAROUSEL, PAGES_AND_CAROUSEL;
-    internal val isCarousel: Boolean get() = this == PAGE_AND_CAROUSEL || this == PAGES_AND_CAROUSEL
+enum class MediaHttpOperation { DIRECT_IMAGE, PAGE_AND_IMAGE, PAGES_AND_IMAGE, PAGE_AND_CAROUSEL, PAGES_AND_CAROUSEL,
+    LINKEDIN_PAGE_AND_CAROUSEL;
+    internal val isCarousel: Boolean get() = this == PAGE_AND_CAROUSEL || this == PAGES_AND_CAROUSEL ||
+        this == LINKEDIN_PAGE_AND_CAROUSEL
+    internal val maxImages: Int get() = if (this == LINKEDIN_PAGE_AND_CAROUSEL) 64 else if (isCarousel) 20 else 1
 }
 enum class MediaHttpPurpose { PAGE, IMAGE }
 enum class MediaHttpFailure {

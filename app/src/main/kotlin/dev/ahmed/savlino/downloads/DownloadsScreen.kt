@@ -30,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -53,16 +54,25 @@ import dev.ahmed.savlino.domain.VideoQuality
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.locale.NezzelFormat
+import dev.ahmed.savlino.ui.TintedIcon
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.ui.theme.isLargeText
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
-fun visibleJobs(jobs: List<DownloadProgress>) = jobs.filter { !it.terminal || it.awaitingSchedule || it.phase == DownloadPhase.FAILED }.asReversed()
+/**
+ * The running job first, then the queue in the order it will run (next up on top), failures last, newest first
+ * (owner 2026-10-21: a just-queued link sat above the one downloading). [jobs] arrive oldest first.
+ */
+fun visibleJobs(jobs: List<DownloadProgress>): List<DownloadProgress> {
+    val (busy, queued) = jobs.filter { !it.terminal || it.awaitingSchedule }.partition { it.busy }
+    return busy.asReversed() + queued + jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }.asReversed()
+}
 fun runningCount(jobs: List<DownloadProgress>) = jobs.count { !it.terminal || it.awaitingSchedule }
 
 @Composable
@@ -175,11 +185,12 @@ fun DownloadsScreen(
     jobs: List<DownloadProgress>, language: String,
     onCancel: (String) -> Unit, onRemove: (String) -> Unit,
     onOpen: (SavedMedia) -> Unit, onShare: (SavedMedia) -> Unit, onOpenWith: (SavedMedia) -> Unit,
-    onShowFiles: (() -> Unit)?, onDelete: (SavedMedia) -> Unit, onPaste: () -> Unit,
+    onShowFiles: ((SavedMedia) -> Unit)?, onDelete: (SavedMedia) -> Unit, onPaste: () -> Unit,
     onRetry: (String) -> Unit = {},
     libraryLoad: LibraryLoadState = LibraryLoadState.Ready(emptyList()), onLibraryRetry: () -> Unit = {},
     onShareSelected: (List<SavedMedia>) -> Unit = {},
     onDeleteSelected: (List<SavedMedia>, (cleared: Boolean) -> Unit) -> Unit = { _, done -> done(true) },
+    canShowFiles: (SavedMedia) -> Boolean = { true },
 ) {
     var filterName by rememberSaveable { mutableStateOf(MediaFilter.ALL.name) }
     var search by rememberSaveable { mutableStateOf(false) }
@@ -266,7 +277,7 @@ fun DownloadsScreen(
                             else -> mediaDate(date, language)
                         }) }
                         items(entries, key = { it.uri.toString() }) { item -> SavedRow(item, language, { onOpen(item) }, { onShare(item) },
-                            { onOpenWith(item) }, onShowFiles, { deletingUri = item.uri.toString() },
+                            { onOpenWith(item) }, onShowFiles.takeIf { canShowFiles(item) }, { deletingUri = item.uri.toString() },
                             // No fade-in: filter switches must not flicker tens of rows; removal fades and neighbours slide.
                             Modifier.animateItem(fadeInSpec = null, placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 100)),
                             selecting = selecting, selected = item.uri.toString() in selectedUris, selectionEnabled = !selectionBusy,
@@ -372,7 +383,7 @@ fun LibraryLoadStatus(load: LibraryLoadState, onRetry: () -> Unit) {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: (() -> Unit)?, onDelete: () -> Unit, modifier: Modifier = Modifier,
+private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit, modifier: Modifier = Modifier,
     selecting: Boolean = false, selected: Boolean = false, selectionEnabled: Boolean = true,
     onSelect: () -> Unit = {}, onToggle: () -> Unit = {},
 ) {
@@ -395,7 +406,7 @@ private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onS
             onLongClickLabel = if (selecting) null else selectLabel, onLongClick = onSelect).padding(vertical = Space.s)
     @Composable fun Action() {
         if (selecting) Checkbox(selected, null, Modifier.size(48.dp).clearAndSetSemantics {})
-        else SavedMenu(item, onShare, onOpenWith, onShowFiles, onDelete)
+        else SavedMenu(item, meta, onShare, onOpenWith, onShowFiles, onDelete)
     }
     @Composable fun Texts(modifier: Modifier) = Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
         Text(NezzelFormat.isolate(item.title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -426,18 +437,53 @@ private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onS
     }
 }
 
+/**
+ * File actions in a bottom sheet headed by the file itself, so it is clear which download they act on.
+ * The action starts at once (a chooser or the delete confirmation) while the sheet slides away under it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SavedMenu(item: SavedMedia, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: (() -> Unit)?, onDelete: () -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.saved_more, item.title)) }
-        DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem(leadingIcon = { Icon(Icons.Default.Share, null) }, text = { Text(stringResource(R.string.share_file)) }, onClick = { menu = false; onShare() })
-            DropdownMenuItem(leadingIcon = { Icon(Icons.Default.PlayArrow, null) }, text = { Text(stringResource(R.string.saved_open_with)) }, onClick = { menu = false; onOpenWith() })
-            if(onShowFiles != null) DropdownMenuItem(leadingIcon = { Icon(painterResource(R.drawable.ic_folder), null) }, text = { Text(stringResource(R.string.saved_show_files)) }, onClick = { menu = false; onShowFiles() })
-            HorizontalDivider()
-            DropdownMenuItem(leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, text = { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
+private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit) {
+    var open by rememberSaveable(item.uri.toString()) { mutableStateOf(false) }
+    IconButton(onClick = { open = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.saved_more, item.title)) }
+    if (!open) return
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    fun act(action: () -> Unit) {
+        action()
+        scope.launch { sheet.hide() }.invokeOnCompletion { open = false }
+    }
+    ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheet) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = Space.s)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Space.xl).padding(bottom = Space.m),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
+                MediaThumbnail(item, Modifier.width(96.dp).aspectRatio(16f / 9f))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
+                    Text(NezzelFormat.isolate(item.title), style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Content),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(meta, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            HorizontalDivider(Modifier.padding(horizontal = Space.xl))
+            Spacer(Modifier.height(Space.s))
+            SheetAction(R.drawable.ic_ms_share, stringResource(R.string.share_file)) { act(onShare) }
+            SheetAction(R.drawable.ic_ms_open_in_new, stringResource(R.string.saved_open_with)) { act(onOpenWith) }
+            if (onShowFiles != null) SheetAction(R.drawable.ic_ms_folder, stringResource(R.string.saved_show_files)) { act { onShowFiles(item) } }
+            HorizontalDivider(Modifier.padding(horizontal = Space.xl, vertical = Space.s))
+            SheetAction(R.drawable.ic_ms_delete, stringResource(R.string.saved_delete), MaterialTheme.colorScheme.error) { act(onDelete) }
         }
+    }
+}
+
+@Composable
+private fun SheetAction(icon: Int, label: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button, onClick = onClick)
+        .padding(horizontal = Space.xl, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+        TintedIcon(icon, tint)
+        Text(label, style = MaterialTheme.typography.bodyLarge,
+            color = if (tint == MaterialTheme.colorScheme.error) tint else MaterialTheme.colorScheme.onSurface)
     }
 }
 

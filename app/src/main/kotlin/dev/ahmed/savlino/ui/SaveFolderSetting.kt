@@ -54,24 +54,18 @@ internal fun SaveFolderSetting() {
         if (uri != null) choose(uri)
     }
     LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { refresh() } }
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(enabled = !busy, role = Role.Button) {
-            try { picker.launch((destinations.destination as? SaveDestination.Tree)?.uri) }
-            catch (_: Exception) { failed = true }
-        }.padding(vertical = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-                Text(stringResource(R.string.change_save_folder), style = MaterialTheme.typography.bodyLarge)
-                Text(NezzelFormat.isolate(name), style = MaterialTheme.typography.bodyMedium)
-                if (!available) Text(stringResource(R.string.save_folder_unavailable), color = MaterialTheme.colorScheme.error)
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
-        }
-        if (custom) TextButton(onClick = { choose(null) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.save_folder_default))
-        }
-        if (failed) Text(stringResource(R.string.save_folder_error), color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+    // Emits rows straight into the Settings group: the folder, then a reset row only for a custom folder.
+    SettingsNavRow(stringResource(R.string.change_save_folder), R.drawable.ic_ms_folder, body = NezzelFormat.isolate(name),
+        note = when {
+            // A failed pick is the actionable message, so it wins over the older "unavailable" state.
+            failed -> stringResource(R.string.save_folder_error)
+            !available -> stringResource(R.string.save_folder_unavailable)
+            else -> null
+        }, noteColor = MaterialTheme.colorScheme.error, liveNote = failed, enabled = !busy) {
+        try { picker.launch((destinations.destination as? SaveDestination.Tree)?.uri) }
+        catch (_: Exception) { failed = true }
     }
+    if (custom) SettingsNavRow(stringResource(R.string.save_folder_default), null, enabled = !busy, chevron = false) { choose(null) }
 }
 
 /** Stored display name only: no provider I/O during composition. */

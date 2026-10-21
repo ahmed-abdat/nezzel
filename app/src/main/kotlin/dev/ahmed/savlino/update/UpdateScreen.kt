@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
@@ -21,18 +22,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.ahmed.savlino.ui.UpdateIllustration
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -69,40 +70,77 @@ internal fun UpdateCard(release: Release, language: String, open: () -> Unit, di
     }
 }
 
+/**
+ * Top of Settings: who you are running (mark, version, build) and the update state in one card. The automatic
+ * check switch lives under Advanced ([UpdateAutoSetting]); a missing updater still shows the identity.
+ */
 @Composable
-internal fun UpdateSettings(updates: AppUpdates, open: () -> Unit) {
-    if (!updates.available) return
-    val state by updates.state.collectAsState()
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.settings_updates_heading), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).toggleable(state.automatic, role = Role.Switch, onValueChange = updates::setAutomatic),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_updates_auto))
-                Text(stringResource(R.string.settings_updates_auto_body), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+internal fun UpdateSettings(updates: AppUpdates?, open: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val language = LocalConfiguration.current.locales[0].language
+    // An open header on the page, not another box: the mark carries the brand, an offer carries the teal.
+    run {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                dev.ahmed.savlino.ui.NezzelMark(Modifier.size(56.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    // The build number is for support; it sits at the bottom of Settings → Advanced.
+                    Text(stringResource(R.string.about_version, NezzelFormat.isolate(BuildConfig.VERSION_NAME)),
+                        style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                }
             }
-            Switch(state.automatic, onCheckedChange = null)
-        }
-        TextButton(onClick = updates::checkNow, enabled = state.check != UpdateCheck.CHECKING,
-            modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.settings_updates_check_now)) }
-        state.lastChecked?.let { checked ->
-            val language = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language
-            Text(stringResource(R.string.settings_updates_last_checked, NezzelFormat.firstStrong(NezzelFormat.shortDateTime(checked, language))),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (state.check == UpdateCheck.CHECKING) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (state.check == UpdateCheck.LATEST || state.check == UpdateCheck.FAILED)
-            Text(stringResource(if (state.check == UpdateCheck.LATEST) R.string.update_latest else R.string.update_check_failed),
-                Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        // The nav dot follows any cached offer (automatic or restored), so Settings must expose it whatever the manual check did;
-        // a manual check also reveals a skipped version
-        if (state.check == UpdateCheck.AVAILABLE || state.badge(BuildConfig.VERSION_CODE.toLong())) state.release?.let { release ->
-            TextButton(onClick = open, modifier = Modifier.testTag("settings_update_offer").heightIn(min = 48.dp)) {
-                Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(release.version)))
+            if (updates == null || !updates.available) return@Column
+            val state by updates.state.collectAsState()
+            // The nav dot follows any cached offer (automatic or restored), so Settings must expose it whatever the manual check did;
+            // a manual check also reveals a skipped version
+            val offer = state.release?.takeIf { state.check == UpdateCheck.AVAILABLE || state.badge(BuildConfig.VERSION_CODE.toLong()) }
+            if (offer != null) {
+                Button(onClick = open, modifier = Modifier.testTag("settings_update_offer").fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(offer.version)))
+                }
+                return@Column
+            }
+            // "Latest" only when no newer release is known (a skipped one is still newer).
+            val latest = state.check == UpdateCheck.LATEST ||
+                (state.lastChecked != null && (state.release?.code ?: 0L) <= BuildConfig.VERSION_CODE.toLong())
+            @Composable fun Status(modifier: Modifier) = Box(modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+                when {
+                    state.check == UpdateCheck.CHECKING -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                    state.check == UpdateCheck.FAILED ->
+                        Text(stringResource(R.string.update_check_failed), style = MaterialTheme.typography.bodyMedium, color = colors.error)
+                    else -> Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (latest) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp), tint = colors.primary)
+                            Text(stringResource(R.string.update_latest), style = MaterialTheme.typography.bodyMedium)
+                        }
+                        // The date and time never wrap apart (no stray "PM" or "م" on its own line).
+                        state.lastChecked?.let { checked ->
+                            Text(stringResource(R.string.settings_updates_last_checked) + " " +
+                                NezzelFormat.firstStrong(NezzelFormat.checkedAt(checked, language).replace(' ', '\u00A0')),
+                                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            // Status over a quiet text action: neither has to squeeze the other in any language or text size.
+            Status(Modifier.fillMaxWidth())
+            TextButton(onClick = updates::checkNow, enabled = state.check != UpdateCheck.CHECKING,
+                modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
+                Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_updates_check_now))
             }
         }
     }
+}
+
+/** Daily check opt-out, under Settings → Advanced. */
+@Composable
+internal fun UpdateAutoSetting(updates: AppUpdates) {
+    val state by updates.state.collectAsState()
+    dev.ahmed.savlino.ui.SwitchSetting(stringResource(R.string.settings_updates_auto), stringResource(R.string.settings_updates_auto_body),
+        state.automatic, dev.ahmed.savlino.R.drawable.ic_ms_update, updates::setAutomatic)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,10 +151,12 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
     val release = if (state.stage == UpdateStage.IDLE) state.release else state.transfer ?: state.release
     val compact = LocalConfiguration.current.screenHeightDp < 480
     val colors = MaterialTheme.colorScheme
-    val heroTop = colors.primaryContainer.copy(alpha = 0.45f).compositeOver(colors.background)
+    val scroll = rememberScrollState()
+    // The hero runs under a clear top bar; once the page scrolls, the bar turns solid so its title stays readable
+    val bar by animateColorAsState(if (release == null || scroll.value > 0) colors.surface else Color.Transparent, label = "update_bar")
     Scaffold(containerColor = colors.background, topBar = {
         TopAppBar(title = { Text(stringResource(R.string.update_screen_title)) },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = if (release == null) colors.surface else heroTop),
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = bar),
             navigationIcon = {
                 IconButton(onClick = back, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(R.string.back))
@@ -128,27 +168,78 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
             return@Scaffold
         }
         val size = NezzelFormat.isolate(NezzelFormat.size(release.size, language))
-        BoxWithConstraints(Modifier.fillMaxSize().padding(insets)) {
-            val scroll = rememberScrollState()
-            LaunchedEffect(state.stage) { if (state.stage != UpdateStage.IDLE) scroll.animateScrollTo(scroll.maxValue) }
-            Column(Modifier.fillMaxWidth().verticalScroll(scroll).heightIn(min = maxHeight),
-                verticalArrangement = Arrangement.SpaceBetween) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(Modifier.fillMaxWidth().height(if (compact) 112.dp else 200.dp)
-                        .background(Brush.verticalGradient(listOf(heroTop, colors.background))), contentAlignment = Alignment.Center) {
-                        UpdateIllustration(compact, Modifier.fillMaxSize())
+        // The action slot stays pinned above the navigation bar; only in short landscape windows does it scroll with the page.
+        val actions: @Composable ColumnScope.() -> Unit = {
+            when (state.stage) {
+                UpdateStage.DOWNLOADING -> {
+                    val progress = (state.bytes.toDouble() / release.size).toFloat().coerceIn(0f, 1f)
+                    UpdateProgressButton(stringResource(R.string.update_downloading,
+                        NezzelFormat.isolate(NezzelFormat.percent((progress * 100).toInt(), language))), progress)
+                    Text(stringResource(R.string.update_progress, NezzelFormat.isolate(NezzelFormat.size(state.bytes, language)), size),
+                        Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+                    TextButton(onClick = cancel, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
+                }
+                UpdateStage.VERIFYING, UpdateStage.INSTALLING -> UpdateProgressButton(
+                    stringResource(if (state.stage == UpdateStage.VERIFYING) R.string.update_verifying else R.string.update_installing))
+                UpdateStage.READY -> {
+                    if (!canInstall) Surface(color = colors.surfaceContainer, shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.update_permission_title), style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.fillMaxWidth().semantics { heading() })
+                            Text(stringResource(R.string.update_permission_body), Modifier.fillMaxWidth())
+                        }
                     }
+                    Button(onClick = if (canInstall) install else permission, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Text(stringResource(if (canInstall) R.string.update_install else R.string.update_permission_action))
+                    }
+                }
+                UpdateStage.ERROR -> {
+                    val message = when (state.failure) {
+                        UpdateFailure.SPACE -> stringResource(R.string.update_failed_space, NezzelFormat.isolate(NezzelFormat.size(requiredUpdateSpace(release.size), language)))
+                        UpdateFailure.VERIFY -> stringResource(R.string.update_failed_verify)
+                        UpdateFailure.INSTALL -> stringResource(R.string.update_not_installed)
+                        else -> stringResource(R.string.update_failed_network)
+                    }
+                    Text(message, Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error)
+                    Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.try_again)) }
+                    if (state.failure == UpdateFailure.INSTALL || state.failure == UpdateFailure.VERIFY) {
+                        val label = stringResource(R.string.update_open_release)
+                        TextButton(onClick = { openUpdateReleasePage(context) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = label }) { Text(label) }
+                    }
+                }
+                UpdateStage.IDLE -> {
+                    Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.update_download, size)) }
+                    Row(Modifier.fillMaxWidth()) {
+                        TextButton(onClick = back, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.update_not_now), textAlign = TextAlign.Center, maxLines = 2)
+                        }
+                        TextButton(onClick = { skip(release.code) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.update_skip), textAlign = TextAlign.Center, maxLines = 2)
+                        }
+                    }
+                }
+            }
+        }
+        val direction = LocalLayoutDirection.current
+        Column(Modifier.fillMaxSize().padding(start = insets.calculateStartPadding(direction),
+            end = insets.calculateEndPadding(direction), bottom = insets.calculateBottomPadding())) {
+            LaunchedEffect(state.stage) { if (compact && state.stage != UpdateStage.IDLE) scroll.animateScrollTo(scroll.maxValue) }
+            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).padding(bottom = 16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val top = insets.calculateTopPadding()
+                    UpdateHero(compact, top, Modifier.fillMaxWidth().height(top + if (compact) 112.dp else 248.dp))
                     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(stringResource(R.string.update_card_version, NezzelFormat.isolate(release.version)),
-                                Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                                Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                             Text(stringResource(R.string.update_meta, NezzelFormat.isolate(BuildConfig.VERSION_NAME), size),
                                 style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                         }
                         val notes = release.notes(language)
-                        if (notes.isNotEmpty()) Surface(color = colors.surfaceContainer, shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(stringResource(R.string.update_whats_new), style = MaterialTheme.typography.titleSmall,
+                        if (notes.isNotEmpty()) {
+                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(stringResource(R.string.update_whats_new), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.fillMaxWidth().semantics { heading() })
                                 notes.take(6).forEach { NoteBullet(it) }
                                 TextButton(onClick = { openUpdateReleasePage(context, release.version) }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -162,59 +253,10 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                         }
                     }
                 }
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    when (state.stage) {
-                        UpdateStage.DOWNLOADING -> {
-                            val progress = (state.bytes.toDouble() / release.size).toFloat().coerceIn(0f, 1f)
-                            UpdateProgressButton(stringResource(R.string.update_downloading,
-                                NezzelFormat.isolate(NezzelFormat.percent((progress * 100).toInt(), language))), progress)
-                            Text(stringResource(R.string.update_progress, NezzelFormat.isolate(NezzelFormat.size(state.bytes, language)), size),
-                                Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
-                            TextButton(onClick = cancel, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
-                        }
-                        UpdateStage.VERIFYING, UpdateStage.INSTALLING -> UpdateProgressButton(
-                            stringResource(if (state.stage == UpdateStage.VERIFYING) R.string.update_verifying else R.string.update_installing))
-                        UpdateStage.READY -> {
-                            if (!canInstall) Surface(color = colors.surfaceContainer, shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(stringResource(R.string.update_permission_title), style = MaterialTheme.typography.titleMedium,
-                                        modifier = Modifier.fillMaxWidth().semantics { heading() })
-                                    Text(stringResource(R.string.update_permission_body), Modifier.fillMaxWidth())
-                                }
-                            }
-                            Button(onClick = if (canInstall) install else permission, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                                Text(stringResource(if (canInstall) R.string.update_install else R.string.update_permission_action))
-                            }
-                        }
-                        UpdateStage.ERROR -> {
-                            val message = when (state.failure) {
-                                UpdateFailure.SPACE -> stringResource(R.string.update_failed_space, NezzelFormat.isolate(NezzelFormat.size(requiredUpdateSpace(release.size), language)))
-                                UpdateFailure.VERIFY -> stringResource(R.string.update_failed_verify)
-                                UpdateFailure.INSTALL -> stringResource(R.string.update_not_installed)
-                                else -> stringResource(R.string.update_failed_network)
-                            }
-                            Text(message, Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error)
-                            Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.try_again)) }
-                            if (state.failure == UpdateFailure.INSTALL || state.failure == UpdateFailure.VERIFY) {
-                                val label = stringResource(R.string.update_open_release)
-                                TextButton(onClick = { openUpdateReleasePage(context) },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = label }) { Text(label) }
-                            }
-                        }
-                        UpdateStage.IDLE -> {
-                            Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.update_download, size)) }
-                            Row(Modifier.fillMaxWidth()) {
-                                TextButton(onClick = back, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                                    Text(stringResource(R.string.update_not_now), textAlign = TextAlign.Center, maxLines = 2)
-                                }
-                                TextButton(onClick = { skip(release.code) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                                    Text(stringResource(R.string.update_skip), textAlign = TextAlign.Center, maxLines = 2)
-                                }
-                            }
-                        }
-                    }
-                }
+                if (compact) Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = actions)
             }
+            if (!compact) Column(Modifier.fillMaxWidth().background(colors.background).padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp), content = actions)
         }
     }
 }

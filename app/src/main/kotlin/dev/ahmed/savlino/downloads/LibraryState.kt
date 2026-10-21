@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.downloads
 
 import dev.ahmed.savlino.storage.SaveDestinations
+import dev.ahmed.savlino.storage.SaveDestination
 
 import android.app.Activity
 import android.app.RecoverableSecurityException
@@ -37,10 +38,11 @@ sealed interface LibraryLoadState {
 class LibraryState(
     val load: LibraryLoadState,
     val open: (SavedMedia) -> Unit, val share: (SavedMedia) -> Unit, val openWith: (SavedMedia) -> Unit,
-    val showFiles: (() -> Unit)?, val delete: (SavedMedia) -> Unit,
+    val showFiles: ((SavedMedia) -> Unit)?, val delete: (SavedMedia) -> Unit,
     val onRetry: () -> Unit,
     val shareSelected: (List<SavedMedia>) -> Unit,
     val deleteSelected: (List<SavedMedia>, (cleared: Boolean) -> Unit) -> Unit,
+    val canShowFiles: (SavedMedia) -> Boolean = { showFiles != null },
 ) {
     val media get() = load.lastSuccessfulRows.orEmpty()
 }
@@ -53,7 +55,8 @@ fun rememberLibraryState(
 ): LibraryState {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val repository = remember(context.contentResolver) { SavedMediaRepository(context.contentResolver, context.packageName, SaveDestinations(context)) }
+    val destinations = remember(context) { SaveDestinations(context) }
+    val repository = remember(context.contentResolver, destinations) { SavedMediaRepository(context.contentResolver, context.packageName, destinations) }
     val scope = rememberCoroutineScope()
     var load by remember { mutableStateOf<LibraryLoadState>(LibraryLoadState.Loading()) }
     var refresh by remember { mutableIntStateOf(0) }
@@ -174,9 +177,24 @@ fun rememberLibraryState(
         catch (_: ActivityNotFoundException) { message(R.string.saved_action_failed) }
         catch (_: SecurityException) { message(R.string.saved_action_failed) }
     }
-    val filesAvailable = remember(context) { MediaActions.files().resolveActivity(context.packageManager) != null }
+    val destination = destinations.destination
+    val selectedTree = (destination as? SaveDestination.Tree)?.uri
+    val fileIntents = remember(context, load.lastSuccessfulRows, selectedTree) {
+        // Files in the same folder share one package-manager probe; no provider IO on the UI thread.
+        buildMap {
+            load.lastSuccessfulRows.orEmpty().groupBy { FolderIntents.folderUri(it, destination) }.forEach { (folder, items) ->
+                if (folder != null) {
+                    val intent = FolderIntents.forItem(items.first(), destination, context.packageManager)
+                    if (intent != null) items.forEach { put(it.uri, intent) }
+                }
+            }
+        }
+    }
     return LibraryState(load, { start(MediaActions.open(it)) }, { start(MediaActions.share(it)) },
-        { start(Intent.createChooser(MediaActions.open(it), null)) }, if(filesAvailable) ({ start(MediaActions.files()) }) else null,
+        { start(Intent.createChooser(MediaActions.open(it), null)) }, if (fileIntents.isNotEmpty()) ({ item ->
+            val intent = fileIntents[item.uri]
+            if (intent != null) start(intent) else message(R.string.saved_action_failed)
+        }) else null,
         { item ->
             // This callback is reachable only after the app's delete confirmation.
             if (singleDeleting || pendingUri != null || batchUris.isNotEmpty()) message(R.string.saved_action_failed)
@@ -215,5 +233,5 @@ fun rememberLibraryState(
                 batchWaiting = false; batchApproved = null
                 batchUris = items.map { it.uri.toString() }.distinct()
             }
-        })
+        }, canShowFiles = { it.uri in fileIntents })
 }

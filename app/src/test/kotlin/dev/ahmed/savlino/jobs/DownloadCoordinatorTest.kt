@@ -38,7 +38,8 @@ class DownloadCoordinatorTest {
                 assertEquals(DownloadPhase.PREPARING, queued.phase)
                 assertTrue(queued.waiting)
                 assertFalse(queued.awaitingSchedule)
-                assertEquals(listOf("queued", "running"),
+                // The running job leads; the queue follows in run order.
+                assertEquals(listOf("running", "queued"),
                     dev.ahmed.savlino.downloads.visibleJobs(f.coordinator.progress.value).map { it.jobId })
                 val scheduled = WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get().single().id
                 assertFalse(withTimeout(5000) { f.coordinator.retry("queued") })

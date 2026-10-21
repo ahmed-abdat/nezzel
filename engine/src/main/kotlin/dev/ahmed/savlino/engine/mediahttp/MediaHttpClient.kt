@@ -146,7 +146,9 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     /** A bad sibling must not retire valid carousel photos; policy, count, byte and deadline checks still apply. */
     internal fun fetchCarouselImage(token: OperationToken, request: PublicMediaRequest, thumbnail: Boolean = false): MediaHttpResult =
         if (!token.operation.isCarousel || request.purpose != MediaHttpPurpose.IMAGE ||
-            request.hostRule !in setOf(MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN, MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN))
+            (if (token.operation == MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL)
+                request.pageContext == null || request.hostRule != MediaHostRule.ANY
+            else request.hostRule !in setOf(MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN, MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
         else fetchInternal(token, request, null, optional = true, imageCap = if (thumbnail) token.budget.imageLimit(thumbnail = true) else null)
 

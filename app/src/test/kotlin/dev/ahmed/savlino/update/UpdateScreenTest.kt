@@ -211,13 +211,16 @@ class UpdateScreenTest {
         try {
             renderThemed({ nodes(it) }, { UpdateSettings(updates) {} }) { a ->
                 val all = texts(nodes(a))
-                val prefix = if (context.resources.configuration.locales[0].language == "ar") "آخر تحقق:" else "Last checked:"
+                val prefix = if (context.resources.configuration.locales[0].language == "ar") "آخر تحقق" else "Last checked"
                 assertEquals(shown, all.any { it.startsWith(prefix) })
+                // Up to date only after a successful check with nothing newer known
+                assertEquals(shown, all.contains(context.getString(R.string.update_latest)))
                 if (shown) {
-                    val label = all.single { it.startsWith(prefix) }
-                    assertTrue(label.any { it in '0'..'9' })
-                    assertTrue(Regex("[0-9]{1,2}:[0-9]{2}").containsMatchIn(label))
-                    assertFalse(label.any { it in '٠'..'٩' || it in '۰'..'۹' })
+                    // The date and time never break apart.
+                    val value = all.single { it.startsWith(prefix) }.removePrefix(prefix).trim()
+                    assertTrue(Regex("[0-9]{1,2}:[0-9]{2}").containsMatchIn(value))
+                    assertFalse(value.contains(' '))
+                    assertFalse(value.any { it in '٠'..'٩' || it in '۰'..'۹' })
                 }
             }
         } finally { owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel(); prefs.edit().clear().commit() }

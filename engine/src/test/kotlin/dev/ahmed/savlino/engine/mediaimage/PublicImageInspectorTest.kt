@@ -5,9 +5,76 @@ import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.mediahttp.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import java.io.ByteArrayOutputStream
 import kotlin.test.*
 
 class PublicImageInspectorTest : PublicImageTestBase() {
+    @Test fun linkedInFivePhotoPostReturnsEveryRealImageInPageOrderWithOneSaveContext() {
+        linkedInPhotos()
+    }
+
+    @Test fun linkedInFailedSiblingIsSkippedAndRemainingPhotosStillReportOfFive() {
+        linkedInPhotos(failedPosition = 2)
+    }
+
+    @Test fun linkedInSinglePhotoKeepsCompleteProofAndBoundSave() {
+        linkedInPhotos(count = 1)
+    }
+
+    @Test fun linkedInSixtyFourPhotoPostDoesNotInheritTheTwentyImageCarouselLimit() {
+        linkedInPhotos(count = 64)
+    }
+
+    private fun linkedInPhotos(count: Int = 5, failedPosition: Int? = null) {
+        val urls = (0 until count).map { "https://media.licdn.com/dms/image/synthetic-$it/feedshare-shrink_800/photo.jpg" }
+        val bodies = urls.indices.map { raster(width = 32 + it, format = "jpg") }
+        // Reverse JSON-LD order: only the post-owned DOM determines the attachment order.
+        var position = 0
+        val html = linkedInHtml(assets = urls.reversed(), domAssets = urls, og = urls.first(), claimed = count)
+            .toString(Charsets.UTF_8).replace(Regex("<li>")) {
+                "<li data-test-id=\"feed-images-content__list-item\" data-position=\"${position++}\" style=\"\">"
+            }.toByteArray()
+        fixture(respond = { request, socket ->
+            if (request.target.startsWith("/posts/")) socket.reply(body = html, headers = mapOf("Content-Type" to "text/html"))
+            else {
+                val index = urls.indexOf("https://media.licdn.com${request.target}")
+                if (index < 0 || index == failedPosition) socket.reply(403)
+                else socket.reply(body = bodies[index], headers = mapOf("Content-Type" to "image/jpeg"))
+            }
+        }) { f ->
+            val operation = f.inspector.newOperation(imageSource(POST), IMAGE_IDENTITY)
+            inspected(runBlocking { f.inspector.inspect(operation, ImageSourceType.LINKEDIN) }).use { result ->
+                val expectedPositions = urls.indices.filter { it != failedPosition }
+                assertEquals(expectedPositions, result.inspection.items.map { it.position })
+                assertEquals(expectedPositions.size, result.discovery.discoveredCount)
+                assertEquals(count, result.discovery.claimedCount)
+                assertEquals(if (failedPosition == null) 0 else 1, result.discovery.unavailableCount)
+                assertEquals(if (failedPosition == null) DiscoveryCompleteness.COMPLETE else DiscoveryCompleteness.PARTIAL,
+                    result.discovery.completeness)
+                assertIs<ImageSaveAvailability.Available>(result.saveAvailability)
+                assertEquals(count + 1, f.server.requests.size, "every attachment fetched, author avatar excluded")
+                val contexts = result.inspection.items.map { item ->
+                    val rendition = assertIs<MediaRendition.Image>(item.renditions.single(), "no placeholder items")
+                    val selection = assertNotNull(result.inspection.selection(rendition.ref))
+                    val reference = assertNotNull(f.store.resolve(selection))
+                    assertTrue(reference.linkedIn)
+                    assertEquals(urls[item.position], reference.url)
+                    assertEquals(32 + item.position, rendition.image.width)
+                    assertEquals(Size.Exact(bodies[item.position].size.toLong()), rendition.size)
+                    assertEquals(imageDigest(bodies[item.position]), assertNotNull(rendition.image.proof).completeBodySha256)
+                    val context = assertNotNull(reference.postContext)
+                    val sink = ByteArrayOutputStream()
+                    assertIs<ImageSaveResult.Success>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                    assertContentEquals(bodies[item.position], sink.toByteArray())
+                    assertEquals(POST, f.server.requests.last().headers["referer"])
+                    context
+                }
+                assertTrue(contexts.all { it === contexts.first() }, "one post context shared by all Save references")
+                assertEquals(count + 1 + expectedPositions.size, f.server.requests.size)
+            }
+        }
+    }
+
     @Test fun outOfMemoryAfterPhotoVerdictStaysAnImageFailure() {
         fixture(respond = { request, socket ->
             if (request.target.startsWith("/posts/"))
@@ -18,7 +85,7 @@ class PublicImageInspectorTest : PublicImageTestBase() {
             // Fail the real context-binding allocation after the page verdict and image validation,
             // outside the transport/validator OOM catches, without allocating an actual memory bomb.
             val contexts = MediaReferenceStore::class.java.getDeclaredField("postContexts").apply { isAccessible = true }
-            contexts.set(f.store, object : LinkedHashMap<MediaHttpPostContext, StoredImageReference>() {
+            contexts.set(f.store, object : LinkedHashMap<MediaHttpPostContext, List<StoredImageReference>>() {
                 override val size: Int get() = throw OutOfMemoryError("synthetic context allocation failure")
             })
             failed(runBlocking { f.inspector.inspect(operation, ImageSourceType.LINKEDIN) }, ImageFailure.BUDGET, ImagePhase.IMAGE)

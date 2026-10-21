@@ -6,6 +6,31 @@ Version entries describe existing builds, not public APK availability.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-10-21
+
+### Changed
+
+- Settings redesign in plain words: an app card at the top (version, "You have the latest version" with a short check time, Check now or the waiting update), then grouped cards for General (language and theme pickers, wallpaper colours), Links, Saving and About. Show options automatically (still on by default), site support (engine) updates and the daily update check moved to a new Advanced page, with the engine version in a small support line; the licence paragraph and warranty line open with the licences.
+- Downloads: a saved file's actions (Share, Open with, Show in Files, Delete) open in a bottom sheet headed by the file's thumbnail, title and size.
+- Onboarding redesign: real site tiles and a slowly drifting logo wall on the first page, pages 2–4 as small pieces of the real app, bolder titles and shorter, confident copy EN/AR. Motion stays still under reduced motion.
+- Update screen: a calm arc of site logos around the Nezzel mark, solid hero band, action slot pinned above the fold, confident titles.
+- Match wallpaper colours (Android 12+) follows any wallpaper; the no-purple check and its explanation line are gone.
+- Quality sheet is more compact: one short hint per row, tighter rows, one facts line (duration · channel · site), All qualities beside the first heading, and no ≈ footnote (≈ still marks estimated sizes; TalkBack says "estimated").
+- Quality rows stay plain everywhere: Other versions show only the file type and a short codec name or audio rate (no format ids, merge partners or video bitrates), and versions that would look the same are left out; a remembered All qualities pick shows as a plain row in height order.
+- Downloads: the running download leads, then the queue in the order it will run; a queued row shows its quality; progress reads "49% · 153 of 313 MB" with time left at the end.
+- Open-source licences moved from About to a small link beside the support line in Advanced (notices still ship in the app); What's new opens in the app from notes bundled with each build, also on fresh installs and test builds.
+
+### Fixed
+
+- Last pick: a quality chosen in All qualities is remembered (by resolution, closest lower one when missing) and the «Last pick» badge no longer marks an older preset.
+- A video+audio download's percent can no longer fall back when the second part starts reporting fragments.
+- Show in Files on a chosen folder passes read access to that folder only; What's new always uses one version both languages have.
+- Video+audio downloads show a real percent and time left from the first byte when the site reported exact sizes (before, the ring spun until the audio part started); once set, the total holds.
+
+### Added
+
+- Material Symbols icons (Apache-2.0) and Simple Icons site logos (CC0), noted in THIRD_PARTY_NOTICES and the in-app licences.
+
 ## [0.4.5] - 2026-10-20
 
 ### Added

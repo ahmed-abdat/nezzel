@@ -67,6 +67,18 @@ internal object FormatChoices {
         return videos + listOfNotNull(m4a ?: fallback, mp3)
     }
 
+    /** Plain codec name for "Other versions" (H.264, VP9…); unknown codecs show nothing rather than a raw id. */
+    fun codecName(format: Format): String? = when (VideoCodecs.family(format.videoCodec)) {
+        "avc" -> "H.264"; "hevc" -> "HEVC"; "av1" -> "AV1"; "vp9" -> "VP9"; "vp8" -> "VP8"; else -> null
+    }
+
+    /** Audio rate people compare (128 vs 320 kbps); video rows never show one. */
+    fun audioKbps(format: Format): Int? = if (format.hasVideo) null else format.conversion?.bitrateKbps ?: format.bitrateKbps
+
+    /** Rows with the same key look identical in "Other versions": title, file type, codec or rate, and size. */
+    fun shownKey(format: Format, roughBytes: Long?): List<Any?> =
+        listOf(labelKey(format), format.container, codecName(format), audioKbps(format), format.size, roughBytes)
+
     private fun sizeRank(size: Size) = when (size) { is Size.Exact -> 2; is Size.Estimated -> 1; Size.Unknown -> 0 }
 
     // H.264, then HEVC, AV1, VP9 (playback-compatible codecs, 2026-10-19).

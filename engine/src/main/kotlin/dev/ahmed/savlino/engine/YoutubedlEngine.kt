@@ -116,7 +116,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         var bytes = -1L
         suspend fun transfer(info: File?) {
             val args = YtdlpCommand.download(command, directory, info)
-            val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1)
+            val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
             val diagnostics = YtdlpDiagnostics()
             current.expireIn(limits.stallMs)
             try {

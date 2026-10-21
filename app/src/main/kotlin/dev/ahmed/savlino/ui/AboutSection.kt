@@ -51,6 +51,8 @@ internal object OpenSourceNotices {
         NoticeComponent("Okio", "Apache License 2.0", "Apache-2.0", "https://github.com/square/okio", "licenses/okio-APACHE-2.0.txt"),
         NoticeComponent("Material Color Utilities", "Apache License 2.0", "Apache-2.0",
             "https://github.com/material-foundation/material-color-utilities", "licenses/material-color-utilities-APACHE-2.0.txt"),
+        NoticeComponent("Material Symbols", "Apache License 2.0", "Apache-2.0", "https://github.com/google/material-design-icons",
+            "licenses/material-symbols-APACHE-2.0.txt"),
         NoticeComponent("Noto Sans Arabic", "SIL Open Font License 1.1", "OFL-1.1", "https://github.com/notofonts/arabic", "licenses/noto-sans-arabic-OFL.txt"),
     )
 }
@@ -58,8 +60,8 @@ internal object OpenSourceNotices {
 private val ltr = TextDirection.Ltr
 
 /**
- * Short About group at the bottom of Settings: name and versions as one tight block, who makes Nezzel, then a
- * notice and the licences dialog. The engine version is not repeated here; Settings shows it in its engine row.
+ * About group at the bottom of Settings: how-to and What's new, then who makes Nezzel. The version sits in the app
+ * card at the top of Settings; the licences are a small link under Advanced ([LicencesLink]).
  */
 @Composable
 internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: () -> Unit = {},
@@ -67,48 +69,34 @@ internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: (
     updates: AppUpdates? = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates) {
     val context = LocalContext.current
     var showWhatsNew by rememberSaveable { mutableStateOf(false) }
-    var showLicences by rememberSaveable { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Text(stringResource(R.string.about), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-        // Identity, version and build read as one block; the prose starts 16dp below it.
-        Column(Modifier.padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.about_version, NezzelFormat.isolate(versionName)), style = MaterialTheme.typography.bodyLarge)
-            Text(stringResource(R.string.about_build, versionCode), style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        TextButton(onClick = onHowItWorks, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.onboarding_how_it_works))
-        }
-        HululsoftAbout()
-        Text(stringResource(R.string.about_body), style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        // A row on the screen's 16dp gutter; a ListItem would inset it a second 16dp.
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button) { showLicences = true }
-            .padding(vertical = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-                Text(stringResource(R.string.about_licences), style = MaterialTheme.typography.bodyLarge)
-                Text(stringResource(R.string.about_licences_help), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
-        }
-        if (updates?.available == true) Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
-            .clickable(role = Role.Button) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
+        SettingsGroup(stringResource(R.string.about)) {
+            SettingsNavRow(stringResource(R.string.onboarding_how_it_works), R.drawable.ic_ms_help, onClick = onHowItWorks)
+            if (updates?.available == true) SettingsNavRow(stringResource(R.string.update_whats_new), R.drawable.ic_ms_celebration) {
                 if (updates.currentNotes() != null) showWhatsNew = true else openUpdateReleasePage(context, versionName)
-            }.padding(vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            Text(stringResource(R.string.update_whats_new), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
+            }
+            CrashReportActions()
         }
-        CrashReportActions()
-        Text(stringResource(R.string.about_warranty), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.padding(horizontal = Space.l)) { HululsoftAbout() }
     }
-    if (showLicences) LicencesDialog { showLicences = false }
-    if (showWhatsNew && !showLicences) updates?.currentNotes()?.let { notes ->
+    if (showWhatsNew) updates?.currentNotes()?.let { notes ->
         WhatsNewSheet(notes, language) { showWhatsNew = false }
     }
+}
+
+/**
+ * The small "Licences" link beside the support line in Advanced. Few people look, but GPL-3.0 §5(d) and the bundled
+ * Apache/BSD/OFL parts need the notices inside the app; the licence paragraph and warranty open with them.
+ */
+@Composable
+internal fun LicencesLink() {
+    var show by rememberSaveable { mutableStateOf(false) }
+    val full = stringResource(R.string.about_licences)
+    TextButton(onClick = { show = true }, modifier = Modifier.heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.about_licences_short), Modifier.semantics { contentDescription = full },
+            style = MaterialTheme.typography.bodySmall)
+    }
+    if (show) LicencesDialog { show = false }
 }
 
 @Composable
@@ -117,7 +105,10 @@ private fun LicencesDialog(onDismiss: () -> Unit) {
         title = { Text(stringResource(R.string.about_licences), modifier = Modifier.semantics { heading() }) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                Text(stringResource(R.string.about_body), style = MaterialTheme.typography.bodyMedium)
                 OpenSourceNotices.components.forEach { NoticeRow(it) }
+                Text(stringResource(R.string.about_warranty), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {

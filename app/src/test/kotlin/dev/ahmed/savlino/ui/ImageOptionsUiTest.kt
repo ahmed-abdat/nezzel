@@ -336,7 +336,7 @@ class ImageOptionsUiTest {
             val vm = vm(activity, found = 1)
             activity.setContent(parent = recomposer) {
                 NezzelTheme(ThemePref.Light, false) {
-                    NezzelApp(vm, "en", ThemePref.Light, false, true, false, onPaste = {}, onDismissSuggestion = {},
+                    NezzelApp(vm, "en", ThemePref.Light, false, true, onPaste = {}, onDismissSuggestion = {},
                         onAcceptSuggestion = {}, onLanguage = {}, onTheme = {}, onWallpaper = {}, onSuggestions = {})
                 }
             }

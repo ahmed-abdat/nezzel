@@ -422,13 +422,35 @@ class AppUpdatesTest {
         assertEquals(listOf("Fixed"), restarted.currentNotes()?.notes("en"))
         assertEquals(listOf("تحسينات"), restarted.currentNotes()?.notes("ar"))
     }
-    @Test fun currentNotesForAnotherBuildAreRemoved() {
+    @Test fun currentNotesFallBackToBundledNotesWithoutPromptingOnFreshInstall() {
+        val updates = AppUpdates(production, scope) { error("Reading bundled notes must not use HTTP") }
+        val bundled = BundledWhatsNew.read(context.assets)!!
+        val notes = updates.currentNotes()!!
+        assertEquals(bundled.version, notes.version)
+        assertEquals(bundled.english, notes.english)
+        assertEquals(bundled.arabic, notes.arabic)
+        assertNull(updates.state.value.whatsNew)
+        assertFalse(updates.consumeUpdated())
+        assertFalse(updates.prefs.contains("current-notes"))
+    }
+    @Test fun currentCachedNotesWinOverBundledNotes() {
+        val updates = AppUpdates(production, scope)
+        updates.prefs.edit().putString("current-notes", org.json.JSONObject()
+            .put("code", dev.ahmed.savlino.BuildConfig.VERSION_CODE)
+            .put("version", "cached-release").put("en", org.json.JSONArray().put("Cached fix"))
+            .put("ar", org.json.JSONArray().put("إصلاح محفوظ")).toString()).commit()
+        val notes = AppUpdates(production, scope).currentNotes()!!
+        assertEquals("cached-release", notes.version)
+        assertEquals(listOf("Cached fix"), notes.english)
+        assertEquals(listOf("إصلاح محفوظ"), notes.arabic)
+    }
+    @Test fun currentNotesForAnotherBuildAreRemovedAndFallBackToBundledNotes() {
         val updates = AppUpdates(production, scope)
         updates.prefs.edit().putString("current-notes", org.json.JSONObject()
             .put("code", dev.ahmed.savlino.BuildConfig.VERSION_CODE - 1)
             .put("version", "0.4.4").put("en", org.json.JSONArray().put("Old"))
             .put("ar", org.json.JSONArray()).toString()).commit()
-        assertNull(AppUpdates(production, scope).currentNotes())
+        assertEquals(BundledWhatsNew.read(context.assets)!!.version, AppUpdates(production, scope).currentNotes()?.version)
         assertFalse(updates.prefs.contains("current-notes"))
     }
     @Test fun noNotesUsesSnackbarOnceAndUnrelatedInstallsShowNothing() {
@@ -457,8 +479,10 @@ class AppUpdatesTest {
         pendingInstall(listOf("Future"), code = dev.ahmed.savlino.BuildConfig.VERSION_CODE + 1L)
         val updates = AppUpdates(production, scope)
         updates.fail(UpdateFailure.INSTALL)
-        assertNull(updates.currentNotes())
-        assertNull(AppUpdates(production, scope).currentNotes())
+        val bundled = BundledWhatsNew.read(context.assets)!!
+        assertEquals(bundled.english, updates.currentNotes()?.english)
+        assertEquals(bundled.english, AppUpdates(production, scope).currentNotes()?.english)
+        assertFalse(updates.prefs.contains("current-notes"))
     }
     @Test fun installedClearsSettingsBadge() {
         val updates = cachedRelease()

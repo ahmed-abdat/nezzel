@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -93,23 +94,19 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                         val outside = links.selectedFormat?.takeIf { selected -> rows.none { it.format.id == selected.id } }
                         val tiers = FormatChoices.tierNames(rows.map { it.format } + listOfNotNull(outside))
                         val (videoRows, audioRows) = rows.partition { it.format.hasVideo }
-                        if (videoRows.isNotEmpty() || outside?.hasVideo == true) SectionTitle(stringResource(R.string.video_group))
-                        videoRows.forEach { row -> PresetRow(links, row, language, tiers) }
-                        outside?.takeIf { it.hasVideo }?.let { FormatChoiceRow(links, it, language, tiers, technical = true) }
+                        val video = videoRows.isNotEmpty() || outside?.hasVideo == true
+                        if (video) GroupHeader(stringResource(R.string.video_group), links)
+                        // A remembered All qualities pick joins the presets as a plain row, in height order.
+                        (videoRows.map { it.format to it } + listOfNotNull(outside?.takeIf { it.hasVideo }?.let { it to null }))
+                            .sortedByDescending { FormatChoices.quality(it.first) ?: 0 }.forEach { (format, row) ->
+                                if (row != null) PresetRow(links, row, language, tiers)
+                                else FormatChoiceRow(links, format, language, tiers, technical = false)
+                            }
                         if (audioRows.isNotEmpty() || outside?.hasVideo == false) {
-                            SectionTitle(stringResource(R.string.audio_group))
+                            GroupHeader(stringResource(R.string.audio_group), links.takeUnless { video })
                             audioRows.forEach { row -> PresetRow(links, row, language, tiers) }
-                            outside?.takeUnless { it.hasVideo }?.let { FormatChoiceRow(links, it, language, tiers, technical = true) }
+                            outside?.takeUnless { it.hasVideo }?.let { FormatChoiceRow(links, it, language, tiers, technical = false) }
                         }
-                    }
-                    if ((links.presetOptions.map { it.second } + listOfNotNull(links.selectedFormat)).any { isEstimate(it, links.roughSizeBytes(it)) })
-                        Text(stringResource(R.string.size_note),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = links::showMoreFormats, enabled = !links.confirmed,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(stringResource(R.string.all_formats))
-                        Spacer(Modifier.weight(1f))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
                     ConfirmationDetails(links, language)
                 }
@@ -140,9 +137,10 @@ private fun PresetRow(links: LinkViewModel, row: PresetRowChoice, language: Stri
     // Same row as the full list ("Full HD · 1080p"); the preset name leads the hint as a short tag.
     // A merged row keeps every member's last-used state; selection follows the actual format.
     // "Last used" is the amber badge (DESIGN.md), not hint text.
-    val last = if (links.lastUsedPreset in row.presets) stringResource(R.string.last_used) else null
+    val last = if (links.lastUsedFormat?.id == format.id) stringResource(R.string.last_used) else null
     FormatRow(formatTitle(format, language, tiers), format, links.roughSizeBytes(format), links.selectedFormat?.id == format.id, !links.confirmed, language,
-        listOfNotNull(label.takeIf { format.hasVideo }, formatHint(format)).joinToString(stringResource(R.string.separator)),
+        // One short hint: the title already names the quality, so the tier's description would only repeat it.
+        if (format.hasVideo) label else formatHint(format),
         badge = last) { links.selectPreset(preset) }
 }
 
@@ -185,15 +183,12 @@ fun MoreFormatsScreen(links: LinkViewModel, language: String, snackbarHost: @Com
                 }
                 if (othersOpen) FormatList(links, others, language, technical = true)
             }
-            val shown = links.primaryFormats + if (othersOpen) others else emptyList()
-            if (shown.any { isEstimate(it, links.roughSizeBytes(it)) }) Text(stringResource(R.string.size_note),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ConfirmationDetails(links, language)
         }
     }
 }
 
-/** Video then audio rows. Other versions add their actual container/codec/source facts as one small line. */
+/** Video then audio rows. Other versions add their file type and codec or audio rate as one small line. */
 @Composable
 private fun FormatList(links: LinkViewModel, formats: List<Format>, language: String, technical: Boolean) {
     // Other versions repeat a quality on purpose (one per codec); the plain list never repeats a tier name.
@@ -211,7 +206,8 @@ private fun FormatList(links: LinkViewModel, formats: List<Format>, language: St
 private fun FormatChoiceRow(links: LinkViewModel, format: Format, language: String,
     tiers: Map<String, FormatChoices.Tier?>?, technical: Boolean) {
     FormatRow(formatTitle(format, language, tiers), format, links.roughSizeBytes(format), links.selectedFormat?.id == format.id,
-        !links.confirmed, language, formatHint(format), if (technical) moreFormatDetail(format, language) else null) {
+        !links.confirmed, language, formatHint(format), if (technical) moreFormatDetail(format, language) else null,
+        badge = if (links.lastUsedFormat?.id == format.id) stringResource(R.string.last_used) else null) {
         links.selectFormat(format.id)
     }
 }
@@ -255,7 +251,7 @@ private fun FormatRow(label: String, format: Format, roughSizeBytes: Long?, sele
                 RowFacts(hint, details)
                 sizeText(Modifier.fillMaxWidth())
             }
-        } else Row(Modifier.padding(horizontal = Space.l, vertical = Space.m), verticalAlignment = Alignment.CenterVertically,
+        } else Row(Modifier.padding(horizontal = Space.l, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.m)) {
             RadioButton(selected, onClick = null, enabled = enabled)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
@@ -287,6 +283,26 @@ private fun LastUsedBadge(text: String) {
 private fun RowFacts(hint: String, details: String?) {
     if (hint.isNotEmpty()) Text(hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (details != null) Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/**
+ * A group heading; the first one carries the way to every quality, so it is on screen as soon as the sheet opens
+ * instead of below the last row. Large text stacks it under the heading.
+ */
+@Composable
+private fun GroupHeader(title: String, links: LinkViewModel?) {
+    if (links == null) return SectionTitle(title)
+    val all: @Composable () -> Unit = {
+        TextButton(onClick = links::showMoreFormats, enabled = !links.confirmed, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.all_formats))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+    if (isLargeText()) { SectionTitle(title); all(); return }
+    Row(Modifier.fillMaxWidth().padding(top = Space.s), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleSmall)
+        all()
+    }
 }
 
 @Composable
@@ -326,24 +342,12 @@ private fun formatHint(format: Format): String {
 
 /** Actual identifiers and codec/rate tokens stay LTR inside localized descriptions. */
 @Composable
-private fun moreFormatDetail(format: Format, language: String): String {
-    val container = NezzelFormat.isolate(format.container.uppercase(java.util.Locale.ROOT))
-    val videoCodec = format.videoCodec?.let(NezzelFormat::isolate)
-    val audioCodec = format.audioCodec?.let(NezzelFormat::isolate)
-    val bitrate = (format.conversion?.bitrateKbps ?: format.bitrateKbps)?.let {
-        NezzelFormat.isolate(NezzelFormat.count(it, language))
-    }
-    return listOfNotNull(
-        stringResource(R.string.format_container_detail, container),
-        videoCodec?.let { stringResource(R.string.format_video_codec_detail, it) },
-        audioCodec?.let { stringResource(R.string.format_audio_codec_detail, it) },
-        bitrate?.let { stringResource(R.string.format_bitrate_detail, it) },
-        if (format.requiresMerge) stringResource(R.string.format_merge_detail,
-            NezzelFormat.isolate(requireNotNull(format.audioFormatId)))
-        else if (format.hasVideo && format.hasAudio && !format.unreportedStreams) stringResource(R.string.format_audio_included) else null,
-        stringResource(R.string.format_source_detail, NezzelFormat.isolate(format.sourceFormatId)),
-    ).joinToString(stringResource(R.string.separator))
-}
+private fun moreFormatDetail(format: Format, language: String): String = listOfNotNull(
+    // File type and a short codec name or audio rate tell versions apart; ids, merge partners and video rates stay out (owner 2026-10-21).
+    NezzelFormat.isolate(format.container.uppercase(java.util.Locale.ROOT)),
+    FormatChoices.codecName(format)?.let(NezzelFormat::isolate),
+    FormatChoices.audioKbps(format)?.let { stringResource(R.string.format_kbps, NezzelFormat.isolate(NezzelFormat.count(it, language))) },
+).joinToString(stringResource(R.string.separator))
 
 /** Truthful copy per failure type; Try again only where a retry can succeed. */
 @Composable

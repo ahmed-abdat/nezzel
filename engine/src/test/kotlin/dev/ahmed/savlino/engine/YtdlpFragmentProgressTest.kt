@@ -49,6 +49,16 @@ class YtdlpFragmentProgressTest {
         assertEquals(10L, final.fragmentIndex); assertEquals(20L, final.fragmentCount)
     }
 
+    @Test fun exactByteBasisIsNeverReplacedByALowerFragmentFraction() {
+        // Review F1: 200 of an exact 300 bytes is 66%; the audio's first 0/10 fragments must not turn it into 10/20 = 50%.
+        val mapper = YtdlpProgressMapper(2, Size.Exact(300))
+        val video = mapper.map("nezzel-v2:v:200:NA:NA:10:10") as EngineEvent.Progress
+        assertEquals(Size.Exact(300), video.total); assertNull(video.fragmentIndex)
+        val audio = mapper.map("nezzel-v2:a:0:NA:NA:0:10") as EngineEvent.Progress
+        assertNull(audio.fragmentIndex); assertNull(audio.fragmentCount)
+        assertEquals(200L, audio.bytesDownloaded); assertEquals(Size.Exact(300), audio.total)
+    }
+
     @Test fun singleFragmentKeepsZeroAndOneAsReported() {
         val mapper = YtdlpProgressMapper()
         val start = mapper.map("nezzel-v2:hls:0:NA:NA:0:1") as EngineEvent.Progress

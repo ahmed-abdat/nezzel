@@ -89,8 +89,13 @@ class SelectionReturnTest {
                     }
                     return semanticsNodes(activity, rounds = 1)
                 }
-                click(single("All qualities button", nodes().filter { it.config.getOrNull(SemanticsActions.OnClick) != null &&
-                    texts(descendants(it)).contains(context.getString(R.string.all_formats)) }))
+                val opened = nodes()
+                val allButton = single("All qualities button", opened.filter { it.config.getOrNull(SemanticsActions.OnClick) != null &&
+                    texts(descendants(it)).contains(context.getString(R.string.all_formats)) })
+                // Beside the first heading, above every quality row, so nobody has to scroll to find it.
+                val firstRow = opened.indexOfFirst { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton }
+                assertTrue(opened.indexOf(allButton) in 0 until firstRow)
+                click(allButton)
                 assertTrue(vm.moreFormats)
                 var full = nodes()
                 if (rows(full, sizes[index]).isEmpty()) {

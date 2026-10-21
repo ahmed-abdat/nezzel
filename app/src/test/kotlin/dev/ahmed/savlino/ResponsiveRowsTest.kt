@@ -15,6 +15,7 @@ import androidx.lifecycle.SavedStateHandle
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.downloads.*
 import dev.ahmed.savlino.engine.*
+import dev.ahmed.savlino.ui.SwitchSetting
 import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.LinkViewModel

@@ -1,0 +1,7 @@
+0.4.6
+• Simpler Settings and quality list, in plain words
+• File actions open in a sheet that shows the file
+• A fresh welcome tour and a calmer update screen
+• Wallpaper colors work with any wallpaper
+• Clearer download progress, shown from the start
+• Your last quality pick is remembered, even from All qualities

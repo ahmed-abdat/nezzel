@@ -58,7 +58,7 @@ class OnboardingTest {
             controller.windowFocusChanged(true)
             assertEquals(0, Shadow.extract<CountingClipboard>(clipboard).reads)
             assertEquals(0, (controller.get().application as dev.ahmed.savlino.jobs.IsolatedTestApplication).maintenanceRequests)
-            compose.onNodeWithText("Save from a link").assertIsDisplayed()
+            compose.onNodeWithText("Keep what you love").assertIsDisplayed()
         } finally { controller.pause().stop().destroy() }
     }
     @Test fun skipPersistsAndNextLaunchOpensHome() {
@@ -71,9 +71,9 @@ class OnboardingTest {
     }
 
     @Test fun startPersistsAfterAllFourPages() = withActivity { controller ->
-        next(); compose.onNodeWithText("Bring a link").assertIsDisplayed()
-        next(); compose.onNodeWithText("Choose what to save").assertIsDisplayed()
-        next(); compose.onNodeWithText("Tap to save").assertIsDisplayed()
+        next(); compose.onNodeWithText("Just share the link").assertIsDisplayed()
+        next(); compose.onNodeWithText("Pick your quality").assertIsDisplayed()
+        next(); compose.onNodeWithText("Saved in one tap").assertIsDisplayed()
         compose.onNodeWithText("Skip").assertDoesNotExist()
         compose.onNodeWithText("Get started").assertHeightIsAtLeast(48.dp).performClick()
         assertTrue(AppPreferences(controller.get()).onboardingSeen)
@@ -105,7 +105,7 @@ class OnboardingTest {
         withActivity { controller ->
             controller.get().links.navigate("Settings")
             compose.onNodeWithText("How it works").performScrollTo().assertIsDisplayed().performClick()
-            compose.onNodeWithText("Save from a link").assertIsDisplayed()
+            compose.onNodeWithText("Keep what you love").assertIsDisplayed()
             val clipboard = controller.get().getSystemService(ClipboardManager::class.java)
             val before = Shadow.extract<CountingClipboard>(clipboard).reads
             controller.windowFocusChanged(true)
@@ -125,7 +125,7 @@ class OnboardingTest {
     }
 
     @Test fun shareDuringTourFinishesItAndOpensOptionsBeforeClipboardIntake() = withActivity { controller ->
-        compose.onNodeWithText("Save from a link").assertIsDisplayed()
+        compose.onNodeWithText("Keep what you love").assertIsDisplayed()
         val clipboard = controller.get().getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newPlainText("text", "https://example.com/clipboard"))
         controller.windowFocusChanged(true)
@@ -139,7 +139,7 @@ class OnboardingTest {
         withActivity { controller ->
             controller.get().links.navigate("Settings")
             compose.onNodeWithText("How it works").performScrollTo().performClick()
-            compose.onNodeWithText("Save from a link").assertIsDisplayed()
+            compose.onNodeWithText("Keep what you love").assertIsDisplayed()
             controller.newIntent(share("https://example.com/replay"))
             assertShareOpened(controller.get(), "https://example.com/replay")
         }
@@ -168,24 +168,24 @@ class OnboardingTest {
         first.pause().saveInstanceState(state).stop().destroy()
         val restored = Robolectric.buildActivity(MainActivity::class.java).create(state).start().resume().visible()
         try {
-            compose.onNodeWithText("Tap to save").assertIsDisplayed()
+            compose.onNodeWithText("Saved in one tap").assertIsDisplayed()
             compose.runOnIdle { restored.get().onBackPressedDispatcher.onBackPressed() }
-            compose.onNodeWithText("Choose what to save").assertIsDisplayed()
+            compose.onNodeWithText("Pick your quality").assertIsDisplayed()
             assertFalse(AppPreferences(restored.get()).onboardingSeen)
         } finally { restored.pause().stop().destroy() }
     }
 
     @Test fun englishSwipesForwardToCopy() = screen(rtl = false) {
         compose.onNodeWithTag("onboarding_pager").performTouchInput { swipeLeft() }
-        compose.onNodeWithText("Bring a link").assertIsDisplayed()
+        compose.onNodeWithText("Just share the link").assertIsDisplayed()
     }
 
     @Test @Config(qualifiers = "ar-w360dp-h800dp-mdpi")
     fun arabicSwipesForwardInMirroredDirection() = screen(rtl = true) {
-        compose.onNodeWithText("احفظ من رابط").assertIsDisplayed()
+        compose.onNodeWithText("احتفظ بما تحب").assertIsDisplayed()
         compose.onNodeWithTag("onboarding_pager").performTouchInput { swipeRight() }
-        compose.onNodeWithText("أضف رابطًا").assertIsDisplayed()
-        compose.onNodeWithContentDescription("الصفحة 2 من 4، أضف رابطًا").assertExists()
+        compose.onNodeWithText("فقط شارك الرابط").assertIsDisplayed()
+        compose.onNodeWithContentDescription("الصفحة 2 من 4، فقط شارك الرابط").assertExists()
     }
 
     @Test fun pagePositionAnnouncesSettledHeadingAndBackReturns() = screen {
@@ -195,18 +195,38 @@ class OnboardingTest {
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion,
                     androidx.compose.ui.semantics.LiveRegionMode.Polite))
         }
-        assertPosition(1, "Save from a link")
+        assertPosition(1, "Keep what you love")
         compose.onNodeWithText("Back").assertDoesNotExist()
         next()
-        assertPosition(2, "Bring a link")
+        assertPosition(2, "Just share the link")
         compose.onNodeWithText("Back").assertHeightIsAtLeast(48.dp).performClick()
-        assertPosition(1, "Save from a link")
+        assertPosition(1, "Keep what you love")
     }
 
-    @Test fun completeIllustrationsStayStillWithAnimationsEnabled() {
+    // Owner 2026-10-20: the logo wall drifts and the Saved check pops, but only with animations on;
+    // every page is still complete from its first frame
+    @Test fun logoWallDriftsOnlyWithAnimationsEnabled() {
+        val app = RuntimeEnvironment.getApplication()
+        for (scale in listOf(1f, 0f)) {
+            android.provider.Settings.Global.putFloat(app.contentResolver,
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, scale)
+            compose.mainClock.autoAdvance = false
+            try {
+                screen {
+                    compose.mainClock.advanceTimeBy(1000)
+                    val before = tourPixels()
+                    compose.mainClock.advanceTimeBy(6000)
+                    if (scale == 0f) assertArrayEquals("Wall must stay still without animations", before, tourPixels())
+                    else assertFalse("Wall must drift with animations", before.contentEquals(tourPixels()))
+                }
+            } finally { compose.mainClock.autoAdvance = true }
+        }
+    }
+
+    @Test fun completeIllustrationsStayStillWithoutAnimations() {
         val app = RuntimeEnvironment.getApplication()
         android.provider.Settings.Global.putFloat(app.contentResolver,
-            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
         compose.mainClock.autoAdvance = false
         try {
             screen {
@@ -333,17 +353,17 @@ class OnboardingTest {
         }
         val english = strings("values"); val arabic = strings("values-ar")
         val expectedEnglish = mapOf(
-            "onboarding_anywhere_title" to "Save from a link",
-            "onboarding_anywhere_body" to "Save videos, audio and photos from supported public links, with no ads or Nezzel account",
-            "onboarding_anywhere_illustration" to "Video, audio and photo symbols beside Nezzel",
-            "onboarding_copy_title" to "Bring a link",
-            "onboarding_copy_body" to "Copy a link and open Nezzel, paste it here, or choose Nezzel from Share\\n\\nOptions and previews load automatically by default — you can turn this off in Settings",
+            "onboarding_anywhere_title" to "Keep what you love",
+            "onboarding_anywhere_body" to "Videos, audio and photos from public links. Clean, ad-free, no account",
+            "onboarding_anywhere_illustration" to "Nezzel with video, audio and photo symbols, over logos of sites it saves from",
+            "onboarding_copy_title" to "Just share the link",
+            "onboarding_copy_body" to "Copy a link and open Nezzel, or share it straight to Nezzel\\n\\nOptions appear on their own. You can turn this off in Settings",
             "onboarding_copy_illustration" to "Copy or share a link to open it in Nezzel",
-            "onboarding_quality_title" to "Choose what to save",
-            "onboarding_quality_body" to "Video and audio options vary by link, and you choose which photos to save — sizes may be estimated or unknown",
+            "onboarding_quality_title" to "Pick your quality",
+            "onboarding_quality_body" to "From Full HD to audio only, you choose. Photos too",
             "onboarding_quality_illustration" to "Example: select a video quality or photos to save",
-            "onboarding_saved_title" to "Tap to save",
-            "onboarding_saved_body" to "Tap Download for video or audio, or Save for photos — find your files in Downloads and change the save folder in Settings",
+            "onboarding_saved_title" to "Saved in one tap",
+            "onboarding_saved_body" to "Your files wait in Downloads, ready to watch or share. Change the folder anytime in Settings",
             "onboarding_saved_illustration" to "Example: a saved file appears in Downloads",
             "onboarding_skip" to "Skip",
             "onboarding_next" to "Next",
@@ -351,17 +371,17 @@ class OnboardingTest {
             "onboarding_start" to "Get started"
         )
         val expectedArabic = mapOf(
-            "onboarding_anywhere_title" to "احفظ من رابط",
-            "onboarding_anywhere_body" to "احفظ الفيديو والصوت والصور من الروابط العامة المدعومة بلا إعلانات أو حساب في Nezzel",
-            "onboarding_anywhere_illustration" to "رموز الفيديو والصوت والصور بجانب Nezzel",
-            "onboarding_copy_title" to "أضف رابطًا",
-            "onboarding_copy_body" to "انسخ رابطًا وافتح Nezzel، أو الصقه هنا، أو اختر Nezzel من قائمة المشاركة\\n\\nيجلب التطبيق الخيارات والمعاينات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات",
+            "onboarding_anywhere_title" to "احتفظ بما تحب",
+            "onboarding_anywhere_body" to "فيديو وصوت وصور من الروابط العامة، بتجربة نظيفة بلا إعلانات ولا حساب",
+            "onboarding_anywhere_illustration" to "Nezzel مع رموز الفيديو والصوت والصور، فوق شعارات مواقع يحفظ منها",
+            "onboarding_copy_title" to "فقط شارك الرابط",
+            "onboarding_copy_body" to "انسخ الرابط وافتح Nezzel، أو شاركه إليه مباشرة\\n\\nتظهر الخيارات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات",
             "onboarding_copy_illustration" to "انسخ رابطًا أو شاركه لفتحه في Nezzel",
-            "onboarding_quality_title" to "اختر ما تريد حفظه",
-            "onboarding_quality_body" to "تختلف خيارات الفيديو والصوت حسب الرابط، وللصور حدّد ما تريد حفظه، وقد يكون الحجم تقديريًا أو غير معروف",
+            "onboarding_quality_title" to "اختر الجودة التي تناسبك",
+            "onboarding_quality_body" to "من Full HD إلى الصوت فقط، الخيار لك، والصور أيضًا",
             "onboarding_quality_illustration" to "مثال: اختيار جودة فيديو أو صور لحفظها",
-            "onboarding_saved_title" to "اضغط للحفظ",
-            "onboarding_saved_body" to "اضغط «تنزيل» للفيديو أو الصوت، أو «حفظ» للصور، وستجد ملفاتك في «التنزيلات»، ويمكنك تغيير مجلد الحفظ من الإعدادات",
+            "onboarding_saved_title" to "يُحفظ بلمسة واحدة",
+            "onboarding_saved_body" to "ستجد ملفاتك في «التنزيلات» جاهزة للمشاهدة أو المشاركة، ويمكنك تغيير المجلد متى شئت من الإعدادات",
             "onboarding_saved_illustration" to "مثال: ظهور ملف محفوظ في التنزيلات",
             "onboarding_skip" to "تخطّي",
             "onboarding_next" to "التالي",
@@ -468,7 +488,7 @@ class OnboardingStartupTest {
         assertFalse(app.updated.isCompleted)
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         try {
-            compose.onNodeWithText("Save from a link").assertIsDisplayed()
+            compose.onNodeWithText("Keep what you love").assertIsDisplayed()
             assertFalse(app.updated.isCompleted)
             compose.onNodeWithText("Skip").performClick()
             assertFalse(app.updated.isCompleted)

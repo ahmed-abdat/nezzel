@@ -3,10 +3,13 @@ package dev.ahmed.savlino.engine
 import dev.ahmed.savlino.domain.Size
 
 /** Numeric yt-dlp template fields; percentages and human-readable rounded units are ignored. */
-class YtdlpProgressMapper(private val streamCount: Int = 1) {
+class YtdlpProgressMapper(private val streamCount: Int = 1, private val expected: Size = Size.Unknown) {
     private data class Stream(val bytes: Long, val total: Size, val fragmentIndex: Long?, val fragmentCount: Long?)
     private val streams = linkedMapOf<String, Stream>()
     private var lastBytes = 0L
+    // The percent's basis, fixed by the first event that has one: exact bytes or fragments. Switching later could
+    // turn 66% of the bytes into 50% of the fragments, so the percent would fall back.
+    private var byFragments: Boolean? = null
     @Synchronized fun map(line: String): EngineEvent? {
         if (line.startsWith("[Merger]") || line.startsWith("[ExtractAudio]")) return EngineEvent.Merging
         val numericFields = when {
@@ -35,13 +38,16 @@ class YtdlpProgressMapper(private val streamCount: Int = 1) {
             advancedIndex ?: retained?.fragmentIndex, count.takeIf { advancedIndex != null } ?: retained?.fragmentCount)
         val cumulative = streams.values.fold(0L) { acc, s -> add(acc, s.bytes) }
         lastBytes = maxOf(cumulative, lastBytes)
-        val aggregate = if (streams.size < streamCount) Size.Unknown else {
+        val measured = if (streams.size < streamCount) Size.Unknown else {
             val totals = streams.values.map { it.total }
             if (totals.any { it == Size.Unknown }) Size.Unknown else {
                 val sum = totals.fold(0L) { acc, size -> add(acc, when (size) { is Size.Exact -> size.bytes; is Size.Estimated -> size.bytes; else -> 0 }) }
                 if (totals.all { it is Size.Exact }) Size.Exact(sum) else Size.Estimated(sum)
             }
         }
+        // The inspection's exact merge total holds until every stream reports its own, so a merge's percent
+        // never falls back to a spinner when a later stream's size is missing or only estimated.
+        val aggregate = if (streamCount > 1 && measured !is Size.Exact) (expected as? Size.Exact) ?: measured else measured
         // No invented denominator for an unseen stream (e.g. the audio half of a merge).
         val fragments = if (streams.size == streamCount && streams.values.all { it.fragmentIndex != null && it.fragmentCount != null }) {
             try {
@@ -50,7 +56,13 @@ class YtdlpProgressMapper(private val streamCount: Int = 1) {
                 }
             } catch (_: ArithmeticException) { null }
         } else null
-        return EngineEvent.Progress(lastBytes, aggregate, fragments?.first, fragments?.second)
+        if (byFragments == null) byFragments = when {
+            aggregate is Size.Exact && aggregate.bytes > 0 -> false
+            fragments != null -> true
+            else -> null
+        }
+        val counted = fragments?.takeIf { byFragments == true }
+        return EngineEvent.Progress(lastBytes, aggregate, counted?.first, counted?.second)
     }
     private fun byteSize(value: String): Long? = value.toLongOrNull()?.takeIf { it >= 0 }
         ?: value.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 && it < Long.MAX_VALUE.toDouble() }?.toLong()

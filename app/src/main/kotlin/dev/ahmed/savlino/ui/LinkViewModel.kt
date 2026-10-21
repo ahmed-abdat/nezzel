@@ -103,6 +103,8 @@ class LinkViewModel(
     linkKeyer: LinkKeyer = LinkKeyer.session,
     private val initializeClipboard: (suspend () -> SuggestionGate)? = null,
     private val previewDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
+    initialHeight: Int? = null,
+    private val rememberHeight: (Int) -> Unit = {},
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -247,8 +249,12 @@ class LinkViewModel(
     val formatOptions get() = inspection?.let(::displayFormats).orEmpty()
     /** One plain row per quality (owner 2026-10-18); a preset's rendition wins its quality. */
     val primaryFormats by derivedStateOf { FormatChoices.simple(formatOptions, preferred = presetOptions.mapTo(HashSet()) { it.second.id }) }
-    /** Every other actual rendition, one tap away under "Other versions". */
-    val otherFormats by derivedStateOf { primaryFormats.mapTo(HashSet()) { it.id }.let { shown -> formatOptions.filter { it.id !in shown } } }
+    /** Every other actual rendition, one tap away under "Other versions"; a row that would look exactly like one already shown is left out. */
+    val otherFormats by derivedStateOf {
+        val shown = primaryFormats.mapTo(HashSet()) { it.id }
+        val looks = primaryFormats.mapTo(HashSet()) { FormatChoices.shownKey(it, roughSizeBytes(it)) }
+        formatOptions.filter { it.id !in shown && looks.add(FormatChoices.shownKey(it, roughSizeBytes(it))) }
+    }
     fun roughSizeBytes(format: Format): Long? = inspection?.roughSizeBytes?.get(format.id)
     /**
      * Main-list presets. MP3 stays under "All qualities" unless it is the only choice (TikTok photo slideshow).
@@ -281,9 +287,22 @@ class LinkViewModel(
     private var savedFormats by mutableStateOf<Map<String, dev.ahmed.savlino.jobs.SavedBefore>>(emptyMap())
     /** The chosen format of this link was saved before (file still present): a notice, never a block. */
     val savedBefore get() = selectedFormat?.let { savedFormats[it.id] }
-    /** Last video preset only: an audio pick never becomes the default for the next link (2026-10-19). */
-    val lastUsedPreset get() = (saved.get<String>("lastPreset")?.let { name -> Preset.entries.find { it.name == name } }
-        ?: initialPreset)?.takeUnless { it.audio }
+    // Restore the whole pick together: a cleared member must not revive an older initial preference.
+    private val restoredPick = saved.contains("lastPreset") || saved.contains("lastHeight")
+    private var lastUsedHeight by mutableStateOf(
+        (if (restoredPick) saved.get<Int>("lastHeight") else initialHeight)?.takeIf { it > 0 })
+    /** Audio picks never replace the remembered video pick (2026-10-19). */
+    var lastUsedPreset by mutableStateOf((if (lastUsedHeight != null) null else if (restoredPick) {
+        saved.get<String>("lastPreset")?.let { name -> Preset.entries.find { it.name == name } }
+    } else initialPreset)?.takeUnless { it.audio }); private set
+    /** The actual returned row the remembered pick resolves to; unrelated fallbacks have no badge. */
+    val lastUsedFormat: Format? get() {
+        val height = lastUsedHeight ?: return presetOptions.firstOrNull { it.first == lastUsedPreset && it.second.hasVideo }?.second
+        return presetOptions.firstOrNull { it.second.hasVideo && FormatChoices.quality(it.second) == height }?.second
+            // The canonical row per quality (same pick as the list), so a height tie never badges a minor codec.
+            ?: primaryFormats.filter { it.hasVideo && FormatChoices.quality(it)?.let { quality -> quality <= height } == true }
+                .maxByOrNull { FormatChoices.quality(it)!! }
+    }
     val confirmed get() = submitted
     val downloadEnabled get() = !submitted && !engineUpdating && engine.isAvailable && selectedFormat != null &&
         inspection?.let { currentSource()?.matches(confirmAgainst ?: return@let false) == true && it.engineVersion == engineVersion() } == true
@@ -577,8 +596,12 @@ class LinkViewModel(
                                 else options.firstOrNull()?.first
                             val initial = options.singleOrNull { it.first == preferred }
                                 ?: options.firstOrNull { it.first == Preset.BEST }
-                            selectedId = initial?.second?.id
-                            selectedPreset = initial?.first
+                            val remembered = lastUsedFormat
+                            selectedId = remembered?.id ?: initial?.second?.id
+                            selectedPreset = if (remembered != null) {
+                                options.firstOrNull { it.second.id == remembered.id && it.first == lastUsedPreset }
+                                    ?.first ?: options.firstOrNull { it.second.id == remembered.id }?.first
+                            } else initial?.first
                             // A single selectable row (LinkedIn/X lone "Video") is always the choice.
                             if (selectedId == null) eligibleFormats.singleOrNull()?.let { only ->
                                 selectedId = only.id
@@ -692,7 +715,17 @@ class LinkViewModel(
                 submitted = true
                 command = result.command
                 EngineTiming.startDownload(result.command.jobId)
-                selectedPreset?.takeUnless { it.audio }?.let { saved["lastPreset"] = it.name; rememberPreset(it) }
+                if (row.hasVideo) {
+                    val preset = selectedPreset?.takeUnless { it.audio }
+                    val height = FormatChoices.quality(row)
+                    if (preset != null || height != null) {
+                        lastUsedPreset = preset
+                        lastUsedHeight = height.takeIf { preset == null }
+                        saved["lastPreset"] = preset?.name
+                        saved["lastHeight"] = lastUsedHeight
+                        if (preset != null) rememberPreset(preset) else rememberHeight(checkNotNull(height))
+                    }
+                }
                 downloads?.let { coordinator ->
                     val confirmed = takeConfirmedCommand() ?: return@let
                     val preset = selectedPreset

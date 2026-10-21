@@ -21,8 +21,6 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="match_wallpaper">Match wallpaper colors</string>
-    <string name="wallpaper_help">Use colors from your wallpaper</string>
-    <string name="wallpaper_rejected">Using Nezzel’s colors with this wallpaper</string>
     <string name="copied_suggestions">Read copied links</string>
     <string name="copied_help">Only while Nezzel is open</string>
     <string name="save_location">Save location</string>
@@ -69,7 +67,6 @@
     <string name="mp3_hint">Plays in almost any player; takes longer</string>
     <string name="other_versions">Other formats (%1$s)</string>
     <string name="other_versions_hide">Hide other formats</string>
-    <string name="size_note">≈ means an estimated size</string>
     <string name="size_estimate_a11y">Estimated size: %1$s</string>
     <string name="unsupported_title">No download found</string>
     <string name="unsupported_body">No download found for this link — try another public link</string>
@@ -117,9 +114,8 @@
     <string name="allow_notifications">Allow</string>
     <string name="download_coordinator_error">Downloads are unavailable — reopen Nezzel to try again</string>
     <string name="completed_channel">Completed downloads</string>
-    <string name="engine_version">Engine version %1$s</string>
     <string name="engine_version_unknown">Unknown</string>
-    <string name="engine_update_now">Update tools</string>
+    <string name="engine_update_now">Update site support</string>
     <string name="engine_updating">Updating engine…</string>
     <string name="engine_updated">Engine is up to date</string>
     <string name="engine_update_failed">Engine update failed — try again in Settings</string>
@@ -127,7 +123,7 @@
     <string name="engine_getting_ready">Getting ready…</string>
     <string name="engine_preparing">Preparing the engine (first time only)…</string>
     <string name="engine_update_busy">Nezzel is busy — try again in a moment</string>
-    <string name="engine_update_help">Checks for updates weekly when downloads are idle</string>
+    <string name="engine_update_help">Updates itself every week</string>
     <string name="engine_update_retry">Update engine and try again</string>
     <string name="notification_rationale_title">Follow your download</string>
     <string name="notification_rationale_body">Allow notifications to follow download progress and know when your file is saved — downloads also work without notifications</string>
@@ -146,6 +142,7 @@
     <string name="download_bytes_per_second">%1$s\u00A0B/s</string>
     <string name="download_transfer_remaining">≈ %1$s left to download</string>
     <string name="download_row_remaining">≈ %1$s left</string>
+    <string name="download_row_bytes">%1$s of %2$s</string>
     <string name="download_remove">Remove from list</string>
     <string name="files_location">Current save folder: %1$s — earlier files may be in other folders</string>
     <string name="saved_files">Saved</string>
@@ -194,21 +191,15 @@
     </plurals>
     <string name="home_subtitle">Share a link to Nezzel, or paste it here</string>
     <string name="automatic_options">Show options automatically</string>
-    <string name="automatic_options_help">Uses the internet to load options and previews for copied, pasted or shared links — saving still needs your confirmation</string>
+    <string name="automatic_options_help">Saving still waits for your tap</string>
     <string name="not_now">Not now</string>
     <string name="rough_size">≈ %1$s</string>
-    <string name="format_container_detail">File type: %1$s</string>
-    <string name="format_video_codec_detail">Video codec: %1$s</string>
-    <string name="format_audio_codec_detail">Audio codec: %1$s</string>
-    <string name="format_bitrate_detail">Bitrate: %1$s kbps</string>
-    <string name="format_merge_detail">Merge audio: %1$s</string>
-    <string name="format_audio_included">Audio included</string>
-    <string name="format_source_detail">Source format: %1$s</string>
     <string name="link_field_hint">Paste a public link</string>
     <string name="link_field_label">Link</string>
     <string name="copied_chip">Use copied link</string>
     <string name="home_active_header">In progress</string>
     <string name="separator">" · "</string>
+    <string name="format_kbps">%1$s kbps</string>
     <string name="spoken_separator">", "</string>
     <string name="checking_link">Loading options…</string>
     <string name="image_preview_desc">Image preview, %1$s</string>
@@ -240,7 +231,6 @@
     <string name="crash_share">Share crash report</string>
     <string name="crash_delete">Delete crash reports</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_build">Build %1$d</string>
     <string name="about_body">Nezzel is free and downloads files on your phone without ads or tracking, using open-source software: yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) and Python (PSF) — source: github.com/ahmed-abdat/nezzel</string>
     <string name="company_name" translatable="false">Hululsoft</string>
     <string name="company_site" translatable="false">hululsoft.mr</string>
@@ -248,9 +238,9 @@
     <string name="company_open_site">Open the %1$s website</string>
     <string name="company_facebook">Facebook</string>
     <string name="company_open_facebook">Open the %1$s Facebook page</string>
-    <string name="about_warranty">Provided as is, without warranty.</string>
+    <string name="about_warranty">Provided as is, without warranty</string>
     <string name="about_licences">Open-source licences</string>
-    <string name="about_licences_help">Components and their licences</string>
+    <string name="about_licences_short">Licences</string>
     <string name="about_show_licence">Show %1$s licence text</string>
     <string name="about_hide_licence">Hide %1$s licence text</string>
     <string name="about_view_licence">View licence</string>
@@ -297,19 +287,19 @@
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_start">Get started</string>
-    <string name="onboarding_copy_title">Bring a link</string>
-    <string name="onboarding_copy_body">Copy a link and open Nezzel, paste it here, or choose Nezzel from Share\n\nOptions and previews load automatically by default — you can turn this off in Settings</string>
-    <string name="onboarding_quality_title">Choose what to save</string>
-    <string name="onboarding_quality_body">Video and audio options vary by link, and you choose which photos to save — sizes may be estimated or unknown</string>
-    <string name="onboarding_saved_title">Tap to save</string>
-    <string name="onboarding_saved_body">Tap Download for video or audio, or Save for photos — find your files in Downloads and change the save folder in Settings</string>
+    <string name="onboarding_copy_title">Just share the link</string>
+    <string name="onboarding_copy_body">Copy a link and open Nezzel, or share it straight to Nezzel\n\nOptions appear on their own. You can turn this off in Settings</string>
+    <string name="onboarding_quality_title">Pick your quality</string>
+    <string name="onboarding_quality_body">From Full HD to audio only, you choose. Photos too</string>
+    <string name="onboarding_saved_title">Saved in one tap</string>
+    <string name="onboarding_saved_body">Your files wait in Downloads, ready to watch or share. Change the folder anytime in Settings</string>
     <string name="onboarding_copy_illustration">Copy or share a link to open it in Nezzel</string>
     <string name="onboarding_quality_illustration">Example: select a video quality or photos to save</string>
     <string name="onboarding_saved_illustration">Example: a saved file appears in Downloads</string>
     <string name="onboarding_page">Page %1$s of %2$s</string>
-    <string name="onboarding_anywhere_title">Save from a link</string>
-    <string name="onboarding_anywhere_body">Save videos, audio and photos from supported public links, with no ads or Nezzel account</string>
-    <string name="onboarding_anywhere_illustration">Video, audio and photo symbols beside Nezzel</string>
+    <string name="onboarding_anywhere_title">Keep what you love</string>
+    <string name="onboarding_anywhere_body">Videos, audio and photos from public links. Clean, ad-free, no account</string>
+    <string name="onboarding_anywhere_illustration">Nezzel with video, audio and photo symbols, over logos of sites it saves from</string>
     <string name="onboarding_copy_action">Copy</string>
     <string name="onboarding_example_url">example.com/…</string>
     <plurals name="multiple_links">
@@ -322,15 +312,21 @@
     <string name="onboarding_share_action">Share</string>
     <string name="onboarding_example">Example</string>
     <string name="onboarding_page_announcement">%1$s, %2$s</string>
-    <string name="link_handling">Link handling</string>
-    <string name="download_tools">Download tools</string>
-    <string name="change_save_folder">Change save folder</string>
+    <string name="settings_general">General</string>
+    <string name="settings_saving">Saving</string>
+    <string name="settings_advanced">Advanced</string>
+    <string name="settings_advanced_help">Links, site support and updates</string>
+    <string name="engine_update_body">Helps when a site stops downloading</string>
+    <string name="settings_support_info">For support: engine %1$s</string>
+    <string name="link_handling">Links</string>
+    <string name="download_tools">Site support</string>
+    <string name="change_save_folder">Save location</string>
     <string name="company_link_failed">Couldn’t open this link</string>
     <string name="open_file_failed">Couldn’t open this file</string>
     <string name="audio_only_type">Audio only · %1$s</string>
 
     <!-- App updates: owner-approved GitHub checks, explicit installation. -->
-    <string name="update_available_title">Update available</string>
+    <string name="update_available_title">A better Nezzel is ready</string>
     <string name="update_card_version">Nezzel %1$s</string>
     <string name="update_action">Update</string>
     <string name="update_not_now">Not now</string>
@@ -354,15 +350,15 @@
     <string name="update_open_release">Open release page</string>
     <string name="update_done">Updated to %1$s</string>
     <string name="settings_updates_heading">App updates</string>
-    <string name="settings_updates_auto">Check for app updates</string>
-    <string name="settings_updates_auto_body">Checks GitHub once a day — nothing installs until you tap</string>
+    <string name="settings_updates_auto">Look for new versions</string>
+    <string name="settings_updates_auto_body">Once a day. Nothing installs without your OK</string>
     <string name="settings_updates_check_now">Check now</string>
     <string name="update_latest">You have the latest version</string>
     <string name="update_check_failed">Couldn\'t check for updates — try again later</string>
     <string name="update_channel">App updates</string>
-    <string name="update_notification_title">Nezzel %1$s is available</string>
+    <string name="update_notification_title">Nezzel %1$s is ready</string>
     <string name="update_notification_text">Tap to see what\'s new and update</string>
-    <string name="settings_updates_last_checked">Last checked: %1$s</string>
+    <string name="settings_updates_last_checked">Last checked</string>
     <string name="whats_new_title">What\'s new in Nezzel %1$s</string>
     <string name="whats_new_ok">Got it</string>
     <string name="update_full_notes">Full notes on GitHub</string>
