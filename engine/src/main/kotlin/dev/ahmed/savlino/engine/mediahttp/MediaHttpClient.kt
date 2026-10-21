@@ -107,7 +107,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     /**
      * Desktop-browser page GET of an already-normalised Facebook link. Redirect hops stay on accepted
-     * Facebook shapes (normalised to www); a login wall is unwrapped once through its next= target,
+     * Facebook shapes (www or regional web); a login wall is unwrapped once through its next= target,
      * otherwise it ends as LOGIN_REQUIRED.
      */
     internal fun fetchFacebookPage(token: OperationToken, url: String): MediaHttpResult =
@@ -440,7 +440,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 else MediaHttpFailure.INVALID_CONTEXT)
                             val located = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
                                 ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
-                            val next = if (facebookPage) facebookHop(located, seen) else located
+                            val next = if (facebookPage) facebookHop(url, located, seen) else located
                             // A members-only post sends logged-out visitors to sign up or log in (2026-10-21).
                             if (linkedInPage && MediaHttpPolicy.isLinkedInLoginWall(next))
                                 throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
@@ -519,16 +519,22 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     }
 
     /** Normalised next Facebook page, the once-unwrapped login next=, or a typed refusal. */
-    private fun facebookHop(next: HttpUrl, seen: Set<String>): HttpUrl {
+    private fun facebookHop(current: HttpUrl, next: HttpUrl, seen: Set<String>): HttpUrl {
         if (FacebookPostIdentity.isLoginWall(next)) {
             val target = next.queryParameterValues("next").singleOrNull()?.let(FacebookPostIdentity::parse)
-                ?.takeUnless { it.isShortlink || it.fetchUrl in seen } ?: throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
-            return MediaHttpPolicy.parse(target.fetchUrl) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+                ?.takeUnless { it.isShortlink || it.fetchUrlOn(next.host) in seen } ?: throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
+            return MediaHttpPolicy.parse(target.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
         }
-        // A shortlink (share or fb.watch) resolves to a post; it never resolves to another shortlink.
-        val identity = FacebookPostIdentity.parse(next.toString())?.takeUnless { it.isShortlink }
+        val identity = FacebookPostIdentity.parse(next.toString())
             ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-        return MediaHttpPolicy.parse(identity.fetchUrl) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+        if (identity.isShortlink) {
+            val previous = FacebookPostIdentity.parse(current.toString())
+            // One regional hop may keep the same shortlink; the web page must then resolve it.
+            if (current.host == "web.facebook.com" || next.host != "web.facebook.com" ||
+                previous == null || previous.kind != identity.kind || previous.fetchUrl.trimEnd('/') != identity.fetchUrl.trimEnd('/'))
+                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+        }
+        return MediaHttpPolicy.parse(identity.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
     }
 
     private fun validateContext(token: OperationToken, request: PublicMediaRequest, url: HttpUrl) {

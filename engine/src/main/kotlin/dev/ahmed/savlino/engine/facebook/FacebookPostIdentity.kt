@@ -14,6 +14,9 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
     val postId: String?, val photoId: String?, val videoId: String?) {
     val isShortlink: Boolean get() = kind == FacebookLinkKind.SHARE || kind == FacebookLinkKind.SHORTLINK
 
+    internal fun fetchUrlOn(host: String): String = if (host == "web.facebook.com")
+        fetchUrl.replaceFirst(WWW, "https://web.facebook.com") else fetchUrl
+
     /** The page is the post or photo itself (not a video/reel surface), so its og:image describes it. */
     internal val isPostOrPhoto: Boolean get() = kind in setOf(FacebookLinkKind.STORY, FacebookLinkKind.PERMALINK,
         FacebookLinkKind.POST, FacebookLinkKind.PHOTO, FacebookLinkKind.SHARE)

@@ -69,6 +69,103 @@ class FacebookInspectionTest : PublicImageTestBase() {
         }
     }
 
+    private fun regionalFacebook(): (RecordedMediaRequest, SSLSocket) -> Unit = { request, socket ->
+        val host = request.headers["host"].orEmpty()
+        when {
+            host == "www.facebook.com" && (request.target.startsWith("/share/") || request.target == storyTarget) ->
+                socket.reply(302, headers = mapOf("Location" to "https://web.facebook.com${request.target}" +
+                    (if ('?' in request.target) "&" else "?") + "_rdc=1&_rdr"))
+            host == "web.facebook.com" && request.target.startsWith("/share/") ->
+                socket.reply(302, headers = mapOf("Location" to "https://web.facebook.com$storyTarget&post_id=synthetic&rdid=synthetic"))
+            host == "web.facebook.com" && request.target == storyTarget ->
+                socket.reply(body = facebookFixture("photo-post.html")
+                    .replace("scontent.example.fbcdn.net", "z-p3-scontent.example.fbcdn.net").toByteArray(), headers = html)
+            host == "z-p3-scontent.example.fbcdn.net" -> socket.reply(body = raster(), headers = png)
+            else -> socket.reply(404)
+        }
+    }
+
+    private fun regionalPhoto(url: String, shareTarget: String? = null) {
+        fixture(respond = regionalFacebook()) { f ->
+            inspected(f.inspectFacebook(url)).use { result ->
+                assertEquals(1, result.inspection.items.size)
+                assertIs<ImageSaveAvailability.Available>(result.saveAvailability)
+                val expected = (shareTarget?.let { listOf("www.facebook.com" to it, "web.facebook.com" to it) }
+                    ?: listOf("www.facebook.com" to storyTarget)) + listOf("web.facebook.com" to storyTarget,
+                    "www.facebook.com" to photoTarget, "z-p3-scontent.example.fbcdn.net" to "/1.jpg")
+                assertEquals(expected, f.server.requests.map { it.headers["host"] to it.target })
+            }
+        }
+    }
+
+    @Test fun regionalSharePostRedirectKeepsWebHostAndFetchesThePhoto() {
+        regionalPhoto(FB_SHARE, "/share/p/1SyntheticAb/")
+    }
+
+    @Test fun regionalPlainShareRedirectKeepsWebHostAndFetchesThePhoto() {
+        regionalPhoto("https://www.facebook.com/share/1SyntheticAb/", "/share/1SyntheticAb/")
+    }
+
+    @Test fun regionalStoryRedirectKeepsWebHostAndFetchesThePhoto() {
+        regionalPhoto(FB_STORY)
+    }
+
+    @Test fun regionalShortlinkRedirectRejectsDifferentTokensAndKinds() {
+        for (target in listOf("/share/p/2OtherShare/", "/share/v/1SyntheticAb/", "/share/1SyntheticAb/")) {
+            fixture(respond = { _, socket ->
+                socket.reply(302, headers = mapOf("Location" to "https://web.facebook.com$target?_rdc=1&_rdr"))
+            }) { f ->
+                f.http.client.newOperation(MediaHttpOperation.PAGES_AND_IMAGE).use { token ->
+                    assertFailure(f.http.client.fetchFacebookPage(token, FB_SHARE), MediaHttpFailure.INVALID_CONTEXT)
+                }
+                assertEquals(1, f.server.requests.size)
+            }
+        }
+    }
+
+    @Test fun regionalSameShortlinkRedirectIsAllowedOnlyOnce() {
+        fixture(respond = { _, socket ->
+            socket.reply(302, headers = mapOf("Location" to "https://web.facebook.com/share/p/1SyntheticAb/?_rdc=1&_rdr"))
+        }) { f ->
+            f.http.client.newOperation(MediaHttpOperation.PAGES_AND_IMAGE).use { token ->
+                assertFailure(f.http.client.fetchFacebookPage(token, FB_SHARE), MediaHttpFailure.INVALID_CONTEXT)
+            }
+            assertEquals(listOf("www.facebook.com", "web.facebook.com"), f.server.requests.map { it.headers["host"] })
+        }
+    }
+
+    @Test fun regionalPostHostPingPongEndsInRedirectLoop() {
+        fixture(respond = { request, socket ->
+            val host = if (request.headers["host"] == "www.facebook.com") "web.facebook.com" else "www.facebook.com"
+            socket.reply(302, headers = mapOf("Location" to "https://$host$storyTarget&_rdc=1&_rdr"))
+        }) { f ->
+            f.http.client.newOperation(MediaHttpOperation.PAGES_AND_IMAGE).use { token ->
+                assertFailure(f.http.client.fetchFacebookPage(token, FB_STORY), MediaHttpFailure.REDIRECT_LOOP)
+            }
+            assertEquals(listOf("www.facebook.com", "web.facebook.com"), f.server.requests.map { it.headers["host"] })
+        }
+    }
+
+    @Test fun regionalLoginNextUsesWallHostAndPersistentWallIsPrivate() {
+        val next = URLEncoder.encode("https://www.facebook.com$storyTarget&rdid=synthetic", "UTF-8")
+        val wall = "https://web.facebook.com/login/?next=$next"
+        for (persistent in listOf(false, true)) fixture(respond = { request, socket ->
+            when {
+                request.headers["host"] == "www.facebook.com" && request.target == storyTarget ||
+                    persistent && request.headers["host"] == "web.facebook.com" ->
+                    socket.reply(302, headers = mapOf("Location" to wall))
+                else -> regionalFacebook()(request, socket)
+            }
+        }) { f ->
+            if (persistent) failed(f.inspectFacebook(FB_STORY), ImageFailure.PRIVATE, ImagePhase.PAGE)
+            else inspected(f.inspectFacebook(FB_STORY)).use { assertEquals(1, it.inspection.items.size) }
+            assertEquals(listOf("www.facebook.com", "web.facebook.com"),
+                f.server.requests.take(2).map { it.headers["host"] })
+            assertEquals(listOf(storyTarget, storyTarget), f.server.requests.take(2).map { it.target })
+            if (persistent) assertEquals(2, f.server.requests.size)
+        }
+    }
+
     private val photoTarget = "/photo/?fbid=900000000000002"
     /** The photo-post attachment's own photo page: currMedia carries the larger copy (declared 2048). */
     private fun photoPage(id: String = "900000000000002") = facebookFixture("photo-page.html")
