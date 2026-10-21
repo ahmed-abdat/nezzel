@@ -72,6 +72,11 @@ class XPostParserTest {
         assertFalse(parsed(xTweet(listOf(xPhoto(width = 2048, height = 2048)))).discovery.previewQuality)
     }
 
+    @Test fun avifPhotosKeepTheirReturnedEncoding() {
+        val result = parsed(xTweet(listOf(xPhoto().replace("SyntheticPhoto1.jpg", "SyntheticPhoto1.avif"))))
+        assertEquals(listOf("https://pbs.twimg.com/media/SyntheticPhoto1?format=avif&name=orig"), result.candidates)
+    }
+
     @Test fun anyVideoOrGifInThePostHandsOffToYtDlp() {
         assertEquals(XParseResult.Video, parse(xTweet(listOf(xVideo()))))
         assertEquals(XParseResult.Video, parse(xTweet(listOf(xVideo("animated_gif")))))
@@ -100,7 +105,7 @@ class XPostParserTest {
             ImageFailure.SOURCE_REFUSED)
         rejected(xTweet(List(17) { xPhoto() }), ImageFailure.SOURCE_REFUSED)
         for (bad in listOf("http://pbs.twimg.com/media/A.jpg", "https://pbs.twimg.com.evil.example/media/A.jpg",
-            "https://pbs.twimg.com/profile_images/A.jpg", "https://pbs.twimg.com/media/A.avif",
+            "https://pbs.twimg.com/profile_images/A.jpg", "https://pbs.twimg.com/media/A.heic",
             "https://pbs.twimg.com/media/A.jpg?name=orig", "https://pbs.twimg.com/media/../A.jpg", "https://example.com/media/A.jpg"))
             // Already a photo-only post: an image failure, never a pre-verdict (yt-dlp fallback) one.
             rejected(xTweet(listOf(xPhoto().replace("https://pbs.twimg.com/media/SyntheticPhoto1.jpg", bad))),

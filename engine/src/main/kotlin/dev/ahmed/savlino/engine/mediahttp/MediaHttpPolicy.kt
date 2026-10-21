@@ -54,27 +54,27 @@ internal object MediaHttpPolicy {
 
     /** https pbs.twimg.com/media/<name>[.ext] only (not profile images, card images or video.twimg.com). */
     internal fun isXImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 && url.host == "pbs.twimg.com" &&
-        Regex("/media/[A-Za-z0-9_-]{1,64}(?:\\.(?:jpg|png|webp|gif))?").matches(url.encodedPath)
+        Regex("/media/[A-Za-z0-9_-]{1,64}(?:\\.(?:jpg|png|webp|gif|avif))?").matches(url.encodedPath)
 
     /**
      * Instagram's image CDN as served to logged-out post pages: `instagram.f<pop>.fna.fbcdn.net` and
-     * `scontent[-<pop>].cdninstagram.com`, https only, `/v/t<n>.<n>-<n>/…<name>.jpg|png|webp|gif` paths only.
+     * `scontent[-<pop>].cdninstagram.com`, https only, `/v/t<n>.<n>-<n>/…<name>.jpg|png|webp|gif|avif` paths only.
      */
     internal fun isInstagramImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 &&
         (instagramFbcdn.matches(url.host) || instagramCdn.matches(url.host)) && instagramPath.matches(url.encodedPath)
     private val instagramFbcdn = Regex("instagram\\.f[a-z0-9]{2,12}(?:-[0-9]{1,3}){1,2}\\.fna\\.fbcdn\\.net")
     private val instagramCdn = Regex("scontent(?:-[a-z0-9]{2,12}(?:-[0-9]{1,3}){1,2})?\\.cdninstagram\\.com")
     private val instagramPath = Regex("/v/t[0-9]{1,3}\\.[0-9]{1,6}-[0-9]{1,3}/(?:[A-Za-z0-9_.-]{1,128}/){0,3}" +
-        "[A-Za-z0-9_.-]{1,160}\\.(?:jpg|jpeg|png|webp|gif)")
+        "[A-Za-z0-9_.-]{1,160}\\.(?:jpg|jpeg|png|webp|gif|avif)")
 
     /** Telegram widget attachment files, never its avatars or arbitrary public hosts. */
     internal fun isTelegramImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 &&
         Regex("cdn[0-9]{1,5}\\.(?:telesco\\.pe|cdn-telegram\\.org)").matches(url.host) &&
-        Regex("/file/[A-Za-z0-9_-]{1,2048}={0,2}(?:\\.(?:jpg|jpeg|png|webp|gif))?").matches(url.encodedPath) && url.encodedQuery == null
+        Regex("/file/[A-Za-z0-9_-]{1,2048}={0,2}(?:\\.(?:jpg|jpeg|png|webp|gif|avif))?").matches(url.encodedPath) && url.encodedQuery == null
 
     /** Bluesky's returned fullsize/thumbnail blob views, including its explicit JPEG conversion. */
     internal fun isBlueskyImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 && url.host == "cdn.bsky.app" &&
-        Regex("/img/(?:feed_fullsize|feed_thumbnail)/plain/did:plc:[a-z2-7]{24}/[A-Za-z0-9_-]{1,256}(?:@(?:jpeg|png|webp))?")
+        Regex("/img/(?:feed_fullsize|feed_thumbnail)/plain/did:plc:[a-z2-7]{24}/[A-Za-z0-9_-]{1,256}(?:@(?:jpeg|png|webp|avif))?")
             .matches(url.encodedPath) && url.encodedQuery == null
 
     internal fun withoutQuery(url: HttpUrl): String = url.newBuilder().query(null).fragment(null).build().toString()

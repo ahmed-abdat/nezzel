@@ -3,6 +3,8 @@ package dev.ahmed.savlino.engine.mediaimage
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
+import android.os.Build
+import dev.ahmed.savlino.domain.MediaImageFormat
 import java.nio.ByteBuffer
 
 /**
@@ -31,6 +33,8 @@ class AndroidImagePreviewDecoder : ImagePreviewDecoder {
             is ImageValidationResult.Failure -> return ImageDecodeResult.Failure(validation.reason)
             is ImageValidationResult.Valid -> validation.image.format
         }
+        if (format == MediaImageFormat.AVIF && Build.VERSION.SDK_INT < 31)
+            return ImageDecodeResult.Failure(ImageFailure.UNSUPPORTED)
         val bitmap = try {
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes, 0, length))) { decoder, info, _ ->
                 if (!isActive()) throw Rejected(ImageFailure.CANCELLED)

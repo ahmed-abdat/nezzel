@@ -86,7 +86,7 @@ class XPostParser {
         val externalLink = Regex("https?://[^\\s]+")
         const val MAX_MEDIA = 16
         const val LARGE_EDGE = 2048L
-        val mediaUrl = Regex("https://pbs\\.twimg\\.com/media/([A-Za-z0-9_-]{1,64})\\.(jpg|jpeg|png|webp|gif)")
+        val mediaUrl = Regex("https://pbs\\.twimg\\.com/media/([A-Za-z0-9_-]{1,64})\\.(jpg|jpeg|png|webp|gif|avif)")
         val json: ObjectMapper = ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
     }
 }

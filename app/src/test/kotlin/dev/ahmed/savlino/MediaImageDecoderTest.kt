@@ -32,6 +32,18 @@ class MediaImageDecoderTest {
             return ByteArrayOutputStream().also { assertTrue(bitmap.compress(format, 95, it)) }.toByteArray()
         } finally { bitmap.recycle() }
     }
+    @Test @Config(sdk = [29]) fun avifIsUnsupportedBeforeCallingThePlatformCodec() {
+        fun box(type: String, body: ByteArray) = ByteBuffer.allocate(body.size + 8)
+            .putInt(body.size + 8).put(type.toByteArray()).put(body).array()
+        val ispe = box("ispe", ByteBuffer.allocate(12).putInt(0).putInt(64).putInt(48).array())
+        val bytes = box("ftyp", "avif".toByteArray() + ByteArray(4)) +
+            box("meta", ByteArray(4) + box("iprp", box("ipco", ispe))) + box("mdat", byteArrayOf(1))
+        assertIs<ImageValidationResult.Valid>(ImageRepresentationValidator().validate(bytes, "image/avif"))
+        rejects(bytes, ImageFailure.UNSUPPORTED, "image/avif")
+        assertEquals(ImageFailure.UNSUPPORTED, assertIs<ImageDecodeResult.Failure>(
+            decoder.decodeThumbnail(bytes, "image/avif", { true }, bytes.size)).reason)
+    }
+
     @Test fun animatedGifProducesOnlyTheFirstFrameAsABitmap() {
         val bytes = "47494638396101000100800000ff00000000ff21ff0b4e45545343415045322e30030100000021f904000a0000002c000000000100010000020244010021f904000a0000002c00000000010001000002024c01003b".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         preview(bytes, "image/jpeg").use { image ->

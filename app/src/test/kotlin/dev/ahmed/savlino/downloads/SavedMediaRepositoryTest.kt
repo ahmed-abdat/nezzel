@@ -302,11 +302,12 @@ class SavedMediaRepositoryTest {
         provider.insertRow(7, "image/webp", 700, pending = 1)
         provider.insertRow(8, "image/gif", 800)
         provider.insertRow(9, "image/svg+xml", 900)
+        provider.insertRow(11, "image/avif", 1100)
         provider.insertRow(10, "image/jpeg", 1000, path = "Download/Nezzel/subfolder/")
         val items = repo.query()
-        assertEquals(listOf(8L, 4L, 3L, 2L, 1L), items.map { ContentUris.parseId(it.uri) })
-        assertEquals(listOf("GIF", "WebP", "PNG", "JPEG", "MP4"), items.map { it.format })
-        assertEquals(listOf(8L, 4L, 3L, 2L), filterMedia(items, MediaFilter.IMAGE).map { ContentUris.parseId(it.uri) })
+        assertEquals(listOf(11L, 8L, 4L, 3L, 2L, 1L), items.map { ContentUris.parseId(it.uri) })
+        assertEquals(listOf("AVIF", "GIF", "WebP", "PNG", "JPEG", "MP4"), items.map { it.format })
+        assertEquals(listOf(11L, 8L, 4L, 3L, 2L), filterMedia(items, MediaFilter.IMAGE).map { ContentUris.parseId(it.uri) })
     }
     @Test fun providerHeightRejectsLongOverflowInsteadOfWrappingToVideoQuality() = fixture { repo, provider ->
         listOf(2147483648L, 4294967297L, Long.MAX_VALUE, 0L, -1L).forEach { height ->
@@ -317,9 +318,9 @@ class SavedMediaRepositoryTest {
         assertEquals(Int.MAX_VALUE, repo.query().single().height)
     }
     @Test fun imageActionsKeepExactMimeUriAndReadOnlyGrantsFromQuery() = fixture { repo, provider ->
-        listOf("image/jpeg", "image/png", "image/webp").forEachIndexed { i, mime -> provider.insertRow(i + 2, mime, 200L + i) }
+        listOf("image/jpeg", "image/png", "image/webp", "image/avif").forEachIndexed { i, mime -> provider.insertRow(i + 2, mime, 200L + i) }
         val images = repo.query().filter { it.mimeType.startsWith("image/") }
-        assertEquals(3, images.size)
+        assertEquals(4, images.size)
         images.forEach { item ->
             val open = MediaActions.open(item)
             assertEquals(Intent.ACTION_VIEW, open.action)

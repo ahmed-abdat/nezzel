@@ -638,6 +638,7 @@ internal fun originalImageMetadata(url: String, preview: MediaImageMetadata): Me
         "png" -> MediaImageFormat.PNG
         "webp" -> MediaImageFormat.WEBP
         "gif" -> MediaImageFormat.GIF
+        "avif" -> MediaImageFormat.AVIF
         else -> preview.format
     }
     // Original dimensions, size and proof are established only by the complete Save validation.

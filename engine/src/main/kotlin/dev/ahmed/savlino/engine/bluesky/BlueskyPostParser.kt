@@ -62,7 +62,7 @@ class BlueskyPostParser {
         if (!MediaHttpPolicy.isBlueskyImage(url)) return null
         val kind = if (thumbnail) "feed_thumbnail" else "feed_fullsize"
         if (!url.encodedPath.startsWith("/img/$kind/plain/$did/")) return null
-        val path = url.encodedPath.replace(Regex("@(?:jpeg|png|webp)$"), "") + "@jpeg"
+        val path = url.encodedPath.replace(Regex("@(?:jpeg|png|webp|avif)$"), "") + "@jpeg"
         return url.newBuilder().encodedPath(path).build().toString()
     }
     private fun read(body: ByteArray, length: Int): JsonNode? {

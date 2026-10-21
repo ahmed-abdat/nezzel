@@ -49,6 +49,7 @@ data class SavedMedia(
         "image/png" -> "PNG"
         "image/webp" -> "WebP"
         "image/gif" -> "GIF"
+        "image/avif" -> "AVIF"
         "video/mp4" -> "MP4"
         "video/x-matroska" -> "MKV"
         "video/webm" -> "WebM"
@@ -82,8 +83,8 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
         val columns = listOf("_id", "_display_name", "title", "mime_type", "_size", "date_added", "height", "width", "duration", MediaStore.MediaColumns.RELATIVE_PATH) +
             if (Build.VERSION.SDK_INT >= 30) listOf("bitrate") else emptyList()
         val cursor = resolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, columns.toTypedArray(),
-            "owner_package_name = ? AND (relative_path = ? OR relative_path = ?) AND is_pending = ? AND (mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ?)",
-            arrayOf(ownerPackageName, "Download/Nezzel/", "Download/Nezzel", "0", "video/mp4", "video/x-matroska", "video/webm", "video/quicktime", "audio/mp4", "audio/x-m4a", "audio/mpeg", "image/jpeg", "image/png", "image/webp", "image/gif"), "date_added DESC, _id DESC", cancellation)
+            "owner_package_name = ? AND (relative_path = ? OR relative_path = ?) AND is_pending = ? AND (mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ?)",
+            arrayOf(ownerPackageName, "Download/Nezzel/", "Download/Nezzel", "0", "video/mp4", "video/x-matroska", "video/webm", "video/quicktime", "audio/mp4", "audio/x-m4a", "audio/mpeg", "image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"), "date_added DESC, _id DESC", cancellation)
             ?: return emptyList()
         return cursor.use { c ->
             fun string(name: String): String? = c.getColumnIndex(name).takeIf { it >= 0 && !c.isNull(it) }?.let(c::getString)

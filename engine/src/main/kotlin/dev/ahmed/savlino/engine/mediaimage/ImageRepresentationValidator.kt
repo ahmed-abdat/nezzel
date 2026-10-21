@@ -22,7 +22,7 @@ internal fun dimensionFailure(width: Long, height: Long): ImageFailure? = when {
 }
 
 /**
- * Complete-representation validation for JPEG/PNG/still WebP and GIF. Bounded incremental state only: no pixel
+ * Complete-representation validation for JPEG/PNG/still WebP/AVIF and GIF. Bounded incremental state only: no pixel
  * decode, no allocation proportional to the image, and proof only after the whole body was structurally
  * consumed. GIF87a/GIF89a bytes override declared MIME; other encodings must agree.
  */
@@ -64,6 +64,7 @@ class ImageRepresentationValidator {
                     MediaImageFormat.JPEG -> JpegParser()
                     MediaImageFormat.WEBP -> WebpParser()
                     MediaImageFormat.GIF -> GifParser()
+                    MediaImageFormat.AVIF -> AvifParser()
                     null -> return fail(ImageFailure.UNSUPPORTED)
                 }
                 checkNotNull(parser).feed(signature, 0, signature.size)?.let { return fail(it) }
@@ -410,6 +411,192 @@ private class JpegParser : FormatParser {
     }
 
     override fun finish(): ImageFailure? = if (state == State.DONE) null else ImageFailure.INVALID_IMAGE
+}
+
+/** ISO BMFF framing; only ftyp and meta payloads are retained, never encoded pixel data. */
+private class AvifParser : FormatParser {
+    private val header = ByteArray(16)
+    private var headerSize = 0
+    private var remaining = 0L
+    private var payload: ByteArray? = null
+    private var position = 0
+    private var type = ""
+    private var sawFtyp = false
+    private var sawMeta = false
+    private var toEof = false
+    override var width = 0L; private set
+    override var height = 0L; private set
+
+    override fun feed(bytes: ByteArray, offset: Int, count: Int): ImageFailure? {
+        var index = offset
+        val end = offset + count
+        while (index < end) {
+            if (toEof) return null
+            if (remaining > 0) {
+                val take = minOf(remaining, (end - index).toLong()).toInt()
+                payload?.let { bytes.copyInto(it, position, index, index + take); position += take }
+                remaining -= take; index += take
+                if (remaining == 0L) endBox()?.let { return it }
+            } else {
+                header[headerSize++] = bytes[index++]
+                if (headerSize == 8 && u32(header, 0) != 1L || headerSize == 16)
+                    startBox()?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun startBox(): ImageFailure? {
+        type = String(header, 4, 4, Charsets.US_ASCII)
+        val size = if (headerSize == 16) boxSize64(header, 8) else u32(header, 0)
+        if (!sawFtyp && type != "ftyp") return ImageFailure.INVALID_IMAGE
+        if (size == 0L) {
+            if (type != "mdat" || !sawMeta) return ImageFailure.INVALID_IMAGE
+            toEof = true
+            headerSize = 0
+            return null
+        }
+        if (size < headerSize) return ImageFailure.INVALID_IMAGE
+        if (type == "ftyp" && (sawFtyp || size - headerSize < 8)) return ImageFailure.INVALID_IMAGE
+        if (type == "meta" && sawMeta) return ImageFailure.INVALID_IMAGE
+        val cap = when (type) { "ftyp" -> 4096; "meta" -> 65536; else -> null }
+        if (cap != null && size > cap) return ImageFailure.BUDGET
+        remaining = size - headerSize
+        payload = if (cap != null) ByteArray(remaining.toInt()) else null
+        position = 0
+        headerSize = 0
+        return if (remaining == 0L) endBox() else null
+    }
+
+    private fun endBox(): ImageFailure? {
+        val body = payload
+        payload = null
+        when (type) {
+            "ftyp" -> {
+                val brands = checkNotNull(body)
+                if (brands.size < 8 || brands.size % 4 != 0) return ImageFailure.INVALID_IMAGE
+                val major = String(brands, 0, 4, Charsets.US_ASCII)
+                if (major == "avis") return ImageFailure.ANIMATED
+                if (major != "avif" && (8 until brands.size step 4).none {
+                    String(brands, it, 4, Charsets.US_ASCII) == "avif"
+                }) return ImageFailure.INVALID_IMAGE
+                sawFtyp = true
+            }
+            "meta" -> {
+                try { readMeta(checkNotNull(body)) }
+                catch (_: InvalidBox) { return ImageFailure.INVALID_IMAGE }
+                dimensionFailure(width, height)?.let { return it }
+                sawMeta = true
+            }
+        }
+        return null
+    }
+
+    private class InvalidBox : RuntimeException() {
+        override fun fillInStackTrace(): Throwable = this
+    }
+    private fun requireBox(condition: Boolean) { if (!condition) throw InvalidBox() }
+    private data class Box(val type: String, val data: Int, val end: Int)
+
+    private fun boxes(bytes: ByteArray, start: Int, end: Int): List<Box> {
+        val result = mutableListOf<Box>()
+        var at = start
+        while (at < end) {
+            requireBox(end - at >= 8)
+            val shortSize = u32(bytes, at)
+            val header = if (shortSize == 1L) 16 else 8
+            requireBox(end - at >= header)
+            val size = if (header == 16) boxSize64(bytes, at + 8) else shortSize
+            requireBox(size >= header && size <= end - at)
+            result += Box(String(bytes, at + 4, 4, Charsets.US_ASCII), at + header, at + size.toInt())
+            at += size.toInt()
+        }
+        return result
+    }
+
+    private fun readMeta(bytes: ByteArray) {
+        requireBox(bytes.size >= 4 && u32(bytes, 0) == 0L)
+        val children = boxes(bytes, 4, bytes.size)
+        val primaryBoxes = children.filter { it.type == "pitm" }
+        requireBox(primaryBoxes.size <= 1)
+        val primary = primaryBoxes.singleOrNull()?.let {
+            val reader = Reader(bytes, it)
+            val version = reader.fullBox()
+            val id = when (version) { 0 -> reader.u16().toLong(); 1 -> reader.u32(); else -> throw InvalidBox() }
+            reader.done()
+            id
+        }
+        val iprp = children.filter { it.type == "iprp" }.singleOrNull() ?: throw InvalidBox()
+        val groups = boxes(bytes, iprp.data, iprp.end)
+        val ipco = groups.filter { it.type == "ipco" }.singleOrNull() ?: throw InvalidBox()
+        val properties = boxes(bytes, ipco.data, ipco.end)
+        var associated: List<Box>? = null
+        for (ipma in groups.filter { it.type == "ipma" }) {
+            val reader = Reader(bytes, ipma)
+            val version = reader.byte()
+            requireBox(version in 0..1)
+            val flags = (reader.byte() shl 16) or (reader.byte() shl 8) or reader.byte()
+            requireBox(flags and 1 == flags)
+            val entries = reader.u32()
+            requireBox(entries <= (ipma.end - reader.at) / 3)
+            repeat(entries.toInt()) {
+                val id = if (version == 0) reader.u16().toLong() else reader.u32()
+                val count = reader.byte()
+                val selected = mutableListOf<Box>()
+                repeat(count) {
+                    val index = if (flags == 1) reader.u16() and 0x7FFF else reader.byte() and 0x7F
+                    requireBox(index <= properties.size)
+                    if (index != 0) selected += properties[index - 1]
+                }
+                if (id == primary) {
+                    requireBox(associated == null)
+                    associated = selected
+                }
+            }
+            reader.done()
+        }
+        // A single unambiguous ispe is safe without associations; transforms still need an owner.
+        val chosen = associated ?: properties.also {
+            requireBox(groups.none { group -> group.type == "ipma" } &&
+                it.count { p -> p.type == "ispe" } == 1 && it.none { p -> p.type == "irot" })
+        }
+        val dimensions = chosen.filter { it.type == "ispe" }.singleOrNull() ?: throw InvalidBox()
+        val reader = Reader(bytes, dimensions)
+        requireBox(reader.fullBox() == 0)
+        width = reader.u32(); height = reader.u32()
+        reader.done()
+        val rotations = chosen.filter { it.type == "irot" }
+        requireBox(rotations.size <= 1)
+        rotations.singleOrNull()?.let {
+            val rotation = Reader(bytes, it)
+            val angle = rotation.byte()
+            requireBox(angle in 0..3)
+            rotation.done()
+            if (angle and 1 != 0) { val originalWidth = width; width = height; height = originalWidth }
+        }
+    }
+
+    private inner class Reader(private val bytes: ByteArray, private val box: Box) {
+        var at = box.data; private set
+        fun byte(): Int { requireBox(at < box.end); return bytes[at++].toInt() and 255 }
+        fun u16(): Int = (byte() shl 8) or byte()
+        fun u32(): Long = (u16().toLong() shl 16) or u16().toLong()
+        fun fullBox(): Int {
+            val version = byte()
+            requireBox(byte() == 0 && byte() == 0 && byte() == 0)
+            return version
+        }
+        fun done() = requireBox(at == box.end)
+    }
+
+    override fun finish(): ImageFailure? =
+        if (!sawFtyp || !sawMeta || headerSize != 0 || remaining != 0L) ImageFailure.INVALID_IMAGE
+        else dimensionFailure(width, height)
+}
+
+private fun boxSize64(bytes: ByteArray, at: Int): Long {
+    val high = u32(bytes, at)
+    return if (high > Int.MAX_VALUE) -1 else (high shl 32) or u32(bytes, at + 4)
 }
 
 private class WebpParser : FormatParser {

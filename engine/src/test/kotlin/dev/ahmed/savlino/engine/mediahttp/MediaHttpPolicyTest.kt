@@ -8,13 +8,19 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MediaHttpPolicyTest {
-    @Test fun gifPhotosUseTheSameCdnHostAndPathLimits() {
-        assertTrue(MediaHttpPolicy.isXImage(assertNotNull(MediaHttpPolicy.parse("https://pbs.twimg.com/media/Synthetic.gif"))))
-        assertFalse(MediaHttpPolicy.isXImage(assertNotNull(MediaHttpPolicy.parse("https://video.twimg.com/tweet_video/Synthetic.gif"))))
-        assertTrue(MediaHttpPolicy.isInstagramImage(assertNotNull(MediaHttpPolicy.parse(
-            "https://instagram.fxyz1-1.fna.fbcdn.net/v/t51.2885-15/Synthetic.gif"))))
-        assertFalse(MediaHttpPolicy.isInstagramImage(assertNotNull(MediaHttpPolicy.parse(
-            "https://instagram.fxyz1-1.fna.fbcdn.net/other/Synthetic.gif"))))
+    @Test fun gifAndAvifPhotosUseTheSameCdnHostAndPathLimits() {
+        for (extension in listOf("gif", "avif")) {
+            assertTrue(MediaHttpPolicy.isXImage(assertNotNull(MediaHttpPolicy.parse("https://pbs.twimg.com/media/Synthetic.$extension"))))
+            assertFalse(MediaHttpPolicy.isXImage(assertNotNull(MediaHttpPolicy.parse("https://video.twimg.com/tweet_video/Synthetic.$extension"))))
+            assertTrue(MediaHttpPolicy.isInstagramImage(assertNotNull(MediaHttpPolicy.parse(
+                "https://instagram.fxyz1-1.fna.fbcdn.net/v/t51.2885-15/Synthetic.$extension"))))
+            assertFalse(MediaHttpPolicy.isInstagramImage(assertNotNull(MediaHttpPolicy.parse(
+                "https://instagram.fxyz1-1.fna.fbcdn.net/other/Synthetic.$extension"))))
+            assertTrue(MediaHttpPolicy.isTelegramImage(assertNotNull(MediaHttpPolicy.parse(
+                "https://cdn1.telesco.pe/file/Synthetic.$extension"))))
+        }
+        assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
+            "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/synthetic@avif"))))
     }
 
     @Test fun fragmentsAreStrippedWithoutChangingPathOrQueryBytes() {

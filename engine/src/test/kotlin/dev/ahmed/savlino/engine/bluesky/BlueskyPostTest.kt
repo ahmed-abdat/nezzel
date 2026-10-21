@@ -38,11 +38,14 @@ class BlueskyPostTest {
             assertEquals(ImageFailure.NO_MEDIA, assertIs<BlueskyParseResult.Failure>(parse(name)).reason)
         assertEquals(ImageFailure.PRIVATE, assertIs<BlueskyParseResult.Failure>(parse("private")).reason)
     }
-    @Test fun webpSuffixIsReplacedAndWrongPostOrCdnAndOversizedBodiesAreRefused() {
+    @Test fun stillSuffixIsReplacedAndWrongPostOrCdnAndOversizedBodiesAreRefused() {
         val parser = BlueskyPostParser()
         val json = bytes("single").toString(Charsets.UTF_8)
-        val webp = json.replace("bafkreisynthetic1\"", "bafkreisynthetic1@webp\"")
-        assertEquals("https://cdn.bsky.app/img/feed_fullsize/plain/$did/bafkreisynthetic1@jpeg", assertIs<BlueskyParseResult.Success>(parser.parse(webp.toByteArray(), uri)).candidates.single())
+        for (suffix in listOf("webp", "avif")) {
+            val encoded = json.replace("bafkreisynthetic1\"", "bafkreisynthetic1@$suffix\"")
+            assertEquals("https://cdn.bsky.app/img/feed_fullsize/plain/$did/bafkreisynthetic1@jpeg",
+                assertIs<BlueskyParseResult.Success>(parser.parse(encoded.toByteArray(), uri)).candidates.single())
+        }
         for (bad in listOf(json.replace("3synthetic001", "3synthetic999"), json.replace("cdn.bsky.app", "cdn.bsky.app.evil.test")))
             assertEquals(ImageFailure.SOURCE_REFUSED, assertIs<BlueskyParseResult.Failure>(parser.parse(bad.toByteArray(), uri)).reason)
         assertEquals(ImageFailure.BUDGET, assertIs<BlueskyParseResult.Failure>(parser.parse(ByteArray(1024 * 1024 + 1), uri)).reason)

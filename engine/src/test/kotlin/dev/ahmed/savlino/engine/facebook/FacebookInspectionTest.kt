@@ -35,6 +35,51 @@ class FacebookInspectionTest : PublicImageTestBase() {
         inspector.inspect(inspector.newOperation(imageSource(url, revision), IMAGE_IDENTITY), ImageSourceType.FACEBOOK)
     }
 
+    @Test fun avifPhotoKeepsItsSignedUrlFormatAndExactBytesThroughSave() {
+        val bytes = checkNotNull(javaClass.getResourceAsStream("/avif/still-64x48.avif")).use { it.readBytes() }
+        // JDK ImageIO has no AVIF codec; this seam tests format admission and Save, not pixel decoding.
+        val decoder = ImagePreviewDecoder { _, mime, _, _ ->
+            assertEquals("image/avif", mime)
+            ImageDecodeResult.Success(object : OwnedImagePreview {
+                override val width = 64
+                override val height = 48
+                override val allocationBytes = 64L * 48 * 4
+                override var isClosed = false; private set
+                override fun close() { isClosed = true }
+            })
+        }
+        val asset = "/synthetic.avif?stp=dst-avif&sig=synthetic%2Fsignature"
+        fixture(decoder = decoder, respond = facebook(override = { request, socket ->
+            when {
+                request.target == storyTarget -> {
+                    socket.reply(body = facebookFixture("photo-post.html").replace(cdn(1),
+                        "https://scontent.example.fbcdn.net$asset").toByteArray(), headers = html)
+                    true
+                }
+                request.headers["host"] == "scontent.example.fbcdn.net" -> {
+                    socket.reply(body = bytes, headers = mapOf("Content-Type" to "image/avif"))
+                    true
+                }
+                else -> false
+            }
+        })) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                val rendition = firstRendition(result)
+                assertEquals(MediaImageFormat.AVIF, rendition.image.format)
+                assertEquals(64, rendition.image.width); assertEquals(48, rendition.image.height)
+                val selection = assertNotNull(result.inspection.selection(rendition.ref))
+                val sink = ByteArrayOutputStream()
+                val saved = assertIs<ImageSaveResult.Success>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                assertEquals(MediaImageFormat.AVIF, saved.image.format)
+                assertEquals(imageDigest(bytes), assertNotNull(saved.image.proof).completeBodySha256)
+                assertContentEquals(bytes, sink.toByteArray())
+                assertEquals(listOf(asset, asset), f.server.requests.filter {
+                    it.headers["host"] == "scontent.example.fbcdn.net"
+                }.map { it.target })
+            }
+        }
+    }
+
     @Test fun shareLinkRedirectsToStoryAndFetchesTheAttachmentWithBrowserHeaders() {
         fixture(respond = facebook()) { f ->
             inspected(f.inspectFacebook(FB_SHARE)).use { result ->

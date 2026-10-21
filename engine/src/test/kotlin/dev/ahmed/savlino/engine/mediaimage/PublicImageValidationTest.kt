@@ -12,6 +12,103 @@ class PublicImageValidationTest {
         assertEquals(reason, assertIs<ImageValidationResult.Failure>(validator.validate(bytes, mime)).reason)
     }
 
+    private fun avifFixture(name: String = "still-64x48.avif") =
+        checkNotNull(javaClass.getResourceAsStream("/avif/$name")).use { it.readBytes() }
+    private fun word(value: Int) = java.nio.ByteBuffer.allocate(4).putInt(value).array()
+    private fun box(type: String, body: ByteArray, extended: Boolean = false): ByteArray =
+        (if (extended) word(1) + type.toByteArray() + java.nio.ByteBuffer.allocate(8).putLong(body.size + 16L).array()
+        else word(body.size + 8) + type.toByteArray()) + body
+    private fun avif(properties: List<ByteArray>, associations: ByteArray? = byteArrayOf(1),
+        extended: Boolean = false, major: String = "avif", primary: Int = 1): ByteArray {
+        val ipma = associations?.let { box("ipma", word(0) + word(1) + byteArrayOf(0, 1, it.size.toByte()) + it) } ?: byteArrayOf()
+        val meta = word(0) + box("pitm", word(0) + byteArrayOf((primary ushr 8).toByte(), primary.toByte())) +
+            box("iprp", box("ipco", properties.fold(byteArrayOf()) { a, b -> a + b }) + ipma)
+        return box("ftyp", major.toByteArray() + word(0) + "avifmif1".toByteArray(), extended) +
+            box("meta", meta, extended) + box("mdat", byteArrayOf(1), extended)
+    }
+    private fun ispe(width: Int = 64, height: Int = 48) = box("ispe", word(0) + word(width) + word(height))
+
+    @Test fun stillAvifBindsDimensionsMeasuredSizeAndEveryByteAcrossChunks() {
+        val bytes = avifFixture()
+        val expected = valid(bytes, "image/avif")
+        assertEquals("AVIF", expected.format.name)
+        assertEquals("avif", expected.format.extension)
+        assertEquals(64, expected.width); assertEquals(48, expected.height)
+        assertEquals(Size.Exact(bytes.size.toLong()), expected.size)
+        assertEquals(bytes.size.toLong(), assertNotNull(expected.proof).measuredBytes)
+        assertEquals(imageDigest(bytes), assertNotNull(expected.proof).completeBodySha256)
+        for (chunk in listOf(1, 7)) {
+            val stream = validator.newStream("image/avif")
+            for (offset in bytes.indices step chunk) assertNull(stream.accept(bytes, offset, minOf(chunk, bytes.size - offset)))
+            val image = assertIs<ImageValidationResult.Valid>(stream.finish()).image
+            assertEquals(expected.format, image.format)
+            assertEquals(expected.width, image.width); assertEquals(expected.height, image.height)
+            assertEquals(expected.size, image.size)
+            val proof = assertNotNull(image.proof)
+            val expectedProof = assertNotNull(expected.proof)
+            assertEquals(expectedProof.completeBodySha256, proof.completeBodySha256)
+            assertEquals(expectedProof.measuredBytes, proof.measuredBytes)
+        }
+        assertEquals("AVIF", imageFormatFor("image/avif; q=1")?.name)
+        reject(bytes, "image/png", ImageFailure.INVALID_IMAGE)
+        assertEquals("GIF", valid(animatedGif(), "image/avif").format.name)
+    }
+
+    @Test fun avifSequencesWrongBytesTruncatedAndOversizedMetadataFail() {
+        reject(avifFixture("anim-32x32.avif"), "image/avif", ImageFailure.ANIMATED)
+        reject(raster(format = "jpeg"), "image/avif", ImageFailure.INVALID_IMAGE)
+        val bytes = avifFixture()
+        val meta = bytes.toString(Charsets.ISO_8859_1).indexOf("meta")
+        assertTrue(meta > 4)
+        reject(bytes.copyOf(meta + 12), "image/avif", ImageFailure.INVALID_IMAGE)
+        val prefix = bytes.copyOf(meta + 4).also { word(65537).copyInto(it, meta - 4) }
+        val stream = validator.newStream("image/avif")
+        assertEquals(ImageFailure.BUDGET, stream.accept(prefix, 0, prefix.size))
+        assertIs<ImageValidationResult.Failure>(stream.finish())
+    }
+
+    @Test fun avifPrimaryAssociationsResolveDimensionsAndRotationWithoutGuessing() {
+        val properties = listOf(ispe(8, 8), ispe(), box("irot", byteArrayOf(1)))
+        val image = valid(avif(properties, byteArrayOf(2, 3)), "image/avif")
+        assertEquals(48, image.width); assertEquals(64, image.height)
+        reject(avif(listOf(ispe()), primary = 2), "image/avif", ImageFailure.INVALID_IMAGE)
+        assertEquals(64, valid(avif(properties, byteArrayOf(2)), "image/avif").width)
+        reject(avif(properties, null), "image/avif", ImageFailure.INVALID_IMAGE)
+        reject(avif(properties, byteArrayOf(1, 2)), "image/avif", ImageFailure.INVALID_IMAGE)
+        reject(avif(properties, byteArrayOf(4)), "image/avif", ImageFailure.INVALID_IMAGE)
+        assertEquals(64, valid(avif(listOf(ispe()), null), "image/avif").width)
+        reject(avif(listOf(ispe(16385, 1))), "image/avif", ImageFailure.DIMENSIONS)
+        reject(avif(listOf(ispe(0, 1))), "image/avif", ImageFailure.INVALID_IMAGE)
+    }
+
+    @Test fun avifWidePrimaryIdAndAssociationsChooseTheGridOutputProperty() {
+        val primary = box("pitm", word(0x01000000) + word(70000))
+        val grid = box("iinf", word(0x01000000) + word(1) +
+            box("infe", word(0x03000000) + word(70000) + byteArrayOf(0, 0) + "grid".toByteArray() + byteArrayOf(0)))
+        val properties = box("ipco", ispe(8, 8) + ispe() + box("irot", byteArrayOf(3)), extended = true)
+        val associations = box("ipma", word(0x01000001) + word(1) + word(70000) +
+            byteArrayOf(2, 0x80.toByte(), 2, 0x80.toByte(), 3))
+        val bytes = box("ftyp", "avif".toByteArray() + word(0)) +
+            box("meta", word(0) + primary + grid + box("iprp", properties + associations)) + box("mdat", byteArrayOf(1))
+        val stream = validator.newStream("image/avif")
+        for (index in bytes.indices) assertNull(stream.accept(bytes, index, 1))
+        val image = assertIs<ImageValidationResult.Valid>(stream.finish()).image
+        assertEquals(48, image.width); assertEquals(64, image.height)
+    }
+
+    @Test fun avifExtendedBoxesCompatibleBrandsAndFinalMdatAreBounded() {
+        val bytes = avif(listOf(ispe()), extended = true, major = "mif1")
+        assertEquals(64, valid(bytes, "image/avif").width)
+        val ordinary = avif(listOf(ispe()))
+        val mdat = ordinary.size - 9
+        assertEquals(64, valid(ordinary.copyOf().also { word(0).copyInto(it, mdat) }, "image/avif").width)
+        reject(word(0) + "ftypavif".toByteArray(), "image/avif", ImageFailure.INVALID_IMAGE)
+        reject(box("ftyp", "mif1".toByteArray() + word(0)), "image/avif", ImageFailure.INVALID_IMAGE)
+        reject(avif(listOf(ispe()), major = "avis"), "image/avif", ImageFailure.ANIMATED)
+        reject(bytes.copyOf(bytes.size - 1), "image/avif", ImageFailure.INVALID_IMAGE)
+        reject(ordinary + byteArrayOf(0), "image/avif", ImageFailure.INVALID_IMAGE)
+    }
+
     @Test fun gifSignaturesOverrideDeclaredMimeAndBindEveryAnimationByte() {
         for (version in listOf("87a", "89a")) for (mime in listOf("image/gif", "image/jpeg")) {
             val bytes = animatedGif(version)
@@ -53,7 +150,7 @@ class PublicImageValidationTest {
 
     @Test fun originalCandidateFormatSupportsEveryAllowedInstagramStillExtension() {
         for ((extension, format) in listOf("jpg" to MediaImageFormat.JPEG, "jpeg" to MediaImageFormat.JPEG,
-            "png" to MediaImageFormat.PNG, "webp" to MediaImageFormat.WEBP)) {
+            "png" to MediaImageFormat.PNG, "webp" to MediaImageFormat.WEBP, "avif" to MediaImageFormat.AVIF)) {
             val original = originalImageMetadata("https://instagram.fxyz1-1.fna.fbcdn.net/photo.$extension?stp=original",
                 MediaImageMetadata(MediaImageFormat.PNG))
             assertEquals(format, original.format)
@@ -88,7 +185,7 @@ class PublicImageValidationTest {
         valid(raster())
         reject(raster(), "image/jpeg", ImageFailure.INVALID_IMAGE)
         reject(raster(format = "jpeg"), "image/png", ImageFailure.INVALID_IMAGE)
-        for (mime in listOf("text/html", "image/svg+xml", "application/pdf", "application/xml", "image/avif", ""))
+        for (mime in listOf("text/html", "image/svg+xml", "application/pdf", "application/xml", ""))
             reject(raster(), mime, ImageFailure.UNSUPPORTED)
     }
 

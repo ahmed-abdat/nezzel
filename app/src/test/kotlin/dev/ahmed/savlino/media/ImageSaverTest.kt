@@ -155,6 +155,29 @@ class ImageSaverTest {
         }
     }
 
+    @Test @Config(sdk = [33]) fun avifPublishesOriginalBytesWithAvifMimeAndExtensionToBothDestinations() {
+        val avif = MediaImageMetadata(MediaImageFormat.AVIF, Size.Exact(fixture.size.toLong()), 1, 1, proof)
+        val documents = treeProvider()
+        val settings = SaveDestinations(app)
+        for (tree in listOf(null, SaveDestinationTest.tree)) {
+            settings.choose(tree)
+            val saver = saver(FakeFetch(result = { ImageSaveResult.Success(avif) }))
+            assertTrue(saver.save(selection, avif, "Photo"))
+            val saved = saver.finish() as ImageSaveState.Saved
+            assertTrue(saved.displayName.endsWith(".avif"))
+            assertArrayEquals(fixture, app.contentResolver.openInputStream(saved.uri)!!.use { it.readBytes() })
+            if (tree == null) {
+                assertEquals(collection.path, saved.uri.path!!.substringBeforeLast('/'))
+                assertEquals("image/avif", provider.row(saved.uri).getAsString(MediaStore.Downloads.MIME_TYPE))
+            } else {
+                val item = settings.savedFiles().single()
+                assertEquals("image/avif", item.mimeType)
+                assertTrue(item.filename.endsWith(".avif"))
+                assertArrayEquals(fixture, documents.files.values.single().readBytes())
+            }
+        }
+    }
+
     @Test fun imageLostTreePermissionDoesNotFallbackToMediaStore() {
         val treeProvider = treeProvider()
         val settings = SaveDestinations(app)

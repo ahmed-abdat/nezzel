@@ -36,7 +36,7 @@ class MediaMetadata(title: String? = null, uploader: String? = null,
 
 /** Reported image encoding; the adapter must verify actual content separately. */
 enum class MediaImageFormat(val mimeType: String, val extension: String) {
-    JPEG("image/jpeg", "jpg"), PNG("image/png", "png"), WEBP("image/webp", "webp"), GIF("image/gif", "gif")
+    JPEG("image/jpeg", "jpg"), PNG("image/png", "png"), WEBP("image/webp", "webp"), GIF("image/gif", "gif"), AVIF("image/avif", "avif")
 }
 
 /** Evidence supplied only after a complete body was measured and digested, never a prefix. */
