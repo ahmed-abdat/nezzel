@@ -89,12 +89,14 @@ class FacebookPostIdentityTest {
 
     @Test fun imageCdnAllowlistIsHttpsScontentOnFbcdnOnly() {
         for (url in listOf("https://scontent.example.fbcdn.net/1.jpg", "https://scontent-iad3-1.xx.fbcdn.net/v/t39/1.jpg?x=1",
-                "https://scontent.fnkc1-1.fna.fbcdn.net/v/1.jpg")) {
+                "https://scontent.fnkc1-1.fna.fbcdn.net/v/1.jpg", "https://z-p3-scontent.fnkc1-1.fna.fbcdn.net/v/1.jpg")) {
             assertTrue(MediaHttpPolicy.isFacebookImageCdn(assertNotNull(MediaHttpPolicy.parse(url))), "allowed CDN")
         }
         for (url in listOf("https://external.example.fbcdn.net/1.jpg", "https://video.example.fbcdn.net/1.mp4",
                 "https://scontent.example.fbcdn.net.evil.example/1.jpg", "https://fbcdn.net/1.jpg",
                 "https://xscontent.example.fbcdn.net/1.jpg", "https://scontent.example.fbsbx.com/1.jpg",
+                "https://z-p3-video.example.fbcdn.net/1.mp4", "https://z-p3-xscontent.example.fbcdn.net/1.jpg",
+                "https://zz-p3-scontent.example.fbcdn.net/1.jpg", "https://z-p3-scontent.example.fbcdn.net.evil.example/1.jpg",
                 "https://www.facebook.com/1.jpg")) {
             assertFalse(MediaHttpPolicy.isFacebookImageCdn(assertNotNull(MediaHttpPolicy.parse(url))), "rejected CDN")
         }

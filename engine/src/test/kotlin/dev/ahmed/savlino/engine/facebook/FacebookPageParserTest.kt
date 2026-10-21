@@ -41,6 +41,14 @@ class FacebookPageParserTest {
         assertTrue(result.discovery.previewQuality, "page declares a larger viewer_image than the only URL it offers")
     }
 
+    @Test fun zeroRatedWebFacebookCdnHostIsTheSamePhoto() {
+        val zeroRated = "https://z-p3-scontent.example.fbcdn.net/1.jpg"
+        val html = facebookFixture("photo-post.html").replace(cdn(1), zeroRated)
+        assertTrue(html.contains(zeroRated))
+        val web = "https://web.facebook.com/story.php?story_fbid=900000000000001&id=42"
+        assertEquals(listOf(zeroRated), parsed(html, web, FB_SHARE).candidates.map { it.url })
+    }
+
     @Test fun nodeRootAndNodeV2RootAreBothStoryRoots() {
         val original = facebookFixture("photo-post.html")
         assertTrue(original.contains("\"node_v2\":{\"__typename\":\"Story\""))

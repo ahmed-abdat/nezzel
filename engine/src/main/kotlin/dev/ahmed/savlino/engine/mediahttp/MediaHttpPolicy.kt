@@ -44,9 +44,13 @@ internal object MediaHttpPolicy {
         return source.sameAs(target)
     }
 
-    /** https scontent*.fbcdn.net only (not external/video/static CDN hosts). */
+    /**
+     * https scontent*.fbcdn.net only (not external/video/static CDN hosts). web.facebook.com in zero-rated
+     * regions serves the same images from a `z-<tag>-scontent…` host.
+     */
     internal fun isFacebookImageCdn(url: HttpUrl): Boolean = url.isHttps && url.port == 443 &&
-        url.host.startsWith("scontent") && url.host.endsWith(".fbcdn.net")
+        url.host.replaceFirst(zeroRatedPrefix, "").startsWith("scontent") && url.host.endsWith(".fbcdn.net")
+    private val zeroRatedPrefix = Regex("^z-[a-z0-9]{1,4}-")
 
     /** https pbs.twimg.com/media/<name>[.ext] only (not profile images, card images or video.twimg.com). */
     internal fun isXImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 && url.host == "pbs.twimg.com" &&
