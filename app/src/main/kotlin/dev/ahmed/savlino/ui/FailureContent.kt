@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
@@ -25,12 +26,13 @@ import dev.ahmed.savlino.ui.theme.Space
 /**
  * One failure layout for video and image sheets: an error tile in place of the preview skeleton (nothing
  * is loading any more), the truthful title/body for the failure type, then the next step. Try again only
- * when trying again can help; "Paste another link" whenever the link itself is the problem.
+ * when trying again can help; "Paste another link" whenever the link itself is the problem; [secondary] (an engine
+ * update) sits beside Close.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: String?, onRetry: (() -> Unit)?,
-    onPasteAnother: ((String?) -> Unit)?, onDismiss: () -> Unit) {
+    onPasteAnother: ((String?) -> Unit)?, onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null) {
     val context = LocalContext.current
     Column(Modifier.testTag("failure_content"), verticalArrangement = Arrangement.spacedBy(Space.m)) {
         Row(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
@@ -48,15 +50,26 @@ internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: 
             }
         }
         body?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            if (onRetry != null) Button(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.try_again)) }
-            if (onPasteAnother != null) {
-                // Explicit tap while Nezzel's sheet has focus: the only time the clipboard is read here.
-                val paste = { onPasteAnother(context.getSystemService(ClipboardManager::class.java)?.plainText()) }
-                if (onRetry == null) Button(onClick = paste, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.paste_another_link)) }
-                else OutlinedButton(onClick = paste, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.paste_another_link)) }
+        // Main actions share one row; the quieter ones (engine update, Close) share the row below (owner 2026-10-21).
+        val paste = onPasteAnother?.let { pasteAnother ->
+            // Explicit tap while Nezzel's sheet has focus: the only time the clipboard is read here.
+            { pasteAnother(context.getSystemService(ClipboardManager::class.java)?.plainText()) }
+        }
+        if (onRetry != null || paste != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            val main = Modifier.weight(1f).heightIn(min = 48.dp)
+            if (onRetry != null) Button(onClick = onRetry, modifier = main) { ActionLabel(R.string.try_again) }
+            if (paste != null) {
+                if (onRetry == null) Button(onClick = paste, modifier = main) { ActionLabel(R.string.paste_another_link) }
+                else OutlinedButton(onClick = paste, modifier = main) { ActionLabel(R.string.paste_another_link) }
             }
+        }
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            secondary?.invoke()
             TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nezzel_close)) }
         }
     }
 }
+
+@Composable
+private fun ActionLabel(@StringRes text: Int) = Text(stringResource(text), textAlign = TextAlign.Center)
