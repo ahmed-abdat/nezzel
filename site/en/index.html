@@ -332,10 +332,6 @@ html[dir=ltr] h2{letter-spacing:-.035em;line-height:1.08}
 .panel .n{font:700 14px/1 system-ui,sans-serif;opacity:.8}
 .panel h3{font-size:26px;line-height:1.3;margin:8px 0 6px;font-weight:800}
 .panel p{margin:0;font-size:16px;opacity:.86;max-width:30ch}
-.hint{position:absolute;top:24px;inset-inline-end:22px;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:color-mix(in oklab,currentColor 9%,transparent);transition:opacity .4s}
-.hint::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 1.8s var(--ease) infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in oklab,currentColor 50%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
-.panel.used .hint{opacity:0}
 .demo{margin-top:auto;padding-top:28px;display:grid;gap:10px;position:relative}
 .panel .vcard{width:100%;max-width:280px;font-size:14px}
 .panel .vcard b{font-size:14.5px}
@@ -658,7 +654,7 @@ footer a{color:inherit}
   <p class="sub" data-i="how-sub" data-r style="--d:1">Try it here before you install</p>
   <div class="panels">
     <article class="panel" data-r style="--d:2">
-      <span class="n">1</span><span class="hint" data-i="try">Try</span>
+      <span class="n">1</span>
       <h3 data-i="s1">Copy the link</h3>
       <p data-i="s1p">Copy the video’s link in its app, or share it straight to Nezzel</p>
       <div class="demo cp">
@@ -667,7 +663,7 @@ footer a{color:inherit}
       </div>
     </article>
     <article class="panel" data-r style="--d:3">
-      <span class="n">2</span><span class="hint" data-i="try">Try</span>
+      <span class="n">2</span>
       <h3 data-i="s2">Pick a quality</h3>
       <p data-i="s2p">Open Nezzel and it shows the link you copied. Then pick from the qualities on offer</p>
       <div class="demo pq" role="radiogroup" data-i-aria="s2" aria-label="Pick a quality">
@@ -677,7 +673,7 @@ footer a{color:inherit}
       </div>
     </article>
     <article class="panel" data-r style="--d:4">
-      <span class="n">3</span><span class="hint" data-i="try">Try</span>
+      <span class="n">3</span>
       <h3 data-i="s3">Tap Download</h3>
       <p data-i="s3p">Nothing downloads until you tap. The file goes to the folder you chose</p>
       <div class="demo">
@@ -800,7 +796,7 @@ footer a{color:inherit}
     video:"Video", "audio-h":"Audio", best:"Highest available", last:"Last used", bal:"Balanced", small:"Small", audio:"Audio only",
     dl:"Download", open:"Open", saved:"Saved", "saved-to":"Saved to <span class=\"ltr\">Download/Nezzel</span>",
     c1:"Copy", c2:"Open", c3:"Pick", c4:"Save",
-    "how-h":"From link to phone in three steps", "how-sub":"Try it here before you install", try:"Try",
+    "how-h":"From link to phone in three steps", "how-sub":"Try it here before you install",
     s1:"Copy the link", s1p:"Copy the video’s link in its app, or share it straight to Nezzel",
     s2:"Pick a quality", s2p:"Open Nezzel and it shows the link you copied. Then pick from the qualities on offer",
     s3:"Tap Download", s3p:"Nothing downloads until you tap. The file goes to the folder you chose",
@@ -877,7 +873,6 @@ footer a{color:inherit}
       "c4": "احفظ",
       "how-h": "من الرابط إلى هاتفك، في ثلاث خطوات",
       "how-sub": "جرّبها هنا قبل أن تثبّته",
-      "try": "جرّب",
       "s1": "انسخ الرابط",
       "s1p": "انسخ رابط الفيديو من التطبيق، أو شاركه مع Nezzel مباشرة",
       "s2": "اختر الجودة",
@@ -961,7 +956,7 @@ footer a{color:inherit}
     video:"Vidéo", "audio-h":"Audio", best:"Meilleure qualité", last:"Dernier choix", bal:"Équilibrée", small:"Petit fichier", audio:"Audio seul",
     dl:"Télécharger", open:"Ouvrir", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
     c1:"Copier", c2:"Ouvrir", c3:"Choisir", c4:"Enregistrer",
-    "how-h":"Du lien au téléphone en trois étapes", "how-sub":"Essayez ici avant d’installer", try:"Essayer",
+    "how-h":"Du lien au téléphone en trois étapes", "how-sub":"Essayez ici avant d’installer",
     s1:"Copiez le lien", s1p:"Copiez le lien de la vidéo dans son application, ou partagez-le directement avec Nezzel",
     s2:"Choisissez la qualité", s2p:"Ouvrez Nezzel : le lien copié s’affiche. Choisissez ensuite parmi les qualités disponibles",
     s3:"Appuyez sur Télécharger", s3p:"Le téléchargement attend votre accord. Le fichier est enregistré dans le dossier choisi",
