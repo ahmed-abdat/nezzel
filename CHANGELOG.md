@@ -12,6 +12,7 @@ Version entries describe existing builds, not public APK availability.
 
 - French: the app follows a French phone, or pick Français in Settings. Sizes show in octets (Ko, Mo, Go).
 - What's new in French after an update.
+- Settings: message us on WhatsApp.
 - Website in Arabic, English and French, each at its own address, with a language menu.
 
 ### Changed
