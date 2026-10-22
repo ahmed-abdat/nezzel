@@ -52,7 +52,7 @@ Signing certificate SHA-256:
 5C:2F:57:02:02:64:BF:E7:F6:8F:80:3B:DE:BE:77:96:C7:E2:5E:80:EF:AC:91:AB:21:9E:36:96:35:76:94:B7
 ```
 
-Check with `apksigner verify --print-certs nezzel-<version>.apk`. Each release also lists file hashes in `SHA256SUMS`. The package name `dev.ahmed.savlino` is an old internal name.
+Check with `apksigner verify --print-certs nezzel-<version>.apk`. Each release also lists file hashes in `SHA256SUMS`.
 
 </details>
 
