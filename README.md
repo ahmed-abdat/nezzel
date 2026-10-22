@@ -76,7 +76,7 @@ A link doesn't work? Tap **Report this link** on the error screen, or [open an i
 
 ## بالعربية
 
-**Nezzel** تطبيق أندرويد لحفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب ولا تتبّع.
+تطبيق **Nezzel** لأندرويد يحفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب ولا تتبّع.
 
 انسخ الرابط، وافتح Nezzel، واختر الجودة، ثم اضغط «تنزيل». حمّل التطبيق من [صفحة الإصدارات](https://github.com/ahmed-abdat/nezzel/releases/latest) أو من [موقع Nezzel](https://nezzel.hululsoft.mr).
 
