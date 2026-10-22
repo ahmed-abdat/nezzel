@@ -41,6 +41,8 @@ You only see qualities the site really offers. Sizes are real; estimates are mar
 
 Nezzel tells you when a new version is out, and updates keep your files and settings. Needs Android 10+ on a 64-bit ARM phone.
 
+Use [Obtainium](https://github.com/ImranR98/Obtainium)? Add `https://github.com/ahmed-abdat/nezzel` in it.
+
 <details>
 <summary>Verify the APK</summary>
 
