@@ -12,6 +12,6 @@ assignees: ""
 
 **Alternatives or current workaround:**
 
-**Arabic/English, accessibility, privacy or offline considerations:**
+**Arabic/English/French, accessibility, privacy or offline considerations:**
 
 <!-- Check existing issues first. Do not include personal data or private URLs. -->

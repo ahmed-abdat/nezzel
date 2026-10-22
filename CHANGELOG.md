@@ -6,6 +6,16 @@ Version entries describe existing builds, not public APK availability.
 
 ## [Unreleased]
 
+### Added
+
+- French: the app follows a French phone, or pick Français in Settings. Sizes show in octets (Ko, Mo, Go).
+- Website in Arabic, English and French, each at its own address, with a language menu.
+
+### Changed
+
+- Facebook stories explain that they need a login instead of showing a generic error.
+- README rewritten with screenshots; privacy details moved to PRIVACY.md; CONTRIBUTING explains how to build from source.
+
 ## [0.4.7] - 2026-10-22
 
 ### Added

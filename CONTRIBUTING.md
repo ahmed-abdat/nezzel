@@ -2,11 +2,41 @@
 
 Small, focused pull requests are welcome. Check existing issues first and describe the problem before proposing a broad feature. Scope: public media, on-device processing, no embedded browser or account login. Contributions are accepted under the project license, GPL-3.0-or-later.
 
-## Setup and checks
+## Build from source
 
-Follow the [README build setup](README.md#build-from-source): JDK 17, Android Platform 37.0 revision 2, Build Tools 36.0.0, and `ANDROID_HOME` pointing to your SDK. Use the checked-in wrapper and dependency locks. No maintainer credentials, phone, or emulator are needed for JVM checks.
+Kotlin + Jetpack Compose Material3.
 
-From the repository root:
+Install JDK 17 and an Android SDK containing **Platform 37.0 (revision 2)** and **Build Tools 36.0.0**. Set `JAVA_HOME` to JDK 17 and `ANDROID_HOME` to your SDK directory. The project disables automatic JDK/SDK installation. The wrapper uses Gradle 9.3.1; AGP 9.1.1 and Kotlin 2.4.21 are pinned in the build files.
+
+From a POSIX shell (Windows users can use WSL with a Linux JDK/SDK):
+
+```sh
+git clone https://github.com/ahmed-abdat/nezzel.git
+cd nezzel
+: "${JAVA_HOME:?Set JAVA_HOME to JDK 17}"
+: "${ANDROID_HOME:?Set ANDROID_HOME to your Android SDK}"
+export GRADLE_USER_HOME="$PWD/.gradle-home"
+./gradlew :app:assembleDebug --max-workers=2
+./gradlew --stop
+```
+
+The first build needs network access for the pinned Gradle distribution and dependencies. Dependency locks and SHA-256 verification are checked in. With all inputs cached, add `--offline`. The build generates a local debug signing key under ignored `.gradle-home/`; no maintainer signing key is needed. Output: `app/build/outputs/apk/debug/app-debug.apk`. Run `./gradlew --stop` after a failed build too.
+
+## Project layout and engine
+
+| Module | Responsibility |
+| --- | --- |
+| `:app` | Compose UI, intake, jobs, notifications, MediaStore publication and settings |
+| `:core` | Pure Kotlin domain types, validation and format policy |
+| `:engine` | yt-dlp adapter, metadata/error mapping, public-post readers and bounded HTTP/image handling |
+
+The legacy package name `dev.ahmed.savlino` is intentional. Nezzel uses pinned **youtubedl-android 0.18.1** to run yt-dlp locally with bundled Python and FFmpeg. yt-dlp extracts media information and downloads selected streams; FFmpeg merges/converts when required. Public-photo readers handle supported post layouts separately. Only real engine results are offered; test fakes are not shipped.
+
+The APK targets Android 10+ (API 29) on `arm64-v8a` only. Native libraries are 16 KB page-aligned; device testing so far is on 4 KB-page phones. The bundled yt-dlp version is 2025.11.12; the app updates it as described in [PRIVACY.md](PRIVACY.md). Every GitHub Release carries the source for the native components (FFmpeg, Python, QuickJS and their libraries): see [SOURCES.md](SOURCES.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Checks
+
+No maintainer credentials, phone, or emulator are needed for JVM checks. From the repository root:
 
 ```sh
 : "${JAVA_HOME:?Set JAVA_HOME to JDK 17}"
@@ -21,8 +51,8 @@ Run `./gradlew --stop` even if a check fails. First-run dependency downloads nee
 ## Code and UI conventions
 
 - Match surrounding Kotlin, Compose, naming and formatting. Keep domain logic in `:core`, engine details in `:engine`, Android presentation/storage in `:app`.
-- Add UI strings to both `app/src/main/res/values/strings.xml` and `app/src/main/res/values-ar/strings.xml`. No hard-coded user-facing text; use plurals where needed.
-- Use start/end layout directions. Keep URLs and filenames LTR within Arabic layouts. Check English/Arabic, light/dark, large text and TalkBack; touch targets are at least 48 dp. Nezzel's own palette is teal; wallpaper colors (Android 12+) are the user's opt-in choice.
+- Add UI strings to `app/src/main/res/values/strings.xml`, `values-ar/strings.xml` and `values-fr/strings.xml`. No hard-coded user-facing text; use plurals where needed.
+- Use start/end layout directions. Keep URLs and filenames LTR within Arabic layouts. Check English/Arabic/French, light/dark, large text and TalkBack; touch targets are at least 48 dp. Nezzel's own palette is teal; wallpaper colors (Android 12+) are the user's opt-in choice.
 - Offer only engine-returned formats. Unknown sizes remain unknown; estimates must be labelled. Keep fakes in test fixtures and never invent progress or successful saves.
 - Never log URLs, clipboard contents, cookies or credentials. Use synthetic IDs and reserved example domains in tests. Do not commit real page dumps, device serials, signing keys or private links.
 - Preserve foreground-only clipboard access, draft/modal guards and explicit Download/Save confirmation. No account login, background clipboard monitoring or new transfer path without a reviewed scope decision.
@@ -52,7 +82,7 @@ A URL is **not required**. Never share private/unlisted links, signed CDN URLs, 
 - [ ] One focused change; linked issue and before/after behavior described.
 - [ ] Relevant regression checks passed; exact commands/results included.
 - [ ] App changes passed app JVM tests, lint and debug assembly; Gradle stopped.
-- [ ] UI text exists in English and Arabic; RTL, accessibility and theme effects reviewed.
+- [ ] UI text exists in English, Arabic and French; RTL, accessibility and theme effects reviewed.
 - [ ] No private URLs, logs, device identifiers, credentials or generated build outputs.
 - [ ] Only actual formats/progress are shown; estimates and unknown values stay honest.
 - [ ] Dependency/license changes and remaining device checks are documented.

@@ -1,149 +1,170 @@
+<div align="center">
+
+<img src="site/img/icon.svg" width="96" height="96" alt="Nezzel icon">
+
 # Nezzel
 
-Built by [Hululsoft](https://hululsoft.mr).
+**Copy a link. Pick a quality. Save it.**
 
-Nezzel is an ad-free Android app for saving videos, audio and photos from supported public links. Share or paste a link, review the available options, then tap Download or Save.
+An Android app with no ads for saving videos, audio and photos from public links.<br>
+Available in Arabic, English and French.
 
-Processing runs on your device, with Arabic and English support and no Nezzel account or tracking. Some links won’t work; private, sign-in-required and protected content aren’t supported.
+<a href="https://github.com/ahmed-abdat/nezzel/releases/latest"><img src=".github/assets/download-apk.svg" alt="Download APK" height="64"></a>
+&nbsp;
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/ahmed-abdat/nezzel"><img src=".github/assets/get-obtainium.svg" alt="Get updates with Obtainium" height="64"></a>
+
+[![Latest release](https://img.shields.io/github/v/release/ahmed-abdat/nezzel?style=flat-square&color=006B5E&label=release)](https://github.com/ahmed-abdat/nezzel/releases/latest)
+[![Android 10+](https://img.shields.io/badge/Android-10%2B-006B5E?style=flat-square)](#install)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-006B5E?style=flat-square)](LICENSE)
+
+[Website](https://nezzel.hululsoft.mr) · [العربية](#بالعربية) · [Français](#en-français) · [Tested sites](#tested-sites) · [FAQ](#faq)
+
+<a href="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="22%" alt="Welcome screen: save from a link"></a>&nbsp;
+<a href="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="22%" alt="Quality options with sizes"></a>&nbsp;
+<a href="fastlane/metadata/android/ar/images/phoneScreenshots/2.png"><img src="fastlane/metadata/android/ar/images/phoneScreenshots/2.png" width="22%" alt="Quality options in Arabic"></a>&nbsp;
+<a href="fastlane/metadata/android/ar/images/phoneScreenshots/1.png"><img src="fastlane/metadata/android/ar/images/phoneScreenshots/1.png" width="22%" alt="Welcome screen in Arabic"></a>
+
+<sub>Video in the screenshots: <i>Big Buck Bunny</i> © Blender Foundation, CC BY 3.0.</sub>
+
+</div>
+
+## Why Nezzel
+
+- **No ads, no account, no tracking.** You don't sign up and no analytics run in the background.
+- **Real options only.** You only see qualities the site actually offers. Sizes are real, and guesses are marked ≈.
+- **Starts from a link.** Share a link to Nezzel, or copy it and open the app. Nezzel offers the link you just copied.
+- **Video, audio or photos.** Full HD video, audio only or MP3, every photo in a post, and GIFs that keep their animation.
+- **Built for Arabic.** Full right-to-left layout, plus English and French, in light and dark themes.
+- **Runs on your phone.** There's no Nezzel server in between: the phone talks to the site directly.
+
+## How it works
+
+1. Copy a link in YouTube, TikTok, Instagram, Facebook, X, or another supported app.
+2. Open Nezzel. It offers the link you just copied, or you can share the link straight to Nezzel.
+3. Pick a quality and tap **Download**. Files go to `Download/Nezzel`.
+
+<div dir="rtl">
 
 ## بالعربية
 
-Nezzel تطبيق أندرويد لحفظ الفيديو والصوت والصور من الروابط العامة المدعومة، بلا إعلانات أو تتبّع. شارك رابطًا أو الصقه، واختر من الخيارات المتاحة، ثم اضغط «تنزيل» أو «حفظ».
+**Nezzel** تطبيق أندرويد لحفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب ولا تتبّع.
 
-تتم المعالجة على جهازك، بواجهة عربية وإنجليزية ودون حساب في Nezzel. قد لا يعمل كل رابط؛ فالتطبيق لا يدعم المحتوى الخاص أو المحمي أو الذي يتطلب تسجيل الدخول.
+انسخ الرابط، وافتح Nezzel، واختر الجودة، ثم اضغط «تنزيل». تُحفظ الملفات في مجلد ‎`Download/Nezzel`‎.
 
-**التثبيت والتحديث:** نزّل ملف APK من [صفحة الإصدارات](https://github.com/ahmed-abdat/nezzel/releases) وافتحه على هاتفك. يتحقق Nezzel من وجود إصدار جديد ويسألك قبل تنزيله، ويمكنك أيضًا إضافة رابط هذا المستودع في تطبيق [Obtainium](https://github.com/ImranR98/Obtainium). كل إصدار جديد يُثبَّت فوق القديم ويحتفظ بملفاتك وإعداداتك.
+**التثبيت:** حمّل ملف APK من [صفحة الإصدارات](https://github.com/ahmed-abdat/nezzel/releases/latest) أو من [موقع Nezzel](https://nezzel.hululsoft.mr)، ثم افتحه على هاتفك. يخبرك التطبيق عند صدور إصدار جديد، ويُثبَّت الإصدار الجديد فوق القديم دون أن تفقد ملفاتك أو إعداداتك.
 
-## Features
+</div>
 
-- Foreground clipboard suggestions and optional automatic loading of metadata/options.
-- Actual available video/audio formats; unknown sizes stay unknown and estimates are labelled.
-- Audio extraction and MP3 conversion using the bundled engine.
-- Public photo posts and photo selection for supported carousels.
-- Original GIF image saves; previews stay still, while the saved file keeps its animation.
-- Download queue, cancellation, explicit retry, notifications, and saved-file Open/Share/Delete.
-- Save to `Download/Nezzel` or a folder chosen through Android’s system picker.
-- Arabic RTL, light/dark themes, and font scaling.
+## En français
 
-## Tested sites
+**Nezzel** est une application Android sans publicité pour enregistrer vidéos, sons et photos depuis des liens publics, sans compte ni pistage.
 
-These link types passed checks on a real Android phone in October 2026. **Saved** means a download or image save completed; **Options** means inspection passed but saving was not checked. This is not a guarantee for every URL or a full Android compatibility matrix.
-
-### Video
-
-| Site | Passed cases | Check |
-| --- | --- | --- |
-| YouTube | Watch videos and Shorts, including merged audio/video | Saved |
-| Facebook | Public videos and Reels | Saved |
-| Instagram | Video posts and Reels | Saved |
-| TikTok | Public videos | Saved |
-| X / Twitter | Videos and silent GIF-style videos (saved as video) | Saved |
-| LinkedIn | Public video posts | Saved |
-| Snapchat | Spotlight video | Saved |
-| Pinterest | Video pins, including an HLS case | Saved |
-| Bluesky | Video posts | Saved |
-| Telegram | Public channel video posts | Saved |
-| Dailymotion, Vimeo | Public videos | Saved |
-| Direct links | MP4 video | Saved |
-| Imgur, Odysee, 9GAG, Bilibili, Streamable | Video posts | Options |
-| Twitch, Kick | Clips | Options |
-
-### Audio
-
-| Site | Passed cases | Check |
-| --- | --- | --- |
-| YouTube / YouTube Music | Audio-only M4A and MP3 conversion | Saved |
-| SoundCloud | Tracks | Options |
-| Mixcloud | Mixes | Options |
-| Bandcamp | Tracks with an MP3 option | Options |
-
-### Photos and GIF images
-
-| Site | Passed cases | Check |
-| --- | --- | --- |
-| Facebook | Public photo posts | Saved |
-| Instagram | Photos and carousel photo selection | Saved |
-| X / Twitter | Photo posts | Saved |
-| LinkedIn | Public image posts and an original animated GIF | Saved |
-| Telegram | Public channel photo posts | Options |
-| Bluesky | Photo posts | Saved |
-| Direct links | JPEG image | Saved |
-
-VK has inspection-only evidence and is not claimed as a verified download site. Rumble blocked requests in testing. Threads, Reddit, Tumblr and TikTok slideshow images are not claimed supported. Login-required, private and DRM-protected content is outside scope. Site changes can break previously working links; [report a sanitized example](CONTRIBUTING.md#reporting-a-broken-link).
-
-## Screenshots
-
-<!-- Replace with current, sanitized Arabic/English screenshots before public launch. -->
-Screenshots coming soon: Home, quality selection, Downloads, and Arabic RTL.
+Copiez un lien, ouvrez Nezzel, choisissez la qualité, puis touchez «&nbsp;Télécharger&nbsp;». Les fichiers vont dans `Download/Nezzel`. Téléchargez l’APK depuis la [page des versions](https://github.com/ahmed-abdat/nezzel/releases/latest) ou le [site de Nezzel](https://nezzel.hululsoft.mr).
 
 ## Install
 
-Download `nezzel-<version>.apk` from [GitHub Releases](https://github.com/ahmed-abdat/nezzel/releases) and open it on your phone. Android may ask you to allow installation from the app opening the APK.
+1. Download `nezzel-<version>.apk` from the [latest release](https://github.com/ahmed-abdat/nezzel/releases/latest) or [nezzel.hululsoft.mr](https://nezzel.hululsoft.mr).
+2. Open it on your phone. Android asks you to allow installs from your browser or file manager once.
+3. That's it. Nezzel tells you when a new version is out and asks before downloading it. You can also follow updates with [Obtainium](https://github.com/ImranR98/Obtainium).
 
-**Updates:** Nezzel checks GitHub for new versions and asks before downloading one (you can turn this off in Settings). You can also add `https://github.com/ahmed-abdat/nezzel` in [Obtainium](https://github.com/ImranR98/Obtainium), or watch this repository's releases on GitHub. Every release is signed with the same key, so a new APK installs over the old one and keeps your files and settings. The download engine (yt-dlp) updates itself weekly inside the app.
+Every release is signed with the same key, so updates install over the old version and keep your files and settings. Site support (yt-dlp) updates itself weekly inside the app.
 
-Requires **Android 10+ (API 29)** and **arm64-v8a**. Other CPU architectures are not packaged. Native libraries are 16 KB page-aligned; device testing so far is on 4 KB-page phones.
+**Requirements:** Android 10 or newer on a 64-bit ARM phone (`arm64-v8a`).
 
-**Source for bundled components:** every GitHub Release also carries the corresponding source for the native components inside the APK (FFmpeg, Python, QuickJS and their libraries). See [SOURCES.md](SOURCES.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+<details>
+<summary><b>Verify the APK</b></summary>
 
-## Build from source
-
-Kotlin + Jetpack Compose Material3.
-
-Install JDK 17 and an Android SDK containing **Platform 37.0 (revision 2)** and **Build Tools 36.0.0**. Set `JAVA_HOME` to JDK 17 and `ANDROID_HOME` to your SDK directory. The project disables automatic JDK/SDK installation. The wrapper uses Gradle 9.3.1; AGP 9.1.1 and Kotlin 2.4.21 are pinned in the build files.
-
-From a POSIX shell (Windows users can use WSL with a Linux JDK/SDK):
-
-```sh
-git clone https://github.com/ahmed-abdat/nezzel.git
-cd nezzel
-# Set JAVA_HOME and ANDROID_HOME for your installation before continuing.
-: "${JAVA_HOME:?Set JAVA_HOME to JDK 17}"
-: "${ANDROID_HOME:?Set ANDROID_HOME to your Android SDK}"
-export GRADLE_USER_HOME="$PWD/.gradle-home"
-./gradlew :app:assembleDebug --max-workers=2
-./gradlew --stop
+```
+Package:   dev.ahmed.savlino
+SHA-256:   5C:2F:57:02:02:64:BF:E7:F6:8F:80:3B:DE:BE:77:96:C7:E2:5E:80:EF:AC:91:AB:21:9E:36:96:35:76:94:B7
 ```
 
-The first build needs network access for the pinned Gradle distribution and dependencies. Dependency locks and SHA-256 verification are checked in. With all inputs cached, add `--offline`. The build generates a local debug signing key under ignored `.gradle-home/`; no maintainer signing key is needed. Output: `app/build/outputs/apk/debug/app-debug.apk`. Run `./gradlew --stop` after a failed build too.
+Check with `apksigner verify --print-certs nezzel-<version>.apk`. Each release also lists the APK's SHA-256 in `SHA256SUMS`. The package name `dev.ahmed.savlino` is an old internal name and is intentional.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for tests and contribution rules, and [CHANGELOG.md](CHANGELOG.md) for version notes.
+</details>
 
-## Project layout and engine
+## Tested sites
 
-| Module | Responsibility |
-| --- | --- |
-| `:app` | Compose UI, intake, jobs, notifications, MediaStore publication and settings |
-| `:core` | Pure Kotlin domain types, validation and format policy |
-| `:engine` | yt-dlp adapter, metadata/error mapping, public-post readers and bounded HTTP/image handling |
+Nezzel uses [yt-dlp](https://github.com/yt-dlp/yt-dlp), so it can open far more sites than this list. These are the ones we checked on a real phone in October 2026. **Saved** means a file was downloaded and saved. **Opens** means the options loaded but saving wasn't tested.
 
-The legacy package name `dev.ahmed.savlino` is intentional. Nezzel uses pinned **youtubedl-android 0.18.1** to run yt-dlp locally with bundled Python and FFmpeg. yt-dlp extracts media information and downloads selected streams; FFmpeg merges/converts when required. Public-photo readers handle supported post layouts separately. Only real engine results are offered; test fakes are not shipped.
+<details>
+<summary><b>Video</b>: YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat, Pinterest and more</summary>
 
-The bundled yt-dlp version is 2025.11.12. Startup maintenance checks upstream STABLE seven days after the last success, automatically at most once per day, and defers while downloads are queued/running. Settings also offers a manual update. Downloaded replacements are not independently hash-pinned by Nezzel; the bundled dependency pins do not cover them. See [the engine inventory](THIRD_PARTY_NOTICES.md).
+| Site | What we tested | Result |
+| --- | --- | --- |
+| YouTube | Videos and Shorts, including merged audio/video | Saved |
+| Facebook | Public videos and Reels | Saved |
+| Instagram | Video posts and Reels | Saved |
+| TikTok | Public videos | Saved |
+| X / Twitter | Videos and GIF-style videos (saved as video) | Saved |
+| LinkedIn | Public video posts | Saved |
+| Snapchat | Spotlight videos | Saved |
+| Pinterest | Video pins | Saved |
+| Bluesky | Video posts | Saved |
+| Telegram | Public channel videos | Saved |
+| Dailymotion, Vimeo | Public videos | Saved |
+| Direct links | MP4 files | Saved |
+| Imgur, Odysee, 9GAG, Bilibili, Streamable | Video posts | Opens |
+| Twitch, Kick | Clips | Opens |
 
-## Privacy and permissions
+</details>
 
-No analytics or telemetry. Processing stays on the device; requests go directly to source sites/CDNs and upstream engine-update infrastructure. This is not an offline app. Automatic option loading can fetch metadata and previews when Nezzel is foregrounded or accepts a shared/pasted link; turn off **Show options automatically** for manual inspection. There is no background clipboard monitoring. Saving media always requires an explicit action. Local job records support progress and retry; source URLs for retryable jobs have bounded retention. URLs and clipboard contents must never be logged.
+<details>
+<summary><b>Audio</b>: YouTube Music, SoundCloud, Mixcloud, Bandcamp</summary>
 
-App updates are checked through GitHub at most once a day after a successful automatic check while **Check for app updates** is on (default). Settings can turn this off or check manually. The primary request downloads `nezzel-update.json` from the latest release on `github.com` (with redirects to GitHub release-asset hosts). If that fetch or manifest is unavailable or invalid, Nezzel tries `api.github.com` once. GitHub sees your IP address and the Nezzel version in the User-Agent. No cookies, account or device identifiers are sent. Update notifications use permission already granted for downloads; updates never request notification permission. APK downloads happen only after you tap Download update, and Android asks you to confirm installation. The downloaded APK must match its SHA-256 digest, this app's package and signing certificates, and the release version code. Files and settings are preserved.
+| Site | What we tested | Result |
+| --- | --- | --- |
+| YouTube / YouTube Music | Audio only (M4A) and MP3 | Saved |
+| SoundCloud | Tracks | Opens |
+| Mixcloud | Mixes | Opens |
+| Bandcamp | Tracks with an MP3 option | Opens |
 
-| Permission | Purpose |
-| --- | --- |
-| `INTERNET` | Inspection, previews, downloads and engine updates |
-| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` | User-confirmed download work |
-| `POST_NOTIFICATIONS` | Download progress/results and app updates on Android 13+; denial does not prevent downloads |
-| `REQUEST_INSTALL_PACKAGES` | User-confirmed app updates through Android PackageInstaller |
-| `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED` | WorkManager execution, connectivity constraints and rescheduling |
-| App-scoped `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX internal receiver protection; signature-level, no user prompt |
+</details>
 
-The latter WorkManager permissions come from dependency manifest merging. No broad storage, contacts, microphone, or location permission is requested. MediaStore manages saved files.
+<details>
+<summary><b>Photos and GIFs</b>: Facebook, Instagram, X, LinkedIn, Bluesky, Telegram</summary>
 
-## Contributing and security
+| Site | What we tested | Result |
+| --- | --- | --- |
+| Facebook | Public photo posts, including posts with several photos | Saved |
+| Instagram | Photos and choosing photos from a carousel | Saved |
+| X / Twitter | Photo posts | Saved |
+| LinkedIn | Public image posts and animated GIFs | Saved |
+| Bluesky | Photo posts | Saved |
+| Telegram | Public channel photos | Opens |
+| Direct links | JPEG images | Saved |
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md). Keep reports free of private URLs, cookies, account details and device identifiers.
+</details>
+
+**Not supported:** private posts, stories, anything that needs a login, and DRM-protected content. Threads, Reddit, Tumblr and TikTok photo slideshows don't work yet. Sites change often, so a link that worked before can break. See the [FAQ](#faq) to report one.
+
+## FAQ
+
+**Why isn't Nezzel on Google Play?**<br>
+Google Play doesn't allow apps that download videos from YouTube. Nezzel is distributed here and on [its website](https://nezzel.hululsoft.mr).
+
+**Android warned me when I installed it. Is that normal?**<br>
+Yes. Android shows that warning for any app installed outside Google Play. Allow installs once for the app you opened the APK with. To check that the file is genuine, see [Verify the APK](#install).
+
+**A link doesn't work. What can I do?**<br>
+On the error screen, tap **Report this link**. WhatsApp opens with the link filled in, and nothing is sent until you press Send. You can also [open an issue](https://github.com/ahmed-abdat/nezzel/issues/new/choose) with an example that has private details removed. Site support updates itself every week, so try again later too.
+
+**Can it save private videos or stories?**<br>
+No. Nezzel never signs in to your accounts, so private, login-only and DRM-protected content stays out of reach.
+
+**Does it work without internet?**<br>
+No. It needs a connection to load and download media, but the connection goes straight from your phone to the site, not through a Nezzel server.
+
+## Privacy
+
+There are no analytics, no telemetry and no Nezzel account. Links only go to the site you're saving from, or to WhatsApp when you choose to report one. Nezzel reads the clipboard only while it's open on screen. Details, including every permission and update check: [PRIVACY.md](PRIVACY.md).
+
+## Contributing
+
+Bug reports, site reports and small pull requests are welcome. Build steps, tests and project layout are in [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately ([SECURITY.md](SECURITY.md)). Version history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## License and responsible use
 
-Copyright (C) 2026 Hululsoft. Nezzel is licensed under **GPL-3.0-or-later** (see [LICENSE](LICENSE)). Third-party components keep their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Hululsoft name and logo are not covered by the GPL; forks must not present themselves as made by Hululsoft.
+Copyright (C) 2026 [Hululsoft](https://hululsoft.mr). Nezzel is licensed under **GPL-3.0-or-later** ([LICENSE](LICENSE)). Third-party components keep their own licenses ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Each release includes the source code for the native components in the APK ([SOURCES.md](SOURCES.md)). The Hululsoft name and logo are not covered by the GPL, and forks must not present themselves as made by Hululsoft.
 
-Download only content you own or have permission or another legal right to download. Respect applicable law and site terms. Nezzel is not affiliated with the supported sites and does not provide a way to bypass DRM or sign-in requirements.
+Download only content you own or have the right to download, and respect the law and each site's terms. Nezzel isn't affiliated with any of the sites it supports, and it doesn't bypass DRM or sign-in requirements.

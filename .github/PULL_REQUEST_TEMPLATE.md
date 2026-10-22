@@ -10,7 +10,7 @@ Related issue:
 
 - [ ] Relevant regression checks pass.
 - [ ] App changes: app JVM tests, lintDebug and assembleDebug pass; Gradle stopped.
-- [ ] UI changes: English/Arabic resources, RTL, TalkBack, large text, light/dark considered.
+- [ ] UI changes: English/Arabic/French resources, RTL, TalkBack, large text, light/dark considered.
 - [ ] No secrets, real user URLs, device serials, raw logs or generated outputs.
 - [ ] No fabricated formats/progress; unknown sizes and estimates are labelled correctly.
 - [ ] Dependencies/third-party notices, public docs and store metadata updated where applicable.

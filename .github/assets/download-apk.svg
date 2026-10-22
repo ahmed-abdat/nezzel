@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="264" height="72" viewBox="0 0 264 72" role="img" aria-label="Download APK">
+  <rect width="264" height="72" rx="20" fill="#006B5E"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 22v20M35 34l9 9 9-9M33 50h22"/>
+  </g>
+  <text x="72" y="34" fill="#FFFFFF" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="21" font-weight="700">Download APK</text>
+  <text x="72" y="54" fill="#BFE9E0" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13">Latest release · Android 10+</text>
+</svg>
