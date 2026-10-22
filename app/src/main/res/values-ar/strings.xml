@@ -231,6 +231,8 @@
     <string name="quality_very_low">منخفضة جدًا</string>
     <string name="quality_very_low_hint">تستهلك بيانات أقل</string>
     <string name="paste_another_link">لصق رابط آخر</string>
+    <string name="report_link">أبلغ عن هذا الرابط</string>
+    <string name="report_link_intro">لم يستطع Nezzel قراءة هذا الرابط:</string>
     <string name="nezzel_close">إغلاق</string>
     <string name="saved_before">سبق حفظ هذا الملف في %1$s</string>
     <string name="network_title">تعذّر الاتصال</string>

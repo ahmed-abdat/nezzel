@@ -88,7 +88,7 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                                 modifier = Modifier.heightIn(min = 48.dp)) {
                                 Text(stringResource(if (links.engineUpdating) R.string.engine_updating else R.string.engine_update_retry))
                             } }
-                        })
+                        }, onReport = reportLinkAction(links))
                 }
                 is OptionsState.Ready -> {
                     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -117,7 +117,8 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                         links::toggleImage, links::selectAllImages, links::inspectCarouselVideo)
                     SavesTo()
                 }
-                is OptionsState.ImageError -> ImageInspectionError(state, links::checkLink, onDismiss, host, links::pasteAnother)
+                is OptionsState.ImageError -> ImageInspectionError(state, links::checkLink, onDismiss, host, links::pasteAnother,
+                    onReport = reportLinkAction(links))
                 OptionsState.Hidden -> Unit
             }
         }
@@ -354,7 +355,7 @@ private fun moreFormatDetail(format: Format, language: String): String = listOfN
 /** Truthful copy per failure type; Try again only where a retry can succeed. */
 @Composable
 private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> Unit, onPasteAnother: (String?) -> Unit,
-    onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null) {
+    onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null, onReport: (() -> Unit)? = null) {
     val (title, body) = when (error) {
         DownloadError.EngineUnavailable -> R.string.unavailable_title to R.string.unavailable_body
         DownloadError.Unsupported -> R.string.unsupported_title to R.string.unsupported_body
@@ -374,7 +375,7 @@ private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> 
     val retry = error in RETRYABLE_INSPECTION
     // Every link fails the same way while the engine is unavailable, so another link is no way out.
     FailureContent(title, body, host, onRetry.takeIf { retry },
-        onPasteAnother.takeIf { error != DownloadError.EngineUnavailable }, onDismiss, secondary)
+        onPasteAnother.takeIf { error != DownloadError.EngineUnavailable }, onDismiss, secondary, onReport)
 }
 
 private val RETRYABLE_INSPECTION = setOf(DownloadError.EngineUnavailable, DownloadError.Offline, DownloadError.Network, DownloadError.FormatExpired,

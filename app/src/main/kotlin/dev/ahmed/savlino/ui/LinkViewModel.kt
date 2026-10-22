@@ -155,6 +155,17 @@ class LinkViewModel(
         else maintenanceState?.version ?: inspectedEngineVersion.takeIf {
             inspectedMaintenanceGeneration == maintenanceState?.generation
         }
+    private fun reportCode(): String? = when (val state = optionsState) {
+        is OptionsState.Error -> state.error.takeIf { it in ReportLink.downloadErrors }?.name
+        is OptionsState.ImageError -> state.failure.takeIf { it in ReportLink.imageFailures }?.name
+        else -> null
+    }
+    internal val canReportLink get() = reportCode() != null && currentSource() != null
+    internal fun reportMessage(intro: String, versionName: String): String? {
+        val code = reportCode() ?: return null
+        val source = currentSource() ?: return null
+        return ReportLink.message(intro, source.link.rawUrl, versionName, engineVersion(), code)
+    }
     private var gate = SuggestionGate(dismissed, linkKeyer)
     private var clipboardReady by mutableStateOf(initializeClipboard == null)
     private val pendingClipboardDismissals = mutableListOf<ValidatedLink>()

@@ -223,6 +223,8 @@
     <string name="quality_very_low">Very low</string>
     <string name="quality_very_low_hint">Saves more data</string>
     <string name="paste_another_link">Paste another link</string>
+    <string name="report_link">Report this link</string>
+    <string name="report_link_intro">Nezzel couldn\'t read this link:</string>
     <string name="nezzel_close">Close</string>
     <string name="saved_before">You saved this on %1$s</string>
     <string name="network_title">Couldn’t connect</string>

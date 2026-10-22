@@ -9,6 +9,7 @@ Version entries describe existing builds, not public APK availability.
 ### Added
 
 - AVIF photos (Android 12+): Facebook now serves some photos only as AVIF; they load and save as .avif. Older Android versions say the image type isn't supported.
+- Report this link: when Nezzel can't read a link, a button opens WhatsApp with the link and app version filled in, ready for you to send to the developer. Nothing is sent unless you press Send.
 
 ### Changed
 
