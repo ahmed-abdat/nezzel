@@ -51,3 +51,6 @@ scripts/public-export.sh
 .public-exclude
 hs_err_pid*.log
 replay_pid*.log
+
+__pycache__/
+*.pyc

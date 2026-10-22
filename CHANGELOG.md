@@ -6,15 +6,24 @@ Version entries describe existing builds, not public APK availability.
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-10-22
+
 ### Added
 
 - French: the app follows a French phone, or pick Français in Settings. Sizes show in octets (Ko, Mo, Go).
+- What's new in French after an update.
 - Website in Arabic, English and French, each at its own address, with a language menu.
 
 ### Changed
 
 - Facebook stories explain that they need a login instead of showing a generic error.
 - README rewritten with screenshots; privacy details moved to PRIVACY.md; CONTRIBUTING explains how to build from source.
+- Website: the demo phone shows your local time; on an iPhone the download line says Nezzel is Android only.
+
+### Fixed
+
+- Saved file names that mix Arabic and Latin text show in the right order.
+- Downloads list: "12 of 30 MB" instead of "12 MB of 30 MB", and audio rates show as kbps.
 
 ## [0.4.7] - 2026-10-22
 

@@ -1,0 +1,5 @@
+0.4.8
+• Nezzel now speaks French
+• Facebook stories: says clearly that they need a login
+• Arabic: names that mix Arabic and English show in the right order
+• Small fixes in the Downloads list

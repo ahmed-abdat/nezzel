@@ -1,0 +1,5 @@
+0.4.8
+• Nezzel parle maintenant français
+• Stories Facebook : un message clair indique qu’elles demandent une connexion
+• Arabe : les noms qui mêlent arabe et latin s’affichent dans le bon ordre
+• Petites corrections dans la liste des téléchargements
