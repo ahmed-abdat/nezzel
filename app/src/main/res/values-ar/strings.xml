@@ -16,6 +16,7 @@
     <string name="language">اللغة</string>
     <string name="language_ar">العربية</string>
     <string name="language_en">English</string>
+    <string name="language_fr">Français</string>
     <string name="appearance">المظهر</string>
     <string name="theme_system">النظام</string>
     <string name="theme_light">فاتح</string>

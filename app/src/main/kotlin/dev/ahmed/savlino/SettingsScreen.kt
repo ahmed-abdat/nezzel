@@ -65,7 +65,8 @@ private fun MainSettings(
     onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?, onAdvanced: () -> Unit,
 ) {
     var picker by rememberSaveable { mutableStateOf<String?>(null) }
-    val languages = listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en))
+    val languages = listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en),
+        "fr" to stringResource(R.string.language_fr))
     val themes = listOf(ThemePref.System to stringResource(R.string.theme_system), ThemePref.Light to stringResource(R.string.theme_light),
         ThemePref.Dark to stringResource(R.string.theme_dark))
     Scaffold(topBar = { ScreenHeader(stringResource(R.string.settings)) }) { insets ->

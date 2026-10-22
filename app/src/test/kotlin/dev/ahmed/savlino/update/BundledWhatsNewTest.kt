@@ -16,6 +16,7 @@ class BundledWhatsNewTest {
         assertEquals("0.4.6", notes.version)
         assertEquals(listOf("First fix", "Second fix"), notes.english)
         assertEquals(listOf("إصلاح أول", "إصلاح ثان"), notes.arabic)
+        assertEquals(listOf("First fix", "Second fix"), notes.notes("fr"))
     }
 
     @Test fun missingEmptyOrVersionOnlyAssetHasNoNotes() {

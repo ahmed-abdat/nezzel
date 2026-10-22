@@ -12,7 +12,7 @@ import java.util.Locale
 object AppLocale {
     fun current(context: Context): String = if (Build.VERSION.SDK_INT >= 33) {
         val manager = context.getSystemService(LocaleManager::class.java)
-        manager.applicationLocales[0]?.language?.takeIf { it == "ar" || it == "en" }
+        manager.applicationLocales[0]?.language?.takeIf { it == "ar" || it == "en" || it == "fr" }
             ?: AppPreferences.phoneLanguage(manager.systemLocales[0]?.language ?: "en")
     } else AppPreferences(context).language(Resources.getSystem().configuration.locales[0].language, null)
 
@@ -40,7 +40,7 @@ object AppLocale {
         })
     }
     fun choose(context: Context, language: String) {
-        require(language == "ar" || language == "en")
+        require(language == "ar" || language == "en" || language == "fr")
         if (Build.VERSION.SDK_INT >= 33) {
             context.getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(NezzelFormat.numericTag(language))
         } else {

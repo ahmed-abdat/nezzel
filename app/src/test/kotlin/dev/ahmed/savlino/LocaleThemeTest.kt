@@ -47,7 +47,8 @@ class LocaleThemeTest {
     @Test fun firstLaunchFollowsPhoneWithoutStoringChoice() {
         val p = prefs()
         assertEquals("ar", p.language("ar", null))
-        assertEquals("en", p.language("fr", null))
+        assertEquals("fr", p.language("fr", null))
+        assertEquals("en", p.language("de", null))
         assertEquals("en", p.language("en", null))
         assertNull(p.storedLanguage)
     }
@@ -56,10 +57,49 @@ class LocaleThemeTest {
         assertEquals("ar", AppLocale.attach(app).resources.configuration.locales[0].language)
         assertNull(p.storedLanguage)
     }
-    @Test @Config(qualifiers = "fr") fun otherPhoneReattachesWithEnglishResourcesWithoutStoredChoice() {
+    @Test @Config(qualifiers = "de") fun otherPhoneReattachesWithEnglishResourcesWithoutStoredChoice() {
         val p = prefs(); val app = RuntimeEnvironment.getApplication()
         assertEquals("en", AppLocale.attach(app).resources.configuration.locales[0].language)
         assertNull(p.storedLanguage)
+    }
+    @Test fun frenchChoiceSurvivesNewStoreAndOverridesPhone() {
+        val p = prefs()
+        p.chooseLanguage("fr")
+        val restored = AppPreferences(RuntimeEnvironment.getApplication())
+        assertEquals("fr", restored.storedLanguage)
+        assertEquals("fr", restored.language("ar", null))
+        assertEquals("en", restored.language("ar", "en"))
+        assertEquals("fr", restored.language("ar", "unsupported"))
+    }
+    @Test fun phoneLanguageUsesSupportedLanguagesAndDefaultsToEnglish() {
+        assertEquals("ar", AppPreferences.phoneLanguage("ar"))
+        assertEquals("fr", AppPreferences.phoneLanguage("fr"))
+        assertEquals("en", AppPreferences.phoneLanguage("en"))
+        assertEquals("en", AppPreferences.phoneLanguage("de"))
+        assertEquals("en", AppPreferences.phoneLanguage(""))
+    }
+    @Test fun invalidLanguageChoicesAreRejectedWithoutOverwritingFrench() {
+        val p = prefs(); p.chooseLanguage("fr")
+        for (code in listOf("de", "", "fr-FR")) {
+            assertThrows(IllegalArgumentException::class.java) { p.chooseLanguage(code) }
+            assertEquals("fr", p.storedLanguage)
+        }
+    }
+    @Test fun unsupportedStoredLanguageFallsBackToPhone() {
+        prefs()
+        val app = RuntimeEnvironment.getApplication()
+        app.getSharedPreferences("nezzel-portable", 0).edit().putString("language", "de").commit()
+        val p = AppPreferences(app)
+        assertNull(p.storedLanguage)
+        assertEquals("fr", p.language("fr", "de"))
+        assertEquals("en", p.language("de", null))
+    }
+    @Test fun frenchFormattingKeepsLatinDigitsAndLocalDecimalSeparator() {
+        assertEquals("42,8\u00a0Mo", NezzelFormat.size(42_800_000, "fr"))
+        assertEquals("1,4\u00a0Go", NezzelFormat.size(1_400_000_000, "fr"))
+        assertEquals("512\u00a0o", NezzelFormat.size(512, "fr"))
+        assertEquals("123", NezzelFormat.count(123, "fr"))
+        assertEquals("63%", NezzelFormat.percent(63, "fr"))
     }
     @Test fun explicitThemeOverridesSystemAndSystemTracksPhone() {
         assertTrue(ThemePref.System.isDark(true)); assertFalse(ThemePref.System.isDark(false))
@@ -77,6 +117,7 @@ class LocaleThemeTest {
     @Test fun platformLocaleChoiceWinsOverOldPreference() {
         val p = prefs(); p.chooseLanguage("en")
         assertEquals("ar", p.language("en", "ar"))
+        assertEquals("fr", p.language("ar", "fr"))
         assertEquals("en", p.language("ar", "en"))
     }
     @Test fun arabicNumbersAlwaysUseLatinDigits() {

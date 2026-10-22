@@ -43,11 +43,11 @@ class AppPreferences(context: Context) {
             if (value != null && value > 0) { putInt("lastHeight", value); remove("lastPreset") }
             else remove("lastHeight")
         }.apply() }
-    val storedLanguage: String? get() = portable.getString("language", null)?.takeIf { it == "ar" || it == "en" }
+    val storedLanguage: String? get() = portable.getString("language", null)?.takeIf { it == "ar" || it == "en" || it == "fr" }
     fun language(system: String, platformChoice: String?): String =
-        platformChoice?.takeIf { it == "ar" || it == "en" } ?: storedLanguage ?: phoneLanguage(system)
+        platformChoice?.takeIf { it == "ar" || it == "en" || it == "fr" } ?: storedLanguage ?: phoneLanguage(system)
     fun chooseLanguage(language: String) {
-        require(language == "ar" || language == "en")
+        require(language == "ar" || language == "en" || language == "fr")
         portable.edit().putString("language", language).apply()
     }
     var theme: ThemePref
@@ -87,5 +87,5 @@ class AppPreferences(context: Context) {
     fun storeDismissedHashes(value: Set<String>): Boolean =
         prefs.edit().putString("dismissed_ordered", JSONArray(value.toList().takeLast(50)).toString())
             .remove("dismissed").commit()
-    companion object { fun phoneLanguage(system: String) = if (system == "ar") "ar" else "en" }
+    companion object { fun phoneLanguage(system: String) = when (system) { "ar" -> "ar"; "fr" -> "fr"; else -> "en" } }
 }

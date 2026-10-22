@@ -24,6 +24,7 @@ class ManifestReleaseTest {
         assertEquals(123L, release.size); assertEquals("a".repeat(64), release.digest)
         assertEquals("https://github.com/ahmed-abdat/nezzel/releases/download/v0.4.4/nezzel-0.4.4.apk", release.url)
         assertEquals(listOf("Fixed"), release.notes("en")); assertEquals(listOf("إصلاح"), release.notes("ar"))
+        assertEquals(listOf("Fixed"), release.notes("fr"))
     }
     @Test fun everyRequiredFieldMustBePresent() {
         listOf("schema", "version", "versionCode", "apk", "notes").forEach { field ->

@@ -341,7 +341,7 @@ class OnboardingTest {
     @Test @Config(qualifiers = "ar-w800dp-h360dp-mdpi")
     fun arabicDarkLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(rtl = true, fontScale = 2f) { checkPages(true) }
 
-    @Test fun englishArabicResourcesHaveMatchingKeysAndShortCopy() {
+    @Test fun allLanguagesHaveMatchingOnboardingKeysAndShortCopy() {
         val res = java.io.File("src/main/res").takeIf { it.isDirectory } ?: java.io.File("app/src/main/res")
         fun strings(locale: String): Map<String, String> {
             val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
@@ -352,6 +352,7 @@ class OnboardingTest {
                 .associate { it.getAttribute("name") to it.textContent }
         }
         val english = strings("values"); val arabic = strings("values-ar")
+        assertEquals(english.keys, strings("values-fr").keys)
         val expectedEnglish = mapOf(
             "onboarding_anywhere_title" to "Keep what you love",
             "onboarding_anywhere_body" to "Videos, audio and photos from public links. Clean, ad-free, no account",

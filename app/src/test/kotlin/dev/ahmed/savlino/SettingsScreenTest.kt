@@ -53,6 +53,31 @@ class SettingsScreenTest {
         }
     }
 
+    @Test fun languagePickerOffersFrenchAndShowsItAsCurrentChoice() = withUpdates { updates ->
+        val chosen = mutableListOf<String>()
+        @androidx.compose.runtime.Composable fun settings(language: String) {
+            SettingsScreen(LinkViewModel(SavedStateHandle()), language, ThemePref.System, false, true,
+                { chosen += it }, {}, {}, {}, {}, {}, updates = updates)
+        }
+        renderThemed({ nodes(it) }, { settings("ar") }) { a ->
+            click(clickable(a, context.getString(R.string.language)))
+            val choices = nodes(a).filter { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton }
+            assertEquals(setOf("العربية", "English", "Français"),
+                choices.flatMap { texts(descendants(it)) }.toSet())
+            click(choices.single { "Français" in texts(descendants(it)) })
+            assertEquals(listOf("fr"), chosen)
+            assertTrue(nodes(a).none { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton })
+        }
+        renderThemed({ nodes(it) }, { settings("fr") }) { a ->
+            val row = clickable(a, context.getString(R.string.language))
+            assertTrue(texts(descendants(row)).contains("Français"))
+            click(row)
+            val french = nodes(a).single { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
+                "Français" in texts(descendants(it)) }
+            assertEquals(true, french.config.getOrNull(SemanticsProperties.Selected))
+        }
+    }
+
     @Test fun advancedHoldsEngineToolsAndUpdateSwitchAndBackReturns() = withUpdates { updates ->
         val toggled = mutableListOf<Boolean>()
         renderThemed({ nodes(it) }, {

@@ -1,0 +1,28 @@
+Nezzel est une application Android sans publicité pour enregistrer des vidéos, de l’audio et des photos depuis des liens publics compatibles — partagez ou collez un lien, consultez les options disponibles, puis appuyez sur Télécharger ou Enregistrer
+
+Tout est traité sur votre appareil, avec une interface en arabe, anglais et français, sans compte Nezzel ni suivi — certains liens ne fonctionnent pas, et les contenus privés, protégés ou nécessitant une connexion à un compte ne sont pas pris en charge
+
+Fonctionnalités
+• Les options vidéo et audio proviennent du moteur de téléchargement ; les tailles inconnues restent inconnues et les estimations sont signalées
+• Extraction audio et conversion en MP3
+• Photos de publications publiques, sélection de photos dans les carrousels compatibles et enregistrement des GIF originaux, avec des aperçus fixes
+• File de téléchargements, annulation, nouvel essai manuel, notifications et actions Ouvrir, Partager et Supprimer pour les fichiers enregistrés
+• Enregistrement dans Download/Nezzel ou dans un dossier choisi avec le sélecteur Android
+• Arabe, anglais et français, affichage de droite à gauche, thèmes clair et sombre et taille du texte réglable
+
+Types de liens testés
+Des vidéos publiques de YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat Spotlight, Pinterest, Bluesky, Telegram, Dailymotion et Vimeo ont été enregistrées sur un vrai téléphone Android, ainsi que des liens MP4 directs — de l’audio M4A seul et des conversions MP3 depuis YouTube ont aussi été enregistrés
+
+L’enregistrement de photos a réussi pour Facebook, Instagram, X, LinkedIn, Bluesky et un lien JPEG direct — un GIF LinkedIn original a aussi été enregistré et lu avec son animation
+
+Les options ont été consultées avec succès pour des titres SoundCloud, des mixes Mixcloud, des titres Bandcamp, des vidéos Imgur, Odysee, 9GAG, Bilibili et Streamable, des clips Twitch et Kick et des publications photo Telegram — l’enregistrement n’a pas été vérifié pour ces cas
+
+Ce sont des exemples, sans garantie que chaque lien fonctionne — Rumble a bloqué les demandes lors des tests, et les contenus privés, nécessitant une connexion à un compte ou protégés par DRM ne sont pas pris en charge
+
+Confidentialité
+Sans publicité, compte, navigateur intégré, analyse d’usage ni télémétrie — le traitement reste sur votre appareil, avec des demandes envoyées directement aux sites sources, à leurs serveurs de fichiers et aux services de mise à jour du moteur — le chargement automatique des options peut récupérer des informations et des aperçus lorsque l’application est au premier plan ou accepte un lien partagé ou collé — désactivez Afficher les options automatiquement pour les consulter manuellement — aucune lecture du presse-papiers en arrière-plan, et l’enregistrement des médias nécessite toujours une confirmation explicite
+
+Configuration et disponibilité
+Android 10 ou plus récent et arm64-v8a uniquement — la compatibilité native avec les pages de 16 Ko n’est pas résolue, et les vérifications sur appareil concernent les pages de 4 Ko — cette fiche n’annonce pas de disponibilité sur F-Droid ou un autre magasin — la distribution publique des APK nécessite toujours le code source correspondant et les mentions complètes des composants tiers
+
+Copyright (C) 2026 Hululsoft — Nezzel est sous licence GPL-3.0-or-later ; les composants tiers conservent leurs propres conditions — téléchargez seulement les contenus que vous avez le droit d’enregistrer — contact : contact@hululsoft.mr

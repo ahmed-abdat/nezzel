@@ -4,22 +4,23 @@ import java.text.NumberFormat
 import java.util.Locale
 
 object NezzelFormat {
-    /** Language tag with Latin digits in both languages. */
+    /** Language tag with Latin digits in every language. */
     fun numericTag(language: String): String = "$language-u-nu-latn"
     fun number(value: Double, language: String, decimals: Int): String =
         NumberFormat.getNumberInstance(Locale.forLanguageTag(numericTag(language))).apply {
             isGroupingUsed = false; minimumFractionDigits = 0; maximumFractionDigits = decimals
-            // Units and numeric punctuation are Latin in both languages.
+            // Keep Latin digits; retain each locale’s decimal separator.
         }.format(value).replace('\u066b', '.')
     fun size(bytes: Long, language: String): String {
         require(bytes >= 0)
         val (value, unit) = when {
-            bytes >= 1_000_000_000 -> bytes / 1_000_000_000.0 to "GB"
-            bytes >= 1_000_000 -> bytes / 1_000_000.0 to "MB"
-            bytes >= 1_000 -> bytes / 1_000.0 to "KB"
-            else -> bytes.toDouble() to "B"
+            bytes >= 1_000_000_000 -> bytes / 1_000_000_000.0 to "G"
+            bytes >= 1_000_000 -> bytes / 1_000_000.0 to "M"
+            bytes >= 1_000 -> bytes / 1_000.0 to "K"
+            else -> bytes.toDouble() to ""
         }
-        return "${number(value, language, 1)}\u00a0$unit" // NBSP: "5.6 MB" never breaks across lines
+        val byte = if (language == "fr") "o" else "B" // French writes octets: Ko, Mo, Go
+        return "${number(value, language, 1)}\u00a0$unit$byte" // NBSP: "5.6 MB" never breaks across lines
     }
     fun duration(seconds: Long): String {
         require(seconds >= 0)
