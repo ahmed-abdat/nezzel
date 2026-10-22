@@ -3,34 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nezzel · نزّل الفيديو من رابطه</title>
+<title>Nezzel · حمّل الفيديو من رابطه</title>
 <meta name="description" content="احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب">
 <meta name="theme-color" content="#F5FBF8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1513" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://api.github.com; base-uri 'self'; form-action 'none'; object-src 'none'">
 <link rel="canonical" href="https://nezzel.hululsoft.mr/">
+<link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/">
+<link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/">
+<link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/">
+<link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Nezzel">
 <meta property="og:url" content="https://nezzel.hululsoft.mr/">
-<meta property="og:title" content="Nezzel · نزّل الفيديو من رابطه">
+<meta property="og:title" content="Nezzel · حمّل الفيديو من رابطه">
 <meta property="og:description" content="احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب">
 <meta property="og:image" content="https://nezzel.hululsoft.mr/img/og.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Nezzel: نزّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة لفيديو">
+<meta property="og:image:alt" content="Nezzel: حمّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة لفيديو">
 <meta property="og:locale" content="ar_AR">
 <meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="fr_FR">
+
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Nezzel","description":"احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب","url":"https://nezzel.hululsoft.mr/","image":"https://nezzel.hululsoft.mr/img/og.jpg","operatingSystem":"Android 10+","applicationCategory":"MultimediaApplication","inLanguage":["ar","en"],"license":"https://www.gnu.org/licenses/gpl-3.0.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/ahmed-abdat/nezzel/releases/latest","publisher":{"@type":"Organization","name":"Hululsoft","url":"https://hululsoft.mr"}}</script>
+<script>
+(() => {
+  const page = document.documentElement.lang;
+  let choice = new URLSearchParams(location.search).get("lang");
+  if (!["ar", "en", "fr"].includes(choice)) {
+    try { choice = localStorage.getItem("nezzel-lang"); } catch (e) {}
+  }
+  if (location.pathname === "/" && (choice === "en" || choice === "fr")) {
+    const target = new URL("/" + choice + "/", location.origin);
+    target.search = location.search; target.searchParams.delete("lang"); target.hash = location.hash;
+    location.replace(target.href);
+  } else {
+    try { localStorage.setItem("nezzel-lang", page); } catch (e) {}
+  }
+})();
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Nezzel","description":"احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب","url":"https://nezzel.hululsoft.mr/","image":"https://nezzel.hululsoft.mr/img/og.jpg","operatingSystem":"Android 10+","applicationCategory":"MultimediaApplication","inLanguage":"ar","license":"https://www.gnu.org/licenses/gpl-3.0.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/ahmed-abdat/nezzel/releases/latest","publisher":{"@type":"Organization","name":"Hululsoft","url":"https://hululsoft.mr"}}</script>
 <script>try{const t=localStorage.getItem("nezzel-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
-<link rel="icon" href="img/icon.svg" type="image/svg+xml">
-<noscript><style>[data-r]{opacity:1;transform:none;filter:none}.theme,.lang,.steps-nav{display:none}</style></noscript>
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-<link rel="preload" href="fonts/noto-sans-arabic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+<noscript><style>[data-r]{opacity:1;transform:none;filter:none}.theme,.steps-nav{display:none}.mini{display:none}</style></noscript>
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preload" href="/fonts/noto-sans-arabic.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-@font-face{font-family:"Noto Sans Arabic";src:url(fonts/noto-sans-arabic.woff2) format("woff2");font-weight:100 900;font-stretch:62.5% 100%;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url(/fonts/noto-sans-arabic.woff2) format("woff2");font-weight:100 900;font-stretch:62.5% 100%;font-display:swap}
 :root{
   --primary:#006B5E;--on-primary:#fff;--primary-c:#9EF2E1;--on-primary-c:#00201B;
   --secondary-c:#CDE8E1;--on-secondary-c:#051F1B;
@@ -65,7 +87,7 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:96px;interpolate-size:allow-keywords}
 body{margin:0;background:var(--bg);color:var(--on-bg);font:400 17px/1.75 "Noto Sans Arabic",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
-html[lang=en] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif;line-height:1.6}
+html[dir=ltr] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif;line-height:1.6}
 ::selection{background:var(--primary-c);color:var(--on-primary-c)}
 a{color:var(--primary);text-underline-offset:.22em;text-decoration-thickness:1.5px}
 :focus-visible{outline:3px solid var(--primary);outline-offset:3px;border-radius:12px}
@@ -96,8 +118,29 @@ body.scrolled .bar{background:color-mix(in oklab,var(--c-lowest) 80%,transparent
 .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-weight:800;font-size:19px}
 .brand img{width:34px;height:34px;border-radius:10px}
 .bar .sp{flex:1}
-.lang{min-height:48px;padding:0 16px;border-radius:999px;border:0;box-shadow:inset 0 0 0 1px var(--outline-v);background:transparent;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s,box-shadow .2s}
+.locale-switch{position:relative;flex:none}
+.locale-switch,.locale-switch[open]{background:transparent;border-radius:999px;transition:none}
+.locale-switch::details-content{height:auto;overflow:visible;transition:none}
+.lang{display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;min-width:76px;padding:0 12px;border-radius:999px;border:0;box-shadow:inset 0 0 0 1px var(--outline-v);background:transparent;font:600 14px/1 system-ui,sans-serif;cursor:pointer;list-style:none;transition:background .15s ease-out,box-shadow .15s ease-out,transform .15s ease-out}
+.lang::-webkit-details-marker{display:none}
+.lang::after{content:none}
+.lang .i{width:20px;height:20px}
+.lang:active{transform:scale(.96)}
 .lang:hover{background:var(--c-high);box-shadow:inset 0 0 0 1px var(--outline)}
+.locale-switch[open] .lang{background:var(--primary-c);color:var(--on-primary-c)}
+.lang-menu{position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:180px;padding:6px;border-radius:18px;background:var(--c-lowest);border:1px solid var(--outline-v);box-shadow:0 10px 30px -10px rgb(var(--ink-sh)/.3);transform-origin:100% 0}
+[dir=rtl] .lang-menu{transform-origin:0 0}
+.lang-menu a{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:44px;padding:8px 12px;border-radius:12px;text-decoration:none;color:var(--on-bg);font-size:15px;transition:background .15s ease-out}
+.lang-menu a:hover,.lang-menu a:focus-visible{background:var(--c-high)}
+.lang-menu a[aria-current=page]{background:var(--primary-c);color:var(--on-primary-c);font-weight:700}
+.lang-menu .i{width:18px;height:18px;visibility:hidden}
+.lang-menu [aria-current=page] .i{visibility:visible}
+@media (prefers-reduced-motion:no-preference){
+  .locale-switch[open] .lang-menu{animation:locale-in .15s ease-out both}
+  .locale-switch[open] .lang-menu a{animation:locale-row .15s ease-out both;animation-delay:calc(var(--row) * 40ms)}
+}
+@keyframes locale-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@keyframes locale-row{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 .theme{position:relative;width:48px;height:48px;flex-shrink:0;border:0;border-radius:50%;background:transparent;box-shadow:inset 0 0 0 1px var(--outline-v);cursor:pointer;display:grid;place-items:center;transition:background .2s,box-shadow .2s}
 .theme:hover{background:var(--c-high);box-shadow:inset 0 0 0 1px var(--outline)}
 .theme svg{grid-area:1/1;width:20px;height:20px;transition:transform .6s var(--spring),opacity .3s}
@@ -117,17 +160,19 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 .btn:hover::after{transform:translateX(calc(var(--x) * 120%))}
 .btn:active{transform:scale(.98);transition-duration:.1s}
 .btn .sz{font-weight:500;opacity:.82}
+.btn>span{white-space:nowrap}
 .btn .i{transition:transform .5s var(--spring)}
 .btn:hover .i{transform:translateY(3px)}
 
 /* hero */
-.hero{display:grid;gap:24px;align-items:center;padding:48px 0 0}
+.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:center;padding:48px 0 0}
 @media (min-width:960px){.hero{grid-template-columns:1.05fr .95fr;gap:40px;padding-top:56px;min-height:min(820px,calc(100svh - 80px))}}
 .copy{text-align:center}
 @media (min-width:960px){.copy{text-align:start}}
-h1{font-size:clamp(42px,7.2vw,88px);line-height:1.12;font-weight:800;margin:0;letter-spacing:0;text-wrap:balance;font-stretch:92%}
-html[lang=en] h1{letter-spacing:-.04em;line-height:1}
-h1 em{font-style:normal;color:var(--primary)}
+h1{font-size:clamp(42px,7.2vw,88px);line-height:1.12;font-weight:800;margin:0;letter-spacing:0;font-stretch:92%}
+html[dir=ltr] h1{letter-spacing:-.04em;line-height:1}
+h1 em{display:block;font-style:normal;color:var(--primary)}
+html[lang=fr] h1{font-size:clamp(34px,10.4vw,64px)}
 .lede{font-size:clamp(18px,2vw,21px);color:var(--muted);max-width:30ch;margin:22px auto 0;text-wrap:pretty}
 @media (min-width:960px){.lede{margin-inline:0}}
 .cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:34px}
@@ -154,7 +199,7 @@ h1 em{font-style:normal;color:var(--primary)}
 .phone{--W:290px;position:relative;z-index:2;width:var(--W);height:calc(var(--W) * 2.07);padding:9px;border-radius:46px;background:#0c100f;box-shadow:0 50px 90px -40px rgb(0 32 27/.7),0 0 0 1.5px #29302e inset,0 0 0 1px rgb(255 255 255/.05);font-size:12.5px;line-height:1.45}
 @media (max-width:380px){.phone{--W:262px}}
 .screen{position:relative;height:100%;border-radius:37px;overflow:hidden;background:var(--bg);color:var(--on-bg);font-family:"Noto Sans Arabic",system-ui,sans-serif}
-html[lang=en] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
+html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .cam{position:absolute;z-index:9;top:12px;left:50%;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#0c100f}
 .sb{display:flex;justify-content:space-between;padding:12px 22px 0;font:600 11px/1 system-ui,sans-serif;opacity:.85}
 .sb>span{direction:ltr;unicode-bidi:isolate}
@@ -273,7 +318,7 @@ html[lang=en] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 /* sections */
 section{padding:128px 0 0}
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
-html[lang=en] h2{letter-spacing:-.035em;line-height:1.08}
+html[dir=ltr] h2{letter-spacing:-.035em;line-height:1.08}
 .sub{color:var(--muted);font-size:18px;max-width:46ch;margin:14px 0 0;text-wrap:pretty}
 
 /* try-it panels */
@@ -442,6 +487,10 @@ footer a{color:inherit}
 
 @media (max-width:520px){
   body{font-size:16.5px}
+  .bar{gap:6px}
+  .bar .sp{min-width:0}
+  .brand{flex-shrink:0;gap:8px}
+  .lang{min-width:70px;padding:0 9px}
   .bar .mini span{display:none}
   .mini{padding:0 14px}
   section{padding-top:96px}
@@ -449,6 +498,8 @@ footer a{color:inherit}
   .steps-nav button{padding:0 11px;font-size:13px}
 }
 @media (max-width:370px){body.past .brand .bn{display:none}}
+@media (max-width:400px){.steps-nav{gap:2px}.steps-nav button{padding:0 8px;font-size:12.5px}.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
+@media (max-width:340px){.lang{min-width:0;padding:0 8px}.steps-nav button{padding:0 5px;font-size:12px}}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
@@ -483,23 +534,32 @@ footer a{color:inherit}
 <a class="sr" href="#main" data-i="skip">تخطَّ إلى المحتوى</a>
 <div class="wrap top">
   <nav class="bar" aria-label="Nezzel">
-    <a class="brand" href="#top" aria-label="Nezzel"><img src="img/icon.svg" alt="" width="34" height="34"><span class="bn">Nezzel</span></a>
+    <a class="brand" href="#top" aria-label="Nezzel"><img src="/img/icon.svg" alt="" width="34" height="34"><span class="bn">Nezzel</span></a>
     <span class="sp"></span>
-    <a class="mini dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/latest" tabindex="-1" aria-label="تنزيل" data-i-aria="get"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="get">تنزيل</span></a>
-    <button class="theme" type="button" id="theme" aria-label="الوضع الداكن" data-i-aria="to-dark"><svg class="moon i" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg><svg class="sun i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
-    <button class="lang" type="button" id="lang" lang="en">English</button>
+    <a class="mini dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/latest" tabindex="-1" data-i-aria="get" aria-label="تنزيل"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="get">تنزيل</span></a>
+    <button class="theme" type="button" id="theme" data-i-aria="to-dark" aria-label="الوضع الداكن"><svg class="moon i" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg><svg class="sun i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
+    <details class="locale-switch" id="locale-switch">
+      <summary class="lang" id="lang" data-i-aria="language" aria-haspopup="menu" aria-controls="lang-menu" aria-label="اللغة">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg><span id="lang-code" lang="en" dir="ltr">AR</span>
+      </summary>
+      <div class="lang-menu" id="lang-menu" role="menu" data-i-aria="language" aria-label="اللغة">
+        <a href="/" hreflang="ar" data-locale="ar" role="menuitem" style="--row:0" aria-current="page"><span lang="ar" dir="rtl">العربية</span><svg class="i" aria-hidden="true"><use href="#check"/></svg></a>
+        <a href="/fr/" hreflang="fr" data-locale="fr" role="menuitem" style="--row:1"><span lang="fr" dir="ltr">Français</span><svg class="i" aria-hidden="true"><use href="#check"/></svg></a>
+        <a href="/en/" hreflang="en" data-locale="en" role="menuitem" style="--row:2"><span lang="en" dir="ltr">English</span><svg class="i" aria-hidden="true"><use href="#check"/></svg></a>
+      </div>
+    </details>
   </nav>
 </div>
 
 <main id="main">
 <header class="wrap hero" id="top">
   <div class="copy">
-    <h1 id="h1" data-i="h1">نزّل الفيديو <em>من رابطه</em></h1>
+    <h1 id="h1" data-i="h1">حمّل الفيديو <em>من رابطه</em></h1>
     <p class="lede" data-i="lede" data-r style="--d:6">احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب</p>
     <div class="cta" data-r style="--d:8">
       <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/latest">
         <svg class="i"><use href="#dl"/></svg>
-        <span data-i="cta">تنزيل التطبيق</span> <span class="sz ltr num size">59 MB</span>
+        <span data-i="cta">تنزيل التطبيق</span> <span class="sz ltr num size" data-mb="59">59 MB</span>
       </a>
       <div class="meta"><span data-i="meta">لأندرويد 10 أو أحدث · الإصدار</span> <span class="ltr num vtxt">0.4.7</span> · <a href="#install" data-i="howto">كيف أثبّته؟</a></div>
     </div>
@@ -542,7 +602,7 @@ footer a{color:inherit}
         </div>
         <div class="sc s1">
           <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
-          <div class="nzb"><img src="img/icon.svg" alt="">Nezzel</div>
+          <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
           <div class="field"><svg class="i"><use href="#link"/></svg><span data-i="field">الصق رابطًا عامًا</span></div>
           <div class="ghost"><i></i><i></i></div>
           <div class="nav"><span class="on"><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">الرئيسية</span></span><span><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">التنزيلات</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">الإعدادات</span></span></div>
@@ -556,13 +616,13 @@ footer a{color:inherit}
           <div class="qs">
             <div class="qh"><div class="art"><svg><use href="#scene"/></svg></div><div><b data-i="vt">لقطات من رحلة الصيف</b><small class="ltr">2:48</small></div></div>
             <div class="ql" data-i="video">فيديو</div>
-            <div class="qr" id="q1080" style="--q:0"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">أعلى جودة</small></span><span class="s">≈ 61.8 MB</span></div>
-            <div class="qr sel" id="q720" style="--q:1"><span class="rd"></span><span class="t"><b><span class="ltr">720p · HD</span><span class="bdg" data-i="last">آخر اختيار</span></b><small data-i="bal">متوازنة</small></span><span class="s">≈ 32.4 MB</span></div>
-            <div class="qr" style="--q:2"><span class="rd"></span><span class="t"><b class="ltr">480p</b><small data-i="small">حجم صغير</small></span><span class="s">≈ 16.9 MB</span></div>
+            <div class="qr" id="q1080" style="--q:0"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">أعلى جودة</small></span><span class="s" data-mb="61.8" data-est>≈ 61.8 MB</span></div>
+            <div class="qr sel" id="q720" style="--q:1"><span class="rd"></span><span class="t"><b><span class="ltr">720p · HD</span><span class="bdg" data-i="last">آخر اختيار</span></b><small data-i="bal">متوازنة</small></span><span class="s" data-mb="32.4" data-est>≈ 32.4 MB</span></div>
+            <div class="qr" style="--q:2"><span class="rd"></span><span class="t"><b class="ltr">480p</b><small data-i="small">حجم صغير</small></span><span class="s" data-mb="16.9" data-est>≈ 16.9 MB</span></div>
             <div class="ql" data-i="audio-h">صوت</div>
-            <div class="qr" style="--q:3"><span class="rd"></span><span class="t"><b><span data-i="audio">صوت فقط</span> · <span class="ltr">M4A</span></b></span><span class="s">2.7 MB</span></div>
+            <div class="qr" style="--q:3"><span class="rd"></span><span class="t"><b><span data-i="audio">صوت فقط</span> · <span class="ltr">M4A</span></b></span><span class="s" data-mb="2.7">2.7 MB</span></div>
           </div>
-          <div class="foot"><div class="pbtn" id="pb2"><svg class="i"><use href="#dl"/></svg><span data-i="dl">تنزيل</span> · <span class="sw ltr num"><span>≈ 32.4 MB</span><span>≈ 61.8 MB</span></span></div></div>
+          <div class="foot"><div class="pbtn" id="pb2"><svg class="i"><use href="#dl"/></svg><span data-i="dl">تنزيل</span> · <span class="sw ltr num"><span data-mb="32.4" data-est>≈ 32.4 MB</span><span data-mb="61.8" data-est>≈ 61.8 MB</span></span></div></div>
         </div>
         <div class="sc s3">
           <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
@@ -585,7 +645,7 @@ footer a{color:inherit}
       <button type="button" data-go="1"><span data-i="c2">افتح</span><i></i></button>
       <button type="button" data-go="2"><span data-i="c3">اختر</span><i></i></button>
       <button type="button" data-go="3"><span data-i="c4">احفظ</span><i></i></button>
-      <button type="button" class="pause" id="demo-pause" aria-label="إيقاف العرض مؤقتًا"><svg class="i"><use href="#pause"/></svg></button>
+      <button type="button" class="pause" id="demo-pause" data-i-aria="pause" aria-label="إيقاف العرض مؤقتًا"><svg class="i"><use href="#pause"/></svg></button>
     </div>
   </div>
 </header>
@@ -608,9 +668,9 @@ footer a{color:inherit}
       <h3 data-i="s2">اختر الجودة</h3>
       <p data-i="s2p">افتح Nezzel فيعرض الرابط الذي نسخته، ثم اختر من الجودات المتاحة</p>
       <div class="demo pq" role="radiogroup" data-i-aria="s2" aria-label="اختر الجودة">
-        <button type="button" role="radio" aria-checked="true" data-size="61.8" data-est="1"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">أعلى جودة</small></span><span class="s">≈ 61.8 MB</span></button>
-        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-size="32.4" data-est="1"><span class="rd"></span><span class="t"><b class="ltr">720p · HD</b><small data-i="bal">متوازنة</small></span><span class="s">≈ 32.4 MB</span></button>
-        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-size="2.7"><span class="rd"></span><span class="t"><b><span data-i="audio">صوت فقط</span> · <span class="ltr">M4A</span></b></span><span class="s">2.7 MB</span></button>
+        <button type="button" role="radio" aria-checked="true" data-size="61.8" data-est="1"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">أعلى جودة</small></span><span class="s" data-mb="61.8" data-est>≈ 61.8 MB</span></button>
+        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-size="32.4" data-est="1"><span class="rd"></span><span class="t"><b class="ltr">720p · HD</b><small data-i="bal">متوازنة</small></span><span class="s" data-mb="32.4" data-est>≈ 32.4 MB</span></button>
+        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-size="2.7"><span class="rd"></span><span class="t"><b><span data-i="audio">صوت فقط</span> · <span class="ltr">M4A</span></b></span><span class="s" data-mb="2.7">2.7 MB</span></button>
       </div>
     </article>
     <article class="panel" data-r style="--d:4">
@@ -618,7 +678,7 @@ footer a{color:inherit}
       <h3 data-i="s3">اضغط تنزيل</h3>
       <p data-i="s3p">لا يبدأ التنزيل قبل أن تضغط، ويُحفظ الملف في المجلد الذي اخترته</p>
       <div class="demo">
-        <button class="dlrun" id="dlrun" type="button"><svg class="i"><use href="#dl"/></svg><span data-i="dl">تنزيل</span> · <span class="ltr num" id="dlsize">≈ 61.8 MB</span></button>
+        <button class="dlrun" id="dlrun" type="button"><svg class="i"><use href="#dl"/></svg><span data-i="dl">تنزيل</span> · <span class="ltr num" id="dlsize" data-mb="61.8" data-est>≈ 61.8 MB</span></button>
         <div class="jobp" id="jobp">
           <span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="ok"><svg class="i"><use href="#check"/></svg></span></span>
           <span class="t"><b data-i="vt">لقطات من رحلة الصيف</b><small class="pl-line"></small><span class="sr" id="job-status" role="status"></span></span>
@@ -635,7 +695,7 @@ footer a{color:inherit}
       <h2 id="ins-h" data-i="ins-h" data-r>التثبيت خطوة بخطوة</h2>
       <p class="sub" data-i="ins-sub" data-r style="--d:1">Nezzel ليس في متجر Play، لذلك قد يطلب أندرويد إذنك لتثبيته من المتصفح. هذا طبيعي</p>
       <ol class="how" id="steps" data-r style="--d:2">
-        <li><button type="button" aria-pressed="true"><span class="k">1</span><span><b data-i="i1">نزّل الملف وافتحه</b><span class="d"><span data-i="i1p">اضغط «تنزيل التطبيق» ثم افتح الملف. إن فتحت صفحة GitHub، اختر ملف APK. وقد ينبّهك المتصفح إلى نوع الملف</span></span></span></button></li>
+        <li><button type="button" aria-pressed="true"><span class="k">1</span><span><b data-i="i1">حمّل الملف وافتحه</b><span class="d"><span data-i="i1p">اضغط «تنزيل التطبيق» ثم افتح الملف. إن فتحت صفحة GitHub، اختر ملف APK. وقد ينبّهك المتصفح إلى نوع الملف</span></span></span></button></li>
         <li><button type="button" aria-pressed="false"><span class="k">2</span><span><b data-i="i2">اسمح بالتثبيت</b><span class="d"><span data-i="i2p">إن طلب أندرويد ذلك، فعّل «السماح من هذا المصدر» ثم ارجع</span></span></span></button></li>
         <li><button type="button" aria-pressed="false"><span class="k">3</span><span><b data-i="i3">اضغط تثبيت</b><span class="d"><span data-i="i3p">قد يعرض <bdi>Play Protect</bdi> فحص التطبيق. اقبل الفحص واتبع نتيجته</span></span></span></button></li>
         <li><button type="button" aria-pressed="false"><span class="k">4</span><span><b data-i="i4">افتح Nezzel وجرّب</b><span class="d"><span data-i="i4p">انسخ رابطًا ثم افتح التطبيق، أو الصق الرابط فيه</span></span></span></button></li>
@@ -648,7 +708,7 @@ footer a{color:inherit}
         <span class="cam"></span>
         <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
         <div class="sc s0">
-          <div class="noti"><span class="fic"><svg class="i"><use href="#file"/></svg></span><span><b>nezzel-<span class="vtxt">0.4.7</span>.apk</b><small><span data-i="sys-done">اكتمل التنزيل</span> · <span class="ltr size">59 MB</span></small></span><span class="go" data-i="open">فتح</span></div>
+          <div class="noti"><span class="fic"><svg class="i"><use href="#file"/></svg></span><span><b>nezzel-<span class="vtxt">0.4.7</span>.apk</b><small><span data-i="sys-done">اكتمل التنزيل</span> · <span class="ltr size" data-mb="59">59 MB</span></small></span><span class="go" data-i="open">فتح</span></div>
         </div>
         <div class="sc s1">
           <h4 data-i="sys-t2">تثبيت التطبيقات غير المعروفة</h4>
@@ -656,10 +716,10 @@ footer a{color:inherit}
           <div class="setrow"><span data-i="sys-allow">السماح من هذا المصدر</span><span class="tg"></span></div>
         </div>
         <div class="sc s2">
-          <div class="dlg"><img src="img/icon.svg" alt=""><b>Nezzel</b><p class="mut" data-i="sys-q">هل تريد تثبيت هذا التطبيق؟</p><div class="scan"></div><div class="acts"><span data-i="sys-cancel">إلغاء</span><span data-i="sys-install">تثبيت</span></div></div>
+          <div class="dlg"><img src="/img/icon.svg" alt=""><b>Nezzel</b><p class="mut" data-i="sys-q">هل تريد تثبيت هذا التطبيق؟</p><div class="scan"></div><div class="acts"><span data-i="sys-cancel">إلغاء</span><span data-i="sys-install">تثبيت</span></div></div>
         </div>
         <div class="sc s3">
-          <div class="home"><i></i><i></i><i></i><i></i><i></i><span class="nz"><img src="img/icon.svg" alt="">Nezzel</span><i></i><i></i></div>
+          <div class="home"><i></i><i></i><i></i><i></i><i></i><span class="nz"><img src="/img/icon.svg" alt="">Nezzel</span><i></i><i></i></div>
         </div>
       </div></div>
     </div>
@@ -671,7 +731,7 @@ footer a{color:inherit}
   <div class="promises">
     <div class="pi" data-r style="--d:1"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle class="dw" cx="12" cy="12" r="8.5" pathLength="1"/><path class="dw" d="M6 6l12 12" pathLength="1"/></svg></span><b data-i="p1">بلا إعلانات</b><p data-i="p1p">احفظ ما تريد، بلا إعلانات تقاطعك</p></div>
     <div class="pi" data-r style="--d:2"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle class="dw" cx="12" cy="8.5" r="3.5" pathLength="1"/><path class="dw" d="M5 19.5c1.2-3.2 3.8-5 7-5s5.8 1.8 7 5" pathLength="1"/></svg></span><b data-i="p2">بلا حساب ولا تتبّع</b><p data-i="p2p">لا تسجيل، ولا إحصاءات تُرسل عنك إلى أي مكان</p></div>
-    <div class="pi" data-r style="--d:3"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">يعمل على هاتفك</b><p data-i="p3p">ينزّل Nezzel الملف من الموقع إلى هاتفك مباشرة، دون المرور بخوادم لنا</p></div>
+    <div class="pi" data-r style="--d:3"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">يعمل على هاتفك</b><p data-i="p3p">يحمّل Nezzel الملف من الموقع إلى هاتفك مباشرة، دون المرور بخوادم لنا</p></div>
     <div class="pi" data-r style="--d:4"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">أرقام صادقة</b><p data-i="p4p">ترى ما يتيحه الموقع فقط. الحجم الحقيقي إن عُرف، والعلامة ≈ تعني تقديرًا</p></div>
   </div>
 </section>
@@ -682,7 +742,7 @@ footer a{color:inherit}
     <details><summary data-i="f1">هل هو مجاني؟</summary><p data-i="f1a">نعم، مجاني بالكامل، بلا إعلانات ولا اشتراكات</p></details>
     <details><summary data-i="f2">من أي مواقع يحفظ؟</summary><p data-i="f2a">من مواقع الفيديو والصور المعروفة، إن كان الرابط عامًا. بعض الروابط قد لا تعمل، والمحتوى الخاص أو المحمي أو الذي يحتاج تسجيل الدخول غير مدعوم. <a href="https://github.com/ahmed-abdat/nezzel#tested-sites">المواقع التي جرّبناها</a></p></details>
     <details><summary data-i="f3">لماذا ليس في متجر Play؟</summary><p data-i="f3a">قواعد متجر Play تقيّد تطبيقات حفظ الفيديو. لذلك ننشره مجانًا على GitHub، ويسألك أندرويد قبل تثبيته</p></details>
-    <details><summary data-i="f4">كيف أحدّثه؟</summary><p data-i="f4a">يخبرك Nezzel عند توفر إصدار جديد، فتنزّله وتؤكد تثبيته. تبقى ملفاتك وإعداداتك كما هي</p></details>
+    <details><summary data-i="f4">كيف أحدّثه؟</summary><p data-i="f4a">يخبرك Nezzel عند توفر إصدار جديد، فتحمّله وتؤكد تثبيته. تبقى ملفاتك وإعداداتك كما هي</p></details>
     <details><summary data-i="f5">أين تُحفظ الملفات؟</summary><p data-i="f5a">في مجلد Nezzel داخل التنزيلات، أو في مجلد تختاره من الإعدادات. وتجدها في تطبيق الملفات</p></details>
     <details><summary data-i="f6">هل يعمل على الآيفون؟</summary><p data-i="f6a">لا، Nezzel لأندرويد فقط، من أندرويد 10 فما فوق، على الهواتف بمعالج <bdi>64-bit</bdi></p></details>
   </div>
@@ -694,7 +754,7 @@ footer a{color:inherit}
       <h2 data-i="os-h">مفتوح المصدر</h2>
       <p data-i="os-p">شيفرة Nezzel كاملة على GitHub برخصة <bdi>GPL-3.0-or-later</bdi>، ويستطيع أي أحد مراجعتها</p>
       <details class="adv" hidden><summary data-i="adv">للمتقدمين: تحقّق من الملف</summary>
-        <p data-i="adv-p">هذه بصمة ملف التثبيت. إن طابقت بصمة الملف الذي نزّلته، فهو الملف نفسه دون تغيير</p>
+        <p data-i="adv-p">هذه بصمة ملف التثبيت. إن طابقت بصمة الملف الذي حمّلته، فهو الملف نفسه دون تغيير</p>
         <div class="hash"><span>SHA-256</span><code id="sha"></code><button type="button" id="copysha" data-i="copy">نسخ</button></div>
       </details>
     </div>
@@ -707,10 +767,10 @@ footer a{color:inherit}
 
 <section class="wrap final" id="final" aria-labelledby="fin-h">
   <div class="word" aria-hidden="true" data-i="word">نزّل</div>
-  <div class="drop" aria-hidden="true"><img src="img/icon.svg" alt=""></div>
-  <h2 id="fin-h" data-i="fin-h" data-r>جاهز؟ نزّل أول فيديو</h2>
+  <div class="drop" aria-hidden="true"><img src="/img/icon.svg" alt=""></div>
+  <h2 id="fin-h" data-i="fin-h" data-r>جاهز؟ حمّل أول فيديو</h2>
   <div class="cta" data-r style="--d:1">
-    <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/latest"><svg class="i"><use href="#dl"/></svg><span data-i="cta">تنزيل التطبيق</span> <span class="sz ltr num size">59 MB</span></a>
+    <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/latest"><svg class="i"><use href="#dl"/></svg><span data-i="cta">تنزيل التطبيق</span> <span class="sz ltr num size" data-mb="59">59 MB</span></a>
   </div>
 </section>
 </main>
@@ -722,6 +782,7 @@ footer a{color:inherit}
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const EN = {
+    language:"Language", "og-alt":"Nezzel: save a video from its link. A phone showing available video qualities",
     word:"Nezzel",
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"Save the video <em>from its link</em>",
     lede:"Save videos, audio and photos from public links. No ads, no account",
@@ -768,15 +829,177 @@ footer a{color:inherit}
     "fin-h":"Ready? Save your first video",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Report a security issue"
   };
-  const AR = { "to-dark":"الوضع الداكن", "to-light":"الوضع الفاتح", pause:"إيقاف العرض مؤقتًا", play:"تشغيل العرض", copiedShort:"تم النسخ", saved:"تم الحفظ",
-    "demo-aria":$("#demo").getAttribute("aria-label"), "demo-ctl":"خطوات العرض", s2:"اختر الجودة" };
-  $$("[data-i]").forEach(el => { AR[el.dataset.i] ??= el.innerHTML; });
+  const AR = {
+      "skip": "تخطَّ إلى المحتوى",
+      "get": "تنزيل",
+      "to-dark": "الوضع الداكن",
+      "h1": "حمّل الفيديو <em>من رابطه</em>",
+      "lede": "احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب",
+      "cta": "تنزيل التطبيق",
+      "meta": "لأندرويد 10 أو أحدث · الإصدار",
+      "howto": "كيف أثبّته؟",
+      "t1": "بلا إعلانات",
+      "t2": "بلا حساب",
+      "t3": "مفتوح المصدر",
+      "demo-aria": "عرض: تنسخ رابط فيديو، يقترحه Nezzel، تختار الجودة، ويُحفظ الملف",
+      "av": "ع",
+      "chat": "العائلة",
+      "msg": "شوفوا هذا المقطع",
+      "vt": "لقطات من رحلة الصيف",
+      "m-reply": "رد",
+      "m-share": "مشاركة",
+      "m-copy": "نسخ الرابط",
+      "copied": "تم نسخ الرابط",
+      "field": "الصق رابطًا عامًا",
+      "n-home": "الرئيسية",
+      "n-dl": "التنزيلات",
+      "n-set": "الإعدادات",
+      "clip": "الرابط الذي نسخته",
+      "view": "عرض خيارات التنزيل",
+      "video": "فيديو",
+      "best": "أعلى جودة",
+      "last": "آخر اختيار",
+      "bal": "متوازنة",
+      "small": "حجم صغير",
+      "audio-h": "صوت",
+      "audio": "صوت فقط",
+      "dl": "تنزيل",
+      "open": "فتح",
+      "saved-to": "تم الحفظ في <span class=\"ltr\">Download/Nezzel</span>",
+      "demo-ctl": "خطوات العرض",
+      "c1": "انسخ",
+      "c2": "افتح",
+      "c3": "اختر",
+      "c4": "احفظ",
+      "how-h": "من الرابط إلى هاتفك، في ثلاث خطوات",
+      "how-sub": "جرّبها هنا قبل أن تثبّته",
+      "try": "جرّب",
+      "s1": "انسخ الرابط",
+      "s1p": "انسخ رابط الفيديو من التطبيق، أو شاركه مع Nezzel مباشرة",
+      "s2": "اختر الجودة",
+      "s2p": "افتح Nezzel فيعرض الرابط الذي نسخته، ثم اختر من الجودات المتاحة",
+      "s3": "اضغط تنزيل",
+      "s3p": "لا يبدأ التنزيل قبل أن تضغط، ويُحفظ الملف في المجلد الذي اخترته",
+      "note": "عرض توضيحي. الجودات والأحجام الحقيقية يحددها كل موقع، والعلامة ≈ تعني حجمًا تقديريًا",
+      "ins-h": "التثبيت خطوة بخطوة",
+      "ins-sub": "Nezzel ليس في متجر Play، لذلك قد يطلب أندرويد إذنك لتثبيته من المتصفح. هذا طبيعي",
+      "i1": "حمّل الملف وافتحه",
+      "i1p": "اضغط «تنزيل التطبيق» ثم افتح الملف. إن فتحت صفحة GitHub، اختر ملف APK. وقد ينبّهك المتصفح إلى نوع الملف",
+      "i2": "اسمح بالتثبيت",
+      "i2p": "إن طلب أندرويد ذلك، فعّل «السماح من هذا المصدر» ثم ارجع",
+      "i3": "اضغط تثبيت",
+      "i3p": "قد يعرض <bdi>Play Protect</bdi> فحص التطبيق. اقبل الفحص واتبع نتيجته",
+      "i4": "افتح Nezzel وجرّب",
+      "i4p": "انسخ رابطًا ثم افتح التطبيق، أو الصق الرابط فيه",
+      "why": "<strong>هل هو آمن؟</strong> لا يطلب جهات اتصالك ولا موقعك، ولا يرسل إحصاءات عنك. وشيفرته مفتوحة على GitHub يستطيع أي أحد مراجعتها",
+      "sys-done": "اكتمل التنزيل",
+      "sys-t2": "تثبيت التطبيقات غير المعروفة",
+      "sys-browser": "المتصفح",
+      "sys-allow": "السماح من هذا المصدر",
+      "sys-q": "هل تريد تثبيت هذا التطبيق؟",
+      "sys-cancel": "إلغاء",
+      "sys-install": "تثبيت",
+      "pr-h": "ما يعدك به Nezzel",
+      "p1": "بلا إعلانات",
+      "p1p": "احفظ ما تريد، بلا إعلانات تقاطعك",
+      "p2": "بلا حساب ولا تتبّع",
+      "p2p": "لا تسجيل، ولا إحصاءات تُرسل عنك إلى أي مكان",
+      "p3": "يعمل على هاتفك",
+      "p3p": "يحمّل Nezzel الملف من الموقع إلى هاتفك مباشرة، دون المرور بخوادم لنا",
+      "p4": "أرقام صادقة",
+      "p4p": "ترى ما يتيحه الموقع فقط. الحجم الحقيقي إن عُرف، والعلامة ≈ تعني تقديرًا",
+      "faq-h": "أسئلة سريعة",
+      "f1": "هل هو مجاني؟",
+      "f1a": "نعم، مجاني بالكامل، بلا إعلانات ولا اشتراكات",
+      "f2": "من أي مواقع يحفظ؟",
+      "f2a": "من مواقع الفيديو والصور المعروفة، إن كان الرابط عامًا. بعض الروابط قد لا تعمل، والمحتوى الخاص أو المحمي أو الذي يحتاج تسجيل الدخول غير مدعوم. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">المواقع التي جرّبناها</a>",
+      "f3": "لماذا ليس في متجر Play؟",
+      "f3a": "قواعد متجر Play تقيّد تطبيقات حفظ الفيديو. لذلك ننشره مجانًا على GitHub، ويسألك أندرويد قبل تثبيته",
+      "f4": "كيف أحدّثه؟",
+      "f4a": "يخبرك Nezzel عند توفر إصدار جديد، فتحمّله وتؤكد تثبيته. تبقى ملفاتك وإعداداتك كما هي",
+      "f5": "أين تُحفظ الملفات؟",
+      "f5a": "في مجلد Nezzel داخل التنزيلات، أو في مجلد تختاره من الإعدادات. وتجدها في تطبيق الملفات",
+      "f6": "هل يعمل على الآيفون؟",
+      "f6a": "لا، Nezzel لأندرويد فقط، من أندرويد 10 فما فوق، على الهواتف بمعالج <bdi>64-bit</bdi>",
+      "os-h": "مفتوح المصدر",
+      "os-p": "شيفرة Nezzel كاملة على GitHub برخصة <bdi>GPL-3.0-or-later</bdi>، ويستطيع أي أحد مراجعتها",
+      "adv": "للمتقدمين: تحقّق من الملف",
+      "adv-p": "هذه بصمة ملف التثبيت. إن طابقت بصمة الملف الذي حمّلته، فهو الملف نفسه دون تغيير",
+      "copy": "نسخ",
+      "gh": "الشيفرة على GitHub",
+      "rel": "كل الإصدارات وملاحظاتها",
+      "word": "نزّل",
+      "fin-h": "جاهز؟ حمّل أول فيديو",
+      "foot": "من صنع <a href=\"https://hululsoft.mr\">Hululsoft</a>",
+      "lic": "التراخيص",
+      "sec": "الإبلاغ عن مشكلة أمنية",
+      "to-light": "الوضع الفاتح",
+      "pause": "إيقاف العرض مؤقتًا",
+      "play": "تشغيل العرض",
+      "copiedShort": "تم النسخ",
+      "saved": "تم الحفظ",
+      "language": "اللغة",
+      "og-alt": "Nezzel: حمّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة لفيديو"
+  };
+  const FR = {
+    language:"Langue", "og-alt":"Nezzel : enregistrez une vidéo depuis son lien. Un téléphone affiche les qualités disponibles",
+    word:"Nezzel",
+    skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"Enregistrez la vidéo <em>depuis son lien</em>",
+    lede:"Enregistrez vidéos, sons et photos depuis des liens publics. Sans publicité ni compte",
+    cta:"Télécharger l’appli", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?",
+    t1:"Sans publicité", t2:"Sans compte", t3:"Code ouvert",
+    "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, vous choisissez la qualité et le fichier est enregistré",
+    "demo-ctl":"Étapes de la démo", pause:"Mettre la démo en pause", play:"Lancer la démo",
+    av:"F", chat:"Famille", msg:"Regardez cette vidéo", vt:"Souvenirs de vacances",
+    "m-reply":"Répondre", "m-share":"Partager", "m-copy":"Copier le lien", copied:"Lien copié",
+    field:"Collez un lien public", "n-home":"Accueil", "n-dl":"Téléchargements", "n-set":"Paramètres",
+    clip:"Le lien que vous avez copié", view:"Voir les options",
+    video:"Vidéo", "audio-h":"Audio", best:"Meilleure qualité", last:"Dernier choix", bal:"Équilibrée", small:"Petit fichier", audio:"Audio seul",
+    dl:"Télécharger", open:"Ouvrir", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
+    c1:"Copier", c2:"Ouvrir", c3:"Choisir", c4:"Enregistrer",
+    "how-h":"Du lien au téléphone en trois étapes", "how-sub":"Essayez ici avant d’installer", try:"Essayer",
+    s1:"Copiez le lien", s1p:"Copiez le lien de la vidéo dans son application, ou partagez-le directement avec Nezzel",
+    s2:"Choisissez la qualité", s2p:"Ouvrez Nezzel : le lien copié s’affiche. Choisissez ensuite parmi les qualités disponibles",
+    s3:"Appuyez sur Télécharger", s3p:"Le téléchargement attend votre accord. Le fichier est enregistré dans le dossier choisi",
+    note:"Ceci est une démo. Chaque site détermine les qualités et les tailles réelles. Le signe ≈ indique une taille estimée",
+    "ins-h":"L’installation, pas à pas",
+    "ins-sub":"Nezzel n’est pas sur le Play Store. Android peut donc vous demander d’autoriser l’installation depuis votre navigateur. C’est normal",
+    i1:"Téléchargez le fichier et ouvrez-le", i1p:"Appuyez sur « Télécharger l’application », puis ouvrez le fichier. Si GitHub s’ouvre, choisissez le fichier APK. Votre navigateur peut afficher un avertissement sur ce type de fichier",
+    i2:"Autorisez l’installation", i2p:"Si Android le demande, activez « Autoriser cette source », puis revenez en arrière",
+    i3:"Appuyez sur Installer", i3p:"Play Protect peut proposer d’analyser l’application. Acceptez l’analyse et suivez le résultat",
+    i4:"Ouvrez Nezzel et essayez", i4p:"Copiez un lien, puis ouvrez l’application, ou collez le lien dedans",
+    why:"<strong>Est-ce sûr ?</strong> L’application ne demande ni vos contacts ni votre position et n’envoie aucune statistique sur vous. Son code est ouvert sur GitHub, chacun peut le vérifier",
+    "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
+    "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
+    "pr-h":"Les engagements de Nezzel",
+    p1:"Sans publicité", p1p:"Enregistrez ce qui vous plaît, sans publicité pour vous interrompre",
+    p2:"Sans compte ni suivi", p2p:"Aucune inscription, aucune statistique sur vous envoyée où que ce soit",
+    p3:"Tout sur votre téléphone", p3p:"Nezzel télécharge directement du site vers votre téléphone, sans passer par nos serveurs",
+    p4:"Des chiffres honnêtes", p4p:"Vous voyez seulement ce que le site propose. La taille réelle quand elle est connue, et ≈ pour une estimation",
+    "faq-h":"Questions fréquentes",
+    f1:"C’est gratuit ?", f1a:"Oui, entièrement gratuit, sans publicité ni abonnement",
+    f2:"Quels sites sont compatibles ?", f2a:"Les sites connus de vidéos et de photos, si le lien est public. Certains liens peuvent ne pas fonctionner. Les contenus privés, protégés ou réservés aux comptes connectés ne sont pas pris en charge. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites testés</a>",
+    f3:"Pourquoi pas sur le Play Store ?", f3a:"Les règles du Play Store limitent les applications de téléchargement vidéo. Nous la publions donc gratuitement sur GitHub, et Android demande votre accord avant l’installation",
+    f4:"Comment mettre à jour ?", f4a:"Nezzel vous prévient quand une nouvelle version est disponible. Vous la téléchargez et confirmez l’installation. Vos fichiers et paramètres sont conservés",
+    f5:"Où sont mes fichiers ?", f5a:"Dans le dossier Nezzel de Téléchargements, ou dans le dossier choisi dans les paramètres. Retrouvez-les dans votre application de fichiers",
+    f6:"Et sur iPhone ?", f6a:"Nezzel fonctionne uniquement sur Android 10 ou plus récent, sur les téléphones avec un processeur <bdi>64 bits</bdi>",
+    "os-h":"Un code ouvert à tous", "os-p":"Tout le code de Nezzel est sur GitHub sous licence <bdi>GPL-3.0-or-later</bdi>. Chacun peut le consulter",
+    adv:"Pour aller plus loin : vérifier le fichier", "adv-p":"Voici l’empreinte du fichier d’installation. Si elle correspond à celle du fichier téléchargé, le fichier n’a pas été modifié",
+    copy:"Copier", copiedShort:"Copié", gh:"Le code sur GitHub", rel:"Versions et nouveautés",
+    "fin-h":"Prêt ? Enregistrez votre première vidéo",
+    foot:"Créé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Signaler un problème de sécurité"
+  };
   const META = {
-    ar: ["Nezzel · نزّل الفيديو من رابطه", "احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب"],
-    en: ["Nezzel · Save the video from its link", "Save videos, audio and photos from public links. No ads, no account"]
+    ar: ["Nezzel · حمّل الفيديو من رابطه", "احفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب"],
+    en: ["Nezzel · Save the video from its link", "Save videos, audio and photos from public links. No ads, no account"],
+    fr: ["Nezzel · Enregistrez la vidéo depuis son lien", "Enregistrez vidéos, sons et photos depuis des liens publics. Sans publicité ni compte"]
   };
   const lang = () => document.documentElement.lang;
-  const t = k => (lang() === "en" ? EN : AR)[k];
+  const strings = { ar: AR, en: EN, fr: FR }[lang()];
+  const t = k => strings[k];
+  const numberFormats = [0, 1].map(decimals => new Intl.NumberFormat(lang() + "-u-nu-latn", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }));
+  const number = (value, decimals = 1) => numberFormats[decimals].format(value);
+  const mb = (value, decimals = 0) => number(value, decimals) + (lang() === "fr" ? "\u00a0Mo" : " MB");
 
   // shared state, declared before anything can render
   let jobFrame = 0, rel = null, pick = { size: 61.8, est: true }, jp = 0, running = false, done3 = false;
@@ -801,30 +1024,50 @@ footer a{color:inherit}
     walk(el);
     $$(".w", el).forEach((w, k) => w.style.setProperty("--k", k));
   }
-  function setLang(l, save) {
-    const d = l === "en" ? EN : AR;
-    document.documentElement.lang = l;
-    document.documentElement.dir = l === "en" ? "ltr" : "rtl";
-    $$("[data-i]").forEach(el => { const v = d[el.dataset.i]; if (v != null) el.innerHTML = v; });
-    $$("[data-i-aria]").forEach(el => { const v = d[el.dataset.iAria]; if (v != null) el.setAttribute("aria-label", v); });
-    document.title = META[l][0];
-    $$('meta[name=description],meta[property="og:description"]').forEach(m => m.content = META[l][1]);
-    const b = $("#lang"); b.textContent = l === "en" ? "العربية" : "English"; b.lang = l === "en" ? "ar" : "en";
-    if (!still) splitWords($("#h1"));
-    pauseBtn.setAttribute("aria-label", t(playing ? "pause" : "play"));
-    applyRelease(); renderAll();
-    if (save) {
-      try { localStorage.setItem("nezzel-lang", l); } catch (e) {}
-      const u = new URL(location); u.searchParams.set("lang", l); history.replaceState(null, "", u);
-    }
-  }
-  $("#lang").addEventListener("click", () => setLang(lang() === "en" ? "ar" : "en", true));
+  const localeSwitch = $("#locale-switch"), langButton = $("#lang"), localeLinks = $$(".lang-menu a");
+  localeLinks.forEach(a => { a.tabIndex = -1; });
+  const closeLanguages = (refocus = true) => {
+    localeSwitch.open = false; langButton.setAttribute("aria-expanded", "false");
+    if (refocus) langButton.focus();
+  };
+  const openLanguages = (index = localeLinks.findIndex(a => a.dataset.locale === lang())) => {
+    localeSwitch.open = true; langButton.setAttribute("aria-expanded", "true");
+    localeLinks[index].focus();
+  };
+  langButton.setAttribute("aria-expanded", "false");
+  langButton.addEventListener("click", e => {
+    e.preventDefault();
+    if (localeSwitch.open) closeLanguages(); else openLanguages();
+  });
+  // Native details/summary remains operable without JS; JS adds menu keyboard behaviour.
+  localeSwitch.addEventListener("toggle", () => langButton.setAttribute("aria-expanded", String(localeSwitch.open)));
+  localeSwitch.addEventListener("keydown", e => {
+    const index = localeLinks.indexOf(document.activeElement);
+    if (e.key === "Escape" && localeSwitch.open) { e.preventDefault(); closeLanguages(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!localeSwitch.open || index < 0) openLanguages(e.key === "ArrowDown" ? 0 : localeLinks.length - 1);
+      else localeLinks[(index + (e.key === "ArrowDown" ? 1 : -1) + localeLinks.length) % localeLinks.length].focus();
+    } else if ((e.key === "Home" || e.key === "End") && localeSwitch.open) {
+      e.preventDefault(); localeLinks[e.key === "Home" ? 0 : localeLinks.length - 1].focus();
+    } else if (e.key === "Tab" && localeSwitch.open) closeLanguages();
+    else if (e.key === " " && index >= 0) { e.preventDefault(); localeLinks[index].click(); }
+  });
+  document.addEventListener("click", e => {
+    if (localeSwitch.open && !localeSwitch.contains(e.target)) closeLanguages(false);
+  });
+  const syncLocaleLinks = () => localeLinks.forEach(a => { a.href = (a.dataset.locale === "ar" ? "/" : "/" + a.dataset.locale + "/") + location.hash; });
+  syncLocaleLinks(); addEventListener("hashchange", syncLocaleLinks);
+  localeLinks.forEach(a => a.addEventListener("click", () => {
+    try { localStorage.setItem("nezzel-lang", a.dataset.locale); } catch (e) {}
+    closeLanguages();
+  }));
 
   // ---------- latest release ----------
   function applyRelease() {
     if (!rel) return;
     $$(".dl-link").forEach(a => { a.href = rel.url; });
-    $$(".size").forEach(s => { s.textContent = rel.mb; });
+    $$(".size").forEach(s => { s.textContent = mb(rel.mb); });
     $$(".vtxt").forEach(s => { s.textContent = rel.ver; });
     if (rel.sha) { $("#sha").textContent = rel.sha.match(/.{1,16}/g).map(r => r.slice(0, 8) + " " + r.slice(8)).join("\n"); $(".adv").hidden = false; }
   }
@@ -833,7 +1076,7 @@ footer a{color:inherit}
     .then(j => {
       const apk = (j.assets || []).find(a => /^nezzel-[\d.]+\.apk$/.test(a.name));
       if (!apk) return;
-      rel = { url: apk.browser_download_url, mb: Math.round(apk.size / 1e6) + " MB", ver: j.tag_name.replace(/^v/, ""),
+      rel = { url: apk.browser_download_url, mb: Math.round(apk.size / 1e6), ver: j.tag_name.replace(/^v/, ""),
               sha: (apk.digest || "").startsWith("sha256:") ? apk.digest.slice(7) : null };
       applyRelease();
     }).catch(() => {});
@@ -858,7 +1101,7 @@ footer a{color:inherit}
 
   // ---------- progress helpers ----------
   const ring = (root, p) => { $(".pr", root).style.strokeDashoffset = String(1 - p / 100); };
-  const line = (total, p) => "<span class=\"ltr num\">" + p + "% · " + (total * p / 100).toFixed(1) + " / " + total + " MB</span>";
+  const line = (total, p) => "<span class=\"ltr num\">" + number(p, 0) + (lang() === "fr" ? "\u00a0% · " : "% · ") + number(total * p / 100) + " / " + mb(total, 1) + "</span>";
 
   // ---------- hero demo: a clock that can pause ----------
   const SCENES = [
@@ -937,7 +1180,7 @@ footer a{color:inherit}
       pick = { size: +r.dataset.size, est: !!r.dataset.est }; resetJob(); renderAll();
     });
     r.addEventListener("keydown", e => {
-      const fwd = lang() === "en" ? 1 : -1;
+      const fwd = document.documentElement.dir === "rtl" ? -1 : 1;
       const d = { ArrowDown: 1, ArrowUp: -1, ArrowRight: fwd, ArrowLeft: -fwd }[e.key]; if (!d) return;
       e.preventDefault(); const n = radios[(k + d + radios.length) % radios.length]; n.focus(); n.click();
     });
@@ -962,7 +1205,7 @@ footer a{color:inherit}
   }
   dlrun.addEventListener("click", runJob);
   function renderAll() {
-    $("#dlsize").textContent = (pick.est ? "≈ " : "") + pick.size + " MB";
+    $("#dlsize").textContent = (pick.est ? "≈ " : "") + mb(pick.size, 1);
     renderJob(); renderDemo3(done3 ? 100 : 0);
   }
 
@@ -1019,9 +1262,8 @@ footer a{color:inherit}
   sysGo(0);
   if (still) { setPlaying(false); showEnd(2); } else enter(0);
   requestAnimationFrame(step);
-  let start = new URLSearchParams(location.search).get("lang");
-  if (!start) { try { start = localStorage.getItem("nezzel-lang"); } catch (e) {} }
-  if (start === "en") setLang("en", false); else { if (!still) splitWords($("#h1")); renderAll(); }
+  if (!still) splitWords($("#h1"));
+  renderAll();
 })();
 </script>
 </body>
