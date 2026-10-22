@@ -34,6 +34,45 @@ class MediaHttpClientTest {
         host: String = "media.test", context: MediaHttpTarget? = null) =
         PublicMediaRequest("https://$host$path", purpose, context)
 
+    @Test fun facebookStoryRedirectsStopBeforeFetchingTheLoginOrStoryPage() {
+        val story = "https://web.facebook.com/stories/900000000000001/Synthetic/"
+        val encoded = java.net.URLEncoder.encode(story, "UTF-8")
+        for (entry in listOf("https://www.facebook.com/share/Synthetic/", "https://fb.watch/Synthetic/"))
+            for (location in listOf(story, "https://www.facebook.com/login.php?next=$encoded")) {
+                fixture(respond = { _, socket -> socket.reply(302, headers = mapOf("Location" to location)) }) { h ->
+                    h.client.newOperation(MediaHttpOperation.PAGES_AND_CAROUSEL).use { token ->
+                        assertFailure(h.client.fetchFacebookPage(token, entry), MediaHttpFailure.FACEBOOK_STORY)
+                    }
+                    assertEquals(1, h.server.requests.size)
+                    assertEquals(1, h.dnsCalls.get())
+                }
+            }
+    }
+
+    @Test fun facebookLoginNextStillUnwrapsPostsButMissingOrAmbiguousNextRequiresLogin() {
+        val post = "https://web.facebook.com/synthetic/posts/900000000000001"
+        val encoded = java.net.URLEncoder.encode(post, "UTF-8")
+        val story = java.net.URLEncoder.encode("https://web.facebook.com/stories/123/Synthetic/", "UTF-8")
+        for (query in listOf("?next=$encoded", "", "?next=$story&next=$encoded")) {
+            fixture(respond = { request, socket ->
+                if (request.target.startsWith("/share/")) socket.reply(302,
+                    headers = mapOf("Location" to "https://web.facebook.com/login.php$query"))
+                else socket.reply()
+            }) { h ->
+                h.client.newOperation(MediaHttpOperation.PAGES_AND_CAROUSEL).use { token ->
+                    val result = h.client.fetchFacebookPage(token, "https://www.facebook.com/share/Synthetic/")
+                    if (query == "?next=$encoded") {
+                        assertSuccess(result).close()
+                        assertEquals(listOf("/share/Synthetic/", "/synthetic/posts/900000000000001"), h.server.requests.map { it.target })
+                    } else {
+                        assertFailure(result, MediaHttpFailure.LOGIN_REQUIRED)
+                        assertEquals(1, h.server.requests.size)
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun eachSiteEnforcesItsOwnPageCapAndNearCapBodiesTransferOwnership() {
         val cases = listOf(Triple("facebook", "https://www.facebook.com/synthetic/posts/123", 10 * 1024 * 1024),
             Triple("linkedin", "https://www.linkedin.com/posts/synthetic-activity-123/", 6 * 1024 * 1024),

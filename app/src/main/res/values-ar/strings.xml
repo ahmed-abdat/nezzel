@@ -224,6 +224,8 @@
     <string name="image_refused_body">لم يستطع Nezzel قراءة هذه الصورة، أعد المحاولة لاحقًا</string>
     <string name="image_large_title">الصورة كبيرة جدًا</string>
     <string name="image_private_title">هذا المنشور ليس عامًا</string>
+    <string name="facebook_story_title">لا يمكن حفظ قصص فيسبوك</string>
+    <string name="facebook_story_body">القصص تحتاج تسجيل الدخول إلى فيسبوك. يحفظ Nezzel المنشورات والريلز والفيديوهات العامة</string>
     <string name="image_changed">تغيّرت الصورة، تحقّق من الرابط مجددًا</string>
     <string name="image_save_failed">تعذّر حفظ الصورة</string>
     <string name="image_preview_quality">جودة المعاينة: يوفّر المنشور نسخة أصغر فقط</string>

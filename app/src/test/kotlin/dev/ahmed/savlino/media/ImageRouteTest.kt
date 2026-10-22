@@ -67,6 +67,12 @@ class ImageRouteTest {
             org.junit.Assert.assertFalse(ImageRoute.isUnsupported(LinkInput.parse(url)!!))
     }
 
+    @Test fun facebookStoriesAreUnsupportedBeforeAnyInspection() {
+        for (host in listOf("www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com"))
+            org.junit.Assert.assertTrue(ImageRoute.isUnsupported(LinkInput.parse("https://$host/stories/123/Synthetic/")!!))
+        org.junit.Assert.assertFalse(ImageRoute.isUnsupported(LinkInput.parse("https://www.facebook.com/storyline/123/")!!))
+    }
+
     @Test fun gifImagesRouteDirectWhileTweetVideoStaysVideo() {
         for (url in listOf("https://example.com/photo.GIF", "https://pbs.twimg.com/media/Synthetic?format=gif&name=orig"))
             assertEquals(MediaSourceRoute.DIRECT_IMAGE, route(url))

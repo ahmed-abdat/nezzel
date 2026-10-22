@@ -9,6 +9,8 @@ enum class ImageFailure {
     DIMENSIONS, DECODE, CANCELLED, STALE, PROOF_MISMATCH, SAVE_UNAVAILABLE, NETWORK, STAGING, INSUFFICIENT_SPACE,
     /** The provider showed a login wall or "content isn't available" to a logged-out visitor. */
     PRIVATE,
+    /** Facebook stories cannot be read without signing in. */
+    FACEBOOK_STORY,
     /**
      * Nezzel refused the source itself: the page or redirect did not prove the same public post, or the
      * transport rejected the URL/address/encoding. Not an image-type verdict (that stays [UNSUPPORTED]).

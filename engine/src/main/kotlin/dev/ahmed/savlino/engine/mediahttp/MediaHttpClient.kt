@@ -521,8 +521,12 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     /** Normalised next Facebook page, the once-unwrapped login next=, or a typed refusal. */
     private fun facebookHop(current: HttpUrl, next: HttpUrl, seen: Set<String>): HttpUrl {
+        if (FacebookPostIdentity.isStoryLink(next.toString())) throw MediaHttpException(MediaHttpFailure.FACEBOOK_STORY)
         if (FacebookPostIdentity.isLoginWall(next)) {
-            val target = next.queryParameterValues("next").singleOrNull()?.let(FacebookPostIdentity::parse)
+            val nextUrl = next.queryParameterValues("next").singleOrNull()
+            if (nextUrl != null && FacebookPostIdentity.isStoryLink(nextUrl))
+                throw MediaHttpException(MediaHttpFailure.FACEBOOK_STORY)
+            val target = nextUrl?.let(FacebookPostIdentity::parse)
                 ?.takeUnless { it.isShortlink || it.fetchUrlOn(next.host) in seen } ?: throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
             return MediaHttpPolicy.parse(target.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
         }

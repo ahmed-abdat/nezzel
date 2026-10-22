@@ -149,6 +149,33 @@ class FacebookVideoHandoffTest {
         assertTrue(engine.inspected.isEmpty())
     }
 
+    @Test fun directStoryLinksShowTheStoryFailureWithoutCallingEitherInspector() {
+        for (host in listOf("www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com")) {
+            check("https://$host/stories/900000000000001/Synthetic/")
+            assertEquals(OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE), vm.optionsState)
+            assertFalse(vm.canReportLink)
+            assertFalse(vm.canUpdateAndRetry)
+        }
+        assertTrue(images.routes.isEmpty())
+        assertTrue(engine.inspected.isEmpty())
+        val legacyOnly = LinkViewModel(SavedStateHandle(), engine = engine)
+        legacyOnly.edit("https://mbasic.facebook.com/stories/123/Synthetic/")
+        legacyOnly.checkLink(); pump()
+        assertEquals(OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE), legacyOnly.optionsState)
+        assertTrue(engine.inspected.isEmpty())
+        legacyOnly.dismissOptions()
+    }
+
+    @Test fun redirectedStoryFailuresNeverFallBackToYtdlpOrOfferReportOrEngineUpdate() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.FACEBOOK_STORY, ImagePhase.PAGE) }
+        check("https://www.facebook.com/share/Synthetic/")
+        assertEquals(OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE), vm.optionsState)
+        assertFalse(vm.canReportLink)
+        assertFalse(vm.canUpdateAndRetry)
+        assertEquals(listOf(MediaSourceRoute.FACEBOOK), images.routes)
+        assertTrue(engine.inspected.isEmpty())
+    }
+
     @Test fun eventLinksAreUnsupportedEvenWithoutAnImageInspector() {
         val legacyOnly = LinkViewModel(SavedStateHandle(), engine = engine)
         legacyOnly.edit("https://mbasic.facebook.com/events/900000000000001/photo.jpg")

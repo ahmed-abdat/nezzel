@@ -637,6 +637,7 @@ internal fun mapTransport(reason: MediaHttpFailure): ImageFailure = when (reason
     MediaHttpFailure.PARTIAL_BODY, MediaHttpFailure.NETWORK, MediaHttpFailure.TIMEOUT -> ImageFailure.NETWORK
     MediaHttpFailure.UNAVAILABLE, MediaHttpFailure.BUSY, MediaHttpFailure.CLOSED -> ImageFailure.UNAVAILABLE
     MediaHttpFailure.LOGIN_REQUIRED -> ImageFailure.PRIVATE
+    MediaHttpFailure.FACEBOOK_STORY -> ImageFailure.FACEBOOK_STORY
 }
 
 /** Original candidates have already passed the CDN policy; their format may differ from the thumbnail. */

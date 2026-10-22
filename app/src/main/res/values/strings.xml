@@ -216,6 +216,8 @@
     <string name="image_refused_body">Nezzel couldn’t read this image — try again later</string>
     <string name="image_large_title">Image too large</string>
     <string name="image_private_title">This post isn’t public</string>
+    <string name="facebook_story_title">Facebook stories can’t be saved</string>
+    <string name="facebook_story_body">Stories need a Facebook login. Nezzel saves public posts, reels and videos</string>
     <string name="image_changed">The image changed — check the link again</string>
     <string name="image_save_failed">Couldn’t save the image</string>
     <string name="image_preview_quality">Preview quality: the post offers only a smaller copy</string>

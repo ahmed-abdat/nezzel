@@ -25,7 +25,9 @@ enum class MediaHttpFailure {
     REDIRECT_LIMIT, REQUEST_LIMIT, RESOURCE_LIMIT, REDIRECT_LOOP, BODY_LIMIT,
     ENCODING, PARTIAL_BODY, NETWORK, TIMEOUT, CANCELLED, BUSY, CLOSED,
     /** A provider page redirected to its login wall (after any login?next= unwrap). */
-    LOGIN_REQUIRED
+    LOGIN_REQUIRED,
+    /** Facebook stories require sign-in; neither the story nor its login wall is fetched. */
+    FACEBOOK_STORY
 }
 /**
  * Extra host allowlist enforced on the first URL and on every redirect hop. X_MEDIA: `https://pbs.twimg.com/media/` only.

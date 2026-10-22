@@ -41,7 +41,8 @@ object ImageRoute {
     /** Share links need the reader to find the bound post's video or photos. */
     private fun isFacebookPost(identity: FacebookPostIdentity): Boolean = identity.kind !in facebookVideoKinds
 
-    fun isUnsupported(link: ValidatedLink): Boolean = FacebookPostIdentity.isEventLink(link.rawUrl)
+    fun isUnsupported(link: ValidatedLink): Boolean = FacebookPostIdentity.isEventLink(link.rawUrl) ||
+        FacebookPostIdentity.isStoryLink(link.rawUrl)
 
     private fun isKnownImageCdn(raw: String): Boolean {
         val uri = try { URI(raw) } catch (_: URISyntaxException) { return false }

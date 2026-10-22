@@ -254,6 +254,24 @@ class ImageOptionsUiTest {
     @Test fun englishPreviewQualityNoteAndPrivateCopy() = assertNoteAndPrivate("en", "This post isn’t public")
     @Test @Config(qualifiers = "ar") fun arabicPreviewQualityNoteAndPrivateCopy() = assertNoteAndPrivate("ar", "هذا المنشور ليس عامًا")
 
+    @Test fun englishStoriesOfferOnlyPasteAnotherAndClose() = assertStoryCopy("en",
+        "Facebook stories can’t be saved", "Stories need a Facebook login. Nezzel saves public posts, reels and videos")
+    @Test @Config(qualifiers = "ar") fun arabicStoriesOfferOnlyPasteAnotherAndClose() = assertStoryCopy("ar",
+        "لا يمكن حفظ قصص فيسبوك", "القصص تحتاج تسجيل الدخول إلى فيسبوك. يحفظ Nezzel المنشورات والريلز والفيديوهات العامة")
+    private fun assertStoryCopy(language: String, title: String, body: String) {
+        for (link in listOf("https://www.facebook.com/stories/123/Synthetic/", "https://www.facebook.com/share/Synthetic/")) {
+            val (labels, context) = sheetLabels(language) { activity ->
+                vm(activity, found = 1, link = link) { MediaInspectResult.Failure(ImageFailure.FACEBOOK_STORY, ImagePhase.PAGE) }
+            }
+            assertTrue(labels.toString(), title in labels)
+            assertTrue(labels.toString(), body in labels)
+            for (shown in listOf(R.string.paste_another_link, R.string.nezzel_close))
+                assertTrue(labels.toString(), context.getString(shown) in labels)
+            for (hidden in listOf(R.string.try_again, R.string.report_link, R.string.engine_update_retry))
+                assertFalse(labels.toString(), context.getString(hidden) in labels)
+        }
+    }
+
     /** A reduced copy is labelled; a login wall reads as "not public", never as a broken link. */
     private fun assertNoteAndPrivate(language: String, privateTitle: String) {
         val (note, context) = sheetLabels(language) { vm(it, found = 1, previewQuality = true) }

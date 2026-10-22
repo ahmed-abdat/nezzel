@@ -14,6 +14,7 @@ import dev.ahmed.savlino.engine.EngineAdapter
 import dev.ahmed.savlino.engine.InspectResult
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
+import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
@@ -459,7 +460,9 @@ class LinkViewModel(
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
         if (ImageRoute.isUnsupported(source.link)) {
-            optionsState = OptionsState.Error(DownloadError.Unsupported)
+            optionsState = if (FacebookPostIdentity.isStoryLink(source.link.rawUrl))
+                OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE)
+                else OptionsState.Error(DownloadError.Unsupported)
             return
         }
         // Image routes run before (and without) the yt-dlp availability gate.

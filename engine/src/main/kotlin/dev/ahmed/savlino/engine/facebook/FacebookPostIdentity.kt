@@ -46,7 +46,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
                 }
             }
             if (host !in hosts) return null
-            if (path.startsWith("/events/")) return null
+            if (path.startsWith("/events/") || path.startsWith("/stories/")) return null
             share.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.SHARE, WWW + path, null, null, null,
                 it.groupValues[1] in setOf("v", "r")) }
             when (path) {
@@ -82,6 +82,11 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
         /** Event pages are unsupported, including mobile hosts and nested event paths. */
         fun isEventLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
             (isFacebookHost(it) || it.host == "mbasic.facebook.com") && it.encodedPath.startsWith("/events/")
+        } == true
+
+        /** Ephemeral stories always need sign-in; story.php is a separate, supported post shape. */
+        fun isStoryLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
+            (isFacebookHost(it) || it.host == "mbasic.facebook.com") && it.encodedPath.startsWith("/stories/")
         } == true
 
         private val loginPaths = setOf("/login", "/login/", "/login.php", "/checkpoint", "/checkpoint/")

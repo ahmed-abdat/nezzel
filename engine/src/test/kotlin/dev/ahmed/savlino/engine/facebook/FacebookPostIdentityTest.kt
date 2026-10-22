@@ -49,6 +49,23 @@ class FacebookPostIdentityTest {
                 assertNull(FacebookPostIdentity.parse("https://$host/$path"))
     }
 
+    @Test fun storiesAreDetectedOnlyOnFacebookHostsAndNeverParsedAsPosts() {
+        for (host in listOf("facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com")) {
+            for (path in listOf("stories/", "stories/900000000000001/Synthetic/", "stories/posts/900000000000001")) {
+                val url = "https://$host/$path"
+                assertTrue(FacebookPostIdentity.isStoryLink(url))
+                assertNull(FacebookPostIdentity.parse(url))
+                assertFalse(FacebookPostIdentity.isEventLink(url))
+            }
+            assertTrue(FacebookPostIdentity.isEventLink("https://$host/events/900000000000001/"))
+        }
+        for (url in listOf("https://www.facebook.com/storyline/123", "https://www.facebook.com/stories",
+            "https://www.facebook.com/story.php?story_fbid=123&id=42", "https://www.facebook.com/events/123/",
+            "https://www.facebook.com/synthetic/posts/123", "https://example.com/stories/123/",
+            "https://www.facebook.com.evil.example/stories/123/"))
+            assertFalse(FacebookPostIdentity.isStoryLink(url))
+    }
+
     @Test fun requestedIdsAreKnownOnlyWhenTheLinkNamesThem() {
         assertEquals("123456789", accepted("https://www.facebook.com/story.php?story_fbid=123456789&id=42").postId)
         assertNull(accepted("https://www.facebook.com/permalink.php?story_fbid=pfbid0AbCd&id=42").postId, "pfbid is not a node id")

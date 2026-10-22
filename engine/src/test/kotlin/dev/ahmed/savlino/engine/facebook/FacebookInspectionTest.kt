@@ -36,6 +36,16 @@ class FacebookInspectionTest : PublicImageTestBase() {
         inspector.inspect(inspector.newOperation(imageSource(url, revision), IMAGE_IDENTITY), ImageSourceType.FACEBOOK)
     }
 
+    @Test fun loginNextStoryIsADistinctTerminalFailureWithoutFetchingIt() {
+        val next = URLEncoder.encode("https://web.facebook.com/stories/900000000000001/Synthetic/", "UTF-8")
+        fixture(respond = { _, socket ->
+            socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com/login.php?next=$next"))
+        }) { f ->
+            failed(f.inspectFacebook(FB_SHARE), ImageFailure.FACEBOOK_STORY, ImagePhase.PAGE)
+            assertEquals(1, f.server.requests.size)
+        }
+    }
+
     @Test fun videoShareLandingOnAMixedPostReturnsTheCanonicalWatchLinkWithoutFetchingPhotos() {
         val target = "/synthetic/posts/pfbid0Synthetic"
         for (kind in listOf("v", "r")) fixture(respond = facebook("mixed-post.html", override = { request, socket ->
