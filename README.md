@@ -10,8 +10,6 @@ Save videos, audio and photos from public links on Android.<br>
 No ads, no account, no tracking. In Arabic, English and French.
 
 <a href="https://github.com/ahmed-abdat/nezzel/releases/latest"><img src=".github/assets/download-apk.svg" alt="Download APK" height="64"></a>
-&nbsp;
-<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/ahmed-abdat/nezzel"><img src=".github/assets/get-obtainium.svg" alt="Get updates with Obtainium" height="64"></a>
 
 [![Latest release](https://img.shields.io/github/v/release/ahmed-abdat/nezzel?style=flat-square&color=006B5E&label=release)](https://github.com/ahmed-abdat/nezzel/releases/latest)
 [![Android 10+](https://img.shields.io/badge/Android-10%2B-006B5E?style=flat-square)](#install)
