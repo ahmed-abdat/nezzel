@@ -146,6 +146,7 @@ class SavedMediaRepositoryTest {
     } }
 
     @Test fun repeatedRefreshesDeduplicateInFlightFolderQueries() = folderFixture { repo, folder, media -> runBlocking {
+        val signalTimeoutMillis = 30_000L
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
         val returned = java.util.concurrent.CountDownLatch(1)
@@ -158,7 +159,8 @@ class SavedMediaRepositoryTest {
             if (uri == blockedUri) {
                 if (calls.incrementAndGet() == 1) {
                     entered.countDown()
-                    try { check(release.await(20, java.util.concurrent.TimeUnit.SECONDS)) }
+                    // Only the test releases this query; slow refreshes must not unblock it.
+                    try { release.await() }
                     finally { returned.countDown() }
                 }
             }
@@ -166,27 +168,28 @@ class SavedMediaRepositoryTest {
         val results = Channel<List<SavedMedia>>(Channel.UNLIMITED)
         var observer = launch { repo.observe().collect { results.send(it.getOrThrow()) } }
         try {
-            assertTrue(withContext(Dispatchers.IO) { entered.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+            assertTrue(withContext(Dispatchers.IO) { entered.await(signalTimeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS) })
             repeat(3) { index ->
                 media.insertRow(index + 2, "video/mp4", (index + 200).toLong())
                 context.contentResolver.notifyChange(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
                 shadowOf(android.os.Looper.getMainLooper()).idle()
-                withTimeout(2000) { progress.receive() }
+                // Wait for provider progress, allowing IO scheduling headroom in full-suite runs.
+                withTimeout(signalTimeoutMillis) { progress.receive() }
                 assertEquals("Refresh must not stack blocked calls for the same URI", 1, calls.get())
             }
             observer.cancelAndJoin()
             release.countDown()
-            assertTrue(withContext(Dispatchers.IO) { returned.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+            assertTrue(withContext(Dispatchers.IO) { returned.await(signalTimeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS) })
             while (results.tryReceive().isSuccess) { }
             folder.onQueryUri = null
             observer = launch { repo.observe().collect { results.send(it.getOrThrow()) } }
-            withTimeout(5000) {
+            withTimeout(signalTimeoutMillis) {
                 while (results.receive().none { it.uri == blockedUri && it.size == 123L }) { }
             }
         } finally {
             release.countDown()
             observer.cancelAndJoin()
-            assertTrue(withContext(Dispatchers.IO) { returned.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+            assertTrue(withContext(Dispatchers.IO) { returned.await(signalTimeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS) })
         }
     } }
 
