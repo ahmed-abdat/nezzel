@@ -6,6 +6,8 @@ Version entries describe existing builds, not public APK availability.
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-10-22
+
 ### Added
 
 - AVIF photos (Android 12+): Facebook now serves some photos only as AVIF; they load and save as .avif. Older Android versions say the image type isn't supported.
@@ -14,7 +16,7 @@ Version entries describe existing builds, not public APK availability.
 ### Changed
 
 - Facebook posts with several photos show every photo the post page exposes (up to 20), so you can pick which to save, like Instagram and X. Before, only the first photo showed.
-- Error sheet: Try again and Paste another link share one row; the engine update and Close sit together below.
+- Error sheet: Try again and Paste another link share one row, each label on one line; with large text or a long translation they stack. The engine update and Close sit together below.
 
 ### Fixed
 
@@ -22,6 +24,7 @@ Version entries describe existing builds, not public APK availability.
 - Facebook links that redirect to the regional web.facebook.com page, and photos on the zero-rated image servers, load again.
 - Facebook video share links (/share/v/, /share/r/) that open a post now find the post's video instead of failing.
 - A Facebook post with photos and a video shows the photos and offers the video too.
+- Fresh install: a link that the built-in engine couldn't read is read again by itself as soon as the first automatic engine update finishes, instead of staying on "couldn't read this link".
 - A Facebook post with only text or a shared link says there's no photo or video in it, and event links say they aren't supported, instead of "couldn't read this link".
 
 ## [0.4.6] - 2026-10-21

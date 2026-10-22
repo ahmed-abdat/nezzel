@@ -1,0 +1,7 @@
+0.4.7
+• Facebook posts with several photos: pick which ones to save
+• Facebook share links, video share links and photo + video posts work again
+• Saves AVIF photos (Android 12+)
+• Says clearly when a post has no photo or video
+• Report a link Nezzel can't read, in one tap on WhatsApp
+• Tidier error screen
