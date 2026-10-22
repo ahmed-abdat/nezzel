@@ -77,9 +77,9 @@ class DownloadsLayoutTest {
     @Test fun refreshErrorAndPendingLoadingKeepSavedRowsVisible() {
         var load by mutableStateOf<LibraryLoadState>(LibraryLoadState.Error(listOf(image)))
         render({ screen(load, retry = { load = LibraryLoadState.Loading(listOf(image)) }) }) { a ->
-            assertTrue(texts(nodes(a)).contains(NezzelFormat.isolate("Photo")))
+            assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
             click(action(a, context.getString(R.string.try_again)))
-            assertTrue(texts(nodes(a)).contains(NezzelFormat.isolate("Photo")))
+            assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
             assertFalse(texts(nodes(a)).contains(context.getString(R.string.saved_empty_title)))
         }
     }
@@ -141,8 +141,8 @@ class DownloadsLayoutTest {
         var all = false
         var opened: SavedMedia? = null
         render({ Column(Modifier.fillMaxWidth().padding(16.dp)) { RecentFiles(rows, language, { opened = it }) { all = true } } }) { a ->
-            val first = action(a, NezzelFormat.isolate("Photo 1"))
-            val second = action(a, NezzelFormat.isolate("Photo 2"))
+            val first = action(a, NezzelFormat.firstStrong("Photo 1"))
+            val second = action(a, NezzelFormat.firstStrong("Photo 2"))
             assertTrue("Recent cards must stack at narrow 200%: ${first.boundsInRoot}, ${second.boundsInRoot}", second.boundsInRoot.top >= first.boundsInRoot.bottom)
             assertTrue(first.boundsInRoot.width >= 280f)
             val seeAll = action(a, context.getString(R.string.see_all)); bounded(seeAll); click(seeAll)

@@ -8,8 +8,13 @@ import org.json.JSONTokener
 
 /** Untrusted release data; never use its generated toString in diagnostics. */
 class Release(val version: String, val code: Long, val name: String, val size: Long,
-              val url: String, val digest: String, internal val english: List<String>, internal val arabic: List<String>) {
-    fun notes(language: String): List<String> = if (language == "ar" && arabic.isNotEmpty()) arabic else english
+              val url: String, val digest: String, internal val english: List<String>, internal val arabic: List<String>,
+              internal val french: List<String> = emptyList()) {
+    fun notes(language: String): List<String> = when {
+        language == "ar" && arabic.isNotEmpty() -> arabic
+        language == "fr" && french.isNotEmpty() -> french
+        else -> english
+    }
     companion object {
         const val API = "https://api.github.com/repos/ahmed-abdat/nezzel/releases/latest"
         const val MANIFEST = "https://github.com/ahmed-abdat/nezzel/releases/latest/download/nezzel-update.json"
@@ -55,7 +60,7 @@ class Release(val version: String, val code: Long, val name: String, val size: L
                     return cleanNotes(lines.asSequence())
                 }
                 Release(version, code, name, size,
-                    "https://github.com/ahmed-abdat/nezzel/releases/download/v$version/$name", digest, language("en"), language("ar"))
+                    "https://github.com/ahmed-abdat/nezzel/releases/download/v$version/$name", digest, language("en"), language("ar"), language("fr"))
             } catch (_: Exception) { null }
         }
         fun parse(bytes: ByteArray): Release? {
@@ -85,7 +90,7 @@ class Release(val version: String, val code: Long, val name: String, val size: L
                 if (!UpdatePolicy.allowed(url)) return null
                 val digest = apk.get("digest") as? String ?: return null
                 if (!Regex("sha256:[0-9a-fA-F]{64}").matches(digest)) return null
-                Release(tag.drop(1), code, name, size, url, digest.substringAfter(':'), notes(body, "en"), notes(body, "ar"))
+                Release(tag.drop(1), code, name, size, url, digest.substringAfter(':'), notes(body, "en"), notes(body, "ar"), notes(body, "fr"))
             } catch (_: Exception) { null }
         }
         private fun boundedDepth(text: String): Boolean {

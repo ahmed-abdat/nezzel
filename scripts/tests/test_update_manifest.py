@@ -46,6 +46,29 @@ class UpdateManifestTests(unittest.TestCase):
                 self.assertNotEqual(0, result.returncode)
                 self.assertEqual("", result.stdout)
 
+    def test_french_is_emitted_only_when_its_block_exists(self):
+        result = self.run_generator()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("fr", json.loads(result.stdout)["notes"])
+        self.notes.write_text(self.notes.read_text(encoding="utf-8")
+                              + "\n<!-- nezzel:notes:fr -->\n- **Corrige** `vidéo`\n<!-- /nezzel:notes -->",
+                              encoding="utf-8")
+        result = self.run_generator()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual({"en": ["Fix video"], "ar": ["إصلاح"], "fr": ["Corrige vidéo"]},
+                         json.loads(result.stdout)["notes"])
+
+    def test_present_french_block_must_be_nonempty_and_unambiguous(self):
+        required = self.notes.read_text(encoding="utf-8")
+        french = "<!-- nezzel:notes:fr -->\n- Correction\n<!-- /nezzel:notes -->"
+        for optional in ["<!-- nezzel:notes:fr -->\n<!-- /nezzel:notes -->", french + french,
+                         "<!-- nezzel:notes:fr -->\n- Correction"]:
+            with self.subTest(optional=optional):
+                self.notes.write_text(required + "\n" + optional, encoding="utf-8")
+                result = self.run_generator()
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual("", result.stdout)
+
     def test_notes_are_cleaned_and_bounded(self):
         lines = ["- **one** `two` [link](discard) <b>text</b>\u202e\u2066\x01"] + ["- " + "x" * 1005] * 9
         self.notes.write_text("\n".join("<!-- nezzel:notes:" + lang + " -->\n" + "\n".join(lines)

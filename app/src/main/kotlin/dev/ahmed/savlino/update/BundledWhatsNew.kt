@@ -9,10 +9,10 @@ internal object BundledWhatsNew {
         fun text(language: String): String? = try {
             assets.open("whats-new/$language.txt").bufferedReader(Charsets.UTF_8).use { it.readText() }
         } catch (_: IOException) { null }
-        return parse(text("en"), text("ar"))
+        return parse(text("en"), text("ar"), text("fr"))
     }
 
-    internal fun parse(english: String?, arabic: String?): WhatsNew? {
+    internal fun parse(english: String?, arabic: String?, french: String? = null): WhatsNew? {
         fun localized(text: String?): Pair<String, List<String>>? {
             val lines = text?.lineSequence()?.toList() ?: return null
             val version = lines.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -22,6 +22,7 @@ internal object BundledWhatsNew {
         val en = localized(english) ?: return null
         val ar = localized(arabic) ?: return null
         if (en.first != ar.first) return null
-        return WhatsNew(en.first, en.second, ar.second)
+        val fr = localized(french)?.takeIf { it.first == en.first }
+        return WhatsNew(en.first, en.second, ar.second, fr?.second.orEmpty())
     }
 }

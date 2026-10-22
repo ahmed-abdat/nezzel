@@ -409,7 +409,7 @@ private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onS
         else SavedMenu(item, meta, onShare, onOpenWith, onShowFiles, onDelete)
     }
     @Composable fun Texts(modifier: Modifier) = Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-        Text(NezzelFormat.isolate(item.title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(NezzelFormat.firstStrong(item.title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content), maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(meta, Modifier.fillMaxWidth(), style = metaStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     // The item's animation modifier goes on the outermost node, the lazy list's direct child.
@@ -459,7 +459,7 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
                 MediaThumbnail(item, Modifier.width(96.dp).aspectRatio(16f / 9f))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-                    Text(NezzelFormat.isolate(item.title), style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Content),
+                    Text(NezzelFormat.firstStrong(item.title), style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Content),
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(meta, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -493,7 +493,7 @@ fun mediaMeta(item: SavedMedia, language: String, withFormat: Boolean = false): 
     when (item.kind) {
         SavedMediaKind.IMAGE -> if (item.width != null && item.width > 0 && item.height != null && item.height > 0)
             stringResource(R.string.saved_image_dimensions, NezzelFormat.count(item.width, language), NezzelFormat.count(item.height, language)) else null
-        SavedMediaKind.AUDIO -> item.bitrateKbps?.let { "${NezzelFormat.count(it, language)}K" }
+        SavedMediaKind.AUDIO -> item.bitrateKbps?.let { stringResource(R.string.format_kbps, NezzelFormat.count(it, language)) }
         SavedMediaKind.VIDEO -> VideoQuality.of(item.width, item.height)
             ?.let { stringResource(R.string.video_quality, NezzelFormat.count(it, language)) }
         null -> null
@@ -566,7 +566,7 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                                 verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                                 MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 9f), MaterialTheme.shapes.large)
                                 // Full-width captions on the layout's start edge, whatever the title's own direction.
-                                Text(NezzelFormat.isolate(item.title), Modifier.fillMaxWidth(), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                Text(NezzelFormat.firstStrong(item.title), Modifier.fillMaxWidth(), maxLines = 2, overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content, textAlign = captionAlign))
                                 Text(mediaMeta(item, language), Modifier.fillMaxWidth(),
                                     style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr, textAlign = captionAlign))

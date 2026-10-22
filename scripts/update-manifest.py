@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate nezzel-update.json from the APK and marked EN/AR release notes (stdlib, -I safe)."""
+"""Generate nezzel-update.json from the APK and marked EN/AR notes, optionally FR (stdlib, -I safe)."""
 import hashlib
 import json
 from pathlib import Path
@@ -55,6 +55,8 @@ def generate(version, code, apk_path, notes_path):
     manifest = {"schema": 1, "version": version, "versionCode": int(code),
                 "apk": {"name": apk.name, "size": size, "sha256": digest.hexdigest()},
                 "notes": {language: notes_block(body, language) for language in ("en", "ar")}}
+    if "<!-- nezzel:notes:fr -->" in body:
+        manifest["notes"]["fr"] = notes_block(body, "fr")
     output = json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n"
     if len(output.encode("utf-8")) > 64 * 1024:
         raise ValueError("manifest exceeds 64 KiB")

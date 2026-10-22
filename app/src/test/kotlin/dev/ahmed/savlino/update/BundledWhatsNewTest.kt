@@ -31,6 +31,21 @@ class BundledWhatsNewTest {
         assertNull(BundledWhatsNew.parse("0.4.6\n• Fixed", "0.4.5\n• إصلاح"))
     }
 
+    @Test fun frenchIsOptionalAndMustMatchTheRequiredLanguagesVersion() {
+        val en = "0.4.6\n• Fixed"
+        val ar = "0.4.6\n• إصلاح"
+        val translated = BundledWhatsNew.parse(en, ar, "0.4.6\n• Corrigé")!!
+        assertEquals(listOf("Corrigé"), translated.notes("fr"))
+        assertEquals(listOf("Fixed"), translated.notes("en"))
+        assertEquals(listOf("إصلاح"), translated.notes("ar"))
+        for (fr in listOf(null, "", "0.4.6\n• ", "0.4.5\n• Ancienne correction")) {
+            val fallback = BundledWhatsNew.parse(en, ar, fr)!!
+            assertEquals("0.4.6", fallback.version)
+            assertEquals(listOf("Fixed"), fallback.notes("fr"))
+        }
+        assertNull(BundledWhatsNew.parse(en, "0.4.5\n• إصلاح", "0.4.6\n• Corrigé"))
+    }
+
     @Test fun readsBothGeneratedAssets() {
         val assets = RuntimeEnvironment.getApplication().assets
         val notes = BundledWhatsNew.read(assets)!!
@@ -42,5 +57,11 @@ class BundledWhatsNewTest {
         assertEquals(arabic.drop(1).filter { it.isNotBlank() }.map { it.removePrefix("• ") }, notes.arabic)
         assertTrue(notes.english.isNotEmpty())
         assertTrue(notes.arabic.isNotEmpty())
+        val french = try {
+            assets.open("whats-new/fr.txt").bufferedReader().use { it.readLines() }
+        } catch (_: java.io.IOException) { null }
+        val translated = french?.takeIf { it.firstOrNull()?.trim() == notes.version }?.drop(1)
+            ?.map { it.trimStart().removePrefix("• ").trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        assertEquals(translated.ifEmpty { notes.english }, notes.notes("fr"))
     }
 }

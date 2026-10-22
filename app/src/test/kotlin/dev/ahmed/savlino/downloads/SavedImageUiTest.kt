@@ -68,18 +68,18 @@ class SavedImageUiTest {
     }
     @Test fun imageChipChangesVisibleRowsAndAllVideoAudioStayCorrect() = render({ screen(listOf(image, video, audio)) }) { a ->
         click(a, string("filter_images"))
-        assertTrue(texts(nodes(a)).contains(NezzelFormat.isolate("Photo")))
-        assertFalse(texts(nodes(a)).contains(NezzelFormat.isolate("Movie")))
-        assertFalse(texts(nodes(a)).contains(NezzelFormat.isolate("Song")))
+        assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
+        assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Movie")))
+        assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Song")))
         click(a, context.getString(R.string.video_group))
-        assertTrue(texts(nodes(a)).contains(NezzelFormat.isolate("Movie")))
-        assertFalse(texts(nodes(a)).contains(NezzelFormat.isolate("Photo")))
+        assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Movie")))
+        assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
         click(a, context.getString(R.string.audio_group))
-        assertTrue(texts(nodes(a)).contains(NezzelFormat.isolate("Song")))
-        assertFalse(texts(nodes(a)).contains(NezzelFormat.isolate("Photo")))
+        assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Song")))
+        assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
         click(a, context.getString(R.string.filter_all))
         val all = texts(nodes(a))
-        listOf("Photo", "Movie", "Song").forEach { assertTrue(all.toString(), all.contains(NezzelFormat.isolate(it))) }
+        listOf("Photo", "Movie", "Song").forEach { assertTrue(all.toString(), all.contains(NezzelFormat.firstStrong(it))) }
     }
     private fun wrappedChips() {
         RuntimeEnvironment.setFontScale(2f)
@@ -102,7 +102,7 @@ class SavedImageUiTest {
                 click(a, label)
                 assertEquals(true, clickNode(a, label).config[SemanticsProperties.Selected])
             }
-            assertTrue(texts(nodes(a)).contains(NezzelFormat.isolate("Photo")))
+            assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
         }
     }
     @Test @Config(qualifiers = "en-w320dp-h1200dp-mdpi") fun english200PercentChipsWrapAndRemain48dpClickable() = wrappedChips()
@@ -121,8 +121,16 @@ class SavedImageUiTest {
     }) { a ->
         val text = texts(nodes(a))
         assertTrue(text.toString(), text.any { it.contains("720p") })
-        assertTrue(text.toString(), text.any { it.contains("128K") })
+        assertTrue(text.toString(), text.any { it.contains("128 kbps") })
         assertTrue(text.toString(), text.contains("1:24"))
+    }
+    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi")
+    fun savedAudioBitrateUsesArabicResource() = render({ Text(mediaMeta(audio, "ar")) }) { a ->
+        assertTrue(texts(nodes(a)).any { it.contains("128 kbps") })
+    }
+    @Test @Config(qualifiers = "fr-w400dp-h1200dp-mdpi")
+    fun savedAudioBitrateUsesFrenchResource() = render({ Text(mediaMeta(audio, "fr")) }) { a ->
+        assertTrue(texts(nodes(a)).any { it.contains("128 kbit/s") })
     }
     private fun fixture(omitWidth: Boolean = false, check: (SavedMediaRepository, SavedMediaRepositoryTest.Provider) -> Unit) {
         val provider = object : SavedMediaRepositoryTest.Provider() {

@@ -36,6 +36,13 @@ not a bullet
         listOf("", "<!-- nezzel:versionCode=no -->", "<!-- nezzel:versionCode=0 -->", "<!-- nezzel:versionCode=362 --><!-- nezzel:versionCode=363 -->")
             .forEach { assertNull(parse(release(it))) }
     }
+    @Test fun frenchReleaseBodyNotesUseSharedCleaningAndFallbackWhenEmpty() {
+        val body = "<!-- nezzel:versionCode=362 --><!-- nezzel:notes:en -->\n- Fixed\n<!-- /nezzel:notes -->"
+        val french = "<!-- nezzel:notes:fr -->\n- **Corrige** `vidéo`\n<!-- /nezzel:notes -->"
+        assertEquals(listOf("Corrige vidéo"), parse(release(body + french))!!.notes("fr"))
+        assertEquals(listOf("Fixed"), parse(release(body))!!.notes("fr"))
+        assertEquals(listOf("Fixed"), parse(release(body + "<!-- nezzel:notes:fr -->\n- \n<!-- /nezzel:notes -->"))!!.notes("fr"))
+    }
     @Test fun digestAndExactlyOneSafeApkAreRequired() {
         val json = release(); val assets = json.getJSONArray("assets"); val asset = assets.getJSONObject(0)
         asset.remove("digest"); assertNull(parse(json))

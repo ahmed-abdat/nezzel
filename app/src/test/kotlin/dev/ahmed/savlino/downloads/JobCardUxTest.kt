@@ -62,7 +62,7 @@ class JobCardUxTest {
         CompositionLocalProvider(LocalSoftwareKeyboardController provides keyboard) { DownloadsScreen(emptyList(), language, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(listOf(family, song))) }
     }, check)
     private fun field() = compose.onNode(hasSetTextAction(), useUnmergedTree = true)
-    private fun row(title: String) = compose.onNodeWithText(NezzelFormat.isolate(title), useUnmergedTree = true)
+    private fun row(title: String) = compose.onNodeWithText(NezzelFormat.firstStrong(title), useUnmergedTree = true)
 
     private fun searchOpensFocusedWithKeyboardAndCloses(fontScale: Float) = screen(fontScale) { a ->
         field().assertDoesNotExist()
@@ -179,6 +179,28 @@ class JobCardUxTest {
         assertEquals("5.6 MB", NezzelFormat.size(5_600_000, "en"))
         assertEquals("506 KB", NezzelFormat.size(506_000, "ar"))
         assertFalse(NezzelFormat.size(1_400_000_000, "ar").contains(' '))
+    }
+
+    @Test fun rowBytesSharesMatchingUnitsButKeepsDifferentUnits() {
+        var progress by mutableStateOf(downloading.copy(bytes = 12_000_000, total = Size.Exact(30_000_000)))
+        host(content = { JobRow(progress, {}, {}, {}) }) { _ ->
+            compose.onNodeWithText("\u206612\u2069 of \u206630\u00a0MB\u2069", useUnmergedTree = true).assertExists()
+            compose.runOnIdle { progress = progress.copy(bytes = 900_000, total = Size.Exact(1_200_000_000)) }
+            compose.waitForIdle()
+            compose.onNodeWithText("\u2066900\u00a0KB\u2069 of \u20661.2\u00a0GB\u2069", useUnmergedTree = true).assertExists()
+        }
+    }
+
+    @Test @Config(qualifiers = "ar-w360dp-h800dp-mdpi")
+    fun mixedArabicSavedTitleUsesFirstStrongInRowAndActionSheet() {
+        val item = family.copy(title = "رحلة Android")
+        host(content = { DownloadsScreen(emptyList(), language, {}, {}, {}, {}, {}, null, {}, {},
+            libraryLoad = LibraryLoadState.Ready(listOf(item))) }) { _ ->
+            compose.onNodeWithText("\u2068رحلة Android\u2069", useUnmergedTree = true).assertExists()
+            compose.onNodeWithContentDescription(context.getString(R.string.saved_more, item.title), useUnmergedTree = true).performClick()
+            compose.waitForIdle()
+            compose.onAllNodesWithText("\u2068رحلة Android\u2069", useUnmergedTree = true).assertCountEquals(2)
+        }
     }
 
     private fun savedSizeStaysOnOneLine() = screen(2f) { _ ->

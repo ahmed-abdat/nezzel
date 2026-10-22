@@ -27,8 +27,12 @@ internal fun hasUpdateSpace(context: Context, size: Long, allocatable: () -> Lon
 enum class UpdateStage { IDLE, DOWNLOADING, VERIFYING, READY, INSTALLING, ERROR }
 enum class UpdateFailure { NETWORK, SPACE, VERIFY, INSTALL }
 enum class UpdateCheck { NONE, CHECKING, LATEST, AVAILABLE, FAILED }
-class WhatsNew(val version: String, val english: List<String>, val arabic: List<String>) {
-    fun notes(language: String): List<String> = if (language == "ar" && arabic.isNotEmpty()) arabic else english
+class WhatsNew(val version: String, val english: List<String>, val arabic: List<String>, val french: List<String> = emptyList()) {
+    fun notes(language: String): List<String> = when {
+        language == "ar" && arabic.isNotEmpty() -> arabic
+        language == "fr" && french.isNotEmpty() -> french
+        else -> english
+    }
 }
 data class AppUpdateState(val automatic: Boolean = true, val release: Release? = null, val skipped: Long? = null,
     val dismissed: Boolean = false, val check: UpdateCheck = UpdateCheck.NONE, val stage: UpdateStage = UpdateStage.IDLE,
@@ -240,7 +244,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
     internal fun recordInstall(session: Int, release: Release): Boolean = prefs.edit()
         .putInt("install-session", session).putLong("install-code", release.code)
         .putString("install-notes", JSONObject().put("version", release.version)
-            .put("en", JSONArray(release.english)).put("ar", JSONArray(release.arabic)).toString()).commit()
+            .put("en", JSONArray(release.english)).put("ar", JSONArray(release.arabic)).put("fr", JSONArray(release.french)).toString()).commit()
     internal fun clearInstall(): Boolean {
         val editor = prefs.edit()
         // Only a completed update to this build can become About's retained notes.
@@ -256,10 +260,10 @@ class AppUpdates internal constructor(private val context: Context, private val 
         }.orEmpty()
         val english = notes("en")
         val arabic = notes("ar")
-        if (english.isEmpty() && arabic.isEmpty()) null else WhatsNew(json.getString("version"), english, arabic)
+        if (english.isEmpty() && arabic.isEmpty()) null else WhatsNew(json.getString("version"), english, arabic, notes("fr"))
     } catch (_: Exception) { null }
     private fun encodeNotes(notes: WhatsNew): String = JSONObject().put("code", BuildConfig.VERSION_CODE)
-        .put("version", notes.version).put("en", JSONArray(notes.english)).put("ar", JSONArray(notes.arabic)).toString()
+        .put("version", notes.version).put("en", JSONArray(notes.english)).put("ar", JSONArray(notes.arabic)).put("fr", JSONArray(notes.french)).toString()
     private fun cachedRelease(): Release? = prefs.getString("release", null)?.toByteArray()?.let { bytes ->
         when (prefs.getString("release-format", null)) {
             "manifest" -> Release.parseManifest(bytes)
@@ -273,9 +277,9 @@ class AppUpdates internal constructor(private val context: Context, private val 
         // 0.4.4 records install-code but not install-notes; its cached offer is the release that was just installed.
         // Copy its notes now: the next successful check replaces that cache.
         val migrated = cachedRelease()?.takeIf { it.code == BuildConfig.VERSION_CODE.toLong() }
-            ?.takeIf { it.english.isNotEmpty() || it.arabic.isNotEmpty() }?.let { WhatsNew(it.version, it.english, it.arabic) } ?: return null
+            ?.takeIf { it.english.isNotEmpty() || it.arabic.isNotEmpty() }?.let { WhatsNew(it.version, it.english, it.arabic, it.french) } ?: return null
         prefs.edit().putString("install-notes", JSONObject().put("version", migrated.version)
-            .put("en", JSONArray(migrated.english)).put("ar", JSONArray(migrated.arabic)).toString()).commit()
+            .put("en", JSONArray(migrated.english)).put("ar", JSONArray(migrated.arabic)).put("fr", JSONArray(migrated.french)).toString()).commit()
         return migrated
     }
     fun currentNotes(): WhatsNew? {

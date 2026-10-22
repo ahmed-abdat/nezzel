@@ -34,6 +34,17 @@ class ManifestReleaseTest {
             assertNull(field, parse(manifest().apply { getJSONObject("apk").remove(field) }))
         }
     }
+    @Test fun optionalFrenchNotesUseSharedCleaningAndEnglishFallback() {
+        val json = manifest()
+        assertEquals(listOf("Fixed"), parse(json)!!.notes("fr"))
+        json.getJSONObject("notes").put("fr", JSONArray().put("**Corrige** `vidéo`\u2066"))
+        val translated = parse(json)!!
+        assertEquals(listOf("Corrige vidéo"), translated.notes("fr"))
+        assertEquals(listOf("Fixed"), translated.notes("en"))
+        assertEquals(listOf("إصلاح"), translated.notes("ar"))
+        json.getJSONObject("notes").put("fr", JSONArray().put(" "))
+        assertEquals(listOf("Fixed"), parse(json)!!.notes("fr"))
+    }
     @Test fun rejectsMalformedRequiredFieldsWithoutCoercion() {
         val bad = mapOf("schema" to listOf<Any>(2, "1", 1.5, true, JSONObject.NULL),
             "version" to listOf<Any>(1, "v0.4.4", "01.4.4", "0.4.4-01", "0.4.4/path", JSONObject.NULL),

@@ -21,6 +21,8 @@ abstract class GenerateWhatsNewAssets : DefaultTask() {
     abstract val englishChangelogs: DirectoryProperty
     @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val arabicChangelogs: DirectoryProperty
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val frenchChangelogs: DirectoryProperty
     @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
 
     @TaskAction
@@ -40,6 +42,9 @@ abstract class GenerateWhatsNewAssets : DefaultTask() {
             val target = destination.resolve("$language.txt")
             if (version != null) changelogs.resolve("$version.txt").copyTo(target, overwrite = true) else target.delete()
         }
+        val french = version?.let { frenchChangelogs.get().asFile.resolve("$it.txt") }?.takeIf { it.isFile }
+        val target = destination.resolve("fr.txt")
+        if (french != null) french.copyTo(target, overwrite = true) else target.delete()
     }
 }
 
@@ -109,6 +114,7 @@ androidComponents.onVariants { variant ->
         versionCode.set(variant.outputs.single().versionCode)
         englishChangelogs.set(rootProject.layout.projectDirectory.dir("fastlane/metadata/android/en-US/changelogs"))
         arabicChangelogs.set(rootProject.layout.projectDirectory.dir("fastlane/metadata/android/ar/changelogs"))
+        frenchChangelogs.set(rootProject.layout.projectDirectory.dir("fastlane/metadata/android/fr-FR/changelogs"))
         outputDirectory.set(layout.buildDirectory.dir("generated/whats-new/${variant.name}"))
     }
     variant.sources.assets?.addGeneratedSourceDirectory(notes, GenerateWhatsNewAssets::outputDirectory)

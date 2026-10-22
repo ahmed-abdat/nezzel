@@ -183,11 +183,12 @@ class AppUpdatesTest {
         .put("apk", org.json.JSONObject().put("name", "update.apk").put("size", 100).put("sha256", "a".repeat(64)))
         .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("Fixed"))).toString().toByteArray()
 
-    private fun updatedFrom044(cachedCode: Long): AppUpdates {
+    private fun updatedFrom044(cachedCode: Long, french: List<String> = emptyList()): AppUpdates {
         val code = dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong()
         val manifest = org.json.JSONObject().put("schema", 1).put("version", "0.4.5").put("versionCode", cachedCode)
             .put("apk", org.json.JSONObject().put("name", "update.apk").put("size", 100).put("sha256", "a".repeat(64)))
             .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("Fixed")).put("ar", org.json.JSONArray().put("أُصلح")))
+        if (french.isNotEmpty()) manifest.getJSONObject("notes").put("fr", org.json.JSONArray(french))
         // What 0.4.4 leaves behind: install-code and its cached offer, no install-notes
         context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().clear().putLong("install-code", code)
             .putString("release", manifest.toString()).putString("release-format", "manifest").commit()
@@ -212,6 +213,15 @@ class AppUpdatesTest {
         val updates = updatedFrom044(dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong() + 1)
         assertNull(updates.state.value.whatsNew)
         assertTrue(updates.consumeUpdated())
+    }
+    @Test fun cachedReleaseMigrationRetainsFrenchAfterTheReleaseCacheIsReplaced() {
+        val updates = updatedFrom044(dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong(), listOf("Corrigé"))
+        assertEquals(listOf("Corrigé"), updates.state.value.whatsNew?.notes("fr"))
+        updates.prefs.edit().remove("release").commit()
+        val restarted = AppUpdates(production, scope)
+        assertEquals(listOf("Corrigé"), restarted.state.value.whatsNew?.notes("fr"))
+        restarted.dismissWhatsNew()
+        assertEquals(listOf("Corrigé"), AppUpdates(production, scope).currentNotes()?.notes("fr"))
     }
     @Test fun manifestSuccessSkipsApiAndRestoresItsCache() = runBlocking {
         val requests = mutableListOf<String>()
@@ -387,9 +397,9 @@ class AppUpdatesTest {
         failed.check(manual = true)
         assertEquals(checked, failed.state.value.lastChecked)
     }
-    private fun pendingInstall(english: List<String>, arabic: List<String> = emptyList(), code: Long = dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong()) {
+    private fun pendingInstall(english: List<String>, arabic: List<String> = emptyList(), code: Long = dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong(), french: List<String> = emptyList()) {
         val updates = AppUpdates(production, scope)
-        assertTrue(updates.recordInstall(123, Release("0.4.5", code, "update.apk", 100, "https://github.com/asset", "a".repeat(64), english, arabic)))
+        assertTrue(updates.recordInstall(123, Release("0.4.5", code, "update.apk", 100, "https://github.com/asset", "a".repeat(64), english, arabic, french)))
     }
     @Test fun whatsNewPersistsUntilDismissedAndSuppressesSnackbar() {
         pendingInstall(listOf("Fixed"), listOf("تحسينات"))
@@ -410,6 +420,26 @@ class AppUpdatesTest {
         assertEquals(listOf("تحسينات"), notes.notes("ar"))
         pendingInstall(listOf("Fixed"))
         assertEquals(listOf("Fixed"), AppUpdates(production, scope).state.value.whatsNew?.notes("ar"))
+    }
+    @Test fun frenchInstallNotesSurviveDismissalAndRestart() {
+        pendingInstall(listOf("Fixed"), listOf("تحسينات"), french = listOf("Corrigé"))
+        val updates = AppUpdates(production, scope)
+        assertEquals(listOf("Corrigé"), updates.state.value.whatsNew?.notes("fr"))
+        assertEquals(listOf("Corrigé"), updates.currentNotes()?.notes("fr"))
+        updates.dismissWhatsNew()
+        val restarted = AppUpdates(production, scope)
+        assertNull(restarted.state.value.whatsNew)
+        assertEquals(listOf("Corrigé"), restarted.currentNotes()?.notes("fr"))
+    }
+    @Test fun oldInstallJsonWithoutFrenchStillLoadsAndFallsBackToEnglish() {
+        val prefs = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
+        prefs.edit().putLong("install-code", dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong())
+            .putString("install-notes", """{"version":"0.4.5","en":["Fixed"],"ar":["تحسينات"]}""").commit()
+        val updates = AppUpdates(production, scope)
+        assertEquals(listOf("Fixed"), updates.state.value.whatsNew?.notes("fr"))
+        assertEquals(listOf("تحسينات"), updates.state.value.whatsNew?.notes("ar"))
+        updates.dismissWhatsNew()
+        assertEquals(listOf("Fixed"), AppUpdates(production, scope).currentNotes()?.notes("fr"))
     }
     @Test fun currentNotesSurviveDismissClearAndRestartInBothLanguages() {
         pendingInstall(listOf("Fixed"), listOf("تحسينات"))
@@ -443,6 +473,7 @@ class AppUpdatesTest {
         assertEquals("cached-release", notes.version)
         assertEquals(listOf("Cached fix"), notes.english)
         assertEquals(listOf("إصلاح محفوظ"), notes.arabic)
+        assertEquals(listOf("Cached fix"), notes.notes("fr"))
     }
     @Test fun currentNotesForAnotherBuildAreRemovedAndFallBackToBundledNotes() {
         val updates = AppUpdates(production, scope)
