@@ -392,6 +392,7 @@ html[dir=ltr] h2{letter-spacing:-.035em;line-height:1.08}
 .sys-wrap .dots{inset:0}
 .sys{z-index:1;font-size:13.5px}
 .sys .sb{position:relative;z-index:3}
+.sb .i{width:12px;height:12px;stroke-width:2.4;vertical-align:-1px}
 .sys .sc{padding:46px 18px 18px}
 .sys[data-s="0"] .s0,.sys[data-s="1"] .s1,.sys[data-s="2"] .s2,.sys[data-s="3"] .s3{opacity:1;transform:none}
 .noti{margin-top:34px;padding:14px;border-radius:18px;background:var(--c-high);display:flex;gap:12px;align-items:center}
@@ -511,6 +512,7 @@ footer a{color:inherit}
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.6a9 9 0 0 1 12 0M9.4 16.1a4 4 0 0 1 5.2 0"/><circle cx="12" cy="19.4" r=".6"/></symbol>
   <symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
   <symbol id="link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
   <symbol id="share" viewBox="0 0 24 24"><path d="M15 5l4 4-4 4M19 9H9a5 5 0 0 0 0 10h1"/></symbol>
@@ -588,7 +590,7 @@ footer a{color:inherit}
         <span class="cam"></span>
         <span class="tap" id="tap"></span>
         <div class="sc s0">
-          <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
+          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="ab"><svg class="i flip"><use href="#back"/></svg><span class="av" data-i="av">F</span><b data-i="chat">Famille</b></div>
           <div class="body">
             <div class="msg" data-i="msg">Regardez cette vidéo</div>
@@ -602,7 +604,7 @@ footer a{color:inherit}
           </div>
         </div>
         <div class="sc s1">
-          <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
+          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
           <div class="field"><svg class="i"><use href="#link"/></svg><span data-i="field">Collez un lien public</span></div>
           <div class="ghost"><i></i><i></i></div>
@@ -613,7 +615,7 @@ footer a{color:inherit}
           </div>
         </div>
         <div class="sc s2">
-          <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
+          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="qs">
             <div class="qh"><div class="art"><svg><use href="#scene"/></svg></div><div><b data-i="vt">Souvenirs de vacances</b><small class="ltr">2:48</small></div></div>
             <div class="ql" data-i="video">Vidéo</div>
@@ -626,7 +628,7 @@ footer a{color:inherit}
           <div class="foot"><div class="pbtn" id="pb2"><svg class="i"><use href="#dl"/></svg><span data-i="dl">Télécharger</span> · <span class="sw ltr num"><span data-mb="32.4" data-est>≈ 32,4 Mo</span><span data-mb="61.8" data-est>≈ 61,8 Mo</span></span></div></div>
         </div>
         <div class="sc s3">
-          <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
+          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="dh" data-i="n-dl">Téléchargements</div>
           <div class="jobm" id="jobm">
             <span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="ok"><svg class="i"><use href="#check"/></svg></span></span>
@@ -707,7 +709,7 @@ footer a{color:inherit}
       <div class="dots"></div>
       <div class="phone sys" id="sys" data-s="0"><div class="screen">
         <span class="cam"></span>
-        <div class="sb"><span>9:41</span><span>5G ▮▮▮</span></div>
+        <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
         <div class="sc s0">
           <div class="noti"><span class="fic"><svg class="i"><use href="#file"/></svg></span><span><b>nezzel-<span class="vtxt">0.4.7</span>.apk</b><small><span data-i="sys-done">Téléchargement terminé</span> · <span class="ltr size" data-mb="59">59 Mo</span></small></span><span class="go" data-i="open">Ouvrir</span></div>
         </div>
@@ -787,7 +789,7 @@ footer a{color:inherit}
     word:"Nezzel",
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"Save the video <em>from its link</em>",
     lede:"Save videos, audio and photos from public links. No ads, no account",
-    cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install",
+    cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
     t1:"No ads", t2:"No account", t3:"Open source",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality, and the file is saved",
     "demo-ctl":"Demo steps", pause:"Pause the demo", play:"Play the demo",
@@ -839,6 +841,7 @@ footer a{color:inherit}
       "cta": "تنزيل التطبيق",
       "meta": "لأندرويد 10 أو أحدث · الإصدار",
       "howto": "كيف أثبّته؟",
+      "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون · الإصدار",
       "t1": "بلا إعلانات",
       "t2": "بلا حساب",
       "t3": "مفتوح المصدر",
@@ -947,7 +950,7 @@ footer a{color:inherit}
     word:"Nezzel",
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"Enregistrez la vidéo <em>depuis son lien</em>",
     lede:"Enregistrez vidéos, sons et photos depuis des liens publics. Sans publicité ni compte",
-    cta:"Télécharger l’appli", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?",
+    cta:"Télécharger l’appli", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
     t1:"Sans publicité", t2:"Sans compte", t3:"Code ouvert",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, vous choisissez la qualité et le fichier est enregistré",
     "demo-ctl":"Étapes de la démo", pause:"Mettre la démo en pause", play:"Lancer la démo",
@@ -1063,6 +1066,20 @@ footer a{color:inherit}
     try { localStorage.setItem("nezzel-lang", a.dataset.locale); } catch (e) {}
     closeLanguages();
   }));
+
+  // ---------- visitor's device (read in the browser only, never sent) ----------
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (ios) { const m = $(".hero [data-i=meta]"); m.dataset.i = "only-ios"; m.textContent = t("only-ios"); }
+  const clock = new Intl.DateTimeFormat(lang() + "-u-nu-latn", { hour: "numeric", minute: "2-digit" });
+  const tick = () => {
+    const now = new Date();
+    const text = clock.formatToParts(now).filter(p => p.type === "hour" || p.type === "minute" || (p.type === "literal" && p.value.trim() === ":")).map(p => p.value).join("");
+    $$(".sb .clk").forEach(s => { s.textContent = text; });
+    setTimeout(tick, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 50);
+  };
+  tick();
+  if (navigator.connection?.type === "wifi") $$(".sb .net").forEach(s => { s.innerHTML = '<svg class="i"><use href="#wifi"/></svg> ▮▮▮'; });
 
   // ---------- latest release ----------
   function applyRelease() {
