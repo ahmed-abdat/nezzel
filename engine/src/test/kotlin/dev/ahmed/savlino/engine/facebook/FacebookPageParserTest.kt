@@ -161,10 +161,20 @@ class FacebookPageParserTest {
     @Test fun albumKeepsPageNodesInOrderPrefersViewerImageAndReportsTrueTotal() {
         val result = parsed(facebookFixture("album-post.html"), FB_STORY, FB_SHARE)
         assertEquals(listOf(cdn(2), cdn(4), cdn(6), cdn(8), cdn(10)), result.candidates.map { it.url })
+        assertEquals(listOf(cdn(1), cdn(3), cdn(5), cdn(7), cdn(9)), result.candidates.map { it.previewUrl })
         assertEquals(5, result.discovery.discoveredCount)
         assertEquals(18, result.discovery.claimedCount)
         assertEquals(DiscoveryCompleteness.PARTIAL, result.discovery.completeness)
         assertFalse(result.discovery.previewQuality)
+    }
+
+    @Test fun albumPreviewFallsBackToOriginalWhenSmallerRenditionIsMissingOrOffCdn() {
+        for (replacement in listOf("https://external.example.fbcdn.net/1.jpg", "")) {
+            val page = facebookFixture("album-post.html").replace(cdn(1), replacement)
+            val first = parsed(page).candidates.first()
+            assertEquals(cdn(2), first.url)
+            assertEquals(cdn(2), first.previewUrl)
+        }
     }
 
     @Test fun requestedPhotoIdSelectsThatNodeOrNothing() {

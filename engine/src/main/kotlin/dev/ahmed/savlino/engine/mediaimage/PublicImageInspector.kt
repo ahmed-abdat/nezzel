@@ -62,7 +62,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     fun newOperation(source: LinkRevision, identity: MediaAdapterIdentity): ImageInspectionOperation {
         val kind = when {
             LinkedInPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL
-            FacebookPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_IMAGE
+            FacebookPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
             XPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             InstagramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             TelegramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
@@ -243,7 +243,11 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         }
         operation.fetchPhase = ImagePhase.IMAGE
         terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
-        // Metadata may enumerate several attachments; only the first is fetched, on the scontent CDN only.
+        val videoSource = parsed.videoId?.let(::facebookWatchLink)?.let { LinkRevision(it, operation.source.revision) }
+        if (parsed.candidates.size > 1 || parsed.discovery.cappedCount > 0 || parsed.discovery.unavailableCount > 0)
+            return fetchCarousel(operation, parsed.candidates.map { it.url }, parsed.discovery,
+                MediaHostRule.FACEBOOK_CDN, MediaMetadata(parsed.title, parsed.author),
+                parsed.candidates.map { it.previewUrl }, videoSource = videoSource)
         var first = parsed.candidates.first()
         var discovery = parsed.discovery
         if (discovery.previewQuality && first.photoId != null && resolved.kind != FacebookLinkKind.PHOTO) {
@@ -258,7 +262,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         return fetchAsset(operation, PublicMediaRequest(url, MediaHttpPurpose.IMAGE, hostRule = MediaHostRule.FACEBOOK_CDN)) { bytes, image ->
             Fetched.Asset(bytes, image, url, parsed.candidates.size, discovery, validity, null, false,
                 MediaHostRule.FACEBOOK_CDN, MediaMetadata(parsed.title, parsed.author),
-                videoSource = parsed.videoId?.let(::facebookWatchLink)?.let { LinkRevision(it, operation.source.revision) })
+                videoSource = videoSource)
         }
     }
 
@@ -380,7 +384,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
 
     /** Small CDN renditions share 2 MiB; LinkedIn validates its evidenced images with the full per-image limit. */
     private fun fetchCarousel(operation: ImageInspectionOperation, urls: List<String>, discovery: ImageDiscovery,
-        rule: MediaHostRule, metadata: MediaMetadata, previewUrls: List<String>, pageContext: MediaHttpTarget? = null): Fetched {
+        rule: MediaHostRule, metadata: MediaMetadata, previewUrls: List<String>, pageContext: MediaHttpTarget? = null,
+        videoSource: LinkRevision? = null): Fetched {
         val validity = MediaInspectionValidity.processLocal()
         val assets = ArrayList<Fetched.Asset>()
         val linkedIn = pageContext != null
@@ -417,7 +422,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                             MediaHttpSaveBinding(operation.source, operation.identity, validity))
                     }
                     Fetched.Asset(bytes, image, url, 1, discovery, validity, postContext, linkedIn, rule, metadata, position,
-                        previewOnly = previewUrl != url)
+                        previewOnly = previewUrl != url, videoSource = videoSource)
                 }
                 when (fetched) {
                     is Fetched.Asset -> assets += fetched
@@ -429,19 +434,21 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                             // Keep a Save capability with declared type and no dimensions/size/proof.
                             if (optionalPreviews && fetched.declaredFormat != null) assets += Fetched.Asset(null,
                                 originalImageMetadata(url, MediaImageMetadata(fetched.declaredFormat)), url, 1,
-                                discovery, validity, null, false, rule, metadata, position, previewOnly = true)
+                                discovery, validity, null, false, rule, metadata, position, previewOnly = true, videoSource = videoSource)
                         } else unavailable++
                     }
                     else -> Unit
                 }
             }
             if (assets.isEmpty()) return if (discovery.hasVideo && operation.state == ImageInspectionOperation.State.ACTIVE)
-                Fetched.Video(MediaInspectResult.VideoRedirect(operation.source, photosUnavailable = true))
+                Fetched.Video(MediaInspectResult.VideoRedirect(videoSource ?: operation.source, photosUnavailable = true))
                 else if (thumbnails && notPreviewed > 0) Fetched.Failed(failure(ImageFailure.PREVIEW_LIMIT, ImagePhase.IMAGE))
                 else last ?: Fetched.Failed(failure(ImageFailure.BUDGET, ImagePhase.IMAGE))
+            val capped = discovery.cappedCount + (urls.size - candidates.size)
             val resultDiscovery = discovery.copy(discoveredCount = assets.size, unavailableCount = unavailable,
+                cappedCount = capped,
                 notPreviewedCount = notPreviewed,
-                completeness = if (unavailable + notPreviewed > 0) DiscoveryCompleteness.PARTIAL else discovery.completeness)
+                completeness = if (unavailable + notPreviewed + capped > 0) DiscoveryCompleteness.PARTIAL else discovery.completeness)
             val result = if (!optionalPreviews && assets.size == 1 && unavailable == 0 && notPreviewed == 0 && discovery.cappedCount == 0)
                 assets.single() else Fetched.Carousel(assets, resultDiscovery)
             completed = true
@@ -559,7 +566,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             }
             decodeTerminal()?.let { return failure(it, ImagePhase.DECODE) }
             if (items.isEmpty()) return if (assets.first().discovery.hasVideo)
-                MediaInspectResult.VideoRedirect(operation.source, photosUnavailable = true) else failure(lastFailure, ImagePhase.DECODE)
+                MediaInspectResult.VideoRedirect(assets.first().videoSource ?: operation.source, photosUnavailable = true) else failure(lastFailure, ImagePhase.DECODE)
             val first = assets.first()
             val inspection = MediaInspection(operation.source, operation.identity, items, first.validity)
             synchronized(lock) {

@@ -7,9 +7,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * PAGE_AND_CAROUSEL: X/Instagram, one page + up to 20 images sharing 2 MiB of image bodies,
  * 24 requests including redirects, and one 15 s fetch deadline. PAGE_AND_IMAGE: one page/image.
- * PAGES_AND_IMAGE: Facebook — at most two page
- * fetches (post, then its photo page) and one image. PAGES_AND_CAROUSEL: Bluesky, at most two API
- * reads (handle resolution + post), with the same carousel image/request/deadline budgets.
+ * PAGES_AND_IMAGE: at most two page fetches and one image. PAGES_AND_CAROUSEL: Facebook (post,
+ * then an optional single photo page) and Bluesky (handle resolution + post), at most two page/API
+ * reads with the same carousel image/request/deadline budgets.
  * LINKEDIN_PAGE_AND_CAROUSEL: one page + up to 64 images, 68 requests including redirects,
  * sharing the same 2 MiB image budget and 15 s fetch deadline.
  */

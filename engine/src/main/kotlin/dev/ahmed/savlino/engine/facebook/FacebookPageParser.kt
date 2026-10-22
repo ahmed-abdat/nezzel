@@ -19,7 +19,7 @@ import org.jsoup.select.NodeVisitor
 
 /** Declared width/height are the page's claim only (used to prefer a larger copy), never reported as fact. */
 class FacebookImageCandidate(val url: String, val photoId: String?, internal val declaredWidth: Long = 0,
-    internal val declaredHeight: Long = 0) {
+    internal val declaredHeight: Long = 0, val previewUrl: String = url) {
     override fun toString() = "FacebookImageCandidate(redacted)"
 }
 sealed interface FacebookParseResult {
@@ -45,7 +45,8 @@ sealed interface FacebookParseResult {
 class FacebookPageParser {
     private class Budget : RuntimeException()
     private class Malformed : RuntimeException()
-    private class Photo(val id: String?, val url: String, val reduced: Boolean, val width: Long, val height: Long)
+    private class Photo(val id: String?, val url: String, val reduced: Boolean, val width: Long, val height: Long,
+        val previewUrl: String)
 
     fun parse(html: ByteArray, page: FacebookPostIdentity, requested: FacebookPostIdentity? = null, length: Int = html.size): FacebookParseResult = try {
         parseBounded(html, page, requested, length)
@@ -140,7 +141,7 @@ class FacebookPageParser {
                 val current = currMedia.filter { (it["id"] as? String) == photoId }.distinct().singleOrNull()
                 listOfNotNull((current?.get("creation_story") ?: current?.get("container_story")) as? Map<*, *>)
             } else listOfNotNull(boundRoot?.story)
-            return FacebookParseResult.Success(chosen.map { FacebookImageCandidate(it.url, it.id, it.width, it.height) },
+            return FacebookParseResult.Success(chosen.map { FacebookImageCandidate(it.url, it.id, it.width, it.height, it.previewUrl) },
                 ImageDiscovery(discovered, completeness, total, previewQuality = chosen.first().reduced, hasVideo = videos.isNotEmpty()),
                 owner.firstNotNullOfOrNull(::storyMessage), owner.firstNotNullOfOrNull(::storyActor), videos.singleOrNull())
         }
@@ -224,7 +225,7 @@ class FacebookPageParser {
     private fun contentStory(story: Map<*, *>): Map<*, *>? =
         ((story["comet_sections"] as? Map<*, *>)?.get("content") as? Map<*, *>)?.get("story") as? Map<*, *>
 
-    /** Photo URL order viewer_image → photo_image → image; each candidate must be on the scontent CDN. */
+    /** Prefer viewer_image for Save; a smaller rendition of the same photo may supply its CDN preview. */
     private fun photo(value: Any?): Photo? {
         val media = value as? Map<*, *> ?: return null
         if (media["__typename"] != "Photo") return null
@@ -236,7 +237,16 @@ class FacebookPageParser {
             if (!allowedCdn(url)) continue
             val reduced = key != "viewer_image" && viewer != null &&
                 (dimension(viewer["width"]) > dimension(image["width"]) || dimension(viewer["height"]) > dimension(image["height"]))
-            return Photo(id, url, reduced, dimension(image["width"]), dimension(image["height"]))
+            val width = dimension(image["width"])
+            val height = dimension(image["height"])
+            val preview = listOf("photo_image", "image").mapNotNull { media[it] as? Map<*, *> }
+                .firstOrNull {
+                    val w = dimension(it["width"])
+                    val h = dimension(it["height"])
+                    val uri = it["uri"] as? String
+                    uri != null && allowedCdn(uri) && w in 1..width && h in 1..height && (w < width || h < height)
+                }?.get("uri") as? String
+            return Photo(id, url, reduced, width, height, preview ?: url)
         }
         return null
     }

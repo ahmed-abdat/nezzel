@@ -13,6 +13,7 @@ Version entries describe existing builds, not public APK availability.
 
 ### Changed
 
+- Facebook posts with several photos show every photo the post page exposes (up to 20), so you can pick which to save, like Instagram and X. Before, only the first photo showed.
 - Error sheet: Try again and Paste another link share one row; the engine update and Close sit together below.
 
 ### Fixed

@@ -148,7 +148,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         if (!token.operation.isCarousel || request.purpose != MediaHttpPurpose.IMAGE ||
             (if (token.operation == MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL)
                 request.pageContext == null || request.hostRule != MediaHostRule.ANY
-            else request.hostRule !in setOf(MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN, MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN)))
+            else request.hostRule !in setOf(MediaHostRule.FACEBOOK_CDN, MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN,
+                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
         else fetchInternal(token, request, null, optional = true, imageCap = if (thumbnail) token.budget.imageLimit(thumbnail = true) else null)
 
@@ -376,7 +377,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (linkedInPage) url = MediaHttpPolicy.normalizeLinkedInEntry(url)
             if (facebookPage && (request.purpose != MediaHttpPurpose.PAGE ||
-                    token.operation != MediaHttpOperation.PAGES_AND_IMAGE ||
+                    token.operation !in setOf(MediaHttpOperation.PAGES_AND_IMAGE, MediaHttpOperation.PAGES_AND_CAROUSEL) ||
                     FacebookPostIdentity.parse(request.url)?.fetchUrl != request.url))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (xPost && (request.purpose != MediaHttpPurpose.PAGE || token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||

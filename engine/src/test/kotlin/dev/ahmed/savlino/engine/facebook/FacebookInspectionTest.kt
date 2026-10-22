@@ -14,10 +14,11 @@ import kotlin.test.*
 class FacebookInspectionTest : PublicImageTestBase() {
     private val html = mapOf("Content-Type" to "text/html; charset=utf-8")
     private val png = mapOf("Content-Type" to "image/png")
+    private val jpeg = mapOf("Content-Type" to "image/jpeg")
     private val storyTarget = "/story.php?story_fbid=900000000000001&id=42"
 
     /** Share link → story.php (desktop page) → CDN image, as recorded live; everything else is 404. */
-    private fun facebook(page: String = "photo-post.html", image: ByteArray = raster(),
+    private fun facebook(page: String = "photo-post.html", image: ByteArray = raster(), imageType: Map<String, String> = png,
         override: (RecordedMediaRequest, SSLSocket) -> Boolean = { _, _ -> false }): (RecordedMediaRequest, SSLSocket) -> Unit =
         { request, socket ->
             val host = request.headers["host"].orEmpty()
@@ -26,7 +27,7 @@ class FacebookInspectionTest : PublicImageTestBase() {
                     socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com$storyTarget&rdid=synthetic"))
                 host == "www.facebook.com" && request.target == storyTarget ->
                     socket.reply(body = facebookFixture(page).toByteArray(), headers = html)
-                host == "scontent.example.fbcdn.net" -> socket.reply(body = image, headers = png)
+                host == "scontent.example.fbcdn.net" -> socket.reply(body = image, headers = imageType)
                 else -> socket.reply(404)
             }
         }
@@ -59,18 +60,28 @@ class FacebookInspectionTest : PublicImageTestBase() {
 
     @Test fun mixedPostPhotosCarryItsCanonicalVideoLinkAtTheOperationsRevision() {
         val target = "/synthetic/posts/900000000000001"
-        fixture(respond = facebook("mixed-post.html", override = { request, socket ->
-            if (request.target == target) {
-                socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
-                true
-            } else false
+        for (firstUnavailable in listOf(false, true)) fixture(respond = facebook("mixed-post.html", override = { request, socket ->
+            when {
+                request.target == target -> {
+                    socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
+                    true
+                }
+                firstUnavailable && request.target == "/4.jpg" -> { socket.reply(404); true }
+                else -> false
+            }
         })) { f ->
             val result = assertIs<MediaInspectResult.Success>(f.inspectFacebook("https://www.facebook.com$target", 7))
             try {
                 assertTrue(result.discovery.hasVideo)
                 assertEquals("https://www.facebook.com/watch/?v=900000000000003", result.videoSource?.link?.rawUrl)
                 assertEquals(7L, result.videoSource?.revision)
-                assertEquals(listOf(target, "/5.jpg"), f.server.requests.map { it.target })
+                val count = if (firstUnavailable) 3 else 4
+                assertEquals(count, result.inspection.items.size)
+                assertEquals(count, result.previews.size)
+                assertEquals(ImageDiscovery(count, DiscoveryCompleteness.PARTIAL, 11,
+                    unavailableCount = if (firstUnavailable) 1 else 0, hasVideo = true), result.discovery)
+                assertTrue(result.inspection.items.all { it.renditions.size == 1 })
+                assertEquals(listOf(target, "/4.jpg", "/6.jpg", "/8.jpg", "/10.jpg"), f.server.requests.map { it.target })
             } finally { result.close() }
         }
     }
@@ -263,6 +274,8 @@ class FacebookInspectionTest : PublicImageTestBase() {
     @Test fun previewAttachmentFetchesItsOwnPhotoPageAndTakesTheLargerMatchedImage() {
         fixture(respond = withPhotoPage { it.reply(body = photoPage(), headers = html) }) { f ->
             inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                assertEquals(1, result.inspection.items.size)
+                assertEquals(1, result.previews.size)
                 assertFalse(result.discovery.previewQuality, "full-size copy from the photo page")
                 assertEquals(ImageDiscovery(1, DiscoveryCompleteness.COMPLETE), result.discovery)
                 assertEquals(listOf(storyTarget, photoTarget, "/50.jpg"), f.server.requests.map { it.target })
@@ -327,13 +340,102 @@ class FacebookInspectionTest : PublicImageTestBase() {
         }
     }
 
-    @Test fun albumFetchesOnlyTheFirstNodeAndReportsPartialEighteen() {
-        fixture(respond = facebook("album-post.html")) { f ->
+    @Test fun albumPreviewsEveryExposedPhotoAndSavesEachOriginalWhileReportingPartialEighteen() {
+        // Album originals are .jpg URLs, so their Save expects (and the CDN sends) JPEG.
+        val photo = raster(format = "jpeg")
+        fixture(respond = facebook("album-post.html", image = photo, imageType = jpeg)) { f ->
             inspected(f.inspectFacebook(FB_STORY)).use { result ->
                 assertEquals(5, result.inspection.items.size)
-                assertEquals(listOf(1, 0, 0, 0, 0), result.inspection.items.map { it.renditions.size })
+                assertEquals(listOf(1, 1, 1, 1, 1), result.inspection.items.map { it.renditions.size })
+                assertEquals(listOf(0, 1, 2, 3, 4), result.inspection.items.map { it.position })
+                assertEquals(5, result.previews.size)
+                assertTrue(result.inspection.items.all { it.renditions.single().ref in result.previews })
                 assertEquals(ImageDiscovery(5, DiscoveryCompleteness.PARTIAL, 18), result.discovery)
-                assertEquals(listOf(storyTarget, "/2.jpg"), f.server.requests.map { it.target })
+                assertEquals(listOf(storyTarget, "/1.jpg", "/3.jpg", "/5.jpg", "/7.jpg", "/9.jpg"),
+                    f.server.requests.map { it.target })
+                for ((index, item) in result.inspection.items.withIndex()) {
+                    val rendition = assertIs<MediaRendition.Image>(item.renditions.single())
+                    assertEquals(Size.Unknown, rendition.image.size)
+                    assertNull(rendition.image.proof)
+                    val selection = assertNotNull(result.inspection.selection(rendition.ref))
+                    val sink = ByteArrayOutputStream()
+                    assertIs<ImageSaveResult.Success>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                    assertContentEquals(photo, sink.toByteArray())
+                    assertEquals("/${(index + 1) * 2}.jpg", f.server.requests.last().target)
+                }
+                assertTrue(f.server.requests.drop(1).all { it.headers["host"] == "scontent.example.fbcdn.net" })
+            }
+        }
+    }
+
+    @Test fun albumKeepsOtherPhotosWhenOnePreviewIsUnavailableOrRedirectsOffCdn() {
+        for (redirect in listOf(false, true)) fixture(respond = facebook("album-post.html", override = { request, socket ->
+            if (request.target == "/1.jpg") {
+                if (redirect) socket.reply(302, headers = mapOf("Location" to "https://external.example.fbcdn.net/1.jpg"))
+                else socket.reply(404)
+                true
+            } else false
+        })) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                assertEquals(4, result.inspection.items.size)
+                assertEquals(4, result.previews.size)
+                assertEquals(listOf(1, 2, 3, 4), result.inspection.items.map { it.position })
+                assertEquals(ImageDiscovery(4, DiscoveryCompleteness.PARTIAL, 18, unavailableCount = 1), result.discovery)
+                assertEquals(listOf(storyTarget, "/1.jpg", "/3.jpg", "/5.jpg", "/7.jpg", "/9.jpg"),
+                    f.server.requests.map { it.target })
+                assertTrue(f.server.requests.none { it.headers["host"] == "external.example.fbcdn.net" })
+            }
+        }
+    }
+
+    @Test fun albumExhaustedImageBudgetKeepsCompletedPreviewAndCountsRemainingPhotos() {
+        val bytes = raster()
+        fixture(respond = facebook("album-post.html", image = bytes)) { f ->
+            val operation = f.inspector.newOperation(imageSource(FB_STORY), IMAGE_IDENTITY)
+            operation.token.budget.consumed(2 * 1024 * 1024 - bytes.size, image = true)
+            inspected(runBlocking { f.inspector.inspect(operation, ImageSourceType.FACEBOOK) }).use { result ->
+                assertEquals(1, result.inspection.items.size)
+                assertEquals(1, result.previews.size)
+                assertEquals(ImageDiscovery(1, DiscoveryCompleteness.PARTIAL, 18, notPreviewedCount = 4), result.discovery)
+                assertEquals(listOf(storyTarget, "/1.jpg"), f.server.requests.map { it.target })
+                assertEquals(0, operation.token.budget.imageLimit())
+            }
+        }
+    }
+
+    @Test fun albumCapsImageRequestsAtTwentyAndCountsUnfetchedCandidates() {
+        val nodes = (1..25).joinToString(",") { index ->
+            """{"media":{"__typename":"Photo","id":"${900000000000010L + index}","viewer_image":{"uri":"${cdn(index)}"}}}"""
+        }
+        val page = facebookFixture("album-post.html")
+            .replace(Regex("\"count\":18,\"nodes\":\\[.*?]"), "\"count\":25,\"nodes\":[$nodes]")
+        fixture(respond = facebook(override = { request, socket ->
+            if (request.target == storyTarget) { socket.reply(body = page.toByteArray(), headers = html); true } else false
+        })) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                assertEquals(20, result.inspection.items.size)
+                assertEquals(20, result.previews.size)
+                assertEquals(ImageDiscovery(20, DiscoveryCompleteness.PARTIAL, 25, cappedCount = 5), result.discovery)
+                assertEquals(listOf(storyTarget) + (1..20).map { "/$it.jpg" }, f.server.requests.map { it.target })
+            }
+        }
+    }
+
+    @Test fun carouselSaveReferencesRejectRedirectsOutsideFacebookCdn() {
+        fixture(respond = facebook("album-post.html", override = { request, socket ->
+            if (request.target == "/4.jpg") {
+                socket.reply(302, headers = mapOf("Location" to "https://external.example.fbcdn.net/4.jpg"))
+                true
+            } else false
+        })) { f ->
+            inspected(f.inspectFacebook(FB_STORY)).use { result ->
+                val ref = result.inspection.items[1].renditions.single().ref
+                val selection = assertNotNull(result.inspection.selection(ref))
+                val sink = ByteArrayOutputStream()
+                assertIs<ImageSaveResult.Failure>(runBlocking { f.saver.transfer(f.saver.newOperation(selection), sink) })
+                assertEquals(0, sink.size())
+                assertEquals("/4.jpg", f.server.requests.last().target)
+                assertTrue(f.server.requests.none { it.headers["host"] == "external.example.fbcdn.net" })
             }
         }
     }
