@@ -75,6 +75,10 @@ internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: (
             if (updates?.available == true) SettingsNavRow(stringResource(R.string.update_whats_new), R.drawable.ic_ms_celebration) {
                 if (updates.currentNotes() != null) showWhatsNew = true else openUpdateReleasePage(context, versionName)
             }
+            val contactIntro = stringResource(R.string.contact_whatsapp_intro)
+            SettingsNavRow(stringResource(R.string.contact_whatsapp), R.drawable.logo_whatsapp) {
+                ReportLink.open(context, ReportLink.contactMessage(contactIntro, versionName, android.os.Build.VERSION.RELEASE))
+            }
             CrashReportActions()
         }
         Box(Modifier.padding(horizontal = Space.l)) { HululsoftAbout() }

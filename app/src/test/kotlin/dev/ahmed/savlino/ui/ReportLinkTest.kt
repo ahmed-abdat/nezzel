@@ -80,6 +80,19 @@ class ReportLinkTest {
         assertNull(intent.data!!.fragment)
     }
 
+    @Test fun contactMessageCarriesOnlyVersionsAndStartsInTheUserLanguage() {
+        listOf("en", "ar", "fr").forEach { language ->
+            val intro = context(language).getString(R.string.contact_whatsapp_intro)
+            val message = ReportLink.contactMessage(intro, "1.2.3", "14")
+            assertEquals(listOf(intro, "Nezzel 1.2.3 · Android 14", "", ""), message.lines())
+            assertFalse(message.contains('\u2066') || message.contains('\u2069'))
+            assertEquals(message, ReportLink.intent(message).data!!.getQueryParameter("text"))
+        }
+        // Arabic starts with an Arabic word, so WhatsApp lays the chat bubble out right to left.
+        assertTrue(Character.getDirectionality(context("ar").getString(R.string.contact_whatsapp_intro)[0]) ==
+            Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC)
+    }
+
     @Test fun missingViewHandlerIsSilentlyIgnored() {
         var attempts = 0
         val context = object : ContextWrapper(context("en")) {

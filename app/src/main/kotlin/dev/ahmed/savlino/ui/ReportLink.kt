@@ -24,6 +24,10 @@ internal object ReportLink {
     fun message(intro: String, sourceLink: String, versionName: String, engineVersion: String?, code: String): String =
         "$intro\n$sourceLink\nNezzel $versionName · engine ${engineVersion ?: "?"} · $code"
 
+    /** Settings' "Message us": the version and Android release only, then a blank line for the user's own words. */
+    fun contactMessage(intro: String, versionName: String, androidRelease: String): String =
+        "$intro\nNezzel $versionName · Android $androidRelease\n\n"
+
     fun intent(message: String) = Intent(Intent.ACTION_VIEW,
         Uri.parse("https://wa.me/$WHATSAPP_NUMBER?text=" + Uri.encode(message)))
 

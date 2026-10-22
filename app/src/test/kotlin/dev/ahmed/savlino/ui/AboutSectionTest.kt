@@ -216,6 +216,17 @@ class AboutSectionTest {
             assertEquals(context.getString(R.string.company_link_failed), org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
         }
     }
+    private fun contactOpensWhatsApp() = render { a ->
+        click(clickable(a, context.getString(R.string.contact_whatsapp)))
+        val started = org.robolectric.Shadows.shadowOf(a).nextStartedActivity
+        assertEquals(android.content.Intent.ACTION_VIEW, started.action)
+        assertTrue(started.dataString!!.startsWith("https://wa.me/${ReportLink.WHATSAPP_NUMBER}?text="))
+        assertEquals(ReportLink.contactMessage(context.getString(R.string.contact_whatsapp_intro), "1.2.3",
+            android.os.Build.VERSION.RELEASE), started.data!!.getQueryParameter("text"))
+    }
+    @Test fun contactRowOpensWhatsAppEnglish() = contactOpensWhatsApp()
+    @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
+    @Test fun contactRowOpensWhatsAppArabic() = contactOpensWhatsApp()
     @Test fun companyLinkFailureGivesFeedbackEnglish() = failedCompanyLink()
     @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
     @Test fun companyLinkFailureGivesFeedbackArabic() = failedCompanyLink()

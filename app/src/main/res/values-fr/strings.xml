@@ -230,6 +230,8 @@
     <string name="paste_another_link">Coller un autre lien</string>
     <string name="report_link">Signaler ce lien</string>
     <string name="report_link_intro">Nezzel n’a pas pu lire ce lien :</string>
+    <string name="contact_whatsapp">Nous écrire sur WhatsApp</string>
+    <string name="contact_whatsapp_intro">Bonjour, à propos de Nezzel\u00a0:</string>
     <string name="nezzel_close">Fermer</string>
     <string name="saved_before">Vous l’avez enregistré le %1$s</string>
     <string name="network_title">Connexion impossible</string>
