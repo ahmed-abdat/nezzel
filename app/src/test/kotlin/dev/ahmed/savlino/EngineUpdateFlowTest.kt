@@ -73,6 +73,49 @@ class EngineUpdateFlowTest {
             } finally { vm.dismissOptions(); store.close() }
         }
     }
+    @Test fun firstRunMaintenanceAfterFailedFirstReadReinspectsOnceOnlyWhenUpdateSucceeds() {
+        for (updateFails in listOf(false, true)) {
+            val app = RuntimeEnvironment.getApplication()
+            app.getSharedPreferences("engine-maintenance", 0).edit().clear().commit()
+            val store = JobStore(app)
+            val engine = UpdatingEngine().apply { failure = DownloadError.Failed; this.updateFails = updateFails }
+            val coordinator = DownloadCoordinator(app, engine, store)
+            val vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator)
+            try {
+                vm.edit("https://example.com/video"); vm.checkLink(); pump()
+                assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+                // Automatic first-run maintenance runs only after that first read finished.
+                runBlocking { withTimeout(5000) { assertEquals(!updateFails, coordinator.maintenance.checkWhenInspectionIdle()) } }
+                pump()
+                if (updateFails) {
+                    assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+                    assertEquals(listOf("https://example.com/video"), engine.inspected)
+                } else {
+                    assertTrue(vm.optionsState is OptionsState.Ready)
+                    assertEquals(listOf("https://example.com/video", "https://example.com/video"), engine.inspected)
+                }
+                assertTrue(store.all().isEmpty())
+            } finally { vm.dismissOptions(); store.close() }
+        }
+    }
+    @Test fun updateDoesNotReinspectAnErrorThatNoEngineReadProduced() {
+        val app = RuntimeEnvironment.getApplication()
+        app.getSharedPreferences("engine-maintenance", 0).edit().clear().commit()
+        val store = JobStore(app)
+        val engine = UpdatingEngine().apply { failure = null }
+        val coordinator = DownloadCoordinator(app, engine, store)
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator)
+        try {
+            vm.edit("https://example.com/video"); vm.checkLink(); pump()
+            assertTrue(vm.optionsState is OptionsState.Ready)
+            // Event links are refused before any engine read (review scenario).
+            vm.edit("https://www.facebook.com/events/123"); vm.checkLink(); pump()
+            assertEquals(OptionsState.Error(DownloadError.Unsupported), vm.optionsState)
+            runBlocking { assertTrue(coordinator.maintenance.updateNow()) }; pump()
+            assertEquals(OptionsState.Error(DownloadError.Unsupported), vm.optionsState)
+            assertEquals(listOf("https://example.com/video"), engine.inspected)
+        } finally { vm.dismissOptions(); store.close() }
+    }
     @Test fun updateCompletionCannotReopenDismissedSheetOrInspectEditedLink() {
         val app = RuntimeEnvironment.getApplication()
         val store = JobStore(app)

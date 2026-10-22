@@ -20,6 +20,7 @@ import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.entry.ShareInput
 import dev.ahmed.savlino.jobs.DownloadCoordinator
+import dev.ahmed.savlino.jobs.EngineMaintenanceState
 import dev.ahmed.savlino.jobs.EngineUpdateStatus
 import dev.ahmed.savlino.media.ImageInspect
 import dev.ahmed.savlino.media.ImageRoute
@@ -129,8 +130,26 @@ class LinkViewModel(
         viewModelScope.launch { engine.waitingOperations.collect { engineWaiters = it } }
         viewModelScope.launch { engine.preparing.collect { enginePreparing = it } }
         downloads?.let { coordinator ->
-            viewModelScope.launch { coordinator.maintenance.state.collect { maintenanceState = it } }
+            viewModelScope.launch { coordinator.maintenance.state.collect { state ->
+                val before = maintenanceState
+                maintenanceState = state
+                retryAfterEngineUpdate(before, state)
+            } }
         }
+    }
+    /**
+     * A fresh install reads its first link with the bundled yt-dlp; automatic maintenance waits for that read, then
+     * updates in seconds (phone: TikTok failed, then read fine). When an update lands while a read failure from the
+     * older engine is on screen, read the same link once more. Metadata only: Download still needs its tap.
+     */
+    private fun retryAfterEngineUpdate(before: EngineMaintenanceState?, state: EngineMaintenanceState) {
+        if (state.status != EngineUpdateStatus.SUCCEEDED) return
+        if (before?.status == EngineUpdateStatus.SUCCEEDED && before.generation == state.generation) return
+        val failed = optionsState as? OptionsState.Error ?: return
+        if (failed.error !in setOf(DownloadError.Unsupported, DownloadError.Failed)) return
+        // Only a read that yt-dlp itself failed, at an older generation than this update.
+        if ((failedReadGeneration ?: return) >= state.generation) return
+        startInspection() // Not checkLink: an automatic clipboard link stays memory-only, as before the failure.
     }
     fun updateEngine() {
         downloads?.let { coordinator ->
@@ -151,6 +170,8 @@ class LinkViewModel(
     }
     private var inspectedEngineVersion by mutableStateOf<String?>(null)
     private var inspectedMaintenanceGeneration: Long? = null
+    /** Maintenance generation of the engine read behind the Error on screen; null for any other error or state. */
+    private var failedReadGeneration: Long? = null
     private fun engineVersion() = if (currentEngineVersion != null) currentEngineVersion.invoke()
         else maintenanceState?.version ?: inspectedEngineVersion.takeIf {
             inspectedMaintenanceGeneration == maintenanceState?.generation
@@ -567,11 +588,13 @@ class LinkViewModel(
         operationId = id
         optionsState = OptionsState.Checking(origin ?: source, id)
         inspectionJob = viewModelScope.launch {
+            var readGeneration: Long? = null
             val inspect: suspend () -> InspectResult = inspect@{
                 // A transient first-install failure may look unavailable while maintenance still owns readiness.
                 // Evaluate only after admission; do not turn the shared-link sheet into an immediate failure.
                 if (!engine.isAvailable) return@inspect InspectResult.Failure(DownloadError.EngineUnavailable)
                 val result = EngineTiming.measure("engine_inspect") { engine.inspect(source, id) }
+                if (result is InspectResult.Failure) readGeneration = downloads?.maintenance?.state?.value?.generation
                 if (currentEngineVersion == null && result is InspectResult.Success) {
                     inspectedEngineVersion = engine.installedVersion()
                     // Capture after readiness, within admission: a first-run update may have changed generation.
@@ -592,9 +615,12 @@ class LinkViewModel(
             if (operationId != id || currentSource()?.matches(origin ?: source) != true) return@launch
             operationId = null
             when (result) {
-                is InspectResult.Failure -> optionsState = if (noMedia && result.error in setOf(
-                    DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
-                    OptionsState.ImageError(ImageFailure.NO_MEDIA) else OptionsState.Error(result.error)
+                is InspectResult.Failure -> {
+                    optionsState = if (noMedia && result.error in setOf(
+                        DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
+                        OptionsState.ImageError(ImageFailure.NO_MEDIA) else OptionsState.Error(result.error)
+                    failedReadGeneration = readGeneration
+                }
                 is InspectResult.Success -> {
                     val returned = result.inspection
                     when {
@@ -702,6 +728,7 @@ class LinkViewModel(
         if (next.normalizedUrl != failed) paste(value)
     }
     private fun invalidateOptions() {
+        failedReadGeneration = null
         photosUnavailable = false
         pendingPermissionChoice = null
         val old = operationId

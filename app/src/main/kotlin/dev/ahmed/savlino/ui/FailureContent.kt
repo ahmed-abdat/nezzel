@@ -12,11 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
@@ -58,13 +60,32 @@ internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: 
             // Explicit tap while Nezzel's sheet has focus: the only time the clipboard is read here.
             { pasteAnother(context.getSystemService(ClipboardManager::class.java)?.plainText()) }
         }
-        if (onRetry != null || paste != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            val main = Modifier.weight(1f).heightIn(min = 48.dp)
-            if (onRetry != null) Button(onClick = onRetry, modifier = main) { ActionLabel(R.string.try_again) }
-            if (paste != null) {
-                if (onRetry == null) Button(onClick = paste, modifier = main) { ActionLabel(R.string.paste_another_link) }
-                else OutlinedButton(onClick = paste, modifier = main) { ActionLabel(R.string.paste_another_link) }
+        if (onRetry != null || paste != null) BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // Two equal halves only while every label fits on one line in its half (phone: "Paste another link" wrapped
+            // and grew taller than Try again); larger text or a longer translation stacks them at full width instead.
+            val labels = listOfNotNull(onRetry?.let { stringResource(R.string.try_again) },
+                paste?.let { stringResource(R.string.paste_another_link) })
+            val measurer = rememberTextMeasurer()
+            val style = MaterialTheme.typography.labelLarge
+            val oneRow = with(LocalDensity.current) {
+                val widest = labels.maxOf { measurer.measure(it, style, maxLines = 1).size.width }.toDp()
+                widest + ActionPadding * 2 <= (maxWidth - Space.s * (labels.size - 1)) / labels.size
             }
+            val main = Modifier.heightIn(min = 48.dp)
+            val actions = @Composable { modifier: Modifier ->
+                if (onRetry != null) Button(onClick = onRetry, modifier = modifier.then(main), contentPadding = ActionPaddingValues) {
+                    ActionLabel(R.string.try_again)
+                }
+                if (paste != null) {
+                    if (onRetry == null) Button(onClick = paste, modifier = modifier.then(main), contentPadding = ActionPaddingValues) {
+                        ActionLabel(R.string.paste_another_link)
+                    } else OutlinedButton(onClick = paste, modifier = modifier.then(main), contentPadding = ActionPaddingValues) {
+                        ActionLabel(R.string.paste_another_link)
+                    }
+                }
+            }
+            if (oneRow) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) { actions(Modifier.weight(1f)) }
+            else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) { actions(Modifier.fillMaxWidth()) }
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.spacedBy(Space.xs)) {
@@ -80,6 +101,10 @@ internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: 
         }
     }
 }
+
+// 16dp sides (Material's 24dp left "Paste another link" ~130dp in a half-width button on a 411dp phone).
+private val ActionPadding = Space.l
+private val ActionPaddingValues = PaddingValues(horizontal = ActionPadding, vertical = Space.s)
 
 @Composable
 private fun ActionLabel(@StringRes text: Int) = Text(stringResource(text), textAlign = TextAlign.Center)
