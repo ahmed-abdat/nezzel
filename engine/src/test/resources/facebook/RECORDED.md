@@ -49,3 +49,14 @@ Neither is recorded data.
 
 `video-conflict-post.html` is `video-story.html` with a hand-written Story root placed first that repeats the same
 `post_id` but names a different Video (`900000000000095`). Not recorded data.
+
+## Additional logged-out recordings
+
+`mixed-post.html` is a recorded logged-out post page, sanitized with the method above and ids remapped.
+Its bound Story has an album with one Video and four Photos; the declared album count is 11.
+
+`group-text-post.html` is a recorded logged-out group post page, sanitized with the method above and ids
+remapped. The bound Story has empty attachments; photo URIs elsewhere are unbound decoys.
+
+`link-share-post.html` is a recorded logged-out link-share post page, sanitized with the method above
+and ids remapped. The bound Story's single non-media attachment is pruned to an empty object.

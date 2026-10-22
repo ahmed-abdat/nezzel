@@ -36,6 +36,19 @@ class FacebookPostIdentityTest {
         }
     }
 
+    @Test fun onlyVideoAndReelSharesHaveTheVideoShareFlag() {
+        for (kind in listOf("v", "r"))
+            assertTrue(accepted("https://www.facebook.com/share/$kind/Synthetic/").isVideoShare)
+        for (path in listOf("share/p/Synthetic/", "share/Synthetic/", "watch/?v=900000000000003"))
+            assertFalse(accepted("https://www.facebook.com/$path").isVideoShare)
+    }
+
+    @Test fun eventPagesAreNotPostsEvenWhenTheirPathLooksLikeOne() {
+        for (host in listOf("facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com"))
+            for (path in listOf("events/900000000000001/", "events/posts/900000000000001"))
+                assertNull(FacebookPostIdentity.parse("https://$host/$path"))
+    }
+
     @Test fun requestedIdsAreKnownOnlyWhenTheLinkNamesThem() {
         assertEquals("123456789", accepted("https://www.facebook.com/story.php?story_fbid=123456789&id=42").postId)
         assertNull(accepted("https://www.facebook.com/permalink.php?story_fbid=pfbid0AbCd&id=42").postId, "pfbid is not a node id")

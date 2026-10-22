@@ -35,6 +35,46 @@ class FacebookInspectionTest : PublicImageTestBase() {
         inspector.inspect(inspector.newOperation(imageSource(url, revision), IMAGE_IDENTITY), ImageSourceType.FACEBOOK)
     }
 
+    @Test fun videoShareLandingOnAMixedPostReturnsTheCanonicalWatchLinkWithoutFetchingPhotos() {
+        val target = "/synthetic/posts/pfbid0Synthetic"
+        for (kind in listOf("v", "r")) fixture(respond = facebook("mixed-post.html", override = { request, socket ->
+            when {
+                request.target.startsWith("/share/$kind/") -> {
+                    socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com$target"))
+                    true
+                }
+                request.target == target -> {
+                    socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
+                    true
+                }
+                else -> false
+            }
+        })) { f ->
+            val result = assertIs<MediaInspectResult.VideoRedirect>(f.inspectFacebook("https://www.facebook.com/share/$kind/Synthetic/", 7))
+            assertEquals("https://www.facebook.com/watch/?v=900000000000003", result.source.link.rawUrl)
+            assertEquals(7, result.source.revision)
+            assertEquals(listOf("/share/$kind/Synthetic/", target), f.server.requests.map { it.target })
+        }
+    }
+
+    @Test fun mixedPostPhotosCarryItsCanonicalVideoLinkAtTheOperationsRevision() {
+        val target = "/synthetic/posts/900000000000001"
+        fixture(respond = facebook("mixed-post.html", override = { request, socket ->
+            if (request.target == target) {
+                socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
+                true
+            } else false
+        })) { f ->
+            val result = assertIs<MediaInspectResult.Success>(f.inspectFacebook("https://www.facebook.com$target", 7))
+            try {
+                assertTrue(result.discovery.hasVideo)
+                assertEquals("https://www.facebook.com/watch/?v=900000000000003", result.videoSource?.link?.rawUrl)
+                assertEquals(7L, result.videoSource?.revision)
+                assertEquals(listOf(target, "/5.jpg"), f.server.requests.map { it.target })
+            } finally { result.close() }
+        }
+    }
+
     @Test fun avifPhotoKeepsItsSignedUrlFormatAndExactBytesThroughSave() {
         val bytes = checkNotNull(javaClass.getResourceAsStream("/avif/still-64x48.avif")).use { it.readBytes() }
         // JDK ImageIO has no AVIF codec; this seam tests format admission and Save, not pixel decoding.

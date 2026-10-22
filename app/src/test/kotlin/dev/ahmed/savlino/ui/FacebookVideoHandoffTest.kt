@@ -61,6 +61,115 @@ class FacebookVideoHandoffTest {
         store.all()
     }
 
+    @Test fun noMediaPageKeepsItsVerdictWhenLegacyCannotFindMedia() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE) }
+        for (error in listOf(DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported)) {
+            engine.inspected.clear()
+            engine.failure = error
+            check(post)
+            assertEquals(listOf(post), engine.inspected)
+            assertEquals(OptionsState.ImageError(ImageFailure.NO_MEDIA), vm.optionsState)
+        }
+    }
+
+    @Test fun noMediaPageStillShowsFormatsWhenLegacyFindsAVideo() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE) }
+        check(post)
+        assertEquals(listOf(post), engine.inspected)
+        assertTrue(vm.optionsState is OptionsState.Ready)
+        assertTrue(vm.downloadEnabled)
+    }
+
+    @Test fun noMediaPagePreservesNetworkAndAccessErrorsFromLegacy() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE) }
+        for (error in listOf(DownloadError.Network, DownloadError.Offline, DownloadError.EngineUnavailable,
+            DownloadError.LoginRequired, DownloadError.SourceRefused)) {
+            engine.failure = error
+            check(post)
+            assertEquals(OptionsState.Error(error), vm.optionsState)
+        }
+    }
+
+    @Test fun noMediaOverrideDoesNotLeakIntoANewOperationOrOtherReaders() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE) }
+        engine.failure = DownloadError.Failed
+        check(post)
+        check(watch)
+        assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+        check("https://www.linkedin.com/feed/update/urn:li:activity:900000000000001/")
+        assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+        images.result = { MediaInspectResult.Failure(ImageFailure.NETWORK, ImagePhase.PAGE) }
+        check(post)
+        assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+    }
+
+    private fun mixedResult(source: LinkRevision, videoSource: LinkRevision?) = imageSuccess(source, hasVideo = true).let {
+        MediaInspectResult.Success(it.inspection, it.preview, it.discovery, it.saveAvailability, it.previews,
+            videoSource = videoSource) { it.close() }
+    }
+
+    @Test fun carouselVideoUsesTheWatchLinkAndKeepsStalenessBoundToTheUsersPost() {
+        images.result = { mixedResult(it, LinkRevision(LinkInput.parse(watch)!!, it.revision)) }
+        check(post)
+        assertTrue(vm.optionsState is OptionsState.ImageReady)
+        vm.inspectCarouselVideo(); pump()
+        assertEquals(listOf(watch), engine.inspected)
+        val ready = vm.optionsState as OptionsState.Ready
+        assertEquals(post, ready.resolvedFrom?.link?.rawUrl)
+        assertEquals(watch, ready.inspection.source.link.rawUrl)
+        assertTrue(vm.downloadEnabled)
+    }
+
+    @Test fun carouselVideoRefusesUntrustedOrStaleWatchLinks() {
+        for (bad in listOf("https://example.com/watch/?v=900000000000003", "$watch&t=5")) {
+            images.result = { mixedResult(it, LinkRevision(LinkInput.parse(bad)!!, it.revision)) }
+            check(post); vm.inspectCarouselVideo(); pump()
+            assertTrue(engine.inspected.isEmpty())
+            assertEquals(OptionsState.ImageError(ImageFailure.UNSUPPORTED), vm.optionsState)
+        }
+        images.result = { mixedResult(it, LinkRevision(LinkInput.parse(watch)!!, it.revision + 1)) }
+        check(post); vm.inspectCarouselVideo(); pump()
+        assertTrue(engine.inspected.isEmpty())
+        assertEquals(OptionsState.ImageError(ImageFailure.UNSUPPORTED), vm.optionsState)
+    }
+
+    @Test fun carouselWithoutOneVideoLinkKeepsTheOriginalInspectionPath() {
+        images.result = { mixedResult(it, null) }
+        check(post); vm.inspectCarouselVideo(); pump()
+        assertEquals(listOf(post), engine.inspected)
+        assertTrue(vm.optionsState is OptionsState.Ready)
+    }
+
+    @Test fun eventLinksAreUnsupportedWithoutCallingEitherInspector() {
+        for (host in listOf("facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com")) {
+            check("https://$host/events/900000000000001/")
+            assertEquals(OptionsState.Error(DownloadError.Unsupported), vm.optionsState)
+        }
+        assertTrue(images.routes.isEmpty())
+        assertTrue(engine.inspected.isEmpty())
+    }
+
+    @Test fun eventLinksAreUnsupportedEvenWithoutAnImageInspector() {
+        val legacyOnly = LinkViewModel(SavedStateHandle(), engine = engine)
+        legacyOnly.edit("https://mbasic.facebook.com/events/900000000000001/photo.jpg")
+        legacyOnly.checkLink(); pump()
+        assertEquals(OptionsState.Error(DownloadError.Unsupported), legacyOnly.optionsState)
+        assertTrue(engine.inspected.isEmpty())
+        legacyOnly.dismissOptions()
+    }
+
+    @Test fun editingThePostDuringCarouselVideoInspectionDropsItsResult() {
+        images.result = { mixedResult(it, LinkRevision(LinkInput.parse(watch)!!, it.revision)) }
+        check(post)
+        engine.gate = CompletableDeferred()
+        vm.inspectCarouselVideo(); pump()
+        assertEquals(listOf(watch), engine.inspected)
+        vm.edit("https://www.facebook.com/synthetic/posts/900000000000009")
+        engine.gate!!.complete(Unit); pump()
+        assertEquals(OptionsState.Hidden, vm.optionsState)
+        assertFalse(vm.downloadEnabled)
+    }
+
     @Test fun pageFailuresUseTheOriginalPostExactlyOnce() {
         for ((reason, status) in listOf(ImageFailure.BUDGET to null, ImageFailure.NETWORK to null,
             ImageFailure.UNAVAILABLE to null, ImageFailure.SOURCE_REFUSED to null, ImageFailure.NO_MEDIA to null,

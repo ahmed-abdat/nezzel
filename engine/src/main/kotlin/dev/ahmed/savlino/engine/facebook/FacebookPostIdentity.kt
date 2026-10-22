@@ -11,7 +11,7 @@ enum class FacebookLinkKind { SHARE, SHORTLINK, STORY, PERMALINK, POST, PHOTO, R
  * resolves them. Ids are node ids only when numeric; a pfbid token is never compared with a node id.
  */
 class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val fetchUrl: String,
-    val postId: String?, val photoId: String?, val videoId: String?) {
+    val postId: String?, val photoId: String?, val videoId: String?, val isVideoShare: Boolean = false) {
     val isShortlink: Boolean get() = kind == FacebookLinkKind.SHARE || kind == FacebookLinkKind.SHORTLINK
 
     internal fun fetchUrlOn(host: String): String = if (host == "web.facebook.com")
@@ -46,7 +46,9 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
                 }
             }
             if (host !in hosts) return null
-            share.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.SHARE, WWW + path, null, null, null) }
+            if (path.startsWith("/events/")) return null
+            share.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.SHARE, WWW + path, null, null, null,
+                it.groupValues[1] in setOf("v", "r")) }
             when (path) {
                 "/story.php", "/permalink.php" -> {
                     val story = single(parsed, "story_fbid", storyId) ?: return null
@@ -76,6 +78,11 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
 
         /** Any facebook.com host family page, including ones we never fetch (used to recognise login walls). */
         internal fun isFacebookHost(url: HttpUrl): Boolean = url.host.lowercase() in hosts
+
+        /** Event pages are unsupported, including mobile hosts and nested event paths. */
+        fun isEventLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
+            (isFacebookHost(it) || it.host == "mbasic.facebook.com") && it.encodedPath.startsWith("/events/")
+        } == true
 
         private val loginPaths = setOf("/login", "/login/", "/login.php", "/checkpoint", "/checkpoint/")
 

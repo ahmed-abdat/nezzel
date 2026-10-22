@@ -38,9 +38,10 @@ object ImageRoute {
         else -> MediaSourceRoute.LEGACY
     }
 
-    /** Posts, photos and post or plain share links may carry a photo; /share/v/ and /share/r/ are videos. */
-    private fun isFacebookPost(identity: FacebookPostIdentity): Boolean = identity.kind !in facebookVideoKinds &&
-        !(identity.kind == FacebookLinkKind.SHARE && ("/share/v/" in identity.fetchUrl || "/share/r/" in identity.fetchUrl))
+    /** Share links need the reader to find the bound post's video or photos. */
+    private fun isFacebookPost(identity: FacebookPostIdentity): Boolean = identity.kind !in facebookVideoKinds
+
+    fun isUnsupported(link: ValidatedLink): Boolean = FacebookPostIdentity.isEventLink(link.rawUrl)
 
     private fun isKnownImageCdn(raw: String): Boolean {
         val uri = try { URI(raw) } catch (_: URISyntaxException) { return false }

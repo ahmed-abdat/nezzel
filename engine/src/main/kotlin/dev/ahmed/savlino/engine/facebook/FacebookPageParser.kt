@@ -25,11 +25,11 @@ class FacebookImageCandidate(val url: String, val photoId: String?, internal val
 sealed interface FacebookParseResult {
     /** title/author: the bound story's (or matched photo's own story's) message first line and actor name. */
     class Success(val candidates: List<FacebookImageCandidate>, val discovery: ImageDiscovery,
-        val title: String? = null, val author: String? = null) : FacebookParseResult {
+        val title: String? = null, val author: String? = null, val videoId: String? = null) : FacebookParseResult {
         override fun toString() = "FacebookParseResult.Success(redacted)"
     }
     data class Failure(val reason: ImageFailure) : FacebookParseResult
-    /** No photo, and this post's own attachment is exactly one Video: yt-dlp gets `watch/?v={videoId}`. */
+    /** The bound post names one video for this request: yt-dlp gets `watch/?v={videoId}`. */
     class Video(val videoId: String) : FacebookParseResult {
         override fun toString() = "FacebookParseResult.Video(redacted)"
     }
@@ -114,6 +114,9 @@ class FacebookPageParser {
         val photos = ArrayList(bound.photos)
         val claimed = bound.claimed
         val album = bound.album
+        val videos = bound.videos.distinct()
+        if ((requested ?: page).isVideoShare && photoId == null)
+            videos.singleOrNull()?.let { return FacebookParseResult.Video(it) }
         // Photo page: only a currMedia whose id is the requested fbid (never an unbound viewer preload).
         if (photoId != null) currMedia.mapNotNull(::photo).filter { it.id == photoId }.forEach(photos::add)
 
@@ -138,8 +141,8 @@ class FacebookPageParser {
                 listOfNotNull((current?.get("creation_story") ?: current?.get("container_story")) as? Map<*, *>)
             } else listOfNotNull(boundRoot?.story)
             return FacebookParseResult.Success(chosen.map { FacebookImageCandidate(it.url, it.id, it.width, it.height) },
-                ImageDiscovery(discovered, completeness, total, previewQuality = chosen.first().reduced),
-                owner.firstNotNullOfOrNull(::storyMessage), owner.firstNotNullOfOrNull(::storyActor))
+                ImageDiscovery(discovered, completeness, total, previewQuality = chosen.first().reduced, hasVideo = videos.isNotEmpty()),
+                owner.firstNotNullOfOrNull(::storyMessage), owner.firstNotNullOfOrNull(::storyActor), videos.singleOrNull())
         }
         // No photo, and the bound story's only attachment is one valid Video: yt-dlp reads its watch page.
         if (photoId == null && (requested ?: page).isPostOrPhoto && bound.others == 0)
@@ -191,8 +194,11 @@ class FacebookPageParser {
                 others++ // an album is never "one video"
                 claimed = (set["count"] as? String)?.takeIf { it.length <= 6 && it.all(Char::isDigit) }?.toInt()
                     ?.takeIf { it > 0 } ?: claimed
-                for (node in (set["nodes"] as? List<*>).orEmpty().take(MAX_CANDIDATES))
-                    photo((node as? Map<*, *>)?.get("media"))?.let(photos::add)
+                for (node in (set["nodes"] as? List<*>).orEmpty().take(MAX_CANDIDATES)) {
+                    val media = (node as? Map<*, *>)?.get("media") as? Map<*, *> ?: continue
+                    photo(media)?.let(photos::add)
+                    if (media["__typename"] == "Video") videoId(media)?.let(videos::add)
+                }
                 continue
             }
             val photo = photo(styled?.get("media"))

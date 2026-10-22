@@ -164,7 +164,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             val discovery: ImageDiscovery, val validity: MediaInspectionValidity,
             val postContext: MediaHttpPostContext?, val linkedIn: Boolean,
             val hostRule: MediaHostRule = MediaHostRule.ANY, val metadata: MediaMetadata = MediaMetadata(),
-            val position: Int = 0, val previewOnly: Boolean = false) : Fetched {
+            val position: Int = 0, val previewOnly: Boolean = false, val videoSource: LinkRevision? = null) : Fetched {
             override fun toString() = "Fetched.Asset(redacted)"
         }
     }
@@ -257,7 +257,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val validity = MediaInspectionValidity.processLocal()
         return fetchAsset(operation, PublicMediaRequest(url, MediaHttpPurpose.IMAGE, hostRule = MediaHostRule.FACEBOOK_CDN)) { bytes, image ->
             Fetched.Asset(bytes, image, url, parsed.candidates.size, discovery, validity, null, false,
-                MediaHostRule.FACEBOOK_CDN, MediaMetadata(parsed.title, parsed.author))
+                MediaHostRule.FACEBOOK_CDN, MediaMetadata(parsed.title, parsed.author),
+                videoSource = parsed.videoId?.let(::facebookWatchLink)?.let { LinkRevision(it, operation.source.revision) })
         }
     }
 
@@ -453,9 +454,12 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     /** Canonical `watch/?v={id}` at the caller's revision; no media URL, preview or reference is produced. */
     private fun videoRedirect(operation: ImageInspectionOperation, videoId: String): Fetched {
         operation.fetchPhase = ImagePhase.IMAGE
-        return redirectTo(operation, videoId.takeIf { it.length <= 25 && it.isNotEmpty() && it.all { c -> c in '0'..'9' } }
-            ?.let { LinkInput.parse("https://www.facebook.com/watch/?v=$it") })
+        return redirectTo(operation, facebookWatchLink(videoId))
     }
+
+    private fun facebookWatchLink(videoId: String): ValidatedLink? =
+        videoId.takeIf { it.length <= 25 && it.isNotEmpty() && it.all { c -> c in '0'..'9' } }
+            ?.let { LinkInput.parse("https://www.facebook.com/watch/?v=$it") }
 
     /** A canonical post/watch link for yt-dlp at the caller's revision; no media URL, preview or reference. */
     private fun redirectTo(operation: ImageInspectionOperation, link: ValidatedLink?, photosUnavailable: Boolean = false): Fetched {
@@ -573,7 +577,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     unavailableCount = fetched.discovery.unavailableCount + dropped,
                     completeness = if (dropped > 0) DiscoveryCompleteness.PARTIAL else fetched.discovery.completeness)
             } else first.discovery
-            return MediaInspectResult.Success(inspection, previews.values.firstOrNull(), discovery, save, previews.toMap()) {
+            return MediaInspectResult.Success(inspection, previews.values.firstOrNull(), discovery, save, previews.toMap(), first.videoSource) {
                 previews.values.forEach { runCatching { it.close() } }
             }
         } finally {

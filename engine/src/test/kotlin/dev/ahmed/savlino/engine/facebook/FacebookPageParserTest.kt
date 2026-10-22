@@ -22,6 +22,65 @@ class FacebookPageParserTest {
     private fun rejected(html: String, reason: ImageFailure, page: String = FB_STORY, requested: String? = null) =
         assertEquals(reason, assertIs<FacebookParseResult.Failure>(parse(html, page, requested)).reason)
 
+    @Test fun mixedAlbumKeepsPhotosAndItsOneVideoForPostAndPlainShareLinks() {
+        for (request in listOf<String?>(null, FB_SHARE, "https://www.facebook.com/share/Synthetic/")) {
+            val result = parsed(facebookFixture("mixed-post.html"), "https://www.facebook.com/synthetic/posts/900000000000001", request)
+            assertEquals(listOf("900000000000002", "900000000000004", "900000000000005", "900000000000006"),
+                result.candidates.map { it.photoId })
+            assertEquals(4, result.discovery.discoveredCount)
+            assertEquals(11, result.discovery.claimedCount)
+            assertEquals(DiscoveryCompleteness.PARTIAL, result.discovery.completeness)
+            assertTrue(result.discovery.hasVideo)
+            assertEquals("900000000000003", result.videoId)
+        }
+    }
+
+    @Test fun videoSharesOfAMixedAlbumRedirectToItsOneBoundVideo() {
+        for (kind in listOf("v", "r")) {
+            val result = parse(facebookFixture("mixed-post.html"), FB_STORY, "https://www.facebook.com/share/$kind/Synthetic/")
+            assertEquals("900000000000003", assertIs<FacebookParseResult.Video>(result).videoId)
+        }
+    }
+
+    @Test fun albumVideoIdsAreValidatedAndOnlyOneDistinctIdIsExposed() {
+        val page = facebookFixture("mixed-post.html")
+        for (bad in listOf("", "invalid", "1".repeat(26))) {
+            val result = parsed(page.replace("900000000000003", bad))
+            assertFalse(result.discovery.hasVideo)
+            assertNull(result.videoId)
+        }
+        val nodes = "\"count\":11,\"nodes\":["
+        val video = "{\"media\":{\"__typename\":\"Video\",\"id\":\"900000000000007\"}},"
+        assertTrue(page.contains(nodes))
+        val several = page.replace(nodes, nodes + video)
+        val result = parsed(several)
+        assertTrue(result.discovery.hasVideo)
+        assertNull(result.videoId)
+        assertIs<FacebookParseResult.Success>(parse(several, FB_STORY, "https://www.facebook.com/share/v/Synthetic/"))
+        val duplicate = page.replace(nodes, nodes + video.replace("900000000000007", "900000000000003"))
+        assertEquals("900000000000003", parsed(duplicate).videoId)
+    }
+
+    @Test fun albumWithOnlyAVideoStillNeedsAVideoShareToRedirect() {
+        val page = facebookFixture("mixed-post.html").replace("\"__typename\":\"Photo\"", "\"__typename\":\"GenericAttachmentMedia\"")
+        rejected(page, ImageFailure.NO_MEDIA)
+        assertEquals("900000000000003", assertIs<FacebookParseResult.Video>(parse(page, FB_STORY,
+            "https://www.facebook.com/share/v/Synthetic/")).videoId)
+    }
+
+    @Test fun duplicateAlbumRootsThatDisagreeOnlyOnTheVideoBindNothing() {
+        val page = facebookFixture("mixed-post.html")
+        val conflict = page.replace("900000000000003", "900000000000007")
+        val both = page.replace("</body>", conflict.substringAfter("<body>").substringBefore("</body>") + "</body>")
+        rejected(both, ImageFailure.NO_MEDIA)
+        rejected(both, ImageFailure.NO_MEDIA, FB_STORY, "https://www.facebook.com/share/v/Synthetic/")
+    }
+
+    @Test fun boundTextAndLinkSharePostsHaveNoMediaDespiteUnboundPhotos() {
+        for (name in listOf("group-text-post.html", "link-share-post.html"))
+            rejected(facebookFixture(name), ImageFailure.NO_MEDIA)
+    }
+
     /** A Photo with a perfectly valid CDN URL placed where only decoys live (comments, save info, feeds). */
     private fun decoy(id: String, n: Int) =
         "{\"__typename\":\"Photo\",\"id\":\"$id\",\"viewer_image\":{\"uri\":\"${cdn(n)}\",\"width\":4000,\"height\":4000}}"

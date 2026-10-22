@@ -52,9 +52,19 @@ class ImageRouteTest {
         assertEquals(MediaSourceRoute.LEGACY, route("https://www.facebook.com/watch/?v=1234567890"))
         assertEquals(MediaSourceRoute.LEGACY, route("https://www.facebook.com/nasa/videos/1234567890/"))
         assertEquals(MediaSourceRoute.LEGACY, route("https://fb.watch/AbC123/"))
-        assertEquals(MediaSourceRoute.LEGACY, route("https://www.facebook.com/share/v/AbC123xyz/"))
-        assertEquals(MediaSourceRoute.LEGACY, route("https://www.facebook.com/share/r/AbC123xyz/"))
+        assertEquals(MediaSourceRoute.FACEBOOK, route("https://www.facebook.com/share/v/AbC123xyz/"))
+        assertEquals(MediaSourceRoute.FACEBOOK, route("https://www.facebook.com/share/r/AbC123xyz/"))
         assertEquals(MediaSourceRoute.LEGACY, route("https://www.facebook.com/nasa"))
+    }
+
+    @Test fun facebookEventsAreUnsupportedBeforeAnyInspection() {
+        for (host in listOf("facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com"))
+            for (path in listOf("events/", "events/900000000000001/", "events/900000000000001/photo.jpg"))
+                org.junit.Assert.assertTrue(ImageRoute.isUnsupported(LinkInput.parse("https://$host/$path")!!))
+        for (url in listOf("https://example.com/events/900000000000001/",
+            "https://www.facebook.com.evil.example/events/900000000000001/",
+            "https://www.facebook.com/synthetic/posts/900000000000001"))
+            org.junit.Assert.assertFalse(ImageRoute.isUnsupported(LinkInput.parse(url)!!))
     }
 
     @Test fun gifImagesRouteDirectWhileTweetVideoStaysVideo() {

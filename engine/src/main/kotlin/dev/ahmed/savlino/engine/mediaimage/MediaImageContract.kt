@@ -51,6 +51,7 @@ sealed interface MediaInspectResult {
     class Success(val inspection: MediaInspection, val preview: OwnedImagePreview?,
         val discovery: ImageDiscovery, val saveAvailability: ImageSaveAvailability,
         val previews: Map<MediaRenditionRef, OwnedImagePreview> = emptyMap(),
+        val videoSource: LinkRevision? = null,
         private val release: () -> Unit) : MediaInspectResult, Closeable {
         override fun close() = release()
         override fun toString() = "MediaInspectResult.Success(redacted)"

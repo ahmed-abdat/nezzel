@@ -55,7 +55,7 @@ sealed interface OptionsState {
      */
     class ImageReady(val inspection: MediaInspection, val rendition: MediaRendition.Image, val preview: ImageBitmap?,
         val discovery: ImageDiscovery, val availability: ImageSaveAvailability, val directImage: Boolean = false,
-        val previews: Map<MediaRenditionRef, ImageBitmap> = emptyMap()) : OptionsState {
+        val previews: Map<MediaRenditionRef, ImageBitmap> = emptyMap(), val videoSource: LinkRevision? = null) : OptionsState {
         val photos = inspection.items.flatMap { it.renditions.filterIsInstance<MediaRendition.Image>() }
         val isCarousel get() = photos.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0 || discovery.notPreviewedCount > 0
         val image get() = rendition.image
@@ -426,6 +426,10 @@ class LinkViewModel(
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
+        if (ImageRoute.isUnsupported(source.link)) {
+            optionsState = OptionsState.Error(DownloadError.Unsupported)
+            return
+        }
         // Image routes run before (and without) the yt-dlp availability gate.
         val images = images ?: return startLegacyInspection(source)
         when (val route = ImageRoute.of(source.link)) {
@@ -483,7 +487,7 @@ class LinkViewModel(
                         !result.inspection.source.matches(source) -> OptionsState.Error(DownloadError.FormatExpired)
                         rendition == null -> OptionsState.ImageError(ImageFailure.NO_MEDIA)
                         else -> OptionsState.ImageReady(result.inspection, rendition, previews[rendition.ref], result.discovery, result.saveAvailability,
-                            route == MediaSourceRoute.DIRECT_IMAGE, previews)
+                            route == MediaSourceRoute.DIRECT_IMAGE, previews, result.videoSource)
                     }
                 }
                 is MediaInspectResult.Failure -> {
@@ -491,7 +495,8 @@ class LinkViewModel(
                     if (readerFallsBack(route, result)) {
                         val landing = result.fallback?.takeIf { route == MediaSourceRoute.LINKEDIN &&
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
-                        startLegacyInspection(landing ?: legacyReaderSource(source, route), source)
+                        startLegacyInspection(landing ?: legacyReaderSource(source, route), source,
+                            noMedia = route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.NO_MEDIA)
                     } else optionsState = OptionsState.ImageError(result.reason, result.statusCode,
                         directImage = route == MediaSourceRoute.DIRECT_IMAGE, phase = result.phase)
                 }
@@ -543,7 +548,7 @@ class LinkViewModel(
             else -> false
         }
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
-    private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null) {
+    private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false) {
         // Reels/TV bypass the image reader, so canonicalize Instagram at the shared legacy entry too.
         val source = legacyReaderSource(input, MediaSourceRoute.INSTAGRAM)
         val origin = readerOrigin ?: input.takeUnless { it.matches(source) }
@@ -576,7 +581,9 @@ class LinkViewModel(
             if (operationId != id || currentSource()?.matches(origin ?: source) != true) return@launch
             operationId = null
             when (result) {
-                is InspectResult.Failure -> optionsState = OptionsState.Error(result.error)
+                is InspectResult.Failure -> optionsState = if (noMedia && result.error in setOf(
+                    DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
+                    OptionsState.ImageError(ImageFailure.NO_MEDIA) else OptionsState.Error(result.error)
                 is InspectResult.Success -> {
                     val returned = result.inspection
                     when {
@@ -781,8 +788,13 @@ class LinkViewModel(
         val ready = optionsState as? OptionsState.ImageReady ?: return
         if (!ready.discovery.hasVideo || imageSaving) return
         val source = currentSource()?.takeIf { it.matches(ready.inspection.source) } ?: return
+        val route = ImageRoute.of(source.link)
+        val video = ready.videoSource
         invalidateOptions()
-        startLegacyInspection(legacyReaderSource(source, ImageRoute.of(source.link)), source)
+        if (video == null) startLegacyInspection(legacyReaderSource(source, route), source)
+        else if (route == MediaSourceRoute.FACEBOOK && video.revision == source.revision && CANONICAL_WATCH.matches(video.link.rawUrl))
+            startLegacyInspection(video, source)
+        else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
     }
     init { imageSaver?.let { saver -> viewModelScope.launch { saver.outcome.collect { onImageOutcome(it) } } } }
     val imageSaveEnabled get() = (optionsState as? OptionsState.ImageReady)?.let { ready ->
