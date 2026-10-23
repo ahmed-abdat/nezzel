@@ -90,6 +90,14 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.expireIn(limits.inspectMs)
             val version = version(current)
             if (YtdlpCommand.isYouTube(source) && fastSource != null) {
+                val key = linkKey(source)
+                // A retry after a fast failure goes straight to yt-dlp; only a success clears the key.
+                if (synchronized(fastFailed) { key in fastFailed }) {
+                    current.expireIn(limits.inspectMs)
+                    return@operation inspectOnce(current, source, version).also {
+                        if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
+                    }
+                }
                 // The version probe keeps its existing budget. NPE never runs under that watchdog:
                 // spending its independent budget must not mark the whole operation as timed out.
                 synchronized(current) {
@@ -97,7 +105,6 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     current.deadline = NO_DEADLINE
                 }
                 val result = fastInfoJson(current, source, operationId, fastSource)
-                val key = linkKey(source)
                 if (result is FastResult.Unreachable && synchronized(fastFailed) {
                         fastFailed.add(key).also { while (fastFailed.size > FAST_FAILED_MAX) fastFailed.remove(fastFailed.first()) }
                     }) return@operation InspectResult.Failure(unreachable(result))

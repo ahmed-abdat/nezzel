@@ -221,13 +221,17 @@ class NpeInspectTest {
         val engine = engine(runtime, fast)
         assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(source, "first"))
         assertTrue(runtime.inspections.isEmpty())
-        // Same link again (Retry): NPE still runs, then yt-dlp gets its full budget.
-        assertEquals("Fallback fixture", assertIs<InspectResult.Success>(engine.inspect(source, "retry")).inspection.title)
-        assertEquals(listOf(YtdlpCommand.inspect(source)), runtime.inspections)
+        // Same link again (Retry): no NPE budget spent, yt-dlp starts at once. A failed retry keeps the key.
+        runtime.inspectAction = { throw RuntimeException("fixture failure") }
+        assertIs<InspectResult.Failure>(engine.inspect(source, "retry"))
+        runtime.inspectAction = {}
+        assertEquals("Fallback fixture", assertIs<InspectResult.Success>(engine.inspect(source, "retry-2")).inspection.title)
+        assertEquals(List(2) { YtdlpCommand.inspect(source) }, runtime.inspections)
+        assertEquals(listOf("first"), fast.calls.map { it.first })
         // A success clears the memory: the next dead-network first try fails fast again.
         assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(source, "later"))
-        assertEquals(1, runtime.inspections.size)
-        assertEquals(3, fast.calls.size)
+        assertEquals(2, runtime.inspections.size)
+        assertEquals(listOf("first", "later"), fast.calls.map { it.first })
         val other = LinkRevision(LinkInput.parse("https://www.youtube.com/watch?v=fixture-two")!!, 1)
         assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(other, "other"))
     }
