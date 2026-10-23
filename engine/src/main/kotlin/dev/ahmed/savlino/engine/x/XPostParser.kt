@@ -41,7 +41,8 @@ sealed interface XParseResult {
  * link cards and avatars never become attachments.
  */
 class XPostParser {
-    fun parse(body: ByteArray, postId: String, length: Int = body.size): XParseResult {
+    /** [mediaIndex] = the `/photo|video/<n>` yt-dlp will read from the link ([XPostIdentity.mediaIndex]). */
+    fun parse(body: ByteArray, postId: String, length: Int = body.size, mediaIndex: Int? = null): XParseResult {
         if (length !in 0..body.size || length > MediaPageLimits.X)
             return XParseResult.Failure(ImageFailure.BUDGET)
         val root = try { json.readTree(body, 0, length) } catch (_: Exception) { null }
@@ -64,13 +65,13 @@ class XPostParser {
         val types = media.map { it.path("type").asText("") }
         val hasVideo = types.any { it == "video" || it == "animated_gif" }
         val photos = media.filter { it.path("type").asText("") == "photo" }
-        if (photos.isEmpty()) return if (hasVideo) XParseResult.Video(XVideoInfo.build(root, postId)) else noMedia()
+        if (photos.isEmpty()) return if (hasVideo) XParseResult.Video(XVideoInfo.build(root, postId, mediaIndex)) else noMedia()
         // Keep only evidenced own photos. Malformed siblings make discovery partial; no usable photo is an
         // IMAGE failure, so a known photo post never becomes a yt-dlp fallback.
         val usable = photos.take(20).mapNotNull { photo ->
             mediaUrl.matchEntire(photo.path("media_url_https").asText(""))?.let { photo to it }
         }
-        if (usable.isEmpty()) return if (hasVideo) XParseResult.PhotosUnavailableVideo(XVideoInfo.build(root, postId))
+        if (usable.isEmpty()) return if (hasVideo) XParseResult.PhotosUnavailableVideo(XVideoInfo.build(root, postId, mediaIndex))
             else XParseResult.Failure(ImageFailure.SOURCE_REFUSED, ImagePhase.IMAGE)
         var large = false
         val candidates = usable.map { (photo, match) ->

@@ -128,6 +128,12 @@ class XVideoInfoTest {
             root().apply { put("card", "{}") },
             root().apply { set<JsonNode>("quoted_tweet", json.readTree("""{"id_str":"1"}""")) },
             root().apply { set<JsonNode>("retweeted_status", json.readTree("""{"id_str":"1"}""")) },
+            root().apply { set<JsonNode>("quoted_status", json.readTree("""{"id_str":"1"}""")) },
+            root().apply { set<JsonNode>("retweeted_tweet", json.readTree("""{"id_str":"1"}""")) },
+            // Age-gated: yt-dlp marks it 18+ and reads it with its own rules; protected/removed answer a tombstone.
+            root().apply { put("possibly_sensitive", true) },
+            // A fresh upload before its mp4 renditions exist.
+            root().apply { variants(this).removeAll() },
             root().apply { put("__typename", "TweetTombstone") },
             root().apply { put("id_str", "1790000000000000002") },
             root().apply { (path("mediaDetails")[0] as ObjectNode).put("type", "audio_space") },
@@ -146,6 +152,37 @@ class XVideoInfoTest {
         assertEquals("Synthetic Author - Synthetic post text line #1", info.path("title").asText())
     }
 
+    private fun twoVideos() = root().apply {
+        (path("mediaDetails") as com.fasterxml.jackson.databind.node.ArrayNode).add(path("mediaDetails")[0].deepCopy<ObjectNode>())
+    }
+    private fun photoThenVideo() = root().apply {
+        (path("mediaDetails") as com.fasterxml.jackson.databind.node.ArrayNode).insert(0, json.readTree("""{"type":"photo"}"""))
+    }
+
+    /**
+     * yt-dlp reads `/video/<n>` or `/photo/<n>` of the user's link: `mediaDetails[n-1]` (photos counted) must be a
+     * `video`, titled ` #k` only when the post has several. Only the first video is built; any other pick → yt-dlp.
+     */
+    @Test fun aMediaIndexInTheLinkMatchesWhatYtDlpReads() {
+        assertEquals(build(), XVideoInfo.build(root(), X_ID, 1))
+        assertNull(XVideoInfo.build(root(), X_ID, 2), "no second media: yt-dlp fails, not ours to answer")
+        assertEquals(build(twoVideos()), XVideoInfo.build(twoVideos(), X_ID, 1))
+        assertEquals("Synthetic Author - Synthetic post text line #1",
+            json.readTree(XVideoInfo.build(twoVideos(), X_ID, 1)).path("title").asText())
+        assertNull(XVideoInfo.build(twoVideos(), X_ID, 2), "second video: yt-dlp")
+        assertEquals(build(), XVideoInfo.build(photoThenVideo(), X_ID, 2), "photos count in the index; one video, no #")
+        assertNull(XVideoInfo.build(photoThenVideo(), X_ID, 1), "a photo pick is not a video")
+        val gif = gif("""[{"bitrate":0,"content_type":"video/mp4","url":"https://video.twimg.com/tweet_video/A.mp4"}]""")
+        assertNotNull(build(gif))
+        assertNull(XVideoInfo.build(gif, X_ID, 1), "yt-dlp: a GIF picked by index is not a video")
+    }
+
+    @Test fun aMixedPostOffersTheSameRowsAsTheVideoAlone() {
+        assertEquals(build(), build(photoThenVideo()))
+        val parsed = assertIs<XParseResult.PhotosUnavailableVideo>(XPostParser().parse(photoThenVideo().toString().toByteArray(), X_ID))
+        assertEquals(build(), parsed.infoJson)
+    }
+
     @Test fun titleStripsLinksAndCutsAt72CodePointsLikeYtDlp() {
         val long = "😀".repeat(80)
         val info = info(root().apply { put("text", "$long https://t.co/Synthetic") })
@@ -158,5 +195,6 @@ class XVideoInfoTest {
         assertEquals(build(), parsed.infoJson)
         assertNull(assertIs<XParseResult.Video>(XPostParser().parse(xTweet(listOf(xVideo()), extra =
             ""","quoted_tweet":{"id_str":"1"}"""), X_ID)).infoJson)
+        assertNull(assertIs<XParseResult.Video>(XPostParser().parse(fixture.toByteArray(), X_ID, mediaIndex = 2)).infoJson)
     }
 }

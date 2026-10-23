@@ -7,7 +7,7 @@ import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
  * optionally with the viewer's `/photo/<n>` or `/video/<n>` suffix. Only the numeric post id is kept; the
  * user segment and any query (share tracking) are never used for a request.
  */
-class XPostIdentity private constructor(val postId: String, val legacyUrl: String?) {
+class XPostIdentity private constructor(val postId: String, val legacyUrl: String?, val mediaIndex: Int?) {
     /** The public syndication read of this exact post (no auth, no cookies). */
     val syndicationUrl: String get() = "https://$SYNDICATION_HOST$SYNDICATION_PATH?id=$postId&token=${token(postId)}"
 
@@ -20,14 +20,20 @@ class XPostIdentity private constructor(val postId: String, val legacyUrl: Strin
         private val hosts = setOf("x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com",
             "mobile.twitter.com", "fxtwitter.com", "www.fxtwitter.com", "vxtwitter.com", "www.vxtwitter.com",
             "fixupx.com", "www.fixupx.com", "fixvx.com", "www.fixvx.com")
-        private val path = Regex("/(?:i(?:/web)?|[A-Za-z0-9_]{1,15})/status/([1-9][0-9]{0,18})(?:/(?:photo|video)/[1-4])?/?")
+        private val path = Regex("/(?:i(?:/web)?|[A-Za-z0-9_]{1,15})/status/([1-9][0-9]{0,18})(?:/(?:photo|video)/([1-4]))?/?")
         private val query = Regex("id=([1-9][0-9]{0,18})&token=([0-9a-z]{1,32})")
 
         fun parse(url: String): XPostIdentity? {
             val parsed = MediaHttpPolicy.parse(url) ?: return null
             if (parsed.host.lowercase() !in hosts) return null
-            val id = path.matchEntire(parsed.encodedPath)?.groupValues?.get(1) ?: return null
-            return id.toLongOrNull()?.let { XPostIdentity(id, if (parsed.host.removePrefix("www.") in mirrors) "https://x.com/i/status/$id" else null) }
+            val match = path.matchEntire(parsed.encodedPath) ?: return null
+            val id = match.groupValues[1]
+            // yt-dlp reads the user's own link, suffix included; a mirror becomes x.com/i/status/<id> without it.
+            val mirror = parsed.host.removePrefix("www.") in mirrors
+            return id.toLongOrNull()?.let {
+                XPostIdentity(id, if (mirror) "https://x.com/i/status/$id" else null,
+                    if (mirror) null else match.groupValues[2].toIntOrNull())
+            }
         }
 
         /** True only for this reader's own syndication request shape, token included. */
