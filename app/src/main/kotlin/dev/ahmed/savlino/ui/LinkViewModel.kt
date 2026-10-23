@@ -293,6 +293,8 @@ class LinkViewModel(
     private var inspectionJob: Job? = null
     private var earlyPreviewJob: Job? = null
     private var inspectionTiming: InspectionTiming? = null
+    /** The options sheet drew the preview image (timing journal only). */
+    fun thumbnailShown() { inspectionTiming?.record(InspectionPhase.THUMBNAIL_SHOWN) }
     internal fun optionsShown() {
         if (optionsState is OptionsState.Ready || optionsState is OptionsState.ImageReady)
             inspectionTiming?.record(InspectionPhase.OPTIONS_SHOWN)
@@ -634,7 +636,8 @@ class LinkViewModel(
         val origin = readerOrigin ?: input.takeUnless { it.matches(source) }
         val id = newOperationId()
         operationId = id
-        optionsState = OptionsState.Checking(origin ?: source, id)
+        val knownThumbnail = YouTubeOEmbed.thumbnail(source.link.rawUrl)
+        optionsState = OptionsState.Checking(origin ?: source, id, earlyPreview = knownThumbnail?.let { EarlyPreview(null, it) })
         if (YouTubeOEmbed.supports(source.link.rawUrl)) {
             earlyPreviewJob = viewModelScope.launch {
                 val preview = try { kotlinx.coroutines.withTimeoutOrNull(4_000) { earlyPreview(source.link) } }
@@ -642,7 +645,8 @@ class LinkViewModel(
                 catch (_: Exception) { null }
                 if (preview != null && operationId == id && currentSource()?.matches(origin ?: source) == true) {
                     (optionsState as? OptionsState.Checking)?.takeIf { it.operationId == id }?.let {
-                        optionsState = it.copy(earlyPreview = preview)
+                        optionsState = it.copy(earlyPreview = EarlyPreview(preview.title, preview.thumbnailUrl ?: knownThumbnail))
+                        if (preview.title != null) timing.record(InspectionPhase.EARLY_TITLE)
                     }
                 }
             }

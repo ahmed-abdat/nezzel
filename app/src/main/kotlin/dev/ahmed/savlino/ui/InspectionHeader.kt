@@ -32,7 +32,7 @@ import dev.ahmed.savlino.ui.theme.Space
 
 @Composable
 internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null,
-    load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }) {
+    load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }, onThumbnail: () -> Unit = {}) {
     val title = inspection?.title ?: earlyPreview?.title
     // The early (oEmbed) preview and the engine name different images of the same video. Once one has drawn,
     // keep it for this link: switching would blank the tile and fetch a second, larger image.
@@ -48,7 +48,7 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
         withContext(Dispatchers.Default) { SheetArtwork.take(inspectionId) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-        PreviewThumbnail(thumbnail, load = load, audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = { shown = it; if (it != null) kept = thumbnail })
+        PreviewThumbnail(thumbnail, load = load, audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = { shown = it; if (it != null) { kept = thumbnail; onThumbnail() } })
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             title?.let {
                 Text(it, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),

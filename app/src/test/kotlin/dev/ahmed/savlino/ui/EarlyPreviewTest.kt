@@ -41,6 +41,20 @@ class EarlyPreviewTest {
         vm.dismissOptions(); idle()
     }
 
+    @Test fun youtubeImageIsKnownBeforeOEmbedAnswers() {
+        val response = CompletableDeferred<EarlyPreview?>()
+        val vm = LinkViewModel(SavedStateHandle(), engine = HeldEngine(), earlyPreview = { response.await() })
+        vm.paste(youtube); idle()
+        val early = (vm.optionsState as OptionsState.Checking).earlyPreview
+        assertNull(early?.title)
+        assertEquals(preview.thumbnailUrl, early?.thumbnailUrl)
+        response.complete(EarlyPreview("Real early title", null)); idle()
+        val filled = (vm.optionsState as OptionsState.Checking).earlyPreview
+        assertEquals("Real early title", filled?.title)
+        assertEquals(preview.thumbnailUrl, filled?.thumbnailUrl)
+        vm.dismissOptions(); idle()
+    }
+
     @Test fun lateResponseCannotReplaceFinishedInspection() {
         val engine = HeldEngine()
         val response = CompletableDeferred<EarlyPreview?>()
@@ -61,7 +75,10 @@ class EarlyPreviewTest {
     @Test fun failureIsSilentAndCancelClearsPreview() {
         val vm = LinkViewModel(SavedStateHandle(), engine = HeldEngine(), earlyPreview = { error("HTTP failure") })
         vm.paste(youtube); idle()
-        assertNull((vm.optionsState as OptionsState.Checking).earlyPreview)
+        // The id-derived image stays; a failed oEmbed only means no early title.
+        val early = (vm.optionsState as OptionsState.Checking).earlyPreview
+        assertNull(early?.title)
+        assertEquals(preview.thumbnailUrl, early?.thumbnailUrl)
         vm.dismissOptions(); idle()
         assertEquals(OptionsState.Hidden, vm.optionsState)
     }
