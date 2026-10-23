@@ -510,10 +510,14 @@ class DownloadCoordinator(
         if (event.waiting && (store.get(event.jobId)?.stage != JobStage.ENQUEUED || active.containsKey(event.jobId))) return
         update(event)
     }
-    @Synchronized private fun update(event: DownloadProgress) {
-        if (event.terminal && !event.awaitingSchedule) dev.ahmed.savlino.ui.EngineTiming.forgetDownload(event.jobId)
-        val previous = mutableProgress.value.find { it.jobId == event.jobId }
-        if (event.restartEpoch < (previous?.restartEpoch ?: 0)) return
+    @Synchronized private fun update(incoming: DownloadProgress) {
+        if (incoming.terminal && !incoming.awaitingSchedule) dev.ahmed.savlino.ui.EngineTiming.forgetDownload(incoming.jobId)
+        val previous = mutableProgress.value.find { it.jobId == incoming.jobId }
+        if (incoming.restartEpoch < (previous?.restartEpoch ?: 0)) return
+        // A paused row has no byte columns: keep this run's last real progress (gone after a process restart).
+        val event = if (incoming.paused && incoming.bytes == null && previous != null && previous.restartEpoch == incoming.restartEpoch)
+            incoming.copy(bytes = previous.bytes, total = previous.total,
+                fragmentIndex = previous.fragmentIndex, fragmentCount = previous.fragmentCount) else incoming
         if (!event.terminal) {
             val row = store.get(event.jobId)
             if (row?.stage?.terminal == true) {

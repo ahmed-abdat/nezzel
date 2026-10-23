@@ -14,6 +14,7 @@ import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.storage.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -479,13 +480,16 @@ class DownloadWorkerTest {
             val running = async(Dispatchers.Default) { f.worker("pause").doWork() }
             try {
                 withTimeout(5000) { entered.await() }
+                withTimeout(5000) { f.coordinator.progress.first { it.singleOrNull()?.bytes == 4L } }
                 assertTrue(f.coordinator.pause("pause"))
                 withTimeout(5000) { running.await() }
                 val row = f.store.get("pause")!!
                 assertEquals(JobStage.PAUSED, row.stage); assertTrue(row.hasPartial)
                 assertNotNull(row.sourceUrl); assertTrue(stopped.isCompleted)
                 assertEquals("keep", File(app.filesDir, "downloads/pause/output.mp4.part").readText())
-                assertTrue(f.coordinator.progress.value.single().paused)
+                f.coordinator.progress.value.single().let {
+                    assertTrue(it.paused); assertEquals(4L, it.bytes); assertEquals(Size.Exact(100), it.total); assertEquals(4, it.percent)
+                }
                 assertFalse(f.phases.any { it in listOf("FAILED", "CANCELLED") })
                 assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("pause").get().all { it.state.isFinished })
                 val previous = WorkManager.getInstance(app).getWorkInfosForUniqueWork("pause").get().map { it.id }.toSet()
