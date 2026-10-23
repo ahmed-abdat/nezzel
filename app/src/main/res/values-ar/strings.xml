@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Nezzel</string>
+    <string name="process_text_label">افتح في Nezzel</string>
     <string name="settings">الإعدادات</string>
     <string name="back">رجوع</string>
     <string name="paste_link">لصق رابط</string>

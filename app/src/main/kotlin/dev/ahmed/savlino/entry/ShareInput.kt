@@ -6,10 +6,17 @@ import android.content.Intent
 class ShareInput private constructor(val text: String?) {
     companion object {
         fun from(intent: Intent?): ShareInput? {
-            if (intent?.action != Intent.ACTION_SEND || intent.type != "text/plain") return null
-            val text = try { intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() }
+            if (intent == null || intent.type != "text/plain") return null
+            val extra = when (intent.action) {
+                Intent.ACTION_SEND -> Intent.EXTRA_TEXT
+                Intent.ACTION_PROCESS_TEXT -> Intent.EXTRA_PROCESS_TEXT
+                else -> return null
+            }
+            val text = try { intent.getCharSequenceExtra(extra)?.toString() }
                 catch (_: RuntimeException) { null }
-            return ShareInput(text?.takeIf { it.length <= 8192 })
+            val boundedText = text?.takeIf { it.length <= 8192 }
+            if (extra == Intent.EXTRA_PROCESS_TEXT && boundedText == null) return null
+            return ShareInput(boundedText)
         }
     }
 }
