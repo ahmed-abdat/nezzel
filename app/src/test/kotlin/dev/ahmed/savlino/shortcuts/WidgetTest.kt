@@ -239,7 +239,7 @@ class WidgetTest {
             store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?", arrayOf<Any>(2000L, "saved"))
         }
         val progress = MutableStateFlow(emptyList<DownloadProgress>())
-        val updater = WidgetUpdater(app, progress, widgetIds = { intArrayOf() })
+        val updater = WidgetUpdater(app, progress, journal = { JobStore(app).use { it.all() } }, widgetIds = { intArrayOf() })
         val collection = updater.start(backgroundScope)
         try {
             runCurrent()
@@ -270,7 +270,7 @@ class WidgetTest {
             store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?", arrayOf<Any>(1000L, "old-saved"))
         }
         val progress = MutableStateFlow(emptyList<DownloadProgress>())
-        val updater = WidgetUpdater(app, progress, widgetIds = { intArrayOf() })
+        val updater = WidgetUpdater(app, progress, journal = { JobStore(app).use { it.all() } }, widgetIds = { intArrayOf() })
         val collection = updater.start(backgroundScope)
         try {
             runCurrent()

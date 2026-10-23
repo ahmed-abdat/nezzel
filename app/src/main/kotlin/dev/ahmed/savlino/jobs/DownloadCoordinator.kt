@@ -57,6 +57,8 @@ class DownloadCoordinator(
     val cancelled: kotlinx.coroutines.flow.SharedFlow<DownloadProgress> = cancellationEvents
     private val mutableError = MutableStateFlow<DownloadError?>(null)
     val error: StateFlow<DownloadError?> = mutableError.asStateFlow()
+    /** Journal rows for observers that need history the live snapshot omits (widget after a restart). */
+    fun journal(): List<JobRecord> = store.all()
 
     fun start(scope: CoroutineScope): Job = scope.launch(CoroutineExceptionHandler { _, _ ->
         // Keep diagnostics out of UI/logs: SQLite errors may contain private row data.

@@ -11,7 +11,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
     /** Process-lifetime collectors stay out of [scope], so its startup jobs can be joined. */
     private val collectors = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val appUpdates by lazy { dev.ahmed.savlino.update.AppUpdates(this, scope) }
-    val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, downloads.completed) }
+    val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, downloads.completed, journal = { downloads.journal() }) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */
     open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope) }
     override val workManagerConfiguration: Configuration

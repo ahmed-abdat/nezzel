@@ -7,7 +7,6 @@ import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
 import dev.ahmed.savlino.jobs.JobRecord
 import dev.ahmed.savlino.jobs.JobStage
-import dev.ahmed.savlino.jobs.JobStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +28,8 @@ class WidgetUpdater(
     private val context: Context,
     private val progress: StateFlow<List<DownloadProgress>>,
     private val completed: Flow<DownloadProgress> = emptyFlow(),
+    /** The coordinator's own journal: a second JobStore would scrub staging without knowing its live writers. */
+    private val journal: () -> List<JobRecord> = { emptyList() },
     private val widgetIds: () -> IntArray = {
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, NezzelWidgetProvider::class.java))
     },
@@ -40,8 +41,7 @@ class WidgetUpdater(
     fun start(scope: CoroutineScope): Job = scope.launch {
         // The process scope runs on IO. A restart has no completion events to replay, and live
         // snapshots deliberately omit completed rows. Seed the widget without emitting a snackbar.
-        val journal = try { JobStore(context).use { it.all() } } catch (_: Exception) { emptyList() }
-        val latest = LatestJob(journal)
+        val latest = LatestJob(try { journal() } catch (_: Exception) { emptyList() })
         merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) })
             .map { latest.accept(it) }
             .distinctUntilChanged()
