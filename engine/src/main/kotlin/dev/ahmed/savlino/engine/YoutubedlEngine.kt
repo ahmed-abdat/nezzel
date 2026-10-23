@@ -28,7 +28,9 @@ sealed interface EngineUpdateResult {
 /** Engine timeouts and recovery (lead 2026-10-19, docs/OPEN_DECISIONS.md). */
 internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 120_000, val stallMs: Long = 45_000,
     val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000, val firstByteMs: Long = 180_000,
-    val npeBudgetMs: Long = NPE_BUDGET_MS) {
+    val npeBudgetMs: Long = NPE_BUDGET_MS,
+    /** Update network stage; with the self-test it stays inside [updateMs]. */
+    val fetchMs: Long = if (updateMs > selfTestMs) updateMs - selfTestMs else updateMs) {
     companion object { const val NPE_BUDGET_MS = 10_000L }
 }
 
@@ -513,34 +515,47 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     } catch (_: Exception) { false }
 
     /**
-     * Caller schedules authorized maintenance. The engine owns the updater: it runs in [updateScope] holding the
-     * exclusive gate from the first version read until the new yt-dlp passed its self-test or the bundled one was
-     * restored. The caller only stops waiting after [EngineLimits.updateMs]; the gate stays closed until then.
+     * Caller schedules authorized maintenance. [prepareYtdlpUpdate] downloads and verifies the release without the
+     * native gate; [installYtdlpUpdate] then runs in [updateScope] holding the exclusive gate from the first version
+     * read until the new yt-dlp passed its self-test or the bundled one was restored. The caller only stops waiting
+     * after [EngineLimits.updateMs]; the gate stays closed until the install ends.
      */
-    override suspend fun updateYtdlp(): EngineUpdateResult {
+    override suspend fun updateYtdlp(): EngineUpdateResult = installYtdlpUpdate(prepareYtdlpUpdate())
+    override suspend fun prepareYtdlpUpdate(): PreparedUpdate = try {
+        withTimeoutOrNull(limits.fetchMs) { runtime.prepareUpdate() } ?: networkFailure
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (_: Exception) { networkFailure } // Fetch errors carry fixed text only; nothing else is kept.
+    override suspend fun installYtdlpUpdate(prepared: PreparedUpdate): EngineUpdateResult {
+        if (prepared is PreparedUpdate.Failed) return prepared.failure
+        var joined = false
         val task = synchronized(updateOwner) {
-            pendingUpdate?.takeIf { it.isActive } ?: updateScope.async { runUpdate() }.also { pendingUpdate = it }
+            pendingUpdate?.takeIf { it.isActive }?.also { joined = true }
+                ?: updateScope.async { runUpdate(prepared) }.also { pendingUpdate = it }
         }
+        if (joined) discardYtdlpUpdate(prepared)
         return withTimeoutOrNull(limits.updateMs) { task.await() } ?: EngineUpdateResult.Failure(DownloadError.Network)
     }
-    private suspend fun runUpdate(): EngineUpdateResult = operation("update-${UUID.randomUUID()}",
-        { error, _ -> EngineUpdateResult.Failure(error) }, exclusive = true) { current ->
-        if (!initialize()) return@operation EngineUpdateResult.Failure(DownloadError.EngineUnavailable)
-        val old = version(current)
-        // An updater can replace the binary and then fail; never retain the previous pin.
-        runtime.initialization.installedVersion = null
-        val outcome = runCatching { runtime.update() }
-        val updated = probe()
-        if (updated != null) {
-            runtime.initialization.installedVersion = updated
-            outcome.getOrThrow()
-            EngineUpdateResult.Success(old, updated)
-        } else {
-            runtime.restoreBundledYtdlp()
-            probe()?.let { runtime.initialization.installedVersion = it }
-            EngineUpdateResult.Failure(DownloadError.Failed, usingBuiltIn = true)
+    override fun discardYtdlpUpdate(prepared: PreparedUpdate) { (prepared as? StagedYtdlp)?.file?.delete() }
+    private val networkFailure get() = PreparedUpdate.Failed(EngineUpdateResult.Failure(DownloadError.Network))
+    private suspend fun runUpdate(prepared: PreparedUpdate): EngineUpdateResult = try {
+        operation("update-${UUID.randomUUID()}", { error, _ -> EngineUpdateResult.Failure(error) }, exclusive = true) { current ->
+            if (!initialize()) return@operation EngineUpdateResult.Failure(DownloadError.EngineUnavailable)
+            val old = version(current)
+            // An updater can replace the binary and then fail; never retain the previous pin.
+            runtime.initialization.installedVersion = null
+            val outcome = runCatching { runtime.installUpdate(prepared) }
+            val updated = probe()
+            if (updated != null) {
+                runtime.initialization.installedVersion = updated
+                outcome.getOrThrow()
+                EngineUpdateResult.Success(old, updated)
+            } else {
+                runtime.restoreBundledYtdlp()
+                probe()?.let { runtime.initialization.installedVersion = it }
+                EngineUpdateResult.Failure(DownloadError.Failed, usingBuiltIn = true)
+            }
         }
-    }
+    } finally { discardYtdlpUpdate(prepared) }
 
     /** No-network `--version` under its own deadline and canceller; null when it fails or hangs (tree destroyed). */
     private suspend fun probe(): String? = operation("probe-${UUID.randomUUID()}", { _, _ -> null }, gated = false) { current ->

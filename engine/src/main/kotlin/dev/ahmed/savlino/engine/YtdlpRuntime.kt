@@ -76,6 +76,10 @@ internal interface YtdlpRuntime {
     fun observe(processId: String) = Unit
     fun destroy(processId: String): Boolean
     fun update()
+    /** Network-only first update stage; touches no installed file. The default has none: [installUpdate] runs [update]. */
+    suspend fun prepareUpdate(): PreparedUpdate = PreparedUpdate.Unstaged
+    /** Local second stage under the exclusive gate: install a staged release, or run the whole [update]. */
+    fun installUpdate(prepared: PreparedUpdate) { update() }
     /** Bundled zip size when an update version is recorded; null when no reconciliation is needed. */
     fun bundledYtdlpSize(): Long? = null
     /** Expected size of a plain bundled copy; null protects recorded updates from bundled-only repair. */
@@ -150,7 +154,7 @@ internal class AndroidYtdlpRuntime(
 private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     private val app = context.applicationContext
     private val base get() = File(app.noBackupFilesDir, YoutubeDL.baseName)
-    private val prefs get() = app.getSharedPreferences(YoutubeDL.baseName, Context.MODE_PRIVATE)
+    private val prefs get() = app.getSharedPreferences(YtdlpRelease.PREFS, Context.MODE_PRIVATE)
     private val titleFfmpeg = TitleFfmpegProcess { args ->
         ProcessBuilder(listOf(File(app.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath) + args)
             .apply {
@@ -226,6 +230,25 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     override fun cancelTitleRewrite(processId: String) = titleFfmpeg.cancel(processId)
     override fun destroy(processId: String) = YoutubeDL.getInstance().destroyProcessById(processId)
     override fun update() { YoutubeDL.updateYoutubeDL(app, YoutubeDL.UpdateChannel.STABLE) }
+    private val releaseClient by lazy { YtdlpReleaseFetcher.client(EngineLimits().fetchMs) }
+    override suspend fun prepareUpdate(): PreparedUpdate =
+        YtdlpReleaseFetcher(releaseClient, app.cacheDir, { prefs.getString(DLP_VERSION, null) }).fetch()
+    /** The local half of 0.18.1 `YoutubeDLUpdater.update` (delete dir, copy, restore bundled on failure, then prefs). */
+    override fun installUpdate(prepared: PreparedUpdate) {
+        val staged = prepared as? StagedYtdlp ?: return update()
+        val file = staged.file ?: return // ALREADY_UP_TO_DATE: 0.18.1 touches no file or preference.
+        val dir = File(base, YoutubeDL.ytdlpDirName)
+        try {
+            if (dir.exists()) check(dir.deleteRecursively())
+            dir.mkdirs()
+            file.copyTo(File(dir, YoutubeDL.ytdlpBin), overwrite = true)
+        } catch (error: Exception) {
+            dir.deleteRecursively()
+            YoutubeDL.getInstance().init_ytdlp(app, dir)
+            throw ReleaseFetchException("install")
+        } finally { file.delete() }
+        prefs.edit().putString(DLP_VERSION, staged.tag).putString(YtdlpRelease.VERSION_NAME_KEY, staged.name).commit()
+    }
     override fun bundledYtdlpSize(): Long? = if (prefs.getString(DLP_VERSION, null) == null) null else
         bundledSize()
     override fun bundledYtdlpSizeForRepair(): Long? = if (prefs.getString(DLP_VERSION, null) != null) null else
@@ -233,7 +256,7 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     private fun bundledSize(): Long =
         app.resources.openRawResource(com.yausername.youtubedl_android.R.raw.ytdlp).use { it.available().toLong() }
     override fun clearUpdatedYtdlpVersion() {
-        prefs.edit().remove(DLP_VERSION).remove("dlpVersionName").commit()
+        prefs.edit().remove(DLP_VERSION).remove(YtdlpRelease.VERSION_NAME_KEY).commit()
     }
     private val warmPrefs get() = app.getSharedPreferences("engine-warm-up", Context.MODE_PRIVATE)
     // The stamp also distinguishes a bundled restore/re-extraction of a previously warmed version.
@@ -251,12 +274,12 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     override fun restoreBundledYtdlp() {
         val dir = File(base, YoutubeDL.ytdlpDirName)
         dir.deleteRecursively()
-        prefs.edit().remove(DLP_VERSION).remove("dlpVersionName").commit()
+        prefs.edit().remove(DLP_VERSION).remove(YtdlpRelease.VERSION_NAME_KEY).commit()
         YoutubeDL.getInstance().init_ytdlp(app, dir)
     }
     private companion object {
         val sharedInitialization = EngineInitialization()
-        const val DLP_VERSION = "dlpVersion"
+        const val DLP_VERSION = YtdlpRelease.VERSION_KEY
     }
 }
 
@@ -379,8 +402,9 @@ internal class DirectoryYtdlpRuntime(
         timing.mode(binary.isDirectory)
         return native.execute(args, processId, line)
     }
-    override fun update() {
-        try { native.update() } catch (error: Exception) {
+    override fun update() = installUpdate(PreparedUpdate.Unstaged)
+    override fun installUpdate(prepared: PreparedUpdate) {
+        try { native.installUpdate(prepared) } catch (error: Exception) {
             runCatching { reconcileVersion() }
             throw error
         }

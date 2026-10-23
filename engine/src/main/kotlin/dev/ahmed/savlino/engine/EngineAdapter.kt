@@ -25,6 +25,13 @@ interface EngineAdapter {
     fun retryInitialization() = Unit
     /** STABLE binary maintenance; caller owns cadence and transfer exclusion. */
     suspend fun updateYtdlp(): EngineUpdateResult = EngineUpdateResult.Failure(DownloadError.EngineUnavailable)
+    /** Network-only first stage of [updateYtdlp]: touches neither the installed binary nor the native gate; cancellable. */
+    suspend fun prepareYtdlpUpdate(): PreparedUpdate = PreparedUpdate.Unstaged
+    /** Local second stage; runs to completion once begun. Consumes [prepared]. */
+    suspend fun installYtdlpUpdate(prepared: PreparedUpdate): EngineUpdateResult =
+        if (prepared is PreparedUpdate.Failed) prepared.failure else updateYtdlp()
+    /** Drops a prepared download without installing it. */
+    fun discardYtdlpUpdate(prepared: PreparedUpdate) = Unit
     suspend fun inspect(source: LinkRevision, operationId: String): InspectResult
     /** Local best-effort persistence of already inspected metadata, after explicit confirmation. */
     fun prepareDownload(command: DownloadCommand) = Unit
@@ -36,7 +43,15 @@ interface EngineAdapter {
     fun cancel(operationId: String)
 }
 
-private val notWaiting: StateFlow<Set<String>> = MutableStateFlow<Set<String>>(emptySet()).asStateFlow()
+/** Result of [EngineAdapter.prepareYtdlpUpdate]; engine-staged releases stay internal to the engine. */
+sealed interface PreparedUpdate {
+    /** No separate network stage: installing runs the whole update. */
+    data object Unstaged : PreparedUpdate
+    /** The network stage failed; nothing was downloaded or kept. */
+    data class Failed(val failure: EngineUpdateResult.Failure) : PreparedUpdate
+}
+
+private val notWaiting:StateFlow<Set<String>> = MutableStateFlow<Set<String>>(emptySet()).asStateFlow()
 private val notPreparing: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
 
 sealed interface InspectResult {
