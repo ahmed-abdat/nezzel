@@ -20,6 +20,12 @@ class LinkInputProseTest {
         }
     }
 
+    @Test fun aCopiedHttpLinkIsReadOverHttps() {
+        assertEquals("https://www.dailymotion.com/video/clipA", LinkInput.parse("http://www.dailymotion.com/video/clipA")?.rawUrl)
+        assertEquals("https://youtu.be/clipA", LinkInput.parse("شاهد HTTP://youtu.be/clipA،")?.rawUrl)
+        assertNull(LinkInput.parse("http://localhost/clipA"))
+    }
+
     @Test fun signedQueryBytesSurviveExtractionWithoutDecodingOrTrimming() {
         val raw = "HTTPS://YouTube.COM:443/Case/%2f?sig=A%2bB&z=2&z=1&token=x,+;!?:@()[]#Part."
         for (input in listOf(raw, "الرابط:$raw", "($raw)", "«$raw»")) {
@@ -32,7 +38,7 @@ class LinkInputProseTest {
     @Test fun repeatedLinksResolveOnceAndDistinctLinksUseFirstValidCandidate() {
         assertEquals("https://youtu.be/clipA", LinkInput.parse("https://youtu.be/clipA https://youtu.be/clipA")?.rawUrl)
         assertEquals("https://youtu.be/clipA", LinkInput.parse("https://youtu.be/clipA https://youtu.be/clipB")?.rawUrl)
-        assertEquals("https://youtu.be/clipA", LinkInput.parse("http://example.org/no https://localhost/no https://youtu.be/clipA")?.rawUrl)
+        assertEquals("https://youtu.be/clipA", LinkInput.parse("http://localhost/no https://localhost/no https://youtu.be/clipA")?.rawUrl)
         assertEquals(listOf("https://youtu.be/clipA", "https://youtu.be/clipB"),
             LinkInput.candidates("https://youtu.be/clipA HTTPS://YOUTU.BE/clipA https://youtu.be/clipB").map { it.rawUrl })
     }

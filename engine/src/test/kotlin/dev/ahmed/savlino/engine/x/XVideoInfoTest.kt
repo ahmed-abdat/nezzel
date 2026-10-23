@@ -187,6 +187,8 @@ class XVideoInfoTest {
     @Test fun titleStripsALinkAfterAUnicodeSpace() {
         val info = info(root().apply { put("text", "Synthetic post\u00a0https://t.co/Synthetic") })
         assertEquals("Synthetic Author - Synthetic post", info.path("title").asText())
+        val nel = info(root().apply { put("text", "Synthetic post\u0085https://t.co/Synthetic") })
+        assertEquals("Synthetic Author - Synthetic post", nel.path("title").asText())
     }
 
     /** Android's ICU regex throws on (?U) at class init, which crashed the app on every X link; the JVM accepts it. */

@@ -534,10 +534,12 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             checkCancelled(current)
             var callbackFailure: Exception? = null
             val result = runtime.execute(args, current.processId) { text ->
-                if (!current.cancelled.get()) try { line(text) } catch (failure: Throwable) {
-                    // Upstream callback runs on its reader thread: do not throw and strand the child, or kill the app.
-                    callbackFailure = failure as? Exception ?: EngineError(failure); current.cancelled.set(true)
-                }
+                // Upstream callback runs on its reader thread: do not throw and strand the child, or kill the app.
+                // VM errors (out of memory) still propagate.
+                if (!current.cancelled.get()) try { line(text) } catch (failure: Exception) {
+                    callbackFailure = failure; current.cancelled.set(true)
+                } catch (failure: LinkageError) { callbackFailure = EngineError(failure); current.cancelled.set(true) }
+                catch (failure: StackOverflowError) { callbackFailure = EngineError(failure); current.cancelled.set(true) }
             }
             callbackFailure?.let { throw it }
             checkCancelled(current)

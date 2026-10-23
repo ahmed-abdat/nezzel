@@ -541,6 +541,8 @@ class LinkViewModel(
                 (delivered.getAndSet(null) as? MediaInspectResult.Success)?.close()
                 throw cancelled
             } catch (_: Exception) { MediaInspectResult.Failure(ImageFailure.UNAVAILABLE, ImagePhase.IMAGE) }
+            catch (_: LinkageError) { MediaInspectResult.Failure(ImageFailure.UNAVAILABLE, ImagePhase.IMAGE) }
+            catch (_: StackOverflowError) { MediaInspectResult.Failure(ImageFailure.UNAVAILABLE, ImagePhase.IMAGE) }
             InspectionTiming.mark(InspectionPhase.NATIVE_READER_DONE)
             if (operationId != id || currentSource()?.matches(source) != true) {
                 (result as? MediaInspectResult.Success)?.close()
@@ -908,7 +910,9 @@ class LinkViewModel(
                                 if (submissionId == confirmed.jobId) { dismissOptions(); clearField() }
                             }
                         } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) {
+                        catch (failure: Throwable) {
+                            // A class-init or recursion Error must fail the submission visibly, not vanish in the app handler.
+                            if (failure is VirtualMachineError && failure !is StackOverflowError) throw failure
                             EngineTiming.forgetDownload(confirmed.jobId)
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                                 if (submissionId == confirmed.jobId) failConfirmation(DownloadError.ExecutionRestricted)
