@@ -35,7 +35,9 @@ import dev.ahmed.savlino.storage.StorageError
 import java.net.URI
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -285,6 +287,10 @@ class LinkViewModel(
             inspectionTiming?.record(InspectionPhase.OPTIONS_SHOWN)
     }
     private var operationId: String? = null
+    /** Speculative yt-dlp read beside a handoff reader; owned here, so a photo verdict or dismissal ends it with its id. */
+    private var race: Deferred<LegacyRead>? = null
+    private var raceOperationId: String? = null
+    private var raceWaiting = false
     private var imageOperation = false
     private var revision = 0L
     private val inspection get() = (optionsState as? OptionsState.Ready)?.inspection
@@ -492,6 +498,8 @@ class LinkViewModel(
         operationId = id
         imageOperation = true
         optionsState = OptionsState.Checking(source, id, image = true)
+        // A video verdict or pre-verdict page failure hands off to yt-dlp; start that read now, beside the reader.
+        if (route in HANDOFF_ROUTES) startRace(legacyReaderSource(source, route))
         // Not cancelled on invalidation: a late result must still arrive here so its preview is closed.
         viewModelScope.launch(requireNotNull(inspectionTiming).context()) {
             // A new inspection retires the previous reference, which would fail an in-flight Save as STALE.
@@ -513,6 +521,12 @@ class LinkViewModel(
                 (result as? MediaInspectResult.Success)?.close()
                 return@launch
             }
+            val handoff = route in HANDOFF_ROUTES && when (result) {
+                is MediaInspectResult.Failure -> readerFallsBack(route, result)
+                is MediaInspectResult.VideoRedirect -> result.source.matches(source)
+                else -> false
+            }
+            if (!handoff) endRace()
             when (result) {
                 is MediaInspectResult.Success -> {
                     val previews = try { withContext(previewDispatcher) {
@@ -541,7 +555,8 @@ class LinkViewModel(
                 }
                 is MediaInspectResult.Failure -> {
                     operationId = null; imageOperation = false
-                    if (readerFallsBack(route, result)) {
+                    if (handoff) awaitRace(legacyReaderSource(source, route), source)
+                    else if (readerFallsBack(route, result)) {
                         val landing = result.fallback?.takeIf { route == MediaSourceRoute.LINKEDIN &&
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
                         startLegacyInspection(landing ?: legacyReaderSource(source, route), source,
@@ -561,7 +576,7 @@ class LinkViewModel(
                     val watch = result.source
                     // These readers hand back the user's own link; normalize existing X/Instagram aliases before yt-dlp.
                     if (route in HANDOFF_ROUTES) {
-                        if (watch.matches(source)) startLegacyInspection(legacyReaderSource(source, route), source)
+                        if (handoff) awaitRace(legacyReaderSource(source, route), source)
                         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
                         return@launch
                     }
@@ -621,72 +636,108 @@ class LinkViewModel(
                 }
             }
         }
-        inspectionJob = viewModelScope.launch(timing.context()) {
-            var readGeneration: Long? = null
-            val inspect: suspend () -> InspectResult = inspect@{
-                InspectionTiming.mark(InspectionPhase.ENGINE_GATE_PASSED)
-                // A transient first-install failure may look unavailable while maintenance still owns readiness.
-                // Evaluate only after admission; do not turn the shared-link sheet into an immediate failure.
-                if (!engine.isAvailable) return@inspect InspectResult.Failure(DownloadError.EngineUnavailable)
-                val result = EngineTiming.measure("engine_inspect") { engine.inspect(source, id) }
-                if (result is InspectResult.Failure) readGeneration = downloads?.maintenance?.state?.value?.generation
-                if (currentEngineVersion == null && result is InspectResult.Success) {
-                    inspectedEngineVersion = engine.installedVersion()
-                    // Capture after readiness, within admission: a first-run update may have changed generation.
-                    inspectedMaintenanceGeneration = downloads?.maintenance?.state?.value?.generation
+        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia) }
+    }
+    /** One yt-dlp read under maintenance admission; generations are captured there and applied only by [showLegacy]. */
+    private class LegacyRead(val result: InspectResult, val readGeneration: Long? = null,
+        val version: Pair<String?, Long?>? = null)
+    private suspend fun readLegacy(source: LinkRevision, id: String): LegacyRead {
+        val inspect: suspend () -> LegacyRead = inspect@{
+            InspectionTiming.mark(InspectionPhase.ENGINE_GATE_PASSED)
+            // A transient first-install failure may look unavailable while maintenance still owns readiness.
+            // Evaluate only after admission; do not turn the shared-link sheet into an immediate failure.
+            if (!engine.isAvailable) return@inspect LegacyRead(InspectResult.Failure(DownloadError.EngineUnavailable))
+            val result = EngineTiming.measure("engine_inspect") { engine.inspect(source, id) }
+            val generation = downloads?.maintenance?.state?.value?.generation
+            // Capture after readiness, within admission: a first-run update may have changed generation.
+            LegacyRead(result, generation.takeIf { result is InspectResult.Failure },
+                if (currentEngineVersion == null && result is InspectResult.Success) engine.installedVersion() to generation else null)
+        }
+        return try {
+            downloads?.maintenance?.withInspection(waiting = { waiting ->
+                if (id == raceOperationId) raceWaiting = waiting
+                if (operationId == id) (optionsState as? OptionsState.Checking)?.let {
+                    optionsState = it.copy(preparing = waiting)
                 }
-                result
+            }, block = inspect) ?: inspect()
+        }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { LegacyRead(InspectResult.Failure(DownloadError.Failed)) }
+    }
+    private fun startRace(source: LinkRevision) {
+        val id = newOperationId()
+        raceOperationId = id
+        raceWaiting = false
+        // Dispatched, not immediate: the reader starts first; yt-dlp follows on the next main-loop turn.
+        race = viewModelScope.async(Dispatchers.Main + requireNotNull(inspectionTiming).context()) { readLegacy(source, id) }
+    }
+    /** Photo verdict, terminal failure or a new sheet: the speculative read never reaches the UI, nor admission later. */
+    private fun endRace() {
+        val id = raceOperationId
+        race?.cancel(); race = null
+        raceOperationId = null; raceWaiting = false
+        id?.let(engine::cancel)
+    }
+    /** The reader handed off: the speculative read becomes this sheet's only yt-dlp inspection. */
+    private fun awaitRace(input: LinkRevision, readerOrigin: LinkRevision) {
+        val running = race ?: return startLegacyInspection(input, readerOrigin)
+        val id = raceOperationId ?: return startLegacyInspection(input, readerOrigin)
+        // [race] stays set so invalidation still cancels it; the id is now [operationId]'s to cancel.
+        raceOperationId = null
+        val source = legacyReaderSource(input, MediaSourceRoute.INSTAGRAM)
+        operationId = id
+        optionsState = OptionsState.Checking(readerOrigin, id, preparing = raceWaiting)
+        inspectionJob = viewModelScope.launch(requireNotNull(inspectionTiming).context()) {
+            val read = running.await()
+            if (race === running) race = null
+            showLegacy(read, id, source, readerOrigin, noMedia = false)
+        }
+    }
+    private fun showLegacy(read: LegacyRead, id: String, source: LinkRevision, origin: LinkRevision?, noMedia: Boolean) {
+        read.version?.let { (version, generation) ->
+            inspectedEngineVersion = version
+            inspectedMaintenanceGeneration = generation
+        }
+        // Both the attempt and URL revision must still belong to this sheet.
+        if (operationId != id || currentSource()?.matches(origin ?: source) != true) return
+        operationId = null
+        earlyPreviewJob?.cancel(); earlyPreviewJob = null
+        when (val result = read.result) {
+            is InspectResult.Failure -> {
+                optionsState = if (noMedia && result.error in setOf(
+                    DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
+                    OptionsState.ImageError(ImageFailure.NO_MEDIA) else OptionsState.Error(result.error)
+                failedReadGeneration = read.readGeneration
             }
-            val result = try {
-                downloads?.maintenance?.withInspection(waiting = { waiting ->
-                    if (operationId == id) (optionsState as? OptionsState.Checking)?.let {
-                        optionsState = it.copy(preparing = waiting)
-                    }
-                }, block = inspect) ?: inspect()
-            }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { InspectResult.Failure(DownloadError.Failed) }
-            // Both the attempt and URL revision must still belong to this sheet.
-            if (operationId != id || currentSource()?.matches(origin ?: source) != true) return@launch
-            operationId = null
-            earlyPreviewJob?.cancel(); earlyPreviewJob = null
-            when (result) {
-                is InspectResult.Failure -> {
-                    optionsState = if (noMedia && result.error in setOf(
-                        DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
-                        OptionsState.ImageError(ImageFailure.NO_MEDIA) else OptionsState.Error(result.error)
-                    failedReadGeneration = readGeneration
-                }
-                is InspectResult.Success -> {
-                    val returned = result.inspection
-                    when {
-                        !returned.source.matches(source) -> optionsState = OptionsState.Error(DownloadError.FormatExpired)
-                        displayFormats(returned).isEmpty() -> optionsState = OptionsState.Error(DownloadError.NoFormats)
-                        else -> {
-                            val ready = OptionsState.Ready(returned, origin)
-                            optionsState = ready
-                            downloads?.let { coordinator -> viewModelScope.launch {
-                                val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
-                                if (optionsState === ready) savedFormats = found
-                            } }
-                            // Video links prefer remembered/Balanced, then the engine's BEST, never audio;
-                            // a link with no video at all (TikTok photo slideshow) preselects its first audio row.
-                            val options = presetOptions
-                            val preferred = if (formatOptions.any { it.hasVideo }) lastUsedPreset ?: Preset.BALANCED
-                                else options.firstOrNull()?.first
-                            val initial = options.singleOrNull { it.first == preferred }
-                                ?: options.firstOrNull { it.first == Preset.BEST }
-                            val remembered = lastUsedFormat
-                            selectedId = remembered?.id ?: initial?.second?.id
-                            selectedPreset = if (remembered != null) {
-                                options.firstOrNull { it.second.id == remembered.id && it.first == lastUsedPreset }
-                                    ?.first ?: options.firstOrNull { it.second.id == remembered.id }?.first
-                            } else initial?.first
-                            // A single selectable row (LinkedIn/X lone "Video") is always the choice.
-                            if (selectedId == null) eligibleFormats.singleOrNull()?.let { only ->
-                                selectedId = only.id
-                                selectedPreset = options.firstOrNull { it.second.id == only.id }?.first
-                            }
+            is InspectResult.Success -> {
+                val returned = result.inspection
+                when {
+                    !returned.source.matches(source) -> optionsState = OptionsState.Error(DownloadError.FormatExpired)
+                    displayFormats(returned).isEmpty() -> optionsState = OptionsState.Error(DownloadError.NoFormats)
+                    else -> {
+                        val ready = OptionsState.Ready(returned, origin)
+                        optionsState = ready
+                        downloads?.let { coordinator -> viewModelScope.launch {
+                            val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
+                            if (optionsState === ready) savedFormats = found
+                        } }
+                        // Video links prefer remembered/Balanced, then the engine's BEST, never audio;
+                        // a link with no video at all (TikTok photo slideshow) preselects its first audio row.
+                        val options = presetOptions
+                        val preferred = if (formatOptions.any { it.hasVideo }) lastUsedPreset ?: Preset.BALANCED
+                            else options.firstOrNull()?.first
+                        val initial = options.singleOrNull { it.first == preferred }
+                            ?: options.firstOrNull { it.first == Preset.BEST }
+                        val remembered = lastUsedFormat
+                        selectedId = remembered?.id ?: initial?.second?.id
+                        selectedPreset = if (remembered != null) {
+                            options.firstOrNull { it.second.id == remembered.id && it.first == lastUsedPreset }
+                                ?.first ?: options.firstOrNull { it.second.id == remembered.id }?.first
+                        } else initial?.first
+                        // A single selectable row (LinkedIn/X lone "Video") is always the choice.
+                        if (selectedId == null) eligibleFormats.singleOrNull()?.let { only ->
+                            selectedId = only.id
+                            selectedPreset = options.firstOrNull { it.second.id == only.id }?.first
                         }
                     }
                 }
@@ -775,6 +826,7 @@ class LinkViewModel(
         earlyPreviewJob?.cancel(); earlyPreviewJob = null
         inspectionTiming = null
         old?.let { if (image) images?.cancel(it) else engine.cancel(it) }
+        endRace()
         selectedId = null; selectedPreset = null; command = null; submissionId = null; submitted = false; moreFormats = false
         savedFormats = emptyMap()
         optionsState = OptionsState.Hidden
