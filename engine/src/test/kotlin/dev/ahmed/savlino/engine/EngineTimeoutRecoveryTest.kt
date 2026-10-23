@@ -313,8 +313,36 @@ class EngineTimeoutRecoveryTest {
         assertTrue(events.all { it == EngineEvent.Progress(1, Size.Exact(3)) })
     }
 
+    @Test fun preDownloadTaggingDoesNotDisableSubsequentByteWatchdog() = runBlocking {
+        for (prefix in listOf("[MetadataParser] Parsed title", "[ThumbnailsConvertor] Converting thumbnail")) {
+            val runtime = Runtime()
+            val dir = temp.newFolder()
+            runtime.action = { _, line ->
+                line(prefix)
+                line("nezzel:18:0:3:NA")
+                line("nezzel:18:1:3:NA")
+                runtime.hang()
+            }
+            assertEquals(TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.STALL),
+                withTimeout(5000) { YoutubedlEngine(runtime, fast).download(command(), dir) {} })
+            assertTrue(runtime.destroys.get() >= 1)
+        }
+    }
+
+    @Test fun preDownloadTaggingPreservesTheFirstByteBudget() = runBlocking {
+        for (prefix in listOf("[MetadataParser] Parsed title", "[ThumbnailsConvertor] Converting thumbnail")) {
+            val runtime = Runtime().apply { action = { _, line -> line(prefix); hang() } }
+            val limits = EngineLimits(firstByteMs = 200)
+            assertEquals(TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.TRANSPORT),
+                withTimeout(3000) { YoutubedlEngine(runtime, limits).download(command(), temp.newFolder()) {} })
+            assertTrue(runtime.destroys.get() >= 1)
+        }
+    }
+
     @Test fun steadyBytesAndLongPostProcessingAreNotStalls() = runBlocking {
-        for (tail in listOf("[Merger] Merging formats into output.mp4", "[FixupM3u8] Fixing MPEG-TS in MP4 container")) {
+        for (tail in listOf("[Merger] Merging formats into output.mp4", "[FixupM3u8] Fixing MPEG-TS in MP4 container",
+            "[EmbedThumbnail] Adding thumbnail", "[ThumbnailsConvertor] Converting thumbnail",
+            "[ExtractAudio] Destination: output.m4a", "[MetadataParser] Parsed title")) {
             val dir = temp.newFolder()
             val runtime = Runtime()
             runtime.action = { args, line ->

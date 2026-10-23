@@ -1,12 +1,13 @@
 package dev.ahmed.savlino.engine
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import dev.ahmed.savlino.domain.*
 import java.io.File
 
 /** Arguments passed directly to ProcessBuilder by the wrapper, never a shell. */
 object YtdlpCommand {
     // Bump whenever download argv changes: partials from a different recipe must restart.
-    const val ARGV_VERSION = 1
+    const val ARGV_VERSION = 2
     const val PROGRESS_TEMPLATE = "download:nezzel-v2:%(info.format_id)s:%(progress.downloaded_bytes)s:%(progress.total_bytes)s:%(progress.total_bytes_estimate)s:%(progress.fragment_index)s:%(progress.fragment_count)s"
     // Pinned yt-dlp grammar treats these names/extensions as selectors, even without operators.
     private val reservedId = Regex("(best|worst|b|w)(video|audio|v|a)?(\\.[1-9][0-9]*)?")
@@ -20,7 +21,8 @@ object YtdlpCommand {
     internal fun isYouTube(source: LinkRevision): Boolean = source.link.host == Host.YOUTUBE
     fun inspect(source: LinkRevision) = listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + NETWORK +
         listOf("--dump-json", "--skip-download", "--", source.link.rawUrl)
-    fun download(command: DownloadCommand, directory: File, infoJson: File? = null): List<String> {
+    fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
+        embedAudioTags: Boolean = true): List<String> {
         val root = directory.canonicalFile
         require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory &&
             root.listFiles()?.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile &&
@@ -57,8 +59,25 @@ object YtdlpCommand {
                 addAll(listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "${conversion.bitrateKbps}K",
                     "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a ${conversion.bitrateKbps}k$resample"))
             }
+            if (embedAudioTags && !row.hasVideo && row.container in setOf("m4a", "mp3"))
+                addAll(audioTagArgs(infoJson))
             if (infoJson != null) addAll(listOf("--load-info-json", infoJson.absolutePath))
             else addAll(listOf("--", command.source.link.rawUrl))
         }
+    }
+
+    /** Only real artist metadata is trusted; yt-dlp otherwise falls back to the uploader/channel. */
+    private fun audioTagArgs(infoJson: File?): List<String> = buildList {
+        addAll(listOf("--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg"))
+        val artist = try {
+            infoJson?.let { ObjectMapper().readTree(it)?.get("artist") }
+                ?.takeIf { it.isTextual }?.asText()?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) { null }
+        val blank = listOf("comment", "purl", "description", "synopsis", "genre", "date") +
+            if (artist == null) listOf("artist") else emptyList()
+        blank.forEach { addAll(listOf("--parse-metadata", ":(?P<meta_$it>)")) }
+        // Python regex syntax: preserve BMP Arabic, strip supplementary/zero-width characters in tags only.
+        addAll(listOf("--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]", "",
+            "--replace-in-metadata", "title", "\\s+$", ""))
     }
 }

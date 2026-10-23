@@ -8,8 +8,8 @@ internal class YtdlpDebugDiagnostics(
     args: List<String> = emptyList(),
     private val log: (String, String) -> Unit = { tag, message -> Log.d(tag, message); Unit },
 ) {
-    // Parsing a private info file may echo metadata in a diagnostic. Suppress the entire attempt.
-    private val privateInput = "--load-info-json" in args
+    // Info parsing and tag replacement may echo private titles. Suppress the entire attempt.
+    private val privateInput = "--load-info-json" in args || "--embed-metadata" in args
     private val tail = ArrayDeque<String>()
     @Synchronized fun accept(output: String) {
         if (!enabled || privateInput) return
