@@ -404,4 +404,10 @@
     <string name="update_trust">يتحقق ⁦Nezzel⁩ من الملف وتوقيعه قبل التثبيت</string>
     <string name="update_downloading">جارٍ التنزيل %1$s</string>
     <string name="settings_update_accessibility">الإعدادات، يتوفر تحديث</string>
+    <string name="shortcut_paste_link">الصق الرابط</string>
+    <string name="widget_empty">انسخ رابطًا ثم اضغط الصق</string>
+    <string name="widget_paused">متوقف مؤقتًا</string>
+    <string name="widget_failed">لم يكتمل</string>
+    <string name="widget_description">\u2066Nezzel\u2069: الصق رابطًا منسوخًا</string>
+    <string name="shortcut_downloads_short">التنزيلات</string>
 </resources>

@@ -47,5 +47,11 @@ object AppLocale {
             AppPreferences(context).chooseLanguage(language)
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(NezzelFormat.numericTag(language)))
         }
+        val manager = android.appwidget.AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(android.content.ComponentName(context, dev.ahmed.savlino.shortcuts.NezzelWidgetProvider::class.java))
+        if (ids.isNotEmpty()) {
+            val app = context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication ?: return
+            dev.ahmed.savlino.shortcuts.NezzelWidgetProvider.render(context, ids, app.widgets.currentState, language)
+        }
     }
 }

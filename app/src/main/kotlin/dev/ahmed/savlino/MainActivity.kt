@@ -16,6 +16,7 @@ import dev.ahmed.savlino.entry.ShareInput
 import dev.ahmed.savlino.entry.plainText
 import dev.ahmed.savlino.entry.ClipboardEntryEffect
 import dev.ahmed.savlino.jobs.NezzelApplication
+import dev.ahmed.savlino.shortcuts.ShortcutActions
 import dev.ahmed.savlino.locale.*
 import dev.ahmed.savlino.ui.LinkViewModel
 import dev.ahmed.savlino.ui.theme.NezzelTheme
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private var replayingOnboarding = false
     private var resumed = false
     private var clipboardReadThisEntry = false
+    private var pasteRequested = false
     private var theme by mutableStateOf(ThemePref.System)
     private var wallpaper by mutableStateOf(false)
     private var suggestions by mutableStateOf(true)
@@ -95,6 +97,8 @@ class MainActivity : AppCompatActivity() {
         links.notificationPrompt = ::beforeConfirmedDownload
         showNotificationRationale = savedInstanceState?.getBoolean("notificationRationale") == true && links.hasPendingNotificationChoice
         refreshPreferences()
+        pasteRequested = !onboarding && (savedInstanceState?.getBoolean("pasteRequested") ?: ShortcutActions.isPasteEntry(intent))
+        if (savedInstanceState == null && intent.action == ShortcutActions.OPEN_DOWNLOADS) links.navigate("Downloads")
         enableEdgeToEdge()
         if (!onboarding) {
             links.onCreateShare(launchShare)
@@ -109,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             NezzelTheme(theme, wallpaper) {
                 if (onboarding) dev.ahmed.savlino.ui.OnboardingScreen(::finishOnboarding)
                 else NezzelApp(links, language, theme, wallpaper, suggestions,
-                    onPaste = { if (resumed && hasWindowFocus()) links.paste(getSystemService(ClipboardManager::class.java).plainText()) },
+                    onPaste = ::pasteClipboard,
                     onDismissSuggestion = links::dismissSuggestion,
                     onAcceptSuggestion = { links.inspectSuggestion() },
                     onAutomaticOptions = { preferences.automaticOptions = it; links.automaticOptions = it },
@@ -140,6 +144,7 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("notificationRationale", showNotificationRationale)
         outState.putBoolean("onboardingReplay", replayingOnboarding)
+        outState.putBoolean("pasteRequested", pasteRequested)
         super.onSaveInstanceState(outState)
     }
     private fun refreshPreferences() {
@@ -150,6 +155,14 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (ShortcutActions.isPasteEntry(intent) || intent.action == ShortcutActions.OPEN_DOWNLOADS) {
+            pasteRequested = ShortcutActions.isPasteEntry(intent) && !onboarding
+            if (intent.action == ShortcutActions.OPEN_DOWNLOADS) links.navigate("Downloads")
+            setIntent(Intent(this, MainActivity::class.java))
+            pasteIfRequested()
+            return
+        }
+        pasteRequested = false
         if (intent.action == dev.ahmed.savlino.update.UpdateNotifications.OPEN && (application as NezzelApplication).appUpdates.available) {
             links.navigate("AppUpdate")
             setIntent(Intent(this, MainActivity::class.java))
@@ -163,18 +176,22 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume(); resumed = true
         links.clipboardForeground = hasWindowFocus()
-        refreshPreferences(); if (!onboarding) links.onForeground(); suggestClipboard()
+        refreshPreferences(); if (!onboarding) links.onForeground(); pasteIfRequested(); suggestClipboard()
     }
     override fun onPause() {
         resumed = false; clipboardReadThisEntry = false
         links.clipboardForeground = false
         super.onPause()
     }
+    override fun onStop() {
+        pasteRequested = false
+        super.onStop()
+    }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (::links.isInitialized) {
             links.clipboardForeground = resumed && hasFocus
-            if (hasFocus) suggestClipboard()
+            if (hasFocus) { pasteIfRequested(); suggestClipboard() }
         }
     }
     private fun finishOnboarding() {
@@ -192,5 +209,16 @@ class MainActivity : AppCompatActivity() {
             clipboardReadThisEntry = true
             getSystemService(ClipboardManager::class.java).plainText()
         }
+    }
+    private fun pasteIfRequested() {
+        if (!pasteRequested || !resumed || !hasWindowFocus()) return
+        pasteRequested = false
+        if (!onboarding) pasteClipboard()
+    }
+    /** Shared by Home and explicit shortcut taps; mark the entry read before suggestions can run. */
+    private fun pasteClipboard() {
+        if (!resumed || !hasWindowFocus() || onboarding) return
+        clipboardReadThisEntry = true
+        links.paste(getSystemService(ClipboardManager::class.java).plainText())
     }
 }

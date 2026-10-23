@@ -5,8 +5,21 @@ import android.content.Intent
 /** Read only the supplied text; never dereference an inbound URI or ClipData. */
 class ShareInput private constructor(val text: String?) {
     companion object {
+        val VIEW_HOSTS: Set<String> = setOf(
+            "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be",
+            "tiktok.com", "www.tiktok.com", "vm.tiktok.com", "vt.tiktok.com",
+            "instagram.com", "www.instagram.com", "facebook.com", "www.facebook.com", "m.facebook.com",
+            "fb.watch", "x.com", "twitter.com", "mobile.twitter.com")
+
         fun from(intent: Intent?): ShareInput? {
-            if (intent == null || intent.type != "text/plain") return null
+            if (intent == null) return null
+            if (intent.action == Intent.ACTION_VIEW) {
+                val uri = intent.data ?: return null
+                if (uri.scheme?.lowercase(java.util.Locale.ROOT) !in setOf("http", "https") ||
+                    uri.host?.lowercase(java.util.Locale.ROOT) !in VIEW_HOSTS) return null
+                return uri.toString().takeIf { it.length <= 8192 }?.let(::ShareInput)
+            }
+            if (intent.type != "text/plain") return null
             val extra = when (intent.action) {
                 Intent.ACTION_SEND -> Intent.EXTRA_TEXT
                 Intent.ACTION_PROCESS_TEXT -> Intent.EXTRA_PROCESS_TEXT

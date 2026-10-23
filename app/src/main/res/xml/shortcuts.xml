@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="paste_link" android:enabled="true" android:icon="@drawable/ic_paste"
+        android:shortcutShortLabel="@string/shortcut_paste_link" android:shortcutLongLabel="@string/shortcut_paste_link">
+        <intent android:action="dev.ahmed.savlino.action.PASTE_LINK" android:targetPackage="dev.ahmed.savlino" android:targetClass="dev.ahmed.savlino.PasteEntry" />
+    </shortcut>
+    <shortcut android:shortcutId="downloads" android:enabled="true" android:icon="@drawable/ic_folder"
+        android:shortcutShortLabel="@string/shortcut_downloads_short" android:shortcutLongLabel="@string/downloads">
+        <intent android:action="dev.ahmed.savlino.action.OPEN_DOWNLOADS" android:targetPackage="dev.ahmed.savlino" android:targetClass="dev.ahmed.savlino.MainActivity" />
+    </shortcut>
+</shortcuts>

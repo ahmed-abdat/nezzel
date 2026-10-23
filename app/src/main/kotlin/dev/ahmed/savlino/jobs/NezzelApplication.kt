@@ -9,6 +9,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
     open val downloads by lazy { DownloadCoordinator(this) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val appUpdates by lazy { dev.ahmed.savlino.update.AppUpdates(this, scope) }
+    val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, downloads.completed) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */
     open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope) }
     override val workManagerConfiguration: Configuration
@@ -23,6 +24,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
         super.onCreate()
         dev.ahmed.savlino.diagnostics.CrashReports.install(this)
         dev.ahmed.savlino.DebugStrictMode.install()
+        scope.launch { widgets.start(this) }
         scope.launch { downloads.maintenance.onLaunch(); downloads.start(scope).join() }
         scope.launch {
             try {
