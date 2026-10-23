@@ -38,7 +38,8 @@ class DownloadNotifications(private val base: Context) {
         manager.cancel(activeId(progress.jobId) xor Int.MIN_VALUE)
         return ForegroundInfo(activeId(progress.jobId), notification(progress), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
-    fun progress(progress: DownloadProgress) { post(activeId(progress.jobId), notification(progress)) }
+    /** A paused event posts nothing here: the tagged [paused] notification is the only one, so Cancel can clear it. */
+    fun progress(progress: DownloadProgress) { if (!progress.paused) post(activeId(progress.jobId), notification(progress)) }
     fun finished(progress: DownloadProgress) {
         // Foreground service removes the active ID when work stops; use a separate result ID.
         dismissPaused(progress.jobId)

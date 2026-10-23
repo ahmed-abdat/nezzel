@@ -50,6 +50,15 @@ class PauseNotificationsTest {
         assertEquals("Paused", manager.activeNotifications.single().notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
     }
 
+    @Test fun aPausedProgressEventPostsNoUntaggedNotification() {
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        DownloadNotifications(app).progress(running.copy(phase = DownloadPhase.PREPARING, paused = true, hasPartial = true))
+        assertEquals(0, manager.activeNotifications.size)
+        DownloadNotifications(app).progress(running)
+        assertEquals(1, manager.activeNotifications.size)
+    }
+
     @Test fun waitingForNetworkAndRestartingOfferOnlyCancelAndNoPercentText() {
         val waiting = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, waiting = true, hasPartial = true)
         val offline = DownloadNotifications.text(app, waiting, offline = true)
