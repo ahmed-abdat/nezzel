@@ -648,6 +648,10 @@ class DownloadCoordinator(
         val removed = row?.stage == JobStage.FAILED && store.remove(id)
         if (removed || store.get(id) == null) mutableProgress.update { it.filterNot { event -> event.jobId == id } }
     }
+    /** Copy link and the gone-file sweep, on this coordinator's journal. */
+    fun shareLinks(onGone: (String) -> Unit) = dev.ahmed.savlino.downloads.ShareLinks(context.contentResolver, store, onGone)
+    /** Settings › Clear link history: every kept link and its key go; the files stay. */
+    suspend fun clearShareLinks() = withContext(Dispatchers.IO) { store.clearShareLinks() }
     fun dismiss(id: String) { mutableProgress.update { it.filterNot { event -> event.jobId == id && event.terminal && !event.awaitingSchedule } } }
     private fun fromRecord(row: JobRecord) = DownloadProgress(row.jobId, row.displayName ?: row.filename,
         when (row.stage) {

@@ -256,6 +256,22 @@ class WidgetTest {
         } finally { collection.cancel() }
     }
 
+    @Test fun fileForgottenBeforeTheWidgetStartsStillLeavesTheSeed() = runTest {
+        val uri = android.net.Uri.parse("content://media/external_primary/downloads/7")
+        JobStore(app).use { store ->
+            assertTrue(store.enqueue(command("saved"))); assertTrue(store.startTransfer("saved")); assertTrue(store.markStaged("saved"))
+            assertTrue(store.recordPending("saved", PendingPublication(uri, "saved.mp4")))
+            assertTrue(store.complete("saved", PublishedFile(uri, "saved.mp4")))
+        }
+        val updater = WidgetUpdater(app, MutableStateFlow(emptyList()), journal = { JobStore(app).use { it.all() } }, widgetIds = { intArrayOf() })
+        updater.forget("saved") // a startup sweep can confirm it gone before start() subscribes
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            assertNull(updater.currentState.title)
+        } finally { collection.cancel() }
+    }
+
     @Test fun newerJournalFailureWinsOverAnOlderCompletion() = runTest {
         val uri = android.net.Uri.parse("content://media/external_primary/downloads/7")
         JobStore(app).use { store ->
@@ -280,6 +296,23 @@ class WidgetTest {
             JobStore(app).use { assertTrue(it.remove("new-failure")) }
             progress.value = emptyList(); runCurrent()
             assertNull(updater.currentState.title)
+        } finally { collection.cancel() }
+    }
+
+    @Test fun forgottenSavedFileLeavesTheWidgetOnlyWhenItIsTheShownCompletion() = runTest {
+        val old = job(DownloadPhase.FAILED).copy(jobId = "old", filename = "old.mp4")
+        val progress = MutableStateFlow(listOf(old, job()))
+        val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
+        val updater = WidgetUpdater(app, progress, completed, widgetIds = { intArrayOf(1) }, render = { _, _ -> })
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            completed.emit(job(DownloadPhase.COMPLETED)); progress.value = listOf(old); runCurrent()
+            updater.forget("old"); runCurrent()
+            assertEquals(DownloadPhase.COMPLETED, updater.currentState.phase)
+            updater.forget("new"); runCurrent()
+            assertEquals("old.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.FAILED, updater.currentState.phase)
         } finally { collection.cancel() }
     }
 }

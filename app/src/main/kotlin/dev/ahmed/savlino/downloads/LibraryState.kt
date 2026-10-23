@@ -47,11 +47,23 @@ class LibraryState(
     val media get() = load.lastSuccessfulRows.orEmpty()
 }
 
+/** Copy link for a saved file: [find] returns null when no link is kept (no job row, cleared, or the key is gone). */
+class LinkCopy(val find: suspend (SavedMedia) -> String?, val copy: (String) -> Unit)
+val LocalLinkCopy = staticCompositionLocalOf<LinkCopy?> { null }
+
+/** The link counts as handled before it reaches the clipboard, so Nezzel never offers it back; a failed write still copies. */
+suspend fun copyHandled(link: String, markHandled: suspend (String) -> Boolean, setClip: (String) -> Unit) {
+    markHandled(link)
+    setClip(link)
+}
+
 @Composable
 fun rememberLibraryState(
     snackbar: SnackbarHostState,
     observe: (() -> Flow<Result<List<SavedMedia>>>)? = null,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** Runs on each listed snapshot: every delete path ends in a reload, and so do deletes outside Nezzel. */
+    sweep: (suspend (rows: List<SavedMedia>, listedAt: Long) -> Unit)? = null,
 ): LibraryState {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -59,6 +71,7 @@ fun rememberLibraryState(
     val repository = remember(context.contentResolver, destinations) { SavedMediaRepository(context.contentResolver, context.packageName, destinations) }
     val scope = rememberCoroutineScope()
     var load by remember { mutableStateOf<LibraryLoadState>(LibraryLoadState.Loading()) }
+    var listedAt by remember { mutableLongStateOf(0L) }
     var refresh by remember { mutableIntStateOf(0) }
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
     var singleDeleting by remember { mutableStateOf(false) }
@@ -79,12 +92,13 @@ fun rememberLibraryState(
                 emit(Result.failure(error))
             }.collect { result ->
                 load = result.fold(
-                    { LibraryLoadState.Ready(it) },
+                    { listedAt = System.currentTimeMillis(); LibraryLoadState.Ready(it) },
                     { LibraryLoadState.Error(load.lastSuccessfulRows) },
                 )
             }
         }
     }
+    LaunchedEffect(load, sweep) { (load as? LibraryLoadState.Ready)?.let { sweep?.invoke(it.rows, listedAt) } }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val uri = pendingUri?.let(android.net.Uri::parse)
         pendingUri = null

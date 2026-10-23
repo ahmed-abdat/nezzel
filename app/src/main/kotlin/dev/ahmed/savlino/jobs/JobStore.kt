@@ -14,6 +14,8 @@ import dev.ahmed.savlino.storage.JobDirectory
 import dev.ahmed.savlino.storage.PendingPublication
 import dev.ahmed.savlino.storage.PublishedFile
 import dev.ahmed.savlino.storage.KeystoreLinkKeyer
+import dev.ahmed.savlino.storage.KeystoreLinkCipher
+import dev.ahmed.savlino.storage.LinkCipher
 import org.json.JSONObject
 
 /** The coordinator serializes recovery and execution before using this journal (U12). */
@@ -42,13 +44,17 @@ class JobRecord internal constructor(
     }
 }
 
+/** A saved file that still holds a Copy link or artwork; [published] is the URI the job wrote. */
+class LinkedFile(val jobId: String, val published: Uri, val updatedAt: Long)
+
 /** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
 /** Blocking platform SQLite, schema v5. Older rows migrate without losing publication ownership. */
 /** [sourceKeys]: keyed tags for "saved before"; null (no AndroidKeyStore) stores no tag and finds nothing. */
-class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred) :
-    SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 5) {
+class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred,
+    private val links: LinkCipher? = KeystoreLinkCipher.current()) :
+    SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, DATABASE_VERSION) {
     private val jobRoot = File(context.filesDir.canonicalFile, "downloads")
     /** Row artwork lives and dies with the row: Remove, the 100-row prune. */
     val artwork = JobArtwork(context.filesDir)
@@ -83,6 +89,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0),
                 stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0),
                 resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0),
+                $SHARE_LINK_COLUMN,
                 CHECK (has_partial = 0 OR stage IN ('ENQUEUED','TRANSFERRING','PAUSED')),
                 CHECK ((stage IN ('COMPLETED','CANCELLED') AND source_url IS NULL)
                     OR (stage = 'FAILED' AND (source_url IS NULL OR retryable = 1))
@@ -93,11 +100,15 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion == 4 && newVersion == 5) {
-            db.execSQL("ALTER TABLE jobs ADD COLUMN transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0)")
-            db.execSQL("ALTER TABLE jobs ADD COLUMN stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0)")
-            db.execSQL("ALTER TABLE jobs ADD COLUMN resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0)")
-        } else if (oldVersion in 1..3 && newVersion == 5) {
+        if (oldVersion in 4..5 && newVersion == DATABASE_VERSION) {
+            if (oldVersion == 4) {
+                db.execSQL("ALTER TABLE jobs ADD COLUMN transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0)")
+                db.execSQL("ALTER TABLE jobs ADD COLUMN stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0)")
+                db.execSQL("ALTER TABLE jobs ADD COLUMN resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0)")
+            }
+            db.execSQL("ALTER TABLE jobs ADD COLUMN $SHARE_LINK_COLUMN")
+        } else if (oldVersion in 1..3 && newVersion == DATABASE_VERSION) {
+            // The rebuild creates the current shape (share_link included); no ALTER follows it.
             // SQLiteOpenHelper owns the transaction, including the CHECK-constraint rebuild.
             db.execSQL("ALTER TABLE jobs RENAME TO jobs_old")
             onCreate(db)
@@ -315,9 +326,20 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         val row = get(jobId)
         // The link is cleared below; a row from before tags (or a lost backfill) gets its tag now.
         val key = row?.sourceUrl?.let(::sourceKey)
+        // Copy link: only the reviewed intake link, sealed in the same UPDATE that scrubs source_url.
+        val link = if (row?.pendingUri == published.uri) row.sourceUrl?.let { links?.seal(it) } else null
         row?.pendingUri == published.uri &&
             transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.COMPLETED,
-                ContentValues().apply { put("display_name", published.displayName); key?.let { put("source_key", it) } })
+                ContentValues().apply {
+                    put("display_name", published.displayName); key?.let { put("source_key", it) }; link?.let { put("share_link", it) }
+                }).also { if (it) supersede(jobId, published.uri) }
+    }
+
+    /** A folder or MediaStore can hand a freed URI to a new file: older rows at that URI lose their link and artwork. */
+    private fun supersede(jobId: String, uri: Uri) {
+        val older = writableDatabase.query("jobs", arrayOf("job_id"), "stage = 'COMPLETED' AND pending_uri = ? AND job_id != ?",
+            arrayOf(uri.toString(), jobId), null, null, null).use { buildList { while (it.moveToNext()) add(it.getString(0)) } }
+        for (id in older) forgetFile(id)
     }
 
     /** Pending ownership must be resolved first by recovery; late cancellation cannot undo commit. */
@@ -372,6 +394,59 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             cleanupJobStaging(jobRoot, jobId)
         }
         changed
+    }
+
+    /** Saved files that still carry a Copy link blob or row artwork (at most the 100 kept terminal rows). */
+    @Synchronized fun linkedFiles(): List<LinkedFile> = readableDatabase.query("jobs",
+        arrayOf("job_id", "pending_uri", "updated_at", "share_link IS NOT NULL"),
+        "stage = 'COMPLETED' AND pending_uri IS NOT NULL", null, null, null, "updated_at DESC, rowid DESC").use { c ->
+        buildList { while (c.moveToNext()) {
+            if (c.getInt(3) == 1 || artwork.has(c.getString(0))) add(LinkedFile(c.getString(0), Uri.parse(c.getString(1)), c.getLong(2)))
+        } }
+    }
+
+    /** The saved file is confirmed gone: its link and its artwork go too; the row stays. */
+    fun forgetFile(jobId: String) { dropShareLink(jobId); artwork.delete(jobId) }
+
+    /** The reviewed link of a saved file, or null. A lost key or bad blob drops it; a busy Keystore only hides it. */
+    fun shareLink(jobId: String): String? {
+        val blob = synchronized(this) {
+            readableDatabase.query("jobs", arrayOf("share_link"), "job_id = ? AND stage = 'COMPLETED'", arrayOf(jobId),
+                null, null, null).use { if (it.moveToFirst() && !it.isNull(0)) it.getBlob(0) else null }
+        } ?: return null
+        return when (val opened = links?.open(blob) ?: return null) {
+            is LinkCipher.Opened.Link -> opened.text
+            LinkCipher.Opened.Unavailable -> null
+            LinkCipher.Opened.Gone -> { dropShareLink(jobId); null }
+        }
+    }
+
+    @Synchronized fun dropShareLink(jobId: String) {
+        writableDatabase.update("jobs", ContentValues().apply { putNull("share_link") }, "job_id = ?", arrayOf(jobId))
+    }
+
+    /**
+     * Clear link history: every blob and "Saved before" tag on ended rows, and the link a failure kept for Retry
+     * (that row stops being retryable), in one transaction; then the key. Active jobs keep the link they need.
+     * Under [terminalLock], so no completion seals across it.
+     */
+    fun clearShareLinks(): Unit = synchronized(terminalLock) {
+        synchronized(this) {
+            val db = writableDatabase
+            val failed = mutableListOf<String>()
+            db.beginTransaction()
+            try {
+                db.query("jobs", arrayOf("job_id"), "stage = 'FAILED' AND source_url IS NOT NULL", null, null, null, null)
+                    .use { while (it.moveToNext()) failed += it.getString(0) }
+                db.update("jobs", ContentValues().apply { putNull("source_url"); put("retryable", 0) },
+                    "stage = 'FAILED' AND source_url IS NOT NULL", null)
+                db.update("jobs", ContentValues().apply { putNull("share_link"); putNull("source_key") },
+                    "stage IN ('COMPLETED','FAILED','CANCELLED') AND (share_link IS NOT NULL OR source_key IS NOT NULL)", null)
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            for (id in failed) get(id)?.let(onExpired)
+        }
+        links?.forget()
     }
 
     /** Remove is restricted to failures; a live job or completed publication is never discarded. */
@@ -460,6 +535,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
             DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
+        const val DATABASE_VERSION = 6
+        private const val SHARE_LINK_COLUMN = "share_link BLOB CHECK(share_link IS NULL OR stage = 'COMPLETED')"
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
 
         private fun encodeFormat(format: Format): String = JSONObject().apply {

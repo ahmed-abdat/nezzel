@@ -126,12 +126,12 @@ class LibraryLoadTest {
         var state: LibraryState? = null
         try {
             controller.get().setContent { state = rememberLibraryState(remember { SnackbarHostState() }, ioDispatcher = work) }
-            await { queries > 0 && state?.load is LibraryLoadState.Error }
+            work.awaitRealIo { queries > 0 && state?.load is LibraryLoadState.Error }
             assertTrue("First provider failure must be Error", state!!.load is LibraryLoadState.Error)
             val before = queries
             fail = false
             compose.runOnIdle { state!!.onRetry() }
-            await { queries > before && state!!.load is LibraryLoadState.Ready }
+            work.awaitRealIo { queries > before && state!!.load is LibraryLoadState.Ready }
             assertEquals(1, state!!.media.size)
             assertEquals(1, provider.db.rawQuery("SELECT _id FROM media", null).use { it.count })
         } finally { controller.pause().stop().destroy(); work.close(); provider.db.close() }

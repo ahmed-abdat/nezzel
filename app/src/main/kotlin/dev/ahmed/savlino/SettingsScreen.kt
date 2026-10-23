@@ -12,6 +12,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -31,8 +33,8 @@ import dev.ahmed.savlino.update.UpdateAutoSetting
 import dev.ahmed.savlino.update.UpdateSettings
 
 /**
- * Everyday choices on one page in grouped cards; automatic options, engine tools and the update-check switch sit
- * one level down under Advanced, so the first screen stays short.
+ * Everyday choices on one page in grouped cards; automatic options, clearing link history, engine tools and the
+ * update-check switch sit one level down under Advanced, so the first screen stays short.
  */
 @Composable
 internal fun SettingsScreen(
@@ -42,6 +44,8 @@ internal fun SettingsScreen(
     onAutomaticOptions: (Boolean) -> Unit,
     onHowItWorks: () -> Unit,
     updates: AppUpdates? = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available },
+    /** Fire and forget: the caller owns the clear so leaving Settings can't cut it short. */
+    onClearLinks: (() -> Unit)? = null,
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
     BackHandler(advanced) { advanced = false }
@@ -51,7 +55,7 @@ internal fun SettingsScreen(
         else fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) togetherWith fadeOut(tween(70, easing = Motion.EaseOut))
     }, label = "settings_page") { page ->
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
-            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate) { advanced = false }
+            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
             onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
     }
@@ -102,15 +106,42 @@ private fun MainSettings(
     }
 }
 
+/** Clear link history once started: leaving the screen or the app can't stop it halfway, and a failure returns false. */
+internal suspend fun clearLinkHistory(clear: suspend () -> Unit): Boolean = withContext(NonCancellable) {
+    try { clear(); true } catch (_: Exception) { false }
+}
+
+/** One row: forgets every saved file's link after one confirmation. Files stay. */
+@Composable
+internal fun PrivacySettings(onClear: () -> Unit) {
+    var confirm by rememberSaveable { mutableStateOf(false) }
+    SettingsGroup(stringResource(R.string.settings_privacy)) {
+        SettingsNavRow(stringResource(R.string.clear_link_history), R.drawable.ic_ms_link,
+            body = stringResource(R.string.clear_link_history_help), chevron = false) { confirm = true }
+    }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false },
+        title = { Text(stringResource(R.string.clear_link_history_title)) },
+        text = { Text(stringResource(R.string.clear_link_history_body)) },
+        dismissButton = {
+            TextButton(onClick = { confirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
+        },
+        confirmButton = {
+            TextButton(onClick = { confirm = false; onClear() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.clear))
+            }
+        })
+}
+
 /**
- * Automatic options (on by default; few people turn it off), engine tools, the daily update check and the licences;
- * [engine] is null without a download coordinator.
+ * Automatic options (on by default; few people turn it off), clearing link history, engine tools, the daily update
+ * check and the licences; [engine] is null without a download coordinator.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: () -> Unit, updates: AppUpdates?,
     automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
-    confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, back: () -> Unit) {
+    confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, onClearLinks: (() -> Unit)? = null,
+    back: () -> Unit) {
     if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
         title = { Text(stringResource(R.string.engine_update_paused_title)) },
         text = { Text(stringResource(R.string.engine_update_paused_body)) },
@@ -132,6 +163,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                         on, R.drawable.ic_ms_bolt, onAutomaticOptions)
                 }
             }
+            onClearLinks?.let { PrivacySettings(it) }
             engine?.let { engine ->
                 val updating = engine.status == EngineUpdateStatus.UPDATING
                 val builtIn = engine.usingBuiltIn && engine.status in setOf(EngineUpdateStatus.IDLE, EngineUpdateStatus.FAILED)

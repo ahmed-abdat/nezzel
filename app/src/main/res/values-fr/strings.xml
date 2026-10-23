@@ -337,6 +337,15 @@
     <string name="onboarding_page_announcement">%1$s, %2$s</string>
     <string name="settings_general">Général</string>
     <string name="settings_saving">Enregistrement</string>
+    <string name="copy_link">Copier le lien</string>
+    <string name="link_copied">Lien copié</string>
+    <string name="settings_privacy">Confidentialité</string>
+    <string name="clear_link_history">Effacer l’historique des liens</string>
+    <string name="clear_link_history_help">Oubliez d’où viennent vos téléchargements. Vos fichiers restent.</string>
+    <string name="clear_link_history_title">Effacer l’historique des liens ?</string>
+    <string name="clear_link_history_body">Nezzel oubliera les liens de tous vos téléchargements. Vos fichiers restent sur votre téléphone.</string>
+    <string name="clear_link_history_failed">Impossible d’effacer l’historique des liens. Réessayez.</string>
+    <string name="clear">Effacer</string>
     <string name="settings_advanced">Avancé</string>
     <string name="settings_advanced_help">Liens, sites et mises à jour</string>
     <string name="engine_update_body">Utile quand un site ne permet plus de télécharger</string>

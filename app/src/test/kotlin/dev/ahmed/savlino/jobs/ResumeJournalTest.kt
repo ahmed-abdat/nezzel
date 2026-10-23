@@ -49,7 +49,7 @@ class ResumeJournalTest {
                 db.version = version
             }
             JobStore(app, null).use { store ->
-                assertEquals(5, store.readableDatabase.version)
+                assertEquals(JobStore.DATABASE_VERSION, store.readableDatabase.version); assertShareLinkOnlyOnCompleted(store)
                 assertEquals(8, store.all().size)
                 for (row in store.all()) {
                     assertEquals(row.jobId, row.stage.name)
@@ -80,6 +80,8 @@ class ResumeJournalTest {
                 .replace(Regex("transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK\\(transport_resumes >= 0\\),\\s*"), "")
                 .replace(Regex("stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK\\(stall_restarts >= 0\\),\\s*"), "")
                 .replace(Regex("resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK\\(resume_reset_bytes >= 0\\),\\s*"), "")
+                .replace(Regex("share_link BLOB CHECK\\(share_link IS NULL OR stage = 'COMPLETED'\\),\\s*"), "")
+            assertFalse(sql.contains("share_link"))
             db.execSQL(sql)
             val columns = db.rawQuery("SELECT * FROM jobs_v4 LIMIT 0", null).use { it.columnNames.joinToString(",") }
             db.execSQL("INSERT INTO jobs_v4 ($columns) SELECT $columns FROM jobs")
@@ -88,7 +90,7 @@ class ResumeJournalTest {
             db.version = 4
         }
         JobStore(app, null).use { store ->
-            assertEquals(5, store.readableDatabase.version)
+            assertEquals(JobStore.DATABASE_VERSION, store.readableDatabase.version); assertShareLinkOnlyOnCompleted(store)
             val paused = store.get("v4-paused")!!
             assertEquals(JobStage.PAUSED, paused.stage); assertTrue(paused.hasPartial)
             assertEquals("recipe", paused.resumeRecipe); assertEquals(1L, paused.restartEpoch)
@@ -244,7 +246,7 @@ class ResumeJournalTest {
             for (id in listOf("old-queued", "old-transfer", "fresh-queued"))
                 File(app.filesDir, "downloads/$id").apply { mkdirs(); resolve("output.mp4.part").writeText("bytes") }
             JobStore(app, null).use { store ->
-                assertEquals(5, store.readableDatabase.version)
+                assertEquals(JobStore.DATABASE_VERSION, store.readableDatabase.version); assertShareLinkOnlyOnCompleted(store)
                 for (id in listOf("old-queued", "old-transfer")) {
                     val row = store.get(id)!!
                     assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)
@@ -263,6 +265,37 @@ class ResumeJournalTest {
                     assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
                 }
             }
+        }
+    }
+
+    /** Both migration paths (rebuild from v1-3, ALTER from v4-5) must enforce the Copy link CHECK. */
+    private fun assertShareLinkOnlyOnCompleted(store: JobStore) {
+        val id = store.all().first { it.stage != JobStage.COMPLETED }.jobId
+        assertThrows(android.database.sqlite.SQLiteConstraintException::class.java) {
+            store.writableDatabase.execSQL("UPDATE jobs SET share_link = x'00' WHERE job_id = ?", arrayOf(id))
+        }
+    }
+
+    @Test fun versionFiveMigrationAddsTheCheckedShareLinkColumn() {
+        JobStore(app, null).use { store ->
+            store.enqueue(command("v5-queued"))
+            val db = store.writableDatabase
+            val sql = db.rawQuery("SELECT sql FROM sqlite_master WHERE name='jobs'", null).use {
+                assertTrue(it.moveToFirst()); it.getString(0)
+            }.replace("CREATE TABLE jobs", "CREATE TABLE jobs_v5")
+                .replace(Regex("share_link BLOB CHECK\\(share_link IS NULL OR stage = 'COMPLETED'\\),\\s*"), "")
+            assertFalse(sql.contains("share_link"))
+            db.execSQL(sql)
+            val columns = db.rawQuery("SELECT * FROM jobs_v5 LIMIT 0", null).use { it.columnNames.joinToString(",") }
+            db.execSQL("INSERT INTO jobs_v5 ($columns) SELECT $columns FROM jobs")
+            db.execSQL("DROP TABLE jobs")
+            db.execSQL("ALTER TABLE jobs_v5 RENAME TO jobs")
+            db.version = 5
+        }
+        JobStore(app, null).use { store ->
+            assertEquals(JobStore.DATABASE_VERSION, store.readableDatabase.version); assertShareLinkOnlyOnCompleted(store)
+            assertEquals(JobStage.ENQUEUED, store.get("v5-queued")!!.stage)
+            store.readableDatabase.rawQuery("SELECT share_link FROM jobs", null).use { assertTrue(it.moveToFirst()); assertTrue(it.isNull(0)) }
         }
     }
 }
