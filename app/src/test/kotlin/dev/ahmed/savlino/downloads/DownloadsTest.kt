@@ -236,7 +236,7 @@ class DownloadsTest {
             assertFalse(texts(nodes(c.get())).contains("Download cancelled"))
             click(c.get(), "Cancel download")
             compose.waitUntil(5000) { shadowOf(Looper.getMainLooper()).idle(); store.get("cancel-event")!!.stage == JobStage.CANCELLED }
-            assertTrue(texts(nodes(c.get())).contains("Download cancelled"))
+            compose.waitUntil(5000) { shadowOf(Looper.getMainLooper()).idle(); texts(nodes(c.get())).contains("Download cancelled") }
             assertTrue(coordinator.progress.value.isEmpty())
         } finally { c.pause().stop().destroy(); store.close(); app.coordinatorOverride = null }
     }

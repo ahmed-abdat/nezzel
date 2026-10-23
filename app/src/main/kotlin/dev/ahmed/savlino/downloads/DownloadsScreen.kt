@@ -144,7 +144,7 @@ private val DownloadProgress.busy get() = !terminal && !awaitingSchedule && !wai
 /** Home's view of the queue: the busy job as one row (a failure as its own row), a count when there are more. */
 @Composable
 fun DownloadStrip(jobs: List<DownloadProgress>, language: String, onCancel: (String) -> Unit = {}, onRemove: (String) -> Unit = {},
-                  onRetry: (String) -> Unit = {}, onClick: () -> Unit) {
+                  onRetry: (String) -> Unit = {}, onPause: (String) -> Unit = {}, onResume: (String) -> Unit = {}, onClick: () -> Unit) {
     val active = jobs.filter { !it.terminal || it.awaitingSchedule }
     val failed = jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
     val shown = rememberWithSavedMoment(jobs, homeStripOrder(jobs))
@@ -174,7 +174,8 @@ fun DownloadStrip(jobs: List<DownloadProgress>, language: String, onCancel: (Str
         AnimatedContent(first, contentKey = { it.jobId }, transitionSpec = {
             fadeIn(easeOut(reduced, Motion.FADE_IN, 50)) togetherWith fadeOut(easeOut(reduced, Motion.FADE_OUT))
         }, label = "home job") { job ->
-            JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) })
+            JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
+                onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
         }
     }
 }
@@ -186,7 +187,7 @@ fun DownloadsScreen(
     onCancel: (String) -> Unit, onRemove: (String) -> Unit,
     onOpen: (SavedMedia) -> Unit, onShare: (SavedMedia) -> Unit, onOpenWith: (SavedMedia) -> Unit,
     onShowFiles: ((SavedMedia) -> Unit)?, onDelete: (SavedMedia) -> Unit, onPaste: () -> Unit,
-    onRetry: (String) -> Unit = {},
+    onRetry: (String) -> Unit = {}, onPause: (String) -> Unit = {}, onResume: (String) -> Unit = {},
     libraryLoad: LibraryLoadState = LibraryLoadState.Ready(emptyList()), onLibraryRetry: () -> Unit = {},
     onShareSelected: (List<SavedMedia>) -> Unit = {},
     onDeleteSelected: (List<SavedMedia>, (cleared: Boolean) -> Unit) -> Unit = { _, done -> done(true) },
@@ -246,7 +247,8 @@ fun DownloadsScreen(
                     }
                     items(active, key = { "job-${it.jobId}" }) { job ->
                         JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
-                            Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)))
+                            Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)),
+                            onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
                     }
                 }
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }

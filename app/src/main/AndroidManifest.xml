@@ -31,6 +31,7 @@
             android:foregroundServiceType="dataSync" tools:node="merge" />
         <receiver android:name=".update.UpdateInstallReceiver" android:exported="false" />
         <receiver android:name=".jobs.DownloadCancelReceiver" android:exported="false" />
+        <receiver android:name=".jobs.DownloadControlReceiver" android:exported="false" />
         <service android:name=".shortcuts.PasteLinkTileService" android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:icon="@drawable/ic_paste" android:label="@string/shortcut_paste_link">

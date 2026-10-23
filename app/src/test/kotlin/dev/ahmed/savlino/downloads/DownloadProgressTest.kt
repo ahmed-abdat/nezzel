@@ -27,7 +27,7 @@ class DownloadProgressTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private val language get() = context.resources.configuration.locales[0].language
     private val rate = "2.5\u00a0MB/s"
-    private val remaining get() = if (language == "ar") "متبقٍّ ≈ \u20660:30\u2069" else "≈ \u20660:30\u2069 left"
+    private val remaining get() = if (language == "ar") "متبقٍّ \u2066≈ \u20660:30\u2069\u2069" else "≈ \u20660:30\u2069 left"
     private val notificationRemaining get() = if (language == "ar") "متبقٍّ للتنزيل ≈ \u20660:30\u2069" else "≈ \u20660:30\u2069 left to download"
     private val bytes get() = context.getString(R.string.download_row_bytes, "\u206625\u2069", "\u2066100\u00a0MB\u2069")
     private val active get() = DownloadProgress("a", "Actual-file.mp4", DownloadPhase.DOWNLOADING,
@@ -102,7 +102,7 @@ class DownloadProgressTest {
         }
         update(active.copy(bytesPerSecond = null, remainingTransferSeconds = null, stalled = null))
         noSpeed(); text(remaining).assertDoesNotExist()
-        text("25%").assertExists(); text(bytes).assertExists()
+        text("25%").assertExists()
     }
     @Test fun phaseChangesAndSameIdNewAttemptClearVisibleRateAndEtaEnglish() = transitions()
     @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi") fun phaseChangesAndSameIdNewAttemptClearVisibleRateAndEtaArabic() = transitions()

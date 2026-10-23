@@ -70,6 +70,17 @@ fun NezzelApp(
     }
     val destinations = remember(context) { SaveDestinations(context) }
     val removeFailed: (String) -> Unit = { id -> scope.launch { links.downloads?.removeFailed(id) } }
+    val app = context.applicationContext as? NezzelApplication
+    val pause: (String) -> Unit = { id -> scope.launch { app?.let { DownloadControls.pause(context, it, id) } } }
+    val resume: (String) -> Unit = { id -> scope.launch { app?.let { DownloadControls.resume(context, it, id) } } }
+    val cancel: (String) -> Unit = { id -> links.cancelDownload(id); DownloadNotifications(context).dismissPaused(id) }
+    // A paused notification outlives its pause only if the job expired or was removed elsewhere: clear it when the row leaves Paused.
+    var pausedIds by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(jobs) {
+        val now = jobs.filter { it.paused && !it.terminal }.map { it.jobId }.toSet()
+        (pausedIds - now).forEach { DownloadNotifications(context).dismissPaused(it) }
+        pausedIds = now
+    }
     val retry: (String) -> Unit = { id ->
         scope.launch { if (links.downloads?.retry(id) != true) snackbar.showSnackbar(context.getString(R.string.download_retry_hint)) }
     }
@@ -122,7 +133,10 @@ fun NezzelApp(
     }
     // Removing the old top-bar action must not give the URL editor implicit initial focus.
     // Keep a neutral focus target until the user chooses an input or navigation destination.
-    CompositionLocalProvider(LocalReducedMotion provides reduced) {
+    val artwork: suspend (String) -> android.graphics.Bitmap? = remember(links.downloads) {
+        val store = links.downloads?.artwork; { id -> store?.load(id) }
+    }
+    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline(), LocalJobArtwork provides artwork) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         // Onboarding replaces this composition in MainActivity. Other modals take priority;
@@ -155,14 +169,15 @@ fun NezzelApp(
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks)
                         "Downloads" -> DownloadsScreen(jobs, language,
-                            { id -> links.cancelDownload(id) },
+                            cancel,
                             removeFailed, library.open, library.share, library.openWith,
                             library.showFiles, library.delete, { links.navigate("Home"); onPaste() },
-                            retry, libraryLoad = library.load, onLibraryRetry = library.onRetry,
+                            retry, pause, resume, libraryLoad = library.load, onLibraryRetry = library.onRetry,
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
                             canShowFiles = library.canShowFiles)
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
-                            onRemove = removeFailed, onRetry = retry)
+                            onRemove = removeFailed, onRetry = retry,
+                            onCancel = cancel, onPause = pause, onResume = resume)
                     }
                 }
             }
@@ -195,7 +210,8 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
 @Composable
 private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
                        onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit,
-                       onRemove: (String) -> Unit, onRetry: (String) -> Unit) {
+                       onRemove: (String) -> Unit, onRetry: (String) -> Unit,
+                       onCancel: (String) -> Unit, onPause: (String) -> Unit, onResume: (String) -> Unit) {
     // The copied link is offered inline only while nothing else is in front of the person.
     val copiedHost = links.suggestionHost.takeIf {
         links.hasSuggestion && links.destination == "Home" && links.optionsState == dev.ahmed.savlino.ui.OptionsState.Hidden &&
@@ -277,7 +293,7 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
                     }
                 }
                 HomeLinkCard(links, copiedHost, onAccept, onDismiss, onPaste)
-                DownloadStrip(jobs, language, links::cancelDownload, onRemove, onRetry) { links.navigate("Downloads") }
+                DownloadStrip(jobs, language, onCancel, onRemove, onRetry, onPause, onResume) { links.navigate("Downloads") }
                 if(runningCount(jobs) > 0 && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
                     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                         Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall,
