@@ -30,3 +30,25 @@
 # those no-arg constructors, so first-run extraction failed and the release
 # engine stayed unavailable (device, 2026-10-19). Keep only the constructors.
 -keep class * implements org.apache.commons.compress.archivers.zip.ZipExtraField { <init>(); }
+
+# NewPipeExtractor v0.26.5 (YouTube options; rules mirror the NewPipe app's).
+# TimeAgoPatternsManager loads the per-language pattern classes by name.
+-keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+# StreamInfo and its items are Serializable; keep their serial form intact if ever parcelled.
+-keepclassmembers class org.schabi.newpipe.extractor.** implements java.io.Serializable {
+    static final long serialVersionUID;
+    !static !transient <fields>;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+}
+# Rhino (signature/n-param JS) binds Java members and generated classes reflectively.
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.mozilla.classfile.ClassFileWriter
+# Rhino's JSR-223 engine and optional tools reference JDK-only APIs absent on Android.
+-keep class org.mozilla.javascript.engine.** { *; }
+-dontwarn org.mozilla.javascript.JavaToJSONConverters
+-dontwarn org.mozilla.javascript.tools.**
+-dontwarn javax.script.**
+-dontwarn jdk.dynalink.**
+# protobuf-javalite reads GeneratedMessageLite fields by name (YouTube request/response messages).
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { <fields>; }

@@ -27,6 +27,10 @@ kotlin { jvmToolchain(17) }
 dependencies {
     constraints {
         implementation(libs.okio)
+        // NewPipeExtractor's runtime graph, pinned to the hash-verified versions in THIRD_PARTY_NOTICES.md.
+        implementation(libs.rhino)
+        implementation(libs.rhino.engine)
+        implementation(libs.protobuf.javalite)
     }
     api(project(":core"))
     implementation(libs.okhttp)
@@ -34,6 +38,7 @@ dependencies {
     implementation(libs.youtubedl.ffmpeg)
     implementation(libs.jackson.databind)
     implementation(libs.jsoup)
+    implementation(libs.newpipe.extractor)
     implementation(libs.coroutines.core)
     // Align the engine runtime with the already adopted app AndroidX graph.
     runtimeOnly(libs.androidx.appcompat)

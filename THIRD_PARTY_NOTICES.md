@@ -23,10 +23,18 @@ Source inventory and offline release-asset tooling are in [SOURCES.md](SOURCES.m
 | OkHttp `okhttp`, Android variant `okhttp-android` | **5.5.0** | Apache-2.0, [tagged source and license](https://github.com/lysine-dev/okhttp/tree/parent-5.5.0); full license in `app/src/main/assets/licenses/okhttp-APACHE-2.0.txt` |
 | Okio `okio`, JVM variant `okio-jvm` | **3.18.2**, explicitly constrained above OkHttp's declared 3.18.1 | Apache-2.0, [tagged source and license](https://github.com/lysine-dev/okio/tree/parent-3.18.2); full license in `app/src/main/assets/licenses/okio-APACHE-2.0.txt` |
 | AndroidX Startup runtime; annotation / annotation-jvm | **1.2.0; 1.10.0**, required by OkHttp Android | Apache-2.0, [AndroidX source](https://android.googlesource.com/platform/frameworks/support/); same Apache-2.0 text as shipped in `app/src/main/assets/licenses/okhttp-APACHE-2.0.txt` (no separate AndroidX asset) |
+| NewPipe Extractor | **v0.26.5**, tag commit `f9e6bb808f82bf3e4dc1f2a29a16fd376931c8ef`; JitPack `com.github.TeamNewPipe:NewPipeExtractor:v0.26.5`, `:engine` (YouTube options only) | GPL-3.0-or-later, [tagged source](https://github.com/TeamNewPipe/NewPipeExtractor/tree/v0.26.5); same GPL-3.0 text as `app/src/main/assets/licenses/youtubedl-android-GPL-3.0.txt` |
+| nanojson (TeamNewPipe fork) | Commit **`e9d656ddb49a412a5a0a5d5ef20ca7ef09549996`**, JitPack, NewPipe Extractor transitive | Apache-2.0, [fork source](https://github.com/TeamNewPipe/nanojson/tree/e9d656ddb49a412a5a0a5d5ef20ca7ef09549996); text in `app/src/main/assets/licenses/nanojson-APACHE-2.0.txt` |
+| Rhino `rhino`, `rhino-engine` | **1.8.1**, tag `Rhino1_8_1_Release` commit `f2d1ffef9dafbd625ca1ea79b8893ecbaee07e61`, explicitly constrained | MPL-2.0 (Exhibit A only; no "Incompatible With Secondary Licenses" notice), V8-derived parts BSD-3-Clause; `app/src/main/assets/licenses/rhino-MPL-2.0.txt` and `rhino-NOTICE.txt`; [source](https://github.com/mozilla/rhino/tree/Rhino1_8_1_Release) |
+| Protocol Buffers `protobuf-javalite` | **4.35.1**, tag `v35.1` commit `35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03`, explicitly constrained | BSD-3-Clause, Copyright 2008 Google Inc.; `app/src/main/assets/licenses/protobuf-BSD-3-Clause.txt`; [source](https://github.com/protocolbuffers/protobuf/tree/v35.1) |
+| JSR 305 annotations | **3.0.2**, NewPipe Extractor transitive (annotations; R8 removed them from the release dex at U1, still listed because they are on the runtime classpath) | Apache-2.0 as declared by the artifact POM (the jar ships no LICENSE/NOTICE); `app/src/main/assets/licenses/jsr305-APACHE-2.0.txt`; [FindBugs JSR-305](https://github.com/findbugsproject/findbugs) |
+| desugar_jdk_libs | **2.1.5**, `:app` core library desugaring (L8 dex in the APK); upstream commit `73170c345e6a762fc6a1f0301bb15218850023ef`: supported inference, not attested (2026-10-23): upstream has no 2.x tags and the POM names no commit; this commit prepares 2.1.5 (sets the version files) and is the last before the Maven release | GPL-2.0 WITH Classpath-exception-2.0; `app/src/main/assets/licenses/desugar_jdk_libs-GPL-2.0-CPE.txt`; [source](https://github.com/google/desugar_jdk_libs/tree/73170c345e6a762fc6a1f0301bb15218850023ef) |
+| desugar_jdk_libs_configuration | **2.1.5**, `:app` L8 configuration; its 29 conversion helper classes may be kept in the L8 dex | BSD-3-Clause, Copyright 2016 the R8 project authors (per the artifact POM and the LICENSE inside the jar); `app/src/main/assets/licenses/desugar_jdk_libs_configuration-BSD-3-Clause.txt`; [R8 source](https://r8.googlesource.com/r8) (the artifact names no commit; BSD-3 needs no source offer) |
 
 ## Artifact hashes and source plan
 
 Maven Central origin: `https://repo.maven.apache.org/maven2/io/github/junkfood02/youtubedl-android/<module>/0.18.1/<module>-0.18.1.aar`.
+NewPipe Extractor and nanojson resolve only from JitPack (`settings.gradle.kts` exclusive content for `com.github.TeamNewPipe`); every other input comes from Maven Central or Google Maven.
 SHA-256 pins match the inspected artifacts and Gradle verification metadata:
 
 | Input | SHA-256 |
@@ -36,6 +44,14 @@ SHA-256 pins match the inspected artifacts and Gradle verification metadata:
 | `common-0.18.1.aar` | `e0c0530bdbdf203e1598e900085d3582e27360731872872f3a67f23a9b24c0b5` |
 | Bundled `res/raw/ytdlp` | `89a0d9058ea9018e380b7771898ff46e393a1986dcd13fef331693c87ce1fca4` |
 | `library-0.18.1-sources.jar` (review input) | `26e94f33de0ba802f3507862d509f80d100c1c9065ded7556d16ff51249c4a9a` |
+| `NewPipeExtractor-v0.26.5.jar` (JitPack; equals the 2026-10-23 spike download) | `923bf0a60938d570ad176ed7b08fa9fec7d0772d7a386ca89a2dd3b9212979c7` |
+| `nanojson-e9d656ddb49a412a5a0a5d5ef20ca7ef09549996.jar` | `d495881a322b3c72e5d43284afd7d7021520028ca8b7c6ba861e3fd8d90614d5` |
+| `rhino-1.8.1.jar` | `98a06d42bdd69da15bf9c2a7812b4cfe648ca9e64fe8baaeb502a32b0ed2c8ac` |
+| `rhino-engine-1.8.1.jar` | `ff38ad60aa32a23942f60242a433a2583a5407841745510754a43e0e61dd95cf` |
+| `protobuf-javalite-4.35.1.jar` | `45d3769189888e491ab7d58125f2014c2a86fb8104c7aa3878c723943fce7a14` |
+| `jsr305-3.0.2.jar` | `766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7` |
+| `desugar_jdk_libs-2.1.5.jar` | `d8044befae095781b9a80bf1faa92edc30382d75d437476784c1bf991598a976` |
+| `desugar_jdk_libs_configuration-2.1.5.jar` | `7bc9051b3a1ec19806311dcb6aa9b9ba7ef9c22caa6f4810da55bde285fb7770` |
 
 [SOURCES.md](SOURCES.md) records the 75-component source inventory, APK entry hashes,
 source-asset contents and offline bundle instructions. Python 3.12.11, FFmpeg 7.1.1 and
