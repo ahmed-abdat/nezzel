@@ -120,11 +120,15 @@ class JobCardUxTest {
                 compose.runOnIdle { progress = state }; compose.waitForIdle()
                 state.phase to compose.onNodeWithTag("card").fetchSemanticsNode().size.height
             }
-            assertEquals("Card height jumped across phases: $heights", 1, heights.map { it.second }.distinct().size)
+            // Narrow rows add one 56dp line (48dp button + 8dp) only while Pause/Resume is offered; every other phase keeps one height.
+            val line = (56 * a.resources.displayMetrics.density).toInt()
+            val stacked = width < 420 || fontScale >= 1.3f
+            val flat = heights.mapIndexed { i, h -> if (stacked && states[i].canPause) h.second - line else h.second }
+            assertEquals("Card height jumped across phases: $heights", 1, flat.distinct().size)
             // Owner 2026-10-19: a running download is one flat list row, not a 160dp hero card.
             // Robolectric's Arabic fallback font is taller than Roboto's line height, so the dp check is English-only.
             if (fontScale == 1f && language == "en") assertEquals("Row is not the 72dp list height: $heights", 72f,
-                heights.first().second / a.resources.displayMetrics.density, .5f)
+                flat.first() / a.resources.displayMetrics.density, .5f)
             // No text loses lines at this scale (ellipsis only on the filename, by design).
             compose.runOnIdle { progress = downloading }; compose.waitForIdle()
             compose.onAllNodes(hasAnyAncestor(hasTestTag("card")) and SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult), useUnmergedTree = true)
@@ -156,9 +160,11 @@ class JobCardUxTest {
 
     @Test fun runningCardHasNoPlayAffordanceOnlyCancel() = host(content = { JobRow(downloading, {}, {}, {}) }) { _ ->
         val clickable = compose.onAllNodes(hasClickAction(), useUnmergedTree = true).fetchSemanticsNodes()
-        assertEquals(1, clickable.size)
-        assertTrue(clickable.single().config[SemanticsProperties.ContentDescription].single()
-            .startsWith(context.getString(R.string.download_cancel_accessibility, "").trim()))
+        val labels = clickable.map { it.config[SemanticsProperties.ContentDescription].single() }
+        // Cancel, plus Pause once the transfer can be paused; never Resume while running.
+        assertTrue(labels.any { it.startsWith(context.getString(R.string.download_cancel_accessibility, "").trim()) })
+        assertTrue(labels.none { it.startsWith(context.getString(R.string.download_resume_accessibility, "").trim()) })
+        assertTrue(clickable.size <= 2)
         compose.onAllNodes(hasContentDescription("Play", substring = true, ignoreCase = true), useUnmergedTree = true).assertCountEquals(0)
         assertEquals(R.drawable.ic_movie, downloading.kindIcon())
         assertEquals(R.drawable.ic_music, downloading.copy(mimeType = "audio/mp4").kindIcon())

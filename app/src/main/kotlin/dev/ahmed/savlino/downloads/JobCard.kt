@@ -103,8 +103,12 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
             // The tile gives way at large text and on narrow rows (phones under ~390dp), so the meta line keeps
             // percent · time left · bytes and "Joining audio and video…" keeps its one line.
             val tile = !isLargeText() && maxWidth >= 360.dp
+            // Narrow rows (under 420dp, or text scaled to 130%+) keep the meta line whole: Pause/Resume drops under it.
+            val stacked = maxWidth < 420.dp || LocalConfiguration.current.fontScale >= 1.3f
+            val button = job.paused || job.canPause
             if (job.phase == DownloadPhase.FAILED) FailedRow(job, tile, onCancel, onRemove, onRetry)
-            else Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),
+            else Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
                 val audio = job.mimeType.startsWith("audio/")
                 if (tile) JobThumb(job.kindIcon(),
@@ -114,8 +118,12 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
                     FilenameText(job.filename)
                     JobMeta(job)
                 }
-                if (job.paused || job.canPause) PauseResumeButton(job, onPause, onResume)
+                if (button && !stacked) PauseResumeButton(job, onPause, onResume)
                 JobRing(job, offline, onCancel)
+            }
+            if (button && stacked) Box(Modifier.fillMaxWidth().padding(end = Space.rowH, bottom = Space.s), contentAlignment = Alignment.CenterEnd) {
+                PauseResumeButton(job, onPause, onResume)
+            }
             }
         }
     }

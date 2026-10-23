@@ -113,7 +113,7 @@ class DownloadsLayoutTest {
                 assertEquals(true, title.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts))
                 assertTrue("Filename must allow two readable lines", layouts.single().layoutInput.maxLines >= 2)
                 val cancel = all.singleOrNull { it.config.getOrNull(SemanticsActions.OnClick) != null &&
-                    it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(job.filename) } }
+                    it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(job.filename) && label.startsWith(context.getString(R.string.download_cancel_accessibility, "").trim()) } }
                 assertNotNull("Cancel must identify ${job.filename}", cancel)
                 bounded(cancel!!)
                 // The ring around Cancel is the progress; it sits at the row's end, beside the title, never over it.
@@ -129,7 +129,7 @@ class DownloadsLayoutTest {
                     c.top >= r.top - .5f && c.bottom <= r.bottom + .5f)
             }
             val selected = jobs.first()
-            val cancel = all.single { it.config.getOrNull(SemanticsActions.OnClick) != null && it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(selected.filename) } }
+            val cancel = all.single { it.config.getOrNull(SemanticsActions.OnClick) != null && it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(selected.filename) && label.startsWith(context.getString(R.string.download_cancel_accessibility, "").trim()) } }
             click(cancel); assertEquals(listOf(selected.jobId), cancelled)
         }
     }

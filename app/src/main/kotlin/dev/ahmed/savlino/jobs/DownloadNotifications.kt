@@ -46,12 +46,12 @@ class DownloadNotifications(private val base: Context) {
         else post(activeId(progress.jobId) xor Int.MIN_VALUE, notification(progress))
     }
     /** A paused job has no worker, so no foreground service: its notification is plain and lives under the result ID. */
-    fun paused(progress: DownloadProgress) { post(pausedId(progress.jobId), notification(progress)) }
-    fun dismissPaused(jobId: String) { manager.cancel(pausedId(jobId)) }
-    private fun post(id: Int, notification: Notification) {
+    fun paused(progress: DownloadProgress) { post(activeId(progress.jobId), notification(progress), PAUSED_TAG) }
+    fun dismissPaused(jobId: String) { manager.cancel(PAUSED_TAG, activeId(jobId)) }
+    private fun post(id: Int, notification: Notification, tag: String? = null) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(base,
                 Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        try { channel(); manager.notify(id, notification) } catch (_: SecurityException) { /* In-app progress remains available. */ }
+        try { channel(); manager.notify(tag, id, notification) } catch (_: SecurityException) { /* In-app progress remains available. */ }
     }
     private fun control(action: String, jobId: String): PendingIntent = PendingIntent.getBroadcast(base, 0,
         Intent(base, DownloadControlReceiver::class.java).setAction(action).setData(android.net.Uri.parse("nezzel:$action/$jobId"))
@@ -97,7 +97,8 @@ class DownloadNotifications(private val base: Context) {
         const val RESUME = "dev.ahmed.savlino.RESUME_DOWNLOAD"
         private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         private fun activeId(id: String) = id.hashCode() and Int.MAX_VALUE
-        private fun pausedId(id: String) = activeId(id) xor Int.MIN_VALUE
+        /** Tags the paused notification so it never shares an ID with the foreground or result ones. */
+        private const val PAUSED_TAG = "paused"
         fun openIntent(progress: DownloadProgress) = Intent(Intent.ACTION_VIEW)
             .setDataAndType(progress.publishedUri, progress.mimeType)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
