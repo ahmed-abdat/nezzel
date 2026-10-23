@@ -21,7 +21,7 @@ class IntakeTest {
     }
 
     @Test fun rejectUnsafeAuthoritiesWithoutResolvingDns() {
-        listOf("http://example.org", "https://localhost", "https://LOCALHOST.", "https://printer.local",
+        listOf("http://localhost", "https://localhost", "https://LOCALHOST.", "https://printer.local",
             "https://a.internal", "https://intranet", "https://127.0.0.1", "https://192.168.1.1",
             "https://[::1]", "https://2130706433", "https://0x7f000001", "https://0177.0.0.1",
             "https://example.org:0", "https://example.org:65536", "https://example.org:",

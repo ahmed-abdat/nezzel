@@ -11,7 +11,7 @@ class ValidatedLink internal constructor(val rawUrl: String, val normalizedUrl: 
 enum class Host { YOUTUBE, TIKTOK, INSTAGRAM, FACEBOOK, X, LINKEDIN, OTHER }
 
 object LinkInput {
-    private val urls = Regex("https://[^\\s\\p{Z}<>\"“”«»]+", RegexOption.IGNORE_CASE)
+    private val urls = Regex("https?://[^\\s\\p{Z}<>\"“”«»]+", RegexOption.IGNORE_CASE)
     private val wrappers = mapOf('(' to ')', '[' to ']', '{' to '}', '\'' to '\'')
     private const val PROSE_PUNCTUATION = ".,;!،؛؟"
 
@@ -21,7 +21,9 @@ object LinkInput {
     fun candidates(text: String?): List<ValidatedLink> {
         if (text == null || text.length > 8192) return emptyList()
         return urls.findAll(text).mapNotNull { match ->
-            validate(unwrap(match.value, text.getOrNull(match.range.first - 1)))
+            // A copied http:// link is read over HTTPS; nothing is ever fetched in cleartext.
+            val secure = if (match.value.startsWith("http://", ignoreCase = true)) "https://" + match.value.substring(7) else match.value
+            validate(unwrap(secure, text.getOrNull(match.range.first - 1)))
         }.distinctBy { it.normalizedUrl }.toList()
     }
 

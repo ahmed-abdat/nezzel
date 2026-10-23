@@ -98,7 +98,7 @@ class ShareStateTest {
     @Test fun pasteAndColdShareInspectFirstValidCandidateOnly() {
         for (paste in listOf(false, true)) {
             val engine = Engine(); val vm = LinkViewModel(SavedStateHandle(), engine = engine)
-            val input = "http://example.org/no https://localhost/no $first $second"
+            val input = "http://localhost/no https://localhost/no $first $second"
             if (paste) vm.paste(input) else vm.onCreateShare(share(input))
             idle()
             assertEquals(first, vm.text)

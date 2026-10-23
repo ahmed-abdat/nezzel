@@ -85,7 +85,7 @@ class ProcessTextInputTest {
                 for (automatic in listOf(true, false)) {
                     val engine = Engine()
                     val vm = LinkViewModel(SavedStateHandle(), engine = engine).apply { automaticOptions = automatic }
-                    val incoming = input(action, "Selected text http://example.org/no $first $second")
+                    val incoming = input(action, "Selected text http://localhost/no $first $second")
                     if (cold) vm.onCreateShare(incoming) else vm.onNewShare(incoming)
                     idle()
                     assertEquals(first, vm.text)
