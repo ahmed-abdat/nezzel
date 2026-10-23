@@ -36,6 +36,7 @@ class SavedMediaRepositoryTest {
         assertEquals(listOf("MP3", "MP4"), list.map { it.format })
         assertEquals(720, list.last().height)
         assertEquals("Download/Nezzel/", list.last().relativePath)
+        assertEquals("external_primary", list.last().volumeName)
         assertNull(list.first().size)
         assertEquals(listOf("Saved 2"), filterMedia(list, MediaFilter.AUDIO).map { it.title })
         assertTrue(filterMedia(list, MediaFilter.VIDEO, "2").isEmpty())
@@ -406,11 +407,11 @@ class SavedMediaRepositoryTest {
     }
     open class Provider : ContentProvider() {
         val db = SQLiteDatabase.create(null).apply {
-            execSQL("CREATE TABLE media (_id INTEGER PRIMARY KEY, _display_name TEXT, title TEXT, mime_type TEXT, _size INTEGER, date_added INTEGER, height INTEGER, width INTEGER, duration INTEGER, bitrate INTEGER, relative_path TEXT, is_pending INTEGER, owner_package_name TEXT)")
+            execSQL("CREATE TABLE media (_id INTEGER PRIMARY KEY, _display_name TEXT, title TEXT, mime_type TEXT, _size INTEGER, date_added INTEGER, height INTEGER, width INTEGER, duration INTEGER, bitrate INTEGER, relative_path TEXT, is_pending INTEGER, owner_package_name TEXT, volume_name TEXT)")
         }
         init { insertRow(1, "video/mp4", 100) }
-        fun insertRow(id: Int, mime: String, date: Long, pending: Int = 0, path: String = "Download/Nezzel/", owner: String = RuntimeEnvironment.getApplication().packageName) {
-            db.execSQL("INSERT INTO media VALUES (?, ?, ?, ?, NULL, ?, 720, NULL, 84000, NULL, ?, ?, ?)", arrayOf<Any>(id, "Saved $id.mp4", "Saved $id", mime, date, path, pending, owner))
+        fun insertRow(id: Int, mime: String, date: Long, pending: Int = 0, path: String = "Download/Nezzel/", owner: String = RuntimeEnvironment.getApplication().packageName, volume: String = "external_primary") {
+            db.execSQL("INSERT INTO media VALUES (?, ?, ?, ?, NULL, ?, 720, NULL, 84000, NULL, ?, ?, ?, ?)", arrayOf<Any>(id, "Saved $id.mp4", "Saved $id", mime, date, path, pending, owner, volume))
         }
         override fun onCreate() = true
         override fun query(uri: Uri, columns: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor =
