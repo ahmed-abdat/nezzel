@@ -134,7 +134,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             }
             var result: MediaInspectResult? = null
             try {
-                result = decodeLock.withLock { withContext(Dispatchers.IO) { decodeAndAdmit(operation, asset) } }
+                result = try {
+                    decodeLock.withLock { withContext(Dispatchers.IO) { decodeAndAdmit(operation, asset) } }
+                } catch (_: LinkageError) { failure(ImageFailure.SOURCE_REFUSED, ImagePhase.DECODE) }
+                    catch (_: StackOverflowError) { failure(ImageFailure.SOURCE_REFUSED, ImagePhase.DECODE) }
                 return result
             } finally {
                 // A context whose inspection was never admitted must not keep occupying a transport slot.

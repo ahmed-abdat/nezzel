@@ -165,6 +165,15 @@ class PublicImageInspectorTest : PublicImageTestBase() {
         }
     }
 
+    @Test fun decoderClassInitErrorIsAFailedReadNotACrash() {
+        for (error in listOf(NoClassDefFoundError("synthetic"), StackOverflowError())) {
+            fixture(ImagePreviewDecoder { _, _, _, _ -> throw error }) { f ->
+                failed(runBlocking { f.inspector.inspect(f.inspector.newOperation(imageSource(), IMAGE_IDENTITY)) },
+                    ImageFailure.SOURCE_REFUSED, ImagePhase.DECODE)
+            }
+        }
+    }
+
     @Test fun opaqueReferencesAndResultErrorsNeverRenderSourceOrSignedQueries() {
         fixture { f ->
             val operation = f.inspector.newOperation(imageSource(), IMAGE_IDENTITY)
