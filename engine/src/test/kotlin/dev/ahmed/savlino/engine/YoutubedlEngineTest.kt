@@ -59,6 +59,39 @@ class YoutubedlEngineTest {
         }
     }
 
+    @Test fun transferFailureCarriesTransportOrHttpCauseWithoutRawDiagnostics() = runBlocking {
+        for (message in listOf("Connection reset by peer", "The read operation timed out",
+            "fragment 3 not found, unable to continue", "Network is unreachable",
+            "HTTP Error 429: Too Many Requests", "HTTP Error 503: Service Unavailable")) {
+            for (callback in listOf(false, true)) {
+                val runtime = Runtime().apply { action = { _, line ->
+                    if (callback) { line("ERROR: $message"); throw YtdlpDiagnostics().apply { accept("ERROR: $message") }.failure() }
+                    else error("ERROR: $message")
+                } }
+                val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), temp.newFolder()) {})
+                assertEquals(if (message.startsWith("HTTP")) DownloadFailureCause.HTTP else DownloadFailureCause.TRANSPORT, result.cause)
+                assertEquals(if (message.startsWith("HTTP")) DownloadError.Failed
+                    else if (message.startsWith("Network")) DownloadError.Offline else DownloadError.Network, result.error)
+            }
+        }
+    }
+
+    @Test fun httpDiagnosticVetoesLaterTransportAndFragmentFailures() = runBlocking {
+        for (status in listOf(429, 503)) {
+            val runtime = Runtime().apply { action = { _, line ->
+                line("ERROR: unable to download fragment: HTTP Error $status")
+                line("ERROR: Connection reset by peer")
+                error("ERROR: fragment 3 not found, unable to continue")
+            } }
+            val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), temp.newFolder()) {})
+            assertEquals(DownloadFailureCause.HTTP, result.cause); assertFalse(result.resumeAllowed)
+        }
+        assertEquals(DownloadFailureCause.OTHER, YtdlpErrorMapper.cause("WARNING: Connection timed out"))
+        assertEquals(DownloadFailureCause.OTHER, YtdlpErrorMapper.cause("ERROR: unknown failure https://example.org/connection-reset/HTTP-Error-503"))
+        assertEquals(DownloadFailureCause.HTTP, YtdlpErrorMapper.cause("ERROR: unable to download fragment: HTTP Error 404"))
+        assertEquals(DownloadFailureCause.OTHER, YtdlpErrorMapper.cause("ERROR: postprocessing: Connection reset by peer"))
+    }
+
     @Test fun initializationIsLazyAndFailureUsesUnavailableFallbackDuringBackoff() = runBlocking {
         val runtime = Runtime(); val engine = YoutubedlEngine(runtime)
         assertTrue(engine.isAvailable); assertEquals(0, runtime.starts)

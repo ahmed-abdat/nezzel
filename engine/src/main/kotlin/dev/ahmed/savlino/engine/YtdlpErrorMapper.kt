@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.engine
 
 import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.domain.DownloadFailureCause
 import java.net.URI
 import java.util.Locale
 
@@ -17,10 +18,11 @@ object YtdlpErrorMapper {
             .joinToString("\n") { it.removePrefix("ERROR:").replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "") }
             .lowercase(Locale.ROOT)
         fun has(vararg patterns: String) = patterns.any(text::contains)
+        val fragmentFailure = FRAGMENT_FAILURE.containsMatchIn(text)
         // Availability phrases are read from the final ERROR line only, and never when the failure is transient
         // (offline/network/429/5xx): "Video unavailable" + timeout must stay a retryable failure.
         val last = text.lineSequence().lastOrNull().orEmpty().trim()
-        val transient = has("network is unreachable", "name resolution", "unable to resolve host", "no address associated with hostname",
+        val transient = fragmentFailure || has("network is unreachable", "name resolution", "unable to resolve host", "no address associated with hostname",
             "no route to host", "name or service not known", "nodename nor servname provided", "timed out", "connection refused",
             "connection reset", "connection abort", "remote end closed connection", "failed to establish a new connection",
             "failed to resolve", "getaddrinfo failed", "broken pipe", "incompleteread", "eof occurred in violation", "ssleoferror",
@@ -68,9 +70,23 @@ object YtdlpErrorMapper {
                 "failed to establish a new connection", "failed to resolve", "getaddrinfo failed", "broken pipe",
                 "incompleteread", "eof occurred in violation", "ssleoferror") ||
                 Regex("\\bssl\\b[^\\n]*eof").containsMatchIn(text) -> DownloadError.Network
+            fragmentFailure && !Regex("\\bhttp error \\d{3}\\b").containsMatchIn(text) -> DownloadError.Network
             else -> DownloadError.Failed
         }
     }
+
+    fun cause(stderr: String): DownloadFailureCause {
+        val text = stderr.lineSequence().filter { it.startsWith("ERROR:") }
+            .joinToString("\n") { it.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "") }
+            .lowercase(Locale.ROOT)
+        // An HTTP response is never a lost connection, even on a fragment or alongside a timeout.
+        if (Regex("\\bhttp error \\d{3}\\b").containsMatchIn(text) ||
+            text.contains("too many requests") || text.contains("service unavailable")) return DownloadFailureCause.HTTP
+        return map(stderr).cause
+    }
+
+    private val FRAGMENT_FAILURE = Regex("\\b(?:unable|failed) to download (?:hls |dash )?fragment\\b|" +
+        "\\bfragment(?: \\d+)? (?:not found|failed|is unavailable)\\b")
 
     /** Inspection-only facts: retain no raw diagnostics, identifiers or URLs. */
     internal class EmptyInspection {

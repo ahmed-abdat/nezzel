@@ -115,7 +115,7 @@ class JobInfoJsonTest {
                 assertTrue(org.robolectric.shadows.ShadowLog.getLogsForTag("NezzelTiming").isEmpty())
                 progress(dev.ahmed.savlino.engine.EngineEvent.Progress(1))
                 progress(dev.ahmed.savlino.engine.EngineEvent.Progress(2))
-                return dev.ahmed.savlino.engine.TransferResult.Failure(DownloadError.Network)
+                return dev.ahmed.savlino.engine.TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
             }
         }
         JobStore(app, null).use { store ->

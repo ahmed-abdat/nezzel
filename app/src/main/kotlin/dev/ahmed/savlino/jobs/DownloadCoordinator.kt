@@ -238,14 +238,13 @@ class DownloadCoordinator(
             if (id in userCancellation || id in pauseRequests) signal.cancel()
         }
         progressed.remove(id)
-        var transferredBytes = 0L
         var startBytes = Long.MAX_VALUE
         fun stoppedError(): DownloadError = when {
             id in userCancellation -> DownloadError.Cancelled
             connectivityStopped(stopReason()) -> DownloadError.Network
             else -> DownloadError.Interrupted
         }
-        fun finishStopped() = finishStopped(id, stoppedError(), transferredBytes, requeueEmpty = true, startBytes = startBytes)
+        fun finishStopped() = finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes)
         try {
             // A pause cancelled this WorkManager attempt before it registered; resume scheduled a new one.
             currentCoroutineContext().ensureActive()
@@ -359,7 +358,6 @@ class DownloadCoordinator(
                                 epoch = store.restartTransfer(id) ?: return@synchronized
                                 engineEpoch = event.restartEpoch
                                 hasPartial = false
-                                transferredBytes = 0
                                 startBytes = 0
                                 transferOpen = true
                                 postProcessing -= id
@@ -373,7 +371,6 @@ class DownloadCoordinator(
                                 return@synchronized
                             }
                             if (event is EngineEvent.Progress) {
-                                transferredBytes = maxOf(transferredBytes, event.bytesDownloaded)
                                 dev.ahmed.savlino.ui.EngineTiming.firstDownloadBytes(id, event.bytesDownloaded)
                             }
                             signal.throwIfCanceled()
@@ -394,7 +391,8 @@ class DownloadCoordinator(
                     } } finally { synchronized(delivery) { engineReturned = true }; downloading.remove(id) }
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
-                            else finishStopped(id, result.error, transferredBytes, resumeAllowed = result.resumeAllowed, startBytes = startBytes)
+                            else finishStopped(id, result.error, resumeAllowed = result.resumeAllowed,
+                                startBytes = startBytes, cause = result.cause)
                         is TransferResult.Success -> {
                             // Single-stream output has no Merging event: close pause here so a resume never drops a finished file.
                             synchronized(delivery) { transferOpen = false; postProcessing += id }
@@ -429,7 +427,7 @@ class DownloadCoordinator(
                             failure is ArithmeticException -> DownloadError.InsufficientSpace
                             else -> DownloadError.ExecutionRestricted
                         }
-                        finishStopped(id, error, transferredBytes)
+                        finishStopped(id, error)
                     }
                 } finally {
                     withContext(NonCancellable) {
@@ -480,23 +478,30 @@ class DownloadCoordinator(
 
     private fun stagingRoot(id: String) = File(context.filesDir.canonicalFile, "downloads/$id")
 
-    private fun finishStopped(id: String, error: DownloadError, reportedBytes: Long,
-        requeueEmpty: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE) = synchronized(userCancellation) {
+    private fun finishStopped(id: String, error: DownloadError,
+        systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
+        cause: DownloadFailureCause = error.cause) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
+        store.resetAutomaticResumes(id, bytes)
         if (id !in userCancellation && (id in pauseRequests || row.stage == JobStage.PAUSED)) {
             store.pausedPartial(id, bytes > 0)
         } else if (id in userCancellation || error == DownloadError.Cancelled) {
             store.cancel(id)
             recovery.reconcile(id, cancellationRequested = true)
-        } else if (resumeAllowed && error in setOf(DownloadError.Network, DownloadError.Offline) &&
+        } else if (systemStopped && error in setOf(DownloadError.Network, DownloadError.Offline) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
-            val jobRoot = File(context.filesDir.canonicalFile, "downloads")
-            // Adopted bytes survive a stop before startTransfer too.
-            if (bytes > 0) { if (store.requeue(id, true) && bytes > startBytes) progressed += id }
-            else if (requeueEmpty && reportedBytes <= 0 && bytes == 0L) {
-                if (cleanupJobStaging(jobRoot, id)) store.requeue(id)
-                else store.fail(id, DownloadError.SaveFailed)
+            // A scheduler stop waits for its constraints; it is not an engine failure episode.
+            if (bytes > 0) {
+                if (store.requeue(id, true) && bytes > startBytes) progressed += id
+            } else if (cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)) store.requeue(id)
+            else store.fail(id, DownloadError.SaveFailed)
+        } else if (resumeAllowed && cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) &&
+            error in setOf(DownloadError.Network, DownloadError.Offline) &&
+            row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
+            // Cold probes/first-byte timeouts may have no partial yet; still allow one bounded resume.
+            if (store.requeueAutomatic(id, cause, hasPartial = bytes > 0)) {
+                if (bytes > startBytes) progressed += id
             } else store.fail(id, error)
         } else {
             store.fail(id, error)

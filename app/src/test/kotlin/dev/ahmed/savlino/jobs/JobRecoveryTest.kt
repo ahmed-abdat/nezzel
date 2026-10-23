@@ -364,7 +364,7 @@ class JobRecoveryTest {
 
     @Test fun schemaUsesDurableRollbackJournalAndSecureDelete() {
         val db = store.writableDatabase
-        assertEquals(4, db.version)
+        assertEquals(5, db.version)
         for ((pragma, expected) in listOf("journal_mode" to "delete", "synchronous" to "2", "secure_delete" to "1")) {
             db.rawQuery("PRAGMA $pragma", null).use { check(it.moveToFirst()); assertEquals(expected, it.getString(0)) }
         }
@@ -646,11 +646,11 @@ class JobRecoveryTest {
         assertArrayEquals(bytes, keep.readBytes())
     }
 
-    @Test fun newerJournalDowngradesToEmptyUsableVersionFour() {
+    @Test fun newerJournalDowngradesToEmptyUsableVersionFive() {
         store.enqueue(command("old-cache"))
-        store.writableDatabase.version = 5
+        store.writableDatabase.version = 6
         reopen()
-        assertEquals(4, store.writableDatabase.version)
+        assertEquals(5, store.writableDatabase.version)
         assertTrue(store.all().isEmpty())
         assertTrue(store.enqueue(command("new-cache")))
     }

@@ -31,6 +31,7 @@ class JobRecord internal constructor(
     /** Explicit fresh transfer only; terminal staging is always deleted. */
     val retryable: Boolean,
     val hasPartial: Boolean, val resumeRecipe: String?, val restartEpoch: Long,
+    val transportResumes: Int, val stallRestarts: Int, val resumeResetBytes: Long,
 ) {
     /** Reconstruct only a still-confirmed nonterminal command. Recovery never starts it. */
     fun command(): DownloadCommand? {
@@ -44,10 +45,10 @@ class JobRecord internal constructor(
 /** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
-/** Blocking platform SQLite, schema v4. Older rows migrate without losing publication ownership. */
+/** Blocking platform SQLite, schema v5. Older rows migrate without losing publication ownership. */
 /** [sourceKeys]: keyed tags for "saved before"; null (no AndroidKeyStore) stores no tag and finds nothing. */
 class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred) :
-    SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 4) {
+    SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 5) {
     private val jobRoot = File(context.filesDir.canonicalFile, "downloads")
     private val terminalLock = Any()
     private val infoCache = dev.ahmed.savlino.engine.YtdlpInfoCache(context.noBackupFilesDir)
@@ -75,6 +76,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 updated_at INTEGER NOT NULL, error TEXT, retryable INTEGER NOT NULL DEFAULT 0,
                 source_key TEXT, has_partial INTEGER NOT NULL DEFAULT 0 CHECK(has_partial IN (0,1)),
                 resume_recipe TEXT, restart_epoch INTEGER NOT NULL DEFAULT 0 CHECK(restart_epoch >= 0),
+                transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0),
+                stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0),
+                resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0),
                 CHECK (has_partial = 0 OR stage IN ('ENQUEUED','TRANSFERRING','PAUSED')),
                 CHECK ((stage IN ('COMPLETED','CANCELLED') AND source_url IS NULL)
                     OR (stage = 'FAILED' AND (source_url IS NULL OR retryable = 1))
@@ -85,7 +89,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion in 1..3 && newVersion == 4) {
+        if (oldVersion == 4 && newVersion == 5) {
+            db.execSQL("ALTER TABLE jobs ADD COLUMN transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0)")
+            db.execSQL("ALTER TABLE jobs ADD COLUMN stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0)")
+            db.execSQL("ALTER TABLE jobs ADD COLUMN resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0)")
+        } else if (oldVersion in 1..3 && newVersion == 5) {
             // SQLiteOpenHelper owns the transaction, including the CHECK-constraint rebuild.
             db.execSQL("ALTER TABLE jobs RENAME TO jobs_old")
             onCreate(db)
@@ -186,6 +194,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             writableDatabase.update("jobs", ContentValues().apply {
                 put("stage", JobStage.ENQUEUED.name); put("updated_at", System.currentTimeMillis())
                 putNull("error"); put("retryable", 0); putNull("pending_uri"); putNull("display_name")
+                put("transport_resumes", 0); put("stall_restarts", 0); put("resume_reset_bytes", 0)
             }, "job_id = ? AND stage = 'FAILED' AND retryable = 1 AND source_url IS NOT NULL AND created_at >= ?",
                 arrayOf(jobId, (System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS).toString())) == 1
         }
@@ -203,16 +212,18 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     @Synchronized fun startTransfer(jobId: String, recipe: String? = null): Boolean {
         scrubExpiredSources()
-        val epoch = Math.addExact(get(jobId)?.restartEpoch ?: 0, 1)
+        val row = get(jobId)
+        val epoch = Math.addExact(row?.restartEpoch ?: 0, 1)
         return transition(jobId, setOf(JobStage.ENQUEUED), JobStage.TRANSFERRING,
             ContentValues().apply {
                 put("resume_recipe", recipe)
                 put("restart_epoch", epoch)
+                if (row?.resumeRecipe != recipe) put("resume_reset_bytes", 0)
             })
     }
     @Synchronized internal fun restartTransfer(jobId: String): Long? {
         if (get(jobId)?.stage != JobStage.TRANSFERRING) return null
-        writableDatabase.execSQL("UPDATE jobs SET restart_epoch=restart_epoch+1, has_partial=0 WHERE job_id=? AND stage='TRANSFERRING'", arrayOf(jobId))
+        writableDatabase.execSQL("UPDATE jobs SET restart_epoch=restart_epoch+1, has_partial=0, resume_reset_bytes=0 WHERE job_id=? AND stage='TRANSFERRING'", arrayOf(jobId))
         return get(jobId)?.restartEpoch
     }
     @Synchronized internal fun requeue(jobId: String, hasPartial: Boolean = false): Boolean {
@@ -220,6 +231,45 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         return transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.ENQUEUED,
             ContentValues().apply { put("has_partial", if (hasPartial) 1 else 0); putNull("error") })
     }
+    /** Persist the reset position so trickles accumulate across attempts without reopening the budget. */
+    @Synchronized internal fun resetAutomaticResumes(jobId: String, bytes: Long) {
+        val row = get(jobId) ?: return
+        val total = (row.format.size as? Size.Exact)?.bytes
+        val completedSmallTransfer = total != null && total in 1 until RESUME_PROGRESS_STEP_BYTES &&
+            row.resumeResetBytes < total && bytes >= total
+        if (bytes - row.resumeResetBytes < RESUME_PROGRESS_STEP_BYTES && !completedSmallTransfer) return
+        writableDatabase.update("jobs", ContentValues().apply {
+            put("transport_resumes", 0); put("stall_restarts", 0); put("resume_reset_bytes", bytes)
+        }, "job_id=? AND stage IN ('ENQUEUED','TRANSFERRING','PAUSED')", arrayOf(jobId))
+    }
+
+    /** Consume the durable budget atomically with requeue, across worker/process restarts. */
+    @Synchronized internal fun requeueAutomatic(jobId: String, cause: DownloadFailureCause, hasPartial: Boolean = true): Boolean {
+        scrubExpiredSources()
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val row = db.query("jobs", null, "job_id=?", arrayOf(jobId), null, null, null)
+                .use { if (it.moveToFirst()) read(it) else null } ?: return false
+            val transport = row.transportResumes
+            val stalls = row.stallRestarts
+            val admitted = when (cause) {
+                DownloadFailureCause.TRANSPORT -> transport < 1
+                DownloadFailureCause.STALL -> stalls < 3
+                else -> false
+            }
+            if (!admitted) return false
+            val changed = transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.ENQUEUED,
+                ContentValues().apply {
+                    put("has_partial", if (hasPartial) 1 else 0); putNull("error")
+                    put("transport_resumes", transport + if (cause == DownloadFailureCause.TRANSPORT) 1 else 0)
+                    put("stall_restarts", stalls + if (cause == DownloadFailureCause.STALL) 1 else 0)
+                })
+            db.setTransactionSuccessful()
+            return changed
+        } finally { db.endTransaction() }
+    }
+
     @Synchronized fun pause(jobId: String, hasPartial: Boolean? = null): Boolean {
         scrubExpiredSources()
         return transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.PAUSED,
@@ -235,7 +285,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
     @Synchronized fun resume(jobId: String): Boolean {
         scrubExpiredSources()
-        return transition(jobId, setOf(JobStage.PAUSED), JobStage.ENQUEUED)
+        return transition(jobId, setOf(JobStage.PAUSED), JobStage.ENQUEUED,
+            ContentValues().apply {
+                put("transport_resumes", 0); put("stall_restarts", 0)
+                put("resume_reset_bytes", stagingBytes(File(jobRoot, jobId)))
+            })
     }
 
     internal fun cancelEnqueued(jobId: String): Boolean = finishTerminal(jobId) {
@@ -378,7 +432,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             text("engine_version"), decodeFormat(text("format_json")), text("filename"), text("preset")?.let(Preset::valueOf),
             text("pending_uri")?.let(Uri::parse), text("display_name"), long("created_at"), long("updated_at"),
             text("error")?.let(DownloadError::valueOf), long("retryable") == 1L,
-            long("has_partial") == 1L, text("resume_recipe"), long("restart_epoch"))
+            long("has_partial") == 1L, text("resume_recipe"), long("restart_epoch"),
+            long("transport_resumes").toInt(), long("stall_restarts").toInt(), long("resume_reset_bytes"))
     }
 
     companion object {
@@ -386,6 +441,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         private const val V2_COLUMNS = "job_id, stage, source_url, revision, engine_version, format_json, filename, preset, " +
             "pending_uri, display_name, created_at, updated_at, error, retryable"
 
+        internal const val RESUME_PROGRESS_STEP_BYTES = 1024L * 1024
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
         /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
         internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()

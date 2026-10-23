@@ -5,6 +5,7 @@ import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.domain.DownloadFailureCause
 import java.io.File
 import java.io.PushbackInputStream
 import java.nio.file.Files
@@ -264,19 +265,37 @@ internal fun matchesYtdlpChild(row: ProcProcess, parent: Int, python: String, sc
     row.command.take(2) == listOf(python, script) && row.command.takeLast(args.size) == args
 
 internal class YtdlpExecutionFailure(val error: DownloadError, val expiredUrl: Boolean = false,
-    val resumeAllowed: Boolean = true) : Exception()
+    val resumeAllowed: Boolean = true, val failureCause: DownloadFailureCause = error.cause) : Exception()
 internal class YtdlpDiagnostics {
     private val error = AtomicReference(DownloadError.Failed)
+    private val cause = AtomicReference(DownloadFailureCause.OTHER)
     private val expired = java.util.concurrent.atomic.AtomicBoolean()
     private val httpFailure = java.util.concurrent.atomic.AtomicBoolean()
     fun accept(line: String) {
         if (expiredUrl(line)) expired.set(true)
         if (blocksResume(line)) httpFailure.set(true)
-        if (line.startsWith("ERROR:")) YtdlpErrorMapper.map(line).let {
-            if (it != DownloadError.Failed) error.set(it)
-        }
+        if (line.lineSequence().any { it.startsWith("ERROR:") })
+            remember(YtdlpErrorMapper.map(line), YtdlpErrorMapper.cause(line))
     }
-    fun failure() = YtdlpExecutionFailure(error.get(), expired.get(), !httpFailure.get())
+    private fun remember(mappedError: DownloadError, mappedCause: DownloadFailureCause) {
+        cause.updateAndGet { previous ->
+            if (previous == DownloadFailureCause.HTTP || mappedCause == DownloadFailureCause.OTHER)
+                previous else mappedCause
+        }
+        if (mappedError != DownloadError.Failed) error.set(mappedError)
+    }
+    /** The sole diagnostic precedence rule, shared by callback, native and adapter failures. */
+    fun failure(fallback: Exception? = null): YtdlpExecutionFailure {
+        if (fallback != null) {
+            accept(fallback.message.orEmpty())
+            if (fallback is YtdlpExecutionFailure) {
+                if (fallback.expiredUrl) expired.set(true)
+                if (!fallback.resumeAllowed) httpFailure.set(true)
+                remember(fallback.error, fallback.failureCause)
+            }
+        }
+        return YtdlpExecutionFailure(error.get(), expired.get(), !httpFailure.get(), cause.get())
+    }
     companion object {
         fun blocksResume(message: String): Boolean = errorLines(message).any(HTTP_NO_RESUME::containsMatchIn)
         fun expiredUrl(message: String): Boolean = errorLines(message).any { HTTP_EXPIRED.containsMatchIn(it) || EXPIRED.containsMatchIn(it) }

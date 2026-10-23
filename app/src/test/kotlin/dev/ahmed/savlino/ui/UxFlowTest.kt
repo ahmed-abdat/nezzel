@@ -289,7 +289,7 @@ class UxFlowTest {
         for (version in listOf(1, 2)) {
             legacyJournal(version)
             JobStore(app, keyer).use { store ->
-                assertEquals(4, store.writableDatabase.version)
+                assertEquals(5, store.writableDatabase.version)
                 assertEquals(JobStage.COMPLETED, store.get("old")!!.stage)
                 assertEquals("v$version", 2, store.all().size)
                 val uri = Uri.parse("content://media/external/downloads/9")

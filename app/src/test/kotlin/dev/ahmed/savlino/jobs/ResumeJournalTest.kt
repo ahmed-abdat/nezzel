@@ -49,11 +49,12 @@ class ResumeJournalTest {
                 db.version = version
             }
             JobStore(app, null).use { store ->
-                assertEquals(4, store.readableDatabase.version)
+                assertEquals(5, store.readableDatabase.version)
                 assertEquals(8, store.all().size)
                 for (row in store.all()) {
                     assertEquals(row.jobId, row.stage.name)
                     assertFalse(row.hasPartial); assertNull(row.resumeRecipe); assertEquals(0L, row.restartEpoch)
+                    assertEquals(0L, row.resumeResetBytes)
                     assertEquals(row.stage == JobStage.FAILED && version > 1, row.retryable)
                     if (row.stage in setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.COMPLETED))
                         assertEquals("content://media/downloads/7", row.pendingUri.toString())
@@ -63,6 +64,93 @@ class ResumeJournalTest {
                 }
                 assertTrue(store.enqueue(command("new-paused"))); assertTrue(store.pause("new-paused"))
             }
+        }
+    }
+
+    @Test fun versionFourMigrationKeepsPausedPartialAndPublicationAndInitializesBudgets() {
+        // Build a real v4 table from the current schema with the U3 columns removed.
+        JobStore(app, null).use { store ->
+            store.enqueue(command("v4-paused")); store.startTransfer("v4-paused", "recipe"); store.pause("v4-paused", true)
+            store.enqueue(command("v4-publishing")); store.startTransfer("v4-publishing", "recipe"); store.markStaged("v4-publishing")
+            store.writableDatabase.execSQL("UPDATE jobs SET stage='PUBLISHING',pending_uri='content://media/downloads/7' WHERE job_id='v4-publishing'")
+            val db = store.writableDatabase
+            val sql = db.rawQuery("SELECT sql FROM sqlite_master WHERE name='jobs'", null).use {
+                assertTrue(it.moveToFirst()); it.getString(0)
+            }.replace("CREATE TABLE jobs", "CREATE TABLE jobs_v4")
+                .replace(Regex("transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK\\(transport_resumes >= 0\\),\\s*"), "")
+                .replace(Regex("stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK\\(stall_restarts >= 0\\),\\s*"), "")
+                .replace(Regex("resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK\\(resume_reset_bytes >= 0\\),\\s*"), "")
+            db.execSQL(sql)
+            val columns = db.rawQuery("SELECT * FROM jobs_v4 LIMIT 0", null).use { it.columnNames.joinToString(",") }
+            db.execSQL("INSERT INTO jobs_v4 ($columns) SELECT $columns FROM jobs")
+            db.execSQL("DROP TABLE jobs")
+            db.execSQL("ALTER TABLE jobs_v4 RENAME TO jobs")
+            db.version = 4
+        }
+        JobStore(app, null).use { store ->
+            assertEquals(5, store.readableDatabase.version)
+            val paused = store.get("v4-paused")!!
+            assertEquals(JobStage.PAUSED, paused.stage); assertTrue(paused.hasPartial)
+            assertEquals("recipe", paused.resumeRecipe); assertEquals(1L, paused.restartEpoch)
+            assertEquals(0, paused.transportResumes); assertEquals(0, paused.stallRestarts)
+            assertEquals(0L, paused.resumeResetBytes)
+            val publication = store.get("v4-publishing")!!
+            assertEquals(JobStage.PUBLISHING, publication.stage)
+            assertEquals("content://media/downloads/7", publication.pendingUri.toString())
+        }
+    }
+
+    @Test fun automaticResumeBudgetsSurviveReopenAndGrowthResetsBothCounters() {
+        JobStore(app, null).use { store ->
+            store.enqueue(command("durable-budget")); store.startTransfer("durable-budget", "recipe")
+            assertTrue(store.requeueAutomatic("durable-budget", DownloadFailureCause.TRANSPORT))
+        }
+        JobStore(app, null).use { store ->
+            store.startTransfer("durable-budget", "recipe")
+            // Re-extraction may clear bytes; it cannot reopen the budget without new progress.
+            store.restartTransfer("durable-budget")
+            assertFalse(store.requeueAutomatic("durable-budget", DownloadFailureCause.TRANSPORT))
+            repeat(3) {
+                assertTrue(store.requeueAutomatic("durable-budget", DownloadFailureCause.STALL))
+                store.startTransfer("durable-budget", "recipe")
+            }
+            assertFalse(store.requeueAutomatic("durable-budget", DownloadFailureCause.STALL))
+            store.resetAutomaticResumes("durable-budget", 1024L * 1024)
+            assertTrue(store.requeueAutomatic("durable-budget", DownloadFailureCause.TRANSPORT))
+            assertEquals(1, store.get("durable-budget")!!.transportResumes)
+            assertEquals(0, store.get("durable-budget")!!.stallRestarts)
+            assertTrue(store.requeueAutomatic("durable-budget", DownloadFailureCause.STALL))
+            assertTrue(store.pause("durable-budget", true)); assertTrue(store.resume("durable-budget"))
+            assertEquals(0, store.get("durable-budget")!!.transportResumes)
+            assertEquals(0, store.get("durable-budget")!!.stallRestarts)
+            assertTrue(store.requeueAutomatic("durable-budget", DownloadFailureCause.TRANSPORT))
+            assertTrue(store.fail("durable-budget", DownloadError.Network))
+            assertTrue(store.retry("durable-budget"))
+            assertEquals(0, store.get("durable-budget")!!.transportResumes)
+            assertEquals(0, store.get("durable-budget")!!.stallRestarts)
+        }
+    }
+
+    @Test fun growthStepAccumulatesAcrossReopenAndResetsAtOneMebibyteOnly() {
+        val step = 1024L * 1024
+        JobStore(app, null).use { store ->
+            store.enqueue(command("step")); store.startTransfer("step", "recipe")
+            assertTrue(store.requeueAutomatic("step", DownloadFailureCause.STALL))
+            store.startTransfer("step", "recipe")
+            store.resetAutomaticResumes("step", step - 1)
+            assertEquals(1, store.get("step")!!.stallRestarts)
+            store.resetAutomaticResumes("step", step)
+            assertEquals(0, store.get("step")!!.stallRestarts)
+            assertEquals(step, store.get("step")!!.resumeResetBytes)
+            assertTrue(store.requeueAutomatic("step", DownloadFailureCause.STALL))
+        }
+        JobStore(app, null).use { store ->
+            store.startTransfer("step", "recipe")
+            store.resetAutomaticResumes("step", 2 * step - 1)
+            assertEquals(1, store.get("step")!!.stallRestarts)
+            store.resetAutomaticResumes("step", 2 * step)
+            assertEquals(0, store.get("step")!!.stallRestarts)
+            assertEquals(2 * step, store.get("step")!!.resumeResetBytes)
         }
     }
 
@@ -156,7 +244,7 @@ class ResumeJournalTest {
             for (id in listOf("old-queued", "old-transfer", "fresh-queued"))
                 File(app.filesDir, "downloads/$id").apply { mkdirs(); resolve("output.mp4.part").writeText("bytes") }
             JobStore(app, null).use { store ->
-                assertEquals(4, store.readableDatabase.version)
+                assertEquals(5, store.readableDatabase.version)
                 for (id in listOf("old-queued", "old-transfer")) {
                     val row = store.get(id)!!
                     assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)

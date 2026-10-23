@@ -90,7 +90,7 @@ class EngineTimeoutRecoveryTest {
             try {
                 if (inspection) assertEquals(InspectResult.Failure(DownloadError.Network), withTimeout(2000) {
                     engine.inspect(source, "cold-inspect")
-                }) else assertEquals(TransferResult.Failure(DownloadError.Network), withTimeout(2000) {
+                }) else assertEquals(TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.TRANSPORT), withTimeout(2000) {
                     engine.download(command(), temp.newFolder()) {}
                 })
             } finally { runtime.destroyed.countDown() }
@@ -285,7 +285,7 @@ class EngineTimeoutRecoveryTest {
         val directory = temp.newFolder()
         try {
             assertTrue(withContext(Dispatchers.IO) { updating.await(2, TimeUnit.SECONDS) })
-            assertEquals(TransferResult.Failure(DownloadError.Network), withTimeout(2000) {
+            assertEquals(TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.TRANSPORT), withTimeout(2000) {
                 engine.download(command(), directory) {}
             })
             assertEquals(0, executions.get())
@@ -294,14 +294,23 @@ class EngineTimeoutRecoveryTest {
         } finally { release.countDown(); withTimeout(2000) { update.await() } }
     }
 
-    @Test fun downloadWithNoNewBytesForTheWatchdogWindowFailsAsRetryableNetwork() = runBlocking {
+    @Test fun downloadWithNoNewBytesForTheWatchdogWindowStopsWithTypedStallAndKeepsBytes() = runBlocking {
         val runtime = Runtime()
-        runtime.action = { _, line -> line("nezzel:18:1:3:NA"); line("nezzel:18:1:3:NA"); runtime.hang() }
+        val dir = temp.newFolder()
+        runtime.action = { _, line ->
+            dir.resolve("output.mp4.part").writeText("x")
+            line("nezzel:18:1:3:NA")
+            // Heartbeats without new bytes must not extend the watchdog indefinitely.
+            while (!runtime.destroyed.await(60, TimeUnit.MILLISECONDS)) line("nezzel:18:1:3:NA")
+            error("process destroyed")
+        }
         val events = mutableListOf<EngineEvent>()
-        val result = withTimeout(5000) { YoutubedlEngine(runtime, fast).download(command(), temp.newFolder(), events::add) }
-        assertEquals(TransferResult.Failure(DownloadError.Network), result)
+        val result = withTimeout(5000) { YoutubedlEngine(runtime, fast).download(command(), dir, events::add) }
+        assertEquals(TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.STALL), result)
+        assertEquals("x", dir.resolve("output.mp4.part").readText())
         assertTrue(runtime.destroys.get() >= 1)
-        assertEquals(listOf<EngineEvent>(EngineEvent.Progress(1, Size.Exact(3)), EngineEvent.Progress(1, Size.Exact(3))), events)
+        assertTrue(events.size >= 2)
+        assertTrue(events.all { it == EngineEvent.Progress(1, Size.Exact(3)) })
     }
 
     @Test fun steadyBytesAndLongPostProcessingAreNotStalls() = runBlocking {
@@ -310,7 +319,7 @@ class EngineTimeoutRecoveryTest {
             val runtime = Runtime()
             runtime.action = { args, line ->
                 for (bytes in 1..6) { line("nezzel:18:$bytes:6:NA"); Thread.sleep(120) } // 720 ms > 300 ms window
-                line(tail); Thread.sleep(700)
+                line(tail); line("nezzel:18:7:9:NA"); Thread.sleep(700)
                 download(dir)(args, line)
             }
             assertIs<TransferResult.Success>(withTimeout(5000) { YoutubedlEngine(runtime, fast).download(command(), dir) {} })

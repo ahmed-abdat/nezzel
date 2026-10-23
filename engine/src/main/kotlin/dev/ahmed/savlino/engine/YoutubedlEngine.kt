@@ -20,8 +20,8 @@ sealed interface EngineUpdateResult {
 }
 
 /** Engine timeouts and recovery (lead 2026-10-19, docs/OPEN_DECISIONS.md). */
-internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 120_000, val stallMs: Long = 180_000,
-    val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000)
+internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 120_000, val stallMs: Long = 45_000,
+    val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000, val firstByteMs: Long = 180_000)
 
 /** Construction/availability are inert. Startup warm-up extracts and probes local binaries only. */
 class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
@@ -37,7 +37,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         /** Set by the canceller when [deadline] passes; reported as retryable Network, never as a user cancel. */
         val timedOut = AtomicBoolean()
         @Volatile var deadline = NO_DEADLINE
-        fun expireIn(ms: Long) { deadline = System.nanoTime() + ms * 1_000_000 }
+        @Volatile var byteWatchdog = false
+        @Volatile var timeoutCause = DownloadFailureCause.TRANSPORT
+        @Synchronized fun expireIn(ms: Long) { deadline = System.nanoTime() + ms * 1_000_000 }
     }
     private class PendingCancellation {
         val deadline = System.nanoTime() + CANCELLATION_WINDOW_MS * 1_000_000
@@ -52,7 +54,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override val preparing: StateFlow<Boolean> get() = runtime.initialization.preparing
     override fun retryInitialization() = runtime.initialization.requestRetry()
 
-    override suspend fun warmUp(): Boolean = operation("warm-${UUID.randomUUID()}", { false }) { current ->
+    override suspend fun warmUp(): Boolean = operation("warm-${UUID.randomUUID()}", { _, _ -> false }) { current ->
         if (!initialize()) return@operation false
         version(current)
         true
@@ -62,13 +64,13 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         runtime.initialization.installedVersion?.let { return it }
         // While an update is unresolved the binary is not readable; report Unknown instead of waiting on it.
         if (pendingUpdate?.isActive == true) return null
-        return operation("version-${UUID.randomUUID()}", { null }) { current ->
+        return operation("version-${UUID.randomUUID()}", { _, _ -> null }) { current ->
             if (initialize()) version(current) else null
         }
     }
 
     override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult =
-        operation(operationId, { InspectResult.Failure(it) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+        operation(operationId, { error, _ -> InspectResult.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
             if (!initialize()) return@operation unavailable.inspect(source, operationId)
             // After initialization: a one-time extraction must not consume the network budget.
             current.expireIn(limits.inspectMs)
@@ -109,7 +111,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override suspend fun download(command: DownloadCommand, directory: File,
         progress: (EngineEvent) -> Unit): TransferResult {
         var resumeAllowed = true
-        return operation(command.jobId, { TransferResult.Failure(it, resumeAllowed) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+        return operation(command.jobId, { error, cause -> TransferResult.Failure(error, resumeAllowed, cause) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
             if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
             // Validate before launching yt-dlp. Caller owns staging cleanup; adapter never touches public storage.
@@ -128,34 +130,37 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 val args = YtdlpCommand.download(command, directory, info)
                 val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
                 val diagnostics = YtdlpDiagnostics()
-                current.expireIn(limits.stallMs)
+                var postProcessing = false
+                synchronized(current) {
+                    current.byteWatchdog = false
+                    current.expireIn(limits.firstByteMs)
+                }
                 try {
                     execute(current, args) { line ->
                         diagnostics.accept(line)
-                        // Post-processors write no transfer bytes; a long remux is not a stall.
-                        if (POSTPROCESSORS.any(line::startsWith)) current.deadline = NO_DEADLINE
-                        if (!current.cancelled.get()) mapper.map(line)?.let { event ->
-                            when (event) {
-                                is EngineEvent.Progress -> if (event.bytesDownloaded > bytes) {
-                                    bytes = event.bytesDownloaded; current.expireIn(limits.stallMs)
-                                }
-                                EngineEvent.Merging -> current.deadline = NO_DEADLINE
-                                is EngineEvent.Restarting -> Unit
+                        val event = mapper.map(line)
+                        // Linearize post-processing/byte progress with expiry. Late byte callbacks
+                        // after a post-processor must never arm the watchdog again.
+                        synchronized(current) {
+                            if (POSTPROCESSORS.any(line::startsWith) || event == EngineEvent.Merging) {
+                                postProcessing = true; current.deadline = NO_DEADLINE; current.byteWatchdog = false
                             }
-                            progress(if (event is EngineEvent.Progress) event.copy(restartEpoch = attemptEpoch) else event)
+                            if (!postProcessing && event is EngineEvent.Progress && event.bytesDownloaded > bytes) {
+                                bytes = event.bytesDownloaded
+                                if (bytes > 0) {
+                                    current.byteWatchdog = true
+                                    current.expireIn(limits.stallMs)
+                                }
+                            }
                         }
+                        if (!current.cancelled.get() && event != null)
+                            progress(if (event is EngineEvent.Progress) event.copy(restartEpoch = attemptEpoch) else event)
                     }
                 } catch (error: Exception) {
-                    resumeAllowed = diagnostics.failure().resumeAllowed &&
-                        (error !is YtdlpExecutionFailure || error.resumeAllowed) &&
-                        !YtdlpDiagnostics.blocksResume(error.message.orEmpty())
+                    val failure = diagnostics.failure(error)
+                    resumeAllowed = failure.resumeAllowed
                     if (error is CancellationException || current.cancelled.get()) throw error
-                    if ((error is YtdlpExecutionFailure && error.expiredUrl) ||
-                        diagnostics.failure().expiredUrl || YtdlpDiagnostics.expiredUrl(error.message.orEmpty()))
-                        throw YtdlpExecutionFailure(if (error is YtdlpExecutionFailure) error.error
-                            else diagnostics.failure().error.takeUnless { it == DownloadError.Failed }
-                                ?: YtdlpErrorMapper.map(error.message.orEmpty()), expiredUrl = true)
-                    throw error
+                    throw failure
                 }
             }
             try { transfer(infoJson) }
@@ -176,6 +181,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 transfer(null)
             }
             current.deadline = NO_DEADLINE
+            current.byteWatchdog = false
             checkCancelled(current)
             val output = try {
                 val root = directory.canonicalFile
@@ -245,7 +251,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         return withTimeoutOrNull(limits.updateMs) { task.await() } ?: EngineUpdateResult.Failure(DownloadError.Network)
     }
     private suspend fun runUpdate(): EngineUpdateResult = operation("update-${UUID.randomUUID()}",
-        { EngineUpdateResult.Failure(it) }, exclusive = true) { current ->
+        { error, _ -> EngineUpdateResult.Failure(error) }, exclusive = true) { current ->
         if (!initialize()) return@operation EngineUpdateResult.Failure(DownloadError.EngineUnavailable)
         val old = version(current)
         // An updater can replace the binary and then fail; never retain the previous pin.
@@ -264,7 +270,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     }
 
     /** No-network `--version` under its own deadline and canceller; null when it fails or hangs (tree destroyed). */
-    private suspend fun probe(): String? = operation("probe-${UUID.randomUUID()}", { null }, gated = false) { current ->
+    private suspend fun probe(): String? = operation("probe-${UUID.randomUUID()}", { _, _ -> null }, gated = false) { current ->
         executeVersion(current).trim().takeIf { it.isNotBlank() }?.also(runtime::rememberWarmedVersion)
     }
 
@@ -326,11 +332,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     }
     private class OperationCancelled : Exception()
 
-    private suspend fun <T> operation(id: String, failure: (DownloadError) -> T, lockTimeoutMs: Long? = null,
+    private suspend fun <T> operation(id: String, failure: (DownloadError, DownloadFailureCause) -> T, lockTimeoutMs: Long? = null,
         exclusive: Boolean = false, gated: Boolean = true, body: suspend (Operation) -> T): T = coroutineScope {
         val current = Operation()
         synchronized(lifecycleLock) {
-            if (operations.containsKey(id)) return@coroutineScope failure(DownloadError.ExecutionRestricted)
+            if (operations.containsKey(id)) return@coroutineScope failure(DownloadError.ExecutionRestricted, DownloadFailureCause.OTHER)
             operations[id] = current
             recentlyFinished.remove(id)
             pendingCancellation.remove(id)?.let { pending ->
@@ -344,9 +350,12 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             while (!current.finished.get()) {
                 try { runtime.observe(current.processId) } catch (_: Exception) { /* Retry transient proc reads. */ }
                 if (!parent.isActive) current.cancelled.set(true)
-                val deadline = current.deadline
-                if (deadline != NO_DEADLINE && System.nanoTime() - deadline >= 0 && !current.cancelled.get()) {
-                    current.timedOut.set(true); current.cancelled.set(true)
+                synchronized(current) {
+                    val deadline = current.deadline
+                    if (deadline != NO_DEADLINE && System.nanoTime() - deadline >= 0 && !current.cancelled.get()) {
+                        current.timeoutCause = if (current.byteWatchdog) DownloadFailureCause.STALL else DownloadFailureCause.TRANSPORT
+                        current.timedOut.set(true); current.cancelled.set(true)
+                    }
                 }
                 if (current.cancelled.get()) current.cancellation.complete(Unit)
                 if (current.cancelled.get() && !destroyed) {
@@ -394,13 +403,19 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             throw cancel
         } catch (error: Exception) {
             // Never log raw engine output: it may contain source URLs/cookies, even in debug.
-            failure(when {
+            val diagnostic = YtdlpDiagnostics().failure(error)
+            val mapped = when {
                 current.timedOut.get() -> DownloadError.Network
                 current.cancelled.get() -> DownloadError.Cancelled
                 error is UnsupportedMetadataException -> DownloadError.Unsupported
-                error is YtdlpExecutionFailure -> error.error
-                else -> YtdlpErrorMapper.map(error.message.orEmpty())
-            })
+                else -> diagnostic.error
+            }
+            val cause = when {
+                current.timedOut.get() -> current.timeoutCause
+                current.cancelled.get() -> DownloadFailureCause.OTHER
+                else -> diagnostic.failureCause
+            }
+            failure(mapped, cause)
         } finally {
             synchronized(lifecycleLock) {
                 current.finished.set(true)
