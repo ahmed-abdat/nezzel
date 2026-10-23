@@ -5,15 +5,26 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import okhttp3.Dns
 
+/** Lookups callers may wait on at once: one carousel's parallel image fetches plus one other operation. */
+internal const val DNS_LIVE_LOOKUPS = 4
+
 /** Override lookup only: default newCall selects OkHttp5.5's inline LookupDnsCall branch. */
 internal class PublicAddressDns internal constructor(private val token: OperationToken,
-    private val rawResolver: (String) -> List<InetAddress>, private val executor: ExecutorService) : Dns {
+    private val rawResolver: (String) -> List<InetAddress>, private val executor: ExecutorService,
+    private val slots: Semaphore) : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
         token.requireActive()
+        // A caller that leaves (answer, cancel or deadline) frees its slot, even if the OS resolver thread stays blocked.
+        if (!slots.tryAcquire()) throw MediaHttpException(MediaHttpFailure.BUSY)
+        try { return resolve(hostname) } finally { slots.release() }
+    }
+
+    private fun resolve(hostname: String): List<InetAddress> {
         val future = try {
             executor.submit<List<InetAddress>> {
                 // Copy before admitting the set, so subsequent caller mutation cannot replace a route.

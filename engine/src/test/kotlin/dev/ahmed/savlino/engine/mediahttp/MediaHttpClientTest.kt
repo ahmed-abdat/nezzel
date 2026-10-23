@@ -525,8 +525,8 @@ class MediaHttpClientTest {
             h.control()
             h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { token ->
                 assertFailure(h.client.fetch(token, request()), MediaHttpFailure.BODY_LIMIT)
-                assertTrue(token.budget.snapshot().consumedBytes <= 2 * 1024 * 1024 + 1,
-                    "consumption stops at cap plus one, independently of Content-Length")
+                assertTrue(token.budget.snapshot().consumedBytes <= 2 * 1024 * 1024,
+                    "consumption stops at the cap, independently of Content-Length")
             }
         }
     }
@@ -773,36 +773,83 @@ class MediaHttpClientTest {
         h.control()
     }
 
-    @Test fun twoHungDnsWorkersRejectNewResolutionWithoutQueue() {
-        val entered = CountDownLatch(2)
+    /** Starts four lookups that hang like an OS resolver ignoring interrupts, on two carousel operations. */
+    private fun hangFourLookups(h: MediaHttpHarness, entered: CountDownLatch): List<Pair<OperationToken, MediaHttpFetchTask>> {
+        val first = h.client.newOperation(MediaHttpOperation.PAGE_AND_CAROUSEL)
+        val second = h.client.newOperation(MediaHttpOperation.PAGE_AND_CAROUSEL)
+        val tasks = listOf(first, first, first, second).map { it to MediaHttpFetchTask(h.client, it, request(host = "other.test")) }
+        await(entered, "four lookups hung")
+        return tasks
+    }
+
+    private fun abandon(h: MediaHttpHarness, tasks: List<Pair<OperationToken, MediaHttpFetchTask>>) {
+        tasks.map { it.first }.distinct().forEach { h.client.cancel(it.id) }
+        tasks.forEach { (_, task) -> assertFailure(task.get(), MediaHttpFailure.CANCELLED); task.close() }
+        tasks.map { it.first }.distinct().forEach { it.close() }
+    }
+
+    private fun hangingResolver(entered: () -> CountDownLatch, release: CountDownLatch): (String) -> List<InetAddress> = { host ->
+        if (host == "other.test") {
+            entered().countDown()
+            while (release.count > 0) try { release.await() } catch (_: InterruptedException) { /* OS-like */ }
+        }
+        listOf(PUBLIC_V4)
+    }
+
+    @Test fun fourLiveLookupsRejectAFifthWithoutQueue() {
+        val entered = CountDownLatch(4)
         val release = CountDownLatch(1)
         try {
-            fixture(resolver = { host ->
-                if (host == "other.test") {
-                    entered.countDown()
-                    while (release.count > 0) try { release.await() } catch (_: InterruptedException) { /* OS-like */ }
-                }
-                listOf(PUBLIC_V4)
-            }) { h ->
+            fixture(resolver = hangingResolver({ entered }, release)) { h ->
                 h.control()
-                val first = h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE)
-                val second = h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE)
-                MediaHttpFetchTask(h.client, first, request(host = "other.test")).use { one ->
-                    MediaHttpFetchTask(h.client, second, request(host = "other.test")).use { two ->
-                        await(entered, "both bounded DNS workers occupied")
-                        h.client.cancel(first.id); h.client.cancel(second.id)
-                        assertFailure(one.get(), MediaHttpFailure.CANCELLED)
-                        assertFailure(two.get(), MediaHttpFailure.CANCELLED)
-                        h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { fresh ->
-                            assertFailure(h.client.fetch(fresh, request()), MediaHttpFailure.BUSY)
-                            assertEquals(0, fresh.budget.snapshot().socketsCreated)
-                        }
-                        release.countDown()
-                    }
-                }
-                first.close(); second.close()
+                val tasks = hangFourLookups(h, entered)
+                try {
+                    val second = tasks.last().first
+                    assertFailure(h.client.fetch(second, request()), MediaHttpFailure.BUSY)
+                } finally { release.countDown(); tasks.forEach { it.second.close() }; tasks.forEach { it.first.close() } }
             }
         } finally { release.countDown() }
+    }
+
+    @Test fun abandonedHungLookupsFreeTheirSlotsUpToABoundedNumberOfThreads() {
+        var entered = CountDownLatch(4)
+        val release = CountDownLatch(1)
+        try {
+            fixture(resolver = hangingResolver({ entered }, release)) { h ->
+                h.control()
+                // Four cancelled lookups still hang: a healthy lookup gets a slot and a spare thread.
+                abandon(h, hangFourLookups(h, entered))
+                h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { fresh ->
+                    assertSuccess(h.client.fetch(fresh, request())).close()
+                }
+                // Eight abandoned threads fill the bounded pool: no new thread, no socket.
+                entered = CountDownLatch(4)
+                abandon(h, hangFourLookups(h, entered))
+                h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { fresh ->
+                    assertFailure(h.client.fetch(fresh, request()), MediaHttpFailure.BUSY)
+                    assertEquals(0, fresh.budget.snapshot().socketsCreated)
+                }
+            }
+        } finally { release.countDown() }
+    }
+
+    @Test fun parallelCarouselBodiesOverTheirCapsConsumeExactlyTheSharedImageBudget() {
+        val third = 2 * 1024 * 1024 / 3
+        val caps = listOf(third, third, 2 * 1024 * 1024 - 2 * third)
+        fixture(respond = { _, socket -> socket.reply(body = ByteArray(third + 4096), declared = null) }) { h ->
+            h.control()
+            h.client.newOperation(MediaHttpOperation.PAGE_AND_CAROUSEL).use { token ->
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(caps.size)
+                try {
+                    caps.map { cap -> pool.submit<MediaHttpResult> {
+                        h.client.fetchCarouselImage(token, PublicMediaRequest("https://pbs.twimg.com/media/Synthetic.jpg",
+                            MediaHttpPurpose.IMAGE, hostRule = MediaHostRule.X_MEDIA), cap)
+                    } }.forEach { assertFailure(it.get(5, TimeUnit.SECONDS), MediaHttpFailure.BODY_LIMIT) }
+                } finally { pool.shutdownNow() }
+                // An over-cap body takes exactly its cap: no probe byte past the 2 MiB the caps share.
+                assertEquals(2L * 1024 * 1024, token.budget.snapshot().consumedBytes)
+            }
+        }
     }
 
     @Test fun readTimeoutRejectsStalledHeadersWithoutPartialSuccess() {

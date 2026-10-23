@@ -24,7 +24,11 @@ import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.x.XPostParser
 import java.io.Closeable
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -55,6 +59,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     private val facebookParser = FacebookPageParser()
     private val xParser = XPostParser()
     private val instagramParser = InstagramPostParser()
+    /** Carousel bodies fetched at once (tests compare against 1). */
+    internal var carouselFetches = CAROUSEL_PARALLEL_FETCHES
 
     private companion object {
         /** Process-wide: a retired decode still owns its raster until it returns and is recycled. */
@@ -113,6 +119,11 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     ImageSourceType.DIRECT -> fetchDirect(operation)
                 } } catch (_: OutOfMemoryError) {
                     Fetched.Failed(failure(ImageFailure.BUDGET, operation.fetchPhase))
+                } catch (_: LinkageError) {
+                    // A class-init failure on the device reads as a refused post, never an app crash.
+                    Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, operation.fetchPhase))
+                } catch (_: StackOverflowError) {
+                    Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, operation.fetchPhase))
                 }
             }
             val asset = when (fetched) {
@@ -400,31 +411,58 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         var last: Fetched.Failed? = null
         var notPreviewed = 0
         var unavailable = discovery.unavailableCount
+        // Up to three bodies in flight; results are walked in position order, exactly as the serial loop counted them.
+        val slots = arrayOfNulls<Fetched>(candidates.size)
+        val next = AtomicInteger()
+        fun work() {
+            while (true) {
+                val position = next.getAndIncrement()
+                if (position >= candidates.size || terminal(operation) != null) return
+                // Reads state only: stopping (and its cleanups) must not run under the budget's monitor.
+                val cap = operation.token.budget.reserveImage(thumbnails) {
+                    operation.state == ImageInspectionOperation.State.ACTIVE && operation.token.id.terminal == null
+                }
+                if (cap <= 0) return
+                try {
+                    val url = candidates[position]
+                    val previewUrl = if (thumbnails) previewUrls[position] else url
+                    slots[position] = fetchAsset(operation, PublicMediaRequest(previewUrl, MediaHttpPurpose.IMAGE, pageContext, rule),
+                        cap) { bytes, image ->
+                        if (pageContext != null && !contextAttempted) {
+                            contextAttempted = true
+                            references.evictForNewContext().forEach(http::forgetLinkedInPost)
+                            postContext = http.rememberLinkedInPost(operation.token, pageContext,
+                                MediaHttpSaveBinding(operation.source, operation.identity, validity))
+                        }
+                        Fetched.Asset(bytes, image, url, 1, discovery, validity, postContext, linkedIn, rule, metadata, position,
+                            previewOnly = previewUrl != url, videoSource = videoSource)
+                    }
+                } finally { operation.token.budget.releaseImage(cap) }
+            }
+        }
+        // LinkedIn stays serial: its first photo opens the post context and photos are full size.
+        val helpers = if (linkedIn || candidates.size < 2) 0 else minOf(carouselFetches, candidates.size) - 1
+        val pool = if (helpers > 0) Executors.newFixedThreadPool(helpers) { task ->
+            Thread(task, "media-carousel").apply { isDaemon = true }
+        } else null
         try {
+            val running = (0 until helpers).map { checkNotNull(pool).submit(Callable { work() }) }
+            work()
+            running.forEach { future ->
+                try { future.get() } catch (failure: ExecutionException) { throw failure.cause ?: failure }
+            }
+            // A deadline keeps every photo that finished in time.
+            val anyAsset = slots.any { it is Fetched.Asset }
             for ((position, url) in candidates.withIndex()) {
-                val retired = terminal(operation)
-                if (retired != null) {
-                    if (retired == ImageFailure.NETWORK && operation.token.checkActive() == MediaHttpFailure.TIMEOUT && assets.isNotEmpty()) {
-                        notPreviewed += candidates.size - position
-                        break
-                    }
-                    return Fetched.Failed(failure(retired, ImagePhase.IMAGE))
-                }
-                if (operation.token.budget.imageLimit() <= 0) {
-                    notPreviewed += candidates.size - position
-                    break
-                }
-                val previewUrl = if (thumbnails) previewUrls[position] else url
-                val fetched = fetchAsset(operation, PublicMediaRequest(previewUrl, MediaHttpPurpose.IMAGE, pageContext, rule),
-                    thumbnail = thumbnails) { bytes, image ->
-                    if (pageContext != null && !contextAttempted) {
-                        contextAttempted = true
-                        references.evictForNewContext().forEach(http::forgetLinkedInPost)
-                        postContext = http.rememberLinkedInPost(operation.token, pageContext,
-                            MediaHttpSaveBinding(operation.source, operation.identity, validity))
-                    }
-                    Fetched.Asset(bytes, image, url, 1, discovery, validity, postContext, linkedIn, rule, metadata, position,
-                        previewOnly = previewUrl != url, videoSource = videoSource)
+                val fetched = slots[position]
+                if (fetched == null) {
+                    // Not fetched: retired, past the deadline, or out of image bytes.
+                    val retired = terminal(operation)
+                    if (retired != null && !(retired == ImageFailure.NETWORK &&
+                            operation.token.checkActive() == MediaHttpFailure.TIMEOUT && anyAsset))
+                        return Fetched.Failed(failure(retired, ImagePhase.IMAGE))
+                    notPreviewed++
+                    continue
                 }
                 when (fetched) {
                     is Fetched.Asset -> assets += fetched
@@ -456,6 +494,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             completed = true
             return result
         } finally {
+            pool?.shutdownNow()
             if (!completed) postContext?.let(http::forgetLinkedInPost)
         }
     }
@@ -503,10 +542,12 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         return if (bigger) larger to parsed.discovery.previewQuality else null
     }
 
-    private fun fetchAsset(operation: ImageInspectionOperation, request: PublicMediaRequest, thumbnail: Boolean = false,
+    /** [cap]: a carousel body's reserved byte share; without one a carousel operation's body may use what is left. */
+    private fun fetchAsset(operation: ImageInspectionOperation, request: PublicMediaRequest, cap: Int? = null,
         complete: (MediaHttpBody, MediaImageMetadata) -> Fetched.Asset): Fetched {
-        val response = when (val result = if (operation.token.operation.isCarousel)
-            http.fetchCarouselImage(operation.token, request, thumbnail) else http.fetch(operation.token, request)) {
+        val token = operation.token
+        val response = when (val result = if (token.operation.isCarousel)
+            http.fetchCarouselImage(token, request, cap ?: token.budget.imageLimit()) else http.fetch(token, request)) {
             is MediaHttpResult.Failure -> return Fetched.Failed(transportFailure(operation, result, ImagePhase.IMAGE),
                 imageFormatFor(result.imageMimeType))
             is MediaHttpResult.Success -> result.response
