@@ -273,14 +273,14 @@ class NpeInspectTest {
 
     private var now = 1_700_000_000_000L
     private fun engine(runtime: Runtime, fast: Fast, limits: EngineLimits = EngineLimits()) =
-        YoutubedlEngine(runtime, limits, fastSource = fast, recent = RecentInspections { now })
+        YoutubedlEngine(runtime, limits, fastSource = fast, recent = RecentInspections({ now }, { now }))
 
     @Test fun npeHitSkipsNpeAndStillTrimsToTheChosenStreams() = runBlocking {
         val json = fixture()
         val fast = Fast { json }
         val runtime = Runtime(fallbackJson)
         val cache = YtdlpInfoCache(temp.newFolder()) { now }
-        val engine = YoutubedlEngine(runtime, infoCache = cache, fastSource = fast, recent = RecentInspections { now })
+        val engine = YoutubedlEngine(runtime, infoCache = cache, fastSource = fast, recent = RecentInspections({ now }, { now }))
         assertIs<InspectResult.Success>(engine.inspect(source, "first"))
         // NPE JSON is not yt-dlp output: an engine update still hits.
         runtime.initialization.installedVersion = "next-version"
