@@ -15,8 +15,11 @@ import dev.ahmed.savlino.domain.DownloadError
 
 /** Battery-limit stops (OS evidence only) and the settings page that lifts them. Needs no battery permission. */
 object BatterySettings {
-    /** Doze/battery saver, job quota, background restriction, standby bucket. Never inferred from network errors. */
-    private val batteryStopReasons = setOf(WorkInfo.STOP_REASON_DEVICE_STATE, WorkInfo.STOP_REASON_QUOTA,
+    /**
+     * Job quota, background restriction, standby bucket. Never inferred from network errors.
+     * DEVICE_STATE is left out: Android also uses it for memory pressure, so it proves nothing about battery.
+     */
+    private val batteryStopReasons = setOf(WorkInfo.STOP_REASON_QUOTA,
         WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION, WorkInfo.STOP_REASON_APP_STANDBY)
 
     @StringRes val errorText = R.string.download_battery_error

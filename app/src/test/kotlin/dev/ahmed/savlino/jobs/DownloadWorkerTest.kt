@@ -385,7 +385,7 @@ class DownloadWorkerTest {
 
     @Test fun batteryStopReasonFailsAsStoppedByBattery() = runBlocking {
         for (reason in listOf(WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION, WorkInfo.STOP_REASON_APP_STANDBY,
-                WorkInfo.STOP_REASON_QUOTA, WorkInfo.STOP_REASON_DEVICE_STATE)) {
+                WorkInfo.STOP_REASON_QUOTA)) {
             fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
                 val id = "battery-$reason"
                 f.store.enqueue(command(id))
@@ -402,15 +402,21 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun unknownStopStaysInterrupted() = runBlocking {
-        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
-            f.store.enqueue(command("plain-stop"))
-            val worker = f.worker("plain-stop")
-            val running = launch(Dispatchers.Default) { worker.doWork() }
-            withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
-            worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
-            running.cancelAndJoin()
-            assertEquals(DownloadError.Interrupted, f.store.get("plain-stop")!!.error)
+    @Test fun unknownAndDeviceStateStopsStayInterrupted() = runBlocking {
+        // DEVICE_STATE also covers memory pressure: no battery claim, still retryable.
+        for (reason in listOf(WorkInfo.STOP_REASON_UNKNOWN, WorkInfo.STOP_REASON_DEVICE_STATE)) {
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+                val id = "plain-stop-${reason.toString().replace('-', 'm')}"
+                f.store.enqueue(command(id))
+                val worker = f.worker(id)
+                val running = launch(Dispatchers.Default) { worker.doWork() }
+                withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+                worker.stop(reason)
+                running.cancelAndJoin()
+                val row = f.store.get(id)!!
+                assertEquals(DownloadError.Interrupted, row.error)
+                assertTrue(row.retryable)
+            }
         }
     }
 

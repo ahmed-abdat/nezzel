@@ -21,10 +21,10 @@ class BatterySettingsTest {
     private val app = ApplicationProvider.getApplicationContext<android.app.Application>()
 
     @Test fun onlyBatteryStopReasonsMap() {
-        for (reason in listOf(WorkInfo.STOP_REASON_DEVICE_STATE, WorkInfo.STOP_REASON_QUOTA,
+        for (reason in listOf(WorkInfo.STOP_REASON_QUOTA,
                 WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION, WorkInfo.STOP_REASON_APP_STANDBY))
             assertTrue("$reason", BatterySettings.batteryStopped(reason, sdk = 31))
-        for (reason in listOf(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY, WorkInfo.STOP_REASON_UNKNOWN,
+        for (reason in listOf(WorkInfo.STOP_REASON_DEVICE_STATE, WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY, WorkInfo.STOP_REASON_UNKNOWN,
                 WorkInfo.STOP_REASON_NOT_STOPPED, WorkInfo.STOP_REASON_USER, WorkInfo.STOP_REASON_CANCELLED_BY_APP,
                 WorkInfo.STOP_REASON_PREEMPT, WorkInfo.STOP_REASON_TIMEOUT, WorkInfo.STOP_REASON_FOREGROUND_SERVICE_TIMEOUT,
                 WorkInfo.STOP_REASON_CONSTRAINT_BATTERY_NOT_LOW, WorkInfo.STOP_REASON_SYSTEM_PROCESSING))
