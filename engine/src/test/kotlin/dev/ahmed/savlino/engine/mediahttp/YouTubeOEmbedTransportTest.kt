@@ -17,7 +17,7 @@ class YouTubeOEmbedTransportTest {
     }
     private val source = "https://youtu.be/abcdefghijk"
     private fun fixture(respond: (RecordedMediaRequest, SSLSocket) -> Unit, test: (MediaHttpHarness) -> Unit) {
-        MediaHttpServer(identity, respond).use { server -> MediaHttpHarness(identity, server).use(test) }
+        MediaHttpServer(identity, respond = respond).use { server -> MediaHttpHarness(identity, server).use(test) }
     }
 
     @Test fun boundedJsonUsesNoCookiesAndReturnsRealMetadata() {
