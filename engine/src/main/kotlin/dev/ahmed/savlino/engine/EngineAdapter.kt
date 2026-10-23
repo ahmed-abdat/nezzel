@@ -28,6 +28,10 @@ interface EngineAdapter {
     suspend fun inspect(source: LinkRevision, operationId: String): InspectResult
     /** Local best-effort persistence of already inspected metadata, after explicit confirmation. */
     fun prepareDownload(command: DownloadCommand) = Unit
+    /** yt-dlp-shaped JSON a native reader already fetched for [link]; a later inspect may use it. Memory only. */
+    fun prefetched(link: ValidatedLink, json: String) = Unit
+    /** Clear link history: forget every link's recent result. */
+    fun clearRecentLinks() = Unit
     suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult
     fun cancel(operationId: String)
 }

@@ -34,7 +34,8 @@ internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 1
 /** Construction/availability are inert. Startup warm-up extracts and probes local binaries only. */
 class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private val limits: EngineLimits = EngineLimits(), private val infoCache: YtdlpInfoCache? = null,
-    private val fastSource: YoutubeFastSource? = null) : EngineAdapter {
+    private val fastSource: YoutubeFastSource? = null,
+    private val recent: RecentInspections = RecentInspections()) : EngineAdapter {
     constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
         fastSource = NpeFastSource())
     private val unavailable = UnavailableEngine()
@@ -42,6 +43,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private val fastSourceInFlight = AtomicBoolean()
     /** Hashed links whose first try failed fast on a dead network; later tries take the full yt-dlp path. Memory only. */
     private val fastFailed = LinkedHashSet<String>()
+    /** One extraction per link at a time; a second inspect of the same link waits, then reads [recent]. */
+    private val inFlight = HashMap<String, CompletableDeferred<Unit>>()
     private class Operation {
         // Never pass externally supplied IDs to the library's child-process shell command.
         val processId = UUID.randomUUID().toString()
@@ -89,53 +92,101 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // After initialization: a one-time extraction must not consume the network budget.
             current.expireIn(limits.inspectMs)
             val version = version(current)
-            if (YtdlpCommand.isYouTube(source) && fastSource != null) {
-                val key = linkKey(source)
-                // A retry after a fast failure goes straight to yt-dlp; only a success clears the key.
-                if (synchronized(fastFailed) { key in fastFailed }) {
-                    current.expireIn(limits.inspectMs)
-                    return@operation inspectOnce(current, source, version).also {
-                        if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
-                    }
-                }
-                // The version probe keeps its existing budget. NPE never runs under that watchdog:
-                // spending its independent budget must not mark the whole operation as timed out.
-                synchronized(current) {
-                    checkCancelled(current)
-                    current.deadline = NO_DEADLINE
-                }
-                val result = fastInfoJson(current, source, operationId, fastSource)
-                if (result is FastResult.Unreachable && synchronized(fastFailed) {
-                        fastFailed.add(key).also { while (fastFailed.size > FAST_FAILED_MAX) fastFailed.remove(fastFailed.first()) }
-                    }) return@operation InspectResult.Failure(unreachable(result))
-                val json = (result as? FastResult.Json)?.json
-                val inspection = if (json == null) null else try {
-                    YtdlpMetadataMapper.map(json, source, version).takeIf {
-                        it.formats.isNotEmpty() && NpeInfoJson.accepts(json, it)
-                    }
-                } catch (_: Exception) { null }
-                catch (_: LinkageError) { null }
+            joined(current, source) { recentHit(source, version) ?: extract(current, source, operationId, version) }
+        }
+
+    override fun prefetched(link: ValidatedLink, json: String) = recent.putPrefetched(link, json)
+
+    override fun clearRecentLinks() {
+        recent.clear()
+        synchronized(fastFailed) { fastFailed.clear() }
+    }
+
+    private suspend fun joined(current: Operation, source: LinkRevision, body: suspend () -> InspectResult): InspectResult {
+        val key = RecentInspections.key(source.link)
+        while (true) {
+            val owner = CompletableDeferred<Unit>()
+            val running = synchronized(inFlight) { inFlight.putIfAbsent(key, owner) }
+            if (running == null) try { return body() } finally {
+                synchronized(inFlight) { inFlight.remove(key, owner) }
+                owner.complete(Unit)
+            }
+            // Waiting spends no network budget; a cancel still ends it at once. A miss afterwards makes this the owner.
+            synchronized(current) {
                 checkCancelled(current)
-                if (inspection != null && json != null) {
-                    synchronized(fastFailed) { fastFailed.remove(key) }
-                    infoCache?.remember(inspection, json, trimToChosen = true)
-                    return@operation InspectResult.Success(inspection)
-                }
-                // yt-dlp gets a full inspection budget from its own start, including after a cap skip.
+                current.deadline = NO_DEADLINE
+            }
+            select {
+                current.cancellation.onAwait { throw OperationCancelled() }
+                running.onAwait { }
+            }
+            current.expireIn(limits.inspectMs)
+        }
+    }
+
+    /** A new sheet re-maps the stored JSON: fresh inspectionId and revision, no NPE, no argv, no network. */
+    private fun recentHit(source: LinkRevision, version: String): InspectResult? {
+        val entry = recent.get(source.link, version) ?: return null
+        val inspection = try {
+            YtdlpMetadataMapper.map(entry.json, source, version).takeIf {
+                it.formats.isNotEmpty() &&
+                    (entry.provenance != RecentInspections.Provenance.NPE || NpeInfoJson.accepts(entry.json, it))
+            }
+        } catch (_: Exception) { null }
+        catch (_: LinkageError) { null }
+        if (inspection == null) { recent.remove(source.link); return null }
+        infoCache?.remember(inspection, entry.json, entry.trimToChosen, entry.createdAt, entry.signedUntil)
+        return InspectResult.Success(inspection)
+    }
+
+    private fun signedUntil(json: String): Long? = try { RecentInspections.signedUntil(json) } catch (_: Exception) { null }
+
+    private suspend fun extract(current: Operation, source: LinkRevision, operationId: String, version: String): InspectResult {
+        if (YtdlpCommand.isYouTube(source) && fastSource != null) {
+            val key = RecentInspections.key(source.link)
+            // A retry after a fast failure goes straight to yt-dlp; only a success clears the key.
+            if (synchronized(fastFailed) { key in fastFailed }) {
                 current.expireIn(limits.inspectMs)
-                return@operation inspectOnce(current, source, version).also {
+                return inspectOnce(current, source, version).also {
                     if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
                 }
             }
-            inspectOnce(current, source, version)
+            // The version probe keeps its existing budget. NPE never runs under that watchdog:
+            // spending its independent budget must not mark the whole operation as timed out.
+            synchronized(current) {
+                checkCancelled(current)
+                current.deadline = NO_DEADLINE
+            }
+            val result = fastInfoJson(current, source, operationId, fastSource)
+            if (result is FastResult.Unreachable && synchronized(fastFailed) {
+                    fastFailed.add(key).also { while (fastFailed.size > FAST_FAILED_MAX) fastFailed.remove(fastFailed.first()) }
+                }) return InspectResult.Failure(unreachable(result))
+            val json = (result as? FastResult.Json)?.json
+            val inspection = if (json == null) null else try {
+                YtdlpMetadataMapper.map(json, source, version).takeIf {
+                    it.formats.isNotEmpty() && NpeInfoJson.accepts(json, it)
+                }
+            } catch (_: Exception) { null }
+            catch (_: LinkageError) { null }
+            checkCancelled(current)
+            if (inspection != null && json != null) {
+                synchronized(fastFailed) { fastFailed.remove(key) }
+                val signed = signedUntil(json)
+                infoCache?.remember(inspection, json, trimToChosen = true, expiresAt = signed)
+                recent.put(source.link, json, RecentInspections.Provenance.NPE, null, signed)
+                return InspectResult.Success(inspection)
+            }
+            // yt-dlp gets a full inspection budget from its own start, including after a cap skip.
+            current.expireIn(limits.inspectMs)
+            return inspectOnce(current, source, version).also {
+                if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
+            }
         }
+        return inspectOnce(current, source, version)
+    }
 
     private fun unreachable(result: FastResult.Unreachable) =
         if (result.offline) DownloadError.Offline else DownloadError.Network
-
-    private fun linkKey(source: LinkRevision): String =
-        java.security.MessageDigest.getInstance("SHA-256").digest(source.link.normalizedUrl.toByteArray())
-            .joinToString("") { "%02x".format(it) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun fastInfoJson(current: Operation, source: LinkRevision, operationId: String,
@@ -201,7 +252,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
         return if (inspection.formats.isEmpty()) InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.NoFormats))
         else {
-            infoCache?.remember(inspection, json)
+            val signed = signedUntil(json)
+            infoCache?.remember(inspection, json, expiresAt = signed)
+            recent.put(source.link, json, RecentInspections.Provenance.YTDLP, version, signed)
             InspectResult.Success(inspection)
         }
     }

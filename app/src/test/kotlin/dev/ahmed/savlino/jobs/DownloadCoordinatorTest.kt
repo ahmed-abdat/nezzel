@@ -297,6 +297,16 @@ class DownloadCoordinatorTest {
         override fun close() = store.close()
     }
 
+    @Test fun clearLinkHistoryAlsoEmptiesTheEnginesRecentResults() = runBlocking {
+        var cleared = 0
+        val engine = object : EngineAdapter by FakeEngine() { override fun clearRecentLinks() { cleared++ } }
+        val store = JobStore(app)
+        try {
+            DownloadCoordinator(app, engine = engine, store = store).clearShareLinks()
+            assertEquals(1, cleared)
+        } finally { store.close() }
+    }
+
     @Test fun secondConfirmationKeepsOneJournalAndOneUniqueWork() = runBlocking {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
