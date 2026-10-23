@@ -65,8 +65,11 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
             val failed = links.optionsState is OptionsState.Error || links.optionsState is OptionsState.ImageError
             if (host != null && links.optionsState !is OptionsState.ImageReady && !failed) {
                 val inspection = (links.optionsState as? OptionsState.Ready)?.inspection
-                InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking,
-                    (links.optionsState as? OptionsState.Checking)?.earlyPreview)
+                // A new link starts a fresh header, so a kept preview never carries over to another video.
+                key(links.text) {
+                    InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking,
+                        (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown)
+                }
             }
             if (links.photosUnavailable) Text(stringResource(R.string.image_photos_unavailable),
                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)

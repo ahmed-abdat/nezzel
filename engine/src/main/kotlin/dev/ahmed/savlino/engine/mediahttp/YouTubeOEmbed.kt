@@ -65,6 +65,8 @@ class YouTubeOEmbed internal constructor(private val http: MediaHttpClient,
             return id?.takeIf(ID::matches)
         }
         fun supports(source: String): Boolean = videoId(source) != null
+        /** The image oEmbed names for this video, known before any request, so the tile can load while oEmbed runs. */
+        fun thumbnail(source: String): String? = videoId(source)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
         internal fun requestUrl(source: String): String? = videoId(source)?.let { id ->
             HttpUrl.Builder().scheme("https").host("www.youtube.com").addPathSegment("oembed")
                 .addQueryParameter("url", "https://www.youtube.com/watch?v=$id")
