@@ -24,6 +24,8 @@ import dev.ahmed.savlino.jobs.EngineUpdateStatus
 import dev.ahmed.savlino.jobs.NezzelApplication
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.ThemePref
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.ahmed.savlino.ui.*
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
@@ -33,8 +35,9 @@ import dev.ahmed.savlino.update.UpdateAutoSetting
 import dev.ahmed.savlino.update.UpdateSettings
 
 /**
- * Everyday choices on one page in grouped cards; automatic options, clearing link history, engine tools and the
- * update-check switch sit one level down under Advanced, so the first screen stays short.
+ * Everyday choices on one page in grouped cards; automatic options, downloads at the same time, clearing link
+ * history, engine tools and the update-check switch sit one level down under Advanced, so the first screen stays
+ * short.
  */
 @Composable
 internal fun SettingsScreen(
@@ -48,6 +51,7 @@ internal fun SettingsScreen(
     onClearLinks: (() -> Unit)? = null,
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
+    val app = LocalContext.current.applicationContext as? NezzelApplication
     BackHandler(advanced) { advanced = false }
     val reduced = LocalReducedMotion.current
     AnimatedContent(advanced, transitionSpec = {
@@ -55,7 +59,9 @@ internal fun SettingsScreen(
         else fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) togetherWith fadeOut(tween(70, easing = Motion.EaseOut))
     }, label = "settings_page") { page ->
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
-            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks) { advanced = false }
+            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks,
+            app?.preferences?.parallelDownloadsFlow?.collectAsState()?.value, { app?.preferences?.chooseParallelDownloads(it) },
+            language) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
             onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
     }
@@ -141,7 +147,7 @@ internal fun PrivacySettings(onClear: () -> Unit) {
 internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: () -> Unit, updates: AppUpdates?,
     automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
     confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, onClearLinks: (() -> Unit)? = null,
-    back: () -> Unit) {
+    parallel: Int? = null, onParallel: (Int) -> Unit = {}, language: String = "en", back: () -> Unit) {
     if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
         title = { Text(stringResource(R.string.engine_update_paused_title)) },
         text = { Text(stringResource(R.string.engine_update_paused_body)) },
@@ -162,6 +168,9 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                     SwitchSetting(stringResource(R.string.automatic_options), stringResource(R.string.automatic_options_help),
                         on, R.drawable.ic_ms_bolt, onAutomaticOptions)
                 }
+            }
+            parallel?.let { count ->
+                SettingsGroup(stringResource(R.string.downloads)) { ParallelSetting(count, language, onParallel) }
             }
             onClearLinks?.let { PrivacySettings(it) }
             engine?.let { engine ->
@@ -190,6 +199,21 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LicencesLink()
             }
+        }
+    }
+}
+
+/** One tap: the number of downloads that run together, 1 to 3. The title above says what the numbers mean. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ParallelSetting(count: Int, language: String, onCount: (Int) -> Unit) = Column {
+    SettingsRow(stringResource(R.string.parallel_downloads), icon = R.drawable.ic_download, body = stringResource(R.string.parallel_downloads_help))
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, bottom = Space.m)) {
+        (1..3).forEach { n ->
+            val label = NezzelFormat.count(n, language)
+            val spoken = stringResource(R.string.parallel_downloads_option, label)
+            SegmentedButton(n == count, { onCount(n) }, SegmentedButtonDefaults.itemShape(n - 1, 3),
+                Modifier.heightIn(min = 48.dp).semantics { contentDescription = spoken }) { Text(label) }
         }
     }
 }

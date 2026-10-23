@@ -61,7 +61,7 @@ class DownloadCoordinatorTest {
     }
 
     @Test fun transfersStaySerialAndQueuedCancellationCannotStartOrCancelTheOtherJob() = runBlocking {
-        heldTransfer().use { f ->
+        heldTransfer(limit = 1).use { f ->
             f.coordinator.enqueue(command("running")); f.coordinator.enqueue(command("queued"))
             val running = async(Dispatchers.IO) { f.coordinator.execute("running", {}, {}) }
             var queued: Deferred<JobRecord?>? = null
@@ -259,15 +259,104 @@ class DownloadCoordinatorTest {
         }
     }
 
-    private fun heldTransfer(): HeldTransfer {
+    @Test fun twoTransfersRunTogetherAndMaintenanceWaitsForBoth() = runBlocking {
+        heldTransfer().use { f ->
+            f.coordinator.enqueue(command("one")); f.coordinator.enqueue(command("two"))
+            val one = async(Dispatchers.IO) { f.coordinator.execute("one", {}, {}) }
+            val two = async(Dispatchers.IO) { f.coordinator.execute("two", {}, {}) }
+            try {
+                withTimeout(5000) { while (f.transferred.size < 2) yield() }
+                assertEquals(setOf("one", "two"), f.transferred.toSet())
+                assertEquals(JobStage.TRANSFERRING, f.store.get("one")!!.stage)
+                assertEquals(JobStage.TRANSFERRING, f.store.get("two")!!.stage)
+                assertFalse(f.coordinator.maintenance.updateNow())
+                one.cancelAndJoin()
+                assertFalse(two.isCompleted)
+                assertFalse(f.coordinator.maintenance.updateNow())
+                f.release.complete(Unit); two.await()
+                assertTrue(f.coordinator.maintenance.updateNow())
+            } finally { f.release.complete(Unit); one.cancelAndJoin(); two.cancelAndJoin() }
+        }
+    }
+
+    @Test fun pausedAndExpiredWaitersNeverTransferAndExpiryDoesNotWaitForTheActiveJob() = runBlocking {
+        heldTransfer(limit = 1).use { f ->
+            for (id in listOf("running", "paused", "expired")) f.coordinator.enqueue(command(id))
+            val running = async(Dispatchers.IO) { f.coordinator.execute("running", {}, {}) }
+            var paused: Deferred<JobRecord?>? = null; var expired: Deferred<JobRecord?>? = null
+            try {
+                withTimeout(5000) { f.entered.await() }
+                paused = async(Dispatchers.IO) { f.coordinator.execute("paused", {}, {}) }
+                expired = async(Dispatchers.IO) { f.coordinator.execute("expired", {}, {}) }
+                assertNull(withTimeoutOrNull(250) { paused.await() })
+                assertNull(withTimeoutOrNull(250) { expired.await() })
+                assertTrue(f.coordinator.pause("paused"))
+                assertEquals(JobStage.PAUSED, withTimeout(5000) { paused.await() }!!.stage)
+                val expiredStaging = File(app.filesDir, "downloads/expired").apply {
+                    mkdirs(); resolve("output.mp4.part").writeText("partial")
+                }
+                f.store.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id='expired'",
+                    arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000))
+                f.store.get("unrelated")
+                val row = withTimeout(5000) { expired.await() }!!
+                assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)
+                assertFalse(expiredStaging.exists())
+                assertFalse(running.isCompleted)
+                f.release.complete(Unit); running.await()
+                assertEquals(listOf("running"), f.transferred.toList())
+            } finally { f.release.complete(Unit); running.cancelAndJoin(); paused?.cancelAndJoin(); expired?.cancelAndJoin() }
+        }
+    }
+
+    @Test fun admissionRechecksTheJournalEvenWithoutAnExplicitSlotRemoval() = runBlocking {
+        heldTransfer(limit = 1).use { f ->
+            for (id in listOf("running", "stale", "next")) f.coordinator.enqueue(command(id))
+            val running = async(Dispatchers.IO) { f.coordinator.execute("running", {}, {}) }
+            var stale: Deferred<JobRecord?>? = null; var next: Deferred<JobRecord?>? = null
+            try {
+                withTimeout(5000) { f.entered.await() }
+                stale = async(Dispatchers.IO) { f.coordinator.execute("stale", {}, {}) }
+                assertNull(withTimeoutOrNull(250) { stale.await() })
+                assertTrue(f.store.pause("stale")) // Bypass coordinator removal: row recheck must protect admission.
+                next = async(Dispatchers.IO) { f.coordinator.execute("next", {}, {}) }
+                f.release.complete(Unit)
+                running.await()
+                assertEquals(JobStage.PAUSED, withTimeout(5000) { stale.await() }!!.stage)
+                withTimeout(5000) { next.await() }
+                assertEquals(listOf("running", "next"), f.transferred.toList())
+            } finally { f.release.complete(Unit); running.cancelAndJoin(); stale?.cancelAndJoin(); next?.cancelAndJoin() }
+        }
+    }
+
+    @Test fun anotherTransferCannotSpendLivePublicationHeadroomAndCancellationReleasesIt() = runBlocking {
+        heldTransfer(freeBytes = 1536L * 1024 * 1024).use { f ->
+            for (id in listOf("one", "rejected", "next"))
+                f.coordinator.enqueue(command(id, Size.Exact(512L * 1024 * 1024)))
+            val one = async(Dispatchers.IO) { f.coordinator.execute("one", {}, {}) }
+            try {
+                withTimeout(5000) { f.entered.await() }
+                val rejected = withTimeout(5000) { f.coordinator.execute("rejected", {}, {}) }!!
+                assertEquals(JobStage.FAILED, rejected.stage)
+                assertEquals(DownloadError.InsufficientSpace, rejected.error)
+                assertEquals(listOf("one"), f.transferred.toList())
+                one.cancelAndJoin()
+                f.release.complete(Unit)
+                withTimeout(5000) { f.coordinator.execute("next", {}, {}) }
+                assertEquals(listOf("one", "next"), f.transferred.toList())
+                assertEquals(DownloadError.Network, f.store.get("next")!!.error)
+            } finally { f.release.complete(Unit); one.cancelAndJoin() }
+        }
+    }
+
+    private fun heldTransfer(limit: Int = 2, freeBytes: Long = Long.MAX_VALUE): HeldTransfer {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(context: Context, name: String, params: WorkerParameters) =
                     object : Worker(context, params) { override fun doWork() = Result.success() }
             }).build())
-        return HeldTransfer()
+        return HeldTransfer(limit, freeBytes)
     }
-    private inner class HeldTransfer : AutoCloseable {
+    private inner class HeldTransfer(limit: Int, freeBytes: Long) : AutoCloseable {
         val store = JobStore(app)
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
@@ -290,8 +379,9 @@ class DownloadCoordinatorTest {
             }
         }
         val coordinator = DownloadCoordinator(app, engine, store,
+            parallelDownloads = kotlinx.coroutines.flow.MutableStateFlow(limit),
             space = dev.ahmed.savlino.storage.SpaceBudget(app.filesDir, app.cacheDir,
-                dev.ahmed.savlino.storage.FreeSpace { Long.MAX_VALUE }), workManager = {
+                dev.ahmed.savlino.storage.FreeSpace { freeBytes }), workManager = {
             beforeSchedule(); WorkManager.getInstance(app)
         })
         override fun close() = store.close()

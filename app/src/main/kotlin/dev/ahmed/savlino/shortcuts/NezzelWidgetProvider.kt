@@ -52,15 +52,20 @@ class NezzelWidgetProvider : AppWidgetProvider() {
                     else -> R.string.widget_failed
                 })
             }
+            // "+1" when more run behind the shown job: isolated, so the sign stays before the digit in RTL.
+            val more = state.more.takeIf { it > 0 && state.title != null }
+            val shown = more?.let { "$status · ${NezzelFormat.isolate(context.getString(R.string.widget_more, NezzelFormat.count(it, language)))}" } ?: status
+            val spoken = listOfNotNull(context.getString(R.string.downloads), title, status,
+                more?.let { context.resources.getQuantityString(R.plurals.widget_more_running, it, NezzelFormat.count(it, language)) })
             return RemoteViews(context.packageName, R.layout.widget_nezzel).apply {
                 setInt(R.id.widget_root, "setLayoutDirection", context.resources.configuration.layoutDirection)
                 setTextViewText(R.id.widget_paste, context.getString(R.string.shortcut_paste_link))
                 setContentDescription(R.id.widget_paste, context.getString(R.string.shortcut_paste_link))
                 setTextViewText(R.id.widget_title, title)
                 setViewVisibility(R.id.widget_title, if (state.title == null) View.GONE else View.VISIBLE)
-                setTextViewText(R.id.widget_status, status)
+                setTextViewText(R.id.widget_status, shown)
                 setViewVisibility(R.id.widget_latest, if (narrow) View.GONE else View.VISIBLE)
-                setContentDescription(R.id.widget_latest, listOf(context.getString(R.string.downloads), title, status).joinToString(". "))
+                setContentDescription(R.id.widget_latest, spoken.joinToString(". "))
                 setOnClickPendingIntent(R.id.widget_paste, ShortcutActions.pendingIntent(context, ShortcutActions.PASTE_LINK))
                 setOnClickPendingIntent(R.id.widget_latest, ShortcutActions.pendingIntent(context, ShortcutActions.OPEN_DOWNLOADS))
             }
