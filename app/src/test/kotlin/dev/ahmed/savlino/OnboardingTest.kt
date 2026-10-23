@@ -493,6 +493,9 @@ class OnboardingStartupTest {
             assertFalse(app.updated.isCompleted)
             compose.onNodeWithText("Skip").performClick()
             assertFalse(app.updated.isCompleted)
+            // U5a: maintenance also waits for the first foreground clipboard decision, which needs focus.
+            controller.windowFocusChanged(true)
+            compose.waitForIdle()
             app.downloads.maintenance.withInspection { } // First attempt ends, even if it found no media.
             kotlinx.coroutines.withTimeout(5000) { app.updated.await() }
             assertTrue(app.getSharedPreferences("engine-maintenance", 0).contains("attempt"))

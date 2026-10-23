@@ -8,8 +8,8 @@ import dev.ahmed.savlino.ui.LinkViewModel
 /** A blocked foreground entry can become eligible without a new resume/focus event. */
 @Composable
 internal fun ClipboardEntryEffect(links: LinkViewModel, readWhenFocused: () -> Unit) {
-    LaunchedEffect(links, links.clipboardEligible) {
-        if (links.clipboardEligible) readWhenFocused()
+    LaunchedEffect(links, links.clipboardEligible, links.clipboardDecisionReady) {
+        if (links.clipboardDecisionReady) readWhenFocused()
     }
 }
 

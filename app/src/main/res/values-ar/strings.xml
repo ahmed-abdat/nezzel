@@ -28,7 +28,7 @@
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">بلا إعلانات أو تتبّع</string>
     <string name="shared_video">رابط شاركته</string>
-    <string name="checking_qualities">جارٍ جلب الخيارات…</string>
+    <string name="checking_qualities">جارٍ جلب الجودات…</string>
     <string name="nothing_downloads">لا يبدأ الحفظ إلا عندما تضغط على «تنزيل» أو «حفظ»</string>
     <string name="cancel">إلغاء</string>
     <string name="video_group">فيديو</string>
@@ -210,7 +210,7 @@
     <string name="separator">" · "</string>
     <string name="format_kbps">%1$s kbps</string>
     <string name="spoken_separator">"، "</string>
-    <string name="checking_link">جارٍ جلب الخيارات…</string>
+    <string name="checking_link">جارٍ قراءة الرابط…</string>
     <string name="image_preview_desc">معاينة الصورة، %1$s</string>
     <string name="image_save">حفظ الصورة</string>
     <string name="image_save_size">حفظ الصورة · %1$s</string>

@@ -84,6 +84,7 @@ class EngineUpdateFlowTest {
             try {
                 vm.edit("https://example.com/video"); vm.checkLink(); pump()
                 assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+                vm.suggest(true, true, true) { error("An open sheet guards the clipboard") }
                 // Automatic first-run maintenance runs only after that first read finished.
                 runBlocking { withTimeout(5000) { assertEquals(!updateFails, coordinator.maintenance.checkWhenInspectionIdle()) } }
                 pump()
@@ -211,6 +212,7 @@ class EngineUpdateFlowTest {
             assertFalse(vm.engineWaiting)
             assertEquals(0L, coordinator.maintenance.state.value.generation)
             assertEquals("2025.11.12", (vm.optionsState as OptionsState.Ready).inspection.engineVersion)
+            vm.suggest(true, true, true) { error("An open sheet guards the clipboard") }
             updating = CoroutineScope(Dispatchers.IO).async { coordinator.maintenance.checkWhenInspectionIdle() }
             // An open options sheet keeps the user's choice usable: maintenance waits until it closes.
             runBlocking { delay(300) }; pump()

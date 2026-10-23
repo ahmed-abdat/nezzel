@@ -50,7 +50,7 @@ internal class MediaHttpTlsIdentity : Closeable {
             "-keyalg", "RSA", "-keysize", "2048", "-validity", "2", "-storetype", "PKCS12",
             "-keystore", storeFile.absolutePath, "-storepass", "fixture-password",
             "-keypass", "fixture-password", "-dname", "CN=media.test", "-noprompt",
-            "-ext", "SAN=dns:media.test,dns:other.test,dns:www.linkedin.com,dns:media.licdn.com,dns:lnkd.in,dns:www.facebook.com,dns:web.facebook.com,dns:fb.watch,dns:scontent.example.fbcdn.net,dns:z-p3-scontent.example.fbcdn.net,dns:external.example.fbcdn.net,dns:cdn.syndication.twimg.com,dns:pbs.twimg.com,dns:video.twimg.com,dns:www.instagram.com,dns:instagram.com,dns:instagram.fxyz1-1.fna.fbcdn.net,dns:scontent-xyz1-1.cdninstagram.com,dns:scontent.example.cdninstagram.com,dns:t.me,dns:telegram.me,dns:cdn1.telesco.pe,dns:public.api.bsky.app,dns:cdn.bsky.app")
+            "-ext", "SAN=dns:media.test,dns:other.test,dns:www.youtube.com,dns:www.linkedin.com,dns:media.licdn.com,dns:lnkd.in,dns:www.facebook.com,dns:web.facebook.com,dns:fb.watch,dns:scontent.example.fbcdn.net,dns:z-p3-scontent.example.fbcdn.net,dns:external.example.fbcdn.net,dns:cdn.syndication.twimg.com,dns:pbs.twimg.com,dns:video.twimg.com,dns:www.instagram.com,dns:instagram.com,dns:instagram.fxyz1-1.fna.fbcdn.net,dns:scontent-xyz1-1.cdninstagram.com,dns:scontent.example.cdninstagram.com,dns:t.me,dns:telegram.me,dns:cdn1.telesco.pe,dns:public.api.bsky.app,dns:cdn.bsky.app")
             .redirectErrorStream(true).redirectOutput(output).start()
         if (!process.waitFor(30, TimeUnit.SECONDS)) {
             process.destroyForcibly()

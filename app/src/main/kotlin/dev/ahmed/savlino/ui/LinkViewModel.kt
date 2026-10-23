@@ -12,6 +12,10 @@ import androidx.lifecycle.viewModelScope
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.EngineAdapter
 import dev.ahmed.savlino.engine.InspectResult
+import dev.ahmed.savlino.engine.InspectionPhase
+import dev.ahmed.savlino.engine.InspectionTiming
+import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
+import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
 import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
@@ -47,7 +51,7 @@ import kotlinx.coroutines.launch
 sealed interface OptionsState {
     data object Hidden : OptionsState
     data class Checking(val source: LinkRevision, val operationId: String, val image: Boolean = false,
-        val preparing: Boolean = false) : OptionsState
+        val preparing: Boolean = false, val earlyPreview: EarlyPreview? = null) : OptionsState
     /** [resolvedFrom]: the user's own link when [inspection] is of the Facebook post's `watch/?v=` link. */
     data class Ready(val inspection: Inspection, val resolvedFrom: LinkRevision? = null) : OptionsState
     data class Error(val error: DownloadError) : OptionsState
@@ -107,6 +111,7 @@ class LinkViewModel(
     private val previewDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
     initialHeight: Int? = null,
     private val rememberHeight: (Int) -> Unit = {},
+    private val earlyPreview: suspend (ValidatedLink) -> EarlyPreview? = { null },
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -190,6 +195,7 @@ class LinkViewModel(
     }
     private var gate = SuggestionGate(dismissed, linkKeyer)
     private var clipboardReady by mutableStateOf(initializeClipboard == null)
+    internal val clipboardDecisionReady get() = clipboardReady
     private val pendingClipboardDismissals = mutableListOf<ValidatedLink>()
     var clipboardForeground by mutableStateOf(true)
     private val clipboardWrites = Mutex()
@@ -272,6 +278,12 @@ class LinkViewModel(
     private var command: DownloadCommand? = null
     private var submissionId: String? = null
     private var inspectionJob: Job? = null
+    private var earlyPreviewJob: Job? = null
+    private var inspectionTiming: InspectionTiming? = null
+    internal fun optionsShown() {
+        if (optionsState is OptionsState.Ready || optionsState is OptionsState.ImageReady)
+            inspectionTiming?.record(InspectionPhase.OPTIONS_SHOWN)
+    }
     private var operationId: String? = null
     private var imageOperation = false
     private var revision = 0L
@@ -459,6 +471,7 @@ class LinkViewModel(
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
+        inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }
         if (ImageRoute.isUnsupported(source.link)) {
             optionsState = if (FacebookPostIdentity.isStoryLink(source.link.rawUrl))
                 OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE)
@@ -480,7 +493,7 @@ class LinkViewModel(
         imageOperation = true
         optionsState = OptionsState.Checking(source, id, image = true)
         // Not cancelled on invalidation: a late result must still arrive here so its preview is closed.
-        viewModelScope.launch {
+        viewModelScope.launch(requireNotNull(inspectionTiming).context()) {
             // A new inspection retires the previous reference, which would fail an in-flight Save as STALE.
             imageSaver?.awaitIdle()
             if (operationId != id) return@launch
@@ -495,6 +508,7 @@ class LinkViewModel(
                 (delivered.getAndSet(null) as? MediaInspectResult.Success)?.close()
                 throw cancelled
             } catch (_: Exception) { MediaInspectResult.Failure(ImageFailure.UNAVAILABLE, ImagePhase.IMAGE) }
+            InspectionTiming.mark(InspectionPhase.NATIVE_READER_DONE)
             if (operationId != id || currentSource()?.matches(source) != true) {
                 (result as? MediaInspectResult.Success)?.close()
                 return@launch
@@ -584,15 +598,33 @@ class LinkViewModel(
         }
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
     private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false) {
+        // A carousel's explicit View video options starts a new inspection without startInspection().
+        val timing = inspectionTiming ?: InspectionTiming().also {
+            it.record(InspectionPhase.INTAKE_ACCEPTED)
+            inspectionTiming = it
+        }
         // Reels/TV bypass the image reader, so canonicalize Instagram at the shared legacy entry too.
         val source = legacyReaderSource(input, MediaSourceRoute.INSTAGRAM)
         val origin = readerOrigin ?: input.takeUnless { it.matches(source) }
         val id = newOperationId()
         operationId = id
         optionsState = OptionsState.Checking(origin ?: source, id)
-        inspectionJob = viewModelScope.launch {
+        if (YouTubeOEmbed.supports(source.link.rawUrl)) {
+            earlyPreviewJob = viewModelScope.launch {
+                val preview = try { kotlinx.coroutines.withTimeoutOrNull(4_000) { earlyPreview(source.link) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+                if (preview != null && operationId == id && currentSource()?.matches(origin ?: source) == true) {
+                    (optionsState as? OptionsState.Checking)?.takeIf { it.operationId == id }?.let {
+                        optionsState = it.copy(earlyPreview = preview)
+                    }
+                }
+            }
+        }
+        inspectionJob = viewModelScope.launch(timing.context()) {
             var readGeneration: Long? = null
             val inspect: suspend () -> InspectResult = inspect@{
+                InspectionTiming.mark(InspectionPhase.ENGINE_GATE_PASSED)
                 // A transient first-install failure may look unavailable while maintenance still owns readiness.
                 // Evaluate only after admission; do not turn the shared-link sheet into an immediate failure.
                 if (!engine.isAvailable) return@inspect InspectResult.Failure(DownloadError.EngineUnavailable)
@@ -617,6 +649,7 @@ class LinkViewModel(
             // Both the attempt and URL revision must still belong to this sheet.
             if (operationId != id || currentSource()?.matches(origin ?: source) != true) return@launch
             operationId = null
+            earlyPreviewJob?.cancel(); earlyPreviewJob = null
             when (result) {
                 is InspectResult.Failure -> {
                     optionsState = if (noMedia && result.error in setOf(
@@ -739,6 +772,8 @@ class LinkViewModel(
         operationId = null // Invalidate before cancellation can release a late callback.
         imageOperation = false
         inspectionJob?.cancel(); inspectionJob = null
+        earlyPreviewJob?.cancel(); earlyPreviewJob = null
+        inspectionTiming = null
         old?.let { if (image) images?.cancel(it) else engine.cancel(it) }
         selectedId = null; selectedPreset = null; command = null; submissionId = null; submitted = false; moreFormats = false
         savedFormats = emptyMap()
@@ -915,14 +950,23 @@ class LinkViewModel(
         super.onCleared()
     }
     fun suggest(resumed: Boolean, focused: Boolean, foreground: Boolean, read: () -> String?) {
-        if (!clipboardEligible) return
-        if (!SuggestionGate.canRead(focused, resumed, foreground, text.isEmpty(), shareActive)) return
-        val value = read()
-        suggestion = gate.offer(value, focused, resumed, foreground, text.isEmpty(), shareActive)
-        if (suggestion != null) {
-            replaceLinkQueue(LinkInput.candidates(value))
-            warmUp()
-            if (automaticOptions) inspectSuggestion(automatically = true)
+        if (!clipboardReady || !resumed || !focused || !foreground) return
+        try {
+            if (!clipboardEligible) return
+            if (!SuggestionGate.canRead(focused, resumed, foreground, text.isEmpty(), shareActive)) return
+            val value = read()
+            suggestion = gate.offer(value, focused, resumed, foreground, text.isEmpty(), shareActive)
+            if (suggestion != null) {
+                replaceLinkQueue(LinkInput.candidates(value))
+                warmUp()
+                if (automaticOptions) inspectSuggestion(automatically = true)
+            }
+        } finally {
+            // Publish intake first: the IO maintenance coroutine must never observe an empty gap.
+            downloads?.maintenance?.let {
+                it.setPendingLink(hasPendingLink())
+                it.foregroundClipboardChecked()
+            }
         }
     }
     init {

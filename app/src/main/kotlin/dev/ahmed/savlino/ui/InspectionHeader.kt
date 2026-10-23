@@ -22,20 +22,23 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.domain.Inspection
+import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Space
 
 @Composable
-internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean) {
+internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null) {
+    val title = inspection?.title ?: earlyPreview?.title
+    val thumbnail = inspection?.thumbnailUrl ?: earlyPreview?.thumbnailUrl
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-        PreviewThumbnail(inspection?.thumbnailUrl, audioOnly = inspection?.formats?.all { !it.hasVideo } == true)
+        PreviewThumbnail(thumbnail, audioOnly = inspection?.formats?.all { !it.hasVideo } == true)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-            inspection?.title?.let {
+            title?.let {
                 Text(it, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (checking) {
+            if (checking && title == null) {
                 Column(Modifier.testTag("preview_title_skeleton").clearAndSetSemantics { }, verticalArrangement = Arrangement.spacedBy(Space.s)) {
                     Spacer(Modifier.fillMaxWidth().height(16.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceContainerHighest))
                     Spacer(Modifier.fillMaxWidth(.65f).height(12.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceContainerHighest))

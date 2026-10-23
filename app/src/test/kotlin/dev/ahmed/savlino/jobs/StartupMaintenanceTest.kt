@@ -16,6 +16,45 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33], manifest = Config.NONE)
 class StartupMaintenanceTest {
     private val app get() = RuntimeEnvironment.getApplication()
+    @Test fun returningLaunchWaitsForFirstForegroundClipboardDecision() = runBlocking {
+        app.getSharedPreferences("engine-maintenance", 0).edit().putBoolean("launched", true).commit()
+        val engine = Engine()
+        val maintenance = EngineMaintenance(app, engine, { false })
+        val checking = async { maintenance.checkWhenInspectionIdle() }
+        try {
+            assertNull(withTimeoutOrNull(100) { checking.await() })
+            assertEquals(0, engine.updates)
+            assertFalse(app.getSharedPreferences("engine-maintenance", 0).contains("attempt"))
+            maintenance.setPendingLink(true)
+            maintenance.foregroundClipboardChecked()
+            assertNull(withTimeoutOrNull(100) { checking.await() })
+            assertEquals(0, engine.updates)
+            maintenance.setPendingLink(false)
+            assertTrue(withTimeout(2000) { checking.await() })
+        } finally { checking.cancelAndJoin() }
+    }
+
+    @Test fun emptyFirstClipboardDecisionReleasesReturningLaunch() = runBlocking {
+        app.getSharedPreferences("engine-maintenance", 0).edit().putBoolean("launched", true).commit()
+        val engine = Engine()
+        val maintenance = EngineMaintenance(app, engine, { false })
+        maintenance.foregroundClipboardChecked()
+        assertTrue(withTimeout(2000) { maintenance.checkWhenInspectionIdle() })
+        assertEquals(1, engine.updates)
+    }
+
+    @Test fun disabledClipboardCompletesDecisionWithoutReadingIt() = runBlocking {
+        app.getSharedPreferences("engine-maintenance", 0).edit().putBoolean("launched", true).commit()
+        val engine = Engine()
+        JobStore(app).use { store ->
+            val coordinator = DownloadCoordinator(app, engine, store)
+            val vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator)
+            vm.suggestionsEnabled = false
+            vm.suggest(true, true, true) { error("Disabled clipboard must not be read") }
+            assertTrue(withTimeout(2000) { coordinator.maintenance.checkWhenInspectionIdle() })
+            assertEquals(1, engine.updates)
+        }
+    }
     private open class Engine : EngineAdapter by FakeEngine() {
         var updates = 0
         override suspend fun installedVersion() = "test-version"
@@ -39,6 +78,7 @@ class StartupMaintenanceTest {
             }
         }
         val maintenance = EngineMaintenance(app, engine, { false })
+        maintenance.foregroundClipboardChecked()
         val checking = async(caller, start = CoroutineStart.UNDISPATCHED) { maintenance.checkWhenInspectionIdle() }
         try {
             withTimeout(2000) {
@@ -71,6 +111,7 @@ class StartupMaintenanceTest {
             }
         }
         val maintenance = EngineMaintenance(app, engine, { false })
+        maintenance.foregroundClipboardChecked()
         val checking = async { maintenance.checkWhenInspectionIdle() }
         try {
             withTimeout(2000) { entered.await() }

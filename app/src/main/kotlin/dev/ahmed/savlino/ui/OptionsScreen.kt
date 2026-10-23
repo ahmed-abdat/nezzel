@@ -50,6 +50,7 @@ fun OptionsScreen(links: LinkViewModel, language: String, onDismiss: () -> Unit,
 /** Sheet body, separate from the popup window so it can be rendered and tested in place. */
 @Composable
 internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismiss: () -> Unit) {
+    androidx.compose.runtime.SideEffect { links.optionsShown() }
     Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)) {
         // A footer (Download or Save bar) brings its own 16dp top padding; the body doesn't add a second one.
         val footer = links.optionsState is OptionsState.Ready || links.optionsState is OptionsState.ImageReady
@@ -64,7 +65,8 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
             val failed = links.optionsState is OptionsState.Error || links.optionsState is OptionsState.ImageError
             if (host != null && links.optionsState !is OptionsState.ImageReady && !failed) {
                 val inspection = (links.optionsState as? OptionsState.Ready)?.inspection
-                InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking)
+                InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking,
+                    (links.optionsState as? OptionsState.Checking)?.earlyPreview)
             }
             if (links.photosUnavailable) Text(stringResource(R.string.image_photos_unavailable),
                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
@@ -78,7 +80,8 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                         else -> R.string.checking_qualities
                     }),
                         Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    Text(stringResource(R.string.nothing_downloads), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.nothing_downloads), style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
                 }
                 is OptionsState.Error -> {

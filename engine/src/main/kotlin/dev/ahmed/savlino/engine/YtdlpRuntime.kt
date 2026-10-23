@@ -196,6 +196,7 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
         val diagnostics = YtdlpDebugDiagnostics(args = args)
         val transfer = args.contains("--no-simulate")
         try {
+            if ("--dump-json" in args) InspectionTiming.mark(InspectionPhase.YTDLP_SPAWNED)
             // Transfer output is merged by the wrapper; metadata stdout must stay JSON-only.
             val response = YoutubeDL.execute(YoutubeDLRequest(emptyList()).addCommands(args), processId = processId,
                 redirectErrorStream = transfer, callback = { _, _, output ->

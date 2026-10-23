@@ -8,6 +8,7 @@ import dev.ahmed.savlino.engine.LegacyMediaInspectionAdapter
 import dev.ahmed.savlino.engine.MediaSourceInspector
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpClient
+import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.storage.DestinationPublisher
 import dev.ahmed.savlino.storage.SaveDestination
@@ -18,11 +19,13 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * Process-wide image services. One HTTP client and one memory-only reference store are shared by the
- * inspector and the Save transfer; nothing is created until an image link or Save needs it.
+ * Process-wide media services. The guarded HTTP client serves image inspection/Save and optional
+ * YouTube metadata; references remain memory-only. Services are created only when authorized work needs them.
  */
 class MediaServices(context: Context, engine: () -> EngineAdapter, scope: CoroutineScope) {
     private val http by lazy { MediaHttpClient.create() }
+    private val oembed by lazy { YouTubeOEmbed(http) }
+    suspend fun earlyPreview(link: dev.ahmed.savlino.domain.ValidatedLink) = oembed.load(link.rawUrl)
     private val references by lazy { MediaReferenceStore() }
     private val inspector by lazy {
         MediaSourceInspector(PublicImageInspector(http, AndroidImagePreviewDecoder(), references), LegacyMediaInspectionAdapter(engine()))

@@ -28,7 +28,7 @@
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">Sans publicité ni suivi</string>
     <string name="shared_video">Lien partagé</string>
-    <string name="checking_qualities">Chargement des options…</string>
+    <string name="checking_qualities">Récupération des qualités…</string>
     <string name="nothing_downloads">L’enregistrement commence seulement si vous appuyez sur Télécharger ou Enregistrer</string>
     <string name="cancel">Annuler</string>
     <string name="video_group">Vidéo</string>
@@ -204,7 +204,7 @@
     <string name="separator">" · "</string>
     <string name="format_kbps">%1$s kbit/s</string>
     <string name="spoken_separator">", "</string>
-    <string name="checking_link">Chargement des options…</string>
+    <string name="checking_link">Lecture du lien…</string>
     <string name="image_preview_desc">Aperçu de l’image, %1$s</string>
     <string name="image_save">Enregistrer l’image</string>
     <string name="image_save_size">Enregistrer l’image · %1$s</string>

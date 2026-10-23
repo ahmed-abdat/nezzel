@@ -28,7 +28,7 @@
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">No ads or tracking</string>
     <string name="shared_video">Shared link</string>
-    <string name="checking_qualities">Loading options…</string>
+    <string name="checking_qualities">Getting qualities…</string>
     <string name="nothing_downloads">Saving starts only when you tap Download or Save</string>
     <string name="cancel">Cancel</string>
     <string name="video_group">Video</string>
@@ -202,7 +202,7 @@
     <string name="separator">" · "</string>
     <string name="format_kbps">%1$s kbps</string>
     <string name="spoken_separator">", "</string>
-    <string name="checking_link">Loading options…</string>
+    <string name="checking_link">Reading the link…</string>
     <string name="image_preview_desc">Image preview, %1$s</string>
     <string name="image_save">Save image</string>
     <string name="image_save_size">Save image · %1$s</string>

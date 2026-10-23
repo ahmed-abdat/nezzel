@@ -26,6 +26,7 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     private val gate = Mutex()
     private val changes = MutableStateFlow(0L)
     @Volatile private var pendingLink = false
+    @Volatile private var clipboardChecked = false
     private var launchRecorded = false
     private var firstLaunch = true
     private var inspectionFinished = false
@@ -40,6 +41,11 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     /** Boolean only: unaccepted URLs never leave the ViewModel. */
     fun setPendingLink(pending: Boolean) {
         pendingLink = pending
+        changes.update { it + 1 }
+    }
+    /** One foreground intake decision per process, including a guarded/disabled clipboard read. */
+    fun foregroundClipboardChecked() {
+        clipboardChecked = true
         changes.update { it + 1 }
     }
     /** Called even while onboarding is showing; no network or version process. */
@@ -59,7 +65,7 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
         onLaunch()
         while (true) {
             val revision = changes.value
-            if (gate.withLock { !inspectionBusy() }) {
+            if (clipboardChecked && gate.withLock { !inspectionBusy() }) {
                 val decision = update(false)
                 if (decision != UpdateDecision.INSPECTION_BUSY) return decision == UpdateDecision.UPDATED
             }

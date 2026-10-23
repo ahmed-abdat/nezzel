@@ -1,0 +1,31 @@
+package dev.ahmed.savlino.engine
+
+import android.os.SystemClock
+import android.util.Log
+import kotlinx.coroutines.asContextElement
+
+/** Fixed vocabulary only: no source, operation id, title or engine output can enter the journal. */
+enum class InspectionPhase(val label: String) {
+    INTAKE_ACCEPTED("intake_accepted"), ENGINE_GATE_PASSED("engine_gate_passed"),
+    NATIVE_READER_DONE("native_reader_done"), YTDLP_SPAWNED("ytdlp_spawned"),
+    JSON_PARSED("json_parsed"), OPTIONS_SHOWN("options_shown")
+}
+
+/** Coroutine-scoped bridge to the existing NezzelTiming debug journal, including blocking runtime calls. */
+class InspectionTiming internal constructor(
+    private val enabled: Boolean,
+    private val now: () -> Long,
+    private val log: (String) -> Unit,
+) {
+    constructor() : this(BuildConfig.DEBUG, SystemClock::elapsedRealtime, { Log.d("NezzelTiming", it); Unit })
+    private val start = if (enabled) now() else 0L
+    private val recorded = mutableSetOf<InspectionPhase>()
+    fun context() = current.asContextElement(this)
+    @Synchronized fun record(phase: InspectionPhase) {
+        if (enabled && recorded.add(phase)) log("${phase.label} ${now() - start}ms")
+    }
+    companion object {
+        private val current = ThreadLocal<InspectionTiming?>()
+        fun mark(phase: InspectionPhase) { current.get()?.record(phase) }
+    }
+}

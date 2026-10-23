@@ -246,6 +246,32 @@ class SelectionSemanticsTest {
         } finally { controller.pause().stop().destroy() }
     }
 
+    @Test fun earlyRealTitleReplacesSkeletonInEnglishArabicAndFrench() {
+        for (language in listOf("en", "ar", "fr")) {
+            val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+            try {
+                val activity = controller.get()
+                val configuration = Configuration(activity.resources.configuration).apply {
+                    setLocale(Locale.forLanguageTag(language)); fontScale = 2f
+                }
+                val context = activity.createConfigurationContext(configuration)
+                activity.setContent {
+                    CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration,
+                        LocalLayoutDirection provides if (language == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                        NezzelTheme(ThemePref.Light, false) {
+                            InspectionHeader(null, "youtu.be", checking = true,
+                                earlyPreview = dev.ahmed.savlino.engine.mediahttp.EarlyPreview("عنوان réel", null))
+                        }
+                    }
+                }
+                val nodes = semantics(activity)
+                assertTrue(texts(nodes).any { it == "عنوان réel" })
+                assertTrue(texts(nodes).any { it.contains("youtu.be") })
+                assertFalse(nodes.any { it.config.getOrNull(SemanticsProperties.TestTag) == "preview_title_skeleton" })
+            } finally { controller.pause().stop().destroy() }
+        }
+    }
+
     @Test fun moreFormatsConvertsOnlyAfterExplicitTapAndEmitsOneCommandAcrossRecomposition() {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         val vm = vm()

@@ -67,7 +67,7 @@ internal sealed interface MediaHttpImageTransferResult {
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpImageTransferResult
 }
 
-private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY }
+private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, YOUTUBE_OEMBED }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -142,6 +142,12 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     internal fun fetchBlueskyApi(token: OperationToken, url: String): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.BLUESKY)
+
+    internal fun newYouTubeOEmbedOperation(): OperationToken =
+        createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false, deadlineSeconds = 4)
+
+    internal fun fetchYouTubeOEmbed(token: OperationToken, url: String): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.YOUTUBE_OEMBED)
 
     /** A bad sibling must not retire valid carousel photos; policy, count, byte and deadline checks still apply. */
     internal fun fetchCarouselImage(token: OperationToken, request: PublicMediaRequest, thumbnail: Boolean = false): MediaHttpResult =
@@ -323,9 +329,10 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     fun newOperation(operation: MediaHttpOperation): OperationToken = createOperation(operation, save = false)
 
-    private fun createOperation(operation: MediaHttpOperation, save: Boolean): OperationToken = synchronized(lock) {
+    private fun createOperation(operation: MediaHttpOperation, save: Boolean,
+        deadlineSeconds: Long = if (save) 120 else 15): OperationToken = synchronized(lock) {
         val rejection = if (closed) MediaHttpFailure.CLOSED else if (active.size >= 2) MediaHttpFailure.BUSY else null
-        val token = OperationToken(operation, this, rejection, if (save) 120 else 15) { retired ->
+        val token = OperationToken(operation, this, rejection, deadlineSeconds) { retired ->
             synchronized(lock) {
                 active.remove(retired.id)
                 imageSaves.remove(retired.id)
@@ -359,6 +366,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val instagramPage = site == PageSite.INSTAGRAM
         val telegramPage = site == PageSite.TELEGRAM
         val blueskyPage = site == PageSite.BLUESKY
+        val oembed = site == PageSite.YOUTUBE_OEMBED
         val browserPage = facebookPage || instagramPage || telegramPage
         if (token.owner !== this) return MediaHttpResult.Failure(MediaHttpFailure.CLOSED)
         var entered = false
@@ -373,6 +381,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             if (synchronized(lock) { imageSaves.containsKey(token.id) })
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             var url = MediaHttpPolicy.parse(request.url) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+            if (oembed && (request.purpose != MediaHttpPurpose.PAGE || !YouTubeOEmbed.isRequest(url)))
+                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (linkedInPage && !MediaHttpPolicy.isLinkedInPageEntry(url))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (linkedInPage) url = MediaHttpPolicy.normalizeLinkedInEntry(url)
@@ -410,7 +420,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 token.budget.requireRequestRoom()
                 val wireRequest = Request.Builder().url(url).get()
                     .header("User-Agent", if (browserPage) DESKTOP_BROWSER_AGENT else PUBLIC_USER_AGENT)
-                    .header("Accept", if (browserPage) BROWSER_PAGE_ACCEPT else if (xPost || blueskyPage) JSON_ACCEPT
+                    .header("Accept", if (browserPage) BROWSER_PAGE_ACCEPT else if (xPost || blueskyPage || oembed) JSON_ACCEPT
                         else if (request.purpose == MediaHttpPurpose.PAGE) PAGE_ACCEPT else IMAGE_ACCEPT)
                     .header("Accept-Encoding", "identity")
                     .apply {
@@ -434,7 +444,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                         token.requireActive()
                         if (response.code in REDIRECTS) {
                             if (telegramPage) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
-                            if (xPost || blueskyPage) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                            if (xPost || blueskyPage || oembed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (instagramPage) throw MediaHttpException(
                                 if (MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
                                         ?.let(InstagramPostIdentity::isLoginWall) == true) MediaHttpFailure.LOGIN_REQUIRED
@@ -461,7 +471,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (request.purpose == MediaHttpPurpose.IMAGE) imageMimeType = response.header("Content-Type")
                             val complete = readComplete(token, request.purpose, url, response, call,
-                                if (facebookPage) MediaPageLimits.FACEBOOK else if (xPost) MediaPageLimits.X
+                                if (oembed) YouTubeOEmbed.MAX_BYTES else if (facebookPage) MediaPageLimits.FACEBOOK else if (xPost) MediaPageLimits.X
                                 else if (instagramPage) MediaPageLimits.INSTAGRAM
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN

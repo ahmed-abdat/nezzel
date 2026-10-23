@@ -19,6 +19,7 @@ object YtdlpMetadataMapper {
         }
         if (documents.size > 1) throw UnsupportedMetadataException()
         val root = documents.single()
+        InspectionTiming.mark(InspectionPhase.JSON_PARSED)
         if (root.path("_type").asText() in listOf("playlist", "multi_video")) {
             val entries = root.path("entries")
             throw UnsupportedMetadataException(emptyResult = entries.isArray && entries.size() == 0)
