@@ -228,7 +228,7 @@ class EngineResumeIntegrationTest {
                 worker.stop(WorkInfo.STOP_REASON_QUOTA)
             } finally { running.cancelAndJoin() }
             assertEquals(JobStage.FAILED, f.store.get(f.id)!!.stage)
-            assertEquals(DownloadError.Interrupted, f.store.get(f.id)!!.error)
+            assertEquals(DownloadError.StoppedByBattery, f.store.get(f.id)!!.error)
             assertTrue(withTimeout(6000) { f.coordinator.retry(f.id) })
             assertEquals(JobStage.ENQUEUED, f.store.get(f.id)!!.stage)
             assertEquals(1, f.work().count { !it.state.isFinished })
