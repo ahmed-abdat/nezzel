@@ -282,4 +282,21 @@ class WidgetTest {
             assertNull(updater.currentState.title)
         } finally { collection.cancel() }
     }
+
+    @Test fun forgottenSavedFileLeavesTheWidgetOnlyWhenItIsTheShownCompletion() = runTest {
+        val old = job(DownloadPhase.FAILED).copy(jobId = "old", filename = "old.mp4")
+        val progress = MutableStateFlow(listOf(old, job()))
+        val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
+        val updater = WidgetUpdater(app, progress, completed, widgetIds = { intArrayOf(1) }, render = { _, _ -> })
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            completed.emit(job(DownloadPhase.COMPLETED)); progress.value = listOf(old); runCurrent()
+            updater.forget("old"); runCurrent()
+            assertEquals(DownloadPhase.COMPLETED, updater.currentState.phase)
+            updater.forget("new"); runCurrent()
+            assertEquals("old.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.FAILED, updater.currentState.phase)
+        } finally { collection.cancel() }
+    }
 }

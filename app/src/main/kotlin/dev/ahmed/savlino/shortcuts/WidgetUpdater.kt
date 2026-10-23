@@ -36,13 +36,16 @@ class WidgetUpdater(
     private val render: (WidgetUiState, IntArray) -> Unit = { state, ids -> NezzelWidgetProvider.render(context, ids, state) },
 ) {
     @Volatile private var cached: WidgetUiState? = null
+    private val forgotten = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    /** The saved file is gone: a widget still showing it as the latest download falls back. */
+    fun forget(jobId: String) { forgotten.tryEmit(jobId) }
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value.lastOrNull())
 
     fun start(scope: CoroutineScope): Job = scope.launch {
         // The process scope runs on IO. A restart has no completion events to replay, and live
         // snapshots deliberately omit completed rows. Seed the widget without emitting a snackbar.
         val latest = LatestJob(try { journal() } catch (_: Exception) { emptyList() })
-        merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) })
+        merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) }, forgotten.map { Event.Forgotten(it) })
             .map { latest.accept(it) }
             .distinctUntilChanged()
             .onEach { cached = it }
@@ -60,6 +63,7 @@ class WidgetUpdater(
     private sealed interface Event {
         data class Snapshot(val jobs: List<DownloadProgress>) : Event
         data class Finished(val job: DownloadProgress) : Event
+        data class Forgotten(val jobId: String) : Event
     }
 
     /** Coordinator snapshots are in admission order. Completed jobs are removed from that list. */
@@ -92,6 +96,7 @@ class WidgetUpdater(
                     rememberedId = event.job.jobId
                     remembered = WidgetUiState.from(event.job)
                 }
+                is Event.Forgotten -> if (event.jobId == rememberedId && remembered?.phase == DownloadPhase.COMPLETED) remembered = null
             }
             return remembered ?: WidgetUiState.from(snapshot.lastOrNull { !it.terminal } ?: snapshot.lastOrNull())
         }

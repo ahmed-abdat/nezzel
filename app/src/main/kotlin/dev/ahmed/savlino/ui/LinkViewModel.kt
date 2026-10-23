@@ -210,6 +210,7 @@ class LinkViewModel(
     private var clipboardReady by mutableStateOf(initializeClipboard == null)
     internal val clipboardDecisionReady get() = clipboardReady
     private val pendingClipboardDismissals = mutableListOf<ValidatedLink>()
+    private val clipboardInit = kotlinx.coroutines.CompletableDeferred<Unit>().apply { if (initializeClipboard == null) complete(Unit) }
     var clipboardForeground by mutableStateOf(true)
     private val clipboardWrites = Mutex()
     private var automaticOffer: ValidatedLink? = null
@@ -1041,6 +1042,7 @@ class LinkViewModel(
                 pendingClipboardDismissals.forEach(gate::dismiss)
                 pendingClipboardDismissals.clear()
                 clipboardReady = true
+                clipboardInit.complete(Unit)
                 if (hasPendingDismissals) persistClipboard(gate.dismissedHashes())
             }
         }
@@ -1094,6 +1096,13 @@ class LinkViewModel(
             viewModelScope.launch { persistClipboard(hashes) }
         }
         suggestion = null
+    }
+    /** Copy link: the copied link counts as handled, so the clipboard never offers it back, also after a restart. */
+    suspend fun markHandled(rawUrl: String): Boolean {
+        val link = LinkInput.parse(rawUrl) ?: return false
+        clipboardInit.await() // Outside clipboardWrites: init persists through it.
+        gate.dismiss(link)
+        return persistClipboard(gate.dismissedHashes())
     }
     fun dismissedHashes(): Set<String> = gate.dismissedHashes()
 }

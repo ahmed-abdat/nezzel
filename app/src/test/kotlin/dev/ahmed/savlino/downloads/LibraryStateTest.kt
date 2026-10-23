@@ -97,6 +97,24 @@ class LibraryStateTest {
             assertEquals("content://provider.documents/tree/saved-folder/document/saved-folder", second.data.toString())
         } finally { controller.pause().stop().destroy(); work.close() }
     }
+    /** X2: every listed snapshot runs the gone-file sweep, so the reload after a delete confirms that file. */
+    @Test @Config(sdk = [35]) fun eachListedSnapshotRunsTheSweepIncludingAfterADelete() = fixture { _, registry ->
+        val sweeps = mutableListOf<Pair<List<String>, Long>>()
+        val sweep: suspend (List<SavedMedia>, Long) -> Unit = { rows, at -> sweeps += rows.map { it.uri.lastPathSegment!! } to at }
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        var state: LibraryState? = null
+        try {
+            controller.get().setContent { CompositionLocalProvider(LocalActivityResultRegistryOwner provides registry) {
+                state = rememberLibraryState(remember { SnackbarHostState() }, ioDispatcher = work, sweep = sweep) } }
+            await { sweeps.isNotEmpty() }
+            assertEquals(listOf("1"), sweeps.last().first)
+            assertTrue(sweeps.last().second > 0)
+            val item = state!!.media.single()
+            compose.runOnIdle { state!!.delete(item) }
+            await { sweeps.last().first.isEmpty() }
+            assertTrue(sweeps.last().second >= sweeps.first().second)
+        } finally { controller.pause().stop().destroy() }
+    }
     @Test @Config(sdk = [35]) fun ownFileDeletesDirectlyWithoutSystemConsentRequest() = fixture { provider, registry ->
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         var state: LibraryState? = null

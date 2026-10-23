@@ -362,6 +362,14 @@
     <string name="onboarding_page_announcement">%1$s، %2$s</string>
     <string name="settings_general">عام</string>
     <string name="settings_saving">الحفظ</string>
+    <string name="copy_link">نسخ الرابط</string>
+    <string name="link_copied">تم نسخ الرابط</string>
+    <string name="settings_privacy">الخصوصية</string>
+    <string name="clear_link_history">مسح سجل الروابط</string>
+    <string name="clear_link_history_help">انسَ مصدر تنزيلاتك. تبقى ملفاتك.</string>
+    <string name="clear_link_history_title">مسح سجل الروابط؟</string>
+    <string name="clear_link_history_body">سينسى Nezzel روابط كل تنزيلاتك. تبقى ملفاتك على هاتفك.</string>
+    <string name="clear">مسح</string>
     <string name="settings_advanced">إعدادات متقدمة</string>
     <string name="settings_advanced_help">الروابط ودعم المواقع والتحديثات</string>
     <string name="engine_update_body">يساعد عندما يتوقف موقع عن التنزيل</string>

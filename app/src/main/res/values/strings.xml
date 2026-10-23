@@ -332,6 +332,14 @@
     <string name="onboarding_page_announcement">%1$s, %2$s</string>
     <string name="settings_general">General</string>
     <string name="settings_saving">Saving</string>
+    <string name="copy_link">Copy link</string>
+    <string name="link_copied">Link copied</string>
+    <string name="settings_privacy">Privacy</string>
+    <string name="clear_link_history">Clear link history</string>
+    <string name="clear_link_history_help">Forget where your downloads came from. Your files stay.</string>
+    <string name="clear_link_history_title">Clear link history?</string>
+    <string name="clear_link_history_body">Nezzel will forget the links of all your downloads. Your files stay on your phone.</string>
+    <string name="clear">Clear</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_advanced_help">Links, site support and updates</string>
     <string name="engine_update_body">Helps when a site stops downloading</string>
