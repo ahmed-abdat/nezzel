@@ -17,6 +17,7 @@ import java.util.IdentityHashMap
 import java.util.WeakHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.Semaphore
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
@@ -88,8 +89,10 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     // Weak keys do not keep the reference store's discarded URL capabilities alive.
     private val storedPosts = WeakHashMap<MediaHttpPostContext, Unit>()
     private val imageSaves = linkedMapOf<OperationId, ImageSaveState>()
-    // One carousel's parallel image fetches plus one other operation; hung OS lookups still cannot pile up.
-    private val resolverExecutor = ThreadPoolExecutor(0, 4, 30, TimeUnit.SECONDS,
+    // Live lookups hold a slot; a cancelled or timed-out lookup whose OS resolver ignores the interrupt keeps only
+    // its thread. Twice the slots in threads, then BUSY: a stuck network still cannot pile up threads.
+    private val resolverSlots = Semaphore(DNS_LIVE_LOOKUPS)
+    private val resolverExecutor = ThreadPoolExecutor(0, 2 * DNS_LIVE_LOOKUPS, 30, TimeUnit.SECONDS,
         SynchronousQueue(), mediaThreads("media-http-dns"), ThreadPoolExecutor.AbortPolicy())
     private val deadlines = ScheduledThreadPoolExecutor(1, mediaThreads("media-http-deadline")).apply {
         removeOnCancelPolicy = true
@@ -593,19 +596,18 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         var buffer = ByteArray(if (declared >= 0) limit else minOf(cap, 8192))
         var count = 0
         try {
-            body.byteStream().use { stream ->
+            body.source().use { source ->
                 try {
                     while (true) {
                         token.requireActive()
                         if (count == limit) {
-                            if (stream.read() != -1) {
-                                token.budget.consumed(1, purpose == MediaHttpPurpose.IMAGE)
+                            // Peek, don't take: an over-cap body consumes exactly its cap, so parallel carousel caps hold.
+                            if (!source.exhausted())
                                 throw MediaHttpException(if (count == cap) MediaHttpFailure.BODY_LIMIT else MediaHttpFailure.PARTIAL_BODY)
-                            }
                             break
                         }
                         if (count == buffer.size) buffer = buffer.copyOf(minOf(cap, buffer.size * 2))
-                        val read = stream.read(buffer, count, minOf(8192, buffer.size - count))
+                        val read = source.read(buffer, count, minOf(8192, buffer.size - count))
                         if (read == -1) break
                         if (read == 0) continue
                         count += read
@@ -646,7 +648,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     // Keep-alive stays inside this token: the client and its pool are evicted when the operation retires.
                     .connectionPool(ConnectionPool(CAROUSEL_PARALLEL_FETCHES, 10, TimeUnit.SECONDS))
                     .proxy(Proxy.NO_PROXY)
-                    .dns(PublicAddressDns(token, environment.rawResolver, resolverExecutor))
+                    .dns(PublicAddressDns(token, environment.rawResolver, resolverExecutor, resolverSlots))
                     .socketFactory(GuardedMediaSocketFactory(token, environment.routeMapper, save?.let { it::trackSocket }))
                     .protocols(listOf(Protocol.HTTP_1_1)).connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
                     .cookieJar(CookieJar.NO_COOKIES).authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
