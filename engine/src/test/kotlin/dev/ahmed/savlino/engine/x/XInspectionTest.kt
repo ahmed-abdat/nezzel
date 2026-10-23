@@ -111,6 +111,15 @@ class XInspectionTest : PublicImageTestBase() {
         }
     }
 
+    @Test fun aLinkPickingAnotherMediaStillHandsOffButRoutesNoInfo() {
+        fixture(respond = x(post = xTweet(listOf(xVideo())))) { f ->
+            assertIs<MediaInspectResult.VideoRedirect>(f.inspectX("https://x.com/someone/status/$X_ID/video/2"))
+            assertEquals(emptyList(), f.xVideoInfos.toList(), "yt-dlp reads media #2 itself")
+            assertIs<MediaInspectResult.VideoRedirect>(f.inspectX("https://x.com/someone/status/$X_ID/video/1"))
+            assertEquals(listOf(X_ID), f.xVideoInfos.map { it.first })
+        }
+    }
+
     @Test fun textAndLinkCardPostIsNoMediaWithoutAnImageRequest() {
         fixture(respond = x(post = xTextWithCard())) { f ->
             failed(f.inspectX(), ImageFailure.LINKED_ELSEWHERE, ImagePhase.PAGE)

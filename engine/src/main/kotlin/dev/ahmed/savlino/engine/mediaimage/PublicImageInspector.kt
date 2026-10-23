@@ -282,7 +282,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val body = try { page.takeBody() }
             catch (_: java.io.IOException) { return Fetched.Failed(failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE)) }
             finally { page.close() }
-        val parsed = when (val result = xParser.parse(body.bytes, identity.postId, body.length)) {
+        val parsed = when (val result = xParser.parse(body.bytes, identity.postId, body.length, identity.mediaIndex)) {
             is XParseResult.Failure -> return Fetched.Failed(failure(result.reason, result.phase))
             is XParseResult.Video -> return xVideo(operation, identity, result.infoJson, photosUnavailable = false)
             is XParseResult.PhotosUnavailableVideo -> return xVideo(operation, identity, result.infoJson, photosUnavailable = true)

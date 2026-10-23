@@ -93,6 +93,11 @@ class XPostParserTest {
     }
 
     @Test fun tombstoneIsNotPublic() = rejected(xTombstone(), ImageFailure.PRIVATE)
+    /** Any other typename (TweetUnavailable, …) is a shape the reader does not know: SOURCE_REFUSED, so yt-dlp reads it. */
+    @Test fun unknownTypenamesAreRefusedForTheYtDlpFallback() {
+        for (typename in listOf("TweetUnavailable", "TweetWithVisibilityResults", ""))
+            rejected(xTweet(listOf(xVideo()), typename = typename), ImageFailure.SOURCE_REFUSED)
+    }
 
     @Test fun malformedOrForeignResponsesAreRefusedNeverGuessed() {
         rejected("not json".toByteArray(), ImageFailure.SOURCE_REFUSED)

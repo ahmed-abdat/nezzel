@@ -27,6 +27,16 @@ class XPostIdentityTest {
             assertEquals(id, id(url), url)
     }
 
+    /** The `/photo|video/<n>` yt-dlp will read: only from the user's own link; a mirror's x.com link drops it. */
+    @Test fun mediaIndexIsTheOneYtDlpSees() {
+        val id = "1790000000000000001"
+        fun index(url: String) = assertNotNull(XPostIdentity.parse(url)).mediaIndex
+        assertEquals(2, index("https://x.com/someone/status/$id/video/2"))
+        assertEquals(1, index("https://twitter.com/someone/status/$id/photo/1?s=20"))
+        assertNull(index("https://x.com/someone/status/$id"))
+        assertNull(index("https://fxtwitter.com/someone/status/$id/video/2"))
+    }
+
     @Test fun otherXPathsHostsAndSchemesAreRejected() {
         for (url in listOf("https://x.com/someone", "https://x.com/home", "https://x.com/someone/status/",
             "https://x.com/someone/status/abc", "https://x.com/someone/status/0123", "https://x.com/someone/status/12/likes",

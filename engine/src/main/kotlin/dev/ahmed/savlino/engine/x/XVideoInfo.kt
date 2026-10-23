@@ -13,18 +13,23 @@ import java.net.URI
  * the syndication JSON and stay absent. No `webpage_url`: a failed download never re-extracts silently.
  *
  * Null means "let yt-dlp read the post": no own video, a card, quoted or reposted post (yt-dlp would add their
- * media), an unknown media or variant shape, or ids that are not exact and unique. Several own videos keep
- * yt-dlp's inspect semantics (`--playlist-items 1`): the first video, titled ` #1`.
+ * media), a possibly sensitive (age-gated) post, an unknown media or variant shape, ids that are not exact and
+ * unique, or a link whose `/photo|video/<n>` picks anything but the first video. Several own videos keep yt-dlp's
+ * inspect semantics (`--playlist-items 1`): the first video, titled ` #1`.
  */
 internal object XVideoInfo {
-    fun build(root: JsonNode, postId: String): String? {
+    fun build(root: JsonNode, postId: String, mediaIndex: Int? = null): String? {
         if (!root.isObject || root.path("__typename").asText(null) != "Tweet" || root.path("id_str").asText(null) != postId)
             return null
         if (DECLINED.any(root::hasNonNull)) return null
+        // yt-dlp marks these 18+ (`age_limit`); anything but an explicit false stays its call.
+        if (root.get("possibly_sensitive")?.let { !it.isNull && !(it.isBoolean && !it.booleanValue()) } == true) return null
         val media = root.get("mediaDetails")?.takeIf { it.isArray } ?: return null
         val videos = media.filter { it.path("type").asText("") != "photo" }
         if (videos.any { !it.isObject || it.path("type").asText("") !in VIDEO_TYPES }) return null
         val video = videos.firstOrNull() ?: return null
+        // twitter.py with an index: `mediaDetails[n-1]`, photos counted, must be a `video` (a GIF is refused).
+        if (mediaIndex != null && (media.get(mediaIndex - 1) !== video || video.path("type").asText() != "video")) return null
         val formats = formats(video) ?: return null
         // A GIF is one progressive file without bitrate (yt-dlp: one `http` row); any other GIF shape → yt-dlp.
         if (video.path("type").asText() == "animated_gif" && video.path("video_info").path("variants")
