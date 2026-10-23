@@ -28,9 +28,10 @@ class RecentInspectionsTest {
         val transfers = CopyOnWriteArrayList<List<String>>()
         val killed = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
         @Volatile var inspect: (String) -> Unit = {}
+        @Volatile var version: () -> Unit = {}
         override fun initialize() = Unit
         override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
-            if ("--version" in args) return "version"
+            if ("--version" in args) { version(); return "version" }
             if ("--dump-json" in args) { inspections += args; inspect(processId); return json }
             transfers += args
             val output = File(args[args.indexOf("-o") + 1].replace("%(ext)s", "mp4"))
@@ -179,6 +180,21 @@ class RecentInspectionsTest {
         assertIs<InspectResult.Success>(engine.inspect(source, "next"))
         assertEquals(2, runtime.inspections.size)
         assertIs<InspectResult.Success>(engine.inspect(source, "after"))
+        assertEquals(2, runtime.inspections.size)
+    }
+
+    @Test fun clearBeforeTheExtractionStartsStillKeepsItsResultOut() = runBlocking {
+        val runtime = Runtime(json())
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        // The version probe runs after inspect began and before the owner registers.
+        runtime.version = { entered.countDown(); release.await(5, TimeUnit.SECONDS) }
+        val engine = engine(runtime)
+        val owner = async(Dispatchers.IO) { engine.inspect(source, "owner") }
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        engine.clearRecentLinks()
+        release.countDown()
+        assertIs<InspectResult.Success>(withTimeout(5000) { owner.await() })
+        assertIs<InspectResult.Success>(engine.inspect(source, "next"))
         assertEquals(2, runtime.inspections.size)
     }
 

@@ -87,17 +87,17 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
 
-    override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult =
-        operation(operationId, { error, _ -> InspectResult.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+    override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+        // Read before any wait: a Clear link history after this call began keeps its result out of [recent].
+        val epoch = recent.epoch()
+        return operation(operationId, { error, _ -> InspectResult.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
             if (!initialize()) return@operation unavailable.inspect(source, operationId)
             // After initialization: a one-time extraction must not consume the network budget.
             current.expireIn(limits.inspectMs)
             val version = version(current)
-            joined(current, source) {
-                val epoch = recent.epoch()
-                recentHit(source, version) ?: extract(current, source, operationId, version, epoch)
-            }
+            joined(current, source) { recentHit(source, version) ?: extract(current, source, operationId, version, epoch) }
         }
+    }
 
     override fun prefetched(link: ValidatedLink, json: String) = recent.putPrefetched(link, json)
 
