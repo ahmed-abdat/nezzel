@@ -227,7 +227,7 @@ class DownloadCoordinatorTest {
                 progress(EngineEvent.Progress(1, Size.Exact(4)))
                 entered.complete(Unit)
                 release.await()
-                return TransferResult.Failure(DownloadError.Network)
+                return TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
             }
         }
         val coordinator = DownloadCoordinator(app, engine, store,

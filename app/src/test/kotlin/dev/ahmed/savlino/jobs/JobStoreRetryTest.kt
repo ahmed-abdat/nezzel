@@ -57,7 +57,7 @@ class JobStoreRetryTest {
                 store.fail(id, DownloadError.Network)
             }
             JobStore(app).use { store ->
-                assertEquals(4, store.readableDatabase.version)
+                assertEquals(5, store.readableDatabase.version)
                 assertTrue(store.retry(id))
                 assertEquals(format, store.get(id)!!.command()!!.format)
             }
@@ -285,7 +285,7 @@ class JobStoreRetryTest {
             db.version = 1
         }
         JobStore(app).use { store ->
-            assertEquals(4, store.writableDatabase.version)
+            assertEquals(5, store.writableDatabase.version)
             assertEquals(8, store.all().size)
             for (stage in JobStage.entries.filter { it != JobStage.PAUSED }) {
                 val row = store.get(stage.name)!!

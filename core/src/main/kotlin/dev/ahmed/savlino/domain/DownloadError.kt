@@ -12,5 +12,14 @@ enum class DownloadError {
     /** The link now opens a site's home page (dead short link), not a post. */
     NotAPost,
     /** The site refused the request (HTTP 403); neither lost connectivity nor an expired media selection. */
-    SourceRefused
+    SourceRefused;
+
+    /** Default for adapters that already return concrete connectivity errors. */
+    val cause: DownloadFailureCause get() = when (this) {
+        Network, Offline -> DownloadFailureCause.TRANSPORT
+        else -> DownloadFailureCause.OTHER
+    }
 }
+
+/** Retry policy input, separate from resource-mappable display errors; contains no diagnostics. */
+enum class DownloadFailureCause { OTHER, TRANSPORT, HTTP, STALL }

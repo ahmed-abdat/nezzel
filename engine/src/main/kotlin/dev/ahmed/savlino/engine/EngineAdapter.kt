@@ -53,7 +53,8 @@ sealed interface EngineEvent {
 
 sealed interface TransferResult {
     data class Success(val output: StagedOutput) : TransferResult
-    data class Failure(val error: DownloadError, val resumeAllowed: Boolean = true) : TransferResult
+    data class Failure(val error: DownloadError, val resumeAllowed: Boolean = true,
+        val cause: DownloadFailureCause = error.cause) : TransferResult
 }
 
 /** A single nonempty staged file, not a published/saved download. */

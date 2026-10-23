@@ -64,6 +64,7 @@ class DownloadWorkerTest {
                 arrayOf<Any>(System.currentTimeMillis() - 1000, "older"))
             f.coordinator.initialize()
             f.coordinator.execute("older", {}, {})
+            f.coordinator.execute("older", {}, {}) // Exhaust the single silent resume before checking failed-row ordering.
             assertEquals(listOf("newer", "older"), dev.ahmed.savlino.downloads.visibleJobs(f.coordinator.progress.value).map { it.jobId })
         }
     }
@@ -257,6 +258,8 @@ class DownloadWorkerTest {
     @Test fun workerFailureKeepsTypedErrorAndRemovesStaging() = runBlocking {
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Network)))).use { f ->
             f.store.enqueue(command("failure"))
+            assertEquals(ListenableWorker.Result.retry(), f.worker("failure").doWork())
+            assertEquals(JobStage.ENQUEUED, f.store.get("failure")!!.stage)
             assertEquals(ListenableWorker.Result.failure(), f.worker("failure").doWork())
             assertEquals(JobStage.FAILED, f.store.get("failure")!!.stage)
             assertEquals(DownloadError.Network, f.store.get("failure")!!.error)
@@ -799,7 +802,7 @@ class DownloadWorkerTest {
             emit(EngineEvent.Progress(0, Size.Exact(20_000)))
             now.set(2000); emit(EngineEvent.Progress(2000, Size.Exact(20_000)))
             ready.complete(Unit); release.await()
-            TransferResult.Failure(DownloadError.Network)
+            TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
         }).use { f ->
             f.coordinator.initialize(); f.store.enqueue(command("silent-stall"))
             val running = async(Dispatchers.Default) { f.coordinator.execute("silent-stall", {}, {}) }
@@ -835,7 +838,7 @@ class DownloadWorkerTest {
             warmups += coordinator.progress.value.single()
             now.addAndGet(2000); emit(EngineEvent.Progress(2000, Size.Exact(10_000)))
             measured += coordinator.progress.value.single()
-            TransferResult.Failure(DownloadError.Network)
+            TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
         }).use { f ->
             coordinator = f.coordinator
             coordinator.initialize(); f.store.enqueue(command("same-attempt"))
@@ -865,7 +868,7 @@ class DownloadWorkerTest {
             now.set(4000)
             emit(EngineEvent.Progress(161_000_000, Size.Unknown))
             snapshots += coordinator.progress.value.single()
-            TransferResult.Failure(DownloadError.Network)
+            TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
         }).use { f ->
             coordinator = f.coordinator
             coordinator.initialize(); f.store.enqueue(command("hls-fragments"))
@@ -893,7 +896,7 @@ class DownloadWorkerTest {
                 now.addAndGet(2000); emit(EngineEvent.Progress(bytes, Size.Exact(100)))
                 snapshots += coordinator.progress.value.single()
             }
-            TransferResult.Failure(DownloadError.Network)
+            TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
         }).use { f ->
             coordinator = f.coordinator
             coordinator.initialize(); f.store.enqueue(command("invalid-count"))
@@ -949,7 +952,7 @@ class DownloadWorkerTest {
                 now.set(2000); emit(EngineEvent.Progress(2000, Size.Exact(10_000)))
                 measuredReport.await()
                 if (cancel) coordinator.requestCancellation(id)
-                TransferResult.Failure(if (cancel) DownloadError.Cancelled else DownloadError.Network)
+                TransferResult.Failure(if (cancel) DownloadError.Cancelled else DownloadError.Network, resumeAllowed = false)
             }).use { f ->
                 coordinator = f.coordinator
                 coordinator.initialize(); f.store.enqueue(command(id))
@@ -1022,7 +1025,7 @@ class DownloadWorkerTest {
         val attempts = java.util.concurrent.atomic.AtomicInteger()
         fixture(FakeEngine(), script = { _, dir, _ ->
             if (attempts.incrementAndGet() == 1) dir.resolve("output.mp4.part").writeText("keep")
-            TransferResult.Failure(DownloadError.Network)
+            TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.STALL)
         }).use { f ->
             assertTrue(f.coordinator.enqueue(command("chain")))
             val wm = WorkManager.getInstance(app)
@@ -1202,6 +1205,177 @@ class DownloadWorkerTest {
             f.coordinator.execute("upgraded", {}, {})
             assertEquals(false, infoAtTransfer); assertEquals("engine-43", engineVersion)
             assertEquals(1, f.attempts.get())
+        }
+    }
+
+    @Test fun transportResumesOnceWithoutGrowthThenFailsAndDeletesPartial() = runBlocking {
+        for (error in listOf(DownloadError.Network, DownloadError.Offline)) {
+            fixture(FakeEngine(), script = { selected, dir, emit ->
+                assertEquals("exact/source", selected.format.sourceFormatId)
+                val part = dir.resolve("output.mp4.part")
+                if (!part.exists()) part.writeText("keep")
+                assertEquals("keep", part.readText())
+                emit(EngineEvent.Progress(4, Size.Exact(100)))
+                TransferResult.Failure(error, cause = DownloadFailureCause.TRANSPORT)
+            }).use { f ->
+                val id = "once-${error.name}"
+                f.store.enqueue(command(id))
+                assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+                assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+                assertTrue(f.store.get(id)!!.hasPartial)
+                assertFalse(f.phases.contains("FAILED"))
+                assertEquals("keep", File(app.filesDir, "downloads/$id/output.mp4.part").readText())
+                assertEquals(ListenableWorker.Result.failure(), f.worker(id).doWork())
+                val row = f.store.get(id)!!
+                assertEquals(JobStage.FAILED, row.stage); assertTrue(row.retryable); assertFalse(row.hasPartial)
+                assertFalse(File(app.filesDir, "downloads/$id").exists())
+                assertEquals(1, f.phases.count { it == "FAILED" })
+                assertEquals(2, f.attempts.get())
+            }
+        }
+    }
+
+    @Test fun mebibyteGrowthBeforePauseResetsTheTransportEpisode() = runBlocking {
+        val entered = CompletableDeferred<Unit>(); val released = CompletableDeferred<Unit>()
+        var attempt = 0
+        fixture(FakeEngine(), cancelHook = { released.complete(Unit) }, script = { _, dir, emit ->
+            attempt++
+            val part = dir.resolve("output.mp4.part")
+            if (!part.exists()) part.writeText("keep") else if (attempt == 2) part.appendBytes(ByteArray(1024 * 1024))
+            emit(EngineEvent.Progress(part.length(), Size.Exact(100)))
+            if (attempt == 2) {
+                entered.complete(Unit); released.await()
+                TransferResult.Failure(DownloadError.Cancelled)
+            } else TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            val id = "growth-pause"
+            f.store.enqueue(command(id, Size.Exact(16L * 1024 * 1024)))
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(1, f.store.get(id)!!.transportResumes)
+            val running = async(Dispatchers.Default) { f.worker(id).doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                assertTrue(f.coordinator.pause(id))
+            } finally { released.complete(Unit) }
+            assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { running.await() })
+            assertEquals(JobStage.PAUSED, f.store.get(id)!!.stage)
+            assertEquals(0, f.store.get(id)!!.transportResumes)
+            assertEquals(4L + 1024 * 1024, File(app.filesDir, "downloads/$id/output.mp4.part").length())
+            assertTrue(f.coordinator.resume(id))
+            assertEquals(ListenableWorker.Result.retry(), f.worker(id).doWork())
+            assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+            assertFalse(f.phases.contains("FAILED"))
+            assertEquals(ListenableWorker.Result.failure(), f.worker(id).doWork())
+            assertEquals(JobStage.FAILED, f.store.get(id)!!.stage)
+            assertFalse(File(app.filesDir, "downloads/$id").exists())
+        }
+    }
+
+    @Test fun subMebibyteJobResetsTransportBudgetOnlyWhenBytesReachCompletion() = runBlocking {
+        var attempt = 0
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            attempt++
+            val bytes = if (attempt == 1) 2 else 4
+            dir.resolve("output.mp4.part").writeBytes(ByteArray(bytes))
+            emit(EngineEvent.Progress(bytes.toLong(), Size.Exact(4)))
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            val id = "small-complete"
+            f.store.enqueue(command(id))
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(0L, f.store.get(id)!!.resumeResetBytes)
+            assertEquals(1, f.store.get(id)!!.transportResumes)
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(4L, f.store.get(id)!!.resumeResetBytes)
+            assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+            assertEquals(4L, File(app.filesDir, "downloads/$id/output.mp4.part").length())
+            assertFalse(f.phases.contains("FAILED"))
+            assertEquals(ListenableWorker.Result.failure(), f.worker(id).doWork())
+            assertEquals(JobStage.FAILED, f.store.get(id)!!.stage)
+            assertFalse(File(app.filesDir, "downloads/$id").exists())
+        }
+    }
+
+    @Test fun typedHttpFailureNeverAutoResumesEvenWhenItsDisplayErrorIsNetwork() = runBlocking {
+        for (error in listOf(DownloadError.Failed, DownloadError.Network)) {
+            fixture(FakeEngine(), script = { _, dir, _ ->
+                dir.resolve("output.mp4.part").writeText("discard")
+                TransferResult.Failure(error, cause = DownloadFailureCause.HTTP)
+            }).use { f ->
+                val id = "http-${error.name}"
+                f.store.enqueue(command(id))
+                assertEquals(ListenableWorker.Result.failure(), f.worker(id).doWork())
+                assertEquals(JobStage.FAILED, f.store.get(id)!!.stage)
+                assertTrue(f.store.get(id)!!.retryable); assertFalse(f.store.get(id)!!.hasPartial)
+                assertFalse(File(app.filesDir, "downloads/$id").exists())
+                assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork(id).get().size)
+                assertEquals(1, f.phases.count { it == "FAILED" })
+            }
+        }
+    }
+
+    @Test fun stallResumesThreeTimesThenFailsAndGrowthResetsBothBudgets() = runBlocking {
+        var grow = false
+        var cause = DownloadFailureCause.STALL
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            val part = dir.resolve("output.mp4.part")
+            if (!part.exists()) part.writeText("keep") else if (grow) part.appendBytes(ByteArray(1024 * 1024))
+            emit(EngineEvent.Progress(part.length(), Size.Exact(100)))
+            TransferResult.Failure(DownloadError.Network, cause = cause)
+        }).use { f ->
+            f.store.enqueue(command("stall-budget", Size.Exact(16L * 1024 * 1024)))
+            assertEquals(ListenableWorker.Result.success(), f.worker("stall-budget").doWork())
+            repeat(2) { assertEquals(ListenableWorker.Result.retry(), f.worker("stall-budget").doWork()) }
+            assertFalse(f.phases.contains("FAILED"))
+            // Progress after three stalls starts a fresh episode; consume transport, then grow again.
+            cause = DownloadFailureCause.TRANSPORT; grow = true
+            assertEquals(ListenableWorker.Result.success(), f.worker("stall-budget").doWork())
+            cause = DownloadFailureCause.STALL
+            assertEquals(ListenableWorker.Result.success(), f.worker("stall-budget").doWork())
+            grow = false
+            repeat(2) { assertEquals(ListenableWorker.Result.retry(), f.worker("stall-budget").doWork()) }
+            assertEquals(JobStage.ENQUEUED, f.store.get("stall-budget")!!.stage)
+            assertTrue(f.store.get("stall-budget")!!.hasPartial)
+            assertEquals(4L + 2 * 1024 * 1024, File(app.filesDir, "downloads/stall-budget/output.mp4.part").length())
+            assertEquals(ListenableWorker.Result.failure(), f.worker("stall-budget").doWork())
+            assertEquals(JobStage.FAILED, f.store.get("stall-budget")!!.stage)
+            assertFalse(File(app.filesDir, "downloads/stall-budget").exists())
+            assertEquals(1, f.phases.count { it == "FAILED" })
+        }
+    }
+
+    @Test fun pauseAndCancelWinWhileAutomaticResumeIsBeingReported() = runBlocking {
+        for (cancel in listOf(false, true)) {
+            val reporting = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+            fixture(FakeEngine(), script = { _, dir, _ ->
+                dir.resolve("output.mp4.part").writeText("keep")
+                TransferResult.Failure(DownloadError.Network)
+            }).use { f ->
+                val id = if (cancel) "resume-cancel" else "resume-pause"
+                f.coordinator.initialize(); f.store.enqueue(command(id))
+                val events = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
+                val running = async(Dispatchers.Default) {
+                    f.coordinator.execute(id, { WorkInfo.STOP_REASON_NOT_STOPPED }, {}, {}) {
+                        events += it
+                        if (it.waiting) { reporting.complete(Unit); release.await() }
+                    }
+                }
+                try {
+                    withTimeout(5000) { reporting.await() }
+                    if (cancel) f.coordinator.cancel(id) else assertTrue(f.coordinator.pause(id))
+                } finally { release.complete(Unit) }
+                withTimeout(5000) { running.await() }
+                val row = f.store.get(id)!!
+                assertEquals(if (cancel) JobStage.CANCELLED else JobStage.PAUSED, row.stage)
+                assertEquals(!cancel, row.hasPartial)
+                assertEquals(!cancel, File(app.filesDir, "downloads/$id/output.mp4.part").exists())
+                if (cancel) assertNull(row.sourceUrl) else assertNotNull(row.sourceUrl)
+                assertFalse(events.any { it.phase == DownloadPhase.FAILED })
+                assertFalse(f.coordinator.continueAfterProgress(id))
+                assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork(id).get().all {
+                    it.state == WorkInfo.State.CANCELLED
+                })
+            }
         }
     }
 
