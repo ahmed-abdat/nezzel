@@ -213,12 +213,17 @@ class MainActivity : AppCompatActivity() {
     private fun pasteIfRequested() {
         if (!pasteRequested || !resumed || !hasWindowFocus()) return
         pasteRequested = false
-        if (!onboarding) pasteClipboard()
+        if (!onboarding) {
+            links.navigate("Home")
+            pasteClipboard()
+        }
     }
     /** Shared by Home and explicit shortcut taps; mark the entry read before suggestions can run. */
     private fun pasteClipboard() {
         if (!resumed || !hasWindowFocus() || onboarding) return
         clipboardReadThisEntry = true
         links.paste(getSystemService(ClipboardManager::class.java).plainText())
+        // Paste publishes its pending link before maintenance can observe this entry's decision.
+        (application as NezzelApplication).downloads.maintenance.foregroundClipboardChecked()
     }
 }
