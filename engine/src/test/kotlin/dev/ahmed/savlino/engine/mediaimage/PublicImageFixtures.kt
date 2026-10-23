@@ -124,7 +124,8 @@ internal class PublicImageFixture(identity: MediaHttpTlsIdentity,
     decoder: ImagePreviewDecoder = JdkPreviewDecoder(),
     respond: (RecordedMediaRequest, SSLSocket) -> Unit = { _, socket -> socket.reply(body = raster(), headers = mapOf("Content-Type" to "image/png")) },
     resolver: (String) -> List<java.net.InetAddress> = { listOf(PUBLIC_V4) }) : Closeable {
-    val server = MediaHttpServer(identity) { request, socket ->
+    // A page plus three parallel carousel bodies, each on its own connection.
+    val server = MediaHttpServer(identity, handlerThreads = 4) { request, socket ->
         if (request.target == "/control") socket.reply() else respond(request, socket)
     }
     val http = MediaHttpHarness(identity, server, resolver)

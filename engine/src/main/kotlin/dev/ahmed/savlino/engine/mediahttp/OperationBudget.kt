@@ -5,6 +5,9 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 
+/** Carousel image bodies one operation may fetch at once; pages and single images stay one at a time. */
+internal const val CAROUSEL_PARALLEL_FETCHES = 3
+
 /** Identity and its terminal state survive retirement without an evictable cancellation tombstone. */
 class OperationId internal constructor(internal val owner: Any) {
     @Volatile internal var terminal: MediaHttpFailure? = null
@@ -18,6 +21,8 @@ class OperationBudget internal constructor(private val operation: MediaHttpOpera
     private var imageBytes = 0L
     private var created = 0
     private var closed = 0
+    private var reserved = 0L
+    private var reservations = 0
 
     @Synchronized internal fun requireRequestRoom() {
         val limit = when (operation) {
@@ -45,6 +50,32 @@ class OperationBudget internal constructor(private val operation: MediaHttpOpera
             (2 * 1024 * 1024 - imageBytes).coerceAtLeast(0).toInt() else 2 * 1024 * 1024
         return minOf(remaining, if (thumbnail) 192 * 1024 else 2 * 1024 * 1024)
     }
+    /**
+     * Parallel carousel bodies reserve their cap up front, so together they never pass the shared 2 MiB.
+     * While siblings are in flight a body waits for its full cap; alone it gets [imageLimit], as a serial loop would.
+     * A positive result must be returned with [releaseImage].
+     */
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+    @Synchronized internal fun reserveImage(thumbnail: Boolean, isActive: () -> Boolean): Int {
+        val want = if (thumbnail) 192 * 1024 else 2 * 1024 * 1024
+        while (true) {
+            val free = (2 * 1024 * 1024 - imageBytes - reserved).coerceAtLeast(0)
+            if (free >= want || reservations == 0) {
+                val cap = minOf(free, want.toLong()).toInt()
+                if (cap > 0) { reserved += cap; reservations++ }
+                return cap
+            }
+            if (!isActive()) return 0
+            (this as Object).wait(50)
+        }
+    }
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+    @Synchronized internal fun releaseImage(cap: Int) {
+        if (cap <= 0) return
+        reserved -= cap
+        reservations--
+        (this as Object).notifyAll()
+    }
     @Synchronized internal fun socketCreated() { created++ }
     @Synchronized internal fun socketClosed() { closed++ }
     @Synchronized internal fun snapshot() = MediaHttpCounters(requests, redirects, bytes, created, closed)
@@ -66,7 +97,8 @@ class OperationToken internal constructor(val operation: MediaHttpOperation, int
     private val lock = Any()
     private val started = System.nanoTime()
     private val cleanups = linkedMapOf<Any, () -> Unit>()
-    private var fetching = false
+    private var fetching = 0
+    private var pageFetching = false
     private var pageClaims = 0
     private var imageClaims = 0
     private var client: OkHttpClient? = null
@@ -91,7 +123,8 @@ class OperationToken internal constructor(val operation: MediaHttpOperation, int
 
     internal fun begin(purpose: MediaHttpPurpose) = synchronized(lock) {
         requireActive()
-        if (fetching) throw MediaHttpException(MediaHttpFailure.BUSY)
+        val parallel = if (purpose == MediaHttpPurpose.IMAGE && operation.isCarousel) CAROUSEL_PARALLEL_FETCHES else 1
+        if (pageFetching || fetching >= parallel) throw MediaHttpException(MediaHttpFailure.BUSY)
         when (purpose) {
             MediaHttpPurpose.PAGE -> {
                 val pages = when (operation) {
@@ -109,9 +142,10 @@ class OperationToken internal constructor(val operation: MediaHttpOperation, int
                 imageClaims++
             }
         }
-        fetching = true
+        fetching++
+        pageFetching = purpose == MediaHttpPurpose.PAGE
     }
-    internal fun endFetch() { synchronized(lock) { fetching = false } }
+    internal fun endFetch() { synchronized(lock) { fetching--; pageFetching = false } }
 
     internal fun client(factory: () -> OkHttpClient): OkHttpClient = synchronized(lock) {
         requireActive()

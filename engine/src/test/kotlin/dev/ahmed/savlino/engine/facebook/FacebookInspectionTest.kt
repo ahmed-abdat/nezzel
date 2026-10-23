@@ -91,7 +91,8 @@ class FacebookInspectionTest : PublicImageTestBase() {
                 assertEquals(ImageDiscovery(count, DiscoveryCompleteness.PARTIAL, 11,
                     unavailableCount = if (firstUnavailable) 1 else 0, hasVideo = true), result.discovery)
                 assertTrue(result.inspection.items.all { it.renditions.size == 1 })
-                assertEquals(listOf(target, "/4.jpg", "/6.jpg", "/8.jpg", "/10.jpg"), f.server.requests.map { it.target })
+                // Photos load in parallel: the page first, then each photo once in any order.
+                assertEquals(listOf(target, "/10.jpg", "/4.jpg", "/6.jpg", "/8.jpg"), f.server.requests.map { it.target }.let { it.take(1) + it.drop(1).sorted() })
             } finally { result.close() }
         }
     }
@@ -362,7 +363,7 @@ class FacebookInspectionTest : PublicImageTestBase() {
                 assertTrue(result.inspection.items.all { it.renditions.single().ref in result.previews })
                 assertEquals(ImageDiscovery(5, DiscoveryCompleteness.PARTIAL, 18), result.discovery)
                 assertEquals(listOf(storyTarget, "/1.jpg", "/3.jpg", "/5.jpg", "/7.jpg", "/9.jpg"),
-                    f.server.requests.map { it.target })
+                    f.server.requests.map { it.target }.let { it.take(1) + it.drop(1).sorted() })
                 for ((index, item) in result.inspection.items.withIndex()) {
                     val rendition = assertIs<MediaRendition.Image>(item.renditions.single())
                     assertEquals(Size.Unknown, rendition.image.size)
@@ -392,7 +393,7 @@ class FacebookInspectionTest : PublicImageTestBase() {
                 assertEquals(listOf(1, 2, 3, 4), result.inspection.items.map { it.position })
                 assertEquals(ImageDiscovery(4, DiscoveryCompleteness.PARTIAL, 18, unavailableCount = 1), result.discovery)
                 assertEquals(listOf(storyTarget, "/1.jpg", "/3.jpg", "/5.jpg", "/7.jpg", "/9.jpg"),
-                    f.server.requests.map { it.target })
+                    f.server.requests.map { it.target }.let { it.take(1) + it.drop(1).sorted() })
                 assertTrue(f.server.requests.none { it.headers["host"] == "external.example.fbcdn.net" })
             }
         }
@@ -426,7 +427,7 @@ class FacebookInspectionTest : PublicImageTestBase() {
                 assertEquals(20, result.inspection.items.size)
                 assertEquals(20, result.previews.size)
                 assertEquals(ImageDiscovery(20, DiscoveryCompleteness.PARTIAL, 25, cappedCount = 5), result.discovery)
-                assertEquals(listOf(storyTarget) + (1..20).map { "/$it.jpg" }, f.server.requests.map { it.target })
+                assertEquals(listOf(storyTarget) + (1..20).map { "/$it.jpg" }.sorted(), f.server.requests.map { it.target }.let { it.take(1) + it.drop(1).sorted() })
             }
         }
     }
