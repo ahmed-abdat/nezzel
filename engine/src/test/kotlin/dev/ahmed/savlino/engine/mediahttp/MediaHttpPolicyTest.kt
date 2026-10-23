@@ -44,6 +44,21 @@ class MediaHttpPolicyTest {
         assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(www, assertNotNull(MediaHttpPolicy.parse("https://ae.linkedin.com/posts/synthetic-activity-123/"))))
     }
 
+    /** Review of url-shapes: encoded and embed update targets are the same post the parser accepts. */
+    @Test fun linkedinHopNormalisesEncodedAndEmbedUpdateTargets() {
+        fun url(value: String) = assertNotNull(MediaHttpPolicy.parse(value))
+        val share = url("https://www.linkedin.com/feed/update/urn:li:share:1/")
+        for (target in listOf("https://www.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/",
+                "https://www.linkedin.com/embed/feed/update/urn:li:share:1/", "https://www.linkedin.com/embed/feed/update/urn%3ali%3ashare%3a1"))
+            assertTrue(MediaHttpPolicy.allowsLinkedInPageHop(share, url(target)), target)
+        assertEquals("https://www.linkedin.com/feed/update/urn:li:share:1/",
+            MediaHttpPolicy.linkedInHopTarget(url("https://www.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/")).toString())
+        assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(share, url("https://www.linkedin.com/feed/update/urn%3Ali%3Ashare%3A2/")))
+        assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(share, url("https://ae.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/")))
+        assertEquals("https://ae.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/",
+            MediaHttpPolicy.linkedInHopTarget(url("https://ae.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/")).toString())
+    }
+
     @Test fun rejectsEveryIpv4SpecialPurposeBoundaryAndAllowsAdjacentPublicAddresses() {
         // Each row is independently specified: first, last, preceding address, following address.
         val rows = listOf(

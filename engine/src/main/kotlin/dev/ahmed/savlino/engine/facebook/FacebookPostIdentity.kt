@@ -49,7 +49,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
                     FacebookPostIdentity(FacebookLinkKind.SHORTLINK, "https://fb.watch$path", null, null, null)
                 }
             }
-            if (host !in inputHosts && !localeHost.matches(host)) return null
+            if (!isFacebookHost(parsed)) return null
             if (path.startsWith("/events/") || path.startsWith("/stories/")) return null
             share.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.SHARE, WWW + path, null, null, null,
                 it.groupValues[1] in setOf("v", "r")) }
@@ -85,22 +85,22 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
             return null
         }
 
-        /** Any facebook.com host family page, including ones we never fetch (used to recognise login walls). */
-        internal fun isFacebookHost(url: HttpUrl): Boolean = url.host.lowercase() in hosts
+        /** Any accepted facebook.com input host, including ones we never fetch; every guard uses this same family. */
+        internal fun isFacebookHost(url: HttpUrl): Boolean = url.host.lowercase().let { it in inputHosts || localeHost.matches(it) }
 
         /** Event pages are unsupported, including mobile hosts and nested event paths. */
         fun isEventLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
-            (isFacebookHost(it) || it.host == "mbasic.facebook.com") && it.encodedPath.startsWith("/events/")
+            isFacebookHost(it) && it.encodedPath.startsWith("/events/")
         } == true
 
         /** Ephemeral stories always need sign-in; story.php is a separate, supported post shape. */
         fun isStoryLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
-            (isFacebookHost(it) || it.host == "mbasic.facebook.com") && it.encodedPath.startsWith("/stories/")
+            isFacebookHost(it) && it.encodedPath.startsWith("/stories/")
         } == true
 
         private val loginPaths = setOf("/login", "/login/", "/login.php", "/checkpoint", "/checkpoint/")
 
-        /** Exactly www/m/web /login, /login/, /login.php, /checkpoint(/): the logged-out wall. */
+        /** Exactly /login, /login/, /login.php, /checkpoint(/) on any Facebook host: the logged-out wall. */
         internal fun isLoginWall(url: HttpUrl): Boolean = isFacebookHost(url) && url.encodedPath in loginPaths
 
         private fun single(url: HttpUrl, name: String, grammar: Regex): String? =

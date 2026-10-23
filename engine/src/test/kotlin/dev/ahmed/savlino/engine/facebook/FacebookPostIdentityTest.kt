@@ -163,4 +163,19 @@ class FacebookPostIdentityTest {
             assertNull(FacebookPostIdentity.parse(url), url)
         assertTrue(FacebookPostIdentity.isStoryLink("https://mbasic.facebook.com/stories/123/"))
     }
+
+    /** Review of url-shapes: every guard covers the same widened host family as parse. */
+    @Test fun storyEventAndLoginGuardsCoverEveryAcceptedHost() {
+        for (host in listOf("mbasic.facebook.com", "touch.facebook.com", "mobile.facebook.com", "ar-ar.facebook.com")) {
+            assertTrue(FacebookPostIdentity.isStoryLink("https://$host/stories/123/"), host)
+            assertTrue(FacebookPostIdentity.isEventLink("https://$host/events/900000000000001/"), host)
+            for (path in listOf("/login", "/login/", "/login.php?next=x", "/checkpoint/"))
+                assertTrue(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host$path"))), "$host$path")
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host/loginx/"))), host)
+        }
+        for (host in listOf("ar.facebook.com", "ar-ar.facebook.com.evil.test", "arab-ar.facebook.com")) {
+            assertFalse(FacebookPostIdentity.isStoryLink("https://$host/stories/123/"), host)
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host/login"))), host)
+        }
+    }
 }

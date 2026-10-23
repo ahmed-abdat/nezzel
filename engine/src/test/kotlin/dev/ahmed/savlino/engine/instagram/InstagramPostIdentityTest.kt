@@ -93,7 +93,8 @@ class InstagramPostIdentityTest {
             "https://www.instagram.com/share/SynthShare1/", "https://www.instagram.com/stories/p/SynthPost01/",
             "https://www.instagram.com/explore/p/SynthPost01/", "https://www.instagram.com/accounts/reel/SynthPost01/",
             "https://www.instagram.com/p/reel/SynthPost01/", "https://www.instagram.com/reels/tv/SynthPost01/",
-            "https://www.instagram.com/stories/synthetic_user/123/"))
+            "https://www.instagram.com/stories/synthetic_user/123/", "https://www.instagram.com/Share/p/SynthPost01/",
+            "https://www.instagram.com/SHARE/reel/SynthShare1/", "https://www.instagram.com/Stories/p/SynthPost01/"))
             assertNull(InstagramPostIdentity.parse(url), url)
     }
 }

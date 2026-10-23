@@ -41,12 +41,16 @@ internal object MediaHttpPolicy {
     internal fun isLinkedInLoginWall(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) &&
         Regex("/(?:signup(?:/[a-z-]+)?|authwall|login|uas/login|checkpoint/[a-z/-]+)/?").matches(url.encodedPath)
 
+    /** A www redirect target in its plain `/feed/update/urn:li:…/` form; other hosts stay as sent (and are refused). */
+    internal fun linkedInHopTarget(to: HttpUrl): HttpUrl = if (to.host == "www.linkedin.com") normalizeLinkedInEntry(to) else to
+
     /** Only a shortlink may establish the post; every later post/activity hop must keep that identity. */
     internal fun allowsLinkedInPageHop(from: HttpUrl, to: HttpUrl): Boolean {
-        if (!isLinkedInPageEntry(from) || !isLinkedInPost(to)) return false
+        val hop = linkedInHopTarget(to)
+        if (!isLinkedInPageEntry(from) || !isLinkedInPost(hop)) return false
         if (from.host == "lnkd.in") return true
         val source = LinkedInPostIdentity.parse(from.toString()) ?: return false
-        val target = LinkedInPostIdentity.parse(to.toString()) ?: return false
+        val target = LinkedInPostIdentity.parse(hop.toString()) ?: return false
         return source.sameAs(target)
     }
 

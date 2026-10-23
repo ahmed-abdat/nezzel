@@ -28,8 +28,8 @@ class InstagramPostIdentity private constructor(val kind: InstagramLinkKind, val
         const val PAGE_HOST = "www.instagram.com"
         private val hosts = setOf("instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am")
         private const val CODE = "[A-Za-z0-9_-]{5,64}"
-        /** First segments Instagram uses for its own pages; never a user prefix. */
-        private const val RESERVED = "(?:share|stories|explore|accounts|direct|about|legal|developer|p|reels?|tv)/"
+        /** First segments Instagram uses for its own pages, in any case; never a user prefix. */
+        private const val RESERVED = "(?i:share|stories|explore|accounts|direct|about|legal|developer|p|reels?|tv)/"
         private val path = Regex("/(?:(?!$RESERVED)[A-Za-z0-9_.]{1,30}/)?(p|reels?|tv)/($CODE)/?")
         private val pagePath = Regex("/p/($CODE)/")
 
