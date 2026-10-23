@@ -31,9 +31,13 @@ import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Space
 
 @Composable
-internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null) {
+internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null,
+    load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }) {
     val title = inspection?.title ?: earlyPreview?.title
-    val thumbnail = inspection?.thumbnailUrl ?: earlyPreview?.thumbnailUrl
+    // The early (oEmbed) preview and the engine name different images of the same video. Once one has drawn,
+    // keep it for this link: switching would blank the tile and fetch a second, larger image.
+    var kept by remember { mutableStateOf<String?>(null) }
+    val thumbnail = kept ?: inspection?.thumbnailUrl ?: earlyPreview?.thumbnailUrl
     var shown by remember { mutableStateOf<Bitmap?>(null) }
     val inspectionId = inspection?.inspectionId
     // Hand the shown artwork to a confirmed job (memory only; written to disk only on Download).
@@ -44,7 +48,7 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
         withContext(Dispatchers.Default) { SheetArtwork.take(inspectionId) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-        PreviewThumbnail(thumbnail, audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = { shown = it })
+        PreviewThumbnail(thumbnail, load = load, audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = { shown = it; if (it != null) kept = thumbnail })
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             title?.let {
                 Text(it, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
