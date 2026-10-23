@@ -58,10 +58,24 @@ fun NezzelApp(
     BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack else "Home") }
     val reduced = rememberReducedMotion()
     val snackbar = remember { SnackbarHostState() }
-    val library = rememberLibraryState(snackbar)
+    val context = LocalContext.current
+    val shareLinks = remember(links.downloads) {
+        links.downloads?.shareLinks { id -> (context.applicationContext as? NezzelApplication)?.widgets?.forget(id) }
+    }
+    val library = rememberLibraryState(snackbar, sweep = shareLinks?.let { it::sweep })
     val jobs by (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    // The app scope outlives the file sheet, so a copy still lands after the sheet closes.
+    val linkCopy = remember(shareLinks) {
+        shareLinks?.let { share -> LinkCopy(share::link) { url -> scope.launch {
+            copyHandled(url, links::markHandled) {
+                context.getSystemService(android.content.ClipboardManager::class.java)
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("Nezzel", it))
+            }
+            // Android 13+ confirms a copy itself.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) snackbar.showSnackbar(context.getString(R.string.link_copied))
+        } } }
+    }
     val updates = (context.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available }
     val updateState by (updates?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AppUpdateState()) }).collectAsState()
     LaunchedEffect(updates, language) {
@@ -165,7 +179,7 @@ fun NezzelApp(
                         scaleIn(tween(Motion.TAB - 30, 70, Motion.EaseOut), initialScale = .98f)) togetherWith
                         fadeOut(tween(70, easing = Motion.EaseOut))
                 }, label = "destination") { route ->
-                    when (route) {
+                    CompositionLocalProvider(LocalLinkCopy provides linkCopy) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks)
                         "Downloads" -> DownloadsScreen(jobs, language,
@@ -178,7 +192,7 @@ fun NezzelApp(
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
                             onRemove = removeFailed, onRetry = retry,
                             onCancel = cancel, onPause = pause, onResume = resume)
-                    }
+                    } }
                 }
             }
             if (showOptions) OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }

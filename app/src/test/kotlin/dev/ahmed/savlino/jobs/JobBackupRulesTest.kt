@@ -17,6 +17,17 @@ class JobBackupRulesTest {
         assertEquals(0, app.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
     }
 
+    @Test fun manifestBindsBothRuleFilesWithBackupOff() {
+        // The rules only protect the journal while the manifest still points at them.
+        val app = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+            .newDocumentBuilder().parse(java.io.File("src/main/AndroidManifest.xml").takeIf { it.isFile } ?: java.io.File("app/src/main/AndroidManifest.xml"))
+            .getElementsByTagName("application").item(0) as org.w3c.dom.Element
+        val android = "http://schemas.android.com/apk/res/android"
+        assertEquals("false", app.getAttributeNS(android, "allowBackup"))
+        assertEquals("@xml/backup_rules", app.getAttributeNS(android, "fullBackupContent"))
+        assertEquals("@xml/data_extraction_rules", app.getAttributeNS(android, "dataExtractionRules"))
+    }
+
     @Test fun onlyPortableCosmeticsAreEligibleForEveryTransport() {
         for ((name, prefixes) in listOf("backup_rules" to listOf(""),
             "data_extraction_rules" to listOf("cloud-backup/", "device-transfer/"))) {

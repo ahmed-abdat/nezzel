@@ -451,6 +451,8 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
     if (!open) return
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val copy = LocalLinkCopy.current
+    val link by produceState<String?>(null, item.uri) { value = copy?.find?.invoke(item) }
     fun act(action: () -> Unit) {
         action()
         scope.launch { sheet.hide() }.invokeOnCompletion { open = false }
@@ -470,6 +472,10 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
             HorizontalDivider(Modifier.padding(horizontal = Space.xl))
             Spacer(Modifier.height(Space.s))
             SheetAction(R.drawable.ic_ms_share, stringResource(R.string.share_file)) { act(onShare) }
+            link?.let { url ->
+                SheetAction(R.drawable.ic_ms_link, stringResource(R.string.copy_link),
+                    supporting = android.net.Uri.parse(url).host?.removePrefix("www.")) { act { copy?.copy?.invoke(url) } }
+            }
             SheetAction(R.drawable.ic_ms_open_in_new, stringResource(R.string.saved_open_with)) { act(onOpenWith) }
             if (onShowFiles != null) SheetAction(R.drawable.ic_ms_folder, stringResource(R.string.saved_show_files)) { act { onShowFiles(item) } }
             HorizontalDivider(Modifier.padding(horizontal = Space.xl, vertical = Space.s))
@@ -479,13 +485,19 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
 }
 
 @Composable
-private fun SheetAction(icon: Int, label: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant, onClick: () -> Unit) {
+private fun SheetAction(icon: Int, label: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        supporting: String? = null, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button, onClick = onClick)
         .padding(horizontal = Space.xl, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.l)) {
         TintedIcon(icon, tint)
-        Text(label, style = MaterialTheme.typography.bodyLarge,
-            color = if (tint == MaterialTheme.colorScheme.error) tint else MaterialTheme.colorScheme.onSurface)
+        Column(verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge,
+                color = if (tint == MaterialTheme.colorScheme.error) tint else MaterialTheme.colorScheme.onSurface)
+            // Hosts stay LTR inside Arabic.
+            if (supporting != null) Text(supporting, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

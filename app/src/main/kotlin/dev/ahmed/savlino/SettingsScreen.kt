@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -42,6 +43,7 @@ internal fun SettingsScreen(
     onAutomaticOptions: (Boolean) -> Unit,
     onHowItWorks: () -> Unit,
     updates: AppUpdates? = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available },
+    onClearLinks: (suspend () -> Unit)? = links.downloads?.let { downloads -> { downloads.clearShareLinks() } },
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
     BackHandler(advanced) { advanced = false }
@@ -53,7 +55,7 @@ internal fun SettingsScreen(
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
             links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
-            onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
+            onSuggestions, onAutomaticOptions, onHowItWorks, updates, onClearLinks) { advanced = true }
     }
 }
 
@@ -62,7 +64,8 @@ private fun MainSettings(
     links: LinkViewModel, language: String, theme: ThemePref, wallpaper: Boolean, suggestions: Boolean,
     onLanguage: (String) -> Unit, onTheme: (ThemePref) -> Unit,
     onWallpaper: (Boolean) -> Unit, onSuggestions: (Boolean) -> Unit,
-    onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?, onAdvanced: () -> Unit,
+    onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?,
+    onClearLinks: (suspend () -> Unit)?, onAdvanced: () -> Unit,
 ) {
     var picker by rememberSaveable { mutableStateOf<String?>(null) }
     val languages = listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en),
@@ -88,6 +91,7 @@ private fun MainSettings(
                 SwitchSetting(stringResource(R.string.copied_suggestions), stringResource(R.string.copied_help), suggestions,
                     R.drawable.ic_ms_content_paste, onSuggestions)
             }
+            onClearLinks?.let { PrivacySettings(it) }
             SettingsGroup(stringResource(R.string.settings_saving)) {
                 SaveFolderSetting()
                 SettingsNavRow(stringResource(R.string.settings_advanced), R.drawable.ic_ms_tune,
@@ -100,6 +104,28 @@ private fun MainSettings(
         "language" -> ChoiceDialog(stringResource(R.string.language), languages, language, onLanguage) { picker = null }
         "theme" -> ChoiceDialog(stringResource(R.string.appearance), themes, theme, onTheme) { picker = null }
     }
+}
+
+/** One row: forgets every saved file's link after one confirmation. Files stay. */
+@Composable
+internal fun PrivacySettings(onClear: suspend () -> Unit) {
+    var confirm by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    SettingsGroup(stringResource(R.string.settings_privacy)) {
+        SettingsNavRow(stringResource(R.string.clear_link_history), R.drawable.ic_ms_link,
+            body = stringResource(R.string.clear_link_history_help), chevron = false) { confirm = true }
+    }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false },
+        title = { Text(stringResource(R.string.clear_link_history_title)) },
+        text = { Text(stringResource(R.string.clear_link_history_body)) },
+        dismissButton = {
+            TextButton(onClick = { confirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
+        },
+        confirmButton = {
+            TextButton(onClick = { confirm = false; scope.launch { onClear() } }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.clear))
+            }
+        })
 }
 
 /**
