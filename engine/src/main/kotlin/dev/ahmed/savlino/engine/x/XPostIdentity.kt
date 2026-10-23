@@ -4,7 +4,7 @@ import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 
 /**
  * A public X/Twitter post link: `x.com|twitter.com|mobile.twitter.com/<user>/status/<id>` or `/i/status/<id>`,
- * optionally with the viewer's `/photo/<n>` or `/video/<n>` suffix. Only the numeric post id is kept; the
+ * optionally with the viewer's `/photo/<n>` or `/video/<n>` suffix (or a mirror's `/<lang>` translation suffix). Only the numeric post id is kept; the
  * user segment and any query (share tracking) are never used for a request.
  */
 class XPostIdentity private constructor(val postId: String, val legacyUrl: String?, val mediaIndex: Int?) {
@@ -16,20 +16,24 @@ class XPostIdentity private constructor(val postId: String, val legacyUrl: Strin
     companion object {
         const val SYNDICATION_HOST = "cdn.syndication.twimg.com"
         const val SYNDICATION_PATH = "/tweet-result"
-        private val mirrors = setOf("fxtwitter.com", "vxtwitter.com", "fixupx.com", "fixvx.com")
-        private val hosts = setOf("x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com",
-            "mobile.twitter.com", "fxtwitter.com", "www.fxtwitter.com", "vxtwitter.com", "www.vxtwitter.com",
+        private val mirrors = setOf("fxtwitter.com", "vxtwitter.com", "fixupx.com", "fixvx.com", "d.fxtwitter.com")
+        private val hosts = setOf("x.com", "www.x.com", "mobile.x.com", "m.x.com", "twitter.com", "www.twitter.com",
+            "mobile.twitter.com", "m.twitter.com", "d.fxtwitter.com", "fxtwitter.com", "www.fxtwitter.com", "vxtwitter.com", "www.vxtwitter.com",
             "fixupx.com", "www.fixupx.com", "fixvx.com", "www.fixvx.com")
         private val path = Regex("/(?:i(?:/web)?|[A-Za-z0-9_]{1,15})/status/([1-9][0-9]{0,18})(?:/(?:photo|video)/([1-4]))?/?")
+        /** fxtwitter's translated view, `/status/<id>/<lang>`; only on a mirror. */
+        private val translated = Regex("(/(?:i(?:/web)?|[A-Za-z0-9_]{1,15})/status/[1-9][0-9]{0,18})/[a-z]{2}/?")
         private val query = Regex("id=([1-9][0-9]{0,18})&token=([0-9a-z]{1,32})")
 
         fun parse(url: String): XPostIdentity? {
             val parsed = MediaHttpPolicy.parse(url) ?: return null
             if (parsed.host.lowercase() !in hosts) return null
-            val match = path.matchEntire(parsed.encodedPath) ?: return null
+            val mirror = parsed.host.lowercase().removePrefix("www.") in mirrors
+            val encodedPath = if (mirror) translated.matchEntire(parsed.encodedPath)?.groupValues?.get(1) ?: parsed.encodedPath
+                else parsed.encodedPath
+            val match = path.matchEntire(encodedPath) ?: return null
             val id = match.groupValues[1]
             // yt-dlp reads the user's own link, suffix included; a mirror becomes x.com/i/status/<id> without it.
-            val mirror = parsed.host.removePrefix("www.") in mirrors
             return id.toLongOrNull()?.let {
                 XPostIdentity(id, if (mirror) "https://x.com/i/status/$id" else null,
                     if (mirror) null else match.groupValues[2].toIntOrNull())

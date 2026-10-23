@@ -16,7 +16,10 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
     companion object {
         private const val ACTIVITY = "activity"
         private val post = Regex("/posts/(${MediaHttpPolicy.LINKEDIN_SLUG})/?")
-        private val activity = Regex("/feed/update/urn:li:activity:([0-9]+)/?")
+        /** `/feed/update/<urn>` or its `/embed/` form, for an activity, share or ugcPost URN. */
+        private val update = Regex("(?:/embed)?/feed/update/urn:li:(activity|share|ugcPost):([0-9]+)/?")
+        /** Apps percent-encode the URN's colons (`urn%3Ali%3Ashare%3A…`); only that escape is decoded. */
+        private val encodedColon = Regex("%3[Aa]")
         private val slugIds = Regex("(?:^|[_-])(activity|share|ugcPost)-([0-9]+)(?:-|$)")
         private val urn = Regex("urn:li:activity:([0-9]+)")
         private val attributed = Regex("urn:li:(share|ugcPost):([0-9]+)")
@@ -32,11 +35,15 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
                 return LinkedInPostIdentity(false, slug,
                     typed?.let { mapOf(it.groupValues[1] to it.groupValues[2]) } ?: emptyMap())
             }
-            activity.matchEntire(parsed.encodedPath)?.let {
-                return LinkedInPostIdentity(false, null, mapOf(ACTIVITY to it.groupValues[1]))
+            update.matchEntire(updatePath(parsed.encodedPath))?.let {
+                return LinkedInPostIdentity(false, null, mapOf(it.groupValues[1] to it.groupValues[2]))
             }
             return null
         }
+
+        /** The update path with only `%3A` decoded; any other escape stays and fails the match. */
+        internal fun updatePath(encodedPath: String): String =
+            if (encodedPath.contains("/feed/update/")) encodedPath.replace(encodedColon, ":") else encodedPath
 
         internal fun activityUrn(value: String): String? = urn.matchEntire(value.trim())?.groupValues?.get(1)
     }
@@ -56,7 +63,9 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
     val cleanUrl: String? get() = when {
         shortlink -> null
         slug != null -> "https://www.linkedin.com/posts/$slug/"
-        else -> activityId?.let { "https://www.linkedin.com/feed/update/urn:li:activity:$it/" }
+        // The activity URN when known (also after a bridge), else the one share/ugcPost URN the link named.
+        else -> (activityId?.let { ACTIVITY to it } ?: ids.entries.firstOrNull()?.toPair())
+            ?.let { (kind, id) -> "https://www.linkedin.com/feed/update/urn:li:$kind:$id/" }
     }
 
     /**

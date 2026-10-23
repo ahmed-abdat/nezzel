@@ -19,7 +19,7 @@ class BlueskyPostTest {
         assertEquals(did, direct.did)
         assertEquals(uri, direct.atUri(did))
         assertEquals("https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=at%3A%2F%2Fdid%3Aplc%3Aabcdefghijklmnopqrstuvwx%2Fapp.bsky.feed.post%2F3synthetic001&depth=0", direct.threadUrl(did))
-        for (url in listOf("https://bsky.app/profile/synthetic.test", "https://bsky.app/profile/synthetic.test/post/3synthetic001/likes", "https://bsky.app/profile/did:web:evil.test/post/3synthetic001", "https://bsky.app/profile/localhost/post/3synthetic001", "https://bsky.app.evil.test/profile/synthetic.test/post/3synthetic001"))
+        for (url in listOf("https://bsky.app/profile/synthetic.test", "https://bsky.app/profile/localhost/post/3synthetic001", "https://bsky.app.evil.test/profile/synthetic.test/post/3synthetic001"))
             assertNull(BlueskyPostIdentity.parse(url))
     }
     @Test fun singleAlbumAndRecordWithMediaReadOnlyOwnImagesAsJpeg() {
@@ -49,6 +49,9 @@ class BlueskyPostTest {
         for (bad in listOf(json.replace("3synthetic001", "3synthetic999"), json.replace("cdn.bsky.app", "cdn.bsky.app.evil.test")))
             assertEquals(ImageFailure.SOURCE_REFUSED, assertIs<BlueskyParseResult.Failure>(parser.parse(bad.toByteArray(), uri)).reason)
         assertEquals(ImageFailure.BUDGET, assertIs<BlueskyParseResult.Failure>(parser.parse(ByteArray(1024 * 1024 + 1), uri)).reason)
-        assertNull(parser.resolveDid("{\"did\":\"did:web:evil.test\"}".toByteArray()))
+        // url-shapes: a handle may resolve to a well-formed did:web; the thread read still goes only to the public API.
+        assertEquals("did:web:synthetic.test", parser.resolveDid("{\"did\":\"did:web:synthetic.test\"}".toByteArray()))
+        for (bad in listOf("did:web:localhost", "did:web:Evil.Test", "did:web:evil.test%3A8080", "did:key:z6Mk"))
+            assertNull(parser.resolveDid("{\"did\":\"$bad\"}".toByteArray()), bad)
     }
 }

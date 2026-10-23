@@ -90,4 +90,19 @@ class XPostIdentityTest {
         assertFalse(XPostIdentity.isSyndicationRequest("syndication.twitter.com", "/tweet-result", ok))
         assertFalse(XPostIdentity.isSyndicationRequest("cdn.syndication.twimg.com", "/tweet-result", null))
     }
+
+    /** url-shapes: m. hosts, d.fxtwitter and fxtwitter's translated `/<lang>` view keep the post id. */
+    @Test fun mobileHostsDirectMirrorAndTranslatedViewKeepTheId() {
+        val id = "1790000000000000001"
+        for (url in listOf("https://m.twitter.com/someone/status/$id", "https://m.x.com/someone/status/$id?s=20",
+            "https://d.fxtwitter.com/someone/status/$id", "https://fxtwitter.com/someone/status/$id/ar",
+            "https://www.fxtwitter.com/someone/status/$id/en/", "https://d.fxtwitter.com/i/status/$id/fr"))
+            assertEquals(id, id(url), url)
+        assertEquals("https://x.com/i/status/$id", XPostIdentity.parse("https://d.fxtwitter.com/someone/status/$id")?.legacyUrl)
+        assertNull(XPostIdentity.parse("https://m.x.com/someone/status/$id")?.legacyUrl) // yt-dlp reads the user's own link
+        for (url in listOf("https://x.com/someone/status/$id/ar", "https://fxtwitter.com/someone/status/$id/arabic",
+            "https://fxtwitter.com/someone/status/$id/ar/extra", "https://e.fxtwitter.com/someone/status/$id",
+            "https://m.x.com.evil.test/someone/status/$id"))
+            assertNull(XPostIdentity.parse(url), url)
+    }
 }

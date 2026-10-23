@@ -7,7 +7,8 @@ enum class InstagramLinkKind { POST, REEL, TV }
 
 /**
  * A public Instagram post link: `instagram.com/p/<code>/`, `/reel/<code>/` (or `/reels/`), `/tv/<code>/`, with or without
- * `www.`/`m.`; any query (share tracking) is dropped. Only the shortcode is kept. Reels/TV are videos and never fetched
+ * `www.`/`m.`; any query (share tracking) is dropped. Only the shortcode is kept. A `/share/…` link carries a share id,
+ * not a shortcode, so it (like any other reserved first segment) is never read as a user prefix. Reels/TV are videos and never fetched
  * by this reader; a post is read only as `https://www.instagram.com/p/<code>/`.
  */
 class InstagramPostIdentity private constructor(val kind: InstagramLinkKind, val code: String) {
@@ -27,7 +28,9 @@ class InstagramPostIdentity private constructor(val kind: InstagramLinkKind, val
         const val PAGE_HOST = "www.instagram.com"
         private val hosts = setOf("instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am")
         private const val CODE = "[A-Za-z0-9_-]{5,64}"
-        private val path = Regex("/(?:[A-Za-z0-9_.]{1,30}/)?(p|reels?|tv)/($CODE)/?")
+        /** First segments Instagram uses for its own pages, in any case; never a user prefix. */
+        private const val RESERVED = "(?i:share|stories|explore|accounts|direct|about|legal|developer|p|reels?|tv)/"
+        private val path = Regex("/(?:(?!$RESERVED)[A-Za-z0-9_.]{1,30}/)?(p|reels?|tv)/($CODE)/?")
         private val pagePath = Regex("/p/($CODE)/")
 
         fun parse(url: String): InstagramPostIdentity? {

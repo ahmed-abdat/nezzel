@@ -9,7 +9,9 @@ class ShareInput private constructor(val text: String?) {
             "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be",
             "tiktok.com", "www.tiktok.com", "vm.tiktok.com", "vt.tiktok.com",
             "instagram.com", "www.instagram.com", "facebook.com", "www.facebook.com", "m.facebook.com",
-            "fb.watch", "x.com", "twitter.com", "mobile.twitter.com")
+            "fb.watch", "x.com", "twitter.com", "mobile.twitter.com",
+            "www.x.com", "www.twitter.com", "mobile.x.com", "m.tiktok.com", "m.instagram.com", "instagr.am",
+            "web.facebook.com", "t.me", "bsky.app", "www.linkedin.com")
 
         fun from(intent: Intent?): ShareInput? {
             if (intent == null) return null

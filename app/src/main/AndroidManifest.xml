@@ -90,6 +90,16 @@
                 <data android:host="x.com" />
                 <data android:host="twitter.com" />
                 <data android:host="mobile.twitter.com" />
+                <data android:host="www.x.com" />
+                <data android:host="www.twitter.com" />
+                <data android:host="mobile.x.com" />
+                <data android:host="m.tiktok.com" />
+                <data android:host="m.instagram.com" />
+                <data android:host="instagr.am" />
+                <data android:host="web.facebook.com" />
+                <data android:host="t.me" />
+                <data android:host="bsky.app" />
+                <data android:host="www.linkedin.com" />
             </intent-filter>
         </activity-alias>
     </application>

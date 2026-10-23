@@ -132,4 +132,50 @@ class FacebookPostIdentityTest {
         }
         assertNull(MediaHttpPolicy.parse("http://scontent.example.fbcdn.net/1.jpg"), "https only")
     }
+
+    /** url-shapes: mobile/locale hosts and a group feed opened on one post reach the reader as the www post. */
+    @Test fun mobileLocaleHostsAndGroupPermalinksNormaliseToWww() {
+        val cases = listOf(
+            Triple("https://mbasic.facebook.com/photo.php?fbid=555&id=1", FacebookLinkKind.PHOTO, "https://www.facebook.com/photo/?fbid=555"),
+            Triple("https://touch.facebook.com/somepage/posts/987654321/", FacebookLinkKind.POST, "https://www.facebook.com/somepage/posts/987654321/"),
+            Triple("https://mobile.facebook.com/story.php?story_fbid=123&id=42", FacebookLinkKind.STORY,
+                "https://www.facebook.com/story.php?story_fbid=123&id=42"),
+            Triple("https://ar-ar.facebook.com/somepage/photos/a.1/555/", FacebookLinkKind.PHOTO, "https://www.facebook.com/somepage/photos/a.1/555/"),
+            Triple("https://fr-fr.facebook.com/photo/?fbid=555", FacebookLinkKind.PHOTO, "https://www.facebook.com/photo/?fbid=555"),
+            Triple("https://www.facebook.com/groups/synthetic.group/?multi_permalinks=987654321&ref=share", FacebookLinkKind.POST,
+                "https://www.facebook.com/groups/synthetic.group/posts/987654321/"),
+            Triple("https://m.facebook.com/groups/123456/?multi_permalinks=987654321", FacebookLinkKind.POST,
+                "https://www.facebook.com/groups/123456/posts/987654321/"),
+            Triple("https://mbasic.facebook.com/watch/?v=777&ref=sharing", FacebookLinkKind.WATCH, "https://www.facebook.com/watch/?v=777"),
+            Triple("https://mbasic.facebook.com/reel/1195289147628387/", FacebookLinkKind.REEL, "https://www.facebook.com/reel/1195289147628387/"),
+            Triple("https://mbasic.facebook.com/somepage/videos/some-title/10155529876156509/", FacebookLinkKind.VIDEO,
+                "https://www.facebook.com/somepage/videos/some-title/10155529876156509/"))
+        for ((url, kind, fetch) in cases) {
+            val identity = accepted(url)
+            assertEquals(kind, identity.kind, url)
+            assertEquals(fetch, identity.fetchUrl, url)
+        }
+        assertEquals("987654321", FacebookPostIdentity.parse(cases[5].first)?.postId)
+        for (url in listOf("https://ar.facebook.com/photo/?fbid=555", "https://ar-ar.facebook.com.evil.test/photo/?fbid=555",
+            "https://arab-ar.facebook.com/photo/?fbid=555", "https://mbasic.facebook.com/stories/123/",
+            "https://www.facebook.com/groups/synthetic.group/", "https://www.facebook.com/groups/synthetic.group/?multi_permalinks=pfbid0x",
+            "https://www.facebook.com/groups/synthetic.group/?multi_permalinks=1&multi_permalinks=2"))
+            assertNull(FacebookPostIdentity.parse(url), url)
+        assertTrue(FacebookPostIdentity.isStoryLink("https://mbasic.facebook.com/stories/123/"))
+    }
+
+    /** Review of url-shapes: every guard covers the same widened host family as parse. */
+    @Test fun storyEventAndLoginGuardsCoverEveryAcceptedHost() {
+        for (host in listOf("mbasic.facebook.com", "touch.facebook.com", "mobile.facebook.com", "ar-ar.facebook.com")) {
+            assertTrue(FacebookPostIdentity.isStoryLink("https://$host/stories/123/"), host)
+            assertTrue(FacebookPostIdentity.isEventLink("https://$host/events/900000000000001/"), host)
+            for (path in listOf("/login", "/login/", "/login.php?next=x", "/checkpoint/"))
+                assertTrue(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host$path"))), "$host$path")
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host/loginx/"))), host)
+        }
+        for (host in listOf("ar.facebook.com", "ar-ar.facebook.com.evil.test", "arab-ar.facebook.com")) {
+            assertFalse(FacebookPostIdentity.isStoryLink("https://$host/stories/123/"), host)
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host/login"))), host)
+        }
+    }
 }
