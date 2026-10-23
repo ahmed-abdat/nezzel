@@ -13,6 +13,9 @@ import dev.ahmed.savlino.MainActivity
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.Size
+import dev.ahmed.savlino.downloads.isOffline
+import dev.ahmed.savlino.downloads.restarting
+import dev.ahmed.savlino.downloads.waitingForNetwork
 import dev.ahmed.savlino.locale.AppLocale
 import dev.ahmed.savlino.locale.NezzelFormat
 import kotlinx.coroutines.launch
@@ -38,24 +41,37 @@ class DownloadNotifications(private val base: Context) {
     fun progress(progress: DownloadProgress) { post(activeId(progress.jobId), notification(progress)) }
     fun finished(progress: DownloadProgress) {
         // Foreground service removes the active ID when work stops; use a separate result ID.
+        dismissPaused(progress.jobId)
         if (progress.phase == DownloadPhase.CANCELLED) manager.cancel(activeId(progress.jobId))
         else post(activeId(progress.jobId) xor Int.MIN_VALUE, notification(progress))
     }
+    /** A paused job has no worker, so no foreground service: its notification is plain and lives under the result ID. */
+    fun paused(progress: DownloadProgress) { post(pausedId(progress.jobId), notification(progress)) }
+    fun dismissPaused(jobId: String) { manager.cancel(pausedId(jobId)) }
     private fun post(id: Int, notification: Notification) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(base,
                 Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         try { channel(); manager.notify(id, notification) } catch (_: SecurityException) { /* In-app progress remains available. */ }
     }
+    private fun control(action: String, jobId: String): PendingIntent = PendingIntent.getBroadcast(base, 0,
+        Intent(base, DownloadControlReceiver::class.java).setAction(action).setData(android.net.Uri.parse("nezzel:$action/$jobId"))
+            .putExtra(DownloadWorker.JOB_ID, jobId), FLAGS)
     private fun notification(progress: DownloadProgress): Notification {
         val ctx = context
-        val description = text(ctx, progress)
+        val offline = isOffline(base)
+        val description = text(ctx, progress, offline)
         val builder = NotificationCompat.Builder(ctx, if (progress.terminal) COMPLETED_CHANNEL else CHANNEL).setSmallIcon(R.drawable.ic_stat_nezzel)
             .setContentTitle(progress.filename).setContentText(description)
             .setStyle(NotificationCompat.BigTextStyle().bigText(description)).setOnlyAlertOnce(true)
-            .setOngoing(!progress.terminal).setAutoCancel(progress.terminal)
+            .setOngoing(!progress.terminal && !progress.paused).setAutoCancel(progress.terminal)
             .setContentIntent(PendingIntent.getActivity(base, 0, Intent(base, MainActivity::class.java), FLAGS))
         if (!progress.terminal) {
-            builder.setProgress(100, progress.visiblePercent ?: 0, progress.visiblePercent == null)
+            // Paused keeps its last real percent as a still bar; waiting/restarting/queued show no number.
+            if (!progress.paused) builder.setProgress(100, progress.visiblePercent ?: 0, progress.visiblePercent == null)
+            else progress.percent?.let { builder.setProgress(100, it, false) }
+            if (progress.paused) builder.addAction(0, ctx.getString(R.string.resume), control(RESUME, progress.jobId))
+            else if (progress.phase == DownloadPhase.DOWNLOADING && !progress.waiting && !progress.restarting)
+                builder.addAction(0, ctx.getString(R.string.pause), control(PAUSE, progress.jobId))
             val cancel = Intent(base, DownloadCancelReceiver::class.java)
                 .setAction(CANCEL).setData(android.net.Uri.parse("nezzel:cancel/${progress.jobId}"))
                 .putExtra(DownloadWorker.JOB_ID, progress.jobId)
@@ -77,8 +93,11 @@ class DownloadNotifications(private val base: Context) {
         const val CHANNEL = "downloads"
         const val COMPLETED_CHANNEL = "completed"
         const val CANCEL = "dev.ahmed.savlino.CANCEL_DOWNLOAD"
+        const val PAUSE = "dev.ahmed.savlino.PAUSE_DOWNLOAD"
+        const val RESUME = "dev.ahmed.savlino.RESUME_DOWNLOAD"
         private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         private fun activeId(id: String) = id.hashCode() and Int.MAX_VALUE
+        private fun pausedId(id: String) = activeId(id) xor Int.MIN_VALUE
         fun openIntent(progress: DownloadProgress) = Intent(Intent.ACTION_VIEW)
             .setDataAndType(progress.publishedUri, progress.mimeType)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -89,7 +108,10 @@ class DownloadNotifications(private val base: Context) {
 
         private fun languageOf(context: Context): String = context.resources.configuration.locales[0].language
 
-        fun phase(context: Context, progress: DownloadProgress): String {
+        fun phase(context: Context, progress: DownloadProgress, offline: Boolean = false): String {
+            if (progress.paused && !progress.terminal) return context.getString(R.string.download_paused)
+            if (progress.waitingForNetwork(offline)) return context.getString(R.string.download_waiting_network)
+            if (progress.restarting) return context.getString(R.string.download_restarting)
             if (progress.waiting && !progress.awaitingSchedule) return context.getString(R.string.download_waiting)
             if (progress.phase == DownloadPhase.DOWNLOADING && progress.stalled == true)
                 return context.getString(R.string.download_waiting_for_data)
@@ -108,9 +130,11 @@ class DownloadNotifications(private val base: Context) {
             })
         }
 
-        fun text(context: Context, progress: DownloadProgress): String {
+        fun text(context: Context, progress: DownloadProgress, offline: Boolean = false): String {
             val language = languageOf(context)
-            val phase = phase(context, progress)
+            val phase = phase(context, progress, offline)
+            if (progress.paused && !progress.terminal) return listOfNotNull(phase, progress.bytes?.takeIf { it >= 0 }
+                ?.let { NezzelFormat.isolate(NezzelFormat.size(it, language)) }).joinToString(" · ")
             return if (progress.phase == DownloadPhase.DOWNLOADING) {
                 (listOf(phase) + transferDetails(context, progress)).joinToString(" · ")
             } else if (progress.phase == DownloadPhase.COMPLETED) {
@@ -196,6 +220,38 @@ class DownloadCancelReceiver : BroadcastReceiver() {
         val app = context.applicationContext as NezzelApplication
         app.downloads.requestCancellation(id)
         val pending = goAsync()
-        app.scope.launch { try { app.downloads.cancel(id) } finally { pending.finish() } }
+        app.scope.launch {
+            try { app.downloads.cancel(id); DownloadNotifications(context).dismissPaused(id) } finally { pending.finish() }
+        }
+    }
+}
+
+/** Pause and Resume from the notification; the app's own buttons go through [DownloadControls] too. */
+class DownloadControlReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action?.takeIf { it == DownloadNotifications.PAUSE || it == DownloadNotifications.RESUME } ?: return
+        val id = intent.getStringExtra(DownloadWorker.JOB_ID)?.takeIf(JobStore::validJobId) ?: return
+        val app = context.applicationContext as NezzelApplication
+        val pending = goAsync()
+        app.scope.launch {
+            try { if (action == DownloadNotifications.PAUSE) DownloadControls.pause(context, app, id) else DownloadControls.resume(context, app, id) }
+            finally { pending.finish() }
+        }
+    }
+}
+
+/** One path for Pause/Resume from the row and the notification, so both leave the same notification behind. */
+object DownloadControls {
+    /** False when the coordinator refuses (already joining/saving): the caller shows nothing, the row is moving on. */
+    suspend fun pause(context: Context, app: NezzelApplication, id: String): Boolean {
+        if (!app.downloads.pause(id)) return false
+        app.downloads.progress.value.find { it.jobId == id && it.paused }?.let { DownloadNotifications(context).paused(it) }
+        return true
+    }
+    suspend fun resume(context: Context, app: NezzelApplication, id: String): Boolean {
+        val resumed = app.downloads.resume(id)
+        // Resumed: the worker posts its own foreground notification. Refused: the job is gone or no longer paused.
+        DownloadNotifications(context).dismissPaused(id)
+        return resumed
     }
 }

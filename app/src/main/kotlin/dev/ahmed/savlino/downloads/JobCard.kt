@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -87,8 +88,9 @@ internal val JobRowHeight = 72.dp
  */
 @Composable
 internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit,
-                    modifier: Modifier = Modifier) {
+                    modifier: Modifier = Modifier, onPause: () -> Unit = {}, onResume: () -> Unit = {}) {
     val reduced = LocalReducedMotion.current
+    val offline = LocalOffline.current
     // One tonal step off the page; light needs the higher step to keep an edge without a shadow.
     val light = MaterialTheme.colorScheme.surface.luminance() > .5f
     val tone by animateColorAsState(when {
@@ -112,7 +114,8 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
                     FilenameText(job.filename)
                     JobMeta(job)
                 }
-                JobRing(job, onCancel)
+                if (job.paused || job.canPause) PauseResumeButton(job, onPause, onResume)
+                JobRing(job, offline, onCancel)
             }
         }
     }
@@ -178,8 +181,12 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
     val language = LocalConfiguration.current.locales[0].language
     val quiet = scheme.onSurfaceVariant
     // AnimatedContent retains the outgoing phase word. Never pair it with the incoming byte tick.
-    if (word != DownloadNotifications.phase(LocalContext.current, job))
+    if (word != DownloadNotifications.phase(LocalContext.current, job, LocalOffline.current))
         return listOf(MetaPart(word, scheme.primary, direction = TextDirection.Content))
+    // Paused keeps the last real numbers only: percent and bytes the journal had, no speed, no time left.
+    if (job.paused) return listOfNotNull(MetaPart(word, scheme.primary, direction = TextDirection.Content, live = true),
+        job.percent?.let { MetaPart(NezzelFormat.isolate(NezzelFormat.percent(it, language)), scheme.onSurface, bold = true) },
+        job.bytes?.takeIf { it >= 0 }?.let { MetaPart(NezzelFormat.isolate(NezzelFormat.size(it, language)), quiet, direction = TextDirection.Content) })
     if (job.saved) return listOfNotNull(MetaPart(word, scheme.onPrimaryContainer, bold = true, direction = TextDirection.Content, live = true),
         job.qualityHeight?.let { MetaPart(stringResource(R.string.video_quality, NezzelFormat.count(it, language)), scheme.onPrimaryContainer) },
         exactTotal(job)?.let { MetaPart(NezzelFormat.size(it, language), scheme.onPrimaryContainer) })
@@ -200,7 +207,7 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
 private fun JobMeta(job: DownloadProgress) {
     val context = LocalContext.current
     val reduced = LocalReducedMotion.current
-    AnimatedContent(DownloadNotifications.phase(context, job), Modifier.fillMaxWidth(), transitionSpec = {
+    AnimatedContent(DownloadNotifications.phase(context, job, LocalOffline.current), Modifier.fillMaxWidth(), transitionSpec = {
         (fadeIn(easeOut(reduced, Motion.FADE_IN, 50)) togetherWith fadeOut(easeOut(reduced, Motion.FADE_OUT)))
             .using(SizeTransform(clip = false))
     }, label = "phase") { word ->
@@ -273,12 +280,14 @@ private fun MetaLine(all: List<MetaPart>, busiest: List<MetaPart>, lines: Int) {
 
 /** The ring is the progress: real fraction when one exists, a spinning arc otherwise. Cancel sits inside it. */
 @Composable
-private fun JobRing(job: DownloadProgress, onCancel: () -> Unit) {
+private fun JobRing(job: DownloadProgress, offline: Boolean, onCancel: () -> Unit) {
     val reduced = LocalReducedMotion.current
     val cancelLabel = stringResource(R.string.download_cancel_accessibility, NezzelFormat.isolate(job.filename))
     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
         val track = MaterialTheme.colorScheme.secondaryContainer
-        val fraction = job.ringFraction()
+        val fraction = job.ringFraction() ?: job.frozenFraction(offline)
+        // Paused and offline rows hold still: a spinner would claim activity that is not happening.
+        val still = reduced || job.paused || job.waitingForNetwork(offline)
         if (job.saved) {
             SavedCheck(36.dp)
             return@Box
@@ -292,7 +301,7 @@ private fun JobRing(job: DownloadProgress, onCancel: () -> Unit) {
                 strokeWidth = 3.dp, trackColor = track, strokeCap = StrokeCap.Round, gapSize = 0.dp)
         } else if (!job.terminal || job.awaitingSchedule) {
             // Reduced motion: no spinner and no frozen arc (a still arc reads as a percent); the phase word carries it.
-            if (reduced) Canvas(Modifier.fillMaxSize()) {
+            if (still) Canvas(Modifier.fillMaxSize()) {
                 val stroke = 3.dp.toPx()
                 drawCircle(track, radius = (this.size.minDimension - stroke) / 2, style = Stroke(stroke))
             } else CircularProgressIndicator(Modifier.fillMaxSize(), strokeWidth = 3.dp, trackColor = track, strokeCap = StrokeCap.Round)
@@ -301,6 +310,18 @@ private fun JobRing(job: DownloadProgress, onCancel: () -> Unit) {
         IconButton(onClick = onCancel, modifier = Modifier.semantics { contentDescription = cancelLabel }) {
             Icon(Icons.Default.Close, null, Modifier.size(20.dp))
         }
+    }
+}
+
+/** Pause while bytes move, Resume while paused: a tonal 48dp button beside the ring, named after the file like Cancel. */
+@Composable
+private fun PauseResumeButton(job: DownloadProgress, onPause: () -> Unit, onResume: () -> Unit) {
+    val name = NezzelFormat.isolate(job.filename)
+    val label = stringResource(if (job.paused) R.string.download_resume_accessibility else R.string.download_pause_accessibility, name)
+    FilledTonalIconButton(onClick = if (job.paused) onResume else onPause, modifier = Modifier.size(48.dp)
+        .semantics { contentDescription = label }) {
+        if (job.paused) Icon(Icons.Default.PlayArrow, null, Modifier.size(24.dp))
+        else Icon(painterResource(R.drawable.ic_pause), null, Modifier.size(24.dp))
     }
 }
 
