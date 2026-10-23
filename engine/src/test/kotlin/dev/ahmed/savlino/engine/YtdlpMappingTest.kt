@@ -47,7 +47,8 @@ class YtdlpMappingTest {
                 "--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:16", "-N", "4", "--no-simulate", "--newline",
                 "--progress-template", YtdlpCommand.PROGRESS_TEMPLATE, "-f", row.id,
                 "-o", File(dir, "output.%(ext)s").path, "--print-to-file", "after_move:filepath",
-                File(dir, "result-path.txt").path, "--", source.link.rawUrl), args)
+                File(dir, "result-path.txt").path) + (if (row.hasVideo) emptyList() else audioTagsWithoutArtist) +
+                listOf("--", source.link.rawUrl), args)
             assertFalse("--postprocessor-args" in args)
         }
     }
@@ -391,7 +392,8 @@ class YtdlpMappingTest {
         assertEquals(audio.id, inspection.presets.single { it.preset == Preset.AUDIO_M4A }.formatId)
         val args = YtdlpCommand.download(command(audio), temp.newFolder())
         assertEquals("http-480", args[args.indexOf("-f") + 1])
-        assertEquals(listOf("--extract-audio", "--audio-format", "m4a"), args.subList(args.indexOf("--extract-audio"), args.indexOf("--")))
+        assertEquals(listOf("--extract-audio", "--audio-format", "m4a") + audioTagsWithoutArtist,
+            args.subList(args.indexOf("--extract-audio"), args.indexOf("--")))
         assertFalse(args.contains("--audio-quality"))
         assertEquals("http-480", inspection.formats.single { it.conversion == AudioConversion.MP3_128 }.sourceFormatId)
     }
@@ -449,7 +451,7 @@ class YtdlpMappingTest {
             assertEquals("audio-128", args[args.indexOf("-f") + 1])
             assertEquals(listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "${conversion.bitrateKbps}K",
                 "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a ${conversion.bitrateKbps}k" +
-                    if (conversion == AudioConversion.MP3_320) " -ar 44100" else ""),
+                    if (conversion == AudioConversion.MP3_320) " -ar 44100" else "") + audioTagsWithoutArtist,
                 args.subList(args.indexOf("--extract-audio"), args.indexOf("--")))
         }
         assertFalse(YtdlpCommand.download(command(audio.first()), dir).contains("--extract-audio"))

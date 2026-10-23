@@ -487,7 +487,8 @@ class YoutubedlEngineTest {
             assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf(
                 "--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:16", "-N", "4", "--no-simulate", "--newline",
                 "--progress-template", YtdlpCommand.PROGRESS_TEMPLATE, "-f", selector, "-o", File(dir, "output.%(ext)s").path,
-                "--print-to-file", "after_move:filepath", File(dir, "result-path.txt").path) + post + listOf("--", source.link.rawUrl), runtime.calls.last())
+                "--print-to-file", "after_move:filepath", File(dir, "result-path.txt").path) + post +
+                (if (format.hasVideo) emptyList() else audioTagsWithoutArtist) + listOf("--", source.link.rawUrl), runtime.calls.last())
             assertFalse(selector.contains('/')); assertTrue(selector.split('+').none { it in setOf("best", "b") })
             assertEquals(EngineEvent.Progress(10, Size.Unknown), events.first())
             assertEquals(EngineEvent.Merging, events.last())

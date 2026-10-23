@@ -3,6 +3,14 @@ package dev.ahmed.savlino.engine
 import kotlin.test.*
 
 class YtdlpDebugDiagnosticsTest {
+    @Test fun audioTaggingNeverLogsMetadataEvenWithoutCachedInfo() {
+        val diagnostics = YtdlpDebugDiagnostics(enabled = true, args = listOf("--embed-metadata")) { _, _ ->
+            fail("Tagging diagnostics may echo private titles")
+        }
+        diagnostics.accept("[MetadataParser] Changed title to: private title")
+        diagnostics.finished(1, "ERROR: private title")
+    }
+
     @Test fun debugLogsExitCodeAndOnlyLastTwentyRedactedLines() {
         val logs = mutableListOf<Pair<String, String>>()
         val diagnostics = YtdlpDebugDiagnostics(enabled = true) { tag, message -> logs += tag to message }

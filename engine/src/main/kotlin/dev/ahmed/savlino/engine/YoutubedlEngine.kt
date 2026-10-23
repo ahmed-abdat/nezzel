@@ -125,42 +125,66 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 restartEpoch++
                 progress(EngineEvent.Restarting(restartEpoch))
             }
+            var retriedWithoutTags = false
             suspend fun transfer(info: File?) {
                 val attemptEpoch = restartEpoch
-                val args = YtdlpCommand.download(command, directory, info)
-                val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
-                val diagnostics = YtdlpDiagnostics()
-                var postProcessing = false
-                synchronized(current) {
-                    current.byteWatchdog = false
-                    current.expireIn(limits.firstByteMs)
-                }
-                try {
-                    execute(current, args) { line ->
-                        diagnostics.accept(line)
-                        val event = mapper.map(line)
-                        // Linearize post-processing/byte progress with expiry. Late byte callbacks
-                        // after a post-processor must never arm the watchdog again.
-                        synchronized(current) {
-                            if (POSTPROCESSORS.any(line::startsWith) || event == EngineEvent.Merging) {
-                                postProcessing = true; current.deadline = NO_DEADLINE; current.byteWatchdog = false
-                            }
-                            if (!postProcessing && event is EngineEvent.Progress && event.bytesDownloaded > bytes) {
-                                bytes = event.bytesDownloaded
-                                if (bytes > 0) {
-                                    current.byteWatchdog = true
-                                    current.expireIn(limits.stallMs)
+                // Build both while staging still contains only valid partials. A postprocessor failure
+                // leaves completed audio here, which must not be cleared or revalidated as a partial.
+                val untaggedArgs = YtdlpCommand.download(command, directory, info, embedAudioTags = false)
+                var args = YtdlpCommand.download(command, directory, info, embedAudioTags = !retriedWithoutTags)
+                while (true) {
+                    val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
+                    val diagnostics = YtdlpDiagnostics()
+                    var postProcessing = false
+                    synchronized(current) {
+                        current.byteWatchdog = false
+                        current.expireIn(limits.firstByteMs)
+                    }
+                    try {
+                        execute(current, args) { line ->
+                            diagnostics.accept(line)
+                            val event = mapper.map(line)
+                            // Linearize post-processing/byte progress with expiry. Late byte callbacks
+                            // after a post-processor must never arm the watchdog again.
+                            synchronized(current) {
+                                // Parsing/converting thumbnails run before downloading: keep the first-byte
+                                // budget armed there, even if the downloader never reports progress.
+                                val preparingTags = bytes <= 0 &&
+                                    (line.startsWith("[MetadataParser]") || line.startsWith("[ThumbnailsConvertor]"))
+                                if (!preparingTags && (POSTPROCESSORS.any(line::startsWith) || event == EngineEvent.Merging)) {
+                                    postProcessing = true; current.deadline = NO_DEADLINE; current.byteWatchdog = false
+                                }
+                                if (!postProcessing && event is EngineEvent.Progress && event.bytesDownloaded > bytes) {
+                                    bytes = event.bytesDownloaded
+                                    if (bytes > 0) {
+                                        current.byteWatchdog = true
+                                        current.expireIn(limits.stallMs)
+                                    }
                                 }
                             }
+                            if (!current.cancelled.get() && event != null)
+                                progress(if (event is EngineEvent.Progress) event.copy(restartEpoch = attemptEpoch) else event)
                         }
-                        if (!current.cancelled.get() && event != null)
-                            progress(if (event is EngineEvent.Progress) event.copy(restartEpoch = attemptEpoch) else event)
+                        break
+                    } catch (error: Exception) {
+                        val failure = diagnostics.failure(error)
+                        resumeAllowed = failure.resumeAllowed
+                        if (error is CancellationException || current.cancelled.get()) throw error
+                        if (failure.error != DownloadError.MergeFailed || "--embed-thumbnail" !in args || retriedWithoutTags)
+                            throw failure
+                        currentCoroutineContext().ensureActive()
+                        checkCancelled(current)
+                        retriedWithoutTags = true
+                        // Keep downloaded audio. Remove only known artwork and the append-only path manifest.
+                        directory.listFiles().orEmpty().filter {
+                            it.name == "result-path.txt" ||
+                                it.name.matches(Regex("output\\.(?:jpg|jpeg|png|webp|avif|gif|temp\\.(?:m4a|mp3))"))
+                        }.forEach {
+                            if (java.nio.file.Files.isSymbolicLink(it.toPath()) || !it.isFile || !it.delete())
+                                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                        }
+                        args = untaggedArgs
                     }
-                } catch (error: Exception) {
-                    val failure = diagnostics.failure(error)
-                    resumeAllowed = failure.resumeAllowed
-                    if (error is CancellationException || current.cancelled.get()) throw error
-                    throw failure
                 }
             }
             try { transfer(infoJson) }
@@ -440,7 +464,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         const val CANCELLATION_WINDOW_MS = 500L
         const val NO_DEADLINE = Long.MIN_VALUE
         val VERSION_ARGS = listOf("--ignore-config", "--version")
-        val POSTPROCESSORS = listOf("[Fixup", "[ffmpeg]", "[VideoRemuxer]", "[VideoConvertor]", "[Metadata]", "[MoveFiles]")
+        val POSTPROCESSORS = listOf("[Fixup", "[ffmpeg]", "[VideoRemuxer]", "[VideoConvertor]", "[Metadata]", "[MoveFiles]",
+            "[EmbedThumbnail]", "[ThumbnailsConvertor]", "[ExtractAudio]", "[MetadataParser]")
         val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val updateOwner = Any()
