@@ -45,7 +45,7 @@ class DownloadCoordinator(
     private val recovery = JobRecovery(store, publisher ?: DestinationPublisher(context, space), File(context.filesDir, "downloads"))
     private val startup = Mutex()
     private val transfer = TransferSlots(parallelDownloads, thermalStatus)
-    private val spaceLedger = TransferSpaceLedger()
+    private val spaceLedger = TransferSpaceLedger { stagingBytes(stagingRoot(it)) }
     @Volatile private var initialized = false
     private val userCancellation = ConcurrentHashMap.newKeySet<String>()
     private val pauseRequests = ConcurrentHashMap.newKeySet<String>()
@@ -258,6 +258,8 @@ class DownloadCoordinator(
         foreground: suspend (DownloadProgress) -> Unit, report: suspend (DownloadProgress) -> Unit,
         finished: suspend (DownloadProgress) -> Unit): JobRecord? = withContext(Dispatchers.IO) {
         initialize()
+        // WorkManager may rerun this id while the stopped attempt still unwinds; its row returns to ENQUEUED first.
+        activeDone[id]?.await()
         val row = queuedRow(id) ?: return@withContext null
         if (row.stage != JobStage.ENQUEUED) return@withContext waitingResult(id, finished)
         transfer.withSlot(id, row.createdAt, eligible = { queuedRow(id)?.stage == JobStage.ENQUEUED }) {

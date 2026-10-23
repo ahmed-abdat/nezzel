@@ -475,6 +475,37 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test @Config(sdk = [33])
+    fun rerunOfTheSameJobWaitsForTheStoppedAttemptToUnwindAndThenRuns() = runBlocking {
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val unwinding = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            if (attempts.incrementAndGet() == 1) {
+                emit(EngineEvent.Progress(0, Size.Unknown))
+                try { awaitCancellation() }
+                finally { withContext(NonCancellable) { unwinding.complete(Unit); release.await() } }
+            }
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
+            f.store.enqueue(command("rerun-overlap"))
+            val first = f.worker("rerun-overlap")
+            val stopped = launch(Dispatchers.Default) { first.doWork() }
+            withTimeout(5000) { while (f.store.get("rerun-overlap")!!.stage != JobStage.TRANSFERRING) yield() }
+            first.stop(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
+            stopped.cancel() // WorkManager cancels the stopped attempt's coroutine; a direct doWork() needs it here.
+            withTimeout(5000) { unwinding.await() }
+            // WorkManager's rerun arrives while the stopped attempt still holds the row.
+            val rerun = async(Dispatchers.Default) { f.worker("rerun-overlap").doWork() }
+            delay(200); assertFalse(rerun.isCompleted)
+            release.complete(Unit); withTimeout(5000) { stopped.join() }
+            assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { rerun.await() })
+            assertEquals(2, attempts.get())
+            assertEquals(JobStage.COMPLETED, f.store.get("rerun-overlap")!!.stage)
+        }
+    }
+
     @Test @Config(sdk = [29, 33, 35])
     fun connectivityStopAfterBytesRequeuesAndKeepsPartial() = runBlocking {
         fixture(FakeEngine(), script = { _, dir, emit ->

@@ -153,6 +153,24 @@ class TransferSlotsTest {
         TransferSpaceLedger().reserve("recovered", space, format)
     }
 
+    @Test fun spaceLedgerCountsOthersByWhatTheyStillNeedNowAndAgainAfterARestart() {
+        val mib = 1024L * 1024
+        val staged = mutableMapOf("a" to 0L)
+        val ledger = TransferSpaceLedger { staged[it] ?: 0L }
+        val unknown = Format("any", "mp4", true, true, size = Size.Unknown)
+        var free = 2560 * mib
+        val space = SpaceBudget(File("stage"), File("public"), FreeSpace { free })
+        ledger.reserve("a", space, unknown)
+        // A wrote 900 MiB: free space already dropped by it, so A's share is only what is left of its 1 GiB.
+        staged["a"] = 900 * mib; free -= 900 * mib
+        ledger.reserve("b", space, unknown)
+        ledger.release("b")
+        // A restart clears A's staging: its whole budget counts again.
+        staged["a"] = 0; free += 900 * mib - 1100 * mib
+        try { ledger.reserve("b", space, unknown); fail("a restarted job's full budget was not counted") }
+        catch (failure: StorageException) { assertEquals(StorageError.InsufficientSpace, failure.error) }
+    }
+
     @Test fun spaceLedgerKeepsMergeAndPublicationBytesWhenResuming() {
         val ledger = TransferSpaceLedger()
         val format = Format("merge", "mp4", true, true, size = Size.Exact(100),

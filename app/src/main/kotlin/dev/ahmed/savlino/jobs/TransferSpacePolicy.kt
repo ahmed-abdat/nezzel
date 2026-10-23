@@ -49,15 +49,21 @@ internal object TransferSpacePolicy {
     }
 }
 
-/** Process-local future space budgets; a new process starts empty after journal recovery. */
-internal class TransferSpaceLedger {
-    private val reservations = mutableMapOf<String, Long>()
+/**
+ * Process-local future space budgets; a new process starts empty after journal recovery. Another job's share is its
+ * budget less what it has already staged, read now: written bytes already left free space, and a restart that clears
+ * staging counts its whole budget again.
+ */
+internal class TransferSpaceLedger(private val staged: (String) -> Long = { 0L }) {
+    private val reservations = mutableMapOf<String, Format>()
     @Synchronized fun reserve(id: String, space: SpaceGate, format: Format, stagedBytes: Long = 0) {
         check(id !in reservations)
         val budget = TransferSpacePolicy.budget(format, stagedBytes)
-        val others = reservations.values.fold(0L, Math::addExact)
+        val others = reservations.entries.fold(0L) { sum, (other, otherFormat) ->
+            Math.addExact(sum, TransferSpacePolicy.budget(otherFormat, staged(other).coerceAtLeast(0)).total)
+        }
         space.beforeTransfer(Math.addExact(budget.staging, others), budget.output)
-        reservations[id] = budget.total
+        reservations[id] = format
     }
     @Synchronized fun release(id: String) { reservations.remove(id) }
 }
