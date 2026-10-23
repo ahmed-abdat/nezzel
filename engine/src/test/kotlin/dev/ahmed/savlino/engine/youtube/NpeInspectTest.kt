@@ -20,13 +20,14 @@ class NpeInspectTest {
     private val fallbackJson = """{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac","title":"Fallback fixture"}"""
     private fun fixture() = assertNotNull(NpeInfoJson.build(NpeFixtures.golden()))
 
-    private class Fast(private val action: () -> String?) : YoutubeFastSource {
+    /** [action] returns a JSON string, a [FastResult] or null (= Miss). */
+    private class Fast(private val action: () -> Any?) : YoutubeFastSource {
         val calls = CopyOnWriteArrayList<Pair<String, Long>>()
         val urls = CopyOnWriteArrayList<String>()
         val cancellations = CopyOnWriteArrayList<String>()
-        override fun infoJson(url: String, operationId: String, timeoutMs: Long): String? {
+        override fun infoJson(url: String, operationId: String, timeoutMs: Long): FastResult {
             urls += url; calls += operationId to timeoutMs
-            return action()
+            return when (val result = action()) { is FastResult -> result; is String -> FastResult.Json(result); else -> FastResult.Miss }
         }
         override fun cancel(operationId: String) { cancellations += operationId }
     }
@@ -202,6 +203,45 @@ class NpeInspectTest {
             assertEquals(listOf("first", "third"), fast.calls.map { it.first })
             assertEquals("Fixture title", third.title)
         } finally { release.countDown() }
+    }
+
+    @Test fun unreachableFailsFastWithoutYtdlp() = runBlocking {
+        for ((offline, error) in listOf(true to DownloadError.Offline, false to DownloadError.Network)) {
+            val runtime = Runtime(fallbackJson)
+            val fast = Fast { FastResult.Unreachable(offline) }
+            assertEquals(InspectResult.Failure(error), engine(runtime, fast).inspect(source, "dead"))
+            assertTrue(runtime.inspections.isEmpty())
+            assertEquals(1, fast.calls.size)
+        }
+    }
+
+    @Test fun retryAfterUnreachableTakesTheFullYtdlpPathUntilASuccess() = runBlocking {
+        val runtime = Runtime(fallbackJson)
+        val fast = Fast { FastResult.Unreachable(false) }
+        val engine = engine(runtime, fast)
+        assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(source, "first"))
+        assertTrue(runtime.inspections.isEmpty())
+        // Same link again (Retry): no NPE budget spent, yt-dlp starts at once. A failed retry keeps the key.
+        runtime.inspectAction = { throw RuntimeException("fixture failure") }
+        assertIs<InspectResult.Failure>(engine.inspect(source, "retry"))
+        runtime.inspectAction = {}
+        assertEquals("Fallback fixture", assertIs<InspectResult.Success>(engine.inspect(source, "retry-2")).inspection.title)
+        assertEquals(List(2) { YtdlpCommand.inspect(source) }, runtime.inspections)
+        assertEquals(listOf("first"), fast.calls.map { it.first })
+        // A success clears the memory: the next dead-network first try fails fast again.
+        assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(source, "later"))
+        assertEquals(2, runtime.inspections.size)
+        assertEquals(listOf("first", "later"), fast.calls.map { it.first })
+        val other = LinkRevision(LinkInput.parse("https://www.youtube.com/watch?v=fixture-two")!!, 1)
+        assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(other, "other"))
+    }
+
+    @Test fun lateUnreachableVerdictWithinGraceStillFailsFast() = runBlocking {
+        val runtime = Runtime(fallbackJson)
+        val fast = Fast { Thread.sleep(450); FastResult.Unreachable(false) }
+        val result = withTimeout(3000) { engine(runtime, fast, EngineLimits(npeBudgetMs = 300)).inspect(source, "late") }
+        assertEquals(InspectResult.Failure(DownloadError.Network), result)
+        assertTrue(runtime.inspections.isEmpty())
     }
 
     @Test fun nonYoutubeNeverTouchesFastSource() = runBlocking {

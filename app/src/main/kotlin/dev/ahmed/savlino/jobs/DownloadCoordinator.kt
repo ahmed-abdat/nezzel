@@ -500,7 +500,11 @@ class DownloadCoordinator(
                     active.remove(id, signal); userCancellation.remove(id); pauseRequests.remove(id); postProcessing.remove(id)
                     // Expiry skipped this staging while the writer was live; the writer has exited now.
                     JobStore.liveWriters.remove(id)
-                    if (store.get(id)?.stage?.terminal == true) cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)
+                    if (store.get(id)?.stage?.terminal == true) {
+                        cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)
+                        // Expiry removed the info file while the engine still ran; a rebuild may have stored a new one.
+                        store.discardInfoJson(id)
+                    }
                     activeDone.remove(id)?.complete(Unit)
                     result
                 }
