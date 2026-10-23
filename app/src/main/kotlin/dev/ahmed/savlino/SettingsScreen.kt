@@ -33,8 +33,8 @@ import dev.ahmed.savlino.update.UpdateAutoSetting
 import dev.ahmed.savlino.update.UpdateSettings
 
 /**
- * Everyday choices on one page in grouped cards; automatic options, engine tools and the update-check switch sit
- * one level down under Advanced, so the first screen stays short.
+ * Everyday choices on one page in grouped cards; automatic options, clearing link history, engine tools and the
+ * update-check switch sit one level down under Advanced, so the first screen stays short.
  */
 @Composable
 internal fun SettingsScreen(
@@ -55,9 +55,9 @@ internal fun SettingsScreen(
         else fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) togetherWith fadeOut(tween(70, easing = Motion.EaseOut))
     }, label = "settings_page") { page ->
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
-            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate) { advanced = false }
+            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
-            onSuggestions, onAutomaticOptions, onHowItWorks, updates, onClearLinks) { advanced = true }
+            onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
     }
 }
 
@@ -66,8 +66,7 @@ private fun MainSettings(
     links: LinkViewModel, language: String, theme: ThemePref, wallpaper: Boolean, suggestions: Boolean,
     onLanguage: (String) -> Unit, onTheme: (ThemePref) -> Unit,
     onWallpaper: (Boolean) -> Unit, onSuggestions: (Boolean) -> Unit,
-    onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?,
-    onClearLinks: (() -> Unit)?, onAdvanced: () -> Unit,
+    onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?, onAdvanced: () -> Unit,
 ) {
     var picker by rememberSaveable { mutableStateOf<String?>(null) }
     val languages = listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en),
@@ -93,7 +92,6 @@ private fun MainSettings(
                 SwitchSetting(stringResource(R.string.copied_suggestions), stringResource(R.string.copied_help), suggestions,
                     R.drawable.ic_ms_content_paste, onSuggestions)
             }
-            onClearLinks?.let { PrivacySettings(it) }
             SettingsGroup(stringResource(R.string.settings_saving)) {
                 SaveFolderSetting()
                 SettingsNavRow(stringResource(R.string.settings_advanced), R.drawable.ic_ms_tune,
@@ -135,14 +133,15 @@ internal fun PrivacySettings(onClear: () -> Unit) {
 }
 
 /**
- * Automatic options (on by default; few people turn it off), engine tools, the daily update check and the licences;
- * [engine] is null without a download coordinator.
+ * Automatic options (on by default; few people turn it off), clearing link history, engine tools, the daily update
+ * check and the licences; [engine] is null without a download coordinator.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: () -> Unit, updates: AppUpdates?,
     automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
-    confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, back: () -> Unit) {
+    confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, onClearLinks: (() -> Unit)? = null,
+    back: () -> Unit) {
     if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
         title = { Text(stringResource(R.string.engine_update_paused_title)) },
         text = { Text(stringResource(R.string.engine_update_paused_body)) },
@@ -164,6 +163,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                         on, R.drawable.ic_ms_bolt, onAutomaticOptions)
                 }
             }
+            onClearLinks?.let { PrivacySettings(it) }
             engine?.let { engine ->
                 val updating = engine.status == EngineUpdateStatus.UPDATING
                 val builtIn = engine.usingBuiltIn && engine.status in setOf(EngineUpdateStatus.IDLE, EngineUpdateStatus.FAILED)

@@ -12,6 +12,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.semantics.*
 import androidx.lifecycle.SavedStateHandle
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.AdvancedSettings
 import dev.ahmed.savlino.SettingsScreen
 import dev.ahmed.savlino.descendants
 import dev.ahmed.savlino.locale.ThemePref
@@ -93,9 +94,15 @@ class CopyLinkCaptureTest {
         }
     }
 
-    @Test fun settingsPrivacy() = shoot("settings", {}) { lang -> settings(lang) }
+    @Test fun settingsMain() = shoot("settings", {}) { lang -> settings(lang) }
 
-    @Test fun clearDialog() = shoot("clear-dialog", { a -> click(a, a.getString(R.string.clear_link_history)) }) { lang -> settings(lang) }
+    @Test fun settingsAdvanced() = shoot("advanced", {}) { advanced() }
+
+    @Test fun clearDialog() = shoot("clear-dialog", { a -> click(a, a.getString(R.string.clear_link_history)) }) { advanced() }
+
+    // The capture view model has no download coordinator, so Advanced shows what the real page shows without one.
+    @androidx.compose.runtime.Composable private fun advanced() =
+        AdvancedSettings(null, {}, null, automaticOptions = true, onClearLinks = {}) {}
 
     @androidx.compose.runtime.Composable private fun settings(lang: String) {
         val vm = androidx.compose.runtime.remember { LinkViewModel(SavedStateHandle()) }

@@ -82,19 +82,24 @@ class SettingsScreenTest {
         val toggled = mutableListOf<Boolean>()
         renderThemed({ nodes(it) }, {
             SettingsScreen(LinkViewModel(SavedStateHandle()), "en", ThemePref.System, false, true,
-                {}, {}, {}, {}, { toggled += it }, {}, updates = updates)
+                {}, {}, {}, {}, { toggled += it }, {}, updates = updates, onClearLinks = {})
         }) { a ->
             val auto = context.getString(R.string.settings_updates_auto)
             val options = context.getString(R.string.automatic_options)
-            // The first page stays short: no automatic-options switch, no engine row and no update switch.
+            val clear = context.getString(R.string.clear_link_history)
+            // The first page stays short: no automatic-options switch, no clear-history row, no engine row, no update switch.
             assertFalse(texts(nodes(a)).contains(auto))
             assertFalse(texts(nodes(a)).contains(options))
+            assertFalse(texts(nodes(a)).contains(clear))
+            assertFalse(texts(nodes(a)).contains(context.getString(R.string.settings_privacy)))
             assertFalse(texts(nodes(a)).contains(context.getString(R.string.about_licences_short)))
             assertFalse(texts(nodes(a)).contains(context.getString(R.string.engine_update_now)))
             click(clickable(a, context.getString(R.string.settings_advanced)))
             compose.waitUntil(5_000) { auto in texts(nodes(a)) }
             assertEquals(Role.Switch, clickable(a, auto).config.getOrNull(SemanticsProperties.Role))
             assertEquals(Role.Switch, clickable(a, options).config.getOrNull(SemanticsProperties.Role))
+            assertTrue(texts(nodes(a)).contains(context.getString(R.string.settings_privacy)))
+            clickable(a, clear)
             // The notices still ship in the app, one level down.
             assertEquals(Role.Button, clickable(a, context.getString(R.string.about_licences_short)).config.getOrNull(SemanticsProperties.Role))
             click(clickable(a, options))
