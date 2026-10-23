@@ -12,11 +12,12 @@ class ImageRouteTest {
         for (url in listOf("https://t.me/synthetic_channel/123", "https://telegram.me/synthetic_channel/123?single"))
             assertEquals("TELEGRAM", route(url).name)
         for (url in listOf("https://bsky.app/profile/synthetic.test/post/3synthetic001",
-            "https://bsky.app/profile/did:plc:abcdefghijklmnopqrstuvwx/post/3synthetic001"))
+            "https://bsky.app/profile/did:plc:abcdefghijklmnopqrstuvwx/post/3synthetic001",
+            "https://bsky.app/profile/synthetic.test/post/3synthetic001/likes"))
             assertEquals("BLUESKY", route(url).name)
         for (url in listOf("https://t.me/synthetic_channel", "https://t.me/c/123/456", "https://t.me/+SyntheticInvite",
             "https://t.me/share/url?url=https%3A%2F%2Fexample.com", "https://t.me/synthetic_channel/not-a-post",
-            "https://bsky.app/profile/synthetic.test", "https://bsky.app/profile/synthetic.test/post/3synthetic001/likes",
+            "https://bsky.app/profile/synthetic.test", "https://bsky.app/profile/synthetic.test/post/3synthetic001/replies",
             "https://bsky.app.evil.com/profile/synthetic.test/post/3synthetic001"))
             assertEquals(url, MediaSourceRoute.LEGACY, route(url))
     }

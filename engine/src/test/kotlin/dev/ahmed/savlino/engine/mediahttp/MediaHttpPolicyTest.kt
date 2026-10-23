@@ -21,6 +21,12 @@ class MediaHttpPolicyTest {
         }
         assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
             "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/synthetic@avif"))))
+        // url-shapes: did:web authors' blobs too; a port, uppercase or bare host never.
+        assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
+            "https://cdn.bsky.app/img/feed_thumbnail/plain/did:web:synthetic.example.org/synthetic@jpeg"))))
+        for (did in listOf("did:web:localhost", "did:web:Evil.Test", "did:web:evil.test%3A8080", "did:key:z6Mk"))
+            assertFalse(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
+                "https://cdn.bsky.app/img/feed_fullsize/plain/$did/synthetic"))), did)
     }
 
     @Test fun fragmentsAreStrippedWithoutChangingPathOrQueryBytes() {

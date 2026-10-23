@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.mediahttp
 
+import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import java.net.InetAddress
 import okhttp3.HttpUrl
@@ -20,13 +21,18 @@ internal object MediaHttpPolicy {
 
     internal fun isLinkedInPost(url: HttpUrl): Boolean = url.host == "www.linkedin.com" &&
         (Regex("/posts/$LINKEDIN_SLUG/?").matches(url.encodedPath) ||
-            Regex("/feed/update/urn:li:activity:[0-9]+/?").matches(url.encodedPath))
+            Regex("/feed/update/urn:li:(?:activity|share|ugcPost):[0-9]+/?").matches(url.encodedPath))
 
     internal fun isLinkedInEntryHost(host: String): Boolean = host == "linkedin.com" || host == "www.linkedin.com" ||
         Regex("[a-z]{2}\\.linkedin\\.com").matches(host)
 
-    internal fun normalizeLinkedInEntry(url: HttpUrl): HttpUrl =
-        if (isLinkedInEntryHost(url.host)) url.newBuilder().host("www.linkedin.com").build() else url
+    /** www host; an `/embed/` or `%3A`-encoded update link becomes its plain `/feed/update/urn:li:…/` page. */
+    internal fun normalizeLinkedInEntry(url: HttpUrl): HttpUrl {
+        if (!isLinkedInEntryHost(url.host)) return url
+        val path = LinkedInPostIdentity.updatePath(url.encodedPath).removePrefix("/embed")
+            .takeIf { it.startsWith("/feed/update/") } ?: url.encodedPath
+        return url.newBuilder().host("www.linkedin.com").encodedPath(path).build()
+    }
 
     internal fun isLinkedInPageEntry(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) && isLinkedInPost(normalizeLinkedInEntry(url)) ||
         (url.host == "lnkd.in" && Regex("/p/[A-Za-z0-9_-]+/?").matches(url.encodedPath))
@@ -74,7 +80,7 @@ internal object MediaHttpPolicy {
 
     /** Bluesky's returned fullsize/thumbnail blob views, including its explicit JPEG conversion. */
     internal fun isBlueskyImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 && url.host == "cdn.bsky.app" &&
-        Regex("/img/(?:feed_fullsize|feed_thumbnail)/plain/did:plc:[a-z2-7]{24}/[A-Za-z0-9_-]{1,256}(?:@(?:jpeg|png|webp|avif))?")
+        Regex("/img/(?:feed_fullsize|feed_thumbnail)/plain/(?:${BlueskyPostIdentity.DID})/[A-Za-z0-9_-]{1,256}(?:@(?:jpeg|png|webp|avif))?")
             .matches(url.encodedPath) && url.encodedQuery == null
 
     internal fun withoutQuery(url: HttpUrl): String = url.newBuilder().query(null).fragment(null).build().toString()

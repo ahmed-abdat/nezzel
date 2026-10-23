@@ -24,6 +24,9 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
     companion object {
         private const val WWW = "https://www.facebook.com"
         private val hosts = setOf("www.facebook.com", "facebook.com", "m.facebook.com", "web.facebook.com")
+        /** Mobile and locale hosts (ar-ar.facebook.com) serve the same posts; parsed links always fetch www/web. */
+        private val inputHosts = hosts + setOf("mbasic.facebook.com", "touch.facebook.com", "mobile.facebook.com")
+        private val localeHost = Regex("[a-z]{2}-[a-z]{2}\\.facebook\\.com")
         private val token = Regex("[A-Za-z0-9_-]{1,64}")
         private val numeric = Regex("[0-9]{1,25}")
         private val storyId = Regex("[0-9]{1,25}|pfbid[A-Za-z0-9]{1,80}")
@@ -33,6 +36,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
         private val posts = Regex("/(?:groups/)?(${segment.pattern})/(?:posts|permalink)/(?:[^/]{1,512}/)?([0-9]{1,25}|pfbid[A-Za-z0-9]{1,80})/?")
         private val photos = Regex("/(${segment.pattern})/photos/(?:[a-z]{1,8}\\.[0-9]{1,25}/)?([0-9]{1,25})/?")
         private val reel = Regex("/reel/([0-9]{1,25})/?")
+        private val group = Regex("/groups/(${segment.pattern})/?")
         private val videos = Regex("/(${segment.pattern})/videos/(?:[^/]{1,512}/)?([0-9]{1,25})/?")
 
         fun parse(url: String): FacebookPostIdentity? {
@@ -45,7 +49,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
                     FacebookPostIdentity(FacebookLinkKind.SHORTLINK, "https://fb.watch$path", null, null, null)
                 }
             }
-            if (host !in hosts) return null
+            if (host !in inputHosts && !localeHost.matches(host)) return null
             if (path.startsWith("/events/") || path.startsWith("/stories/")) return null
             share.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.SHARE, WWW + path, null, null, null,
                 it.groupValues[1] in setOf("v", "r")) }
@@ -69,6 +73,11 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
             reel.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.REEL, WWW + path, null, null, it.groupValues[1]) }
             photos.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.PHOTO, WWW + path, null, it.groupValues[2], null) }
             videos.matchEntire(path)?.let { return FacebookPostIdentity(FacebookLinkKind.VIDEO, WWW + path, null, null, it.groupValues[2]) }
+            // A group feed opened on one post: /groups/<g>/?multi_permalinks=<id> is that group post.
+            group.matchEntire(path)?.let { match ->
+                val id = single(parsed, "multi_permalinks", numeric) ?: return null
+                return FacebookPostIdentity(FacebookLinkKind.POST, "$WWW/groups/${match.groupValues[1]}/posts/$id/", id, null, null)
+            }
             posts.matchEntire(path)?.let { match ->
                 val id = match.groupValues[2]
                 return FacebookPostIdentity(FacebookLinkKind.POST, WWW + path, id.takeIf(numeric::matches), null, null)
