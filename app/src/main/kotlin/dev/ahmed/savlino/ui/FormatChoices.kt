@@ -90,7 +90,7 @@ internal object FormatChoices {
             old.hasVideo == fresh.hasVideo && old.hasAudio == fresh.hasAudio && old.height == fresh.height &&
             old.videoCodec == fresh.videoCodec && old.audioCodec == fresh.audioCodec &&
             old.conversion == fresh.conversion && old.animatedGif == fresh.animatedGif &&
-            (oldBytes == null || freshBytes == null || freshBytes * 4 <= oldBytes * 5)
+            (oldBytes == null || freshBytes == null || freshBytes - oldBytes <= oldBytes / 4)
 
     private fun sizeRank(size: Size) = when (size) { is Size.Exact -> 2; is Size.Estimated -> 1; Size.Unknown -> 0 }
 

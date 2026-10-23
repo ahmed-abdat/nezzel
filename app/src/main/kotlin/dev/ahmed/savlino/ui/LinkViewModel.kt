@@ -374,11 +374,11 @@ class LinkViewModel(
     }
     val confirmed get() = submitted
     /** A stale sheet stays tappable: Download reads the link again first (see [confirmDownload]). An unknown engine version can't confirm anything. */
-    val downloadEnabled get() = !submitted && !refreshing && !engineUpdating && engine.isAvailable && selectedFormat != null &&
+    val downloadEnabled get() = !submitted && !refreshing && !optionsChanged && !engineUpdating && engine.isAvailable && selectedFormat != null &&
         inspection != null && engineVersion() != null && confirmAgainst?.let { currentSource()?.matches(it) } == true
     /** Download was tapped on a stale sheet; the same link is being read again before anything is queued. */
     var refreshing by mutableStateOf(false); private set
-    /** That fresh read no longer offered the same choice, so the sheet shows the fresh options instead. */
+    /** That fresh read no longer offered the same choice: the sheet shows the fresh options and Download waits for a pick. */
     var optionsChanged by mutableStateOf(false); private set
     /** When the sheet's options were read; the engine keeps their info JSON for [YtdlpInfoCache.TTL_MS]. */
     private var readAt: Long? = null
@@ -798,14 +798,14 @@ class LinkViewModel(
     fun selectFormat(id: String) {
         if (!submitted && !refreshing && eligibleFormats.any { it.id == id }) {
             if (selectedId != id) pendingPermissionChoice = null
-            selectedId = id; selectedPreset = null
+            selectedId = id; selectedPreset = null; optionsChanged = false
         }
     }
     fun selectPreset(preset: Preset) {
         if (submitted || refreshing) return
         presetOptions.singleOrNull { it.first == preset }?.let {
             if (selectedId != it.second.id) pendingPermissionChoice = null
-            selectedId = it.second.id; selectedPreset = preset
+            selectedId = it.second.id; selectedPreset = preset; optionsChanged = false
         }
     }
     fun showMoreFormats() { if (optionsState is OptionsState.Ready && !submitted) moreFormats = true }
@@ -866,7 +866,7 @@ class LinkViewModel(
     @Synchronized fun confirmDownload() = confirmDownload(refreshed = false)
     /** [refreshed]: this tap already read the link again, so a sheet that is still stale fails instead of reading again. */
     @Synchronized private fun confirmDownload(refreshed: Boolean) {
-        if (submitted || refreshing || engineUpdating) return
+        if (submitted || refreshing || optionsChanged || engineUpdating) return
         val inspected = inspection ?: return
         val current = currentSource() ?: return
         val origin = confirmAgainst ?: return
@@ -940,6 +940,8 @@ class LinkViewModel(
             if (operationId != id) return@launch // Edited or dismissed meanwhile: invalidation already reset the sheet.
             refreshing = false
             showLegacy(read, id, source, ready.resolvedFrom, noMedia = false)
+            // All formats has no error view: a failed read goes back to the sheet, which shows it.
+            if (optionsState !is OptionsState.Ready) moreFormats = false
             // The read landed only if its inspection is the one now on screen (not an error, not a dropped late result).
             val fresh = (read.result as? InspectResult.Success)?.inspection
                 ?.takeIf { (optionsState as? OptionsState.Ready)?.inspection === it } ?: return@launch

@@ -2,13 +2,16 @@ package dev.ahmed.savlino
 
 import android.os.Looper
 import androidx.lifecycle.SavedStateHandle
+import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.ui.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.coroutines.*
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
@@ -26,8 +29,8 @@ class StaleSheetTest {
     private var clock = 1_000_000L
     private var version = "v1"
     private val ids = mutableListOf<String>()
-    private fun model(engine: FakeEngine) = LinkViewModel(SavedStateHandle(), engine = engine, currentEngineVersion = { version },
-        newOperationId = { (ids.size + 1).toString().also { ids += it } }, now = { clock }).also {
+    private fun model(engine: FakeEngine, downloads: DownloadCoordinator? = null) = LinkViewModel(SavedStateHandle(),
+        engine = engine, downloads = downloads, currentEngineVersion = { version }, newOperationId = { (ids.size + 1).toString().also { ids += it } }, now = { clock }).also {
         it.edit(url); it.checkLink(); idle()
         assertEquals("22", it.selectedFormat?.id)
     }
@@ -79,7 +82,52 @@ class StaleSheetTest {
         assertNull(vm.takeConfirmedCommand())
         assertTrue(vm.optionsChanged)
         assertEquals("136", vm.selectedFormat?.id) // normal preselect on the fresh options
+        assertFalse(vm.downloadEnabled) // a second tap must not take the preselected row unseen
+        vm.confirmDownload(); idle()
+        assertNull(vm.takeConfirmedCommand())
+        vm.selectFormat("136")
+        assertFalse(vm.optionsChanged)
         assertTrue(vm.downloadEnabled)
+        vm.confirmDownload(); idle()
+        assertEquals(listOf("1", "2"), ids) // the fresh sheet is fresh: no third read
+        assertEquals("136", vm.takeConfirmedCommand()?.format?.id)
+    }
+
+    @Test fun pickingAPresetAlsoCountsAsPickingAgain() {
+        val vm = model(engine(InspectResult.Success(inspection(hd.copy(height = 480)))))
+        age(); vm.confirmDownload(); idle()
+        assertFalse(vm.downloadEnabled)
+        vm.selectPreset(Preset.BALANCED)
+        assertFalse(vm.optionsChanged)
+        assertTrue(vm.downloadEnabled)
+    }
+
+    @Test fun failedReadFromAllFormatsGoesBackToTheSheetError() {
+        val vm = model(engine(InspectResult.Failure(DownloadError.Network)))
+        vm.showMoreFormats()
+        assertTrue(vm.moreFormats)
+        age(); vm.confirmDownload(); idle()
+        assertFalse(vm.moreFormats)
+        assertEquals(OptionsState.Error(DownloadError.Network), vm.optionsState)
+    }
+
+    @Test fun agedSheetStoresExactlyOneJobWithTheFreshRowAndTheSameLink() {
+        val app = RuntimeEnvironment.getApplication()
+        val store = JobStore(app)
+        val freshRow = hd.copy(size = Size.Exact(11_000_000))
+        val engine = engine(InspectResult.Success(inspection(freshRow)))
+        val vm = model(engine, DownloadCoordinator(app, engine, store))
+        try {
+            age(); vm.confirmDownload(); idle()
+            runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { idle(); delay(5) } } }
+            idle()
+            val job = store.all().single()
+            assertEquals("22", job.format.id)
+            assertEquals(freshRow.size, job.format.size)
+            assertEquals(url, job.sourceUrl)
+            assertEquals(source.revision, job.revision)
+            assertEquals(listOf("1", "2"), ids)
+        } finally { vm.dismissOptions(); store.close() }
     }
 
     @Test fun changedHeightCodecOrMuchBiggerFileShowsTheSheet() {

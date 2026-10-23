@@ -16,6 +16,9 @@ class FormatChoicesTest {
         assertTrue(FormatChoices.sameChoice(picked, picked.copy(width = 1920, bitrateKbps = 4000), null, 9_999))
         assertFalse(FormatChoices.sameChoice(picked, picked.copy(), 1_000, 1_251)) // > 25% bigger than shown
         assertTrue(FormatChoices.sameChoice(picked, picked.copy(), 1_000, 400)) // smaller is fine
+        val huge = Long.MAX_VALUE / 2 // ×4 / ×5 would overflow here
+        assertTrue(FormatChoices.sameChoice(picked, picked.copy(), huge, huge))
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(), huge, Long.MAX_VALUE))
         assertFalse(FormatChoices.sameChoice(picked, picked.copy(height = 720), null, null))
         assertFalse(FormatChoices.sameChoice(picked, picked.copy(videoCodec = "vp09.02.51.10"), null, null)) // HDR
         assertFalse(FormatChoices.sameChoice(picked, picked.copy(audioCodec = "opus"), null, null))
