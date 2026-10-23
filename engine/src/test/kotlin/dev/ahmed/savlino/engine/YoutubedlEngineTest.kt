@@ -33,6 +33,65 @@ class YoutubedlEngineTest {
         override fun update() { updates++; version = "2026.08.19" }
         override fun destroy(processId: String): Boolean { destroys.incrementAndGet(); return true }
     }
+    @Test fun concurrentDownloadsHaveIndependentProcessesCancellationAndProgress() = runBlocking {
+        val entered = CountDownLatch(2)
+        val releases = java.util.concurrent.ConcurrentHashMap<String, CountDownLatch>()
+        val processIds = java.util.concurrent.ConcurrentHashMap<String, String>()
+        val destroyed = java.util.concurrent.ConcurrentLinkedQueue<String>()
+        val directories = mapOf("cancel-one" to temp.newFolder().canonicalFile, "finish-two" to temp.newFolder().canonicalFile)
+        val native = object : YtdlpRuntime {
+            override val initialization = EngineInitialization()
+            override fun initialize() = Unit
+            override fun update() = Unit
+            override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
+                if ("--version" in args) return "2025.11.12"
+                val id = directories.entries.single { (_, dir) -> File(dir, "output.%(ext)s").path in args }.key
+                processIds[id] = processId
+                val release = CountDownLatch(1)
+                releases[processId] = release
+                line("nezzel:18:${if (id == "cancel-one") 1 else 2}:3:NA")
+                entered.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                if (processId in destroyed) throw IllegalStateException("cancelled")
+                val dir = directories.getValue(id)
+                File(dir, "output.mp4").writeText("abc")
+                File(dir, "result-path.txt").writeText(File(dir, "output.mp4").path)
+                line("nezzel:18:3:3:NA")
+                return ""
+            }
+            override fun destroy(processId: String): Boolean {
+                destroyed += processId
+                releases[processId]?.countDown()
+                return true
+            }
+        }
+        // Exercise the process-tracking runtime too; only the native process launch is replaced.
+        val runtime = AndroidYtdlpRuntime(native, { ProcessTree(object : ProcTable {
+            override fun snapshot() = emptyList<ProcProcess>()
+            override fun read(pid: Int): ProcProcess? = null
+            override fun signal(pid: Int, signal: Int) = Unit
+        }) { false } }, pause = {})
+        val engine = YoutubedlEngine(runtime)
+        val firstEvents = java.util.concurrent.CopyOnWriteArrayList<EngineEvent>()
+        val secondEvents = java.util.concurrent.CopyOnWriteArrayList<EngineEvent>()
+        fun selected(id: String) = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(id,
+            Inspection(source, "2025.11.12", listOf(row)), source, row.id, "title")).command
+        val first = async(Dispatchers.Default) { engine.download(selected("cancel-one"), directories.getValue("cancel-one"), firstEvents::add) }
+        val second = async(Dispatchers.Default) { engine.download(selected("finish-two"), directories.getValue("finish-two"), secondEvents::add) }
+        try {
+            check(entered.await(5, TimeUnit.SECONDS))
+            assertEquals(2, processIds.values.toSet().size)
+            engine.cancel("cancel-one")
+            assertEquals(DownloadError.Cancelled, assertIs<TransferResult.Failure>(withTimeout(5000) { first.await() }).error)
+            assertFalse(second.isCompleted)
+            assertEquals(listOf(processIds.getValue("cancel-one")), destroyed.toList())
+            releases.getValue(processIds.getValue("finish-two")).countDown()
+            assertIs<TransferResult.Success>(withTimeout(5000) { second.await() })
+            assertEquals(listOf(1L), firstEvents.filterIsInstance<EngineEvent.Progress>().map { it.bytesDownloaded })
+            assertEquals(listOf(2L, 3L), secondEvents.filterIsInstance<EngineEvent.Progress>().map { it.bytesDownloaded })
+        } finally { releases.values.forEach { it.countDown() }; first.cancelAndJoin(); second.cancelAndJoin() }
+    }
+
     @Test fun runtimeReceivesExactConversionSourceAndScopedEncodingOptions() = runBlocking {
         for (container in listOf("mp3", "m4a", "webm", "mp4", null)) {
             for ((conversion, scoped) in listOf(

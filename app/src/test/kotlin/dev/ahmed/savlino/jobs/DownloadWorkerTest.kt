@@ -1227,15 +1227,11 @@ class DownloadWorkerTest {
             f.store.startTransfer("flip", "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:engine-42:${YtdlpCommand.ARGV_VERSION}")
             File(app.filesDir, "downloads/flip").apply { mkdirs(); resolve("output.mp4.part").writeText("keep") }
             f.store.pause("flip", true); f.store.resume("flip")
-            val worker: Deferred<JobRecord?>
-            synchronized(f.store) {
-                worker = async(Dispatchers.Default) {
-                    f.coordinator.execute("flip", { WorkInfo.STOP_REASON_NOT_STOPPED }, {}, {}) { endings += it }
-                }
-                // The attempt registers while its row read still waits: a pause from here on reaches it.
-                val deadline = System.nanoTime() + 5_000_000_000
-                while (!f.coordinator.isRunning("flip")) { check(System.nanoTime() < deadline); Thread.yield() }
+            val worker = async(Dispatchers.Default) {
+                f.coordinator.execute("flip", { WorkInfo.STOP_REASON_NOT_STOPPED }, {}, {}) { endings += it }
             }
+            // Slot ordering reads createdAt before writer registration; pause races the admitted attempt.
+            withTimeout(5000) { while (!f.coordinator.isRunning("flip")) yield() }
             try {
                 assertTrue(f.coordinator.pause("flip"))
                 assertTrue(f.coordinator.resume("flip"))
@@ -1460,6 +1456,50 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun stoppingOneOfTwoWorkersFreesItsSlotAndDoesNotStopTheOther() = runBlocking {
+        for ((reason, error) in listOf(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY to DownloadError.Network,
+            WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION to DownloadError.StoppedByBattery,
+            WorkInfo.STOP_REASON_QUOTA to DownloadError.StoppedByBattery)) {
+            val suffix = reason.toString().replace('-', 'm')
+            val stoppedId = "stopped-$suffix"; val otherId = "other-$suffix"; val nextId = "next-$suffix"
+            val entered = kotlinx.coroutines.channels.Channel<String>(3)
+            val finishOther = CompletableDeferred<Unit>()
+            fixture(FakeEngine(), script = { command, dir, emit ->
+                entered.send(command.jobId)
+                if (command.jobId == stoppedId) awaitCancellation()
+                if (command.jobId == otherId) finishOther.await()
+                val output = File(dir, "output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                emit(EngineEvent.Progress(4, Size.Exact(4)))
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }).use { f ->
+                f.coordinator.initialize()
+                for (id in listOf(stoppedId, otherId, nextId)) f.store.enqueue(command(id))
+                val worker = f.worker(stoppedId)
+                assertNotEquals(worker.getForegroundInfo().notificationId, f.worker(otherId).getForegroundInfo().notificationId)
+                val stopped = launch(Dispatchers.Default) { worker.doWork() }
+                val other = async(Dispatchers.Default) { f.worker(otherId).doWork() }
+                var next: Deferred<ListenableWorker.Result>? = null
+                try {
+                    assertEquals(setOf(stoppedId, otherId), withTimeout(5000) { setOf(entered.receive(), entered.receive()) })
+                    next = async(Dispatchers.Default) { f.worker(nextId).doWork() }
+                    assertNull(withTimeoutOrNull(250) { entered.receive() })
+                    worker.stop(reason); stopped.cancelAndJoin()
+                    assertEquals(if (error == DownloadError.Network) JobStage.ENQUEUED else JobStage.FAILED,
+                        f.store.get(stoppedId)!!.stage)
+                    if (error != DownloadError.Network) assertEquals(error, f.store.get(stoppedId)!!.error)
+                    else assertTrue(f.coordinator.progress.value.single { it.jobId == stoppedId }.waiting)
+                    assertEquals(nextId, withTimeout(5000) { entered.receive() })
+                    assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { next.await() })
+                    assertFalse(other.isCompleted)
+                    finishOther.complete(Unit)
+                    assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { other.await() })
+                    assertEquals(JobStage.COMPLETED, f.store.get(otherId)!!.stage)
+                    assertEquals(JobStage.COMPLETED, f.store.get(nextId)!!.stage)
+                } finally { finishOther.complete(Unit); stopped.cancelAndJoin(); other.cancelAndJoin(); next?.cancelAndJoin() }
+            }
+        }
+    }
+
     private fun assertSaved(f: Fixture, id: String) {
         assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
         assertNull(f.store.get(id)!!.sourceUrl)
@@ -1508,8 +1548,8 @@ class DownloadWorkerTest {
     }
     private inner class Fixture(val engine: FakeEngine, val provider: TestDownloadsProvider, val store: JobStore,
         val coordinator: DownloadCoordinator, val engineStopped: CompletableDeferred<Unit>, val attempts: java.util.concurrent.atomic.AtomicInteger) : AutoCloseable {
-        val phases = mutableListOf<String>()
-        val progressData = mutableListOf<Data>()
+        val phases = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val progressData = java.util.concurrent.CopyOnWriteArrayList<Data>()
         fun worker(id: String) = TestListenableWorkerBuilder<DownloadWorker>(app)
             .setInputData(workDataOf(DownloadWorker.JOB_ID to id))
             .setWorkerFactory(DownloadWorker.Factory(coordinator))

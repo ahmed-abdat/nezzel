@@ -11,7 +11,17 @@ import java.io.IOException
 
 /** Q5 preflight reserves are budgets, never claimed media sizes or disk reservations. */
 internal object TransferSpacePolicy {
-    fun check(space: SpaceGate, format: Format, stagedBytes: Long = 0) {
+    data class Budget(val staging: Long, val output: Long) {
+        val total: Long get() = Math.addExact(staging, output)
+    }
+
+    fun check(space: SpaceGate, format: Format, stagedBytes: Long = 0): Budget {
+        val budget = budget(format, stagedBytes)
+        space.beforeTransfer(budget.staging, budget.output)
+        return budget
+    }
+
+    fun budget(format: Format, stagedBytes: Long = 0): Budget {
         require(stagedBytes >= 0)
         fun remaining(budget: Long) = (budget - minOf(budget, stagedBytes)).coerceAtLeast(0)
         val output = when (val size = format.size) {
@@ -20,17 +30,15 @@ internal object TransferSpacePolicy {
                 val reserve = Math.addExact(size.bytes, Math.addExact(size.bytes / 4,
                     if (size.bytes % 4 == 0L) 0L else 1L))
                 // Q5 defines an aggregate estimated reserve; measured publication is checked later.
-                space.beforeTransfer(remaining(reserve), 0)
-                return
+                return Budget(remaining(reserve), 0)
             }
             Size.Unknown -> {
                 // Aggregate 1 GiB reserve; SpaceBudget adds its 64 MiB margin on both volumes.
-                space.beforeTransfer(remaining(1024L * 1024 * 1024), 0)
-                return
+                return Budget(remaining(1024L * 1024 * 1024), 0)
             }
         }
         val intermediate = if (format.requiresMerge || format.conversion != null) Math.multiplyExact(output, 2L) else 0L
-        space.beforeTransfer(Math.addExact(remaining(output), intermediate), output)
+        return Budget(Math.addExact(remaining(output), intermediate), output)
     }
 
     fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.any {
@@ -39,4 +47,17 @@ internal object TransferSpacePolicy {
             (it is IOException && (it.message.orEmpty().contains("ENOSPC", ignoreCase = true) ||
                 it.message.orEmpty().contains("no space left", ignoreCase = true)))
     }
+}
+
+/** Process-local future space budgets; a new process starts empty after journal recovery. */
+internal class TransferSpaceLedger {
+    private val reservations = mutableMapOf<String, Long>()
+    @Synchronized fun reserve(id: String, space: SpaceGate, format: Format, stagedBytes: Long = 0) {
+        check(id !in reservations)
+        val budget = TransferSpacePolicy.budget(format, stagedBytes)
+        val others = reservations.values.fold(0L, Math::addExact)
+        space.beforeTransfer(Math.addExact(budget.staging, others), budget.output)
+        reservations[id] = budget.total
+    }
+    @Synchronized fun release(id: String) { reservations.remove(id) }
 }

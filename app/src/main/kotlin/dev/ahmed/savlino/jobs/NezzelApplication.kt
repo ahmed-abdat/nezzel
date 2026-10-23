@@ -3,10 +3,15 @@ package dev.ahmed.savlino.jobs
 import android.app.Application
 import androidx.work.Configuration
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** On-demand WorkManager initialization; workers cannot pass the coordinator's startup barrier. */
 open class NezzelApplication : Application(), Configuration.Provider {
-    open val downloads by lazy { DownloadCoordinator(this) }
+    val preferences by lazy { dev.ahmed.savlino.locale.AppPreferences(this) }
+    private val thermalStatus = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE)
+    private val thermalListener = android.os.PowerManager.OnThermalStatusChangedListener { thermalStatus.value = it }
+    open val downloads by lazy { DownloadCoordinator(this, parallelDownloads = preferences.parallelDownloadsFlow,
+        thermalStatus = thermalStatus) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** Process-lifetime collectors stay out of [scope], so its startup jobs can be joined. */
     private val collectors = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -24,6 +29,13 @@ open class NezzelApplication : Application(), Configuration.Provider {
     }
     override fun onCreate() {
         super.onCreate()
+        // The heat guard is optional: a missing thermal service ("Listener failed to set") must not stop startup.
+        runCatching {
+            getSystemService(android.os.PowerManager::class.java)?.let { power ->
+                thermalStatus.value = power.currentThermalStatus
+                power.addThermalStatusListener(mainExecutor, thermalListener)
+            }
+        }
         dev.ahmed.savlino.diagnostics.CrashReports.install(this)
         dev.ahmed.savlino.DebugStrictMode.install()
         collectors.launch { widgets.start(this) }
