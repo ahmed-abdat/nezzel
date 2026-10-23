@@ -105,6 +105,31 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun foregroundInfoFollowsEachStateSoAReplacedServiceNotificationIsCurrent() = runBlocking {
+        shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        fixture(FakeEngine(steps = listOf(
+            FakeEngine.Step.Emit(EngineEvent.Progress(1, Size.Exact(4))),
+            FakeEngine.Step.Emit(EngineEvent.Progress(2, Size.Exact(4))),
+            FakeEngine.Step.Emit(EngineEvent.Merging),
+            FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))
+        ))).use { f ->
+            f.store.enqueue(command("current"))
+            assertEquals(ListenableWorker.Result.success(), f.worker("current").doWork())
+            // WorkManager re-promotes a surviving job with its last ForegroundInfo when another job's worker ends:
+            // one per state, never per percent step, and never a stale "Preparing" once bytes moved.
+            val texts = f.foregrounds.map { it.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString() }
+            assertEquals(texts.toString(), 4, texts.size)
+            assertFalse(texts[0], texts[0].startsWith(app.getString(dev.ahmed.savlino.R.string.download_transferring)))
+            assertTrue(texts[1], texts[1].startsWith(app.getString(dev.ahmed.savlino.R.string.download_transferring)))
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_joining), texts[2])
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_saving), texts[3])
+            assertEquals(1, f.foregrounds.map { it.notificationId }.toSet().size)
+            // The worker has returned: no group summary outlives it.
+            assertTrue(app.getSystemService(android.app.NotificationManager::class.java).activeNotifications
+                .none { it.tag == DownloadNotifications.SUMMARY_TAG })
+        }
+    }
+
     @Test fun workerWaitsForStartupRecoveryBeforeStartingTransfer() = runBlocking {
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
             f.store.enqueue(command("old")); f.store.startTransfer("old")
@@ -1581,9 +1606,14 @@ class DownloadWorkerTest {
         val coordinator: DownloadCoordinator, val engineStopped: CompletableDeferred<Unit>, val attempts: java.util.concurrent.atomic.AtomicInteger) : AutoCloseable {
         val phases = java.util.concurrent.CopyOnWriteArrayList<String>()
         val progressData = java.util.concurrent.CopyOnWriteArrayList<Data>()
+        val foregrounds = java.util.concurrent.CopyOnWriteArrayList<ForegroundInfo>()
         fun worker(id: String) = TestListenableWorkerBuilder<DownloadWorker>(app)
             .setInputData(workDataOf(DownloadWorker.JOB_ID to id))
             .setWorkerFactory(DownloadWorker.Factory(coordinator))
+            .setForegroundUpdater { _, _, info ->
+                foregrounds += info
+                com.google.common.util.concurrent.SettableFuture.create<Void>().apply { set(null) }
+            }
             .setProgressUpdater { _, _, data ->
                 phases += data.getString("phase")!!
                 progressData += data

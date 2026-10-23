@@ -3,6 +3,7 @@ package dev.ahmed.savlino.downloads
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.animation.*
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.shape.CircleShape
 import android.util.Size
 import androidx.compose.foundation.Image
@@ -66,12 +67,28 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
 /**
- * The running job first, then the queue in the order it will run (next up on top), failures last, newest first
- * (owner 2026-10-21: a just-queued link sat above the one downloading). [jobs] arrive oldest first.
+ * Running jobs in the order they started (oldest on top, so rows never jump as a second one starts), then the queue in the
+ * order it will run, failures last, newest first. [jobs] arrive oldest first; [started] holds job IDs in start order
+ * ([rememberStartOrder]); a running job it does not know keeps its place in [jobs].
  */
-fun visibleJobs(jobs: List<DownloadProgress>): List<DownloadProgress> {
-    val (busy, queued) = jobs.filter { !it.terminal || it.awaitingSchedule }.partition { it.busy }
-    return busy.asReversed() + queued + jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }.asReversed()
+fun visibleJobs(jobs: List<DownloadProgress>, started: List<String> = emptyList()): List<DownloadProgress> {
+    val (running, queued) = jobs.filter { !it.terminal || it.awaitingSchedule }.partition { it.running }
+    val rank = started.withIndex().associate { (index, id) -> id to index }
+    return running.sortedBy { rank[it.jobId] ?: Int.MAX_VALUE } + queued +
+        jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }.asReversed()
+}
+
+/** Holds a transfer slot: admitted and not paused. Preparing counts, so a row does not move when its bytes start. */
+internal val DownloadProgress.running get() = !terminal && !awaitingSchedule && !waiting && !paused
+
+/** Job IDs in the order this screen saw them start running; a job that stops running gives up its place. */
+@Composable
+internal fun rememberStartOrder(jobs: List<DownloadProgress>): List<String> {
+    val order = remember { mutableListOf<String>() }
+    val running = jobs.filter { it.running }.map { it.jobId }
+    order.retainAll(running.toSet())
+    running.forEach { if (it !in order) order += it }
+    return order.toList()
 }
 fun runningCount(jobs: List<DownloadProgress>) = jobs.count { !it.terminal || it.awaitingSchedule }
 
@@ -131,33 +148,32 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
 @Composable
 private fun NavLabel(text: String) = Text(text, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
 
-/** Busy jobs first (bytes moving, joining, converting, saving), then queued/waiting ones, each newest first; failures last. */
-internal fun homeStripOrder(jobs: List<DownloadProgress>): List<DownloadProgress> {
-    val active = jobs.filter { !it.terminal || it.awaitingSchedule }.asReversed()
-    val failed = jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }.asReversed()
-    return active.sortedBy { if (it.busy) 0 else 1 } + failed
-}
+/** Most rows Home stacks: one per transfer slot. */
+internal const val HOME_STRIP_ROWS = 3
 
-private val BUSY_PHASES = setOf(DownloadPhase.DOWNLOADING, DownloadPhase.JOINING, DownloadPhase.CONVERTING, DownloadPhase.SAVING)
-private val DownloadProgress.busy get() = !terminal && !awaitingSchedule && !waiting && phase in BUSY_PHASES
-
-/** Home's view of the queue: the busy job as one row (a failure as its own row), a count when there are more. */
+/**
+ * Home's view of the queue: one row per running job (up to [HOME_STRIP_ROWS], in start order), or the next job in line
+ * (a failure as its own row) when none runs; a count opens Downloads when more wait beyond the rows.
+ */
 @Composable
 fun DownloadStrip(jobs: List<DownloadProgress>, language: String, onCancel: (String) -> Unit = {}, onRemove: (String) -> Unit = {},
                   onRetry: (String) -> Unit = {}, onPause: (String) -> Unit = {}, onResume: (String) -> Unit = {}, onClick: () -> Unit) {
     val active = jobs.filter { !it.terminal || it.awaitingSchedule }
     val failed = jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
-    val shown = rememberWithSavedMoment(jobs, homeStripOrder(jobs))
+    val started = rememberStartOrder(jobs)
+    val shown = rememberWithSavedMoment(jobs, visibleJobs(jobs, started))
     if (shown.isEmpty()) return
     val reduced = LocalReducedMotion.current
     val context = LocalContext.current
+    // Saved cards (in their moment) and running jobs each get a row; otherwise the first in line stands alone.
+    val rows = shown.takeWhile { it.saved || it.running }.take(HOME_STRIP_ROWS).ifEmpty { shown.take(1) }
     // With a count action the 48dp header row carries its own air (4dp to the row); a bare heading is natural height + 8dp.
-    val counted = shown.size > 1
+    val counted = shown.size > rows.size
     Column(Modifier.fillMaxWidth().animateContentSize(easeOut(reduced)), verticalArrangement = Arrangement.spacedBy(if (counted) Space.xs else Space.s)) {
-        val first = shown.first()
+        val first = rows.first()
         // The header names what the lead card is, so a failure alone never reads as progress.
         val header = when {
-            first.saved -> stringResource(R.string.saved_files)
+            first.saved && rows.none { it.running } -> stringResource(R.string.saved_files)
             first.phase == DownloadPhase.FAILED && !first.awaitingSchedule ->
                 stringResource(R.string.downloads_stopped_header, NezzelFormat.count(failed.size, language))
             else -> stringResource(R.string.home_active_header)
@@ -170,12 +186,20 @@ fun DownloadStrip(jobs: List<DownloadProgress>, language: String, onCancel: (Str
                     else stringResource(R.string.see_all))
             }
         }
-        // A new lead job cross-fades in; the saved card fades out instead of vanishing when its moment ends.
-        AnimatedContent(first, contentKey = { it.jobId }, transitionSpec = {
-            fadeIn(easeOut(reduced, Motion.FADE_IN, 50)) togetherWith fadeOut(easeOut(reduced, Motion.FADE_OUT))
-        }, label = "home job") { job ->
-            JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
-                onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
+        // Rows already there when Home opens are simply shown; only a job that starts later fades in.
+        val opening = remember { rows.mapTo(HashSet()) { it.jobId } }
+        Column(verticalArrangement = Arrangement.spacedBy(Space.item)) {
+            rows.forEach { job ->
+                // Keyed by job: a row keeps its state while others start or leave.
+                key(job.jobId) {
+                    val appear = remember { MutableTransitionState(job.jobId in opening) }.apply { targetState = true }
+                    AnimatedVisibility(appear, enter = fadeIn(easeOut(reduced, Motion.FADE_IN, 50)) + expandVertically(easeOut(reduced)),
+                        label = "home job") {
+                        JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
+                            onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
+                    }
+                }
+            }
         }
     }
 }
@@ -200,7 +224,8 @@ fun DownloadsScreen(
     var deletingUri by rememberSaveable { mutableStateOf<String?>(null) }
     val saved = libraryLoad.lastSuccessfulRows.orEmpty()
     val deleting = saved.find { it.uri.toString() == deletingUri }
-    val active = rememberWithSavedMoment(jobs, remember(jobs) { visibleJobs(jobs) })
+    val started = rememberStartOrder(jobs)
+    val active = rememberWithSavedMoment(jobs, remember(jobs, started) { visibleJobs(jobs, started) })
     val reduced = LocalReducedMotion.current
     val filtered = remember(saved, filterName, query) { filterMedia(saved, MediaFilter.valueOf(filterName), query) }
     // Changing the filter/search exits selection; hidden files never receive a bulk action.

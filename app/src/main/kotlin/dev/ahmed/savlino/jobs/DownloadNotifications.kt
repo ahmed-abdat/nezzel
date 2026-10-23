@@ -36,6 +36,8 @@ class DownloadNotifications(private val base: Context) {
         channel()
         // Retry reuses the job ID; its previous result no longer describes this attempt.
         manager.cancel(activeId(progress.jobId) xor Int.MIN_VALUE)
+        // WorkManager posts the returned notification after this call, so count it as shown already.
+        summary(including = progress.jobId)
         return ForegroundInfo(activeId(progress.jobId), notification(progress), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
     /** A paused event posts nothing here: the tagged [paused] notification is the only one, so Cancel can clear it. */
@@ -45,9 +47,41 @@ class DownloadNotifications(private val base: Context) {
         dismissPaused(progress.jobId)
         if (progress.phase == DownloadPhase.CANCELLED) manager.cancel(activeId(progress.jobId))
         else post(activeId(progress.jobId) xor Int.MIN_VALUE, notification(progress))
+        summary(excluding = progress.jobId)
     }
     /** A paused job has no worker, so no foreground service: its notification is plain and lives under the result ID. */
-    fun paused(progress: DownloadProgress) { post(activeId(progress.jobId), notification(progress), PAUSED_TAG) }
+    fun paused(progress: DownloadProgress) {
+        post(activeId(progress.jobId), notification(progress), PAUSED_TAG)
+        summary(excluding = progress.jobId)
+    }
+    /** This job's worker has returned: WorkManager drops its active notification, so the group stops counting it. */
+    fun settled(jobId: String) = summary(excluding = jobId)
+
+    /**
+     * One group for the live job notifications, with a "2 downloads running" summary once two are shown (API 24+ bundles
+     * them under it). The summary then stays while any job remains and goes with the last one: cancelling it earlier would
+     * take the group's plain (non-foreground) children with it, and the shade hides a summary over a single child anyway.
+     */
+    private fun summary(including: String? = null, excluding: String? = null) = synchronized(SUMMARY_LOCK) {
+        val shown = try { manager.activeNotifications.toList() } catch (_: RuntimeException) { return@synchronized }
+        val ids = shown.filter { it.tag == null && it.notification.group == GROUP &&
+            it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }.map { it.id }.toMutableSet()
+        including?.let { ids += activeId(it) }
+        excluding?.let { ids -= activeId(it) }
+        val posted = shown.any { it.tag == SUMMARY_TAG && it.id == SUMMARY_ID }
+        when {
+            ids.isEmpty() -> if (posted) manager.cancel(SUMMARY_TAG, SUMMARY_ID)
+            ids.size >= 2 || posted -> {
+                val ctx = context
+                val title = ctx.resources.getQuantityString(R.plurals.downloads_running, ids.size,
+                    NezzelFormat.count(ids.size, languageOf(ctx)))
+                post(SUMMARY_ID, NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(R.drawable.ic_stat_nezzel)
+                    .setContentTitle(title).setGroup(GROUP).setGroupSummary(true).setOnlyAlertOnce(true).setSilent(true)
+                    .setContentIntent(PendingIntent.getActivity(base, 0, Intent(base, MainActivity::class.java), FLAGS))
+                    .build(), SUMMARY_TAG)
+            }
+        }
+    }
     fun dismissPaused(jobId: String) { manager.cancel(PAUSED_TAG, activeId(jobId)) }
     private fun post(id: Int, notification: Notification, tag: String? = null) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(base,
@@ -66,6 +100,8 @@ class DownloadNotifications(private val base: Context) {
             .setStyle(NotificationCompat.BigTextStyle().bigText(description)).setOnlyAlertOnce(true)
             .setOngoing(!progress.terminal && !progress.paused).setAutoCancel(progress.terminal)
             .setContentIntent(PendingIntent.getActivity(base, 0, Intent(base, MainActivity::class.java), FLAGS))
+        // Live jobs share a group under one summary; results and paused rows stand alone, so the group counts only work in flight.
+        if (!progress.terminal && !progress.paused) builder.setGroup(GROUP)
         if (!progress.terminal) {
             // Paused keeps its last real percent as a still bar; waiting/restarting/queued show no number.
             if (!progress.paused) builder.setProgress(100, progress.visiblePercent ?: 0, progress.visiblePercent == null)
@@ -100,6 +136,11 @@ class DownloadNotifications(private val base: Context) {
         private fun activeId(id: String) = id.hashCode() and Int.MAX_VALUE
         /** Tags the paused notification so it never shares an ID with the foreground or result ones. */
         private const val PAUSED_TAG = "paused"
+        const val GROUP = "dev.ahmed.savlino.DOWNLOADS"
+        /** Tagged too: the summary's ID can never meet a job's hashed ID. */
+        const val SUMMARY_TAG = "summary"
+        const val SUMMARY_ID = 0
+        private val SUMMARY_LOCK = Any()
         fun openIntent(progress: DownloadProgress) = Intent(Intent.ACTION_VIEW)
             .setDataAndType(progress.publishedUri, progress.mimeType)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)

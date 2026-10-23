@@ -61,6 +61,25 @@ class WidgetTest {
         assertEquals(View.LAYOUT_DIRECTION_RTL, rendered.layoutDirection)
     }
 
+    @Test fun newestRunningJobLeadsWithACountOfTheOthersRunningButNotTheQueue() {
+        val older = job().copy(jobId = "older", filename = "older.mp4")
+        val newer = job(bytes = 60).copy(jobId = "newer", filename = "newer.mp4")
+        val queued = job(DownloadPhase.PREPARING).copy(jobId = "queued", filename = "queued.mp4", waiting = true)
+        val state = WidgetUiState.from(listOf(older, newer, queued))
+        assertEquals("newer.mp4", state.title)
+        assertEquals(1, state.more)
+        val rendered = view(state)
+        assertEquals("Downloading 60% · \u2066+1\u2069", status(rendered))
+        assertEquals("Downloads. \u2066newer.mp4\u2069. Downloading 60%. 1 more running",
+            rendered.findViewById<View>(R.id.widget_latest).contentDescription.toString())
+        val arabic = view(state, language = "ar")
+        assertEquals("جارٍ التنزيل \u206660%\u2069 · \u2066+1\u2069", status(arabic))
+        assertTrue(arabic.findViewById<View>(R.id.widget_latest).contentDescription.toString().endsWith("تنزيل آخر جارٍ"))
+        // One running job, or only a queue: no count.
+        assertEquals(0, WidgetUiState.from(listOf(older, queued)).more)
+        assertEquals("Queued", status(view(WidgetUiState.from(listOf(queued)))))
+    }
+
     @Test fun narrowHidesLatestAndActionsOpenTheActivityWithImmutableIntents() {
         assertEquals(View.GONE, view(WidgetUiState.from(job()), narrow = true).findViewById<View>(R.id.widget_latest).visibility)
         val rendered = view(WidgetUiState.from(job()))
