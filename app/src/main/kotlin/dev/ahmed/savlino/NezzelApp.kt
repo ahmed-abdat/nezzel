@@ -133,7 +133,10 @@ fun NezzelApp(
     }
     // Removing the old top-bar action must not give the URL editor implicit initial focus.
     // Keep a neutral focus target until the user chooses an input or navigation destination.
-    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline()) {
+    val artwork: suspend (String) -> android.graphics.Bitmap? = remember(links.downloads) {
+        val store = links.downloads?.artwork; { id -> store?.load(id) }
+    }
+    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline(), LocalJobArtwork provides artwork) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         // Onboarding replaces this composition in MainActivity. Other modals take priority;

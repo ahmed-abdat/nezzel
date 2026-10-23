@@ -10,7 +10,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -25,10 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -91,7 +97,7 @@ internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List
 internal val JobRowHeight = 72.dp
 
 /**
- * One flat row for every job state, on Home and in Downloads: kind tile, filename over one meta line, Pause/Resume and
+ * One flat row for every job state, on Home and in Downloads: artwork or kind tile, filename over one meta line, Pause/Resume and
  * Cancel at the end. The card itself is the progress: a tonal layer grows from the start edge to the real fraction
  * (owner 2026-10-23, option C). No fraction, no fill: waiting and restarting rows show an indeterminate hairline at the
  * bottom instead. Level 0 on a tonal fill, no shadow. Large text drops the tile and grows the row; buttons never stack.
@@ -117,17 +123,22 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
             // The tile gives way at large text and on narrow rows (phones under ~390dp), so the meta line keeps
             // percent · time left and "Joining audio and video…" keeps its one line.
             val tile = !isLargeText() && maxWidth >= 340.dp
+            val art = if (tile) rememberJobArtwork(job.jobId) else null
+            // A badge's ring takes the colour right behind the tile: the fill once it has passed the tile, else the row.
+            val behind = if (fraction != null && maxWidth * fraction >= Space.rowH + 40.dp)
+                fillColor(MaterialTheme.colorScheme, job.paused, light).compositeOver(tone) else tone
             if (fraction != null) JobFill(fraction, job.paused, light, Modifier.matchParentSize())
             // Waiting has nothing to show; every other live row without a fraction breathes so it never looks frozen.
             else if (!job.terminal && !job.saved && !job.waiting && job.phase != DownloadPhase.FAILED) JobPulse(reduced, Modifier.matchParentSize())
-            if (job.phase == DownloadPhase.FAILED) FailedRow(job, tile, onCancel, onRemove, onRetry)
+            if (job.phase == DownloadPhase.FAILED) FailedRow(job, tile, art, tone, onCancel, onRemove, onRetry)
             else {
                 Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
                     val audio = job.mimeType.startsWith("audio/")
-                    if (tile) JobThumb(job.kindIcon(),
+                    if (tile) JobThumb(art, job.kindIcon(),
                         if (audio) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                        if (audio) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer)
+                        if (audio) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                        if (audio) ThumbBadge.Audio else null, behind)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
                         FilenameText(job.filename)
                         JobMeta(job)
@@ -196,14 +207,42 @@ internal fun DownloadProgress.kindIcon(): Int = when {
     else -> R.drawable.ic_movie
 }
 
+/** The job's row artwork by id, read off the main thread (`downloads.artwork::load`); null keeps the kind icon. */
+val LocalJobArtwork = staticCompositionLocalOf<suspend (String) -> Bitmap?> { { null } }
+
+@Composable
+private fun rememberJobArtwork(jobId: String): ImageBitmap? {
+    val load = LocalJobArtwork.current
+    return produceState<ImageBitmap?>(null, jobId, load) { value = load(jobId)?.asImageBitmap() }.value
+}
+
+internal enum class ThumbBadge { Audio, Failed }
+
 /**
- * No remote artwork exists for a job yet, so a flat tile names the kind of file instead of faking a frame.
- * Decorative and not clickable: the ring's Cancel is the row's only control while it runs.
+ * The options sheet's own artwork, cropped to a square, when the job kept one; else a flat tile names the kind of file
+ * instead of faking a frame. Over artwork a small badge keeps what the icon said (audio, failed), ringed in the colour
+ * behind it. Decorative and not clickable: the filename names the row.
  */
 @Composable
-private fun JobThumb(icon: Int, container: Color, content: Color) {
-    Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.medium).background(container), contentAlignment = Alignment.Center) {
+private fun JobThumb(art: ImageBitmap?, icon: Int, container: Color, content: Color, badge: ThumbBadge?, ring: Color) {
+    if (art == null) return Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.medium).background(container), contentAlignment = Alignment.Center) {
         Icon(painterResource(icon), null, Modifier.size(24.dp), tint = content)
+    }
+    Box(Modifier.testTag("job-art").size(40.dp)) {
+        Image(art, null, Modifier.matchParentSize().clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
+        if (badge != null) Box(Modifier.testTag("job-art-badge-${badge.name.lowercase()}").align(Alignment.BottomEnd)
+            .offset(3.dp, 3.dp).size(18.dp).background(ring, CircleShape).padding(2.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+            val scheme = MaterialTheme.colorScheme
+            when (badge) {
+                ThumbBadge.Audio -> Box(Modifier.matchParentSize().background(scheme.tertiaryContainer), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_music), null, Modifier.size(10.dp), tint = scheme.onTertiaryContainer)
+                }
+                // The error glyph's disc fills the badge; its "!" is cut out, so the light layer under it shows through.
+                ThumbBadge.Failed -> Box(Modifier.matchParentSize().background(scheme.onError), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_error), null, Modifier.requiredSize(17.dp), tint = scheme.error)
+                }
+            }
+        }
     }
 }
 
@@ -409,11 +448,12 @@ private fun SavedCheck(size: androidx.compose.ui.unit.Dp) {
  * Try again is a tonal ↻ button beside Remove (or Cancel while awaiting its schedule); no pill under the text.
  */
 @Composable
-private fun FailedRow(job: DownloadProgress, tile: Boolean, onCancel: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit) {
+private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, ring: Color, onCancel: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit) {
     val context = LocalContext.current
     Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),
         horizontalArrangement = Arrangement.spacedBy(Space.inline), verticalAlignment = Alignment.CenterVertically) {
-        if (tile) JobThumb(R.drawable.ic_error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+        if (tile) JobThumb(art, R.drawable.ic_error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer,
+            ThumbBadge.Failed, ring)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
             FilenameText(job.filename)
             Text(DownloadNotifications.phase(context, job), color = MaterialTheme.colorScheme.error,

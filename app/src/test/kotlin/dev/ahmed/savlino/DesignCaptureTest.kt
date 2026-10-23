@@ -102,6 +102,40 @@ class DesignCaptureTest {
         }
     }
 
+    /**
+     * Rows with real artwork: photos from NEZZEL_ART_DIR (local, never committed), the last row without any so the
+     * kind icon shows next to them. Skipped unless both env vars are set.
+     */
+    @Test fun thumbRows() {
+        val art = System.getenv("NEZZEL_ART_DIR")?.let(::File)
+        assumeTrue(dir != null && art != null)
+        val files = mapOf("a" to "beach.jpg", "b" to "concert.jpg", "c" to "cooking.jpg", "d" to "tall.jpg", "e" to "city.jpg")
+        val load: suspend (String) -> Bitmap? = { id -> files[id]?.let { android.graphics.BitmapFactory.decodeFile(File(art, it).path) } }
+        composable("thumb-rows-384") { lang ->
+            val ar = lang == "ar"
+            val running = DownloadProgress("a", if (ar) "عطلة العائلة.mp4" else "Family holiday.mp4", DownloadPhase.DOWNLOADING,
+                bytes = 42_000_000, total = Size.Exact(100_000_000), bytesPerSecond = 2_500_000.0, remainingTransferSeconds = 30, stalled = false)
+            val paused = DownloadProgress("b", if (ar) "أغنية المساء.m4a" else "Evening song.m4a", DownloadPhase.PREPARING, bytes = 3_200_000,
+                total = Size.Exact(5_000_000), paused = true, hasPartial = true, mimeType = "audio/mp4")
+            val waiting = DownloadProgress("c", if (ar) "وصفات سريعة.mp4" else "Recipe tips.mp4", DownloadPhase.PREPARING, waiting = true,
+                hasPartial = true, total = Size.Exact(100_000_000), qualityHeight = 720)
+            val restarting = DownloadProgress("d", if (ar) "قدر الطبخ.mp4" else "Cooking pot.mp4", DownloadPhase.PREPARING,
+                total = Size.Exact(100_000_000), restartEpoch = 1, qualityHeight = 720)
+            val failed = DownloadProgress("e", if (ar) "المدينة ليلًا.mp4" else "City at night.mp4", DownloadPhase.FAILED,
+                error = DownloadError.Network, retryable = true)
+            val noArt = DownloadProgress("f", if (ar) "مقطع بلا صورة.mp4" else "No picture.mp4", DownloadPhase.DOWNLOADING,
+                bytes = 70_000_000, total = Size.Exact(100_000_000), bytesPerSecond = 2_500_000.0, remainingTransferSeconds = 12, stalled = false)
+            androidx.compose.runtime.CompositionLocalProvider(dev.ahmed.savlino.downloads.LocalOffline provides true,
+                dev.ahmed.savlino.ui.theme.LocalReducedMotion provides true, dev.ahmed.savlino.downloads.LocalJobArtwork provides load) {
+                androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                    for (job in listOf(running, paused, waiting, restarting, failed, noArt))
+                        dev.ahmed.savlino.downloads.JobRow(job, {}, {}, {})
+                }
+            }
+        }
+    }
+
     @Test fun home() {
         assumeTrue(dir != null)
         variants { lang, dark ->
