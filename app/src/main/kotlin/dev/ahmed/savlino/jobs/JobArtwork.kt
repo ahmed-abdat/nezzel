@@ -92,7 +92,10 @@ class JobArtwork internal constructor(filesDir: File, private val codec: Preview
  * download is confirmed. A confirm that beats the background encode encodes the held bitmap itself.
  */
 object SheetArtwork {
-    private class Entry(@Volatile var bitmap: Bitmap?) { @Volatile var bytes: ByteArray? = null }
+    private class Entry(var bitmap: Bitmap?) { var bytes: ByteArray? = null }
+
+    /** Tests swap in a gated encoder to pin the background-encode vs confirm interleaving. */
+    @androidx.annotation.VisibleForTesting internal var encoder: (Bitmap) -> ByteArray? = { JobArtwork.encode(it) }
 
     private val pending = object : LinkedHashMap<String, Entry>(4, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>) = size > 2
@@ -112,10 +115,10 @@ object SheetArtwork {
     /** Off main. Kept (not removed) so a second format from the same sheet also gets artwork; the cap bounds it. */
     internal fun take(inspectionId: String): ByteArray? {
         val entry = synchronized(pending) { pending[inspectionId] } ?: return null
-        entry.bytes?.let { return it }
-        val bytes = entry.bitmap?.let(JobArtwork::encode) ?: return null
-        entry.bytes = bytes; entry.bitmap = null
-        return bytes
+        // One snapshot per entry: a confirm that races the background encode waits for it and gets its bytes.
+        return synchronized(entry) {
+            entry.bytes ?: entry.bitmap?.let(encoder)?.also { entry.bytes = it; entry.bitmap = null }
+        }
     }
 
     internal fun clear() = synchronized(pending) { pending.clear() }

@@ -25,7 +25,7 @@ class JobArtworkTest {
     private val app = ApplicationProvider.getApplicationContext<android.app.Application>()
     private val root get() = File(app.filesDir, "job-art")
 
-    @After fun tearDown() { SheetArtwork.clear(); root.deleteRecursively() }
+    @After fun tearDown() { SheetArtwork.clear(); SheetArtwork.encoder = { JobArtwork.encode(it) }; root.deleteRecursively() }
 
     private fun noisy(width: Int, height: Int): Bitmap {
         val random = Random(7)
@@ -139,5 +139,29 @@ class JobArtworkTest {
         assertTrue(bytes.size in 1..JobArtwork.MAX_BYTES)
         assertTrue(SheetArtwork.take("early") === bytes)
         assertFalse(bitmap.isRecycled)
+    }
+
+    @Test fun confirmRacingTheBackgroundEncodeGetsItsBytes() {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        SheetArtwork.encoder = { bitmap ->
+            if (calls.incrementAndGet() == 1) { entered.countDown(); release.await() }
+            JobArtwork.encode(bitmap)
+        }
+        SheetArtwork.show("race", noisy(320, 180))
+        val background = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val confirm = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val encoded = background.submit<ByteArray?> { SheetArtwork.take("race") }
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)) // background encode is mid-flight
+            val confirmed = confirm.submit<ByteArray?> { SheetArtwork.take("race") }
+            Thread.sleep(100)
+            assertFalse(confirmed.isDone) // the confirm waits instead of reading a half-updated entry
+            release.countDown()
+            val bytes = encoded.get(5, java.util.concurrent.TimeUnit.SECONDS)!!
+            assertTrue(confirmed.get(5, java.util.concurrent.TimeUnit.SECONDS) === bytes)
+            assertEquals(1, calls.get())
+        } finally { release.countDown(); background.shutdownNow(); confirm.shutdownNow() }
     }
 }
