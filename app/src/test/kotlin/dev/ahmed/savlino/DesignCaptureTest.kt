@@ -211,7 +211,17 @@ class DesignCaptureTest {
         } } finally { RuntimeEnvironment.setFontScale(1f) }
     }
 
-    private fun readyLinks(): dev.ahmed.savlino.ui.LinkViewModel {
+    /** Item 8, Download on a stale sheet: "Checking again…" while the link is read again, then the note when the pick changed. */
+    @Test fun staleSheet() {
+        assumeTrue(dir != null)
+        for (changed in listOf(false, true)) composable(if (changed) "stale-changed" else "stale-refreshing") { lang ->
+            val vm = androidx.compose.runtime.remember { readyLinks(stale = if (changed) Stale.CHANGED else Stale.HELD) }
+            androidx.compose.material3.Surface { dev.ahmed.savlino.ui.OptionsSheetContent(vm, lang) {} }
+        }
+    }
+    private enum class Stale { HELD, CHANGED }
+
+    private fun readyLinks(stale: Stale? = null): dev.ahmed.savlino.ui.LinkViewModel {
         val url = "https://example.org/reel"
         val source = dev.ahmed.savlino.domain.LinkRevision(dev.ahmed.savlino.domain.LinkInput.parse(url)!!, 1)
         fun v(id: String, side: Int, long: Int, codec: String, kb: Long) = dev.ahmed.savlino.domain.Format(id, "mp4", true, false,
@@ -223,11 +233,24 @@ class DesignCaptureTest {
         val presets = listOf(dev.ahmed.savlino.domain.Preset.BEST to "h1080", dev.ahmed.savlino.domain.Preset.BALANCED to "h720",
             dev.ahmed.savlino.domain.Preset.SMALL to "h360", dev.ahmed.savlino.domain.Preset.AUDIO_M4A to "a45")
             .map { dev.ahmed.savlino.domain.PresetChoice(it.first, it.second) }
-        val engine = dev.ahmed.savlino.engine.FakeEngine(dev.ahmed.savlino.engine.InspectResult.Success(dev.ahmed.savlino.domain.Inspection(
+        fun inspection(rows: List<dev.ahmed.savlino.domain.Format>, presets: List<dev.ahmed.savlino.domain.PresetChoice>) =
+            dev.ahmed.savlino.engine.InspectResult.Success(dev.ahmed.savlino.domain.Inspection(
             source, "v1", rows, presets, title = "Sunset over the old harbour", uploader = "Harbour club", durationSeconds = 42,
-            roughSizeBytes = mapOf("mp3-128" to 680_000L))))
-        return dev.ahmed.savlino.ui.LinkViewModel(androidx.lifecycle.SavedStateHandle(), engine = engine, currentEngineVersion = { "v1" }).apply {
+            roughSizeBytes = mapOf("mp3-128" to 680_000L)))
+        val first = inspection(rows, presets)
+        // The fresh read no longer offers the 1080p rows the sheet showed.
+        val fresh = inspection(rows.filterNot { it.id.endsWith("1080") }, presets.filterNot { it.formatId == "h1080" })
+        val engine = dev.ahmed.savlino.engine.FakeEngine(first, inspectionScripts = mapOf(
+            "2" to dev.ahmed.savlino.engine.FakeEngine.InspectionScript(fresh, awaitRelease = stale == Stale.HELD)))
+        var operation = 0
+        var clock = 0L
+        return dev.ahmed.savlino.ui.LinkViewModel(androidx.lifecycle.SavedStateHandle(), engine = engine, currentEngineVersion = { "v1" },
+            newOperationId = { (++operation).toString() }, now = { clock }).apply {
             edit(url); checkLink(); shadowOf(Looper.getMainLooper()).idle(); selectPreset(dev.ahmed.savlino.domain.Preset.BEST)
+            if (stale != null) {
+                clock += dev.ahmed.savlino.ui.SHEET_FRESH_MS
+                confirmDownload(); shadowOf(Looper.getMainLooper()).idle()
+            }
         }
     }
 

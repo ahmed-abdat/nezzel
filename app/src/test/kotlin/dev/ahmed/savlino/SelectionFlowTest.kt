@@ -175,7 +175,8 @@ class SelectionFlowTest {
         val vm = model(version = { version }); check(vm)
         vm.showMoreFormats()
         version = "fixture-v2"
-        vm.confirmDownload()
+        // Item 8: Download reads the link again; the fresh read still reports v1, so nothing is confirmed.
+        vm.confirmDownload(); shadowOf(Looper.getMainLooper()).idle()
         assertNull(vm.takeConfirmedCommand()); assertNull(vm.selectedFormat)
         assertTrue(vm.optionsState is OptionsState.Error)
         assertFalse(vm.moreFormats)

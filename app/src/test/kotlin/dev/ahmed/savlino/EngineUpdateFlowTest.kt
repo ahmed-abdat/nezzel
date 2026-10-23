@@ -144,10 +144,12 @@ class EngineUpdateFlowTest {
             vm.edit("https://example.com/video"); vm.checkLink(); pump()
             assertTrue(vm.downloadEnabled)
             runBlocking { assertFalse(coordinator.maintenance.updateNow()) }; pump()
-            assertFalse(vm.downloadEnabled)
-            vm.confirmDownload()
-            assertEquals(OptionsState.Error(DownloadError.FormatExpired), vm.optionsState)
-            assertTrue(store.all().isEmpty())
+            // Item 8: the replaced binary makes the sheet stale. Download reads the link again on it and queues the fresh row.
+            assertTrue(vm.downloadEnabled)
+            vm.confirmDownload(); pump()
+            assertEquals(2, engine.inspected.size)
+            runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } } }
+            assertEquals("2026.08.19", store.all().single().engineVersion)
         } finally { vm.dismissOptions(); store.close() }
     }
     @Test fun busyUpdateCannotRestoreStaleConfirmationAfterReplacementVersionReadFailed() {

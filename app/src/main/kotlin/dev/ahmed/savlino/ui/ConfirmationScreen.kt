@@ -41,14 +41,22 @@ fun ConfirmationScreen(links: LinkViewModel, language: String) {
             Text(stringResource(R.string.choice_confirmed), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.titleMedium)
         }
+        if (links.optionsChanged) {
+            Text(stringResource(R.string.options_changed), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.bodyMedium)
+        }
         val format = links.selectedFormat
         val roughBytes = format?.let(links::roughSizeBytes)
         val sized = format != null && (format.size != Size.Unknown || roughBytes != null)
-        val label = if (sized) stringResource(R.string.download_size, sizeLabel(format!!, language, roughBytes)) else stringResource(R.string.download)
+        val label = if (links.refreshing) stringResource(R.string.checking_again)
+            else if (sized) stringResource(R.string.download_size, sizeLabel(format!!, language, roughBytes)) else stringResource(R.string.download)
         // TalkBack hears "About 4.7 MB, estimated", never the ≈ symbol.
-        val spoken = if (sized) stringResource(R.string.download_size, spokenSize(format!!, language, roughBytes)) else label
+        val spoken = if (sized && !links.refreshing) stringResource(R.string.download_size, spokenSize(format!!, language, roughBytes)) else label
         Button(onClick = links::requestDownload, enabled = links.downloadEnabled,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics { contentDescription = spoken }) { Text(label) }
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
+                contentDescription = spoken
+                if (links.refreshing) liveRegion = LiveRegionMode.Polite
+            }) { Text(label) }
     }
 }
 

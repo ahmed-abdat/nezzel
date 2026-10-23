@@ -8,6 +8,25 @@ class FormatChoicesTest {
     private fun video(id: String, width: Int?, height: Int, codec: String = "avc1", size: Size = Size.Unknown) =
         Format(id, "mp4", true, true, videoCodec = codec, width = width, height = height, size = size)
 
+    /** Item 8: a stale sheet downloads without asking again only when the fresh row is the same choice. */
+    @Test fun sameChoiceNeedsTheSameIdsTypeHeightCodecsAndNoMuchBiggerFile() {
+        val picked = Format("137", "mp4", true, true, videoCodec = "avc1.640028", audioCodec = "mp4a.40.2", height = 1080,
+            audioFormatId = "140-1-drc", requiresMerge = true)
+        assertTrue(FormatChoices.sameChoice(picked, picked.copy(), 1_000, 1_250))
+        assertTrue(FormatChoices.sameChoice(picked, picked.copy(width = 1920, bitrateKbps = 4000), null, 9_999))
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(), 1_000, 1_251)) // > 25% bigger than shown
+        assertTrue(FormatChoices.sameChoice(picked, picked.copy(), 1_000, 400)) // smaller is fine
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(height = 720), null, null))
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(videoCodec = "vp09.02.51.10"), null, null)) // HDR
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(audioCodec = "opus"), null, null))
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(audioFormatId = "140-0"), null, null)) // other dub
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(container = "mkv"), null, null))
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(id = "137b"), null, null))
+        assertFalse(FormatChoices.sameChoice(picked, picked.copy(sourceFormatId = "399"), null, null))
+        val mp3 = Format("a-mp3", "mp3", false, true, conversion = AudioConversion.MP3_128, sourceFormatId = "140", sourceContainer = "m4a")
+        assertFalse(FormatChoices.sameChoice(mp3, mp3.copy(conversion = AudioConversion.MP3_320), null, null))
+    }
+
     @Test fun tiersFollowTheQuality() {
         assertEquals(FormatChoices.Tier.UHD, FormatChoices.tier(2160))
         assertEquals(FormatChoices.Tier.FULL_HD, FormatChoices.tier(1080))

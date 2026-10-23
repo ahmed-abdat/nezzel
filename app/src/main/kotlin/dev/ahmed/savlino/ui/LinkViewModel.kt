@@ -18,6 +18,7 @@ import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
+import dev.ahmed.savlino.engine.YtdlpInfoCache
 import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
@@ -79,6 +80,8 @@ internal fun copyPreview(preview: OwnedImagePreview): ImageBitmap? = (preview as
     ?.takeUnless { it.isRecycled }?.copy(android.graphics.Bitmap.Config.ARGB_8888, false)?.asImageBitmap()
 
 private const val IMAGE_TITLE_MAX = 80
+/** A sheet older than this reads its link again on Download: the engine's info JSON for it lasts [YtdlpInfoCache.TTL_MS]. */
+internal const val SHEET_FRESH_MS = YtdlpInfoCache.TTL_MS - 5 * 60 * 1000L
 /** The only link a Facebook video post may hand to yt-dlp: no other host, path or query parameter. */
 private val CANONICAL_WATCH = Regex("https://www\\.facebook\\.com/watch/\\?v=[0-9]{1,25}")
 /** Readers that hand a proven video post back as the user's own link. */
@@ -114,6 +117,7 @@ class LinkViewModel(
     initialHeight: Int? = null,
     private val rememberHeight: (Int) -> Unit = {},
     private val earlyPreview: suspend (ValidatedLink) -> EarlyPreview? = { null },
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -369,8 +373,15 @@ class LinkViewModel(
                 .maxByOrNull { FormatChoices.quality(it)!! }
     }
     val confirmed get() = submitted
-    val downloadEnabled get() = !submitted && !engineUpdating && engine.isAvailable && selectedFormat != null &&
-        inspection?.let { currentSource()?.matches(confirmAgainst ?: return@let false) == true && it.engineVersion == engineVersion() } == true
+    /** A stale sheet stays tappable: Download reads the link again first (see [confirmDownload]). An unknown engine version can't confirm anything. */
+    val downloadEnabled get() = !submitted && !refreshing && !engineUpdating && engine.isAvailable && selectedFormat != null &&
+        inspection != null && engineVersion() != null && confirmAgainst?.let { currentSource()?.matches(it) } == true
+    /** Download was tapped on a stale sheet; the same link is being read again before anything is queued. */
+    var refreshing by mutableStateOf(false); private set
+    /** That fresh read no longer offered the same choice, so the sheet shows the fresh options instead. */
+    var optionsChanged by mutableStateOf(false); private set
+    /** When the sheet's options were read; the engine keeps their info JSON for [YtdlpInfoCache.TTL_MS]. */
+    private var readAt: Long? = null
     var suggestionsEnabled by mutableStateOf(true)
     var automaticOptions by mutableStateOf(true)
     var editorFocused by mutableStateOf(false)
@@ -730,34 +741,36 @@ class LinkViewModel(
                 when {
                     !returned.source.matches(source) -> optionsState = OptionsState.Error(DownloadError.FormatExpired)
                     displayFormats(returned).isEmpty() -> optionsState = OptionsState.Error(DownloadError.NoFormats)
-                    else -> {
-                        val ready = OptionsState.Ready(returned, origin)
-                        optionsState = ready
-                        downloads?.let { coordinator -> viewModelScope.launch {
-                            val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
-                            if (optionsState === ready) savedFormats = found
-                        } }
-                        // Video links prefer remembered/Balanced, then the engine's BEST, never audio;
-                        // a link with no video at all (TikTok photo slideshow) preselects its first audio row.
-                        val options = presetOptions
-                        val preferred = if (formatOptions.any { it.hasVideo }) lastUsedPreset ?: Preset.BALANCED
-                            else options.firstOrNull()?.first
-                        val initial = options.singleOrNull { it.first == preferred }
-                            ?: options.firstOrNull { it.first == Preset.BEST }
-                        val remembered = lastUsedFormat
-                        selectedId = remembered?.id ?: initial?.second?.id
-                        selectedPreset = if (remembered != null) {
-                            options.firstOrNull { it.second.id == remembered.id && it.first == lastUsedPreset }
-                                ?.first ?: options.firstOrNull { it.second.id == remembered.id }?.first
-                        } else initial?.first
-                        // A single selectable row (LinkedIn/X lone "Video") is always the choice.
-                        if (selectedId == null) eligibleFormats.singleOrNull()?.let { only ->
-                            selectedId = only.id
-                            selectedPreset = options.firstOrNull { it.second.id == only.id }?.first
-                        }
-                    }
+                    else -> showReady(returned, origin)
                 }
             }
+        }
+    }
+    private fun showReady(returned: Inspection, origin: LinkRevision?) {
+        val ready = OptionsState.Ready(returned, origin)
+        readAt = now()
+        optionsState = ready
+        downloads?.let { coordinator -> viewModelScope.launch {
+            val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
+            if (optionsState === ready) savedFormats = found
+        } }
+        // Video links prefer remembered/Balanced, then the engine's BEST, never audio;
+        // a link with no video at all (TikTok photo slideshow) preselects its first audio row.
+        val options = presetOptions
+        val preferred = if (formatOptions.any { it.hasVideo }) lastUsedPreset ?: Preset.BALANCED
+            else options.firstOrNull()?.first
+        val initial = options.singleOrNull { it.first == preferred }
+            ?: options.firstOrNull { it.first == Preset.BEST }
+        val remembered = lastUsedFormat
+        selectedId = remembered?.id ?: initial?.second?.id
+        selectedPreset = if (remembered != null) {
+            options.firstOrNull { it.second.id == remembered.id && it.first == lastUsedPreset }
+                ?.first ?: options.firstOrNull { it.second.id == remembered.id }?.first
+        } else initial?.first
+        // A single selectable row (LinkedIn/X lone "Video") is always the choice.
+        if (selectedId == null) eligibleFormats.singleOrNull()?.let { only ->
+            selectedId = only.id
+            selectedPreset = options.firstOrNull { it.second.id == only.id }?.first
         }
     }
     private fun currentSource() = LinkInput.parse(text)?.let { LinkRevision(it, revision) }
@@ -783,13 +796,13 @@ class LinkViewModel(
         return videos + audio
     }
     fun selectFormat(id: String) {
-        if (!submitted && eligibleFormats.any { it.id == id }) {
+        if (!submitted && !refreshing && eligibleFormats.any { it.id == id }) {
             if (selectedId != id) pendingPermissionChoice = null
             selectedId = id; selectedPreset = null
         }
     }
     fun selectPreset(preset: Preset) {
-        if (submitted) return
+        if (submitted || refreshing) return
         presetOptions.singleOrNull { it.first == preset }?.let {
             if (selectedId != it.second.id) pendingPermissionChoice = null
             selectedId = it.second.id; selectedPreset = preset
@@ -844,21 +857,27 @@ class LinkViewModel(
         old?.let { if (image) images?.cancel(it) else engine.cancel(it) }
         endRace()
         selectedId = null; selectedPreset = null; command = null; submissionId = null; submitted = false; moreFormats = false
+        refreshing = false; optionsChanged = false; readAt = null
         savedFormats = emptyMap()
         optionsState = OptionsState.Hidden
     }
     /** Consume the immutable confirmation exactly once. */
     @Synchronized fun takeConfirmedCommand(): DownloadCommand? = command.also { command = null }
-    @Synchronized fun confirmDownload() {
-        if (submitted || engineUpdating) return
+    @Synchronized fun confirmDownload() = confirmDownload(refreshed = false)
+    /** [refreshed]: this tap already read the link again, so a sheet that is still stale fails instead of reading again. */
+    @Synchronized private fun confirmDownload(refreshed: Boolean) {
+        if (submitted || refreshing || engineUpdating) return
         val inspected = inspection ?: return
         val current = currentSource() ?: return
         val origin = confirmAgainst ?: return
-        if (!engine.isAvailable || inspected.engineVersion != engineVersion() || !origin.matches(current)) {
+        val version = engineVersion()
+        val stale = inspected.engineVersion != version || readAt.let { it == null || now() - it >= SHEET_FRESH_MS }
+        if (!engine.isAvailable || version == null || !origin.matches(current) || (stale && refreshed)) {
             failConfirmation(if (!engine.isAvailable) DownloadError.EngineUnavailable else DownloadError.FormatExpired)
             return
         }
         val row = selectedFormat ?: return
+        if (stale) return refreshBeforeDownload(row)
         // A resolved watch link is the job's source; the field keeps showing the user's own link.
         val jobSource = if ((optionsState as? OptionsState.Ready)?.resolvedFrom != null) inspected.source else current
         when (val result = DownloadCommand.confirm(UUID.randomUUID().toString(), inspected, jobSource, row.id, "Nezzel")) {
@@ -901,6 +920,43 @@ class LinkViewModel(
             ConfirmResult.Stale -> failConfirmation(DownloadError.FormatExpired)
             is ConfirmResult.Invalid -> failConfirmation(result.reason)
         }
+    }
+    /**
+     * Download on a stale sheet (engine updated, or options older than [SHEET_FRESH_MS]) reads the same link again on
+     * the normal path (NPE first on YouTube, then yt-dlp), whatever "Load options automatically" says: the user tapped.
+     * It downloads only when the fresh read offers the same choice, and always the fresh row (rule 3); otherwise the
+     * fresh options show with a note and the user picks again.
+     */
+    private fun refreshBeforeDownload(picked: Format) {
+        val ready = optionsState as? OptionsState.Ready ?: return
+        val source = ready.inspection.source
+        val pickedBytes = shownBytes(ready.inspection, picked)
+        val preset = selectedPreset
+        val id = newOperationId()
+        operationId = id
+        refreshing = true
+        inspectionJob = viewModelScope.launch {
+            val read = readLegacy(source, id)
+            if (operationId != id) return@launch // Edited or dismissed meanwhile: invalidation already reset the sheet.
+            refreshing = false
+            showLegacy(read, id, source, ready.resolvedFrom, noMedia = false)
+            // The read landed only if its inspection is the one now on screen (not an error, not a dropped late result).
+            val fresh = (read.result as? InspectResult.Success)?.inspection
+                ?.takeIf { (optionsState as? OptionsState.Ready)?.inspection === it } ?: return@launch
+            val row = selectable(fresh).singleOrNull { it.id == picked.id }
+            if (row == null || !FormatChoices.sameChoice(picked, row, pickedBytes, shownBytes(fresh, row))) {
+                optionsChanged = true
+                return@launch
+            }
+            selectedId = row.id
+            selectedPreset = preset?.takeIf { choice -> presetOptions.any { it.first == choice && it.second.id == row.id } }
+            confirmDownload(refreshed = true)
+        }
+    }
+    private fun shownBytes(from: Inspection, format: Format): Long? = when (val size = format.size) {
+        is Size.Exact -> size.bytes
+        is Size.Estimated -> size.bytes
+        Size.Unknown -> from.roughSizeBytes[format.id]
     }
     fun cancelDownload(id: String) {
         downloads?.let { coordinator ->
