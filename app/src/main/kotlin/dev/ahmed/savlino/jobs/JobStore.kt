@@ -203,10 +203,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     @Synchronized fun startTransfer(jobId: String, recipe: String? = null): Boolean {
         scrubExpiredSources()
+        val epoch = Math.addExact(get(jobId)?.restartEpoch ?: 0, 1)
         return transition(jobId, setOf(JobStage.ENQUEUED), JobStage.TRANSFERRING,
             ContentValues().apply {
                 put("resume_recipe", recipe)
-                put("restart_epoch", Math.addExact(get(jobId)?.restartEpoch ?: 0, 1))
+                put("restart_epoch", epoch)
             })
     }
     @Synchronized internal fun restartTransfer(jobId: String): Long? {
@@ -344,15 +345,29 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     private fun scrubExpiredSources() {
-        val cutoff = System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS
-        val expired = writableDatabase.query("jobs", arrayOf("job_id"),
-            "stage IN ('ENQUEUED','PAUSED','TRANSFERRING') AND created_at < ?", arrayOf(cutoff.toString()),
-            null, null, null).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
-        writableDatabase.execSQL("UPDATE jobs SET stage='FAILED', error='FormatExpired', source_url=NULL, " +
-            "retryable=0, has_partial=0, updated_at=? WHERE stage IN ('ENQUEUED','PAUSED','TRANSFERRING') AND created_at < ?",
-            arrayOf(System.currentTimeMillis(), cutoff))
-        for (id in expired) { infoCache.remove(id); cleanupJobStaging(jobRoot, id) }
-        writableDatabase.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0 " +
+        val cutoff = (System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS).toString()
+        val live = "stage IN ('ENQUEUED','PAUSED','TRANSFERRING') AND created_at < ?"
+        val db = writableDatabase
+        fun expired() = db.query("jobs", arrayOf("job_id"), live, arrayOf(cutoff), null, null, null)
+            .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
+        val changed = ArrayList<String>()
+        if (expired().isNotEmpty()) {
+            // Another helper (own monitor) may move a row to STAGED meanwhile: only rows this UPDATE changed lose staging.
+            db.beginTransaction()
+            try {
+                for (id in expired()) {
+                    if (db.update("jobs", ContentValues().apply {
+                            put("stage", JobStage.FAILED.name); put("error", DownloadError.FormatExpired.name)
+                            putNull("source_url"); put("retryable", 0); put("has_partial", 0)
+                            put("updated_at", System.currentTimeMillis())
+                        }, "job_id = ? AND $live", arrayOf(id, cutoff)) == 1) changed += id
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        }
+        // A live writer in this process deletes its own staging once the engine has exited.
+        for (id in changed) { infoCache.remove(id); if (id !in liveWriters) cleanupJobStaging(jobRoot, id) }
+        db.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0 " +
             "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ?", arrayOf(cutoff))
     }
 
@@ -372,6 +387,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             "pending_uri, display_name, created_at, updated_at, error, retryable"
 
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
+        /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
+        internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,

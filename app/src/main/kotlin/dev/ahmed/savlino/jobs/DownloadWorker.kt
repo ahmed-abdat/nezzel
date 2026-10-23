@@ -30,7 +30,9 @@ class DownloadWorker(context: Context, params: WorkerParameters,
             if (event.terminal) notifications.finished(event)
             if (!isStopped) persistence.report(event)
         }
-        if (row?.stage == JobStage.ENQUEUED) return Result.retry()
+        // A stopped worker's result is ignored; WorkManager reschedules it.
+        if (row?.stage == JobStage.ENQUEUED)
+            return if (!isStopped && coordinator.continueAfterProgress(id)) Result.success() else Result.retry()
         return if (row?.stage in setOf(JobStage.COMPLETED, JobStage.CANCELLED, JobStage.PAUSED)) Result.success() else Result.failure()
     }
     class Factory(private val coordinator: DownloadCoordinator) : WorkerFactory() {

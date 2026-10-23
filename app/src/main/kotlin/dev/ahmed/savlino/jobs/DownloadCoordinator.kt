@@ -45,6 +45,10 @@ class DownloadCoordinator(
     private val activeDone = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     private val downloading = ConcurrentHashMap.newKeySet<String>()
     private val active = ConcurrentHashMap<String, CancellationSignal>()
+    /** Post-processing has started: the staged output is complete and a pause would discard it. */
+    private val postProcessing = ConcurrentHashMap.newKeySet<String>()
+    /** Requeued with more bytes on disk than this attempt started with. */
+    private val progressed = ConcurrentHashMap.newKeySet<String>()
     private val mutableProgress = MutableStateFlow<List<DownloadProgress>>(emptyList())
     val progress: StateFlow<List<DownloadProgress>> = mutableProgress.asStateFlow()
     private val finishedEvents = kotlinx.coroutines.flow.MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 100)
@@ -74,8 +78,7 @@ class DownloadCoordinator(
                 if (row.stage == JobStage.ENQUEUED) {
                     updateQueue(fromRecord(row))
                     try { schedule(row.jobId) }
-                    catch (_: Exception) { updateQueue(DownloadProgress(row.jobId, row.filename, DownloadPhase.FAILED,
-                        error = DownloadError.ExecutionRestricted, awaitingSchedule = true, waiting = true)) }
+                    catch (_: Exception) { updateQueue(scheduleFailed(row)) }
                 }
                 else if (row.stage.terminal || row.stage == JobStage.PAUSED) update(fromRecord(row))
             }
@@ -91,10 +94,10 @@ class DownloadCoordinator(
             // A scheduling failure leaves a durable ENQUEUED row for startup to retry.
             if (inserted) {
                 store.prepareInfoJson(command.jobId) { engine.prepareDownload(command) }
-                updateQueue(fromRecord(store.get(command.jobId)!!))
+                val row = store.get(command.jobId)!!
+                updateQueue(fromRecord(row))
                 try { schedule(command.jobId) }
-                catch (_: Exception) { updateQueue(DownloadProgress(command.jobId, command.filename, DownloadPhase.FAILED,
-                    error = DownloadError.ExecutionRestricted, awaitingSchedule = true, waiting = true)) }
+                catch (_: Exception) { updateQueue(scheduleFailed(row)) }
             }
             inserted
         }
@@ -107,16 +110,32 @@ class DownloadCoordinator(
         catch (_: Exception) { emptyMap() }
     }
 
+    private fun request(id: String) = OneTimeWorkRequestBuilder<DownloadWorker>()
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS)
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setInputData(workDataOf(DownloadWorker.JOB_ID to id)).build()
+
     private fun schedule(id: String) {
         if (store.get(id)?.stage != JobStage.ENQUEUED) return
-        workManager().enqueueUniqueWork(id, ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<DownloadWorker>()
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setInputData(workDataOf(DownloadWorker.JOB_ID to id)).build())
-            .result.get()
+        workManager().enqueueUniqueWork(id, ExistingWorkPolicy.KEEP, request(id)).result.get()
         // A pause can win while an already-admitted scheduler is waiting on WorkManager.
         if (store.get(id)?.stage == JobStage.PAUSED) workManager().cancelUniqueWork(id).result.get()
     }
+
+    /**
+     * A requeue that kept more bytes than its attempt started with continues as fresh work after this one
+     * succeeds, so exponential backoff only grows across attempts without progress. False: use Result.retry().
+     */
+    internal fun continueAfterProgress(id: String): Boolean {
+        if (!progressed.remove(id) || store.get(id)?.stage != JobStage.ENQUEUED) return false
+        return try {
+            workManager().enqueueUniqueWork(id, ExistingWorkPolicy.APPEND_OR_REPLACE, request(id)).result.get()
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** Tests synchronize on the stop signal, never on engine.cancel (unregistered IDs are not cancelled). */
+    @androidx.annotation.VisibleForTesting internal fun stopRequested(id: String) = active[id]?.isCanceled == true
+    @androidx.annotation.VisibleForTesting internal fun isRunning(id: String) = active.containsKey(id)
 
     /** Immediate signal only: never delete staging while an engine or copy may still be writing. */
     fun requestCancellation(id: String) {
@@ -136,8 +155,7 @@ class DownloadCoordinator(
         updateQueue(fromRecord(row))
         try {
             schedule(id)
-        } catch (_: Exception) { updateQueue(DownloadProgress(id, row.filename, DownloadPhase.FAILED,
-            error = DownloadError.ExecutionRestricted, awaitingSchedule = true, waiting = true)) }
+        } catch (_: Exception) { updateQueue(scheduleFailed(row)) }
     }
 
     suspend fun cancel(id: String) = withContext(Dispatchers.IO) {
@@ -162,7 +180,7 @@ class DownloadCoordinator(
     suspend fun pause(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
         val paused = synchronized(userCancellation) {
-            if (id in userCancellation || !store.pause(id)) false
+            if (id in userCancellation || id in postProcessing || !store.pause(id)) false
             else { pauseRequests += id; stopEngine(id, cancelUnregistered = false); true }
         }
         if (!paused) return@withContext false
@@ -210,31 +228,37 @@ class DownloadCoordinator(
         foreground: suspend (DownloadProgress) -> Unit, report: suspend (DownloadProgress) -> Unit,
         finished: suspend (DownloadProgress) -> Unit): JobRecord? = withContext(Dispatchers.IO) {
         initializeUnderMaintenanceGate()
-        synchronized(userCancellation) { if (id in userCancellation) store.cancelEnqueued(id) }
-        val row = store.get(id) ?: return@withContext null
-        if (row.stage != JobStage.ENQUEUED) {
-            if (row.error == DownloadError.FormatExpired || id in userCancellation) {
-                val result = fromRecord(row)
-                update(result)
-                withContext(NonCancellable) { finished(result) }
-                userCancellation.remove(id)
-            }
-            return@withContext row
-        }
         val signal = CancellationSignal()
+        // Register before reading the row: a later pause/cancel reaches this attempt and resume waits for it.
         synchronized(userCancellation) {
-            if (active.putIfAbsent(id, signal) != null) return@withContext row
+            if (active.putIfAbsent(id, signal) != null) return@withContext store.get(id)
             activeDone[id] = CompletableDeferred()
+            JobStore.liveWriters += id
+            if (id in userCancellation) store.cancelEnqueued(id)
             if (id in userCancellation || id in pauseRequests) signal.cancel()
         }
+        progressed.remove(id)
         var transferredBytes = 0L
+        var startBytes = Long.MAX_VALUE
         fun stoppedError(): DownloadError = when {
             id in userCancellation -> DownloadError.Cancelled
             connectivityStopped(stopReason()) -> DownloadError.Network
             else -> DownloadError.Interrupted
         }
-        fun finishStopped() = finishStopped(id, stoppedError(), transferredBytes, requeueEmpty = true)
+        fun finishStopped() = finishStopped(id, stoppedError(), transferredBytes, requeueEmpty = true, startBytes = startBytes)
         try {
+            // A pause cancelled this WorkManager attempt before it registered; resume scheduled a new one.
+            currentCoroutineContext().ensureActive()
+            val row = store.get(id) ?: return@withContext null
+            if (row.stage != JobStage.ENQUEUED) {
+                if (row.error == DownloadError.FormatExpired || id in userCancellation) {
+                    val result = fromRecord(row)
+                    update(result)
+                    withContext(NonCancellable) { finished(result) }
+                    userCancellation.remove(id)
+                }
+                return@withContext row
+            }
             // Connectivity retries may outlive startup recovery in the same process.
             if (System.currentTimeMillis() - row.createdAt > JobStore.CONFIRMATION_LIFETIME_MS) {
                 // Linearize cancellation with expiry's terminal write. A received user cancel wins.
@@ -270,6 +294,7 @@ class DownloadCoordinator(
                 fun emit(event: DownloadProgress) = synchronized(delivery) {
                     if (event.phase in setOf(DownloadPhase.JOINING, DownloadPhase.CONVERTING, DownloadPhase.SAVING)) {
                         transferOpen = false
+                        postProcessing += id
                     }
                     if (event.phase != DownloadPhase.DOWNLOADING) metrics.clear()
                     delivery.offer(event)
@@ -285,12 +310,17 @@ class DownloadCoordinator(
                         check(store.discardInfoJson(id))
                     }
                     if (engineVersion != command.engineVersion) {
+                        // Cached signed URLs belong to the previous yt-dlp: extract again with this one.
+                        check(store.discardInfoJson(id))
                         command = (DownloadCommand.confirm(id, Inspection(command.source, engineVersion, listOf(command.format)),
                             command.source, command.format.id, row.filename.substringBeforeLast('.')) as ConfirmResult.Confirmed).command
                     }
                     if (!store.startTransfer(id, recipe)) return@coroutineScope
                     var epoch = store.get(id)!!.restartEpoch
                     var engineEpoch = 0L
+                    var checkedAt: Long? = null
+                    var stale = false
+                    var engineReturned = false
                     var hasPartial = row.hasPartial && row.resumeRecipe == recipe
                     val initial = DownloadProgress(id, row.filename, DownloadPhase.PREPARING,
                         restartEpoch = epoch, hasPartial = hasPartial,
@@ -302,6 +332,7 @@ class DownloadCoordinator(
                     val job = if (adopting) directories.createOrAdopt(id) else directories.create(id)
                     val partialBytes = stagingBytes(job.directory)
                     hasPartial = partialBytes > 0
+                    startBytes = partialBytes
                     store.transferPartial(id, hasPartial)
                     TransferSpacePolicy.check(space, command.format, partialBytes)
                     synchronized(userCancellation) {
@@ -311,13 +342,17 @@ class DownloadCoordinator(
                     }
                     val result = try { engine.download(command, job.directory) { event ->
                         synchronized(delivery) {
-                            if (event is EngineEvent.Progress && event.restartEpoch != engineEpoch) return@synchronized
-                            val current = store.get(id) ?: return@synchronized
-                            if (current.restartEpoch != epoch) return@synchronized
-                            if (current.stage != JobStage.TRANSFERRING) {
-                                if (current.error == DownloadError.FormatExpired) stopEngine(id, cancelUnregistered = false)
-                                return@synchronized
+                            // Late callbacks from a finished attempt never reach the next one.
+                            if (engineReturned || event is EngineEvent.Progress && event.restartEpoch != engineEpoch) return@synchronized
+                            // Pause and cancel arrive through the signal; read the row (expiry, epoch) at most once a second.
+                            val now = monotonicMillis()
+                            if (!stale && checkedAt.let { it == null || now - it !in 0 until 1000 }) {
+                                checkedAt = now
+                                val current = store.get(id)
+                                stale = current == null || current.restartEpoch != epoch || current.stage != JobStage.TRANSFERRING
+                                if (current?.error == DownloadError.FormatExpired) stopEngine(id, cancelUnregistered = false)
                             }
+                            if (stale) return@synchronized
                             if (event is EngineEvent.Restarting) {
                                 if (event.restartEpoch <= engineEpoch) return@synchronized
                                 signal.throwIfCanceled()
@@ -325,7 +360,9 @@ class DownloadCoordinator(
                                 engineEpoch = event.restartEpoch
                                 hasPartial = false
                                 transferredBytes = 0
+                                startBytes = 0
                                 transferOpen = true
+                                postProcessing -= id
                                 metrics.clear()
                                 emit(initial.copy(restartEpoch = epoch, hasPartial = false))
                                 return@synchronized
@@ -354,11 +391,13 @@ class DownloadCoordinator(
                                 is EngineEvent.Restarting -> error("Restart handled above")
                             })
                         }
-                    } } finally { downloading.remove(id) }
+                    } } finally { synchronized(delivery) { engineReturned = true }; downloading.remove(id) }
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
-                            else finishStopped(id, result.error, transferredBytes, resumeAllowed = result.resumeAllowed)
+                            else finishStopped(id, result.error, transferredBytes, resumeAllowed = result.resumeAllowed, startBytes = startBytes)
                         is TransferResult.Success -> {
+                            // Single-stream output has no Merging event: close pause here so a resume never drops a finished file.
+                            synchronized(delivery) { transferOpen = false; postProcessing += id }
                             currentCoroutineContext().ensureActive()
                             synchronized(userCancellation) {
                                 signal.throwIfCanceled()
@@ -421,7 +460,10 @@ class DownloadCoordinator(
                         recovery.reconcile(id, cancellationRequested = true)
                         store.get(id)?.let(::fromRecord)
                     } else null
-                    active.remove(id, signal); userCancellation.remove(id); pauseRequests.remove(id)
+                    active.remove(id, signal); userCancellation.remove(id); pauseRequests.remove(id); postProcessing.remove(id)
+                    // Expiry skipped this staging while the writer was live; the writer has exited now.
+                    JobStore.liveWriters.remove(id)
+                    if (store.get(id)?.stage?.terminal == true) cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)
                     activeDone.remove(id)?.complete(Unit)
                     result
                 }
@@ -439,7 +481,7 @@ class DownloadCoordinator(
     private fun stagingRoot(id: String) = File(context.filesDir.canonicalFile, "downloads/$id")
 
     private fun finishStopped(id: String, error: DownloadError, reportedBytes: Long,
-        requeueEmpty: Boolean = false, resumeAllowed: Boolean = true) = synchronized(userCancellation) {
+        requeueEmpty: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         if (id !in userCancellation && (id in pauseRequests || row.stage == JobStage.PAUSED)) {
@@ -450,7 +492,8 @@ class DownloadCoordinator(
         } else if (resumeAllowed && error in setOf(DownloadError.Network, DownloadError.Offline) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             val jobRoot = File(context.filesDir.canonicalFile, "downloads")
-            if (bytes > 0 && row.stage == JobStage.TRANSFERRING) store.requeue(id, true)
+            // Adopted bytes survive a stop before startTransfer too.
+            if (bytes > 0) { if (store.requeue(id, true) && bytes > startBytes) progressed += id }
             else if (requeueEmpty && reportedBytes <= 0 && bytes == 0L) {
                 if (cleanupJobStaging(jobRoot, id)) store.requeue(id)
                 else store.fail(id, DownloadError.SaveFailed)
@@ -497,8 +540,10 @@ class DownloadCoordinator(
         if (row.stage == JobStage.ENQUEUED) return@withContext maintenance.withDownload {
             if (store.get(id)?.stage != JobStage.ENQUEUED ||
                 progress.value.none { it.jobId == id && it.awaitingSchedule }) return@withDownload false
-            // Explicit Downloads Retry always extracts from the URL, even after failed cleanup.
-            if (!store.discardInfoJson(id)) {
+            // Explicit Downloads Retry always extracts from the URL, even after failed cleanup;
+            // fresh signed URLs never continue older bytes.
+            if (!store.discardInfoJson(id) || !cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id) ||
+                !store.requeue(id)) {
                 mutableError.value = DownloadError.ExecutionRestricted
                 return@withDownload false
             }
@@ -556,6 +601,8 @@ class DownloadCoordinator(
         }, error = row.error, publishedUri = row.pendingUri.takeIf { row.stage == JobStage.COMPLETED }, mimeType = mime(row.format), total = row.format.size, qualityHeight = VideoQuality.of(row.format.width, row.format.height), waiting = row.stage == JobStage.ENQUEUED,
         retryable = row.stage == JobStage.FAILED && row.retryable && row.sourceUrl != null,
         paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch)
+    private fun scheduleFailed(row: JobRecord) = fromRecord(row).copy(phase = DownloadPhase.FAILED,
+        error = DownloadError.ExecutionRestricted, awaitingSchedule = true, waiting = true)
     private fun mime(format: Format) = mimeTypeFor(format.container)
 }
 

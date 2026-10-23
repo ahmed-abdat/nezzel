@@ -12,7 +12,7 @@ class JobDirectoryResumeTest {
         val jobs = JobDirectory(temp.root)
         val dir = jobs.create("owned").directory
         val partials = listOf("output.mp4.part", "output.mp4.part-Frag14.part", "output.mp4.ytdl",
-            "output.f137.mp4", "output.f140.m4a.part", "output.temp")
+            "output.f137.mp4", "output.f140.m4a.part", "output.temp", "output.temp.mp4")
         (partials + listOf("result-path.txt", "output.mp4")).forEach { dir.resolve(it).writeText(it) }
         assertEquals(dir, jobs.createOrAdopt("owned").directory)
         assertEquals(partials.toSet(), dir.list()!!.toSet())

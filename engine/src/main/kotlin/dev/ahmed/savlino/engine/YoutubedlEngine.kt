@@ -117,6 +117,12 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val infoJson = infoCache?.freshFile(command.jobId)
             var bytes = -1L
             var restartEpoch = 0L
+            // Without the inspection's info JSON yt-dlp extracts new signed URLs: never continue older bytes.
+            if (infoJson == null && directory.listFiles().orEmpty().isNotEmpty()) {
+                if (!clearStaging(directory)) return@operation TransferResult.Failure(DownloadError.ExecutionRestricted)
+                restartEpoch++
+                progress(EngineEvent.Restarting(restartEpoch))
+            }
             suspend fun transfer(info: File?) {
                 val attemptEpoch = restartEpoch
                 val args = YtdlpCommand.download(command, directory, info)

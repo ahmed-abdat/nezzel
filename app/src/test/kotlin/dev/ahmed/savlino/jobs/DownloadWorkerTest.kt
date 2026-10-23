@@ -322,7 +322,7 @@ class DownloadWorkerTest {
                 assertTrue(withContext(Dispatchers.IO) { opened.await(5, java.util.concurrent.TimeUnit.SECONDS) })
                 worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
                 running.cancel()
-                withTimeout(5000) { f.engineStopped.await() }
+                withTimeout(5000) { while (!f.coordinator.stopRequested("copy-stop")) yield() }
             } finally { release.countDown() }
             running.join()
             assertEquals(JobStage.FAILED, f.store.get("copy-stop")!!.stage)
@@ -431,14 +431,19 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun transientFailureWithDiskBytesReturnsWorkerRetryWithoutTerminalEvent() = runBlocking {
+    @Test fun transientFailureWithNewDiskBytesSucceedsIntoFreshWorkWithoutTerminalEvent() = runBlocking {
         fixture(FakeEngine(), script = { _, dir, emit ->
             dir.resolve("output.mp4.part").writeText("keep")
             emit(EngineEvent.Progress(4, Size.Exact(100)))
             TransferResult.Failure(DownloadError.Network)
         }).use { f ->
             f.store.enqueue(command("transport"))
-            assertEquals(ListenableWorker.Result.retry(), f.worker("transport").doWork())
+            assertEquals(ListenableWorker.Result.success(), f.worker("transport").doWork())
+            // Startup scheduled this job; the continuation is chained behind that pending work.
+            val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("transport").get()
+            assertEquals(2, work.size)
+            val next = work.single { it.state == WorkInfo.State.BLOCKED }
+            assertEquals(NetworkType.CONNECTED, next.constraints.requiredNetworkType)
             val row = f.store.get("transport")!!
             assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
             assertNotNull(row.sourceUrl); assertEquals(1L, row.restartEpoch)
@@ -670,7 +675,7 @@ class DownloadWorkerTest {
                 assertTrue(withContext(Dispatchers.IO) { committed.await(5, java.util.concurrent.TimeUnit.SECONDS) })
                 worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
                 running.cancel()
-                withTimeout(5000) { f.engineStopped.await() }
+                withTimeout(5000) { while (!f.coordinator.stopRequested("late-stop")) yield() }
             } finally { release.countDown() }
             running.join()
             assertSaved(f, "late-stop")
@@ -1009,6 +1014,193 @@ class DownloadWorkerTest {
         return results.single()
     }
 
+    @Test fun progressedRequeueChainsFreshWorkAfterThisAttemptAndNoProgressKeepsBackoff() = runBlocking {
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        fixture(FakeEngine(), script = { _, dir, _ ->
+            if (attempts.incrementAndGet() == 1) dir.resolve("output.mp4.part").writeText("keep")
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("chain")))
+            val wm = WorkManager.getInstance(app)
+            val pending = wm.getWorkInfosForUniqueWork("chain").get().single()
+            assertEquals(WorkInfo.State.ENQUEUED, pending.state)
+            assertEquals(ListenableWorker.Result.success(), f.worker("chain").doWork())
+            val chain = wm.getWorkInfosForUniqueWork("chain").get()
+            assertEquals(2, chain.size)
+            val next = chain.single { it.id != pending.id }
+            // APPEND_OR_REPLACE: the continuation waits for the current (still unfinished) work.
+            assertEquals(WorkInfo.State.BLOCKED, next.state)
+            assertEquals(NetworkType.CONNECTED, next.constraints.requiredNetworkType)
+            WorkManagerTestInitHelper.getTestDriver(app)!!.setAllConstraintsMet(pending.id)
+            withTimeout(5000) { while (wm.getWorkInfoById(next.id).get()!!.state != WorkInfo.State.ENQUEUED) yield() }
+            assertEquals(WorkInfo.State.SUCCEEDED, wm.getWorkInfoById(pending.id).get()!!.state)
+            assertEquals(0, wm.getWorkInfoById(next.id).get()!!.runAttemptCount)
+            // Same bytes again: no continuation; Result.retry() keeps the exponential backoff growing.
+            assertEquals(ListenableWorker.Result.retry(), f.worker("chain").doWork())
+            assertEquals(2, wm.getWorkInfosForUniqueWork("chain").get().size)
+            val row = f.store.get("chain")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
+            assertEquals("keep", File(app.filesDir, "downloads/chain/output.mp4.part").readText())
+            assertEquals(2, attempts.get())
+        }
+    }
+
+    @Test fun connectivityStopBeforeStartTransferKeepsAdoptedPartial() = runBlocking {
+        val probing = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), version = { probing.complete(Unit); awaitCancellation() }).use { f ->
+            shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
+            f.coordinator.initialize(); f.store.enqueue(command("early-stop"))
+            f.store.startTransfer("early-stop", "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:engine-42:${YtdlpCommand.ARGV_VERSION}")
+            File(app.filesDir, "downloads/early-stop").apply { mkdirs(); resolve("output.mp4.part").writeText("keep") }
+            f.store.pause("early-stop", true); f.store.resume("early-stop")
+            val worker = f.worker("early-stop")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            withTimeout(5000) { probing.await() }
+            worker.stop(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
+            running.cancelAndJoin()
+            val row = f.store.get("early-stop")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
+            assertNull(row.error); assertNotNull(row.sourceUrl); assertEquals(1L, row.restartEpoch)
+            assertEquals("keep", File(app.filesDir, "downloads/early-stop/output.mp4.part").readText())
+            assertEquals(0, f.attempts.get())
+        }
+    }
+
+    @Test fun pauseIsRefusedOncePostProcessingOrPublicationStarted() = runBlocking {
+        val joining = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            dir.resolve("output.f137.mp4").writeText("video")
+            emit(EngineEvent.Progress(4, Size.Exact(4)))
+            emit(EngineEvent.Merging)
+            joining.complete(Unit); release.await()
+            dir.resolve("output.f137.mp4").delete()
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+            f.store.enqueue(command("joining"))
+            val opened = java.util.concurrent.CountDownLatch(1)
+            val copy = java.util.concurrent.CountDownLatch(1)
+            f.provider.onOpen = { opened.countDown(); check(copy.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
+            val running = async(Dispatchers.Default) { f.worker("joining").doWork() }
+            try {
+                withTimeout(5000) { joining.await() }
+                assertFalse(f.coordinator.pause("joining"))
+                assertEquals(JobStage.TRANSFERRING, f.store.get("joining")!!.stage)
+                release.complete(Unit)
+                assertTrue(withContext(Dispatchers.IO) { opened.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+                assertFalse(f.coordinator.pause("joining"))
+            } finally { release.complete(Unit); copy.countDown() }
+            assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { running.await() })
+            assertSaved(f, "joining")
+            assertFalse(f.phases.contains("PAUSED"))
+        }
+    }
+
+    @Test fun expiryFromAnotherStoreWhileWriterLiveKeepsStagingUntilTheWriterExits() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            dir.resolve("output.mp4.part").writeText("bytes")
+            emit(EngineEvent.Progress(5, Size.Exact(100)))
+            entered.complete(Unit); release.await()
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("expire-live"))
+            val running = async(Dispatchers.Default) { f.coordinator.execute("expire-live", {}, {}) }
+            try {
+                withTimeout(5000) { entered.await() }
+                JobStore(app, null).use { other ->
+                    other.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?", arrayOf<Any?>(
+                        System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, "expire-live"))
+                    assertEquals(JobStage.FAILED, other.get("expire-live")!!.stage)
+                }
+                assertEquals("bytes", File(app.filesDir, "downloads/expire-live/output.mp4.part").readText())
+            } finally { release.complete(Unit) }
+            withTimeout(5000) { running.await() }
+            val row = f.store.get("expire-live")!!
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)
+            assertNull(row.sourceUrl); assertFalse(row.hasPartial)
+            assertFalse(File(app.filesDir, "downloads/expire-live").exists())
+            assertFalse("expire-live" in JobStore.liveWriters)
+        }
+    }
+
+    @Test fun quickPauseResumeAroundAWorkerStartLeavesOneQueuedResumableRow() = runBlocking {
+        val stopped = CompletableDeferred<Unit>()
+        val endings = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
+        fixture(FakeEngine(), script = { _, _, emit ->
+            emit(EngineEvent.Progress(4, Size.Exact(100)))
+            stopped.await()
+            TransferResult.Failure(DownloadError.Cancelled)
+        }, cancelHook = { stopped.complete(Unit) }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("flip"))
+            f.store.startTransfer("flip", "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:engine-42:${YtdlpCommand.ARGV_VERSION}")
+            File(app.filesDir, "downloads/flip").apply { mkdirs(); resolve("output.mp4.part").writeText("keep") }
+            f.store.pause("flip", true); f.store.resume("flip")
+            val worker: Deferred<JobRecord?>
+            synchronized(f.store) {
+                worker = async(Dispatchers.Default) {
+                    f.coordinator.execute("flip", { WorkInfo.STOP_REASON_NOT_STOPPED }, {}, {}) { endings += it }
+                }
+                // The attempt registers while its row read still waits: a pause from here on reaches it.
+                val deadline = System.nanoTime() + 5_000_000_000
+                while (!f.coordinator.isRunning("flip")) { check(System.nanoTime() < deadline); Thread.yield() }
+            }
+            try {
+                assertTrue(f.coordinator.pause("flip"))
+                assertTrue(f.coordinator.resume("flip"))
+                withTimeout(5000) { worker.await() }
+            } finally { stopped.complete(Unit); worker.cancelAndJoin() }
+            val row = f.store.get("flip")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
+            assertNull(row.error); assertNotNull(row.sourceUrl)
+            assertEquals("keep", File(app.filesDir, "downloads/flip/output.mp4.part").readText())
+            assertFalse(endings.any { it.phase in setOf(DownloadPhase.FAILED, DownloadPhase.CANCELLED) })
+            assertFalse(f.coordinator.isRunning("flip"))
+            assertEquals(WorkInfo.State.ENQUEUED, WorkManager.getInstance(app).getWorkInfosForUniqueWork("flip").get().single().state)
+        }
+    }
+
+    @Test fun progressReadsTheRowAtMostOncePerSecondAndStaleStaysDropped() = runBlocking {
+        val now = java.util.concurrent.atomic.AtomicLong()
+        val seen = mutableListOf<Long?>()
+        lateinit var f: Fixture
+        fixture(FakeEngine(), clock = { now.get() }, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+            dir.resolve("output.mp4.part").writeText("bytes")
+            emit(EngineEvent.Progress(1, Size.Exact(100)))
+            // Raw write the callback has not read yet: the next check comes a second after the last one.
+            f.store.writableDatabase.execSQL("UPDATE jobs SET restart_epoch = restart_epoch + 5 WHERE job_id = 'throttle'")
+            for ((at, bytes) in listOf(500L to 2L, 1000L to 3L, 1600L to 4L)) {
+                now.set(at); emit(EngineEvent.Progress(bytes, Size.Exact(100)))
+                seen += f.coordinator.progress.value.single().bytes
+            }
+            TransferResult.Failure(DownloadError.Failed)
+        }).use { fx ->
+            f = fx
+            fx.coordinator.initialize(); fx.store.enqueue(command("throttle"))
+            fx.coordinator.execute("throttle", {}, {})
+            assertEquals(listOf<Long?>(2, 2, 2), seen)
+        }
+    }
+
+    @Test fun newerEngineDiscardsCachedInfoJsonBeforeTheReconfirmedTransfer() = runBlocking {
+        val info = File(app.noBackupFilesDir, "ytdlp-info/upgraded.json")
+        var infoAtTransfer: Boolean? = null
+        var engineVersion: String? = null
+        fixture(FakeEngine(), version = { "engine-43" }, script = { command, _, _ ->
+            infoAtTransfer = info.exists(); engineVersion = command.engineVersion
+            TransferResult.Failure(DownloadError.Failed)
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("upgraded"))
+            info.apply { parentFile!!.mkdirs(); writeText("{}") }
+            f.coordinator.execute("upgraded", {}, {})
+            assertEquals(false, infoAtTransfer); assertEquals("engine-43", engineVersion)
+            assertEquals(1, f.attempts.get())
+        }
+    }
+
     private fun assertSaved(f: Fixture, id: String) {
         assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
         assertNull(f.store.get(id)!!.sourceUrl)
@@ -1024,6 +1216,7 @@ class DownloadWorkerTest {
     private fun fixture(engine: FakeEngine, freeBytes: Long = Long.MAX_VALUE,
         downloadFailure: Exception? = null, cancelHook: () -> Unit = {},
         clock: () -> Long = { android.os.SystemClock.elapsedRealtime() }, nextTick: suspend () -> Unit = { delay(250) },
+        version: suspend () -> String? = { null },
         script: (suspend (DownloadCommand, File, (EngineEvent) -> Unit) -> TransferResult)? = null): Fixture {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
@@ -1040,6 +1233,7 @@ class DownloadWorkerTest {
         val attempts = java.util.concurrent.atomic.AtomicInteger()
         val observedEngine = object : EngineAdapter by engine {
             override fun cancel(operationId: String) { cancelHook(); engine.cancel(operationId); engineStopped.complete(Unit) }
+            override suspend fun installedVersion() = version()
             override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult {
                 attempts.incrementAndGet()
                 if (downloadFailure != null) {

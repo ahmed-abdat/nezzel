@@ -278,15 +278,15 @@ internal class YtdlpDiagnostics {
     }
     fun failure() = YtdlpExecutionFailure(error.get(), expired.get(), !httpFailure.get())
     companion object {
-        fun blocksResume(message: String): Boolean = message.lineSequence().filter { it.startsWith("ERROR:") }.any {
-            Regex("\\bhttp error (429|5\\d\\d)\\b", RegexOption.IGNORE_CASE)
-                .containsMatchIn(it.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), ""))
-        }
-        fun expiredUrl(message: String): Boolean = message.lineSequence().filter { it.startsWith("ERROR:") }.any { line ->
-            val text = line.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "").lowercase(java.util.Locale.ROOT)
-            Regex("\\bhttp error (401|403|410)\\b").containsMatchIn(text) ||
-                Regex("\\b(url|signature|token)\\b.{0,40}\\bexpired\\b|\\bexpired (url|signature|token)\\b").containsMatchIn(text)
-        }
+        fun blocksResume(message: String): Boolean = errorLines(message).any(HTTP_NO_RESUME::containsMatchIn)
+        fun expiredUrl(message: String): Boolean = errorLines(message).any { HTTP_EXPIRED.containsMatchIn(it) || EXPIRED.containsMatchIn(it) }
+        /** ERROR lines without URLs (a path may spell an error code), lowercased. */
+        private fun errorLines(message: String) = message.lineSequence().filter { it.startsWith("ERROR:") }
+            .map { it.replace(URL, "").lowercase(java.util.Locale.ROOT) }
+        private val URL = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
+        private val HTTP_NO_RESUME = Regex("\\bhttp error (429|5\\d\\d)\\b")
+        private val HTTP_EXPIRED = Regex("\\bhttp error (401|403|410)\\b")
+        private val EXPIRED = Regex("\\b(url|signature|token)\\b.{0,40}\\bexpired\\b|\\bexpired (url|signature|token)\\b")
     }
 }
 

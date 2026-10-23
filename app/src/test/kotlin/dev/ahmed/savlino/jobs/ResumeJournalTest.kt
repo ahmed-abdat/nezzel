@@ -39,7 +39,7 @@ class ResumeJournalTest {
                     db.execSQL("""INSERT INTO jobs (job_id,stage,source_url,revision,engine_version,format_json,
                         filename,pending_uri,display_name,created_at,updated_at,error,retryable)
                         VALUES (?,?,?,1,'version',?,'clip.mp4',?,'provider.mp4',?,?,?,?)""",
-                        arrayOf(stage.name, stage.name, source,
+                        arrayOf<Any?>(stage.name, stage.name, source,
                             """{"id":"18","sourceId":"18","container":"mp4","video":true,"audio":true,"merge":false,"sizeKind":"unknown"}""",
                             if (stage in setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.COMPLETED)) "content://media/downloads/7" else null,
                             System.currentTimeMillis(), System.currentTimeMillis(),
@@ -74,7 +74,7 @@ class ResumeJournalTest {
                     val allowed = partial in 0..1 && (partial == 0 || stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED))
                     try {
                         store.writableDatabase.execSQL("UPDATE jobs SET stage=?,has_partial=?,source_url=?,pending_uri=? WHERE job_id='check'",
-                            arrayOf(stage.name, partial, if (stage.terminal) null else "https://example.org/watch", "content://media/downloads/1"))
+                            arrayOf<Any?>(stage.name, partial, if (stage.terminal) null else "https://example.org/watch", "content://media/downloads/1"))
                         assertTrue("$stage/$partial accepted", allowed)
                     } catch (_: SQLiteConstraintException) { assertFalse("$stage/$partial rejected", allowed) }
                 }
@@ -108,11 +108,72 @@ class ResumeJournalTest {
                 val dir = JobDirectory(app.filesDir).create(id).directory
                 dir.resolve("output.mp4.part").writeText("bytes")
                 store.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?",
-                    arrayOf(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, id))
+                    arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, id))
                 val row = store.get(id)!!
                 assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)
                 assertNull(row.sourceUrl); assertFalse(row.retryable); assertFalse(row.hasPartial)
                 assertFalse(dir.exists()); assertFalse(store.resume(id)); assertFalse(store.retry(id))
+            }
+        }
+    }
+
+    @Test fun realLegacyChecksMigrateAndExpiredLiveRowsFailWithTheirStaging() {
+        val stages = "'ENQUEUED','TRANSFERRING','STAGED','PENDING_INSERTED','PUBLISHING','COMPLETED','FAILED','CANCELLED'"
+        val pending = "CHECK (stage NOT IN ('PENDING_INSERTED','PUBLISHING','COMPLETED') OR pending_uri IS NOT NULL)"
+        val v1Url = "CHECK ((stage IN ('COMPLETED','FAILED','CANCELLED') AND source_url IS NULL) " +
+            "OR (stage NOT IN ('COMPLETED','FAILED','CANCELLED') AND source_url IS NOT NULL))"
+        val v2Url = "CHECK ((stage IN ('COMPLETED','CANCELLED') AND source_url IS NULL) " +
+            "OR (stage = 'FAILED' AND (source_url IS NULL OR retryable = 1)) " +
+            "OR (stage NOT IN ('COMPLETED','FAILED','CANCELLED') AND source_url IS NOT NULL))"
+        val url = "https://example.org/watch"
+        val format = """{"id":"18","sourceId":"18","container":"mp4","video":true,"audio":true,"merge":false,"sizeKind":"unknown"}"""
+        for (version in 1..3) {
+            app.deleteDatabase(JobStore.DATABASE_NAME)
+            File(app.filesDir, "downloads").deleteRecursively()
+            val path = app.getDatabasePath(JobStore.DATABASE_NAME).apply { parentFile!!.mkdirs() }
+            val old = System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 60_000
+            SQLiteDatabase.openOrCreateDatabase(path, null).use { db ->
+                db.execSQL("""CREATE TABLE jobs (job_id TEXT PRIMARY KEY NOT NULL,
+                    stage TEXT NOT NULL CHECK(stage IN ($stages)), source_url TEXT, revision INTEGER NOT NULL,
+                    engine_version TEXT NOT NULL, format_json TEXT NOT NULL, filename TEXT NOT NULL, preset TEXT,
+                    pending_uri TEXT, display_name TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                    error TEXT, retryable INTEGER NOT NULL DEFAULT 0${if (version == 3) ", source_key TEXT" else ""},
+                    ${if (version == 1) v1Url else v2Url}, $pending)""")
+                fun insert(id: String, stage: JobStage, created: Long, failed: Boolean = false) = db.execSQL(
+                    """INSERT INTO jobs (job_id,stage,source_url,revision,engine_version,format_json,filename,
+                        created_at,updated_at,error,retryable) VALUES (?,?,?,1,'version',?,'clip.mp4',?,?,?,?)""",
+                    arrayOf<Any?>(id, stage.name, url, format, created, created,
+                        if (failed) "Network" else null, if (failed) 1 else 0))
+                insert("old-queued", JobStage.ENQUEUED, old)
+                insert("old-transfer", JobStage.TRANSFERRING, old)
+                insert("fresh-queued", JobStage.ENQUEUED, System.currentTimeMillis())
+                // The fixture's CHECKs are the real ones: v1 never kept a failed row's link.
+                if (version == 1) try { insert("old-failed", JobStage.FAILED, old, failed = true); fail("v1 CHECK") }
+                    catch (_: android.database.SQLException) { }
+                else insert("old-failed", JobStage.FAILED, old, failed = true)
+                db.version = version
+            }
+            for (id in listOf("old-queued", "old-transfer", "fresh-queued"))
+                File(app.filesDir, "downloads/$id").apply { mkdirs(); resolve("output.mp4.part").writeText("bytes") }
+            JobStore(app, null).use { store ->
+                assertEquals(4, store.readableDatabase.version)
+                for (id in listOf("old-queued", "old-transfer")) {
+                    val row = store.get(id)!!
+                    assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)
+                    assertNull(row.sourceUrl); assertFalse(row.retryable); assertFalse(row.hasPartial)
+                    assertFalse(File(app.filesDir, "downloads/$id").exists())
+                }
+                val fresh = store.get("fresh-queued")!!
+                assertEquals(JobStage.ENQUEUED, fresh.stage); assertNotNull(fresh.sourceUrl)
+                assertTrue(File(app.filesDir, "downloads/fresh-queued/output.mp4.part").exists())
+                if (version > 1) {
+                    val failed = store.get("old-failed")!!
+                    assertEquals(DownloadError.Network, failed.error); assertNull(failed.sourceUrl); assertFalse(failed.retryable)
+                } else assertNull(store.get("old-failed"))
+                store.readableDatabase.rawQuery("SELECT COUNT(*) FROM jobs WHERE source_url IS NOT NULL AND created_at < ?",
+                    arrayOf((System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS).toString())).use {
+                    assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+                }
             }
         }
     }

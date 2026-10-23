@@ -142,21 +142,48 @@ class YtdlpInfoReuseTest {
         assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command, dir) }
     }
 
-    @Test fun expiredUrlOnAdoptedBytesWithoutCachedInfoWipesBeforeMissingExactFormatFails() = runBlocking {
+    @Test fun adoptedBytesWithoutCachedInfoWipeBeforeTheFirstUrlTransfer() = runBlocking {
         val runtime = Runtime(json)
         val engine = YoutubedlEngine(runtime)
         val command = confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true))))
         val dir = temp.newFolder()
         File(dir, "output.mp4.part").writeText("old bytes")
+        val events = mutableListOf<EngineEvent>()
         runtime.action = { args, _ ->
-            assertEquals("18", args[args.indexOf("-f") + 1])
-            if (runtime.transfers.size == 1) error("ERROR: unable to download video data: HTTP Error 403")
             assertTrue(dir.list()!!.isEmpty())
+            assertFalse("--load-info-json" in args)
+            assertEquals("18", args[args.indexOf("-f") + 1])
             error("ERROR: requested format is not available")
         }
-        assertEquals(TransferResult.Failure(DownloadError.FormatExpired), engine.download(command, dir) {})
-        assertEquals(2, runtime.transfers.size)
+        assertEquals(TransferResult.Failure(DownloadError.FormatExpired), engine.download(command, dir) { events += it })
+        assertEquals(1, runtime.transfers.size)
+        assertEquals(listOf<EngineEvent>(EngineEvent.Restarting(1)), events)
         assertTrue(dir.list()!!.isEmpty())
+    }
+
+    @Test fun resumeAfterInfoJsonExpiredWipesPartialsAndExtractsFromUrl() = runBlocking {
+        var now = 10_000_000L
+        val runtime = Runtime(json)
+        val cache = YtdlpInfoCache(temp.newFolder()) { now }
+        val engine = YoutubedlEngine(runtime, infoCache = cache)
+        val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
+        engine.prepareDownload(command)
+        val dir = temp.newFolder()
+        File(dir, "output.f18.mp4.part").writeText("bytes from the inspected signed URL")
+        File(dir, "output.f18.mp4.ytdl").writeText("state")
+        now += YtdlpInfoCache.TTL_MS
+        val events = mutableListOf<EngineEvent>()
+        runtime.action = { args, line ->
+            assertTrue(dir.list()!!.isEmpty())
+            assertFalse("--load-info-json" in args)
+            assertTrue(source.link.rawUrl in args)
+            line("nezzel:18:1:1000:NA")
+            Runtime.output(args)
+        }
+        assertIs<TransferResult.Success>(engine.download(command, dir) { events += it })
+        assertEquals(1, runtime.transfers.size)
+        assertEquals(EngineEvent.Restarting(1), events.first())
+        assertEquals(listOf(1L), events.filterIsInstance<EngineEvent.Progress>().map { it.restartEpoch })
     }
 
     @Test fun httpRateLimitAndServerErrorsNeverResumeEvenAfterTransportDiagnostics() = runBlocking {

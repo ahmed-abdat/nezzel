@@ -278,6 +278,33 @@ class DownloadCoordinatorTest {
         } finally { store.close() }
     }
 
+    @Test fun scheduleFailureEventKeepsTheRowEpochAndRetryStartsWithoutOldBytes() = runBlocking {
+        WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder().build())
+        val store = JobStore(app)
+        var schedulingBlocked = true
+        try {
+            store.enqueue(command("epoch-schedule")); store.startTransfer("epoch-schedule", "recipe")
+            store.requeue("epoch-schedule", true)
+            val staging = File(app.filesDir, "downloads/epoch-schedule").apply { mkdirs(); resolve("output.mp4.part").writeText("old") }
+            val coordinator = DownloadCoordinator(app, engine = FakeEngine(), store = store, workManager = {
+                if (schedulingBlocked) error("Scheduler unavailable") else WorkManager.getInstance(app)
+            })
+            coordinator.initialize()
+            val row = store.get("epoch-schedule")!!
+            val event = coordinator.progress.value.single()
+            assertTrue(event.awaitingSchedule); assertEquals(DownloadPhase.FAILED, event.phase)
+            assertTrue(row.restartEpoch > 0); assertEquals(row.restartEpoch, event.restartEpoch)
+            assertEquals(row.hasPartial, event.hasPartial)
+            schedulingBlocked = false
+            assertTrue(coordinator.retry("epoch-schedule"))
+            // Retry extracts fresh signed URLs: older bytes never continue.
+            assertFalse(staging.exists())
+            assertEquals(JobStage.ENQUEUED, store.get("epoch-schedule")!!.stage)
+            assertFalse(store.get("epoch-schedule")!!.hasPartial)
+            assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork("epoch-schedule").get().size)
+        } finally { store.close() }
+    }
+
     @Test fun restoredQueueSchedulingFailureDoesNotEscapeStartupAndRemainsCancellable() = runBlocking {
         val store = JobStore(app)
         store.enqueue(command("restored"))
