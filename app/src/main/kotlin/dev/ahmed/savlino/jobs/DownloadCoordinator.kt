@@ -87,10 +87,14 @@ class DownloadCoordinator(
         }
     }
 
+    /** Row artwork for the Downloads tile: `artwork.load(jobId)`, null → kind icon. */
+    val artwork: JobArtwork get() = store.artwork
+
     suspend fun enqueue(command: DownloadCommand, preset: Preset? = null): Boolean = withContext(Dispatchers.IO) {
         maintenance.withDownload {
             initializeUnderMaintenanceGate()
             val inserted = store.enqueue(command, preset)
+            if (inserted) SheetArtwork.take(command.inspectionId)?.let { store.artwork.save(command.jobId, it) }
             // A scheduling failure leaves a durable ENQUEUED row for startup to retry.
             if (inserted) {
                 store.prepareInfoJson(command.jobId) { engine.prepareDownload(command) }

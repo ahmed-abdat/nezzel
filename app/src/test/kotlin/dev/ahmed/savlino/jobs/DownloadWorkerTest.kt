@@ -351,6 +351,38 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun confirmedDownloadStoresSheetArtwork() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            val command = command("art-job")
+            val sheet = android.graphics.Bitmap.createBitmap(640, 360, android.graphics.Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(android.graphics.Color.rgb(0, 128, 128)) }
+            SheetArtwork.offer(command.inspectionId, sheet)
+            assertTrue(f.coordinator.enqueue(command))
+            val file = File(app.filesDir, "job-art/art-job")
+            assertTrue(file.isFile)
+            assertTrue(file.length() in 1..JobArtwork.MAX_BYTES.toLong())
+            val loaded = f.coordinator.artwork.load("art-job")!!
+            assertEquals(JobArtwork.SIDE, loaded.width)
+            assertEquals(JobArtwork.SIDE, loaded.height)
+            assertFalse(sheet.isRecycled)
+            f.coordinator.removeFailed("art-job") // not FAILED: kept
+            assertTrue(file.isFile)
+            f.store.fail("art-job", DownloadError.Failed)
+            f.coordinator.removeFailed("art-job")
+            assertFalse(file.exists())
+            assertNull(f.coordinator.artwork.load("art-job"))
+        }
+    }
+
+    @Test fun noSheetArtworkStoresNothing() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            assertTrue(f.coordinator.enqueue(command("plain-job")))
+            assertFalse(File(app.filesDir, "job-art/plain-job").exists())
+            assertNull(f.coordinator.artwork.load("plain-job"))
+        }
+    }
+
     @Test fun batteryStopReasonFailsAsStoppedByBattery() = runBlocking {
         for (reason in listOf(WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION, WorkInfo.STOP_REASON_APP_STANDBY,
                 WorkInfo.STOP_REASON_QUOTA, WorkInfo.STOP_REASON_DEVICE_STATE)) {

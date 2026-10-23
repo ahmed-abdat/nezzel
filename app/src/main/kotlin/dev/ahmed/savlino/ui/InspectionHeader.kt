@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.domain.Inspection
 import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.jobs.SheetArtwork
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Space
 
@@ -31,8 +34,15 @@ import dev.ahmed.savlino.ui.theme.Space
 internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null) {
     val title = inspection?.title ?: earlyPreview?.title
     val thumbnail = inspection?.thumbnailUrl ?: earlyPreview?.thumbnailUrl
+    var shown by remember { mutableStateOf<Bitmap?>(null) }
+    val inspectionId = inspection?.inspectionId
+    // Hand the shown artwork to a confirmed job (memory only; written to disk only on Download).
+    LaunchedEffect(inspectionId, shown) {
+        val bitmap = shown ?: return@LaunchedEffect
+        if (inspectionId != null) withContext(Dispatchers.Default) { SheetArtwork.offer(inspectionId, bitmap) }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-        PreviewThumbnail(thumbnail, audioOnly = inspection?.formats?.all { !it.hasVideo } == true)
+        PreviewThumbnail(thumbnail, audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = { shown = it })
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             title?.let {
                 Text(it, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
@@ -54,13 +64,17 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
 }
 
 @Composable
-internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }) {
+internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) },
+    onBitmap: (Bitmap?) -> Unit = {}) {
+    val report by rememberUpdatedState(onBitmap)
     // Reset the old bitmap immediately on URL change, including null; produceState alone retains it.
     // The coroutine is cancelled on URL change or sheet disposal. No disk or process cache.
     key(url) {
         var finished by remember { mutableStateOf(url == null) }
         val bitmap by produceState<Bitmap?>(null, url) {
+            report(null)
             value = url?.let { load(it) }
+            report(value)
             finished = true
         }
         val current = bitmap

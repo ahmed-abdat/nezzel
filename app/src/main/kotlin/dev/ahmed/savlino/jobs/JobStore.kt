@@ -50,6 +50,8 @@ class SavedBefore(val uri: Uri, val savedAt: Long)
 class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred) :
     SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 5) {
     private val jobRoot = File(context.filesDir.canonicalFile, "downloads")
+    /** Row artwork lives and dies with the row: Remove, the 100-row prune. */
+    val artwork = JobArtwork(context.filesDir)
     private val terminalLock = Any()
     private val infoCache = dev.ahmed.savlino.engine.YtdlpInfoCache(context.noBackupFilesDir)
 
@@ -206,7 +208,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             writableDatabase.delete("jobs", "job_id = ? AND stage IN ('COMPLETED','FAILED','CANCELLED')",
                 arrayOf(jobId)) == 1
         }
-        if (removed) cleanupJobStaging(jobRoot, jobId)
+        if (removed) { cleanupJobStaging(jobRoot, jobId); artwork.delete(jobId) }
         removed
     }
 
@@ -371,8 +373,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     /** Remove is restricted to failures; a live job or completed publication is never discarded. */
-    @Synchronized fun removeFailed(jobId: String): Boolean = writableDatabase.delete("jobs",
-        "job_id = ? AND stage = ?", arrayOf(jobId, JobStage.FAILED.name)) == 1
+    @Synchronized fun removeFailed(jobId: String): Boolean = (writableDatabase.delete("jobs",
+        "job_id = ? AND stage = ?", arrayOf(jobId, JobStage.FAILED.name)) == 1).also { if (it) artwork.delete(jobId) }
 
     @Synchronized fun pruneTerminal() {
         scrubExpiredSources()
@@ -382,6 +384,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 ORDER BY updated_at DESC, rowid DESC LIMIT -1 OFFSET 100
             )
         """.trimIndent())
+        artwork.retainOnly(all().mapTo(HashSet()) { it.jobId })
     }
 
     private fun transition(id: String, from: Set<JobStage>, to: JobStage, values: ContentValues = ContentValues()): Boolean {

@@ -8,9 +8,10 @@ import kotlin.math.roundToInt
 
 internal class EncodedPreviewArtwork(val bytes: ByteArray, val pixels: Bitmap)
 
-/** The caller keeps its bitmap. Only newly owned sampled pixels and their fresh PNG encoding leave this boundary. */
+/** The caller keeps its bitmap. Only newly owned sampled pixels and their fresh encoding (PNG by default) leave this boundary. */
 internal open class PreviewArtworkCodec {
-    open fun encodeSampled(bitmap: Bitmap, maxAxis: Int, maxBytes: Int): EncodedPreviewArtwork? {
+    open fun encodeSampled(bitmap: Bitmap, maxAxis: Int, maxBytes: Int,
+        format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG, quality: Int = 100): EncodedPreviewArtwork? {
         var pixels: Bitmap? = null
         var scaled: Bitmap? = null
         try {
@@ -32,7 +33,7 @@ internal open class PreviewArtworkCodec {
                     super.write(bytes, offset, length)
                 }
             }
-            if (!owned.compress(Bitmap.CompressFormat.PNG, 100, output) || output.size() == 0) return null
+            if (!owned.compress(format, quality, output) || output.size() == 0) return null
             return EncodedPreviewArtwork(output.toByteArray(), owned).also { pixels = null }
         } catch (_: Exception) {
             return null
