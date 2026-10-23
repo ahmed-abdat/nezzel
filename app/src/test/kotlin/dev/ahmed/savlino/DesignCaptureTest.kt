@@ -74,6 +74,27 @@ class DesignCaptureTest {
         } finally { controller.pause().stop().destroy() }
     }
 
+    @Test fun pauseRows() {
+        assumeTrue(dir != null)
+        composable("pause-rows") { lang ->
+            val name = if (lang == "ar") "فيديو العائلة.mp4" else "Family holiday.mp4"
+            val running = DownloadProgress("a", name, DownloadPhase.DOWNLOADING, bytes = 42_000_000, total = Size.Exact(100_000_000),
+                bytesPerSecond = 2_500_000.0, remainingTransferSeconds = 30, stalled = false, qualityHeight = 720)
+            val paused = running.copy(jobId = "b", phase = DownloadPhase.PREPARING, paused = true, hasPartial = true,
+                bytesPerSecond = null, remainingTransferSeconds = null, stalled = null)
+            val waiting = DownloadProgress("c", name, DownloadPhase.PREPARING, waiting = true, hasPartial = true, total = Size.Exact(100_000_000), qualityHeight = 720)
+            val restarting = DownloadProgress("d", name, DownloadPhase.PREPARING, total = Size.Exact(100_000_000), restartEpoch = 1, qualityHeight = 720)
+            val failed = DownloadProgress("e", name, DownloadPhase.FAILED, error = DownloadError.Network, retryable = true)
+            androidx.compose.runtime.CompositionLocalProvider(dev.ahmed.savlino.downloads.LocalOffline provides true) {
+                androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                    for (job in listOf(running, paused, waiting, restarting, failed))
+                        dev.ahmed.savlino.downloads.JobRow(job, {}, {}, {})
+                }
+            }
+        }
+    }
+
     @Test fun home() {
         assumeTrue(dir != null)
         variants { lang, dark ->
