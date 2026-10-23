@@ -28,21 +28,34 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
         val entry = inspections.remove(command.inspectionId) ?: return
         if (!fresh(entry.createdAt) || !entry.inspection.source.matches(command.source) ||
             entry.inspection.engineVersion != command.engineVersion || command.format !in entry.inspection.formats) return
-        var temporary: File? = null
         try {
             val json = if (entry.trimToChosen) trim(entry.json, command) ?: return else entry.json
-            val target = file(command.jobId) ?: return
-            if (target.exists()) return
+            val target = file(command.jobId, entry.trimToChosen) ?: return
+            if (files(command.jobId).any { Files.exists(it.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) }) return
+            write(target, json, entry.createdAt)
+        } catch (_: Exception) { /* Cache failure never prevents a confirmed URL download. */ }
+    }
+
+    /** Rebuilt NPE JSON is already trimmed; origin and content become durable in one atomic move. */
+    @Synchronized internal fun store(jobId: String, json: String): File? = try {
+        val target = file(jobId, npe = true)
+        if (target == null || !remove(jobId)) null else write(target, json, now())
+    } catch (_: Exception) { null }
+
+    private fun write(target: File, json: String, createdAt: Long): File? {
+        var temporary: File? = null
+        return try {
             check(root.mkdirs() || root.isDirectory)
             temporary = File(root, "${UUID.randomUUID()}.tmp")
             temporary.writeText(json)
-            check(temporary.setLastModified(entry.createdAt))
+            check(temporary.setLastModified(createdAt))
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: Exception) { /* Cache failure never prevents a confirmed URL download. */ }
+            target
+        } catch (_: Exception) { null }
         finally { temporary?.delete() }
     }
 
-    private fun trim(json: String, command: DownloadCommand): String? {
+    internal fun trim(json: String, command: DownloadCommand): String? {
         val mapper = ObjectMapper()
         val root = mapper.readTree(json) as? ObjectNode ?: return null
         val formats = root.get("formats")?.takeIf { it.isArray } ?: return null
@@ -54,7 +67,7 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
     }
 
     @Synchronized internal fun freshFile(jobId: String): File? = try {
-        file(jobId)?.takeIf { file ->
+        files(jobId).firstOrNull { file ->
             if (!Files.isSymbolicLink(file.toPath()) && file.isFile && file.length() > 0 && fresh(file.lastModified())) true
             else { file.delete(); false }
         }
@@ -62,10 +75,12 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
 
     /** False keeps explicit Retry from reusing a surviving private file. */
     @Synchronized fun remove(jobId: String): Boolean = try {
-        val file = file(jobId)
-        file != null && (!Files.exists(file.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) || file.delete())
+        val files = files(jobId)
+        // Try both even if one removal fails. Never recursively remove an unexpected directory.
+        files.isNotEmpty() && files.map { !Files.exists(it.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) || it.delete() }.all { it }
     } catch (_: Exception) { false }
 
+    internal fun isNpe(file: File): Boolean = file.name.endsWith(".npe.json")
 
     @Synchronized fun sweep() {
         inspections.entries.removeAll { !fresh(it.value.createdAt) }
@@ -77,8 +92,9 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
     }
 
     private fun fresh(createdAt: Long) = now() - createdAt in 0 until TTL_MS
-    private fun file(jobId: String): File? = if (jobId.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}")))
-        File(root, "$jobId.json") else null // App job IDs are random UUIDs, never URLs or media identifiers.
+    private fun files(jobId: String) = listOfNotNull(file(jobId, npe = true), file(jobId))
+    private fun file(jobId: String, npe: Boolean = false): File? = if (jobId.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}")))
+        File(root, if (npe) "$jobId.npe.json" else "$jobId.json") else null // Opaque job IDs only.
 
     companion object { const val TTL_MS = 60L * 60 * 1000 }
 }
