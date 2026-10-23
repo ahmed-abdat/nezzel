@@ -79,6 +79,19 @@ internal object FormatChoices {
     fun shownKey(format: Format, roughBytes: Long?): List<Any?> =
         listOf(labelKey(format), format.container, codecName(format), audioKbps(format), format.size, roughBytes)
 
+    /**
+     * A fresh read still offers exactly what the user picked on an older sheet: same ids (audio track, dub and
+     * DRC included), file type, picture height and codecs (HDR shows in the codec string). A file now more than
+     * 25% bigger than the size they saw is not the same choice on mobile data. Sizes are the shown bytes, or null.
+     */
+    fun sameChoice(old: Format, fresh: Format, oldBytes: Long?, freshBytes: Long?): Boolean =
+        old.id == fresh.id && old.sourceFormatId == fresh.sourceFormatId && old.audioFormatId == fresh.audioFormatId &&
+            old.container == fresh.container && old.sourceContainer == fresh.sourceContainer &&
+            old.hasVideo == fresh.hasVideo && old.hasAudio == fresh.hasAudio && old.height == fresh.height &&
+            old.videoCodec == fresh.videoCodec && old.audioCodec == fresh.audioCodec &&
+            old.conversion == fresh.conversion && old.animatedGif == fresh.animatedGif &&
+            (oldBytes == null || freshBytes == null || freshBytes - oldBytes <= oldBytes / 4)
+
     private fun sizeRank(size: Size) = when (size) { is Size.Exact -> 2; is Size.Estimated -> 1; Size.Unknown -> 0 }
 
     // H.264, then HEVC, AV1, VP9 (playback-compatible codecs, 2026-10-19).

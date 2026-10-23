@@ -44,6 +44,8 @@
     <string name="download_size">Download · %1$s</string>
     <string name="saves_to">Saves to %1$s</string>
     <string name="choice_confirmed">Selection confirmed</string>
+    <string name="checking_again">Checking again…</string>
+    <string name="options_changed">Options changed. Pick again.</string>
     <string name="video_quality">%1$sp</string>
     <string name="quality_4k">4K</string>
     <string name="quality_2k">2K</string>
