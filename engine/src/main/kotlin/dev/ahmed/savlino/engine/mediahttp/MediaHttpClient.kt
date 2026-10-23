@@ -88,7 +88,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     // Weak keys do not keep the reference store's discarded URL capabilities alive.
     private val storedPosts = WeakHashMap<MediaHttpPostContext, Unit>()
     private val imageSaves = linkedMapOf<OperationId, ImageSaveState>()
-    private val resolverExecutor = ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS,
+    // One carousel's parallel image fetches plus one other operation; hung OS lookups still cannot pile up.
+    private val resolverExecutor = ThreadPoolExecutor(0, 4, 30, TimeUnit.SECONDS,
         SynchronousQueue(), mediaThreads("media-http-dns"), ThreadPoolExecutor.AbortPolicy())
     private val deadlines = ScheduledThreadPoolExecutor(1, mediaThreads("media-http-deadline")).apply {
         removeOnCancelPolicy = true
@@ -149,15 +150,18 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     internal fun fetchYouTubeOEmbed(token: OperationToken, url: String): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.YOUTUBE_OEMBED)
 
-    /** A bad sibling must not retire valid carousel photos; policy, count, byte and deadline checks still apply. */
-    internal fun fetchCarouselImage(token: OperationToken, request: PublicMediaRequest, thumbnail: Boolean = false): MediaHttpResult =
+    /**
+     * A bad sibling must not retire valid carousel photos; policy, count, byte and deadline checks still apply.
+     * [cap] is this body's [OperationBudget.reserveImage] share of the carousel's image bytes.
+     */
+    internal fun fetchCarouselImage(token: OperationToken, request: PublicMediaRequest, cap: Int): MediaHttpResult =
         if (!token.operation.isCarousel || request.purpose != MediaHttpPurpose.IMAGE ||
             (if (token.operation == MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL)
                 request.pageContext == null || request.hostRule != MediaHostRule.ANY
             else request.hostRule !in setOf(MediaHostRule.FACEBOOK_CDN, MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN,
                 MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
-        else fetchInternal(token, request, null, optional = true, imageCap = if (thumbnail) token.budget.imageLimit(thumbnail = true) else null)
+        else fetchInternal(token, request, null, optional = true, imageCap = cap)
 
     internal fun rememberLinkedInPost(token: OperationToken, page: MediaHttpTarget,
         binding: MediaHttpSaveBinding): MediaHttpPostContext? {
@@ -640,7 +644,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 val builder = OkHttpClient.Builder()
                     .dispatcher(Dispatcher(executor))
                     // Keep-alive stays inside this token: the client and its pool are evicted when the operation retires.
-                    .connectionPool(ConnectionPool(2, 10, TimeUnit.SECONDS))
+                    .connectionPool(ConnectionPool(CAROUSEL_PARALLEL_FETCHES, 10, TimeUnit.SECONDS))
                     .proxy(Proxy.NO_PROXY)
                     .dns(PublicAddressDns(token, environment.rawResolver, resolverExecutor))
                     .socketFactory(GuardedMediaSocketFactory(token, environment.routeMapper, save?.let { it::trackSocket }))

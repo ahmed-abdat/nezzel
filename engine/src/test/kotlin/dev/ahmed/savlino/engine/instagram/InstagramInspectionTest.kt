@@ -160,7 +160,9 @@ class InstagramInspectionTest : PublicImageTestBase() {
                 assertEquals(1, result.inspection.items[0].renditions.size)
                 assertTrue(result.inspection.items.all { it.renditions.size == 1 })
                 assertEquals(5, result.previews.size)
-                assertEquals(listOf(IG_PAGE_TARGET) + (1..5).map { igImagePath(it, "_s640x640") }, f.server.requests.map { it.target })
+                // Photos load in parallel: the page first, then each photo once in any order.
+                assertEquals(listOf(IG_PAGE_TARGET) + (1..5).map { igImagePath(it, "_s640x640") },
+                    f.server.requests.map { it.target }.let { it.take(1) + it.drop(1).sorted() })
             }
         }
     }
@@ -203,8 +205,14 @@ class InstagramInspectionTest : PublicImageTestBase() {
     @Test fun laterFetchDeadlinePreservesEarlierValidatedPhoto() {
         lateinit var operation: ImageInspectionOperation
         val page = igPage(igPolaris(media = igMedia(8, children = listOf(igPhoto(1), igPhoto(2)))))
-        fixture(respond = ig(page = page, override = { request, socket ->
+        val photo = raster(40, 30, "jpg")
+        fixture(respond = ig(page = page, image = photo, override = { request, socket ->
             if (request.target == igImagePath(2, "_s640x640")) {
+                // Photo 1 loads in parallel: let it finish reading before the deadline hits.
+                val read = page.size.toLong() + photo.size
+                val until = System.nanoTime() + 3_000_000_000L
+                while (operation.token.budget.snapshot().consumedBytes < read && System.nanoTime() < until) Thread.sleep(10)
+                Thread.sleep(100)
                 operation.token.stop(MediaHttpFailure.TIMEOUT)
                 socket.close()
                 true

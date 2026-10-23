@@ -79,11 +79,12 @@ internal data class RecordedMediaRequest(val target: String, val headers: Map<St
 /** Real HTTP/1.1 over JDK TLS. Each response closes its connection for deterministic close evidence,
  *  unless [keepAlive] serves further requests on the same socket. */
 internal class MediaHttpServer(private val identity: MediaHttpTlsIdentity, private val keepAlive: Boolean = false,
+    handlerThreads: Int = 2,
     private val respond: (RecordedMediaRequest, SSLSocket) -> Unit = { _, socket -> socket.reply() }) : Closeable {
     private val listener = identity.context.serverSocketFactory.createServerSocket(0, 8,
         InetAddress.getLoopbackAddress()) as SSLServerSocket
     private val sockets = CopyOnWriteArrayList<Socket>()
-    private val handlers = Executors.newFixedThreadPool(2)
+    private val handlers = Executors.newFixedThreadPool(handlerThreads)
     private val accepting = Executors.newSingleThreadExecutor()
     private val stopped = CountDownLatch(1)
     val accepted = AtomicInteger()

@@ -773,8 +773,8 @@ class MediaHttpClientTest {
         h.control()
     }
 
-    @Test fun twoHungDnsWorkersRejectNewResolutionWithoutQueue() {
-        val entered = CountDownLatch(2)
+    @Test fun fourHungDnsWorkersRejectNewResolutionWithoutQueue() {
+        val entered = CountDownLatch(4)
         val release = CountDownLatch(1)
         try {
             fixture(resolver = { host ->
@@ -785,21 +785,20 @@ class MediaHttpClientTest {
                 listOf(PUBLIC_V4)
             }) { h ->
                 h.control()
-                val first = h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE)
-                val second = h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE)
-                MediaHttpFetchTask(h.client, first, request(host = "other.test")).use { one ->
-                    MediaHttpFetchTask(h.client, second, request(host = "other.test")).use { two ->
-                        await(entered, "both bounded DNS workers occupied")
-                        h.client.cancel(first.id); h.client.cancel(second.id)
-                        assertFailure(one.get(), MediaHttpFailure.CANCELLED)
-                        assertFailure(two.get(), MediaHttpFailure.CANCELLED)
-                        h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { fresh ->
-                            assertFailure(h.client.fetch(fresh, request()), MediaHttpFailure.BUSY)
-                            assertEquals(0, fresh.budget.snapshot().socketsCreated)
-                        }
-                        release.countDown()
+                // Two carousel operations, two parallel image fetches each: every bounded DNS worker hangs.
+                val first = h.client.newOperation(MediaHttpOperation.PAGE_AND_CAROUSEL)
+                val second = h.client.newOperation(MediaHttpOperation.PAGE_AND_CAROUSEL)
+                val tasks = listOf(first, first, second, second).map { MediaHttpFetchTask(h.client, it, request(host = "other.test")) }
+                try {
+                    await(entered, "all four bounded DNS workers occupied")
+                    h.client.cancel(first.id); h.client.cancel(second.id)
+                    tasks.forEach { assertFailure(it.get(), MediaHttpFailure.CANCELLED) }
+                    h.client.newOperation(MediaHttpOperation.DIRECT_IMAGE).use { fresh ->
+                        assertFailure(h.client.fetch(fresh, request()), MediaHttpFailure.BUSY)
+                        assertEquals(0, fresh.budget.snapshot().socketsCreated)
                     }
-                }
+                    release.countDown()
+                } finally { tasks.forEach { it.close() } }
                 first.close(); second.close()
             }
         } finally { release.countDown() }
