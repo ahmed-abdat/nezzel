@@ -141,7 +141,7 @@ class ShortcutMaintenanceTest {
                 assertEquals(1, engine.updates.get())
                 assertEquals(0, engine.inspections.get())
                 assertEquals(0, engine.transfers.get())
-                assertEquals(1, CountingClipboard.allReads)
+                assertEquals("empty clipboard is rejected by its description, never read", 0, CountingClipboard.allReads)
                 assertEquals("", c.get().links.text)
             } finally {
                 c.pause().stop().destroy()
