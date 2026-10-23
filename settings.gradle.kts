@@ -10,6 +10,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // NewPipeExtractor ships only on JitPack: nothing else resolves there, and nothing NewPipe resolves elsewhere.
+        exclusiveContent {
+            forRepository { maven("https://jitpack.io") }
+            filter { includeGroupByRegex("com\\.github\\.TeamNewPipe(\\..*)?") }
+        }
     }
 }
 

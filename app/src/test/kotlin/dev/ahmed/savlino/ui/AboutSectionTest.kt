@@ -106,7 +106,9 @@ class AboutSectionTest {
         val all = nodes(a)
         val shown = texts(all)
         val names = OpenSourceNotices.components.map { it.name }
-        listOf("yt-dlp", "youtubedl-android", "FFmpeg", "Python", "Native libraries (FFmpeg and Python)", "QuickJS").forEach { assertTrue(it in names) }
+        listOf("yt-dlp", "youtubedl-android", "FFmpeg", "Python", "Native libraries (FFmpeg and Python)", "QuickJS",
+            "NewPipe Extractor", "Rhino", "Rhino notices (V8-derived parts)", "Protocol Buffers (Java Lite)", "nanojson",
+            "desugar_jdk_libs").forEach { assertTrue(it in names) }
         OpenSourceNotices.components.forEach { c ->
             assertTrue("Missing ${c.name}", shown.contains(NezzelFormat.isolate(c.name)))
             assertTrue("Missing ${c.spdx}", shown.any { c.spdx in it })
@@ -130,6 +132,20 @@ class AboutSectionTest {
     @Test fun componentsWithoutBundledTextOnlyNameTheirLicence() {
         val none = OpenSourceNotices.components.filter { it.asset == null }.map { it.name }.toSet()
         assertEquals(setOf("yt-dlp"), none)
+    }
+
+    @Test fun newPipeExtractorRowsOpenTheirUpstreamTexts() {
+        fun text(name: String) = OpenSourceNotices.components.first { it.name == name }.asset!!.let { path ->
+            context.assets.open(path).bufferedReader().use { it.readText() }
+        }
+        assertEquals("GPL-3.0-or-later", OpenSourceNotices.components.first { it.name == "NewPipe Extractor" }.spdx)
+        assertTrue("GNU GENERAL PUBLIC LICENSE" in text("NewPipe Extractor"))
+        assertTrue("Mozilla Public License Version 2.0" in text("Rhino"))
+        assertTrue("V8" in text("Rhino notices (V8-derived parts)"))
+        assertTrue("Redistribution and use in source and binary forms" in text("Protocol Buffers (Java Lite)"))
+        assertTrue("Apache License" in text("nanojson"))
+        val desugar = text("desugar_jdk_libs")
+        assertTrue("GNU General Public License" in desugar && "CLASSPATH" in desugar.uppercase())
     }
 
     @Test fun nativeRowsOpenTheBundledNoticeInventory() {

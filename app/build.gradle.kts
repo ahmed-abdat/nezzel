@@ -83,6 +83,8 @@ android {
         buildConfig = true
     }
     compileOptions {
+        // NewPipeExtractor calls Java 10+ stream APIs (Collectors.toUnmodifiableList) that API 29-32 lack.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -163,6 +165,7 @@ dependencies {
         testImplementation(libs.androidx.tracing)
         androidTestImplementation(libs.androidx.tracing)
     }
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.work.runtime)
     testImplementation(libs.work.testing)
     implementation(libs.okhttp)

@@ -19,6 +19,10 @@ okio = "3.18.2"
 lifecycle = "2.8.7"
 robolectric = "4.14.1"
 tracing = "1.2.0"
+newpipe-extractor = "v0.26.5"
+rhino = "1.8.1"
+protobuf-javalite = "4.35.1"
+desugar-jdk-libs = "2.1.5"
 
 [libraries]
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
@@ -33,6 +37,11 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 youtubedl-library = { module = "io.github.junkfood02.youtubedl-android:library", version.ref = "youtubedl" }
 youtubedl-ffmpeg = { module = "io.github.junkfood02.youtubedl-android:ffmpeg", version.ref = "youtubedl" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipe-extractor" }
+rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
+rhino-engine = { module = "org.mozilla:rhino-engine", version.ref = "rhino" }
+protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf-javalite" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
