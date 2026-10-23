@@ -76,8 +76,9 @@ internal data class RecordedMediaRequest(val target: String, val headers: Map<St
     override fun toString() = "RecordedMediaRequest(redacted)"
 }
 
-/** Real HTTP/1.1 over JDK TLS. Each response closes its connection for deterministic close evidence. */
-internal class MediaHttpServer(private val identity: MediaHttpTlsIdentity,
+/** Real HTTP/1.1 over JDK TLS. Each response closes its connection for deterministic close evidence,
+ *  unless [keepAlive] serves further requests on the same socket. */
+internal class MediaHttpServer(private val identity: MediaHttpTlsIdentity, private val keepAlive: Boolean = false,
     private val respond: (RecordedMediaRequest, SSLSocket) -> Unit = { _, socket -> socket.reply() }) : Closeable {
     private val listener = identity.context.serverSocketFactory.createServerSocket(0, 8,
         InetAddress.getLoopbackAddress()) as SSLServerSocket
@@ -106,19 +107,21 @@ internal class MediaHttpServer(private val identity: MediaHttpTlsIdentity,
                         try {
                             socket.use {
                                 val input = it.inputStream
-                                val first = input.readHttpLine() ?: return@use
-                                val headers = linkedMapOf<String, String>()
-                                while (true) {
-                                    val line = input.readHttpLine() ?: break
-                                    if (line.isEmpty()) break
-                                    val split = line.indexOf(':')
-                                    if (split > 0) headers[line.substring(0, split).lowercase()] = line.substring(split + 1).trim()
-                                }
-                                val target = first.substringAfter(' ').substringBefore(' ')
-                                val request = RecordedMediaRequest(target, headers)
-                                requests += request
-                                requestOne.countDown()
-                                respond(request, socket)
+                                do {
+                                    val first = input.readHttpLine() ?: break
+                                    val headers = linkedMapOf<String, String>()
+                                    while (true) {
+                                        val line = input.readHttpLine() ?: break
+                                        if (line.isEmpty()) break
+                                        val split = line.indexOf(':')
+                                        if (split > 0) headers[line.substring(0, split).lowercase()] = line.substring(split + 1).trim()
+                                    }
+                                    val target = first.substringAfter(' ').substringBefore(' ')
+                                    val request = RecordedMediaRequest(target, headers)
+                                    requests += request
+                                    requestOne.countDown()
+                                    respond(request, socket)
+                                } while (keepAlive)
                             }
                         } catch (_: java.io.IOException) {
                             // Expected for TLS rejection, cancellation, read limits and closed fixture sockets.

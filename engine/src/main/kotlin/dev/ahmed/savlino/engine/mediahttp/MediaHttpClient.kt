@@ -639,7 +639,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             try {
                 val builder = OkHttpClient.Builder()
                     .dispatcher(Dispatcher(executor))
-                    .connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS))
+                    // Keep-alive stays inside this token: the client and its pool are evicted when the operation retires.
+                    .connectionPool(ConnectionPool(2, 10, TimeUnit.SECONDS))
                     .proxy(Proxy.NO_PROXY)
                     .dns(PublicAddressDns(token, environment.rawResolver, resolverExecutor))
                     .socketFactory(GuardedMediaSocketFactory(token, environment.routeMapper, save?.let { it::trackSocket }))

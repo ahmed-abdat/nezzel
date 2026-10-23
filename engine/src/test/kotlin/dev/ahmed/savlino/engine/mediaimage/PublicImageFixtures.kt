@@ -129,7 +129,9 @@ internal class PublicImageFixture(identity: MediaHttpTlsIdentity,
     }
     val http = MediaHttpHarness(identity, server, resolver)
     val store = MediaReferenceStore()
-    val inspector = PublicImageInspector(http.client, decoder, store)
+    /** X video info handed out before a redirect: post id + yt-dlp-shaped JSON. */
+    val xVideoInfos = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+    val inspector = PublicImageInspector(http.client, decoder, store) { post, info -> xVideoInfos += post.postId to info }
     val saver = ImageSaveTransfer(http.client, store)
     override fun close() { inspector.close(); store.close(); http.close(); server.close() }
 }
