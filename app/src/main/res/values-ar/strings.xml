@@ -43,6 +43,8 @@
     <string name="estimated_size">≈ %1$s</string>
     <string name="download_size">تنزيل · %1$s</string>
     <string name="saves_to">يُحفظ في %1$s</string>
+    <string name="mobile_data_about">يستهلك نحو %1$s من بيانات هاتفك</string>
+    <string name="mobile_data_exact">يستهلك %1$s من بيانات هاتفك</string>
     <string name="choice_confirmed">تم تأكيد الاختيار</string>
     <string name="checking_again">جارٍ التحقق من جديد…</string>
     <string name="options_changed">تغيّرت الخيارات، اختر من جديد.</string>

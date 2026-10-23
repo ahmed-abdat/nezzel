@@ -8,12 +8,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.domain.Format
 import dev.ahmed.savlino.domain.Size
+import dev.ahmed.savlino.downloads.rememberMetered
 import dev.ahmed.savlino.jobs.SavedBefore
 import dev.ahmed.savlino.jobs.mimeTypeFor
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -36,6 +40,7 @@ internal fun SavesTo() = Text(stringResource(R.string.saves_to, NezzelFormat.iso
 /** The explicit Download action for the chosen quality, pinned under the options; nothing is queued until it is pressed. */
 @Composable
 fun ConfirmationScreen(links: LinkViewModel, language: String) {
+    val metered = rememberMetered()
     Column(Modifier.fillMaxWidth().padding(Space.l).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
         if (links.confirmed) {
             Text(stringResource(R.string.choice_confirmed), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -48,6 +53,9 @@ fun ConfirmationScreen(links: LinkViewModel, language: String) {
         val format = links.selectedFormat
         val roughBytes = format?.let(links::roughSizeBytes)
         val sized = format != null && (format.size != Size.Unknown || roughBytes != null)
+        if (format != null && !links.confirmed && largeOnMobileData(format, roughBytes, metered)) {
+            MobileDataNote(format, roughBytes, language)
+        }
         val label = if (links.refreshing) stringResource(R.string.checking_again)
             else if (sized) stringResource(R.string.download_size, sizeLabel(format!!, language, roughBytes)) else stringResource(R.string.download)
         // TalkBack hears "About 4.7 MB, estimated", never the ≈ symbol.
@@ -58,6 +66,41 @@ fun ConfirmationScreen(links: LinkViewModel, language: String) {
                 if (links.refreshing) liveRegion = LiveRegionMode.Polite
             }) { Text(label) }
     }
+}
+
+/** States the cost: "Uses about 412 MB of your mobile data". The words carry "about", so the size drops its ≈. */
+@Composable
+private fun MobileDataNote(format: Format, roughBytes: Long?, language: String) {
+    val bytes = knownBytes(format, roughBytes) ?: return
+    val amount = NezzelFormat.isolate(NezzelFormat.size(bytes, language))
+    Row(Modifier.testTag("mobile_data_note").semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        // Centred on the first line, so a wrapped sentence keeps the icon beside its start.
+        val line = with(LocalDensity.current) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
+        Icon(painterResource(R.drawable.ic_mobile_data), contentDescription = null,
+            Modifier.padding(top = ((line - 18.dp) / 2).coerceAtLeast(0.dp)).size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(mobileDataText(isEstimate(format, roughBytes), amount), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun mobileDataText(estimate: Boolean, amount: String): String =
+    stringResource(if (estimate) R.string.mobile_data_about else R.string.mobile_data_exact, amount)
+
+private fun knownBytes(format: Format, roughBytes: Long?): Long? = when (val size = format.size) {
+    is Size.Exact -> size.bytes
+    is Size.Estimated -> size.bytes
+    Size.Unknown -> roughBytes
+}
+
+/** The pick is big enough to matter on a data plan: only a size the Download button shows (exact or ≈), never a guess. */
+internal const val LARGE_ON_MOBILE_DATA_BYTES = 100_000_000L
+
+internal fun largeOnMobileData(format: Format, roughBytes: Long?, metered: Boolean): Boolean {
+    if (!metered) return false
+    return (knownBytes(format, roughBytes) ?: return false) >= LARGE_ON_MOBILE_DATA_BYTES
 }
 
 /**
