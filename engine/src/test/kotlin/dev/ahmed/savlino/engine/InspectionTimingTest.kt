@@ -15,7 +15,8 @@ class InspectionTimingTest {
             for (phase in InspectionPhase.entries) { time += 10; InspectionTiming.mark(phase) }
         }
         assertEquals(listOf("intake_accepted 10ms", "engine_gate_passed 20ms", "native_reader_done 30ms",
-            "ytdlp_spawned 40ms", "json_parsed 50ms", "options_shown 60ms", "early_title 70ms", "thumbnail_shown 80ms"), messages)
+            "ytdlp_spawned 40ms", "json_parsed 50ms", "options_shown 60ms", "early_title 70ms", "thumbnail_shown 80ms",
+            "short_link_done 90ms"), messages)
         assertTrue(messages.none { "://" in it })
     }
     @Test fun releaseDisabledTraceRecordsNothing() = runBlocking {
