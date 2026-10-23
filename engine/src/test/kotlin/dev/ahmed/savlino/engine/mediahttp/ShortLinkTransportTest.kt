@@ -18,7 +18,8 @@ class ShortLinkTransportTest {
     private fun fixture(respond: (RecordedMediaRequest, SSLSocket) -> Unit, test: (MediaHttpHarness) -> Unit) {
         MediaHttpServer(identity, respond = respond).use { server -> MediaHttpHarness(identity, server).use(test) }
     }
-    private fun MediaHttpHarness.resolve(url: String) = runBlocking { ShortLinkResolver(client).resolve(LinkInput.parse(url)!!) }
+    private fun MediaHttpHarness.outcome(url: String) = runBlocking { ShortLinkResolver(client).resolve(LinkInput.parse(url)!!) }
+    private fun MediaHttpHarness.resolve(url: String) = (outcome(url) as? ShortLinkOutcome.Resolved)?.link
     private fun redirect(location: String): (RecordedMediaRequest, SSLSocket) -> Unit =
         { _, socket -> socket.reply(301, byteArrayOf(), mapOf("Location" to location)) }
 
@@ -57,17 +58,56 @@ class ShortLinkTransportTest {
         }
     }
 
-    @Test fun interstitialsErrorsCleartextAndPrivateTargetsKeepTheShortLink() {
+    @Test fun interstitialsErrorsAndLoopsKeepTheShortLink() {
         val answers = listOf<(SSLSocket) -> Unit>(
             { it.reply(200, "<html>leaving</html>".toByteArray(), mapOf("Content-Type" to "text/html")) },
             { it.reply(404, byteArrayOf()) },
-            { it.reply(301, byteArrayOf(), mapOf("Location" to "http://www.youtube.com/watch?v=abcdefghijk")) },
-            { it.reply(301, byteArrayOf(), mapOf("Location" to "https://127.0.0.1/x")) },
             { it.reply(301, byteArrayOf(), mapOf("Location" to "https://t.co/loop")) },
         )
         for (answer in answers) fixture({ _, socket -> answer(socket) }) { h ->
-            assertNull(h.resolve("https://t.co/loop"))
+            assertEquals(ShortLinkOutcome.Unresolved, h.outcome("https://t.co/loop"))
             assertEquals(1, h.server.requests.size)
+        }
+    }
+
+    @Test fun aCleartextDestinationIsReadOverHttpsLikeAPastedOne() {
+        fixture(redirect("http://www.youtube.com/watch?v=abcdefghijk")) { h ->
+            assertEquals(youtube, h.resolve("https://t.co/Synth01")?.rawUrl)
+            assertEquals(1, h.server.requests.size)
+        }
+    }
+
+    @Test fun ipLiteralAndLocalhostDestinationsAreBlocked() {
+        for (location in listOf("https://127.0.0.1/x", "http://10.0.0.1/x", "https://[::1]/x", "https://localhost/x"))
+            fixture(redirect(location)) { h ->
+                assertEquals(ShortLinkOutcome.Blocked, h.outcome("https://t.co/Synth01"), location)
+                assertEquals(1, h.server.requests.size)
+            }
+    }
+
+    @Test fun aDestinationThatResolvesToLoopbackIsBlockedWithoutBeingRequested() {
+        val loopback = java.net.InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+        MediaHttpServer(identity, respond = redirect("https://loop.example/x")).use { server ->
+            MediaHttpHarness(identity, server,
+                resolver = { host -> if (host == "loop.example") listOf(loopback) else listOf(PUBLIC_V4) }).use { h ->
+                assertEquals(ShortLinkOutcome.Blocked, h.outcome("https://tinyurl.com/7synthetic"))
+                assertEquals(listOf("tinyurl.com"), h.server.requests.map { it.headers["host"] })
+            }
+        }
+    }
+
+    @Test fun theLandingHopCountsTowardTheThreeRedirectLimit() {
+        val chain = mapOf("bit.ly" to "https://tinyurl.com/a", "tinyurl.com" to "https://t.co/b", "t.co" to "https://ow.ly/c",
+            "ow.ly" to youtube)
+        val respond: (RecordedMediaRequest, SSLSocket) -> Unit =
+            { request, socket -> socket.reply(301, byteArrayOf(), mapOf("Location" to chain.getValue(request.headers["host"]!!))) }
+        fixture(respond) { h ->
+            assertEquals(ShortLinkOutcome.Unresolved, h.outcome("https://bit.ly/synth"))
+            assertEquals(listOf("bit.ly", "tinyurl.com", "t.co", "ow.ly"), h.server.requests.map { it.headers["host"] })
+        }
+        fixture(respond) { h ->
+            assertEquals(youtube, h.resolve("https://tinyurl.com/a")?.rawUrl)
+            assertEquals(3, h.server.requests.size)
         }
     }
 
@@ -78,7 +118,7 @@ class ShortLinkTransportTest {
         MediaHttpClient.forTesting(environment).use { client ->
             for (url in listOf(youtube, "https://youtu.be/abcdefghijk", "https://lnkd.in/p/synthetic", "https://bit.ly/a/b",
                     "https://www.instagram.com/reel/DBsynth01/", "https://example.org/x"))
-                assertNull(runBlocking { ShortLinkResolver(client).resolve(LinkInput.parse(url)!!) }, url)
+                assertEquals(ShortLinkOutcome.Unresolved, runBlocking { ShortLinkResolver(client).resolve(LinkInput.parse(url)!!) }, url)
             client.newShortLinkOperation().use { token ->
                 assertFailure(client.fetchShortLink(token, youtube), MediaHttpFailure.INVALID_CONTEXT)
             }

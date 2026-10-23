@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.mediaimage.*
+import dev.ahmed.savlino.engine.mediahttp.ShortLinkOutcome
 import kotlinx.coroutines.*
 import org.junit.After
 import org.junit.Assert.*
@@ -33,11 +34,16 @@ class ShortLinkRoutingTest {
     private val asked = mutableListOf<String>()
     private var destination: String? = null
     private var hold: CompletableDeferred<Unit>? = null
+    private var blocked = false
     private var nextId = 0
     private val vm = LinkViewModel(SavedStateHandle(), engine = engine, images = images,
         newOperationId = { "op-${++nextId}" }, previewDispatcher = Dispatchers.Unconfined, previewImage = ::testBitmap,
         currentEngineVersion = { "2026.08.19" },
-        resolveShortLink = { link -> asked += link.rawUrl; hold?.await(); destination?.let(LinkInput::parse) })
+        resolveShortLink = { link ->
+            asked += link.rawUrl; hold?.await()
+            if (blocked) ShortLinkOutcome.Blocked
+            else destination?.let(LinkInput::parse)?.let(ShortLinkOutcome::Resolved) ?: ShortLinkOutcome.Unresolved
+        })
     @After fun tearDown() { hold?.complete(Unit); vm.dismissOptions(); pump() }
 
     private fun pump() = shadowOf(Looper.getMainLooper()).idle()
@@ -60,6 +66,16 @@ class ShortLinkRoutingTest {
         settle { vm.optionsState is OptionsState.Ready }
         assertEquals(listOf(short), engine.inspected)
         assertNull((vm.optionsState as OptionsState.Ready).resolvedFrom)
+    }
+
+    @Test fun aNonPublicDestinationFailsWithoutEverReachingTheEngine() {
+        blocked = true
+        check(short)
+        settle { vm.optionsState is OptionsState.Error }
+        assertEquals(DownloadError.Unsupported, (vm.optionsState as OptionsState.Error).error)
+        assertEquals(listOf(short), asked)
+        assertTrue(engine.inspected.isEmpty())
+        assertTrue(images.routes.isEmpty())
     }
 
     @Test fun aPostDestinationGoesToItsReaderAndItsPhotosStaySavable() {

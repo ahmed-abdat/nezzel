@@ -15,6 +15,7 @@ import dev.ahmed.savlino.engine.InspectResult
 import dev.ahmed.savlino.engine.InspectionPhase
 import dev.ahmed.savlino.engine.InspectionTiming
 import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
+import dev.ahmed.savlino.engine.mediahttp.ShortLinkOutcome
 import dev.ahmed.savlino.engine.mediahttp.ShortLinks
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.MediaSourceRoute
@@ -121,8 +122,8 @@ class LinkViewModel(
     private val rememberHeight: (Int) -> Unit = {},
     private val earlyPreview: suspend (ValidatedLink) -> EarlyPreview? = { null },
     private val now: () -> Long = System::currentTimeMillis,
-    /** A known shortener's destination from its redirect alone; null keeps the short link (today's path). */
-    private val resolveShortLink: suspend (ValidatedLink) -> ValidatedLink? = { null },
+    /** A known shortener's destination from its redirect alone; Unresolved keeps the short link (today's path). */
+    private val resolveShortLink: suspend (ValidatedLink) -> ShortLinkOutcome = { ShortLinkOutcome.Unresolved },
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -517,12 +518,17 @@ class LinkViewModel(
         optionsState = OptionsState.Checking(source, id)
         val timing = requireNotNull(inspectionTiming)
         inspectionJob = viewModelScope.launch(timing.context()) {
-            val resolved = try { resolveShortLink(source.link) }
-                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            val outcome = try { resolveShortLink(source.link) }
+                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { ShortLinkOutcome.Unresolved }
             if (operationId != id || currentSource()?.matches(source) != true) return@launch
             operationId = null
             timing.record(InspectionPhase.SHORT_LINK_DONE)
-            route(resolved?.let { LinkRevision(it, source.revision) } ?: source, source)
+            when (outcome) {
+                // A non-public destination is never handed to the engine, not even as the short link it follows.
+                ShortLinkOutcome.Blocked -> optionsState = OptionsState.Error(DownloadError.Unsupported)
+                ShortLinkOutcome.Unresolved -> route(source, source)
+                is ShortLinkOutcome.Resolved -> route(LinkRevision(outcome.link, source.revision), source)
+            }
         }
     }
     /** [input] is what gets read; [origin] is the intake link every staleness check binds to. */

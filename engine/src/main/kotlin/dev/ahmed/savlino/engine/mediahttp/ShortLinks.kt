@@ -29,30 +29,53 @@ object ShortLinks {
     fun isShortLink(link: ValidatedLink): Boolean = MediaHttpPolicy.parse(link.rawUrl)?.let(::isShortLink) == true
 }
 
+/** What a short link's redirect named. */
+sealed interface ShortLinkOutcome {
+    data class Resolved(val link: ValidatedLink) : ShortLinkOutcome
+    /** Nothing usable was learned (interstitial, timeout, chain too long): the caller keeps today's path. */
+    data object Unresolved : ShortLinkOutcome
+    /** The redirect points at a non-public address or an unusable link: neither it nor the short link may be read. */
+    data object Blocked : ShortLinkOutcome
+}
+
 /**
  * Bounded, optional redirect read of a [ShortLinks] link inside the authorized inspection: HTTPS only, at most three
- * hops, 4 s, no cookie, no body. Any failure returns null and the caller keeps today's path. Memory only; never logged.
+ * hops (the landing one included), 4 s, no cookie, no body. The destination must pass the same public-address DNS
+ * check as every hop. Memory only; never logged.
  */
 class ShortLinkResolver internal constructor(private val http: MediaHttpClient,
-    private val fetch: (OperationToken, String) -> MediaHttpResult) {
-    constructor(http: MediaHttpClient) : this(http, http::fetchShortLink)
+    private val fetch: (OperationToken, String) -> MediaHttpResult,
+    private val requirePublic: (OperationToken, HttpUrl) -> Unit) {
+    constructor(http: MediaHttpClient) : this(http, http::fetchShortLink, http::requirePublicHost)
 
-    suspend fun resolve(link: ValidatedLink): ValidatedLink? {
-        if (!ShortLinks.isShortLink(link)) return null
+    suspend fun resolve(link: ValidatedLink): ShortLinkOutcome {
+        if (!ShortLinks.isShortLink(link)) return ShortLinkOutcome.Unresolved
         return withContext(Dispatchers.IO) {
             suspendCancellableCoroutine { continuation ->
                 val token = http.newShortLinkOperation()
                 continuation.invokeOnCancellation { token.close() }
-                val resolved = token.use {
+                val outcome = token.use {
                     try {
-                        if (!continuation.isActive) return@use null
-                        (fetch(token, link.rawUrl) as? MediaHttpResult.Failure)
-                            ?.takeIf { it.reason == MediaHttpFailure.LANDED }?.landing?.let(LinkInput::parse)
-                            ?.takeUnless { ShortLinks.isShortLink(it) }
-                    } catch (_: Exception) { null }
+                        if (!continuation.isActive) ShortLinkOutcome.Unresolved else land(token, link)
+                    } catch (failure: MediaHttpException) {
+                        if (failure.reason == MediaHttpFailure.ADDRESS_REJECTED) ShortLinkOutcome.Blocked
+                        else ShortLinkOutcome.Unresolved
+                    } catch (_: Exception) { ShortLinkOutcome.Unresolved }
                 }
-                if (continuation.isActive) continuation.resume(resolved)
+                if (continuation.isActive) continuation.resume(outcome)
             }
         }
+    }
+
+    private fun land(token: OperationToken, link: ValidatedLink): ShortLinkOutcome {
+        val failure = fetch(token, link.rawUrl) as? MediaHttpResult.Failure ?: return ShortLinkOutcome.Unresolved
+        if (failure.reason == MediaHttpFailure.ADDRESS_REJECTED) return ShortLinkOutcome.Blocked
+        val landing = failure.takeIf { it.reason == MediaHttpFailure.LANDED }?.landing ?: return ShortLinkOutcome.Unresolved
+        // An IP literal, localhost or malformed destination is never handed on, not even through the short link.
+        val resolved = LinkInput.parse(landing) ?: return ShortLinkOutcome.Blocked
+        val url = MediaHttpPolicy.parse(resolved.rawUrl) ?: return ShortLinkOutcome.Blocked
+        if (ShortLinks.isShortLink(url)) return ShortLinkOutcome.Unresolved
+        requirePublic(token, url)
+        return ShortLinkOutcome.Resolved(resolved)
     }
 }

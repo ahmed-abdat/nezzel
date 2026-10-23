@@ -172,6 +172,11 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.SHORT_LINK,
             stopAt = { _, next -> !ShortLinks.isShortLink(next) })
 
+    /** The same public-address DNS check a request would make, without requesting [url]; throws ADDRESS_REJECTED. */
+    internal fun requirePublicHost(token: OperationToken, url: HttpUrl) {
+        PublicAddressDns(token, environment.rawResolver, resolverExecutor, resolverSlots).lookup(url.host)
+    }
+
     /**
      * A bad sibling must not retire valid carousel photos; policy, count, byte and deadline checks still apply.
      * [cap] is this body's [OperationBudget.reserveImage] share of the carousel's image bytes.
@@ -478,8 +483,13 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 if (MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
                                         ?.let(InstagramPostIdentity::isLoginWall) == true) MediaHttpFailure.LOGIN_REQUIRED
                                 else MediaHttpFailure.INVALID_CONTEXT)
-                            val located = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
-                                ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+                            val location = response.header("Location").orEmpty()
+                            val located = MediaHttpPolicy.resolve(url, location)
+                                // A shortener's http destination is read over HTTPS, as a pasted one is; an IP literal,
+                                // localhost or malformed destination is refused outright, so nothing hands it on.
+                                ?: if (shortLink) MediaHttpPolicy.resolve(url, location.replaceFirst(HTTP_SCHEME, "https://"))
+                                    ?: throw MediaHttpException(MediaHttpFailure.ADDRESS_REJECTED)
+                                else throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             val next = when {
                                 facebookPage -> facebookHop(url, located, seen)
                                 linkedInPage -> MediaHttpPolicy.linkedInHopTarget(located)
@@ -494,9 +504,10 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             if (request.pageContext != null && next.host != "media.licdn.com")
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (!seen.add(next.toString())) throw MediaHttpException(MediaHttpFailure.REDIRECT_LOOP)
+                            // The landing hop counts too: a stop never stretches the three-redirect limit.
+                            token.budget.redirect()
                             if (stopAt?.invoke(located, next) == true)
                                 return MediaHttpResult.Failure(MediaHttpFailure.LANDED, null, next.toString())
-                            token.budget.redirect()
                             url = next
                         } else {
                             if (response.code != 200) throw MediaHttpException(MediaHttpFailure.HTTP_STATUS, response.code)
@@ -737,6 +748,7 @@ private const val IMAGE_ACCEPT = "image/jpeg,image/png,image/gif,image/webp;q=0.
 private const val SAVE_BODY_CAP = 20L * 1024 * 1024
 /** Shorteners (t.co, Instagram /share/) answer a browser with an HTML interstitial and anything else with the redirect. */
 private const val SHORT_LINK_AGENT = "Nezzel"
+private val HTTP_SCHEME = Regex("^http://", RegexOption.IGNORE_CASE)
 private const val PUBLIC_USER_AGENT = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
 
 /** Checks the exact route immediately before Socket.connect; fixture mapping is strictly below this guard. */
