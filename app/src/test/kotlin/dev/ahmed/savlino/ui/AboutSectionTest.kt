@@ -108,7 +108,7 @@ class AboutSectionTest {
         val names = OpenSourceNotices.components.map { it.name }
         listOf("yt-dlp", "youtubedl-android", "FFmpeg", "Python", "Native libraries (FFmpeg and Python)", "QuickJS",
             "NewPipe Extractor", "Rhino", "Rhino notices (V8-derived parts)", "Protocol Buffers (Java Lite)", "nanojson",
-            "desugar_jdk_libs").forEach { assertTrue(it in names) }
+            "desugar_jdk_libs", "desugar_jdk_libs_configuration (R8)", "JSR 305 annotations").forEach { assertTrue(it in names) }
         OpenSourceNotices.components.forEach { c ->
             assertTrue("Missing ${c.name}", shown.contains(NezzelFormat.isolate(c.name)))
             assertTrue("Missing ${c.spdx}", shown.any { c.spdx in it })
@@ -146,6 +146,10 @@ class AboutSectionTest {
         assertTrue("Apache License" in text("nanojson"))
         val desugar = text("desugar_jdk_libs")
         assertTrue("GNU General Public License" in desugar && "CLASSPATH" in desugar.uppercase())
+        val r8 = text("desugar_jdk_libs_configuration (R8)")
+        assertTrue("the R8 project authors" in r8 && "Redistribution and use in source and binary forms" in r8)
+        assertEquals("BSD-3-Clause", OpenSourceNotices.components.first { it.name == "desugar_jdk_libs_configuration (R8)" }.spdx)
+        assertTrue("Apache License" in text("JSR 305 annotations"))
     }
 
     @Test fun nativeRowsOpenTheBundledNoticeInventory() {

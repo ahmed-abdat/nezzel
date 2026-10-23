@@ -14,7 +14,7 @@ the source assets remain available alongside it.
 | `rhino-1.8.1-source.tar.gz` | Rhino tag `Rhino1_8_1_Release`, commit `f2d1ffef9dafbd625ca1ea79b8893ecbaee07e61` (MPL-2.0; V8-derived parts BSD-3-Clause). |
 | `protobuf-javalite-4.35.1-source.tar.gz` | Protocol Buffers tag `v35.1`, commit `35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03` (BSD-3-Clause). |
 | `nanojson-e9d656dd-source.tar.gz` | TeamNewPipe nanojson fork, commit `e9d656ddb49a412a5a0a5d5ef20ca7ef09549996` (Apache-2.0). |
-| `desugar_jdk_libs-2.1.5-source.tar.gz` | google/desugar_jdk_libs commit `73170c345e6a762fc6a1f0301bb15218850023ef` (GPL-2.0 with Classpath Exception). Upstream has no 2.x tags; this commit sets `VERSION_JDK11.txt` to 2.1.5 and is the last before the 2.1.5 Maven release. |
+| `desugar_jdk_libs-2.1.5-source.tar.gz` | google/desugar_jdk_libs commit `73170c345e6a762fc6a1f0301bb15218850023ef` (GPL-2.0 with Classpath Exception). Upstream has no 2.x tags; this commit sets `VERSION_JDK11.txt` to 2.1.5 and is the last before the 2.1.5 Maven release (supported inference, not attested upstream; 2026-10-23). Covers desugar_jdk_libs only: desugar_jdk_libs_configuration is BSD-3-Clause R8 code. |
 | `SOURCES.md` | This inventory and expected APK payload hashes. |
 | `SHA256SUMS` | SHA-256 of each of the other source assets above. |
 
