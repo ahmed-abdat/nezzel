@@ -38,13 +38,15 @@ class TitleDownloadTest {
             val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", Inspection(source,
                 "test-version", listOf(row), title = "Confirmed title"), source, row.id, "ignored")).command
             var rewritten = false
+            val events = mutableListOf<EngineEvent>()
             val runtime = Runtime(directory, "mp4").apply { rewrite = { file, title ->
+                assertEquals(EngineEvent.Merging, events.lastOrNull())
                 assertEquals("downloaded", file.readText())
                 assertEquals("Confirmed title", title)
                 file.writeText("rewritten")
                 rewritten = true
             } }
-            val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, directory) {})
+            val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, directory, events::add))
             assertTrue(rewritten)
             assertEquals("rewritten", result.output.file.readText())
         }

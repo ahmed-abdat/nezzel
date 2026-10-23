@@ -126,6 +126,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 progress(EngineEvent.Restarting(restartEpoch))
             }
             var retriedWithoutTags = false
+            var preProcessingBytes: Long? = null
             suspend fun transfer(info: File?) {
                 val attemptEpoch = restartEpoch
                 // Build both while staging still contains only valid partials. A postprocessor failure
@@ -146,12 +147,24 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                             val event = mapper.map(line)
                             // Linearize post-processing/byte progress with expiry. Late byte callbacks
                             // after a post-processor must never arm the watchdog again.
+                            var startedPostProcessing = false
                             synchronized(current) {
                                 // Parsing/converting thumbnails run before downloading: keep the first-byte
                                 // budget armed there, even if the downloader never reports progress.
                                 val preparingTags = bytes <= 0 &&
                                     (line.startsWith("[MetadataParser]") || line.startsWith("[ThumbnailsConvertor]"))
                                 if (!preparingTags && (POSTPROCESSORS.any(line::startsWith) || event == EngineEvent.Merging)) {
+                                    if (!postProcessing) {
+                                        startedPostProcessing = true
+                                        // Stdout delivery may lag behind native rewriting. Prefer the measured
+                                        // transfer bytes; the input file is only a fallback when no bytes were reported.
+                                        // Keep this across the optional untagged retry on the same downloaded audio.
+                                        if (preProcessingBytes == null) {
+                                            val input = File(directory, "output.${command.format.container}")
+                                            preProcessingBytes = bytes.takeIf { it > 0 }
+                                                ?: input.takeIf { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile }?.length()
+                                        }
+                                    }
                                     postProcessing = true; current.deadline = NO_DEADLINE; current.byteWatchdog = false
                                 }
                                 if (!postProcessing && event is EngineEvent.Progress && event.bytesDownloaded > bytes) {
@@ -162,14 +175,17 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                                     }
                                 }
                             }
-                            if (!current.cancelled.get() && event != null)
-                                progress(if (event is EngineEvent.Progress) event.copy(restartEpoch = attemptEpoch) else event)
+                            val delivered = if (startedPostProcessing) EngineEvent.Merging else event
+                            if (!current.cancelled.get() && delivered != null)
+                                progress(if (delivered is EngineEvent.Progress) delivered.copy(restartEpoch = attemptEpoch) else delivered)
                         }
                         break
                     } catch (error: Exception) {
                         val failure = diagnostics.failure(error)
                         resumeAllowed = failure.resumeAllowed
-                        if (error is CancellationException || current.cancelled.get()) throw error
+                        if (error is CancellationException) throw error
+                        // Watchdog cancellation must carry the HTTP retry-warning classification outward.
+                        if (current.cancelled.get()) throw if (current.timedOut.get()) failure else error
                         if (failure.error != DownloadError.MergeFailed || "--embed-thumbnail" !in args || retriedWithoutTags)
                             throw failure
                         currentCoroutineContext().ensureActive()
@@ -191,6 +207,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             catch (error: Exception) {
                 if (error is CancellationException) throw error
                 currentCoroutineContext().ensureActive()
+                // Keep the typed timeout diagnostic instead of replacing it with OperationCancelled.
+                if (current.timedOut.get()) throw error
                 checkCancelled(current)
                 val hasBytes = bytes > 0 || directory.listFiles().orEmpty().any {
                     !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name) && it.length() > 0
@@ -200,6 +218,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 infoCache?.remove(command.jobId)
                 // A new extraction must never inherit bytes from expired signed URLs.
                 bytes = -1L
+                preProcessingBytes = null
                 restartEpoch++
                 progress(EngineEvent.Restarting(restartEpoch))
                 transfer(null)
@@ -224,10 +243,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 val expected = (row.size as? Size.Exact)?.bytes
                 val extractsAudio = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
                 // Allow a 2% size shortfall for an unchanged single stream; remuxed/extracted/converted
-                // outputs and estimates cannot be compared to input sizes. Check before optional title rewriting.
+                // outputs and estimates cannot be compared to input sizes. Native tags may change file size;
+                // compare the bytes captured before post-processing, or the untouched final file.
                 // expected - expected / 50 is ceil(98% of expected), without overflowing Long.
                 if (!row.requiresMerge && row.conversion == null && !extractsAudio && expected != null &&
-                    file.length() < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
+                    (preProcessingBytes ?: file.length()) < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
                 val output = StagedOutput.validate(root, listOf(file))
                 require(output.file.parentFile == root)
                 output
@@ -237,6 +257,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
             // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
             if (command.format.hasVideo && !command.format.animatedGif && output.file.extension.equals("mp4", ignoreCase = true)) {
+                progress(EngineEvent.Merging)
+                checkCancelled(current)
                 try { runtime.rewriteTitle(output.file, command.filename.substringBeforeLast('.'), current.processId) }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { /* Optional polish must never fail an otherwise successful transfer. */ }
@@ -428,13 +450,17 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         } catch (error: Exception) {
             // Never log raw engine output: it may contain source URLs/cookies, even in debug.
             val diagnostic = YtdlpDiagnostics().failure(error)
+            val httpTimeout = current.timedOut.get() && !diagnostic.resumeAllowed &&
+                diagnostic.failureCause == DownloadFailureCause.HTTP
             val mapped = when {
+                httpTimeout -> diagnostic.error
                 current.timedOut.get() -> DownloadError.Network
                 current.cancelled.get() -> DownloadError.Cancelled
                 error is UnsupportedMetadataException -> DownloadError.Unsupported
                 else -> diagnostic.error
             }
             val cause = when {
+                httpTimeout -> DownloadFailureCause.HTTP
                 current.timedOut.get() -> current.timeoutCause
                 current.cancelled.get() -> DownloadFailureCause.OTHER
                 else -> diagnostic.failureCause

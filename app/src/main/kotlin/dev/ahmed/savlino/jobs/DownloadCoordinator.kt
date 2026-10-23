@@ -58,6 +58,19 @@ class DownloadCoordinator(
     private val mutableError = MutableStateFlow<DownloadError?>(null)
     val error: StateFlow<DownloadError?> = mutableError.asStateFlow()
 
+    init {
+        store.onExpired = { row ->
+            // Scrub holds the store monitor. Publish without the coordinator's update monitor:
+            // update() reads the store in the opposite order on native callback threads.
+            val expired = fromRecord(row)
+            mutableProgress.update { old ->
+                if (old.any { it.jobId == row.jobId && it.restartEpoch > row.restartEpoch }) old
+                else if (old.any { it.jobId == row.jobId }) old.map { if (it.jobId == row.jobId) expired else it }
+                else old + expired
+            }
+        }
+    }
+
     fun start(scope: CoroutineScope): Job = scope.launch(CoroutineExceptionHandler { _, _ ->
         // Keep diagnostics out of UI/logs: SQLite errors may contain private row data.
         mutableError.value = DownloadError.ExecutionRestricted
@@ -193,7 +206,11 @@ class DownloadCoordinator(
 
     suspend fun resume(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
-        if (store.get(id)?.stage != JobStage.PAUSED) return@withContext false
+        val row = store.get(id) ?: return@withContext false
+        if (row.stage != JobStage.PAUSED) {
+            if (row.stage.terminal) update(fromRecord(row))
+            return@withContext false
+        }
         try {
             val finished = withTimeoutOrNull(5000) {
                 activeDone[id]?.await()
@@ -203,7 +220,10 @@ class DownloadCoordinator(
             if (!finished) { mutableError.value = DownloadError.ExecutionRestricted; return@withContext false }
             maintenance.withDownload {
                 synchronized(userCancellation) {
-                    if (!store.resume(id)) return@withDownload false
+                    if (!store.resume(id)) {
+                        store.get(id)?.takeIf { it.stage.terminal }?.let { update(fromRecord(it)) }
+                        return@withDownload false
+                    }
                     pauseRequests.remove(id)
                 }
                 mutableError.value = null
@@ -239,12 +259,16 @@ class DownloadCoordinator(
         }
         progressed.remove(id)
         var startBytes = Long.MAX_VALUE
+        var schedulerStopped = false
         fun stoppedError(): DownloadError = when {
             id in userCancellation -> DownloadError.Cancelled
             connectivityStopped(stopReason()) -> DownloadError.Network
             else -> DownloadError.Interrupted
         }
-        fun finishStopped() = finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes)
+        fun finishStopped() {
+            schedulerStopped = stopReason() != WorkInfo.STOP_REASON_NOT_STOPPED
+            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes)
+        }
         try {
             // A pause cancelled this WorkManager attempt before it registered; resume scheduled a new one.
             currentCoroutineContext().ensureActive()
@@ -466,6 +490,12 @@ class DownloadCoordinator(
                     result
                 }
                 if (lateCancellation != null) { update(lateCancellation); finished(lateCancellation) }
+                // A stopped WorkSpec is re-enqueued even though this writer journalled FAILED.
+                // Release native/publication ownership before cancelling that obsolete scheduler entry.
+                if (schedulerStopped && store.get(id)?.stage == JobStage.FAILED) {
+                    try { workManager().cancelUniqueWork(id).result.get() }
+                    catch (_: Exception) { mutableError.value = DownloadError.ExecutionRestricted }
+                }
             }
         }
         store.get(id)
@@ -537,7 +567,10 @@ class DownloadCoordinator(
             if (event.phase == DownloadPhase.CANCELLED) cancellationEvents.tryEmit(event)
         }
         mutableProgress.update { old ->
-            if (event.phase in setOf(DownloadPhase.COMPLETED, DownloadPhase.CANCELLED)) old.filterNot { it.jobId == event.jobId }
+            // An expiry callback can win after the journal check above; never resurrect that confirmation.
+            if (!event.terminal && old.any { it.jobId == event.jobId && it.error == DownloadError.FormatExpired &&
+                    it.restartEpoch >= event.restartEpoch }) old
+            else if (event.phase in setOf(DownloadPhase.COMPLETED, DownloadPhase.CANCELLED)) old.filterNot { it.jobId == event.jobId }
             else if (old.any { it.jobId == event.jobId }) old.map { if(it.jobId == event.jobId) event else it }
             else old + event
         }

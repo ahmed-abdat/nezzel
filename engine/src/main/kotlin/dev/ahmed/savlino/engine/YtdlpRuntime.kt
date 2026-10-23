@@ -274,6 +274,12 @@ internal class YtdlpDiagnostics {
     fun accept(line: String) {
         if (expiredUrl(line)) expired.set(true)
         if (blocksResume(line)) httpFailure.set(true)
+        // Retry warnings are not terminal ERROR lines. Retain only the HTTP class, never their URL/message.
+        if (line.lineSequence().filter { it.startsWith("[download] Got error:") }
+                .any { HTTP_NO_RESUME.containsMatchIn(it.replace(URL, "").lowercase(java.util.Locale.ROOT)) }) {
+            httpFailure.set(true)
+            remember(DownloadError.Failed, DownloadFailureCause.HTTP)
+        }
         if (line.lineSequence().any { it.startsWith("ERROR:") })
             remember(YtdlpErrorMapper.map(line), YtdlpErrorMapper.cause(line))
     }
@@ -294,7 +300,11 @@ internal class YtdlpDiagnostics {
                 remember(fallback.error, fallback.failureCause)
             }
         }
-        return YtdlpExecutionFailure(error.get(), expired.get(), !httpFailure.get(), cause.get())
+        val mapped = error.get().let {
+            if (httpFailure.get() && cause.get() == DownloadFailureCause.HTTP &&
+                it in setOf(DownloadError.Network, DownloadError.Offline)) DownloadError.Failed else it
+        }
+        return YtdlpExecutionFailure(mapped, expired.get(), !httpFailure.get(), cause.get())
     }
     companion object {
         fun blocksResume(message: String): Boolean = errorLines(message).any(HTTP_NO_RESUME::containsMatchIn)

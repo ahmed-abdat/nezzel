@@ -1,5 +1,8 @@
 package dev.ahmed.savlino.engine
 
+import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.domain.DownloadFailureCause
+
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.*
 
@@ -129,4 +132,23 @@ class YtdlpRuntimeTest {
         assertEquals("result", runtime.execute(emptyList(), "logical-id") { delivered++ })
         assertEquals(1000, delivered)
     }
+    @Test fun retryWarningRetainsOnlyHttpClassAndIgnoresUnrelatedWarningsAndUrlText() {
+        for (status in listOf(429, 500, 503)) {
+            val diagnostic = YtdlpDiagnostics().apply {
+                accept("[download] Got error: HTTP Error $status: https://example.org/private. Retrying fragment 3 (1/10)...")
+            }.failure(YtdlpExecutionFailure(DownloadError.Network))
+            assertEquals(DownloadFailureCause.HTTP, diagnostic.failureCause)
+            assertEquals(DownloadError.Failed, diagnostic.error)
+            assertFalse(diagnostic.resumeAllowed)
+            assertNull(diagnostic.message)
+            assertNull(diagnostic.cause)
+        }
+        for (line in listOf("WARNING: HTTP Error 503", "[debug] HTTP Error 429",
+            "[download] Got error: connection reset https://example.org/HTTP%20Error%20503. Retrying fragment 3")) {
+            val diagnostic = YtdlpDiagnostics().apply { accept(line) }.failure()
+            assertEquals(DownloadFailureCause.OTHER, diagnostic.failureCause)
+            assertTrue(diagnostic.resumeAllowed)
+        }
+    }
+
 }

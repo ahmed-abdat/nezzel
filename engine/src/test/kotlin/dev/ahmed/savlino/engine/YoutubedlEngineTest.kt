@@ -76,6 +76,34 @@ class YoutubedlEngineTest {
         }
     }
 
+    @Test fun fragmentRetryHttpClassSurvivesWatchdogTimeout() = runBlocking {
+        for (status in listOf(429, 503)) {
+            val stopped = CountDownLatch(1)
+            val runtime = object : YtdlpRuntime {
+                override val initialization = EngineInitialization()
+                override fun initialize() = Unit
+                override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
+                    if ("--version" in args) return "2025.11.12"
+                    line("nezzel:18:1:3:NA")
+                    repeat(3) {
+                        line("[download] Got error: HTTP Error $status: https://example.org/private. Retrying fragment 2 (1/10)...")
+                    }
+                    check(stopped.await(5, TimeUnit.SECONDS))
+                    error("process stopped")
+                }
+                override fun destroy(processId: String): Boolean { stopped.countDown(); return true }
+                override fun update() = Unit
+            }
+            try {
+                val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime,
+                    EngineLimits(stallMs = 100, firstByteMs = 3000)).download(command(), temp.newFolder()) {})
+                assertEquals(DownloadError.Failed, result.error)
+                assertEquals(DownloadFailureCause.HTTP, result.cause)
+                assertFalse(result.resumeAllowed)
+            } finally { stopped.countDown() }
+        }
+    }
+
     @Test fun httpDiagnosticVetoesLaterTransportAndFragmentFailures() = runBlocking {
         for (status in listOf(429, 503)) {
             val runtime = Runtime().apply { action = { _, line ->
@@ -211,7 +239,7 @@ class YoutubedlEngineTest {
         val events = mutableListOf<EngineEvent>()
         val result = YoutubedlEngine(runtime).download(command(), dir, events::add)
         assertEquals(File(dir, "output.mp4").canonicalFile, assertIs<TransferResult.Success>(result).output.file)
-        assertEquals<List<EngineEvent>>(listOf(EngineEvent.Progress(3, Size.Exact(3))), events)
+        assertEquals<List<EngineEvent>>(listOf(EngineEvent.Progress(3, Size.Exact(3)), EngineEvent.Merging), events)
         assertEquals("18", runtime.calls.last().let { it[it.indexOf("-f") + 1] })
     }
     @Test fun outputEscapeAndStaleEngineVersionCannotSucceed() = runBlocking {
