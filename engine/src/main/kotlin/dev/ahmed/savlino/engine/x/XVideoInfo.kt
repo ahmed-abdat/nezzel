@@ -137,5 +137,6 @@ internal object XVideoInfo {
     private val DIGITS = Regex("[0-9]{1,25}")
     private val NAME = Regex("[a-z0-9_]{1,32}")
     private val DIMENSIONS = Regex("/(\\d+)x(\\d+)/")
-    private val LINK = Regex("(?U)\\s+(https?://[^ ]+)")
+    // Android's ICU regex rejects the Unicode-classes flag; \p{Z} adds the Unicode spaces it covered on the JVM.
+    private val LINK = Regex("[\\s\\p{Z}]+(https?://[^ ]+)")
 }

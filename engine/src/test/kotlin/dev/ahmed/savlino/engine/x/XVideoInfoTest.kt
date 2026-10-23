@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.YtdlpMetadataMapper
+import java.io.File
 import org.junit.Test
 import kotlin.test.*
 
@@ -181,6 +182,20 @@ class XVideoInfoTest {
         assertEquals(build(), build(photoThenVideo()))
         val parsed = assertIs<XParseResult.PhotosUnavailableVideo>(XPostParser().parse(photoThenVideo().toString().toByteArray(), X_ID))
         assertEquals(build(), parsed.infoJson)
+    }
+
+    @Test fun titleStripsALinkAfterAUnicodeSpace() {
+        val info = info(root().apply { put("text", "Synthetic post\u00a0https://t.co/Synthetic") })
+        assertEquals("Synthetic Author - Synthetic post", info.path("title").asText())
+    }
+
+    /** Android's ICU regex throws on (?U) at class init, which crashed the app on every X link; the JVM accepts it. */
+    @Test fun mainSourcesUseNoRegexFlagAndroidRejects() {
+        val roots = listOf("src/main", "../core/src/main", "../app/src/main").map(::File).filter { it.isDirectory }
+        assertTrue(roots.isNotEmpty())
+        val offenders = roots.flatMap { it.walk().filter { f -> f.extension == "kt" }.toList() }
+            .filter { it.readText().let { text -> "(?U" in text || "UNICODE_CHARACTER_CLASS" in text } }
+        assertEquals(emptyList<File>(), offenders)
     }
 
     @Test fun titleStripsLinksAndCutsAt72CodePointsLikeYtDlp() {
