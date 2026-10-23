@@ -293,6 +293,50 @@ class DownloadNotificationsTest {
     }
     @Test fun twoRunningJobsGroupUnderOneEnglishSummaryThatSurvivesOneEnding() = twoRunning("en")
     @Test fun twoRunningJobsGroupUnderOneArabicSummaryThatSurvivesOneEnding() = twoRunning("ar")
+    private fun runningTitle(count: Int) = dev.ahmed.savlino.locale.AppLocale.localized(RuntimeEnvironment.getApplication()).resources
+        .getQuantityString(dev.ahmed.savlino.R.plurals.downloads_running, count, dev.ahmed.savlino.locale.NezzelFormat.count(count, "en"))
+
+    @Test fun jobsWhoseIdsShareAHashKeepTheirOwnNotificationsAndBothCount() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        assertEquals("Aa".hashCode(), "BB".hashCode())
+        val notifications = DownloadNotifications(app)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val a = DownloadProgress("Aa", "A.mp4", DownloadPhase.DOWNLOADING, bytes = 1, total = dev.ahmed.savlino.domain.Size.Exact(4))
+        val b = a.copy(jobId = "BB", filename = "B.mp4")
+        val infos = listOf(a, b).map { notifications.foreground(it).also { info -> manager.notify(info.notificationId, info.notification) } }
+        assertNotEquals(infos[0].notificationId, infos[1].notificationId)
+        notifications.progress(a.copy(bytes = 2)); notifications.progress(b.copy(bytes = 3))
+        val live = manager.activeNotifications.filter { it.tag == null }
+        assertEquals(setOf("A.mp4", "B.mp4"), live.map { it.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString() }.toSet())
+        val summary = manager.activeNotifications.single { it.tag == DownloadNotifications.SUMMARY_TAG }.notification
+        assertEquals(runningTitle(2), summary.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString())
+    }
+
+    @Test fun anOldAttemptSettlingAfterItsRerunPromotedLeavesTheJobCounted() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val notifications = DownloadNotifications(app)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val a = DownloadProgress("a", "A.mp4", DownloadPhase.DOWNLOADING, bytes = 1, total = dev.ahmed.savlino.domain.Size.Exact(4))
+        val b = a.copy(jobId = "b", filename = "B.mp4")
+        val old = Any(); val rerun = Any()
+        fun promote(job: DownloadProgress, attempt: Any) =
+            notifications.foreground(job, attempt).also { manager.notify(it.notificationId, it.notification) }
+        fun summaryTitle() = manager.activeNotifications.singleOrNull { it.tag == DownloadNotifications.SUMMARY_TAG }
+            ?.notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+        promote(a, old); promote(b, Any())
+        assertEquals(runningTitle(2), summaryTitle())
+        // The stopped attempt released the job; its rerun promotes before the old worker's finally runs.
+        val again = promote(a.copy(phase = DownloadPhase.PREPARING), rerun)
+        notifications.settled("a", old)
+        assertEquals("The rerun still runs under the same ID", runningTitle(2), summaryTitle())
+        manager.cancel(again.notificationId) // WorkManager drops the rerun's foreground notification when it ends.
+        notifications.settled("a", rerun)
+        notifications.finished(b.copy(phase = DownloadPhase.CANCELLED))
+        assertNull(summaryTitle())
+    }
+
     @Test fun pausedJobLeavesTheGroupAndItsCount() {
         val app = RuntimeEnvironment.getApplication()
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)

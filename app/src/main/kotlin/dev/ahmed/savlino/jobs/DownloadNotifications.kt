@@ -32,8 +32,10 @@ class DownloadNotifications(private val base: Context) {
         manager.createNotificationChannel(NotificationChannel(COMPLETED_CHANNEL, context.getString(R.string.completed_channel),
             NotificationManager.IMPORTANCE_DEFAULT))
     }
-    fun foreground(progress: DownloadProgress): ForegroundInfo {
+    /** [attempt] is the worker promoting this job; [settled] only drops the job from the group for that same attempt. */
+    fun foreground(progress: DownloadProgress, attempt: Any? = null): ForegroundInfo {
         channel()
+        attempt?.let { synchronized(SUMMARY_LOCK) { attempts[progress.jobId] = it } }
         // Retry reuses the job ID; its previous result no longer describes this attempt.
         manager.cancel(activeId(progress.jobId) xor Int.MIN_VALUE)
         // WorkManager posts the returned notification after this call, so count it as shown already.
@@ -54,8 +56,14 @@ class DownloadNotifications(private val base: Context) {
         post(activeId(progress.jobId), notification(progress), PAUSED_TAG)
         summary(excluding = progress.jobId)
     }
-    /** This job's worker has returned: WorkManager drops its active notification, so the group stops counting it. */
-    fun settled(jobId: String) = summary(excluding = jobId)
+    /**
+     * This job's worker has returned: WorkManager drops its active notification, so the group stops counting it.
+     * A rerun of the same job may already have promoted itself under the same ID; then the job still counts.
+     */
+    fun settled(jobId: String, attempt: Any? = null) = synchronized(SUMMARY_LOCK) {
+        val current = attempts[jobId]
+        if (current == null || current === attempt) { attempts.remove(jobId); summary(excluding = jobId) }
+    }
 
     /**
      * One group for the live job notifications, with a "2 downloads running" summary once two are shown (API 24+ bundles
@@ -133,7 +141,14 @@ class DownloadNotifications(private val base: Context) {
         const val PAUSE = "dev.ahmed.savlino.PAUSE_DOWNLOAD"
         const val RESUME = "dev.ahmed.savlino.RESUME_DOWNLOAD"
         private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        private fun activeId(id: String) = id.hashCode() and Int.MAX_VALUE
+        private val ids = HashMap<String, Int>()
+        private val attempts = HashMap<String, Any>()
+        /** The hash keeps a job's ID across process restarts; a job whose hash another job already holds probes on. */
+        private fun activeId(id: String): Int = synchronized(ids) {
+            ids[id] ?: ids.values.toHashSet().let { taken ->
+                generateSequence(id.hashCode() and Int.MAX_VALUE) { (it + 1) and Int.MAX_VALUE }.first { it !in taken }
+            }.also { ids[id] = it }
+        }
         /** Tags the paused notification so it never shares an ID with the foreground or result ones. */
         private const val PAUSED_TAG = "paused"
         const val GROUP = "dev.ahmed.savlino.DOWNLOADS"

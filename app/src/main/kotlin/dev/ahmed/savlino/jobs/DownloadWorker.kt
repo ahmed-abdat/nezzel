@@ -11,11 +11,11 @@ class DownloadWorker(context: Context, params: WorkerParameters,
         val progress = coordinator.progress.value.firstOrNull { it.jobId == jobId }
             ?: DownloadProgress(jobId.orEmpty(), applicationContext.getString(dev.ahmed.savlino.R.string.app_name),
                 DownloadPhase.PREPARING)
-        return notifications.foreground(progress)
+        return notifications.foreground(progress, this)
     }
     override suspend fun doWork(): Result {
         val id = jobId?.takeIf(JobStore::validJobId) ?: return Result.failure()
-        try { return run(id) } finally { notifications.settled(id) }
+        try { return run(id) } finally { notifications.settled(id, this) }
     }
     private suspend fun run(id: String): Result {
         // When another job's worker ends, WorkManager re-promotes the service with this job's last ForegroundInfo.
@@ -23,7 +23,7 @@ class DownloadWorker(context: Context, params: WorkerParameters,
         var promoted: Any? = null
         suspend fun promote(event: DownloadProgress) {
             promoted = foregroundKey(event)
-            setForeground(notifications.foreground(event))
+            setForeground(notifications.foreground(event, this@DownloadWorker))
         }
         val persistence = ProgressPersistence(coordinator.monotonicMillis) { event ->
             setProgress(workDataOf("phase" to event.phase.name, "bytes" to (event.bytes ?: -1L),
