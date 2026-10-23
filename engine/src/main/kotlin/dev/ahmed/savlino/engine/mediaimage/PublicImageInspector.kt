@@ -45,7 +45,9 @@ class ImageInspectionOperation internal constructor(val source: LinkRevision,
  * one pixel decode runs in the process at a time. Blocking work runs on the IO dispatcher.
  */
 class PublicImageInspector(private val http: MediaHttpClient, private val decoder: ImagePreviewDecoder,
-    private val references: MediaReferenceStore) : Closeable {
+    private val references: MediaReferenceStore,
+    /** Receives the yt-dlp-shaped info of an X video post before its redirect (memory only; never logged). */
+    private val xVideoInfo: (XPostIdentity, String) -> Unit = { _, _ -> }) : Closeable {
     private val lock = Any()
     private var current: ImageInspectionOperation? = null
     private val validator = ImageRepresentationValidator()
@@ -282,8 +284,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             finally { page.close() }
         val parsed = when (val result = xParser.parse(body.bytes, identity.postId, body.length)) {
             is XParseResult.Failure -> return Fetched.Failed(failure(result.reason, result.phase))
-            XParseResult.Video -> return redirectTo(operation, operation.source.link)
-            XParseResult.PhotosUnavailableVideo -> return redirectTo(operation, operation.source.link, photosUnavailable = true)
+            is XParseResult.Video -> return xVideo(operation, identity, result.infoJson, photosUnavailable = false)
+            is XParseResult.PhotosUnavailableVideo -> return xVideo(operation, identity, result.infoJson, photosUnavailable = true)
             is XParseResult.Success -> result
         }
         operation.fetchPhase = ImagePhase.IMAGE
@@ -467,6 +469,13 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     private fun facebookWatchLink(videoId: String): ValidatedLink? =
         videoId.takeIf { it.length <= 25 && it.isNotEmpty() && it.all { c -> c in '0'..'9' } }
             ?.let { LinkInput.parse("https://www.facebook.com/watch/?v=$it") }
+
+    /** The info built from the syndication JSON goes out only while this operation is still current. */
+    private fun xVideo(operation: ImageInspectionOperation, identity: XPostIdentity, infoJson: String?,
+        photosUnavailable: Boolean): Fetched {
+        if (infoJson != null && terminal(operation) == null) xVideoInfo(identity, infoJson)
+        return redirectTo(operation, operation.source.link, photosUnavailable)
+    }
 
     /** A canonical post/watch link for yt-dlp at the caller's revision; no media URL, preview or reference. */
     private fun redirectTo(operation: ImageInspectionOperation, link: ValidatedLink?, photosUnavailable: Boolean = false): Fetched {

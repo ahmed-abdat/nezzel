@@ -106,6 +106,7 @@ class XInspectionTest : PublicImageTestBase() {
                 assertEquals(link, redirect.source.link.rawUrl)
                 assertEquals(7, redirect.source.revision)
                 assertEquals(listOf(X_SYNDICATION_TARGET), f.server.requests.map { it.target })
+                assertEquals(listOf(X_ID), f.xVideoInfos.map { it.first }, "yt-dlp-shaped info routed once")
             }
         }
     }

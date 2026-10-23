@@ -15,7 +15,7 @@ class XPostParserTest {
         phase: ImagePhase = ImagePhase.PAGE) = assertEquals(XParseResult.Failure(reason, phase), parse(body, id))
 
     @Test fun mixedPostWithNoUsablePhotosKeepsVideoHandoff() {
-        assertEquals(XParseResult.PhotosUnavailableVideo, parse(xTweet(listOf("""{"type":"photo"}""", xVideo()))))
+        assertNotNull(assertIs<XParseResult.PhotosUnavailableVideo>(parse(xTweet(listOf("""{"type":"photo"}""", xVideo())))).infoJson)
     }
 
     @Test fun onlyMeasuredBytesCountWhenAllocationHasSpareCapacity() {
@@ -47,7 +47,7 @@ class XPostParserTest {
     @Test fun gifPhotoUsesImageCandidateWhileAnimatedGifKeepsVideoHandoff() {
         assertEquals(listOf("https://pbs.twimg.com/media/SyntheticPhoto1?format=gif&name=orig"),
             parsed(xTweet(listOf(xPhoto("SyntheticPhoto1", "gif")))).candidates)
-        assertEquals(XParseResult.Video, parse(xTweet(listOf(xVideo("animated_gif")))))
+        assertIs<XParseResult.Video>(parse(xTweet(listOf(xVideo("animated_gif")))))
     }
 
     @Test fun singlePhotoIsTheOriginalOnPbsWithPostTextAndAuthor() {
@@ -78,8 +78,8 @@ class XPostParserTest {
     }
 
     @Test fun anyVideoOrGifInThePostHandsOffToYtDlp() {
-        assertEquals(XParseResult.Video, parse(xTweet(listOf(xVideo()))))
-        assertEquals(XParseResult.Video, parse(xTweet(listOf(xVideo("animated_gif")))))
+        assertNotNull(assertIs<XParseResult.Video>(parse(xTweet(listOf(xVideo())))).infoJson)
+        assertIs<XParseResult.Video>(parse(xTweet(listOf(xVideo("animated_gif")))))
         // Mixed photo + video: yt-dlp reads the video, as it did before this reader.
         assertEquals(1, parsed(xTweet(listOf(xPhoto(), xVideo()))).candidates.size)
         assertEquals(1, parsed(xTweet(listOf(xVideo(), xPhoto()))).candidates.size)

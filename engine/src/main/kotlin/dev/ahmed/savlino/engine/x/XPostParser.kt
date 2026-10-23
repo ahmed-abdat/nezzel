@@ -19,9 +19,16 @@ sealed interface XParseResult {
         val title: String? = null, val author: String? = null) : XParseResult {
         override fun toString() = "XParseResult.Success(redacted)"
     }
-    /** The post has only usable video/GIF media: yt-dlp reads it as before. */
-    data object Video : XParseResult
-    data object PhotosUnavailableVideo : XParseResult
+    /**
+     * The post has only usable video/GIF media. [infoJson] is the yt-dlp-shaped info built from this JSON
+     * ([XVideoInfo]); null means yt-dlp reads the post as before.
+     */
+    class Video(val infoJson: String?) : XParseResult {
+        override fun toString() = "XParseResult.Video(redacted)"
+    }
+    class PhotosUnavailableVideo(val infoJson: String?) : XParseResult {
+        override fun toString() = "XParseResult.PhotosUnavailableVideo(redacted)"
+    }
     /**
      * [phase] PAGE: no media verdict yet (the app may fall back to yt-dlp once). IMAGE: the post is known to be
      * photo-only but its photo cannot be used; yt-dlp has nothing to add, so the error is shown.
@@ -57,13 +64,13 @@ class XPostParser {
         val types = media.map { it.path("type").asText("") }
         val hasVideo = types.any { it == "video" || it == "animated_gif" }
         val photos = media.filter { it.path("type").asText("") == "photo" }
-        if (photos.isEmpty()) return if (hasVideo) XParseResult.Video else noMedia()
+        if (photos.isEmpty()) return if (hasVideo) XParseResult.Video(XVideoInfo.build(root, postId)) else noMedia()
         // Keep only evidenced own photos. Malformed siblings make discovery partial; no usable photo is an
         // IMAGE failure, so a known photo post never becomes a yt-dlp fallback.
         val usable = photos.take(20).mapNotNull { photo ->
             mediaUrl.matchEntire(photo.path("media_url_https").asText(""))?.let { photo to it }
         }
-        if (usable.isEmpty()) return if (hasVideo) XParseResult.PhotosUnavailableVideo
+        if (usable.isEmpty()) return if (hasVideo) XParseResult.PhotosUnavailableVideo(XVideoInfo.build(root, postId))
             else XParseResult.Failure(ImageFailure.SOURCE_REFUSED, ImagePhase.IMAGE)
         var large = false
         val candidates = usable.map { (photo, match) ->
