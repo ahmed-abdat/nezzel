@@ -53,6 +53,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     /** Row artwork lives and dies with the row: Remove, the 100-row prune. */
     val artwork = JobArtwork(context.filesDir)
     private val terminalLock = Any()
+    /** Called under this helper's monitor; observers must not acquire coordinator locks or read the store. */
+    internal var onExpired: (JobRecord) -> Unit = {}
     private val infoCache = dev.ahmed.savlino.engine.YtdlpInfoCache(context.noBackupFilesDir)
 
     init {
@@ -423,7 +425,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             } finally { db.endTransaction() }
         }
         // A live writer in this process deletes its own staging once the engine has exited.
-        for (id in changed) { infoCache.remove(id); if (id !in liveWriters) cleanupJobStaging(jobRoot, id) }
+        for (id in changed) {
+            infoCache.remove(id)
+            if (id !in liveWriters) cleanupJobStaging(jobRoot, id)
+            val row = db.query("jobs", null, "job_id = ?", arrayOf(id), null, null, null)
+                .use { if (it.moveToFirst()) read(it) else null }
+            if (row != null) onExpired(row)
+        }
         db.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0 " +
             "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ?", arrayOf(cutoff))
     }

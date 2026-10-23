@@ -100,6 +100,65 @@ class YtdlpAudioTagsTest {
         }
     }
 
+    @Test fun exactAudioCompletenessUsesBytesBeforeTaggingShrinksMetadata() = runBlocking {
+        for (container in listOf("mp3", "m4a")) {
+            for (taggingFails in listOf(false, true)) {
+                val dir = temp.newFolder().canonicalFile
+                val output = File(dir, "output.$container")
+                val format = Format("native-audio", container, false, true, size = Size.Exact(1000))
+                val runtime = Runtime().apply { action = { args, line ->
+                    if ("--embed-metadata" in args) {
+                        // Metadata parsing before transfer must not snapshot a missing file.
+                        line("[MetadataParser] Parsed title")
+                        output.writeBytes(ByteArray(1000))
+                        line("nezzel:native-audio:1000:1000:NA")
+                        line("[Metadata] Adding metadata")
+                        output.writeBytes(ByteArray(950))
+                        if (taggingFails) error("ERROR: Postprocessing: cover failed")
+                    }
+                    File(dir, "result-path.txt").writeText(output.path)
+                    ""
+                } }
+                val result = YoutubedlEngine(runtime).download(command(format), dir) {}
+                assertEquals(950L, assertIs<TransferResult.Success>(result).output.file.length())
+                assertEquals(if (taggingFails) 2 else 1, runtime.calls.size)
+            }
+        }
+    }
+
+    @Test fun delayedTaggingCallbackUsesMeasuredTransferBytesRatherThanAlreadyRewrittenFile() = runBlocking {
+        val dir = temp.newFolder().canonicalFile
+        val output = File(dir, "output.mp3")
+        val runtime = Runtime().apply { action = { _, line ->
+            output.writeBytes(ByteArray(1000))
+            line("nezzel:native-audio:1000:1000:NA")
+            // Native processing may outrun the wrapper's stdout reader.
+            output.writeBytes(ByteArray(950))
+            line("[Metadata] Adding metadata")
+            File(dir, "result-path.txt").writeText(output.path)
+            ""
+        } }
+        val format = Format("native-audio", "mp3", false, true, size = Size.Exact(1000))
+        val result = YoutubedlEngine(runtime).download(command(format), dir) {}
+        assertEquals(950L, assertIs<TransferResult.Success>(result).output.file.length())
+    }
+
+    @Test fun truncatedAudioStillFailsWhenTaggingExpandsIt() = runBlocking {
+        val dir = temp.newFolder().canonicalFile
+        val output = File(dir, "output.mp3")
+        val runtime = Runtime().apply { action = { _, line ->
+            output.writeBytes(ByteArray(950))
+            line("nezzel:native-audio:950:950:NA")
+            line("[Metadata] Adding metadata")
+            output.writeBytes(ByteArray(1100))
+            File(dir, "result-path.txt").writeText(output.path)
+            ""
+        } }
+        val format = Format("native-audio", "mp3", false, true, size = Size.Exact(1000))
+        assertEquals(TransferResult.Failure(DownloadError.MergeFailed),
+            YoutubedlEngine(runtime).download(command(format), dir) {})
+    }
+
     @Test fun taggingFailureRetriesOnceOnSameAudioAndPublishesWithoutArtworkSidecars() = runBlocking {
         for (format in audio) {
             val dir = temp.newFolder().canonicalFile

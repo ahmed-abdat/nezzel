@@ -200,6 +200,61 @@ class DownloadCoordinatorTest {
         }
     }
 
+    @Test fun resumePublishesExpiredPausedRowAndDeletesItsPartial() = runBlocking {
+        heldTransfer().use { f ->
+            assertTrue(f.coordinator.enqueue(command("expired-pause")))
+            assertTrue(f.coordinator.pause("expired-pause"))
+            val staging = File(app.filesDir, "downloads/expired-pause").apply { mkdirs() }
+            staging.resolve("output.mp4.part").writeText("partial")
+            assertTrue(f.coordinator.progress.value.single().paused)
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?",
+                arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, "expired-pause"))
+
+            assertFalse(f.coordinator.resume("expired-pause"))
+            val progress = f.coordinator.progress.value.single()
+            assertEquals(DownloadPhase.FAILED, progress.phase)
+            assertEquals(DownloadError.FormatExpired, progress.error)
+            assertFalse(progress.paused)
+            assertFalse(progress.retryable)
+            assertFalse(staging.exists())
+        }
+    }
+
+    @Test fun resumePublishesExpiryThatWinsWhileWaitingForPreviousWork() = runBlocking {
+        heldTransfer().use { f ->
+            assertTrue(f.coordinator.enqueue(command("expiry-race")))
+            assertTrue(f.coordinator.pause("expiry-race"))
+            f.beforeSchedule = {
+                f.store.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?",
+                    arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, "expiry-race"))
+            }
+            assertFalse(f.coordinator.resume("expiry-race"))
+            val progress = f.coordinator.progress.value.single()
+            assertEquals(DownloadPhase.FAILED, progress.phase)
+            assertEquals(DownloadError.FormatExpired, progress.error)
+            assertFalse(progress.paused)
+        }
+    }
+
+    @Test fun unrelatedJournalReadPublishesEveryPausedExpiryWithoutResume() = runBlocking {
+        heldTransfer().use { f ->
+            for (id in listOf("expired-one", "expired-two")) {
+                assertTrue(f.coordinator.enqueue(command(id)))
+                assertTrue(f.coordinator.pause(id))
+            }
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at=?",
+                arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000))
+
+            assertNull(f.store.get("unrelated")) // Scrubbing is triggered by any journal read.
+            assertEquals(2, f.coordinator.progress.value.size)
+            for (progress in f.coordinator.progress.value) {
+                assertEquals(DownloadPhase.FAILED, progress.phase)
+                assertEquals(DownloadError.FormatExpired, progress.error)
+                assertFalse(progress.paused)
+            }
+        }
+    }
+
     private fun heldTransfer(): HeldTransfer {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
