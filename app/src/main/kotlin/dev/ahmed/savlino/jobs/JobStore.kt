@@ -330,7 +330,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     /** Persist the failure reason if provider reconciliation must be deferred. */
     @Synchronized internal fun requestPublicationFailure(jobId: String, reason: DownloadError) {
-        require(reason in setOf(DownloadError.Cancelled, DownloadError.Interrupted, DownloadError.Network,
+        require(reason in setOf(DownloadError.Cancelled, DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
             DownloadError.InsufficientSpace, DownloadError.FolderUnavailable))
         writableDatabase.update("jobs", ContentValues().apply { put("error", reason.name) },
             "job_id = ? AND stage IN ('PENDING_INSERTED','PUBLISHING') AND (error IS NULL OR error != 'Cancelled')", arrayOf(jobId))
@@ -354,7 +354,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING),
             if (cancelled) JobStage.CANCELLED else JobStage.FAILED, ContentValues().apply {
                 put("error", if (cancelled) DownloadError.Cancelled.name
-                    else if (reason in setOf(DownloadError.Interrupted, DownloadError.Network,
+                    else if (reason in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
                         DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)) reason!!.name else DownloadError.SaveFailed.name)
                 put("retryable", if (!cancelled) 1 else 0); putNull("pending_uri")
             })
@@ -448,7 +448,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
-            DownloadError.Failed, DownloadError.EngineUnavailable)
+            DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
 
         private fun encodeFormat(format: Format): String = JSONObject().apply {

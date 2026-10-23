@@ -380,4 +380,7 @@
     <string name="widget_failed">Didn\'t finish</string>
     <string name="widget_description">\u2066Nezzel\u2069: paste a copied link</string>
     <string name="shortcut_downloads_short">Downloads</string>
+    <string name="download_battery_error">Android stopped this download to save battery</string>
+    <string name="battery_settings">Battery settings</string>
+    <string name="battery_hint_samsung">Samsung: add Nezzel to “Never sleeping apps” in Battery settings</string>
 </resources>

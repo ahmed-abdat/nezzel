@@ -12,7 +12,9 @@ enum class DownloadError {
     /** The link now opens a site's home page (dead short link), not a post. */
     NotAPost,
     /** The site refused the request (HTTP 403); neither lost connectivity nor an expired media selection. */
-    SourceRefused;
+    SourceRefused,
+    /** Android stopped the transfer for battery/background limits (API 31+ stop reason only, never guessed). */
+    StoppedByBattery;
 
     /** Default for adapters that already return concrete connectivity errors. */
     val cause: DownloadFailureCause get() = when (this) {
