@@ -73,7 +73,7 @@ fun ConfirmationScreen(links: LinkViewModel, language: String) {
 private fun MobileDataNote(format: Format, roughBytes: Long?, language: String) {
     val bytes = knownBytes(format, roughBytes) ?: return
     val amount = NezzelFormat.isolate(NezzelFormat.size(bytes, language))
-    Row(Modifier.testTag("mobile_data_note").semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+    Row(Modifier.testTag("mobile_data_note").semantics(mergeDescendants = true) { },
         horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         // Centred on the first line, so a wrapped sentence keeps the icon beside its start.
         val line = with(LocalDensity.current) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }

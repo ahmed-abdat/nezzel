@@ -31,6 +31,9 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
+import org.robolectric.shadows.ShadowConnectivityManager
 import org.robolectric.shadows.ShadowNetworkCapabilities
 
 /** The "large file on mobile data" line: shown only for a known size ≥ 100 MB on a metered network; never blocks Download. */
@@ -80,6 +83,30 @@ class MobileDataNoteTest {
             assertFalse(note(activity))
         }
     }
+
+    @Test fun lostNetworkHidesTheNoteUntilTheNextOneReports() =
+        render(Size.Exact(240_000_000), metered = true) { activity, _ ->
+            assertTrue(note(activity))
+            val network = connectivity().activeNetwork!!
+            callbacks().forEach { it.onLost(network) }
+            assertFalse(note(activity))
+            switchTo(metered = true)
+            assertTrue(note(activity))
+        }
+
+    @Test fun unmeteredVpnShowsNoNote() = render(Size.Exact(240_000_000), metered = true) { activity, _ ->
+        assertTrue(note(activity))
+        val vpn = capabilities(metered = false).also { shadowOf(it).addTransportType(NetworkCapabilities.TRANSPORT_VPN) }
+        callbacks().forEach { it.onCapabilitiesChanged(connectivity().activeNetwork!!, vpn) }
+        assertFalse(note(activity))
+    }
+
+    @Test @Config(shadows = [RefusingConnectivity::class]) fun failedRegistrationShowsNoNoteAndDoesNotCrash() =
+        render(Size.Exact(240_000_000), metered = true) { activity, vm ->
+            assertTrue(callbacks().isEmpty())
+            assertFalse(note(activity))
+            assertTrue(vm.downloadEnabled)
+        }
 
     private lateinit var activity: ComponentActivity
     // Own recomposer and frame clock: the shared Android one may be tied to an earlier test's looper and never send a frame.
@@ -142,4 +169,12 @@ class MobileDataNoteTest {
             onClose()
         } finally { recomposer.cancel(); scope.cancel(); controller.pause().stop().destroy() }
     }
+}
+
+/** A platform that refuses the callback (some OEM builds throw SecurityException on register). */
+@Implements(ConnectivityManager::class)
+class RefusingConnectivity : ShadowConnectivityManager() {
+    @Implementation
+    override fun registerDefaultNetworkCallback(networkCallback: ConnectivityManager.NetworkCallback) =
+        throw SecurityException("refused")
 }
