@@ -43,6 +43,8 @@
     <string name="estimated_size">≈ %1$s</string>
     <string name="download_size">Télécharger · %1$s</string>
     <string name="saves_to">Enregistrement dans %1$s</string>
+    <string name="mobile_data_about">Utilise environ %1$s de vos données mobiles</string>
+    <string name="mobile_data_exact">Utilise %1$s de vos données mobiles</string>
     <string name="choice_confirmed">Choix confirmé</string>
     <string name="checking_again">Nouvelle vérification…</string>
     <string name="options_changed">Les options ont changé. Choisissez à nouveau.</string>

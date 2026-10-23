@@ -36,3 +36,35 @@ fun rememberOffline(): Boolean {
     LaunchedEffect(raw) { if (raw) delay(1000); settled = raw }
     return settled
 }
+
+/** True only when the default network says it is metered; unknown capabilities count as not metered, so nothing nags. */
+fun isMetered(context: Context): Boolean {
+    val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    val capabilities = manager.getNetworkCapabilities(manager.activeNetwork ?: return false) ?: return false
+    return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+}
+
+/**
+ * Follows the default network while composed (a Wi-Fi/mobile switch updates it); the callback goes when the caller
+ * leaves. Callbacks never query the manager (stale during a handoff): no default network means no note, and the next
+ * one reports its own capabilities. If the callback cannot be registered, nothing is shown.
+ */
+@Composable
+fun rememberMetered(): Boolean {
+    val context = LocalContext.current
+    var metered by remember { mutableStateOf(isMetered(context)) }
+    DisposableEffect(context) {
+        val manager = context.getSystemService(ConnectivityManager::class.java)
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                metered = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            }
+            override fun onLost(network: Network) { metered = false }
+        }
+        val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }
+            catch (_: RuntimeException) { false }
+        if (!registered) metered = false
+        onDispose { if (registered) try { manager?.unregisterNetworkCallback(callback) } catch (_: RuntimeException) { } }
+    }
+    return metered
+}
