@@ -120,13 +120,17 @@ class DownloadCoordinatorTest {
             assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("paused").get().isEmpty())
             val queued = WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get().single()
             assertEquals(NetworkType.CONNECTED, queued.constraints.requiredNetworkType)
+            assertFalse("a queued row is not paused-only", f.coordinator.onlyPausedWaiting())
+            assertFalse(f.coordinator.maintenance.updateNow(includePaused = true))
             f.coordinator.cancel("queued")
             assertFalse(f.coordinator.maintenance.updateNow())
             assertEquals(EngineUpdateStatus.BUSY, f.coordinator.maintenance.state.value.status)
             assertEquals("engine-42", f.engine.installedVersion())
-            f.coordinator.cancel("paused")
-            assertTrue(f.coordinator.maintenance.updateNow())
+            assertTrue(f.coordinator.onlyPausedWaiting())
+            // Confirmed: paused bytes are given up (their resume recipe pins the old engine).
+            assertTrue(f.coordinator.maintenance.updateNow(includePaused = true))
             assertEquals("updated", f.engine.installedVersion())
+            assertEquals(JobStage.PAUSED, f.store.get("paused")!!.stage)
         }
     }
 

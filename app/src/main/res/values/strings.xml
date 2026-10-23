@@ -125,6 +125,9 @@
     <string name="engine_getting_ready">Getting ready…</string>
     <string name="engine_preparing">Preparing the engine (first time only)…</string>
     <string name="engine_update_busy">Nezzel is busy — try again in a moment</string>
+    <string name="engine_update_paused_title">Update now?</string>
+    <string name="engine_update_paused_body">Paused downloads will start over.</string>
+    <string name="engine_update_paused_confirm">Update</string>
     <string name="engine_update_help">Updates itself every week</string>
     <string name="engine_update_retry">Update engine and try again</string>
     <string name="notification_rationale_title">Follow your download</string>

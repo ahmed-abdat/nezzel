@@ -125,6 +125,9 @@
     <string name="engine_getting_ready">Préparation…</string>
     <string name="engine_preparing">Préparation du moteur (la première fois seulement)…</string>
     <string name="engine_update_busy">Nezzel est occupé — réessayez dans un instant</string>
+    <string name="engine_update_paused_title">Mettre à jour maintenant ?</string>
+    <string name="engine_update_paused_body">Les téléchargements en pause recommenceront depuis le début.</string>
+    <string name="engine_update_paused_confirm">Mettre à jour</string>
     <string name="engine_update_help">Mise à jour automatique chaque semaine</string>
     <string name="engine_update_retry">Mettre à jour et réessayer</string>
     <string name="notification_rationale_title">Suivez votre téléchargement</string>

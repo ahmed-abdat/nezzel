@@ -125,6 +125,9 @@
     <string name="engine_getting_ready">جارٍ التجهيز…</string>
     <string name="engine_preparing">جارٍ تجهيز المحرّك (لأول مرة فقط)…</string>
     <string name="engine_update_busy">&#x2066;Nezzel&#x2069; مشغول الآن، أعد المحاولة بعد قليل</string>
+    <string name="engine_update_paused_title">التحديث الآن؟</string>
+    <string name="engine_update_paused_body">التنزيلات المتوقفة مؤقتًا ستبدأ من جديد.</string>
+    <string name="engine_update_paused_confirm">تحديث</string>
     <string name="engine_update_help">يتحدّث تلقائيًا كل أسبوع</string>
     <string name="engine_update_retry">تحديث المحرّك وإعادة المحاولة</string>
     <string name="notification_rationale_title">تابع تنزيلك</string>

@@ -159,9 +159,20 @@ class LinkViewModel(
         if ((failedReadGeneration ?: return) >= state.generation) return
         startInspection() // Not checkLink: an automatic clipboard link stays memory-only, as before the failure.
     }
+    /** Update now found only paused downloads; Settings asks before they lose their partial bytes. */
+    var confirmPausedUpdate by mutableStateOf(false); private set
     fun updateEngine() {
         downloads?.let { coordinator ->
-            (coordinatorScope ?: viewModelScope).launch { coordinator.maintenance.updateNow() }
+            (coordinatorScope ?: viewModelScope).launch {
+                if (withContext(Dispatchers.IO) { coordinator.onlyPausedWaiting() }) confirmPausedUpdate = true
+                else coordinator.maintenance.updateNow()
+            }
+        }
+    }
+    fun answerPausedUpdate(update: Boolean) {
+        confirmPausedUpdate = false
+        if (update) downloads?.let { coordinator ->
+            (coordinatorScope ?: viewModelScope).launch { coordinator.maintenance.updateNow(includePaused = true) }
         }
     }
     val engineUpdating get() = maintenanceState?.status == EngineUpdateStatus.UPDATING

@@ -54,6 +54,20 @@ class EngineMaintenanceTest {
         assertEquals(EngineUpdateStatus.IDLE, maintenance.state.value.status)
         assertFalse(app.getSharedPreferences("engine-maintenance", 0).contains("attempt"))
     }
+    @Test fun pausedOnlyDownloadsWaitUnlessUpdateNowWasConfirmed() = runBlocking {
+        var running = false
+        val engine = UpdatingEngine()
+        val maintenance = EngineMaintenance(app, engine, { true }, hasRunningDownloads = { running })
+        assertFalse("weekly maintenance never asks; it waits", maintenance.checkOnStartup())
+        assertFalse(maintenance.updateNow())
+        assertEquals(EngineUpdateStatus.BUSY, maintenance.state.value.status)
+        running = true
+        assertFalse("a running or queued download keeps the busy rule", maintenance.updateNow(includePaused = true))
+        assertEquals("2025.11.12", engine.version)
+        running = false
+        assertTrue(maintenance.updateNow(includePaused = true))
+        assertEquals("2026.08.19", engine.version)
+    }
     @Test fun successfulCheckIsDurableAndSuppressesAutomaticChecksForSevenDays() = runBlocking {
         var now = 20 * day
         val engine = UpdatingEngine()

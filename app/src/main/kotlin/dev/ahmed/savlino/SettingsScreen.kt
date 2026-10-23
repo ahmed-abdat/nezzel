@@ -51,7 +51,7 @@ internal fun SettingsScreen(
         else fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) togetherWith fadeOut(tween(70, easing = Motion.EaseOut))
     }, label = "settings_page") { page ->
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
-            links.automaticOptions, onAutomaticOptions) { advanced = false }
+            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
             onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
     }
@@ -109,7 +109,13 @@ private fun MainSettings(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: () -> Unit, updates: AppUpdates?,
-    automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {}, back: () -> Unit) {
+    automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
+    confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, back: () -> Unit) {
+    if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
+        title = { Text(stringResource(R.string.engine_update_paused_title)) },
+        text = { Text(stringResource(R.string.engine_update_paused_body)) },
+        confirmButton = { TextButton(onClick = { onPausedUpdate(true) }) { Text(stringResource(R.string.engine_update_paused_confirm)) } },
+        dismissButton = { TextButton(onClick = { onPausedUpdate(false) }) { Text(stringResource(R.string.cancel)) } })
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.settings_advanced)) }, navigationIcon = {
             IconButton(onClick = back, modifier = Modifier.size(48.dp)) {

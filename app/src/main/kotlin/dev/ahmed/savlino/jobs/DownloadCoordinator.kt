@@ -34,7 +34,12 @@ class DownloadCoordinator(
 ) {
     val maintenance = EngineMaintenance(context, engine, {
         active.isNotEmpty() || store.all().any { !it.stage.terminal }
+    }, hasRunningDownloads = {
+        active.isNotEmpty() || store.all().any { !it.stage.terminal && it.stage != JobStage.PAUSED }
     })
+    /** Only paused rows wait: a manual engine update may proceed once the user accepts they start over. */
+    fun onlyPausedWaiting(): Boolean = active.isEmpty() &&
+        store.all().filter { !it.stage.terminal }.let { rows -> rows.isNotEmpty() && rows.all { it.stage == JobStage.PAUSED } }
     private val recovery = JobRecovery(store, publisher ?: DestinationPublisher(context, space), File(context.filesDir, "downloads"))
     private val startup = Mutex()
     // Bound native processing and space preflight to one transfer; queue admission never waits here.

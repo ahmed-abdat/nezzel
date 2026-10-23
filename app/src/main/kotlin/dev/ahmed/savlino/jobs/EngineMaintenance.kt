@@ -21,7 +21,9 @@ data class EngineMaintenanceState(val version: String? = null, val everSucceeded
 /** Process owner. Cadence is durable; inspections and downloads exclude the exclusive updater. */
 class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     private val hasDownloads: () -> Boolean, private val now: () -> Long = System::currentTimeMillis,
-    private val nativeWaitMs: Long = 90_000) {
+    private val nativeWaitMs: Long = 90_000,
+    /** Downloads that would lose more than their partial bytes: everything except paused rows. */
+    private val hasRunningDownloads: () -> Boolean = hasDownloads) {
     private val prefs = context.getSharedPreferences("engine-maintenance", Context.MODE_PRIVATE)
     private val gate = Mutex()
     private val changes = MutableStateFlow(0L)
@@ -107,8 +109,9 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     }
     private enum class UpdateDecision { UPDATED, NO_UPDATE, INSPECTION_BUSY }
     suspend fun checkOnStartup(): Boolean = update(false) == UpdateDecision.UPDATED
-    suspend fun updateNow(): Boolean = update(true) == UpdateDecision.UPDATED
-    private suspend fun update(manual: Boolean): UpdateDecision = withContext(Dispatchers.IO) {
+    /** [includePaused]: the user confirmed that paused downloads start over (their resume recipe pins the engine). */
+    suspend fun updateNow(includePaused: Boolean = false): Boolean = update(true, includePaused) == UpdateDecision.UPDATED
+    private suspend fun update(manual: Boolean, includePaused: Boolean = false): UpdateDecision = withContext(Dispatchers.IO) {
         if (!manual) onLaunch()
         if (!gate.tryLock()) {
             if (mutableState.value.status != EngineUpdateStatus.UPDATING)
@@ -116,7 +119,7 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
             return@withContext UpdateDecision.NO_UPDATE
         }
         try {
-            if (downloads > 0 || hasDownloads()) {
+            if (downloads > 0 || (if (manual && includePaused) hasRunningDownloads() else hasDownloads())) {
                 mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.BUSY)
                 return@withContext UpdateDecision.NO_UPDATE
             }
