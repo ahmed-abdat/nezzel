@@ -181,6 +181,31 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
 
     override fun prepareDownload(command: DownloadCommand) { infoCache?.prepare(command) }
 
+    private suspend fun rebuild(current: Operation, command: DownloadCommand): File? {
+        val fast = fastSource ?: return null
+        val cache = infoCache ?: return null
+        synchronized(current) {
+            checkCancelled(current)
+            current.deadline = NO_DEADLINE
+            current.byteWatchdog = false
+        }
+        val json = fastInfoJson(current, command.source, command.jobId, fast)
+        currentCoroutineContext().ensureActive()
+        checkCancelled(current)
+        val trimmed = try { json?.let { cache.trim(it, command) } }
+            catch (_: Exception) { null }
+        if (trimmed == null) return null
+        val stored = cache.store(command.jobId, trimmed)
+        try {
+            currentCoroutineContext().ensureActive()
+            checkCancelled(current)
+            return stored
+        } catch (cancel: Exception) {
+            cache.remove(command.jobId)
+            throw cancel
+        }
+    }
+
     override suspend fun download(command: DownloadCommand, directory: File,
         progress: (EngineEvent) -> Unit): TransferResult {
         var resumeAllowed = true
@@ -189,7 +214,18 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
             // Validate before launching yt-dlp. Caller owns staging cleanup; adapter never touches public storage.
             prepareDownload(command)
-            val infoJson = infoCache?.freshFile(command.jobId)
+            var infoJson = infoCache?.freshFile(command.jobId)
+            val canRebuild = YtdlpCommand.isYouTube(command.source) && fastSource != null
+            var rebuilt = false
+            suspend fun rebuildOnce(): File? {
+                if (!canRebuild || rebuilt) return null
+                rebuilt = true // A failed, timed-out or cap-skipped call also spends the budget.
+                return rebuild(current, command)
+            }
+            fun discardInfo() {
+                if (infoCache?.remove(command.jobId) == false)
+                    throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+            }
             var bytes = -1L
             var restartEpoch = 0L
             // Without the inspection's info JSON yt-dlp extracts new signed URLs: never continue older bytes.
@@ -197,6 +233,10 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 if (!clearStaging(directory)) return@operation TransferResult.Failure(DownloadError.ExecutionRestricted)
                 restartEpoch++
                 progress(EngineEvent.Restarting(restartEpoch))
+            }
+            if (infoJson == null) {
+                infoJson = rebuildOnce()
+                if (infoJson == null) discardInfo()
             }
             var retriedWithoutTags = false
             var preProcessingBytes: Long? = null
@@ -206,6 +246,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 // leaves completed audio here, which must not be cleared or revalidated as a partial.
                 val untaggedArgs = YtdlpCommand.download(command, directory, info, embedAudioTags = false)
                 var args = YtdlpCommand.download(command, directory, info, embedAudioTags = !retriedWithoutTags)
+                var reextractionBlocked = false
                 while (true) {
                     val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
                     val diagnostics = YtdlpDiagnostics()
@@ -254,7 +295,10 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                         }
                         break
                     } catch (error: Exception) {
-                        val failure = diagnostics.failure(error)
+                        val diagnostic = diagnostics.failure(error)
+                        reextractionBlocked = reextractionBlocked || diagnostic.reextractionBlocked
+                        val failure = YtdlpExecutionFailure(diagnostic.error, diagnostic.expiredUrl,
+                            diagnostic.resumeAllowed, diagnostic.failureCause, reextractionBlocked)
                         resumeAllowed = failure.resumeAllowed
                         if (error is CancellationException) throw error
                         // Watchdog cancellation must carry the HTTP retry-warning classification outward.
@@ -276,25 +320,46 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     }
                 }
             }
-            try { transfer(infoJson) }
-            catch (error: Exception) {
-                if (error is CancellationException) throw error
-                currentCoroutineContext().ensureActive()
-                // Keep the typed timeout diagnostic instead of replacing it with OperationCancelled.
-                if (current.timedOut.get()) throw error
-                checkCancelled(current)
-                val hasBytes = bytes > 0 || directory.listFiles().orEmpty().any {
-                    !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name) && it.length() > 0
+            var attempts = 0
+            var retriedPageExpiry = false
+            // Legacy jobs retain their two-attempt path. NPE can add one JSON attempt, never a loop.
+            val transferLimit = if (canRebuild) 3 else 2
+            while (true) {
+                try { attempts++; transfer(infoJson); break }
+                catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    currentCoroutineContext().ensureActive()
+                    // Keep the typed timeout diagnostic instead of replacing it with OperationCancelled.
+                    if (current.timedOut.get()) throw error
+                    checkCancelled(current)
+                    if (error !is YtdlpExecutionFailure || error.reextractionBlocked || attempts >= transferLimit) throw error
+                    val hasBytes = bytes > 0 || directory.listFiles().orEmpty().any {
+                        !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name) && it.length() > 0
+                    }
+                    val expiry = error.expiredUrl && (infoJson != null || hasBytes)
+                    val rejected = !error.expiredUrl && infoJson?.let { infoCache?.isNpe(it) } == true &&
+                        error.error in NPE_REJECTIONS
+                    if (!expiry && !rejected) throw error
+                    if (infoJson == null) {
+                        if (retriedPageExpiry) throw error
+                        retriedPageExpiry = true
+                    }
+                    synchronized(current) {
+                        checkCancelled(current)
+                        current.deadline = NO_DEADLINE
+                        current.byteWatchdog = false
+                    }
+                    if (!clearStaging(directory)) throw error
+                    discardInfo()
+                    // Every new extraction starts a new progress epoch with no inherited bytes.
+                    bytes = -1L
+                    preProcessingBytes = null
+                    restartEpoch++
+                    progress(EngineEvent.Restarting(restartEpoch))
+                    // The path only moves forward: once using the page URL, never return to NPE.
+                    infoJson = if (expiry && infoJson != null) rebuildOnce() else null
+                    if (infoJson == null) discardInfo()
                 }
-                val retry = error is YtdlpExecutionFailure && error.expiredUrl && (infoJson != null || hasBytes)
-                if (!retry || !clearStaging(directory)) throw error
-                infoCache?.remove(command.jobId)
-                // A new extraction must never inherit bytes from expired signed URLs.
-                bytes = -1L
-                preProcessingBytes = null
-                restartEpoch++
-                progress(EngineEvent.Restarting(restartEpoch))
-                transfer(null)
             }
             current.deadline = NO_DEADLINE
             current.byteWatchdog = false
@@ -565,6 +630,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val VERSION_ARGS = listOf("--ignore-config", "--version")
         val POSTPROCESSORS = listOf("[Fixup", "[ffmpeg]", "[VideoRemuxer]", "[VideoConvertor]", "[Metadata]", "[MoveFiles]",
             "[EmbedThumbnail]", "[ThumbnailsConvertor]", "[ExtractAudio]", "[MetadataParser]")
+        val NPE_REJECTIONS = setOf(DownloadError.FormatExpired, DownloadError.Failed, DownloadError.Unsupported, DownloadError.NoFormats)
         val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val fastSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
