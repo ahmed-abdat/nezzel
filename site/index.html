@@ -446,6 +446,12 @@ summary::after{content:"";margin-inline-start:auto;width:9px;height:9px;border-r
 details[open] summary::after{transform:translateY(2px) rotate(-135deg)}
 details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 
+/* trust */
+.tr-head h2{max-width:none}
+.tr-head p{margin:14px 0 0;color:var(--muted);max-width:52ch}
+.never{margin:14px 0 0;color:var(--muted);font-size:16px;max-width:52ch}
+.src{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:14px;font-weight:700}
+
 /* open source */
 .open{margin-top:128px;position:relative;overflow:hidden;border-radius:var(--r-xl);background:var(--inverse);color:var(--on-inverse);padding:clamp(28px,6vw,64px);display:grid;gap:28px}
 @media (min-width:960px){.open{grid-template-columns:1.2fr 1fr;align-items:end}}
@@ -453,15 +459,7 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 [dir=rtl] .open::before{-webkit-mask:linear-gradient(to right,#000,transparent 60%);mask:linear-gradient(to right,#000,transparent 60%)}
 .open>*{position:relative;min-width:0}
 .open p{margin:14px 0 0;opacity:.85;max-width:44ch}
-.adv{margin-top:18px;background:none!important}
-.adv summary{display:inline-flex;align-items:center;min-height:48px;padding:0;font-size:15px;font-weight:600;opacity:.85}
-.adv summary::after{margin-inline-start:4px}
-.adv p{padding:0;margin:4px 0 0;font-size:14.5px;color:inherit;opacity:.75}
 /* the full fingerprint in groups of 8, so it can actually be compared */
-.hash{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px 10px;margin-top:12px;padding:10px 10px 14px 14px;border-radius:14px;background:color-mix(in oklab,var(--on-inverse) 8%,transparent);direction:ltr}
-.hash>span{font:700 12.5px/1 system-ui,sans-serif;opacity:.7}
-.hash code{grid-column:1/-1;font:500 13.5px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;word-spacing:.3em;white-space:pre-line;overflow-wrap:anywhere}
-.hash button{grid-area:1/2;min-height:48px;padding:0 16px;border:0;border-radius:10px;background:color-mix(in oklab,var(--on-inverse) 14%,transparent);font:700 13px/1 "Noto Sans Arabic",system-ui,sans-serif;cursor:pointer}
 .links{display:grid;gap:14px;font-size:15.5px}
 .links a{color:var(--inverse-primary)}
 .gh{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:0 22px;border-radius:999px;box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--on-inverse) 40%,transparent);color:inherit!important;text-decoration:none;font-weight:700;justify-self:start;transition:background .3s}
@@ -734,6 +732,15 @@ footer a{color:inherit}
   </div>
 </section>
 
+<section class="wrap tw" id="trust" aria-labelledby="tr-h">
+  <div class="tr-head">
+    <h2 id="tr-h" data-i="tr-h" data-r>بلا إعلانات، بلا تتبّع، بلا حساب</h2>
+    <p data-i="tr-p" data-r style="--d:1">لا يخرج من هاتفك شيء عنك. يتصل Nezzel بالموقع الذي اخترته، وبـ&nbsp;<bdi>GitHub</bdi> ليبحث عن تحديث</p>
+  </div>
+  <p class="never" data-i="tr-ask" data-r style="--d:2">لا يطلب موقعك ولا جهات اتصالك ولا ملفاتك، فقط الإنترنت والإشعارات</p>
+  <a class="src" href="https://github.com/ahmed-abdat/nezzel"><svg class="i"><use href="#gh"/></svg><span data-i="tr-src">الشيفرة المصدرية</span></a>
+</section>
+
 <section class="wrap faqs" aria-labelledby="faq-h">
   <h2 id="faq-h" data-i="faq-h" data-r>أسئلة سريعة</h2>
   <div class="faq" data-r style="--d:1">
@@ -751,10 +758,6 @@ footer a{color:inherit}
     <div>
       <h2 data-i="os-h">مفتوح المصدر</h2>
       <p data-i="os-p">شيفرة Nezzel كاملة على GitHub برخصة <bdi>GPL-3.0-or-later</bdi>، ويستطيع أي أحد مراجعتها</p>
-      <details class="adv" hidden><summary data-i="adv">للمتقدمين: تحقّق من الملف</summary>
-        <p data-i="adv-p">هذه بصمة ملف التثبيت. إن طابقت بصمة الملف الذي حمّلته، فهو الملف نفسه دون تغيير</p>
-        <div class="hash"><span>SHA-256</span><code id="sha"></code><button type="button" id="copysha" data-i="copy">نسخ</button></div>
-      </details>
     </div>
     <div class="links">
       <a class="gh" href="https://github.com/ahmed-abdat/nezzel"><svg class="i"><use href="#gh"/></svg><span data-i="gh">الشيفرة على GitHub</span></a>
@@ -822,8 +825,10 @@ footer a{color:inherit}
     f5:"Where are files saved?", f5a:"In the Nezzel folder in Downloads, or a folder you choose in Settings. You’ll find them in your Files app",
     f6:"Does it work on iPhone?", f6a:"No, Nezzel is Android only: Android 10 or newer, on phones with a <bdi>64-bit</bdi> processor",
     "os-h":"Open source", "os-p":"Nezzel’s full code is on GitHub under <bdi>GPL-3.0-or-later</bdi>, open for anyone to review",
-    adv:"For advanced users: check the file", "adv-p":"This is the install file’s fingerprint. If it matches the file you downloaded, the file wasn’t changed",
-    copy:"Copy", copiedShort:"Copied", gh:"Code on GitHub", rel:"All releases and notes",
+    "tr-h":"No ads, no trackers, no account", "tr-p":"Nothing about you leaves your phone. Nezzel talks to the site you chose, and to <bdi>GitHub</bdi> to look for updates",
+    "tr-ask":"It never asks for your location, contacts or files. Only internet and notifications",
+    "tr-src":"Source code",
+    gh:"Code on GitHub", rel:"All releases and notes",
     "fin-h":"Copy the link, we’ll do the rest",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Report a security issue"
   };
@@ -921,9 +926,10 @@ footer a{color:inherit}
       "f6a": "لا، Nezzel لأندرويد فقط، من أندرويد 10 فما فوق، على الهواتف بمعالج <bdi>64-bit</bdi>",
       "os-h": "مفتوح المصدر",
       "os-p": "شيفرة Nezzel كاملة على GitHub برخصة <bdi>GPL-3.0-or-later</bdi>، ويستطيع أي أحد مراجعتها",
-      "adv": "للمتقدمين: تحقّق من الملف",
-      "adv-p": "هذه بصمة ملف التثبيت. إن طابقت بصمة الملف الذي حمّلته، فهو الملف نفسه دون تغيير",
-      "copy": "نسخ",
+      "tr-h": "بلا إعلانات، بلا تتبّع، بلا حساب",
+      "tr-p": "لا يخرج من هاتفك شيء عنك. يتصل Nezzel بالموقع الذي اخترته، وبـ&nbsp;<bdi>GitHub</bdi> ليبحث عن تحديث",
+      "tr-ask": "لا يطلب موقعك ولا جهات اتصالك ولا ملفاتك، فقط الإنترنت والإشعارات",
+      "tr-src": "الشيفرة المصدرية",
       "gh": "الشيفرة على GitHub",
       "rel": "كل الإصدارات وملاحظاتها",
       "word": "نزّل",
@@ -934,7 +940,6 @@ footer a{color:inherit}
       "to-light": "الوضع الفاتح",
       "pause": "إيقاف العرض مؤقتًا",
       "play": "تشغيل العرض",
-      "copiedShort": "تم النسخ",
       "saved": "تم الحفظ",
       "language": "اللغة",
       "og-alt": "Nezzel: حمّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة لفيديو"
@@ -982,8 +987,10 @@ footer a{color:inherit}
     f5:"Où sont mes fichiers ?", f5a:"Dans le dossier Nezzel de Téléchargements, ou dans le dossier choisi dans les paramètres. Retrouvez-les dans votre application de fichiers",
     f6:"Et sur iPhone ?", f6a:"Nezzel fonctionne uniquement sur Android 10 ou plus récent, sur les téléphones avec un processeur <bdi>64 bits</bdi>",
     "os-h":"Un code ouvert à tous", "os-p":"Tout le code de Nezzel est sur GitHub sous licence <bdi>GPL-3.0-or-later</bdi>. Chacun peut le consulter",
-    adv:"Pour aller plus loin : vérifier le fichier", "adv-p":"Voici l’empreinte du fichier d’installation. Si elle correspond à celle du fichier téléchargé, le fichier n’a pas été modifié",
-    copy:"Copier", copiedShort:"Copié", gh:"Le code sur GitHub", rel:"Versions et nouveautés",
+    "tr-h":"Sans pub, sans traceurs, sans compte", "tr-p":"Rien sur vous ne quitte votre téléphone. Nezzel contacte le site que vous avez choisi, et <bdi>GitHub</bdi> pour chercher les mises à jour",
+    "tr-ask":"Il ne demande jamais votre position, vos contacts ni vos fichiers. Seulement Internet et les notifications",
+    "tr-src":"Code source",
+    gh:"Le code sur GitHub", rel:"Versions et nouveautés",
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Créé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Signaler un problème de sécurité"
   };
@@ -1081,7 +1088,6 @@ footer a{color:inherit}
     $$(".dl-link").forEach(a => { a.href = rel.url; });
     $$(".size").forEach(s => { s.textContent = mb(rel.mb); });
     $$(".vtxt").forEach(s => { s.textContent = rel.ver; });
-    if (rel.sha) { $("#sha").textContent = rel.sha.match(/.{1,16}/g).map(r => r.slice(0, 8) + " " + r.slice(8)).join("\n"); $(".adv").hidden = false; }
   }
   fetch("https://api.github.com/repos/ahmed-abdat/nezzel/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -1092,12 +1098,6 @@ footer a{color:inherit}
               sha: (apk.digest || "").startsWith("sha256:") ? apk.digest.slice(7) : null };
       applyRelease();
     }).catch(() => {});
-  $("#copysha").addEventListener("click", e => {
-    const b = e.currentTarget;
-    navigator.clipboard?.writeText(rel.sha).then(() => {
-      b.textContent = t("copiedShort"); setTimeout(() => { b.textContent = t("copy"); }, 1600);
-    }).catch(() => {});
-  });
 
   // ---------- reveals + header ----------
   const io = new IntersectionObserver(es => es.forEach(e => {
