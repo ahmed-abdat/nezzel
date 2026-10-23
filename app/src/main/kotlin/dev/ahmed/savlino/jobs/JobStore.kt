@@ -50,6 +50,8 @@ class SavedBefore(val uri: Uri, val savedAt: Long)
 class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred) :
     SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 5) {
     private val jobRoot = File(context.filesDir.canonicalFile, "downloads")
+    /** Row artwork lives and dies with the row: Remove, the 100-row prune. */
+    val artwork = JobArtwork(context.filesDir)
     private val terminalLock = Any()
     private val infoCache = dev.ahmed.savlino.engine.YtdlpInfoCache(context.noBackupFilesDir)
 
@@ -206,7 +208,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             writableDatabase.delete("jobs", "job_id = ? AND stage IN ('COMPLETED','FAILED','CANCELLED')",
                 arrayOf(jobId)) == 1
         }
-        if (removed) cleanupJobStaging(jobRoot, jobId)
+        if (removed) { cleanupJobStaging(jobRoot, jobId); artwork.delete(jobId) }
         removed
     }
 
@@ -330,7 +332,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     /** Persist the failure reason if provider reconciliation must be deferred. */
     @Synchronized internal fun requestPublicationFailure(jobId: String, reason: DownloadError) {
-        require(reason in setOf(DownloadError.Cancelled, DownloadError.Interrupted, DownloadError.Network,
+        require(reason in setOf(DownloadError.Cancelled, DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
             DownloadError.InsufficientSpace, DownloadError.FolderUnavailable))
         writableDatabase.update("jobs", ContentValues().apply { put("error", reason.name) },
             "job_id = ? AND stage IN ('PENDING_INSERTED','PUBLISHING') AND (error IS NULL OR error != 'Cancelled')", arrayOf(jobId))
@@ -354,7 +356,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING),
             if (cancelled) JobStage.CANCELLED else JobStage.FAILED, ContentValues().apply {
                 put("error", if (cancelled) DownloadError.Cancelled.name
-                    else if (reason in setOf(DownloadError.Interrupted, DownloadError.Network,
+                    else if (reason in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
                         DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)) reason!!.name else DownloadError.SaveFailed.name)
                 put("retryable", if (!cancelled) 1 else 0); putNull("pending_uri")
             })
@@ -371,8 +373,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     /** Remove is restricted to failures; a live job or completed publication is never discarded. */
-    @Synchronized fun removeFailed(jobId: String): Boolean = writableDatabase.delete("jobs",
-        "job_id = ? AND stage = ?", arrayOf(jobId, JobStage.FAILED.name)) == 1
+    @Synchronized fun removeFailed(jobId: String): Boolean = (writableDatabase.delete("jobs",
+        "job_id = ? AND stage = ?", arrayOf(jobId, JobStage.FAILED.name)) == 1).also { if (it) artwork.delete(jobId) }
 
     @Synchronized fun pruneTerminal() {
         scrubExpiredSources()
@@ -382,6 +384,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 ORDER BY updated_at DESC, rowid DESC LIMIT -1 OFFSET 100
             )
         """.trimIndent())
+        artwork.retainOnly(all().mapTo(HashSet()) { it.jobId })
     }
 
     private fun transition(id: String, from: Set<JobStage>, to: JobStage, values: ContentValues = ContentValues()): Boolean {
@@ -448,7 +451,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
-            DownloadError.Failed, DownloadError.EngineUnavailable)
+            DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
 
         private fun encodeFormat(format: Format): String = JSONObject().apply {

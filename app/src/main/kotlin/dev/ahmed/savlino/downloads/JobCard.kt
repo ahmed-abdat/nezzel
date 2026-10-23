@@ -39,6 +39,7 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.locale.NezzelFormat
+import dev.ahmed.savlino.ui.BatteryHelp
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -342,6 +343,7 @@ private fun FailedRow(job: DownloadProgress, tile: Boolean, onCancel: () -> Unit
             if (!job.awaitingSchedule && !job.retryable)
                 Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BatteryHelp(job.error, onBatterySettings = { BatterySettings.open(context) })
             if (job.awaitingSchedule || job.retryable)
                 FilledTonalButton(onClick = onRetry, modifier = Modifier.padding(top = Space.xs).heightIn(min = 48.dp)) {
                     Text(stringResource(R.string.try_again))

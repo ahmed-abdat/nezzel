@@ -87,10 +87,14 @@ class DownloadCoordinator(
         }
     }
 
+    /** Row artwork for the Downloads tile: `artwork.load(jobId)`, null → kind icon. */
+    val artwork: JobArtwork get() = store.artwork
+
     suspend fun enqueue(command: DownloadCommand, preset: Preset? = null): Boolean = withContext(Dispatchers.IO) {
         maintenance.withDownload {
             initializeUnderMaintenanceGate()
             val inserted = store.enqueue(command, preset)
+            if (inserted) SheetArtwork.take(command.inspectionId)?.let { store.artwork.save(command.jobId, it) }
             // A scheduling failure leaves a durable ENQUEUED row for startup to retry.
             if (inserted) {
                 store.prepareInfoJson(command.jobId) { engine.prepareDownload(command) }
@@ -239,10 +243,14 @@ class DownloadCoordinator(
         }
         progressed.remove(id)
         var startBytes = Long.MAX_VALUE
-        fun stoppedError(): DownloadError = when {
-            id in userCancellation -> DownloadError.Cancelled
-            connectivityStopped(stopReason()) -> DownloadError.Network
-            else -> DownloadError.Interrupted
+        fun stoppedError(): DownloadError {
+            if (id in userCancellation) return DownloadError.Cancelled
+            val reason = stopReason()
+            return when {
+                connectivityStopped(reason) -> DownloadError.Network
+                BatterySettings.batteryStopped(reason) -> DownloadError.StoppedByBattery
+                else -> DownloadError.Interrupted
+            }
         }
         fun finishStopped() = finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes)
         try {
@@ -505,7 +513,7 @@ class DownloadCoordinator(
             } else store.fail(id, error)
         } else {
             store.fail(id, error)
-            val stopped = error in setOf(DownloadError.Interrupted, DownloadError.Network,
+            val stopped = error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
                 DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)
             recovery.reconcile(id, cancellationRequested = stopped, cancellationError = error)
         }

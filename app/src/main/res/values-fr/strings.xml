@@ -383,4 +383,7 @@
     <string name="widget_failed">Échec du téléchargement</string>
     <string name="widget_description">\u2066Nezzel\u2069 : coller un lien copié</string>
     <string name="shortcut_downloads_short">Fichiers</string>
+    <string name="download_battery_error">Android a arrêté ce téléchargement pour économiser la batterie</string>
+    <string name="battery_settings">Réglages batterie</string>
+    <string name="battery_hint_samsung">Samsung : ajoutez Nezzel aux « Applications jamais en veille » dans les réglages batterie</string>
 </resources>

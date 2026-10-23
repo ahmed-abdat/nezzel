@@ -106,6 +106,12 @@ class DownloadNotificationsTest {
         notifications.finished(DownloadProgress("a", "Title.mp4", DownloadPhase.COMPLETED))
         assertTrue(shadowOf(app.getSystemService(NotificationManager::class.java)).allNotifications.isEmpty())
     }
+    @Test fun batteryStopNamesBatteryNotDownloadFailed() {
+        val app = RuntimeEnvironment.getApplication()
+        val stopped = DownloadProgress("a", "Title.mp4", DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.StoppedByBattery)
+        assertEquals(app.getString(dev.ahmed.savlino.R.string.download_battery_error), DownloadNotifications.phase(app, stopped))
+        assertTrue(DownloadNotifications.text(app, stopped).contains(app.getString(dev.ahmed.savlino.R.string.download_battery_error)))
+    }
     private fun metrics() = DownloadProgress("a", "Actual.mp4", DownloadPhase.DOWNLOADING,
         bytes = 25_000_000, total = dev.ahmed.savlino.domain.Size.Exact(100_000_000),
         bytesPerSecond = 2_500_000.0, remainingTransferSeconds = 30, stalled = false)

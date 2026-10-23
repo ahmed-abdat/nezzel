@@ -285,4 +285,27 @@ class JobCardUxTest {
             assertTrue("Failed row shorter than a list row", row.height / density >= 71.5f)
         }
     }
+    /** C1: an OS battery stop names battery and offers Battery settings until Nezzel is exempt. */
+    @Test fun batteryStopShowsBatterySettingsUntilExempt() {
+        val stopped = job.copy(phase = DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.StoppedByBattery, retryable = true)
+        host(content = { Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(stopped, {}, {}, {}) } }) { a ->
+            compose.onNodeWithText(context.getString(R.string.download_battery_error), useUnmergedTree = true).assertExists()
+            compose.onNodeWithText(context.getString(R.string.battery_settings)).assertHasClickAction().performClick()
+            assertEquals(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, Shadows.shadowOf(a).nextStartedActivity?.action)
+        }
+    }
+    @Test fun batteryStopHidesButtonWhenExempt() {
+        Shadows.shadowOf(context.getSystemService(android.os.PowerManager::class.java)).setIgnoringBatteryOptimizations(context.packageName, true)
+        val stopped = job.copy(phase = DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.StoppedByBattery, retryable = true)
+        host(content = { Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(stopped, {}, {}, {}) } }) { _ ->
+            compose.onNodeWithText(context.getString(R.string.download_battery_error), useUnmergedTree = true).assertExists()
+            compose.onNodeWithText(context.getString(R.string.battery_settings), useUnmergedTree = true).assertDoesNotExist()
+        }
+    }
+    @Test fun otherFailuresShowNoBatteryButton() {
+        val failed = job.copy(phase = DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.Network, retryable = true)
+        host(content = { Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(failed, {}, {}, {}) } }) { _ ->
+            compose.onNodeWithText(context.getString(R.string.battery_settings), useUnmergedTree = true).assertDoesNotExist()
+        }
+    }
 }

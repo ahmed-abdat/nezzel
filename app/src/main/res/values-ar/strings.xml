@@ -410,4 +410,7 @@
     <string name="widget_failed">لم يكتمل</string>
     <string name="widget_description">\u2066Nezzel\u2069: الصق رابطًا منسوخًا</string>
     <string name="shortcut_downloads_short">التنزيلات</string>
+    <string name="download_battery_error">أوقف \u2066Android\u2069 التنزيل لتوفير البطارية</string>
+    <string name="battery_settings">إعدادات البطارية</string>
+    <string name="battery_hint_samsung">سامسونج: أضف Nezzel إلى «التطبيقات التي لا تدخل السكون أبدًا» في إعدادات البطارية</string>
 </resources>

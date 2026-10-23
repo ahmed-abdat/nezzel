@@ -351,6 +351,87 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun confirmedDownloadStoresSheetArtwork() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            val command = command("art-job")
+            val sheet = android.graphics.Bitmap.createBitmap(640, 360, android.graphics.Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(android.graphics.Color.rgb(0, 128, 128)) }
+            SheetArtwork.offer(command.inspectionId, sheet)
+            assertTrue(f.coordinator.enqueue(command))
+            val file = File(app.filesDir, "job-art/art-job")
+            assertTrue(file.isFile)
+            assertTrue(file.length() in 1..JobArtwork.MAX_BYTES.toLong())
+            val loaded = f.coordinator.artwork.load("art-job")!!
+            assertEquals(JobArtwork.SIDE, loaded.width)
+            assertEquals(JobArtwork.SIDE, loaded.height)
+            assertFalse(sheet.isRecycled)
+            f.coordinator.removeFailed("art-job") // not FAILED: kept
+            assertTrue(file.isFile)
+            f.store.fail("art-job", DownloadError.Failed)
+            f.coordinator.removeFailed("art-job")
+            assertFalse(file.exists())
+            assertNull(f.coordinator.artwork.load("art-job"))
+        }
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun confirmBeforeSheetEncodeStillStoresArtwork() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            val command = command("early-art")
+            val sheet = android.graphics.Bitmap.createBitmap(640, 360, android.graphics.Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(android.graphics.Color.rgb(0, 128, 128)) }
+            SheetArtwork.show(command.inspectionId, sheet) // shown, background encode not finished
+            assertTrue(f.coordinator.enqueue(command))
+            assertTrue(File(app.filesDir, "job-art/early-art").length() in 1..JobArtwork.MAX_BYTES.toLong())
+        }
+    }
+
+    @Test fun noSheetArtworkStoresNothing() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            assertTrue(f.coordinator.enqueue(command("plain-job")))
+            assertFalse(File(app.filesDir, "job-art/plain-job").exists())
+            assertNull(f.coordinator.artwork.load("plain-job"))
+        }
+    }
+
+    @Test fun batteryStopReasonFailsAsStoppedByBattery() = runBlocking {
+        for (reason in listOf(WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION, WorkInfo.STOP_REASON_APP_STANDBY,
+                WorkInfo.STOP_REASON_QUOTA)) {
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+                val id = "battery-$reason"
+                f.store.enqueue(command(id))
+                val worker = f.worker(id)
+                val running = launch(Dispatchers.Default) { worker.doWork() }
+                withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+                worker.stop(reason)
+                running.cancelAndJoin()
+                val row = f.store.get(id)!!
+                assertEquals(JobStage.FAILED, row.stage)
+                assertEquals(DownloadError.StoppedByBattery, row.error)
+                assertTrue(row.retryable)
+            }
+        }
+    }
+
+    @Test fun unknownAndDeviceStateStopsStayInterrupted() = runBlocking {
+        // DEVICE_STATE also covers memory pressure: no battery claim, still retryable.
+        for (reason in listOf(WorkInfo.STOP_REASON_UNKNOWN, WorkInfo.STOP_REASON_DEVICE_STATE)) {
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+                val id = "plain-stop-${reason.toString().replace('-', 'm')}"
+                f.store.enqueue(command(id))
+                val worker = f.worker(id)
+                val running = launch(Dispatchers.Default) { worker.doWork() }
+                withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+                worker.stop(reason)
+                running.cancelAndJoin()
+                val row = f.store.get(id)!!
+                assertEquals(DownloadError.Interrupted, row.error)
+                assertTrue(row.retryable)
+            }
+        }
+    }
+
     @Test fun zeroByteConnectivityStopReturnsWorkerRetry() = runBlocking {
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Cancelled)))).use { f ->
             f.store.enqueue(command("network-retry"))
