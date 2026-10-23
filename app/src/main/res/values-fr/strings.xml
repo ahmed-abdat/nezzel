@@ -377,4 +377,10 @@
     <string name="update_trust">Nezzel vérifie le fichier et sa signature avant l’installation</string>
     <string name="update_downloading">Téléchargement de %1$s</string>
     <string name="settings_update_accessibility">Paramètres, mise à jour disponible</string>
+    <string name="shortcut_paste_link">Coller un lien</string>
+    <string name="widget_empty">Copiez un lien, puis appuyez sur Coller</string>
+    <string name="widget_paused">En pause</string>
+    <string name="widget_failed">Échec du téléchargement</string>
+    <string name="widget_description">\u2066Nezzel\u2069 : coller un lien copié</string>
+    <string name="shortcut_downloads_short">Fichiers</string>
 </resources>

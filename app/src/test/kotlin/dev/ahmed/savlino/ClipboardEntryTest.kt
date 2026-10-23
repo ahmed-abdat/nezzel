@@ -132,7 +132,9 @@ class ClipboardEntryTest {
 class CountingClipboard : ShadowClipboardManager() {
     var reads = 0
     @Implementation override fun getPrimaryClip(): ClipData? {
-        reads++
+        reads++; allReads++
         return super.getPrimaryClip()
     }
+    /** Reads through every Context's ClipboardManager (an Activity gets its own instance and shadow). */
+    companion object { var allReads = 0 }
 }
