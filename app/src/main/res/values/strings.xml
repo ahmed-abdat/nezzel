@@ -128,6 +128,9 @@
     <string name="engine_update_paused_title">Update now?</string>
     <string name="engine_update_paused_body">Paused downloads will start over.</string>
     <string name="engine_update_paused_confirm">Update</string>
+    <string name="parallel_downloads">Downloads at the same time</string>
+    <string name="parallel_downloads_help">Fewer keeps the phone cooler</string>
+    <string name="parallel_downloads_option">%1$s at a time</string>
     <string name="engine_update_help">Updates itself every week</string>
     <string name="engine_update_retry">Update engine and try again</string>
     <string name="notification_rationale_title">Follow your download</string>
