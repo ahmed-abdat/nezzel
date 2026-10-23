@@ -2,6 +2,9 @@ package dev.ahmed.savlino.engine
 
 import android.content.Context
 import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.youtube.NpeFastSource
+import dev.ahmed.savlino.engine.youtube.NpeInfoJson
+import dev.ahmed.savlino.engine.youtube.YoutubeFastSource
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -11,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.sync.withLock
 
 sealed interface EngineUpdateResult {
@@ -21,13 +25,20 @@ sealed interface EngineUpdateResult {
 
 /** Engine timeouts and recovery (lead 2026-10-19, docs/OPEN_DECISIONS.md). */
 internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 120_000, val stallMs: Long = 45_000,
-    val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000, val firstByteMs: Long = 180_000)
+    val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000, val firstByteMs: Long = 180_000,
+    val npeBudgetMs: Long = NPE_BUDGET_MS) {
+    companion object { const val NPE_BUDGET_MS = 10_000L }
+}
 
 /** Construction/availability are inert. Startup warm-up extracts and probes local binaries only. */
 class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
-    private val limits: EngineLimits = EngineLimits(), private val infoCache: YtdlpInfoCache? = null) : EngineAdapter {
-    constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir))
+    private val limits: EngineLimits = EngineLimits(), private val infoCache: YtdlpInfoCache? = null,
+    private val fastSource: YoutubeFastSource? = null) : EngineAdapter {
+    constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
+        fastSource = NpeFastSource())
     private val unavailable = UnavailableEngine()
+    /** At most one NPE call in flight; the app holds one engine, so this caps the process. */
+    private val fastSourceInFlight = AtomicBoolean()
     private class Operation {
         // Never pass externally supplied IDs to the library's child-process shell command.
         val processId = UUID.randomUUID().toString()
@@ -75,8 +86,70 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // After initialization: a one-time extraction must not consume the network budget.
             current.expireIn(limits.inspectMs)
             val version = version(current)
+            if (YtdlpCommand.isYouTube(source) && fastSource != null) {
+                // The version probe keeps its existing budget. NPE never runs under that watchdog:
+                // spending its independent budget must not mark the whole operation as timed out.
+                synchronized(current) {
+                    checkCancelled(current)
+                    current.deadline = NO_DEADLINE
+                }
+                val json = fastInfoJson(current, source, operationId, fastSource)
+                val inspection = if (json == null) null else try {
+                    YtdlpMetadataMapper.map(json, source, version).takeIf {
+                        it.formats.isNotEmpty() && NpeInfoJson.accepts(json, it)
+                    }
+                } catch (_: Exception) { null }
+                catch (_: LinkageError) { null }
+                checkCancelled(current)
+                if (inspection != null && json != null) {
+                    infoCache?.remember(inspection, json, trimToChosen = true)
+                    return@operation InspectResult.Success(inspection)
+                }
+                // yt-dlp gets a full inspection budget from its own start, including after a cap skip.
+                current.expireIn(limits.inspectMs)
+            }
             inspectOnce(current, source, version)
         }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun fastInfoJson(current: Operation, source: LinkRevision, operationId: String,
+        fast: YoutubeFastSource): String? {
+        checkCancelled(current)
+        if (limits.npeBudgetMs <= 0) return null
+        if (!fastSourceInFlight.compareAndSet(false, true)) return null
+        val started = System.nanoTime()
+        val abandoned = AtomicBoolean()
+        // Not a child of the operation: Rhino CPU work may ignore interruption indefinitely.
+        // Only the blocking worker releases the process-wide slot, even after timeout/cancellation.
+        val result = fastSourceScope.async {
+            try {
+                if (current.cancelled.get() || abandoned.get() ||
+                    System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) null
+                else fast.infoJson(source.link.rawUrl, operationId, limits.npeBudgetMs)
+            } catch (_: Exception) { null }
+            catch (_: LinkageError) { null }
+            finally { fastSourceInFlight.set(false) }
+        }
+        var abandon = true
+        try {
+            return select {
+                current.cancellation.onAwait { throw OperationCancelled() }
+                result.onAwait {
+                    // A ready result must not beat an elapsed budget just because its timer was delayed.
+                    if (System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) null
+                    else { abandon = false; it }
+                }
+                onTimeout(limits.npeBudgetMs) { null }
+            }
+        } finally {
+            if (abandon) {
+                abandoned.set(true)
+                try { fast.cancel(operationId) }
+                catch (_: Exception) { /* No private failure details cross the fallback seam. */ }
+                catch (_: LinkageError) { /* Desugaring failures also fall back to yt-dlp. */ }
+            }
+        }
+    }
 
     private suspend fun inspectOnce(current: Operation, source: LinkRevision, version: String): InspectResult {
         val empty = YtdlpErrorMapper.EmptyInspection()
@@ -494,6 +567,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             "[EmbedThumbnail]", "[ThumbnailsConvertor]", "[ExtractAudio]", "[MetadataParser]")
         val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val fastSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val updateOwner = Any()
         /** The one updater; a second request joins it instead of starting another. */
         @Volatile var pendingUpdate: Deferred<EngineUpdateResult>? = null
