@@ -193,6 +193,44 @@ class YoutubedlEngineTest {
         assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted), engine.download(command(), dir) {})
         assertEquals("outside", outside.readText())
     }
+    @Test fun exactSingleStreamRejectsTruncatedOutputBeforeReturningItForPublication() = runBlocking {
+        for ((expected, actual, succeeds) in listOf(Triple(1000L, 0, false), Triple(1000L, 979, false), Triple(1000L, 980, true),
+            Triple(1000L, 1000, true), Triple(1000L, 1100, true), Triple(101L, 98, false),
+            Triple(101L, 99, true), Triple(Long.MAX_VALUE, 1000, false))) {
+            for (format in listOf(row.copy(size = Size.Exact(expected)),
+                Format("audio", "m4a", false, true, size = Size.Exact(expected)))) {
+                val dir = temp.newFolder().canonicalFile
+                val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job",
+                    Inspection(source, "2025.11.12", listOf(format)), source, format.id, "title")).command
+                val runtime = Runtime().apply { action = { _, line ->
+                    File(dir, "output.${format.container}").writeBytes(ByteArray(actual))
+                    File(dir, "result-path.txt").writeText(File(dir, "output.${format.container}").path)
+                    // A final progress report must not override the exact inspection size.
+                    line("nezzel:${format.id}:$actual:$actual:NA"); ""
+                } }
+                val result = YoutubedlEngine(runtime).download(command, dir) {}
+                if (succeeds) assertEquals(actual.toLong(), assertIs<TransferResult.Success>(result).output.file.length())
+                else assertEquals(TransferResult.Failure(DownloadError.MergeFailed), result)
+            }
+        }
+    }
+    @Test fun outputSizeGuardSkipsMergesConversionsExtractionEstimatesAndUnknownSizes() = runBlocking {
+        val rows = listOf(row.copy(size = Size.Estimated(1000)), row.copy(size = Size.Unknown),
+            row.copy(size = Size.Exact(1000), hasAudio = false, audioFormatId = "140", requiresMerge = true),
+            Format("converted", "mp3", false, true, size = Size.Exact(1000),
+                conversion = AudioConversion.MP3_128, sourceFormatId = "140"),
+            Format("extracted", "m4a", false, true, size = Size.Exact(1000), sourceFormatId = "18"))
+        for (format in rows) {
+            val dir = temp.newFolder().canonicalFile
+            val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job",
+                Inspection(source, "2025.11.12", listOf(format)), source, format.id, "title")).command
+            val runtime = Runtime().apply { action = { _, _ ->
+                File(dir, "output.${format.container}").writeBytes(ByteArray(10))
+                File(dir, "result-path.txt").writeText(File(dir, "output.${format.container}").path); ""
+            } }
+            assertEquals(10L, assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, dir) {}).output.file.length())
+        }
+    }
     @Test fun extraOutputsAndNonliteralExtensionsFailWithoutDeletingAnything() = runBlocking {
         for (names in listOf(listOf("output.mp4", "extra.m4a"), listOf("output.mp4.exe"),
             listOf("output.mp4", "output.f140.m4a"), listOf("output.mp4", "nested"))) {
@@ -413,7 +451,8 @@ class YoutubedlEngineTest {
                 else -> listOf("--extract-audio", "--audio-format", "m4a")
             }
             val selector = if (format.requiresMerge) "136+140" else format.sourceFormatId
-            assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf("--no-simulate", "--newline",
+            assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf(
+                "--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:16", "-N", "4", "--no-simulate", "--newline",
                 "--progress-template", YtdlpCommand.PROGRESS_TEMPLATE, "-f", selector, "-o", File(dir, "output.%(ext)s").path,
                 "--print-to-file", "after_move:filepath", File(dir, "result-path.txt").path) + post + listOf("--", source.link.rawUrl), runtime.calls.last())
             assertFalse(selector.contains('/')); assertTrue(selector.split('+').none { it in setOf("best", "b") })

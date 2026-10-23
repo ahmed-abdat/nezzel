@@ -169,6 +169,15 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             require(file.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
             require(!java.nio.file.Files.isSymbolicLink(file.toPath()))
             require(File(paths.single()).canonicalFile == file.canonicalFile)
+            require(file.isFile)
+            val row = command.format
+            val expected = (row.size as? Size.Exact)?.bytes
+            val extractsAudio = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
+            // Allow a 2% size shortfall for an unchanged single stream; remuxed/extracted/converted
+            // outputs and estimates cannot be compared to input sizes. Check before optional title rewriting.
+            // expected - expected / 50 is ceil(98% of expected), without overflowing Long.
+            if (!row.requiresMerge && row.conversion == null && !extractsAudio && expected != null &&
+                file.length() < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
             val output = StagedOutput.validate(root, listOf(file))
             require(output.file.parentFile == root)
             output

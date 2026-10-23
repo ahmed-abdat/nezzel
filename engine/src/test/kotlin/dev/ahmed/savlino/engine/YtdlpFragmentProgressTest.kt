@@ -5,6 +5,52 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class YtdlpFragmentProgressTest {
+    @Test fun concurrentFragmentCallbacksKeepBytesAndCompletedFragmentProgressMonotonic() {
+        // Representative -N callbacks: in-flight bytes before completion, a byte dip and a late fragment hook.
+        val lines = listOf(
+            "nezzel-v2:hls:120000:NA:155000000:0:4",
+            "nezzel-v2:hls:728092:NA:39000000:1:4",
+            "nezzel-v2:hls:700000:NA:155000000:0:4",
+            "nezzel-v2:hls:900000:NA:2000000:2:4",
+            "nezzel-v2:hls:1100000:NA:6000000:3:4",
+            "nezzel-v2:hls:1200000:NA:1200000:4:4",
+            "nezzel-v2:hls:1200000:1200000:NA:NA:NA")
+        val mapper = YtdlpProgressMapper()
+        val events = lines.map { mapper.map(it) as EngineEvent.Progress }
+        assertEquals(listOf(120000L, 728092L, 728092L, 900000L, 1100000L, 1200000L, 1200000L),
+            events.map { it.bytesDownloaded })
+        assertEquals(listOf(0L, 25L, 25L, 50L, 75L, 100L, 100L),
+            events.map { it.fragmentIndex!! * 100 / it.fragmentCount!! })
+        assertTrue(events.dropLast(1).all { it.total is Size.Estimated })
+        assertEquals(Size.Exact(1200000), events.last().total)
+    }
+
+    @Test fun concurrentByteOnlyEstimatesNeverSupplyAPercentageDenominator() {
+        val mapper = YtdlpProgressMapper()
+        for (line in listOf("nezzel-v2:hls:728092:NA:39000000:NA:NA",
+            "nezzel-v2:hls:700000:NA:155000000:NA:NA")) {
+            val event = mapper.map(line) as EngineEvent.Progress
+            assertEquals(728092L, event.bytesDownloaded)
+            assertTrue(event.total is Size.Estimated)
+            assertNull(event.fragmentIndex); assertNull(event.fragmentCount)
+        }
+    }
+
+    @Test fun interleavedConcurrentStreamsKeepAggregateProgressUntilMerger() {
+        val mapper = YtdlpProgressMapper(2)
+        val lines = listOf("nezzel-v2:v:400:NA:4000:1:4", "nezzel-v2:a:100:NA:1000:0:4",
+            "nezzel-v2:v:380:NA:16000:0:4", "nezzel-v2:a:200:NA:4000:2:4",
+            "nezzel-v2:v:800:NA:800:4:4", "nezzel-v2:a:400:NA:400:4:4",
+            "nezzel-v2:v:800:800:NA:NA:NA", "nezzel-v2:a:400:400:NA:NA:NA")
+        val events = lines.map { mapper.map(it) as EngineEvent.Progress }
+        assertEquals(listOf(400L, 500L, 500L, 600L, 1000L, 1200L, 1200L, 1200L), events.map { it.bytesDownloaded })
+        assertNull(events.first().fragmentIndex)
+        assertEquals(listOf(12L, 12L, 37L, 75L, 100L, 100L, 100L),
+            events.drop(1).map { it.fragmentIndex!! * 100 / it.fragmentCount!! })
+        assertEquals(Size.Exact(1200), events.last().total)
+        assertEquals(EngineEvent.Merging, mapper.map("[Merger] Merging formats into output.mp4"))
+    }
+
     @Test fun numericFragmentTemplateKeepsRealBytesAndEstimatedSize() {
         val event = YtdlpProgressMapper().map("nezzel-v2:hls:video:160900000:NA:156700000:25:100")
         assertNotNull("Reported fragment progress must reach the app", event)

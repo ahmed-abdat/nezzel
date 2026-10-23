@@ -35,6 +35,9 @@ object YtdlpCommand {
         return buildList {
             addAll(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1"))
             addAll(NETWORK)
+            addAll(listOf("--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8",
+                "--retry-sleep", "fragment:exp=1:16"))
+            if (!isYouTube(command.source)) addAll(listOf("-N", "4"))
             addAll(listOf("--no-simulate", "--newline",
                 "--progress-template", PROGRESS_TEMPLATE, "-f", selector,
                 "-o", File(root, template).path, "--print-to-file", "after_move:filepath", File(root, "result-path.txt").path))

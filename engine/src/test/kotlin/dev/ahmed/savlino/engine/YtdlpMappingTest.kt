@@ -37,17 +37,44 @@ class YtdlpMappingTest {
             }
         }
     }
-    @Test fun nativeOriginalAudioAndVideoKeepExactPreChangeArgvGolden() {
+    @Test fun nativeOriginalAudioAndVideoKeepExactDownloadArgv() {
         for (row in listOf(Format("native-mp3", "mp3", false, true, audioCodec = "mp3"),
             Format("native-aac", "m4a", false, true, audioCodec = "aac"),
             Format("native-video", "mp4", true, true, audioCodec = "mp3"))) {
             val dir = temp.newFolder().canonicalFile
             val args = YtdlpCommand.download(command(row), dir)
-            assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf("--no-simulate", "--newline",
+            assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf(
+                "--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:16", "-N", "4", "--no-simulate", "--newline",
                 "--progress-template", YtdlpCommand.PROGRESS_TEMPLATE, "-f", row.id,
                 "-o", File(dir, "output.%(ext)s").path, "--print-to-file", "after_move:filepath",
                 File(dir, "result-path.txt").path, "--", source.link.rawUrl), args)
             assertFalse("--postprocessor-args" in args)
+        }
+    }
+
+    @Test fun onlyNonYouTubeDownloadsUseConcurrentFragmentsAndNeitherOperationDisablesBundledJs() {
+        for (url in listOf("https://example.org/video", "https://www.youtube.com/watch?v=fixture", "https://youtu.be/fixture")) {
+            val source = LinkRevision(assertNotNull(LinkInput.parse(url)), 1)
+            val row = Format("18", "mp4", true, true)
+            val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job",
+                Inspection(source, "v1", listOf(row)), source, row.id, "title")).command
+            for (info in listOf(null, temp.newFile())) {
+                val download = YtdlpCommand.download(command, temp.newFolder(), info)
+                if (source.link.host == Host.YOUTUBE) assertFalse("-N" in download)
+                else {
+                    assertEquals(1, download.count { it == "-N" })
+                    assertEquals("4", download[download.indexOf("-N") + 1])
+                    assertTrue(download.indexOf("-N") > download.indexOf("--fragment-retries"))
+                    assertTrue(download.indexOf("-N") < download.indexOf(if (info == null) "--" else "--load-info-json"))
+                }
+                for (args in listOf(YtdlpCommand.inspect(source), download)) {
+                    assertFalse(args.any { it == "--no-js-runtimes" || it.startsWith("--no-js-runtimes=") })
+                    assertFalse(args.any { it == "--remote-components" || it.startsWith("--remote-components=") })
+                }
+            }
+            val inspect = YtdlpCommand.inspect(source)
+            assertFalse("-N" in inspect); assertFalse("--retry-sleep" in inspect)
+            assertFalse("--abort-on-unavailable-fragments" in inspect)
         }
     }
 
@@ -405,7 +432,8 @@ class YtdlpMappingTest {
         val dir = temp.newFolder().canonicalFile
         val row = Format("136", "mp4", true, false, audioFormatId = "140", requiresMerge = true)
         val args = YtdlpCommand.download(command(row), dir)
-        assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf("--no-simulate", "--newline",
+        assertEquals(listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + YtdlpCommand.NETWORK + listOf(
+            "--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:16", "-N", "4", "--no-simulate", "--newline",
             "--progress-template", YtdlpCommand.PROGRESS_TEMPLATE, "-f", "136+140",
             "-o", File(dir, "output.%(ext)s").path, "--print-to-file", "after_move:filepath",
             File(dir, "result-path.txt").path, "--merge-output-format", "mp4", "--", source.link.rawUrl), args)
