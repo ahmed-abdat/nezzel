@@ -12,7 +12,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -43,7 +44,8 @@ internal fun SettingsScreen(
     onAutomaticOptions: (Boolean) -> Unit,
     onHowItWorks: () -> Unit,
     updates: AppUpdates? = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available },
-    onClearLinks: (suspend () -> Unit)? = links.downloads?.let { downloads -> { downloads.clearShareLinks() } },
+    /** Fire and forget: the caller owns the clear so leaving Settings can't cut it short. */
+    onClearLinks: (() -> Unit)? = null,
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
     BackHandler(advanced) { advanced = false }
@@ -65,7 +67,7 @@ private fun MainSettings(
     onLanguage: (String) -> Unit, onTheme: (ThemePref) -> Unit,
     onWallpaper: (Boolean) -> Unit, onSuggestions: (Boolean) -> Unit,
     onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?,
-    onClearLinks: (suspend () -> Unit)?, onAdvanced: () -> Unit,
+    onClearLinks: (() -> Unit)?, onAdvanced: () -> Unit,
 ) {
     var picker by rememberSaveable { mutableStateOf<String?>(null) }
     val languages = listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en),
@@ -106,11 +108,15 @@ private fun MainSettings(
     }
 }
 
+/** Clear link history once started: leaving the screen or the app can't stop it halfway, and a failure returns false. */
+internal suspend fun clearLinkHistory(clear: suspend () -> Unit): Boolean = withContext(NonCancellable) {
+    try { clear(); true } catch (_: Exception) { false }
+}
+
 /** One row: forgets every saved file's link after one confirmation. Files stay. */
 @Composable
-internal fun PrivacySettings(onClear: suspend () -> Unit) {
+internal fun PrivacySettings(onClear: () -> Unit) {
     var confirm by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     SettingsGroup(stringResource(R.string.settings_privacy)) {
         SettingsNavRow(stringResource(R.string.clear_link_history), R.drawable.ic_ms_link,
             body = stringResource(R.string.clear_link_history_help), chevron = false) { confirm = true }
@@ -122,7 +128,7 @@ internal fun PrivacySettings(onClear: suspend () -> Unit) {
             TextButton(onClick = { confirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
         },
         confirmButton = {
-            TextButton(onClick = { confirm = false; scope.launch { onClear() } }, modifier = Modifier.heightIn(min = 48.dp)) {
+            TextButton(onClick = { confirm = false; onClear() }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.clear))
             }
         })

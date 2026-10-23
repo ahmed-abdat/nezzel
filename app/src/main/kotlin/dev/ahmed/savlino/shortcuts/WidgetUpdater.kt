@@ -9,6 +9,7 @@ import dev.ahmed.savlino.jobs.JobRecord
 import dev.ahmed.savlino.jobs.JobStage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -36,16 +37,17 @@ class WidgetUpdater(
     private val render: (WidgetUiState, IntArray) -> Unit = { state, ids -> NezzelWidgetProvider.render(context, ids, state) },
 ) {
     @Volatile private var cached: WidgetUiState? = null
-    private val forgotten = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    // Buffered until start() collects: a startup sweep can confirm a file gone before the widget subscribes.
+    private val forgotten = Channel<String>(Channel.UNLIMITED)
     /** The saved file is gone: a widget still showing it as the latest download falls back. */
-    fun forget(jobId: String) { forgotten.tryEmit(jobId) }
+    fun forget(jobId: String) { forgotten.trySend(jobId) }
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value.lastOrNull())
 
     fun start(scope: CoroutineScope): Job = scope.launch {
         // The process scope runs on IO. A restart has no completion events to replay, and live
         // snapshots deliberately omit completed rows. Seed the widget without emitting a snackbar.
         val latest = LatestJob(try { journal() } catch (_: Exception) { emptyList() })
-        merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) }, forgotten.map { Event.Forgotten(it) })
+        merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) }, forgotten.receiveAsFlow().map { Event.Forgotten(it) })
             .map { latest.accept(it) }
             .distinctUntilChanged()
             .onEach { cached = it }

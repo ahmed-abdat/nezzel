@@ -332,7 +332,14 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.COMPLETED,
                 ContentValues().apply {
                     put("display_name", published.displayName); key?.let { put("source_key", it) }; link?.let { put("share_link", it) }
-                })
+                }).also { if (it) supersede(jobId, published.uri) }
+    }
+
+    /** A folder or MediaStore can hand a freed URI to a new file: older rows at that URI lose their link and artwork. */
+    private fun supersede(jobId: String, uri: Uri) {
+        val older = writableDatabase.query("jobs", arrayOf("job_id"), "stage = 'COMPLETED' AND pending_uri = ? AND job_id != ?",
+            arrayOf(uri.toString(), jobId), null, null, null).use { buildList { while (it.moveToNext()) add(it.getString(0)) } }
+        for (id in older) forgetFile(id)
     }
 
     /** Pending ownership must be resolved first by recovery; late cancellation cannot undo commit. */
@@ -392,7 +399,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     /** Saved files that still carry a Copy link blob or row artwork (at most the 100 kept terminal rows). */
     @Synchronized fun linkedFiles(): List<LinkedFile> = readableDatabase.query("jobs",
         arrayOf("job_id", "pending_uri", "updated_at", "share_link IS NOT NULL"),
-        "stage = 'COMPLETED' AND pending_uri IS NOT NULL", null, null, null, null).use { c ->
+        "stage = 'COMPLETED' AND pending_uri IS NOT NULL", null, null, null, "updated_at DESC, rowid DESC").use { c ->
         buildList { while (c.moveToNext()) {
             if (c.getInt(3) == 1 || artwork.has(c.getString(0))) add(LinkedFile(c.getString(0), Uri.parse(c.getString(1)), c.getLong(2)))
         } }
@@ -418,10 +425,26 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         writableDatabase.update("jobs", ContentValues().apply { putNull("share_link") }, "job_id = ?", arrayOf(jobId))
     }
 
-    /** Clear link history: every blob, then the key. Under [terminalLock], so no completion seals across it. */
+    /**
+     * Clear link history: every blob and "Saved before" tag on ended rows, and the link a failure kept for Retry
+     * (that row stops being retryable), in one transaction; then the key. Active jobs keep the link they need.
+     * Under [terminalLock], so no completion seals across it.
+     */
     fun clearShareLinks(): Unit = synchronized(terminalLock) {
         synchronized(this) {
-            writableDatabase.update("jobs", ContentValues().apply { putNull("share_link") }, "share_link IS NOT NULL", null)
+            val db = writableDatabase
+            val failed = mutableListOf<String>()
+            db.beginTransaction()
+            try {
+                db.query("jobs", arrayOf("job_id"), "stage = 'FAILED' AND source_url IS NOT NULL", null, null, null, null)
+                    .use { while (it.moveToNext()) failed += it.getString(0) }
+                db.update("jobs", ContentValues().apply { putNull("source_url"); put("retryable", 0) },
+                    "stage = 'FAILED' AND source_url IS NOT NULL", null)
+                db.update("jobs", ContentValues().apply { putNull("share_link"); putNull("source_key") },
+                    "stage IN ('COMPLETED','FAILED','CANCELLED') AND (share_link IS NOT NULL OR source_key IS NOT NULL)", null)
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            for (id in failed) get(id)?.let(onExpired)
         }
         links?.forget()
     }

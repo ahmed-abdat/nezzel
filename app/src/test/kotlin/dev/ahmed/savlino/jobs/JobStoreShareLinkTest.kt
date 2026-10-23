@@ -50,10 +50,10 @@ class JobStoreShareLinkTest {
 
     private fun uri(id: String) = Uri.parse("content://media/external_primary/downloads/${id.hashCode() and 0xffff}")
 
-    private fun JobStore.completed(id: String): Boolean {
+    private fun JobStore.completed(id: String, at: Uri = uri(id)): Boolean {
         check(enqueue(command(id))); check(startTransfer(id)); check(markStaged(id))
-        check(recordPending(id, PendingPublication(uri(id), "$id.mp4"))); check(markPublishing(id))
-        return complete(id, PublishedFile(uri(id), "$id.mp4"))
+        check(recordPending(id, PendingPublication(at, "$id.mp4"))); check(markPublishing(id))
+        return complete(id, PublishedFile(at, "$id.mp4"))
     }
 
     private fun JobStore.blob(id: String): ByteArray? = readableDatabase.rawQuery(
@@ -115,6 +115,26 @@ class JobStoreShareLinkTest {
         assertEquals(link, store.shareLink("after"))
     } }
 
+    @Test fun clearForgetsSavedBeforeAndRetryLinksButNotActiveJobs() { JobStore(app, IsolatedTestApplication.FAKE_KEYER, cipher).use { store ->
+        val expired = mutableListOf<String>()
+        store.onExpired = { expired += it.jobId }
+        val normalized = LinkInput.parse(link)!!.normalizedUrl
+        assertTrue(store.completed("done"))
+        check(store.enqueue(command("failed"))); check(store.startTransfer("failed")); check(store.fail("failed", DownloadError.Network))
+        check(store.enqueue(command("live")))
+        assertTrue(store.get("failed")!!.retryable)
+        assertTrue(store.savedFormats(normalized).isNotEmpty())
+        store.clearShareLinks()
+        assertTrue(store.savedFormats(normalized).isEmpty())
+        store.readableDatabase.rawQuery("SELECT job_id, source_url, source_key, share_link, retryable FROM jobs", null).use { c ->
+            val rows = buildMap { while (c.moveToNext()) put(c.getString(0), listOf(c.getString(1), c.getString(2), c.isNull(3), c.getInt(4))) }
+            assertEquals(listOf(null, null, true, 0), rows["done"])
+            assertEquals(listOf(null, null, true, 0), rows["failed"])
+            assertEquals(link, rows["live"]!![0]); assertNotNull(rows["live"]!![1])
+        }
+        assertEquals(listOf("failed"), expired) // the Downloads row loses its Retry now, not after a restart
+    } }
+
     @Test fun busyKeystoreHidesButKeepsALostKeyDrops() { JobStore(app, null, cipher).use { store ->
         assertTrue(store.completed("kept")); assertTrue(store.completed("lost"))
         val fresh = AesGcmLinkCipher(keys) // a new process: nothing cached
@@ -146,6 +166,16 @@ class JobStoreShareLinkTest {
             db.rawQuery("PRAGMA $pragma", null).use { assertTrue(it.moveToFirst()); assertEquals(expected, it.getString(0).lowercase()) }
     } }
     /** C9: a file confirmed gone takes its link and artwork; the row stays, and a row with only artwork still counts. */
+    /** A folder can hand a deleted file's document URI to a new file: only the newest row there keeps link and artwork. */
+    @Test fun reusedUriLeavesOnlyTheNewestFileItsLinkAndArtwork() { JobStore(app, null, cipher).use { store ->
+        val doc = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ANezzel/document/primary%3ANezzel%2Fclip.mp4")
+        assertTrue(store.completed("first", doc)); assertTrue(store.artwork.save("first", byteArrayOf(1)))
+        assertTrue(store.artwork.save("second", byteArrayOf(2))); assertTrue(store.completed("second", doc))
+        assertNull(store.blob("first")); assertFalse(store.artwork.has("first"))
+        assertNotNull(store.blob("second")); assertTrue(store.artwork.has("second"))
+        assertEquals(listOf("second"), store.linkedFiles().map { it.jobId })
+    } }
+
     @Test fun forgetFileDropsLinkAndArtworkButKeepsTheRow() { JobStore(app, null, cipher).use { store ->
         assertTrue(store.completed("gone")); assertTrue(store.completed("art-only"))
         assertTrue(store.artwork.save("gone", byteArrayOf(1, 2, 3)))

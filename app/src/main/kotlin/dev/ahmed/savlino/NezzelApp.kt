@@ -76,6 +76,12 @@ fun NezzelApp(
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) snackbar.showSnackbar(context.getString(R.string.link_copied))
         } } }
     }
+    // Same scope: a clear started in Settings outlives the screen.
+    val clearLinks = remember(links.downloads) {
+        links.downloads?.let { downloads -> { scope.launch {
+            if (!clearLinkHistory(downloads::clearShareLinks)) snackbar.showSnackbar(context.getString(R.string.clear_link_history_failed))
+        }; Unit } }
+    }
     val updates = (context.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available }
     val updateState by (updates?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AppUpdateState()) }).collectAsState()
     LaunchedEffect(updates, language) {
@@ -181,7 +187,7 @@ fun NezzelApp(
                 }, label = "destination") { route ->
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
-                            onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks)
+                            onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks)
                         "Downloads" -> DownloadsScreen(jobs, language,
                             cancel,
                             removeFailed, library.open, library.share, library.openWith,

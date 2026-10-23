@@ -256,6 +256,22 @@ class WidgetTest {
         } finally { collection.cancel() }
     }
 
+    @Test fun fileForgottenBeforeTheWidgetStartsStillLeavesTheSeed() = runTest {
+        val uri = android.net.Uri.parse("content://media/external_primary/downloads/7")
+        JobStore(app).use { store ->
+            assertTrue(store.enqueue(command("saved"))); assertTrue(store.startTransfer("saved")); assertTrue(store.markStaged("saved"))
+            assertTrue(store.recordPending("saved", PendingPublication(uri, "saved.mp4")))
+            assertTrue(store.complete("saved", PublishedFile(uri, "saved.mp4")))
+        }
+        val updater = WidgetUpdater(app, MutableStateFlow(emptyList()), journal = { JobStore(app).use { it.all() } }, widgetIds = { intArrayOf() })
+        updater.forget("saved") // a startup sweep can confirm it gone before start() subscribes
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            assertNull(updater.currentState.title)
+        } finally { collection.cancel() }
+    }
+
     @Test fun newerJournalFailureWinsOverAnOlderCompletion() = runTest {
         val uri = android.net.Uri.parse("content://media/external_primary/downloads/7")
         JobStore(app).use { store ->

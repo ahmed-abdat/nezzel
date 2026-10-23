@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.*
+import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,6 +71,16 @@ class CopyLinkUiTest {
         click(a, context.getString(R.string.saved_more, video.title))
         assertNotNull(clickable(a, context.getString(R.string.share_file)))
         assertNull(clickable(a, context.getString(R.string.copy_link)))
+    }
+
+    @Test fun clearLinkHistoryOutlivesItsCallerAndReportsAFailure() = kotlinx.coroutines.test.runTest {
+        assertFalse(dev.ahmed.savlino.clearLinkHistory { throw android.database.sqlite.SQLiteException("busy") })
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var cleared = false
+        val caller = launch { dev.ahmed.savlino.clearLinkHistory { gate.await(); cleared = true } }
+        testScheduler.runCurrent(); caller.cancel() // the user left Settings mid-clear
+        gate.complete(Unit); caller.join()
+        assertTrue(cleared)
     }
 
     @Test fun clearLinkHistoryClearsOnlyAfterConfirmation() {

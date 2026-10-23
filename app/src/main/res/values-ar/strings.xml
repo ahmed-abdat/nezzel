@@ -369,6 +369,7 @@
     <string name="clear_link_history_help">انسَ مصدر تنزيلاتك. تبقى ملفاتك.</string>
     <string name="clear_link_history_title">مسح سجل الروابط؟</string>
     <string name="clear_link_history_body">سينسى Nezzel روابط كل تنزيلاتك. تبقى ملفاتك على هاتفك.</string>
+    <string name="clear_link_history_failed">تعذّر مسح سجل الروابط. حاول مرة أخرى.</string>
     <string name="clear">مسح</string>
     <string name="settings_advanced">إعدادات متقدمة</string>
     <string name="settings_advanced_help">الروابط ودعم المواقع والتحديثات</string>
