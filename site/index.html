@@ -451,6 +451,8 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 .tr-head p{margin:14px 0 0;color:var(--muted);max-width:52ch}
 .never{margin:14px 0 0;color:var(--muted);font-size:16px;max-width:52ch}
 .src{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:14px;font-weight:700}
+.wa{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:8px;font-weight:700;justify-self:start}
+.wa .i{fill:#25D366;stroke:none}
 
 /* open source */
 .open{margin-top:128px;position:relative;overflow:hidden;border-radius:var(--r-xl);background:var(--inverse);color:var(--on-inverse);padding:clamp(28px,6vw,64px);display:grid;gap:28px}
@@ -523,6 +525,7 @@ footer a{color:inherit}
   <symbol id="pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
   <symbol id="playo" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
   <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.8 2.8 5.8 3.1 5.8 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  <symbol id="wa" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z"/></symbol>
   <!-- sample thumbnail: an illustrated summer coast (no real footage, no real people) -->
   <symbol id="scene" viewBox="0 0 160 90"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC98A"/><stop offset=".6" stop-color="#F7A26B"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F8A7B"/><stop offset="1" stop-color="#0B5248"/></linearGradient></defs><rect width="160" height="90" fill="url(#sky)"/><circle cx="104" cy="44" r="15" fill="#FFF1D6"/><path d="M0 54h160v36H0z" fill="url(#sea)"/><path d="M0 58c20-3 38 3 58 0s40-4 62 0 30 2 40 0" stroke="#9EF2E1" stroke-opacity=".45" stroke-width="1.6" fill="none"/><path d="M0 90V68c18-10 40-14 64-6 14 5 22 12 32 22H0Z" fill="#E8C48E"/><path d="M28 70c0-10 2-18 6-24m0 0c-6 0-10 3-13 6m13-6c5-2 10-1 13 2m-13-2c2-4 6-6 10-6" stroke="#2A1800" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
 </svg>
@@ -750,6 +753,7 @@ footer a{color:inherit}
     <details><summary data-i="f4">كيف أحدّثه؟</summary><p data-i="f4a">يخبرك Nezzel عند توفر إصدار جديد، فتحمّله وتؤكد تثبيته. تبقى ملفاتك وإعداداتك كما هي</p></details>
     <details><summary data-i="f5">أين تُحفظ الملفات؟</summary><p data-i="f5a">في مجلد Nezzel داخل التنزيلات، أو في مجلد تختاره من الإعدادات. وتجدها في تطبيق الملفات</p></details>
     <details><summary data-i="f6">هل يعمل على الآيفون؟</summary><p data-i="f6a">لا، Nezzel لأندرويد فقط، من أندرويد 10 فما فوق، على الهواتف بمعالج <bdi>64-bit</bdi></p></details>
+    <a class="wa" data-i-href="wa-href" href="https://wa.me/22237928327?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%20%F0%9F%91%8B%20%D8%B4%D9%83%D8%B1%D9%8B%D8%A7%20%D8%B9%D9%84%D9%89%20Nezzel%21"><svg class="i" aria-hidden="true"><use href="#wa"/></svg><span data-i="wa">راسلنا على واتساب</span></a>
   </div>
 </section>
 
@@ -824,6 +828,7 @@ footer a{color:inherit}
     f4:"How do I update it?", f4a:"Nezzel tells you when a new version is out. You download it and confirm the install. Your files and settings stay",
     f5:"Where are files saved?", f5a:"In the Nezzel folder in Downloads, or a folder you choose in Settings. You’ll find them in your Files app",
     f6:"Does it work on iPhone?", f6a:"No, Nezzel is Android only: Android 10 or newer, on phones with a <bdi>64-bit</bdi> processor",
+    wa:"Message us on WhatsApp", "wa-href":"https://wa.me/22237928327?text=Hi%20%F0%9F%91%8B%20Thanks%20for%20Nezzel%21",
     "os-h":"Open source", "os-p":"Nezzel’s full code is on GitHub under <bdi>GPL-3.0-or-later</bdi>, open for anyone to review",
     "tr-h":"No ads, no trackers, no account", "tr-p":"Nothing about you leaves your phone. Nezzel talks to the site you chose, and to <bdi>GitHub</bdi> to look for updates",
     "tr-ask":"It never asks for your location, contacts or files. Only internet and notifications",
@@ -924,6 +929,8 @@ footer a{color:inherit}
       "f5a": "في مجلد Nezzel داخل التنزيلات، أو في مجلد تختاره من الإعدادات. وتجدها في تطبيق الملفات",
       "f6": "هل يعمل على الآيفون؟",
       "f6a": "لا، Nezzel لأندرويد فقط، من أندرويد 10 فما فوق، على الهواتف بمعالج <bdi>64-bit</bdi>",
+      "wa": "راسلنا على واتساب",
+      "wa-href": "https://wa.me/22237928327?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%20%F0%9F%91%8B%20%D8%B4%D9%83%D8%B1%D9%8B%D8%A7%20%D8%B9%D9%84%D9%89%20Nezzel%21",
       "os-h": "مفتوح المصدر",
       "os-p": "شيفرة Nezzel كاملة على GitHub برخصة <bdi>GPL-3.0-or-later</bdi>، ويستطيع أي أحد مراجعتها",
       "tr-h": "بلا إعلانات، بلا تتبّع، بلا حساب",
@@ -986,6 +993,7 @@ footer a{color:inherit}
     f4:"Comment mettre à jour ?", f4a:"Nezzel vous prévient quand une nouvelle version est disponible. Vous la téléchargez et confirmez l’installation. Vos fichiers et paramètres sont conservés",
     f5:"Où sont mes fichiers ?", f5a:"Dans le dossier Nezzel de Téléchargements, ou dans le dossier choisi dans les paramètres. Retrouvez-les dans votre application de fichiers",
     f6:"Et sur iPhone ?", f6a:"Nezzel fonctionne uniquement sur Android 10 ou plus récent, sur les téléphones avec un processeur <bdi>64 bits</bdi>",
+    wa:"Écrivez-nous sur WhatsApp", "wa-href":"https://wa.me/22237928327?text=Bonjour%20%F0%9F%91%8B%20Merci%20pour%20Nezzel%C2%A0%21",
     "os-h":"Un code ouvert à tous", "os-p":"Tout le code de Nezzel est sur GitHub sous licence <bdi>GPL-3.0-or-later</bdi>. Chacun peut le consulter",
     "tr-h":"Sans pub, sans traceurs, sans compte", "tr-p":"Rien sur vous ne quitte votre téléphone. Nezzel contacte le site que vous avez choisi, et <bdi>GitHub</bdi> pour chercher les mises à jour",
     "tr-ask":"Il ne demande jamais votre position, vos contacts ni vos fichiers. Seulement Internet et les notifications",

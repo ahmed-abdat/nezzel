@@ -67,6 +67,7 @@ function translate(source, nodes, dict, meta, locale) {
     const set = (key, value) => { tag = attr(tag, key, value); };
     if (a['data-i']) edits.push([node.openEnd, node.close, dict[a['data-i']]]);
     if (a['data-i-aria']) set('aria-label', dict[a['data-i-aria']]);
+    if (a['data-i-href']) set('href', dict[a['data-i-href']]);
     if (node.name === 'html') { set('lang', locale); set('dir', locale === 'ar' ? 'rtl' : 'ltr'); }
     if (node.name === 'title') edits.push([node.openEnd, node.close, escape(meta[0])]);
     if (node.name === 'meta') {
@@ -111,7 +112,7 @@ try {
   const nodes = elements(source);
   const dictionaries = Object.fromEntries(locales.map(l => [l, dictionary(source, l.toUpperCase())]));
   const meta = dictionary(source, 'META');
-  const keys = new Set([...Object.values(dictionaries).flatMap(Object.keys), ...nodes.flatMap(n => [n.attrs['data-i'], n.attrs['data-i-aria']]).filter(Boolean)]);
+  const keys = new Set([...Object.values(dictionaries).flatMap(Object.keys), ...nodes.flatMap(n => [n.attrs['data-i'], n.attrs['data-i-aria'], n.attrs['data-i-href']]).filter(Boolean)]);
   const missing = [];
   for (const locale of locales) {
     for (const key of keys) if (typeof dictionaries[locale][key] !== 'string' || !dictionaries[locale][key].trim()) missing.push(`${locale}: ${key}`);
