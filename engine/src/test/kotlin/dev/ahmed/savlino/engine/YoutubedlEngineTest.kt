@@ -145,7 +145,10 @@ class YoutubedlEngineTest {
     @Test fun inspectUsesMetadataOnlyAndInitializesOnceAcrossCalls() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> """{"formats":[{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac"}]}""" } }
         val engine = YoutubedlEngine(runtime)
-        repeat(2) { assertEquals("18", assertIs<InspectResult.Success>(engine.inspect(source, "inspect-$it")).inspection.formats.single { it.id == "18" }.id) }
+        repeat(2) {
+            engine.clearRecentLinks() // each call extracts
+            assertEquals("18", assertIs<InspectResult.Success>(engine.inspect(source, "inspect-$it")).inspection.formats.single { it.id == "18" }.id)
+        }
         assertEquals(1, runtime.starts); assertEquals(0, runtime.updates)
         assertEquals(2, runtime.calls.count { it.contains("--dump-json") && it.contains("--skip-download") })
         assertTrue(runtime.calls.none { it.contains("--no-simulate") })

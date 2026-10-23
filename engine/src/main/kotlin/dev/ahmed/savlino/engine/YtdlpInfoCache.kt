@@ -16,11 +16,14 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
     private class Entry(val inspection: Inspection, val json: String, val createdAt: Long, val trimToChosen: Boolean)
     private val inspections = linkedMapOf<String, Entry>()
 
-    @Synchronized internal fun remember(inspection: Inspection, json: String, trimToChosen: Boolean = false) {
+    /** [createdAt] is the real extraction time; [expiresAt] (signed URLs) shortens the TTL through confirm and resume. */
+    @Synchronized internal fun remember(inspection: Inspection, json: String, trimToChosen: Boolean = false,
+        createdAt: Long = now(), expiresAt: Long? = null) {
         inspections.entries.removeAll { !fresh(it.value.createdAt) }
         // Only the recent options sheets can confirm. Bound abandoned inspections as well as their age.
         while (inspections.size >= 4) inspections.remove(inspections.keys.first())
-        inspections[inspection.inspectionId] = Entry(inspection, json, now(), trimToChosen)
+        val effective = if (expiresAt == null) createdAt else minOf(createdAt, expiresAt - TTL_MS)
+        inspections[inspection.inspectionId] = Entry(inspection, json, effective, trimToChosen)
     }
 
     /** Consume once; a later explicit Retry must never resurrect this inspection. Best-effort IO. */
