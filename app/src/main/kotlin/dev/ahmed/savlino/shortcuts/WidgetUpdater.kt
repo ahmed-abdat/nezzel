@@ -5,6 +5,9 @@ import android.content.ComponentName
 import android.content.Context
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
+import dev.ahmed.savlino.jobs.JobRecord
+import dev.ahmed.savlino.jobs.JobStage
+import dev.ahmed.savlino.jobs.JobStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,7 +38,10 @@ class WidgetUpdater(
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value.lastOrNull())
 
     fun start(scope: CoroutineScope): Job = scope.launch {
-        val latest = LatestJob()
+        // The process scope runs on IO. A restart has no completion events to replay, and live
+        // snapshots deliberately omit completed rows. Seed the widget without emitting a snackbar.
+        val journal = try { JobStore(context).use { it.all() } } catch (_: Exception) { emptyList() }
+        val latest = LatestJob(journal)
         merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) })
             .map { latest.accept(it) }
             .distinctUntilChanged()
@@ -57,18 +63,37 @@ class WidgetUpdater(
     }
 
     /** Coordinator snapshots are in admission order. Completed jobs are removed from that list. */
-    private class LatestJob {
+    private class LatestJob(journal: List<JobRecord>) {
         private var snapshot = emptyList<DownloadProgress>()
-        private var completed: DownloadProgress? = null
+        private var knownIds = journal.map { it.jobId }.toSet()
+        // Reverse admission order breaks timestamp ties in favor of the newer admission.
+        private var rememberedId: String? = null
+        private var remembered = journal.asReversed().maxByOrNull { it.updatedAt }?.let { row ->
+            rememberedId = row.jobId
+            WidgetUiState(row.displayName ?: row.filename, when (row.stage) {
+                JobStage.ENQUEUED, JobStage.PAUSED -> DownloadPhase.PREPARING
+                JobStage.COMPLETED -> DownloadPhase.COMPLETED
+                JobStage.CANCELLED -> DownloadPhase.CANCELLED
+                else -> DownloadPhase.FAILED
+            }, paused = row.stage == JobStage.PAUSED, waiting = row.stage == JobStage.ENQUEUED)
+        }
         fun accept(event: Event): WidgetUiState {
             when (event) {
                 is Event.Snapshot -> {
-                    if (event.jobs.any { next -> snapshot.none { it.jobId == next.jobId } }) completed = null
+                    if (event.jobs.any { !it.terminal } ||
+                        event.jobs.any { it.jobId !in knownIds } ||
+                        (remembered?.phase != DownloadPhase.COMPLETED && snapshot.any { it.jobId == rememberedId } &&
+                            event.jobs.none { it.jobId == rememberedId })) remembered = null
+                    // Empty startup snapshots must not make recovered journal rows look newly admitted.
+                    if (event.jobs.isNotEmpty()) knownIds = event.jobs.map { it.jobId }.toSet()
                     snapshot = event.jobs
                 }
-                is Event.Finished -> completed = event.job
+                is Event.Finished -> {
+                    rememberedId = event.job.jobId
+                    remembered = WidgetUiState.from(event.job)
+                }
             }
-            return WidgetUiState.from(completed ?: snapshot.lastOrNull())
+            return remembered ?: WidgetUiState.from(snapshot.lastOrNull { !it.terminal } ?: snapshot.lastOrNull())
         }
     }
 }

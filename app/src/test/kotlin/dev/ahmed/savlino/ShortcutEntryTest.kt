@@ -62,6 +62,40 @@ class ShortcutEntryTest {
         } finally { c.pause().stop().destroy() }
     }
 
+    @Test fun pasteShortcutReturnsEveryDestinationHomeBeforeFillingTheDraft() {
+        val c = Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            c.windowFocusChanged(true)
+            for (destination in listOf("Settings", "Downloads", "AppUpdate")) {
+                c.get().links.navigate(destination)
+                clipboard.setPrimaryClip(ClipData.newPlainText("text", "https://youtu.be/$destination"))
+                c.newIntent(ShortcutActions.intent(app, ShortcutActions.PASTE_LINK))
+                assertEquals(destination, "Home", c.get().links.destination)
+                assertEquals("https://youtu.be/$destination", c.get().links.text)
+                assertEquals(dev.ahmed.savlino.ui.OptionsState.Hidden, c.get().links.optionsState)
+            }
+            assertEquals(3, reads)
+        } finally { c.pause().stop().destroy() }
+    }
+
+    @Test fun restoredPasteReturnsHomeEvenWhenNavigationWasSavedElsewhere() {
+        for (destination in listOf("Settings", "Downloads", "AppUpdate")) {
+            val first = Robolectric.buildActivity(MainActivity::class.java,
+                ShortcutActions.intent(app, ShortcutActions.PASTE_LINK)).setup()
+            first.get().links.navigate(destination)
+            val state = android.os.Bundle()
+            first.pause().saveInstanceState(state).stop().destroy()
+            val restored = Robolectric.buildActivity(MainActivity::class.java, Intent(app, MainActivity::class.java))
+                .create(state).start().resume().visible()
+            try {
+                restored.windowFocusChanged(true)
+                assertEquals(destination, "Home", restored.get().links.destination)
+                assertEquals("https://youtu.be/one", restored.get().links.text)
+            } finally { restored.pause().stop().destroy() }
+        }
+        assertEquals(3, reads)
+    }
+
     @Test fun neverFocusedDoesNotRead() {
         val c = Robolectric.buildActivity(MainActivity::class.java, ShortcutActions.intent(app, ShortcutActions.PASTE_LINK))
             .create().start().resume().visible()

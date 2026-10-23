@@ -11,6 +11,11 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
+import dev.ahmed.savlino.jobs.JobStore
+import dev.ahmed.savlino.jobs.command
+import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.storage.PendingPublication
+import dev.ahmed.savlino.storage.PublishedFile
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -127,7 +132,7 @@ class WidgetTest {
     }
 
     @Test fun newestJobWinsAndCompletionSurvivesItsRemovalFromProgress() = runTest {
-        val old = job().copy(jobId = "old", filename = "old.mp4")
+        val old = job(DownloadPhase.FAILED).copy(jobId = "old", filename = "old.mp4")
         val progress = MutableStateFlow(listOf(old, job()))
         val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
         val updater = WidgetUpdater(app, progress, completed, widgetIds = { intArrayOf(1) }, render = { _, _ -> })
@@ -144,7 +149,7 @@ class WidgetTest {
     }
 
     @Test fun completionStillWinsWhenSnapshotRemovalArrivesBeforeCompletionEvent() = runTest {
-        val old = job().copy(jobId = "old", filename = "old.mp4")
+        val old = job(DownloadPhase.FAILED).copy(jobId = "old", filename = "old.mp4")
         val progress = MutableStateFlow(listOf(old, job()))
         val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
         val updater = WidgetUpdater(app, progress, completed, widgetIds = { intArrayOf(1) }, render = { _, _ -> })
@@ -157,7 +162,7 @@ class WidgetTest {
         collection.cancel()
     }
 
-    @Test fun latestCompletionOverridesSnapshotUntilANewJobIsAdmitted() = runTest {
+    @Test fun activeSnapshotReplacesCompletionWithoutANewAdmission() = runTest {
         val old = job().copy(jobId = "old", filename = "old.mp4")
         val progress = MutableStateFlow(listOf(old, job()))
         val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
@@ -166,13 +171,115 @@ class WidgetTest {
         runCurrent()
         completed.emit(old.copy(phase = DownloadPhase.COMPLETED)); runCurrent()
         progress.value = listOf(job(bytes = 60)); runCurrent()
-        assertEquals("old.mp4", updater.currentState.title)
-        assertEquals(DownloadPhase.COMPLETED, updater.currentState.phase)
+        assertEquals("clip.mp4", updater.currentState.title)
+        assertEquals(DownloadPhase.DOWNLOADING, updater.currentState.phase)
+        assertEquals(60, updater.currentState.percent)
         progress.value = listOf(job(bytes = 70)); runCurrent()
-        assertEquals("old.mp4", updater.currentState.title)
+        assertEquals("clip.mp4", updater.currentState.title)
+        assertEquals(70, updater.currentState.percent)
         progress.value = listOf(job(), job().copy(jobId = "next", filename = "next.mp4")); runCurrent()
         assertEquals("next.mp4", updater.currentState.title)
         assertEquals(DownloadPhase.DOWNLOADING, updater.currentState.phase)
         collection.cancel()
+    }
+
+    @Test fun retryOrResumeOfAnExistingJobReplacesTheRememberedCompletion() = runTest {
+        for (paused in listOf(false, true)) {
+            val a = job(if (paused) DownloadPhase.DOWNLOADING else DownloadPhase.FAILED)
+                .copy(jobId = "a", filename = "a.mp4", paused = paused)
+            val b = job().copy(jobId = "b", filename = "b.mp4")
+            val progress = MutableStateFlow(listOf(a, b))
+            val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
+            val updater = WidgetUpdater(app, progress, completed, widgetIds = { intArrayOf() })
+            val collection = updater.start(backgroundScope)
+            try {
+                runCurrent()
+                completed.emit(b.copy(phase = DownloadPhase.COMPLETED)); runCurrent()
+                progress.value = listOf(a); runCurrent()
+                // A retry/resume changes phase, not identity, and can arrive without a new admission.
+                progress.value = listOf(a.copy(phase = DownloadPhase.PREPARING, paused = false, waiting = true)); runCurrent()
+                assertEquals("a.mp4", updater.currentState.title)
+                assertEquals(DownloadPhase.PREPARING, updater.currentState.phase)
+                assertTrue(updater.currentState.waiting)
+            } finally { collection.cancel() }
+        }
+    }
+
+    @Test fun retriedOlderJobWinsOverANewerFailureInTheSnapshot() = runTest {
+        val a = job(DownloadPhase.FAILED).copy(jobId = "a", filename = "a.mp4")
+        val newerFailure = job(DownloadPhase.FAILED).copy(jobId = "failed", filename = "failed.mp4")
+        val b = job().copy(jobId = "b", filename = "b.mp4")
+        val progress = MutableStateFlow(listOf(a, newerFailure, b))
+        val completed = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 1)
+        val updater = WidgetUpdater(app, progress, completed, widgetIds = { intArrayOf() })
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            completed.emit(b.copy(phase = DownloadPhase.COMPLETED)); runCurrent()
+            progress.value = listOf(a, newerFailure); runCurrent()
+            assertEquals("b.mp4", updater.currentState.title)
+            progress.value = listOf(a.copy(phase = DownloadPhase.PREPARING), newerFailure); runCurrent()
+            assertEquals("a.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.PREPARING, updater.currentState.phase)
+        } finally { collection.cancel() }
+    }
+
+    @Test fun freshProcessShowsTheNewestJournalUpdateIncludingCompletion() = runTest {
+        val uri = android.net.Uri.parse("content://media/external_primary/downloads/7")
+        JobStore(app).use { store ->
+            // Insert completion first: the journal's admission order must not decide freshness.
+            assertTrue(store.enqueue(command("saved")))
+            assertTrue(store.startTransfer("saved"))
+            assertTrue(store.markStaged("saved"))
+            assertTrue(store.recordPending("saved", PendingPublication(uri, "saved.mp4")))
+            assertTrue(store.complete("saved", PublishedFile(uri, "saved.mp4")))
+            assertTrue(store.enqueue(command("old-failure")))
+            assertTrue(store.fail("old-failure", DownloadError.Network))
+            store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?", arrayOf<Any>(1000L, "old-failure"))
+            store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?", arrayOf<Any>(2000L, "saved"))
+        }
+        val progress = MutableStateFlow(emptyList<DownloadProgress>())
+        val updater = WidgetUpdater(app, progress, widgetIds = { intArrayOf() })
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            assertEquals("saved.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.COMPLETED, updater.currentState.phase)
+            assertEquals("Saved", status(view(updater.currentState)))
+            // Recovery publishes failures but omits completed rows; this must retain the seed.
+            progress.value = listOf(job(DownloadPhase.FAILED).copy(jobId = "old-failure", filename = "old.mp4")); runCurrent()
+            assertEquals("saved.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.COMPLETED, updater.currentState.phase)
+            progress.value = listOf(job(DownloadPhase.PREPARING).copy(jobId = "old-failure", filename = "old.mp4")); runCurrent()
+            assertEquals("old.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.PREPARING, updater.currentState.phase)
+        } finally { collection.cancel() }
+    }
+
+    @Test fun newerJournalFailureWinsOverAnOlderCompletion() = runTest {
+        val uri = android.net.Uri.parse("content://media/external_primary/downloads/7")
+        JobStore(app).use { store ->
+            assertTrue(store.enqueue(command("new-failure")))
+            assertTrue(store.fail("new-failure", DownloadError.Network))
+            assertTrue(store.enqueue(command("old-saved")))
+            assertTrue(store.startTransfer("old-saved"))
+            assertTrue(store.markStaged("old-saved"))
+            assertTrue(store.recordPending("old-saved", PendingPublication(uri, "old.mp4")))
+            assertTrue(store.complete("old-saved", PublishedFile(uri, "old.mp4")))
+            store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?", arrayOf<Any>(2000L, "new-failure"))
+            store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?", arrayOf<Any>(1000L, "old-saved"))
+        }
+        val progress = MutableStateFlow(emptyList<DownloadProgress>())
+        val updater = WidgetUpdater(app, progress, widgetIds = { intArrayOf() })
+        val collection = updater.start(backgroundScope)
+        try {
+            runCurrent()
+            assertEquals("clip.mp4", updater.currentState.title)
+            assertEquals(DownloadPhase.FAILED, updater.currentState.phase)
+            progress.value = listOf(job(DownloadPhase.FAILED).copy(jobId = "new-failure")); runCurrent()
+            JobStore(app).use { assertTrue(it.remove("new-failure")) }
+            progress.value = emptyList(); runCurrent()
+            assertNull(updater.currentState.title)
+        } finally { collection.cancel() }
     }
 }

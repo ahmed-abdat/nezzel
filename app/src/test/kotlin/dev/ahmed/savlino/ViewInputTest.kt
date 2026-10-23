@@ -32,7 +32,7 @@ class ViewInputTest {
         val nodes = alias.getElementsByTagName("data")
         val data = (0 until nodes.length).map { nodes.item(it) as org.w3c.dom.Element }
         assertEquals(ShareInput.VIEW_HOSTS, data.map { it.getAttribute("android:host") }.filter { it.isNotEmpty() }.toSet())
-        assertEquals(setOf("http", "https"), data.map { it.getAttribute("android:scheme") }.filter { it.isNotEmpty() }.toSet())
+        assertEquals(setOf("https"), data.map { it.getAttribute("android:scheme") }.filter { it.isNotEmpty() }.toSet())
         val shortcuts = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(java.io.File(main, "res/xml/shortcuts.xml")).getElementsByTagName("intent")
         val intents = (0 until shortcuts.length).map { shortcuts.item(it) as org.w3c.dom.Element }
@@ -91,6 +91,26 @@ class ViewInputTest {
             c.newIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://youtu.be/two")))
             assertEquals("https://youtu.be/two", c.get().links.text)
             assertNull(c.get().links.takeConfirmedCommand())
+        } finally { c.pause().stop().destroy() }
+    }
+
+    @Test @Config(sdk = [33]) fun openWithOffersOnlyLinksThatCanFillTheDraft() {
+        val app = RuntimeEnvironment.getApplication()
+        dev.ahmed.savlino.locale.AppPreferences(app).apply { automaticOptions = false; suggestionsEnabled = false }
+        val c = Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            for (host in ShareInput.VIEW_HOSTS) {
+                fun handlers(scheme: String) = app.packageManager.queryIntentActivities(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://$host/watch?v=clip"))
+                        .addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                    .filter { it.activityInfo.packageName == app.packageName && it.activityInfo.name.endsWith(".OpenWithLinks") }
+                assertTrue("HTTPS handler for $host", handlers("https").isNotEmpty())
+                assertTrue("Unsupported HTTP must not be offered for $host", handlers("http").isEmpty())
+                c.newIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://$host/watch?v=clip")))
+                assertEquals("https://$host/watch?v=clip", c.get().links.text)
+                assertFalse(c.get().links.invalidShare)
+                assertNull(c.get().links.takeConfirmedCommand())
+            }
         } finally { c.pause().stop().destroy() }
     }
 
