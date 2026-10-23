@@ -199,6 +199,27 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun expiryDuringALiveTransferLeavesNoRebuiltInfoBehind() = runBlocking {
+        lateinit var store: JobStore
+        val info = File(app.noBackupFilesDir, "ytdlp-info/expired-rebuild.npe.json")
+        fixture(FakeEngine(), script = { command, _, _ ->
+            // The confirmation lifetime passes mid-transfer: the next read fails the row and drops its info.
+            store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - 86_400_001L, command.jobId))
+            assertEquals(JobStage.FAILED, store.get(command.jobId)!!.stage)
+            // The engine's NPE rebuild then stores fresh info for the already failed job.
+            info.parentFile!!.mkdirs(); info.writeText("{}")
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            store = f.store
+            f.coordinator.initialize()
+            f.store.enqueue(command("expired-rebuild"))
+            f.worker("expired-rebuild").doWork()
+            assertEquals(JobStage.FAILED, f.store.get("expired-rebuild")!!.stage)
+            assertFalse(info.exists())
+        }
+    }
+
     @Test fun cancellationWinsExpiredQueueInLiveProcessBeforeAnyTransfer() = runBlocking {
         fixture(FakeEngine()).use { f ->
             f.coordinator.initialize()

@@ -24,12 +24,13 @@ class NpeDownloadTest {
         return assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(job, inspection, link, format.id, "Fixture")).command
     }
 
-    private class Fast(var action: () -> String?) : YoutubeFastSource {
+    /** [action] returns a JSON string, a [FastResult] or null (= Miss). */
+    private class Fast(var action: () -> Any?) : YoutubeFastSource {
         val calls = CopyOnWriteArrayList<Pair<String, Long>>()
         val cancelled = CopyOnWriteArrayList<String>()
-        override fun infoJson(url: String, operationId: String, timeoutMs: Long): String? {
+        override fun infoJson(url: String, operationId: String, timeoutMs: Long): FastResult {
             calls += operationId to timeoutMs
-            return action()
+            return when (val result = action()) { is FastResult -> result; is String -> FastResult.Json(result); else -> FastResult.Miss }
         }
         override fun cancel(operationId: String) { cancelled += operationId }
     }
@@ -268,16 +269,19 @@ class NpeDownloadTest {
             assertEquals(1, run.runtime.transfers.size, excluded)
             assertTrue(run.fast!!.calls.isEmpty(), excluded)
             assertTrue(run.events.none { it is EngineEvent.Restarting }, excluded)
+            assertEquals("abandoned bytes", File(run.dir, "output.f137.mp4.part").readText(), excluded)
         }
         for (error in listOf(DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted,
             DownloadError.Interrupted, DownloadError.Cancelled, DownloadError.MergeFailed, DownloadError.Network, DownloadError.Offline)) {
             val run = Run(); run.inspected()
             run.runtime.action = { _, line ->
                 line("ERROR: unable to download video data: HTTP Error 403")
+                run.partial()
                 throw YtdlpExecutionFailure(error)
             }
             assertEquals(error, assertIs<TransferResult.Failure>(run.download()).error)
             assertEquals(1, run.runtime.transfers.size); assertTrue(run.fast!!.calls.isEmpty())
+            assertEquals("abandoned bytes", File(run.dir, "output.f137.mp4.part").readText(), error.name)
         }
     }
 
@@ -293,7 +297,40 @@ class NpeDownloadTest {
             assertIs<TransferResult.Failure>(run.download())
             assertEquals(1, run.runtime.transfers.size)
             assertTrue(run.events.none { it is EngineEvent.Restarting })
+            assertEquals("abandoned bytes", File(run.dir, "output.f137.mp4.part").readText())
         }
+    }
+
+    @Test fun unreachableRebuildFailsAsTransportWithoutPageTransfer() = runBlocking {
+        for ((offline, error) in listOf(true to DownloadError.Offline, false to DownloadError.Network)) {
+            val run = Run(fast = Fast { FastResult.Unreachable(offline) })
+            val failure = assertIs<TransferResult.Failure>(run.download())
+            assertEquals(error, failure.error)
+            assertEquals(DownloadFailureCause.TRANSPORT, failure.cause)
+            assertTrue(run.runtime.transfers.isEmpty())
+            assertNull(run.cache.freshFile("job"))
+        }
+        // Expiry recovery: the rebuild sees a dead network, so no page-URL attempt follows.
+        val run = Run(); run.inspected()
+        run.fast!!.action = { FastResult.Unreachable(false) }
+        run.runtime.action = { _, line -> run.failAttempt(line) }
+        assertEquals(DownloadError.Network, assertIs<TransferResult.Failure>(run.download()).error)
+        assertEquals(1, run.runtime.transfers.size)
+        assertEquals(1, run.fast.calls.size)
+        assertNull(run.cache.freshFile("job"))
+    }
+
+    @Test fun cancelAfterRebuildReturnsButBeforeThePostStoreCheckLeavesNoInfoAndNoTransfer() = runBlocking {
+        var armed = false
+        lateinit var run: Run
+        // The cache reads the clock inside store(): cancel exactly between NPE's return and the post-store check.
+        run = Run(clock = { if (armed) { armed = false; run.engine.cancel("job") }; System.currentTimeMillis() })
+        run.fast!!.action = { armed = true; json() }
+        assertEquals(DownloadError.Cancelled, assertIs<TransferResult.Failure>(run.download()).error)
+        assertFalse(armed)
+        assertNull(run.cache.freshFile("job"))
+        assertTrue(run.runtime.transfers.isEmpty())
+        assertTrue(run.fast.cancelled.isEmpty())
     }
 
     @Test fun typedRuntimeFailurePreservesStickyExclusionWithoutPrivateDiagnostics() {

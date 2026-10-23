@@ -2,6 +2,7 @@ package dev.ahmed.savlino.engine
 
 import android.content.Context
 import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.youtube.FastResult
 import dev.ahmed.savlino.engine.youtube.NpeFastSource
 import dev.ahmed.savlino.engine.youtube.NpeInfoJson
 import dev.ahmed.savlino.engine.youtube.YoutubeFastSource
@@ -39,6 +40,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private val unavailable = UnavailableEngine()
     /** At most one NPE call in flight; the app holds one engine, so this caps the process. */
     private val fastSourceInFlight = AtomicBoolean()
+    /** Hashed links whose first try failed fast on a dead network; later tries take the full yt-dlp path. Memory only. */
+    private val fastFailed = LinkedHashSet<String>()
     private class Operation {
         // Never pass externally supplied IDs to the library's child-process shell command.
         val processId = UUID.randomUUID().toString()
@@ -93,7 +96,12 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     checkCancelled(current)
                     current.deadline = NO_DEADLINE
                 }
-                val json = fastInfoJson(current, source, operationId, fastSource)
+                val result = fastInfoJson(current, source, operationId, fastSource)
+                val key = linkKey(source)
+                if (result is FastResult.Unreachable && synchronized(fastFailed) {
+                        fastFailed.add(key).also { while (fastFailed.size > FAST_FAILED_MAX) fastFailed.remove(fastFailed.first()) }
+                    }) return@operation InspectResult.Failure(unreachable(result))
+                val json = (result as? FastResult.Json)?.json
                 val inspection = if (json == null) null else try {
                     YtdlpMetadataMapper.map(json, source, version).takeIf {
                         it.formats.isNotEmpty() && NpeInfoJson.accepts(json, it)
@@ -102,21 +110,32 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 catch (_: LinkageError) { null }
                 checkCancelled(current)
                 if (inspection != null && json != null) {
+                    synchronized(fastFailed) { fastFailed.remove(key) }
                     infoCache?.remember(inspection, json, trimToChosen = true)
                     return@operation InspectResult.Success(inspection)
                 }
                 // yt-dlp gets a full inspection budget from its own start, including after a cap skip.
                 current.expireIn(limits.inspectMs)
+                return@operation inspectOnce(current, source, version).also {
+                    if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
+                }
             }
             inspectOnce(current, source, version)
         }
 
+    private fun unreachable(result: FastResult.Unreachable) =
+        if (result.offline) DownloadError.Offline else DownloadError.Network
+
+    private fun linkKey(source: LinkRevision): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(source.link.normalizedUrl.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun fastInfoJson(current: Operation, source: LinkRevision, operationId: String,
-        fast: YoutubeFastSource): String? {
+        fast: YoutubeFastSource): FastResult {
         checkCancelled(current)
-        if (limits.npeBudgetMs <= 0) return null
-        if (!fastSourceInFlight.compareAndSet(false, true)) return null
+        if (limits.npeBudgetMs <= 0) return FastResult.Miss
+        if (!fastSourceInFlight.compareAndSet(false, true)) return FastResult.Miss
         val started = System.nanoTime()
         val abandoned = AtomicBoolean()
         // Not a child of the operation: Rhino CPU work may ignore interruption indefinitely.
@@ -124,10 +143,10 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val result = fastSourceScope.async {
             try {
                 if (current.cancelled.get() || abandoned.get() ||
-                    System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) null
+                    System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) FastResult.Miss
                 else fast.infoJson(source.link.rawUrl, operationId, limits.npeBudgetMs)
-            } catch (_: Exception) { null }
-            catch (_: LinkageError) { null }
+            } catch (_: Exception) { FastResult.Miss }
+            catch (_: LinkageError) { FastResult.Miss }
             finally { fastSourceInFlight.set(false) }
         }
         var abandon = true
@@ -136,10 +155,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 current.cancellation.onAwait { throw OperationCancelled() }
                 result.onAwait {
                     // A ready result must not beat an elapsed budget just because its timer was delayed.
-                    if (System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) null
+                    // The source stops itself at the budget, so its dead-network verdict lands just after it.
+                    if (it is FastResult.Json && System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) FastResult.Miss
                     else { abandon = false; it }
                 }
-                onTimeout(limits.npeBudgetMs) { null }
+                onTimeout(limits.npeBudgetMs + NPE_GRACE_MS) { FastResult.Miss }
             }
         } finally {
             if (abandon) {
@@ -189,9 +209,12 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.deadline = NO_DEADLINE
             current.byteWatchdog = false
         }
-        val json = fastInfoJson(current, command.source, command.jobId, fast)
+        val result = fastInfoJson(current, command.source, command.jobId, fast)
         currentCoroutineContext().ensureActive()
         checkCancelled(current)
+        // The page URL would wait on the same dead network; TRANSPORT lets the coordinator wait for one.
+        if (result is FastResult.Unreachable) throw YtdlpExecutionFailure(unreachable(result))
+        val json = (result as? FastResult.Json)?.json
         val trimmed = try { json?.let { cache.trim(it, command) } }
             catch (_: Exception) { null }
         if (trimmed == null) return null
@@ -630,6 +653,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val VERSION_ARGS = listOf("--ignore-config", "--version")
         val POSTPROCESSORS = listOf("[Fixup", "[ffmpeg]", "[VideoRemuxer]", "[VideoConvertor]", "[Metadata]", "[MoveFiles]",
             "[EmbedThumbnail]", "[ThumbnailsConvertor]", "[ExtractAudio]", "[MetadataParser]")
+        /** Lets the source's own end-of-budget verdict win over the engine timer. */
+        const val NPE_GRACE_MS = 1_000L
+        const val FAST_FAILED_MAX = 16
         val NPE_REJECTIONS = setOf(DownloadError.FormatExpired, DownloadError.Failed, DownloadError.Unsupported, DownloadError.NoFormats)
         val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

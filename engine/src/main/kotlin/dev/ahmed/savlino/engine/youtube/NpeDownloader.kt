@@ -10,6 +10,10 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 internal class NpeDownloader(client: OkHttpClient) : Downloader() {
@@ -25,8 +29,26 @@ internal class NpeDownloader(client: OkHttpClient) : Downloader() {
         val budget = TimeUnit.MILLISECONDS.toNanos(timeoutMs)
         var cancelled = false
         val calls = mutableSetOf<Call>()
+        var requests = 0
+        var responses = 0
+        var offline = false
+        var unreachable = false
         fun remaining() = budget - (System.nanoTime() - started)
         fun check() { if (cancelled || remaining() <= 0) throw IOException("Extraction stopped") }
+        /** Exception classes only; nothing about the failure is kept. */
+        fun failed(error: Throwable) {
+            generateSequence(error) { it.cause }.take(8).forEach {
+                if (it is UnknownHostException) offline = true
+                if (it is ConnectException || it is NoRouteToHostException || it is InterruptedIOException) unreachable = true
+            }
+        }
+        /** Null once any response arrived (the network works) or after cancellation; true = no DNS. */
+        fun offline(): Boolean? = when {
+            cancelled || responses > 0 || requests == 0 -> null
+            offline -> true
+            unreachable || remaining() <= 0 -> false
+            else -> null
+        }
     }
 
     companion object {
@@ -41,7 +63,8 @@ internal class NpeDownloader(client: OkHttpClient) : Downloader() {
         }
     }
 
-    fun <T> operation(id: Any, callTimeoutMs: Long, block: () -> T): T {
+    /** [unreachable] receives the run's verdict when no request got any response (see [Token.offline]). */
+    fun <T> operation(id: Any, callTimeoutMs: Long, unreachable: (offline: Boolean) -> Unit = {}, block: () -> T): T {
         if (callTimeoutMs <= 0) throw IOException("Extraction stopped")
         val token = Token(callTimeoutMs)
         synchronized(lock) {
@@ -53,7 +76,7 @@ internal class NpeDownloader(client: OkHttpClient) : Downloader() {
         try { return block() }
         finally {
             if (previous == null) current.remove() else current.set(previous)
-            synchronized(lock) { operations.remove(id) }
+            synchronized(lock) { operations.remove(id); token.offline() }?.let(unreachable)
         }
     }
 
@@ -89,9 +112,13 @@ internal class NpeDownloader(client: OkHttpClient) : Downloader() {
                 if (token != null) {
                     active.timeout().timeout(token.remaining().coerceAtLeast(1), TimeUnit.NANOSECONDS)
                     token.calls.add(active)
+                    token.requests++
                 }
             }
-            active.execute().use { response ->
+            val received = try { active.execute() }
+                catch (error: IOException) { synchronized(lock) { token?.failed(error) }; throw error }
+            synchronized(lock) { if (token != null) token.responses++ }
+            received.use { response ->
                 if (response.code in 300..399) throw IOException("Extraction redirect rejected")
                 val body = response.body
                 if (body.contentLength() > MAX_BODY) throw IOException("Extraction response too large")

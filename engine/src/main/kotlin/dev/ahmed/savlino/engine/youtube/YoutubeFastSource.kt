@@ -6,9 +6,18 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Blocking on the caller thread. Every unusable result means use yt-dlp; never retain failures. */
+/** Never carries URLs, ids or exception details. */
+internal sealed interface FastResult {
+    class Json(val json: String) : FastResult
+    /** Anything unusable, including cancellation: use yt-dlp. */
+    data object Miss : FastResult
+    /** No HTTP response at all in this run; yt-dlp would wait on the same dead network. */
+    data class Unreachable(val offline: Boolean) : FastResult
+}
+
+/** Blocking on the caller thread. Never retain failures. */
 internal interface YoutubeFastSource {
-    fun infoJson(url: String, operationId: String, timeoutMs: Long): String?
+    fun infoJson(url: String, operationId: String, timeoutMs: Long): FastResult
     fun cancel(operationId: String)
 }
 
@@ -16,22 +25,24 @@ internal class NpeFastSource(private val downloader: NpeDownloader = NpeDownload
     private val installed by lazy { downloader.install() }
     private val operations = ConcurrentHashMap<String, AtomicBoolean>()
 
-    override fun infoJson(url: String, operationId: String, timeoutMs: Long): String? {
-        if (timeoutMs <= 0) return null
+    override fun infoJson(url: String, operationId: String, timeoutMs: Long): FastResult {
+        if (timeoutMs <= 0) return FastResult.Miss
         val cancelled = AtomicBoolean()
-        if (operations.putIfAbsent(operationId, cancelled) != null) return null
+        if (operations.putIfAbsent(operationId, cancelled) != null) return FastResult.Miss
         val started = System.nanoTime()
+        var offline: Boolean? = null
+        fun miss() = offline?.takeUnless { cancelled.get() }?.let(FastResult::Unreachable) ?: FastResult.Miss
         return try {
             installed
-            if (!ServiceList.YouTube.streamLHFactory.acceptUrl(url)) return null
-            downloader.operation(operationId, timeoutMs) {
+            if (!ServiceList.YouTube.streamLHFactory.acceptUrl(url)) return FastResult.Miss
+            downloader.operation(operationId, timeoutMs, { offline = it }) {
                 if (cancelled.get()) null
                 else NpeInfoJson.build(StreamInfo.getInfo(ServiceList.YouTube, url))
             }?.takeIf {
                 !cancelled.get() && System.nanoTime() - started < TimeUnit.MILLISECONDS.toNanos(timeoutMs)
-            }
-        } catch (_: Exception) { null }
-        catch (_: LinkageError) { null }
+            }?.let(FastResult::Json) ?: miss()
+        } catch (_: Exception) { miss() }
+        catch (_: LinkageError) { FastResult.Miss }
         finally { operations.remove(operationId, cancelled) }
     }
 
