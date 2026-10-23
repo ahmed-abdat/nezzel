@@ -8,6 +8,8 @@ package dev.ahmed.savlino.domain
 class SuggestionGate(dismissed: Set<String> = emptySet(), private val keyer: LinkKeyer = LinkKeyer.session) {
     private val dismissed = dismissed.toMutableSet()
     private var lastOfferedHash: String? = null
+    /** The last keyed tag by its normalized link: offering then dismissing one link costs one keystore HMAC, not two. */
+    private var lastTag: Pair<String, String>? = null
 
     fun offer(text: String?, focused: Boolean = true, resumed: Boolean = true, foreground: Boolean = true,
               fieldEmpty: Boolean = true, shareActive: Boolean = false): ValidatedLink? {
@@ -29,6 +31,11 @@ class SuggestionGate(dismissed: Set<String> = emptySet(), private val keyer: Lin
     }
 
     // A keyer that cannot tag right now falls back to the session key: dedupe still works, nothing durable matches.
-    private fun hash(link: ValidatedLink): String = keyer.key(LinkKeyer.CLIPBOARD, link.normalizedUrl)
-        ?: LinkKeyer.session.key(LinkKeyer.CLIPBOARD, link.normalizedUrl)!!
+    // Only keyed tags are reused, so a link tagged during a keystore hiccup is tried again next time.
+    private fun hash(link: ValidatedLink): String {
+        val url = link.normalizedUrl
+        lastTag?.let { (tagged, tag) -> if (tagged == url) return tag }
+        return keyer.key(LinkKeyer.CLIPBOARD, url)?.also { lastTag = url to it }
+            ?: LinkKeyer.session.key(LinkKeyer.CLIPBOARD, url)!!
+    }
 }

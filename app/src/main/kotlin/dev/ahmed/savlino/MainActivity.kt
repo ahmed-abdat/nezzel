@@ -92,7 +92,6 @@ class MainActivity : AppCompatActivity() {
             }
         })[LinkViewModel::class.java]
         val appUpdates = (application as NezzelApplication).appUpdates
-        appUpdates.start()
         if (savedInstanceState == null && openUpdate && appUpdates.available) links.navigate("AppUpdate")
         links.notificationPrompt = ::beforeConfirmedDownload
         showNotificationRationale = savedInstanceState?.getBoolean("notificationRationale") == true && links.hasPendingNotificationChoice
@@ -104,6 +103,7 @@ class MainActivity : AppCompatActivity() {
             links.onCreateShare(launchShare)
             (application as NezzelApplication).startMaintenanceAfterOnboarding()
         }
+        appUpdates.start() // After intake: a cold shared link reaches the view model first.
         // Consume the launch envelope; the ViewModel owns accepted/queued user state thereafter.
         setIntent(Intent(this, MainActivity::class.java))
         setContent {

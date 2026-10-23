@@ -179,6 +179,24 @@ class AppUpdatesTest {
         assertTrue(updates.directory.listFiles().orEmpty().isEmpty())
     }
 
+    @Test fun startSchedulesInTheBackgroundAndATogglePendingMeanwhileWins() = runBlocking {
+        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().putLong("success", System.currentTimeMillis()).commit()
+        val work = WorkManager.getInstance(context)
+        fun scheduled() = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().any { !it.state.isFinished }
+        val queued = java.util.concurrent.LinkedBlockingQueue<Runnable>()
+        val owner = CoroutineScope(SupervisorJob() + java.util.concurrent.Executor { queued += it }.asCoroutineDispatcher())
+        try {
+            val updates = AppUpdates(production, owner) { error("A fresh successful check must not make requests") }
+            updates.start()
+            assertFalse("start() returns before WorkManager is touched", scheduled())
+            updates.setAutomatic(false)
+            while (queued.isNotEmpty()) queued.poll()!!.run()
+            assertFalse(scheduled())
+            updates.setAutomatic(true)
+            assertTrue(scheduled())
+        } finally { owner.cancel() }
+    }
+
     private fun manifestBytes(): ByteArray = org.json.JSONObject().put("schema", 1).put("version", "0.4.4").put("versionCode", 99999)
         .put("apk", org.json.JSONObject().put("name", "update.apk").put("size", 100).put("sha256", "a".repeat(64)))
         .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("Fixed"))).toString().toByteArray()

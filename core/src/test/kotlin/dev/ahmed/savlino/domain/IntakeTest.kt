@@ -75,6 +75,26 @@ class IntakeTest {
         assertNotNull(gate.offer(url))
     }
 
+    @Test fun offerThenDismissTagsTheLinkOnceAndAnotherLinkFresh() {
+        val tagged = mutableListOf<String>()
+        val gate = SuggestionGate(keyer = { _, url -> tagged += url; "tag:$url" })
+        val offered = assertNotNull(gate.offer("https://example.org/a"))
+        gate.dismiss(offered)
+        assertEquals(listOf("https://example.org/a"), tagged)
+        gate.dismiss(assertNotNull(LinkInput.parse("https://example.org/b")))
+        assertEquals(listOf("https://example.org/a", "https://example.org/b"), tagged)
+        assertEquals(setOf("tag:https://example.org/a", "tag:https://example.org/b"), gate.dismissedHashes())
+    }
+
+    @Test fun aLinkTaggedWithoutTheKeyIsTaggedAgainOnceTheKeyWorks() {
+        var keyed = false
+        val gate = SuggestionGate(keyer = { _, url -> if (keyed) "tag:$url" else null })
+        val offered = assertNotNull(gate.offer("https://example.org/a"))
+        keyed = true
+        gate.dismiss(offered)
+        assertEquals(setOf("tag:https://example.org/a"), gate.dismissedHashes())
+    }
+
     @Test fun dismissedNormalizedUrlStillOffersQueryAndFragmentVariants() {
         val gate = SuggestionGate()
         gate.dismiss(assertNotNull(LinkInput.parse("https://EXAMPLE.org/a?item=1#first")))

@@ -58,6 +58,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
     init { currentNotes() } // Discard notes retained by an older build, even before About opens
     private val checkGate = Mutex()
     private val filesGate = Mutex()
+    private val scheduleLock = Any()
     private var transfer: Job? = null
     private var installation: Job? = null
     @Volatile private var http: UpdateHttp? = null
@@ -90,11 +91,12 @@ class AppUpdates internal constructor(private val context: Context, private val 
         }
         swept = true
     }
+    /** Everything runs on [scope]: WorkManager's first start must not hold up a cold launch's shared or copied link. */
     @Synchronized fun start() {
         if (!available || started) return
         started = true
-        schedule()
         scope.launch {
+            schedule()
             withContext(Dispatchers.IO) { filesGate.withLock { sweepOnce() } }
             check(manual = false)
         }
@@ -106,7 +108,8 @@ class AppUpdates internal constructor(private val context: Context, private val 
         schedule()
         if (!value) UpdateNotifications(context).cancel()
     }
-    private fun schedule() {
+    // Reads the switch under the lock, so a toggle during start-up's background schedule still ends in the switch's state.
+    private fun schedule(): Unit = synchronized(scheduleLock) {
         val work = WorkManager.getInstance(context)
         if (!available || !appPrefs.appUpdates) { work.cancelUniqueWork(WORK); return }
         work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP,
