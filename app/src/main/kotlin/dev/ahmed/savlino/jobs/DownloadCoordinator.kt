@@ -493,7 +493,7 @@ class DownloadCoordinator(
                 // A stopped WorkSpec is re-enqueued even though this writer journalled FAILED.
                 // Release native/publication ownership before cancelling that obsolete scheduler entry.
                 if (schedulerStopped && store.get(id)?.stage == JobStage.FAILED) {
-                    try { workManager().cancelUniqueWork(id).result.get() }
+                    try { workManager().cancelUniqueWork(id).result.get(5, java.util.concurrent.TimeUnit.SECONDS) }
                     catch (_: Exception) { mutableError.value = DownloadError.ExecutionRestricted }
                 }
             }
