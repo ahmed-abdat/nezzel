@@ -130,6 +130,9 @@
     <string name="engine_update_paused_title">التحديث الآن؟</string>
     <string name="engine_update_paused_body">التنزيلات المتوقفة مؤقتًا ستبدأ من جديد.</string>
     <string name="engine_update_paused_confirm">تحديث</string>
+    <string name="parallel_downloads">التنزيلات في وقت واحد</string>
+    <string name="parallel_downloads_help">العدد الأقل يُبقي الهاتف أبرد</string>
+    <string name="parallel_downloads_option">%1$s في وقت واحد</string>
     <string name="engine_update_help">يتحدّث تلقائيًا كل أسبوع</string>
     <string name="engine_update_retry">تحديث المحرّك وإعادة المحاولة</string>
     <string name="notification_rationale_title">تابع تنزيلك</string>
@@ -429,6 +432,15 @@
     <string name="widget_empty">انسخ رابطًا ثم اضغط الصق</string>
     <string name="widget_paused">متوقف مؤقتًا</string>
     <string name="widget_failed">لم يكتمل</string>
+    <string name="widget_more">+%1$s</string>
+    <plurals name="widget_more_running">
+        <item quantity="zero">لا تنزيلات أخرى جارية</item>
+        <item quantity="one">تنزيل آخر جارٍ</item>
+        <item quantity="two">تنزيلان آخران جاريان</item>
+        <item quantity="few">%1$s تنزيلات أخرى جارية</item>
+        <item quantity="many">%1$s تنزيلًا آخر جاريًا</item>
+        <item quantity="other">%1$s تنزيل آخر جارٍ</item>
+    </plurals>
     <string name="widget_description">\u2066Nezzel\u2069: الصق رابطًا منسوخًا</string>
     <string name="shortcut_downloads_short">التنزيلات</string>
     <string name="download_battery_error">أوقف \u2066Android\u2069 التنزيل لتوفير البطارية</string>

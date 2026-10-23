@@ -31,6 +31,8 @@ class DownloadCoordinator(
     internal val monotonicMillis: () -> Long = { android.os.SystemClock.elapsedRealtime() },
     private val nextProgressTick: suspend () -> Unit = { delay(250) },
     private val savedFileExists: (android.net.Uri) -> Boolean = { uri -> publishedFileExists(context, uri) },
+    parallelDownloads: StateFlow<Int> = MutableStateFlow(2),
+    thermalStatus: StateFlow<Int> = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE),
 ) {
     val maintenance = EngineMaintenance(context, engine, {
         active.isNotEmpty() || store.all().any { !it.stage.terminal }
@@ -42,8 +44,8 @@ class DownloadCoordinator(
         store.all().filter { !it.stage.terminal }.let { rows -> rows.isNotEmpty() && rows.all { it.stage == JobStage.PAUSED } }
     private val recovery = JobRecovery(store, publisher ?: DestinationPublisher(context, space), File(context.filesDir, "downloads"))
     private val startup = Mutex()
-    // Bound native processing and space preflight to one transfer; queue admission never waits here.
-    private val transfer = Mutex()
+    private val transfer = TransferSlots(parallelDownloads, thermalStatus)
+    private val spaceLedger = TransferSpaceLedger { stagingBytes(stagingRoot(it)) }
     @Volatile private var initialized = false
     private val userCancellation = ConcurrentHashMap.newKeySet<String>()
     private val pauseRequests = ConcurrentHashMap.newKeySet<String>()
@@ -67,6 +69,7 @@ class DownloadCoordinator(
 
     init {
         store.onExpired = { row ->
+            transfer.removeWaiting(row.jobId)
             // Scrub holds the store monitor. Publish without the coordinator's update monitor:
             // update() reads the store in the opposite order on native callback threads.
             val expired = fromRecord(row)
@@ -165,6 +168,7 @@ class DownloadCoordinator(
     fun requestCancellation(id: String) {
         if (!JobStore.validJobId(id)) return
         synchronized(userCancellation) { userCancellation += id }
+        transfer.removeWaiting(id)
         stopEngine(id)
     }
     private fun stopEngine(id: String, cancelUnregistered: Boolean = true) {
@@ -208,6 +212,7 @@ class DownloadCoordinator(
             else { pauseRequests += id; stopEngine(id, cancelUnregistered = false); true }
         }
         if (!paused) return@withContext false
+        transfer.removeWaiting(id)
         if (!active.containsKey(id)) store.pausedPartial(id, stagingBytes(stagingRoot(id)) > 0)
         store.get(id)?.let { update(fromRecord(it)) }
         try { workManager().cancelUniqueWork(id).result.get() }
@@ -251,8 +256,34 @@ class DownloadCoordinator(
 
     suspend fun execute(id: String, stopReason: () -> Int,
         foreground: suspend (DownloadProgress) -> Unit, report: suspend (DownloadProgress) -> Unit,
-        finished: suspend (DownloadProgress) -> Unit): JobRecord? = transfer.withLock {
-        maintenance.withDownload { executeWithMaintenanceGate(id, stopReason, foreground, report, finished) }
+        finished: suspend (DownloadProgress) -> Unit): JobRecord? = withContext(Dispatchers.IO) {
+        initialize()
+        // WorkManager may rerun this id while the stopped attempt still unwinds; its row returns to ENQUEUED first.
+        activeDone[id]?.await()
+        val row = queuedRow(id) ?: return@withContext null
+        if (row.stage != JobStage.ENQUEUED) return@withContext waitingResult(id, finished)
+        transfer.withSlot(id, row.createdAt, eligible = { queuedRow(id)?.stage == JobStage.ENQUEUED }) {
+            try {
+                maintenance.withDownload { executeWithMaintenanceGate(id, stopReason, foreground, report, finished) }
+            } finally { withContext(NonCancellable) { spaceLedger.release(id) } }
+        } ?: waitingResult(id, finished)
+    }
+
+    private fun queuedRow(id: String): JobRecord? = synchronized(userCancellation) {
+        // A received cancel wins expiry's scrub, including the read needed for slot ordering.
+        if (id in userCancellation) store.cancelEnqueued(id)
+        store.get(id)
+    }
+
+    private suspend fun waitingResult(id: String, finished: suspend (DownloadProgress) -> Unit): JobRecord? {
+        val row = queuedRow(id) ?: return null
+        if (row.stage.terminal && (row.error == DownloadError.FormatExpired || id in userCancellation)) {
+            val result = fromRecord(row)
+            update(result)
+            withContext(NonCancellable) { finished(result) }
+            userCancellation.remove(id)
+        }
+        return row
     }
 
     private suspend fun executeWithMaintenanceGate(id: String, stopReason: () -> Int,
@@ -372,7 +403,7 @@ class DownloadCoordinator(
                     hasPartial = partialBytes > 0
                     startBytes = partialBytes
                     store.transferPartial(id, hasPartial)
-                    TransferSpacePolicy.check(space, command.format, partialBytes)
+                    spaceLedger.reserve(id, space, command.format, partialBytes)
                     synchronized(userCancellation) {
                         signal.throwIfCanceled()
                         check(store.get(id)?.stage == JobStage.TRANSFERRING)
@@ -655,7 +686,10 @@ class DownloadCoordinator(
     /** Copy link and the gone-file sweep, on this coordinator's journal. */
     fun shareLinks(onGone: (String) -> Unit) = dev.ahmed.savlino.downloads.ShareLinks(context.contentResolver, store, onGone)
     /** Settings › Clear link history: every kept link and its key go; the files stay. */
-    suspend fun clearShareLinks() = withContext(Dispatchers.IO) { store.clearShareLinks() }
+    suspend fun clearShareLinks() = withContext(Dispatchers.IO) {
+        engine.clearRecentLinks()
+        store.clearShareLinks()
+    }
     fun dismiss(id: String) { mutableProgress.update { it.filterNot { event -> event.jobId == id && event.terminal && !event.awaitingSchedule } } }
     private fun fromRecord(row: JobRecord) = DownloadProgress(row.jobId, row.displayName ?: row.filename,
         when (row.stage) {

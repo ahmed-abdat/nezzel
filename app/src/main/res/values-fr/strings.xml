@@ -130,6 +130,9 @@
     <string name="engine_update_paused_title">Mettre à jour maintenant ?</string>
     <string name="engine_update_paused_body">Les téléchargements en pause recommenceront depuis le début.</string>
     <string name="engine_update_paused_confirm">Mettre à jour</string>
+    <string name="parallel_downloads">Téléchargements simultanés</string>
+    <string name="parallel_downloads_help">Moins il y en a, moins le téléphone chauffe</string>
+    <string name="parallel_downloads_option">%1$s à la fois</string>
     <string name="engine_update_help">Mise à jour automatique chaque semaine</string>
     <string name="engine_update_retry">Mettre à jour et réessayer</string>
     <string name="notification_rationale_title">Suivez votre téléchargement</string>
@@ -402,6 +405,12 @@
     <string name="widget_empty">Copiez un lien, puis appuyez sur Coller</string>
     <string name="widget_paused">En pause</string>
     <string name="widget_failed">Échec du téléchargement</string>
+    <string name="widget_more">+%1$s</string>
+    <plurals name="widget_more_running">
+        <item quantity="one">%1$s autre en cours</item>
+        <item quantity="many">%1$s autres en cours</item>
+        <item quantity="other">%1$s autres en cours</item>
+    </plurals>
     <string name="widget_description">\u2066Nezzel\u2069 : coller un lien copié</string>
     <string name="shortcut_downloads_short">Fichiers</string>
     <string name="download_battery_error">Android a arrêté ce téléchargement pour économiser la batterie</string>

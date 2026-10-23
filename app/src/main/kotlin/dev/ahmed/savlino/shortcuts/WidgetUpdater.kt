@@ -3,6 +3,7 @@ package dev.ahmed.savlino.shortcuts
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import dev.ahmed.savlino.downloads.running
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
 import dev.ahmed.savlino.jobs.JobRecord
@@ -14,13 +15,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-/** Only fields visible in RemoteViews participate in equality; 37% floors to the 35% bucket. */
+/**
+ * Only fields visible in RemoteViews participate in equality; 37% floors to the 35% bucket.
+ * [more] counts the other running jobs behind the shown one ("+1"); queued ones are not counted.
+ */
 data class WidgetUiState(val title: String? = null, val phase: DownloadPhase? = null,
-    val percent: Int? = null, val paused: Boolean = false, val waiting: Boolean = false) {
+    val percent: Int? = null, val paused: Boolean = false, val waiting: Boolean = false, val more: Int = 0) {
     companion object {
-        fun from(job: DownloadProgress?): WidgetUiState = if (job == null) WidgetUiState() else WidgetUiState(
+        fun from(job: DownloadProgress?, more: Int = 0): WidgetUiState = if (job == null) WidgetUiState() else WidgetUiState(
             job.filename, job.phase, job.visiblePercent?.let { it / 5 * 5 }, job.paused,
-            !job.terminal && (job.waiting || job.awaitingSchedule))
+            !job.terminal && (job.waiting || job.awaitingSchedule), more)
+
+        /** The newest running job, then the newest live one, then the newest of any kind. */
+        fun from(jobs: List<DownloadProgress>): WidgetUiState {
+            val running = jobs.filter { it.running }
+            return running.lastOrNull()?.let { from(it, running.size - 1) }
+                ?: from(jobs.lastOrNull { !it.terminal } ?: jobs.lastOrNull())
+        }
     }
 }
 
@@ -41,7 +52,7 @@ class WidgetUpdater(
     private val forgotten = Channel<String>(Channel.UNLIMITED)
     /** The saved file is gone: a widget still showing it as the latest download falls back. */
     fun forget(jobId: String) { forgotten.trySend(jobId) }
-    val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value.lastOrNull())
+    val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value)
 
     fun start(scope: CoroutineScope): Job = scope.launch {
         // The process scope runs on IO. A restart has no completion events to replay, and live
@@ -100,7 +111,7 @@ class WidgetUpdater(
                 }
                 is Event.Forgotten -> if (event.jobId == rememberedId && remembered?.phase == DownloadPhase.COMPLETED) remembered = null
             }
-            return remembered ?: WidgetUiState.from(snapshot.lastOrNull { !it.terminal } ?: snapshot.lastOrNull())
+            return remembered ?: WidgetUiState.from(snapshot)
         }
     }
 }

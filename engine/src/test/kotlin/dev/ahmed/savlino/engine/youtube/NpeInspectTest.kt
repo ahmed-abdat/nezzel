@@ -185,6 +185,7 @@ class NpeInspectTest {
         val engine = engine(runtime, fast, EngineLimits(npeBudgetMs = 500))
         try {
             assertEquals("Fallback fixture", assertIs<InspectResult.Success>(engine.inspect(source, "first")).inspection.title)
+            engine.clearRecentLinks() // each call extracts
             assertEquals("Fallback fixture", assertIs<InspectResult.Success>(engine.inspect(source, "second")).inspection.title)
             assertEquals(listOf("first"), fast.calls.map { it.first })
             assertEquals(2, runtime.inspections.size)
@@ -195,6 +196,7 @@ class NpeInspectTest {
             val third = withTimeout(3000) {
                 var result: Inspection
                 do {
+                    engine.clearRecentLinks()
                     result = assertIs<InspectResult.Success>(engine.inspect(source, "third")).inspection
                     yield()
                 } while (fast.calls.size == 1)
@@ -228,7 +230,9 @@ class NpeInspectTest {
         assertEquals("Fallback fixture", assertIs<InspectResult.Success>(engine.inspect(source, "retry-2")).inspection.title)
         assertEquals(List(2) { YtdlpCommand.inspect(source) }, runtime.inspections)
         assertEquals(listOf("first"), fast.calls.map { it.first })
-        // A success clears the memory: the next dead-network first try fails fast again.
+        // The success is served from memory for 15 min; after that the cleared key fails fast again.
+        assertIs<InspectResult.Success>(engine.inspect(source, "hit"))
+        now += RecentInspections.MAX_AGE_MS
         assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(source, "later"))
         assertEquals(2, runtime.inspections.size)
         assertEquals(listOf("first", "later"), fast.calls.map { it.first })
@@ -267,6 +271,44 @@ class NpeInspectTest {
         assertEquals(listOf(YtdlpCommand.inspect(source)), runtime.inspections)
     }
 
+    private var now = 1_700_000_000_000L
     private fun engine(runtime: Runtime, fast: Fast, limits: EngineLimits = EngineLimits()) =
-        YoutubedlEngine(runtime, limits, fastSource = fast)
+        YoutubedlEngine(runtime, limits, fastSource = fast, recent = RecentInspections({ now }, { now }))
+
+    @Test fun npeHitSkipsNpeAndStillTrimsToTheChosenStreams() = runBlocking {
+        val json = fixture()
+        val fast = Fast { json }
+        val runtime = Runtime(fallbackJson)
+        val cache = YtdlpInfoCache(temp.newFolder()) { now }
+        val engine = YoutubedlEngine(runtime, infoCache = cache, fastSource = fast, recent = RecentInspections({ now }, { now }))
+        assertIs<InspectResult.Success>(engine.inspect(source, "first"))
+        // NPE JSON is not yt-dlp output: an engine update still hits.
+        runtime.initialization.installedVersion = "next-version"
+        val again = LinkRevision(source.link, 2)
+        val inspection = assertIs<InspectResult.Success>(engine.inspect(again, "second")).inspection
+        assertEquals(1, fast.calls.size)
+        assertTrue(runtime.inspections.isEmpty())
+        assertEquals("next-version", inspection.engineVersion)
+        val chosen = inspection.formats.first { it.requiresMerge }
+        val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, again, chosen.id, "Fixture")).command
+        engine.prepareDownload(command)
+        val file = assertNotNull(cache.freshFile("job"))
+        assertTrue(cache.isNpe(file))
+        assertEquals(setOf(chosen.sourceFormatId, chosen.audioFormatId),
+            ObjectMapper().readTree(file).path("formats").map { it.path("format_id").asText() }.toSet())
+    }
+
+    @Test fun joinerWaitsOutASlowNpeOwnerWithoutItsOwnDeadline() = runBlocking {
+        val json = fixture()
+        val fast = Fast { Thread.sleep(700); json }
+        val runtime = Runtime(fallbackJson)
+        val engine = engine(runtime, fast, EngineLimits(inspectMs = 300, npeBudgetMs = 3_000))
+        val owner = async(Dispatchers.IO) { engine.inspect(source, "owner") }
+        delay(100)
+        val joiner = async(Dispatchers.IO) { engine.inspect(source, "joiner") }
+        assertIs<InspectResult.Success>(withTimeout(5000) { owner.await() })
+        assertIs<InspectResult.Success>(withTimeout(5000) { joiner.await() })
+        assertEquals(1, fast.calls.size)
+        assertTrue(runtime.inspections.isEmpty())
+    }
 }

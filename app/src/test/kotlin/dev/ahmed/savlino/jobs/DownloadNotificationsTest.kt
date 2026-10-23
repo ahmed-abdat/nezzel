@@ -245,4 +245,114 @@ class DownloadNotificationsTest {
     @Test fun actualEnglishNotificationKeepsFragmentPercentAndHonestBytes() = honestHlsNotification("en")
     @Test fun actualArabicNotificationKeepsFragmentPercentAndHonestBytes() = honestHlsNotification("ar")
 
+    private fun twoRunning(language: String) {
+        val app = RuntimeEnvironment.getApplication()
+        dev.ahmed.savlino.locale.AppLocale.choose(app, language)
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val notifications = DownloadNotifications(app)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val a = DownloadProgress("a", "A.mp4", DownloadPhase.DOWNLOADING, bytes = 1, total = dev.ahmed.savlino.domain.Size.Exact(4))
+        val b = a.copy(jobId = "b", filename = "B.mp4")
+        fun summary() = manager.activeNotifications.singleOrNull { it.tag == DownloadNotifications.SUMMARY_TAG }
+        fun title(n: android.app.Notification) = n.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString()
+        // WorkManager posts each returned foreground payload.
+        val first = notifications.foreground(a)
+        manager.notify(first.notificationId, first.notification)
+        assertNull("One job needs no summary", summary())
+        val second = notifications.foreground(b)
+        manager.notify(second.notificationId, second.notification)
+        val group = summary()!!.notification
+        assertTrue(group.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0)
+        assertEquals(DownloadNotifications.GROUP, group.group)
+        assertEquals(DownloadNotifications.CHANNEL, group.channelId)
+        assertEquals(dev.ahmed.savlino.locale.AppLocale.localized(app).resources.getQuantityString(dev.ahmed.savlino.R.plurals.downloads_running, 2,
+            dev.ahmed.savlino.locale.NezzelFormat.count(2, language)), title(group))
+        assertEquals(listOf(DownloadNotifications.GROUP, DownloadNotifications.GROUP),
+            listOf(first, second).map { it.notification.group })
+        assertNotEquals(first.notificationId, second.notificationId)
+
+        // A ends while B runs: A's result stands alone, B's live notification stays as it was, the summary stays over it.
+        notifications.progress(b.copy(bytes = 2))
+        notifications.finished(a.copy(phase = DownloadPhase.COMPLETED, publishedUri = android.net.Uri.parse("content://media/1")))
+        manager.cancel(first.notificationId) // WorkManager drops the ended worker's foreground notification.
+        notifications.settled("a")
+        val live = manager.activeNotifications.filter { it.tag == null && it.notification.channelId == DownloadNotifications.CHANNEL }
+        assertEquals(listOf(second.notificationId), live.map { it.id })
+        assertEquals("B.mp4", title(live.single().notification))
+        assertTrue(live.single().notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0)
+        val result = manager.activeNotifications.single { it.notification.channelId == DownloadNotifications.COMPLETED_CHANNEL }
+        assertEquals("A.mp4", title(result.notification))
+        assertNull("A result never joins the live group", result.notification.group)
+        assertNotNull("The summary outlives one ending job: cancelling it would take B's plain notification along", summary())
+
+        // The last job ends: no orphaned summary.
+        notifications.finished(b.copy(phase = DownloadPhase.CANCELLED))
+        notifications.settled("b")
+        assertNull(summary())
+        assertTrue(manager.activeNotifications.none { it.notification.channelId == DownloadNotifications.CHANNEL })
+    }
+    @Test fun twoRunningJobsGroupUnderOneEnglishSummaryThatSurvivesOneEnding() = twoRunning("en")
+    @Test fun twoRunningJobsGroupUnderOneArabicSummaryThatSurvivesOneEnding() = twoRunning("ar")
+    private fun runningTitle(count: Int) = dev.ahmed.savlino.locale.AppLocale.localized(RuntimeEnvironment.getApplication()).resources
+        .getQuantityString(dev.ahmed.savlino.R.plurals.downloads_running, count, dev.ahmed.savlino.locale.NezzelFormat.count(count, "en"))
+
+    @Test fun jobsWhoseIdsShareAHashKeepTheirOwnNotificationsAndBothCount() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        assertEquals("Aa".hashCode(), "BB".hashCode())
+        val notifications = DownloadNotifications(app)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val a = DownloadProgress("Aa", "A.mp4", DownloadPhase.DOWNLOADING, bytes = 1, total = dev.ahmed.savlino.domain.Size.Exact(4))
+        val b = a.copy(jobId = "BB", filename = "B.mp4")
+        val infos = listOf(a, b).map { notifications.foreground(it).also { info -> manager.notify(info.notificationId, info.notification) } }
+        assertNotEquals(infos[0].notificationId, infos[1].notificationId)
+        notifications.progress(a.copy(bytes = 2)); notifications.progress(b.copy(bytes = 3))
+        val live = manager.activeNotifications.filter { it.tag == null }
+        assertEquals(setOf("A.mp4", "B.mp4"), live.map { it.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString() }.toSet())
+        val summary = manager.activeNotifications.single { it.tag == DownloadNotifications.SUMMARY_TAG }.notification
+        assertEquals(runningTitle(2), summary.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString())
+    }
+
+    @Test fun anOldAttemptSettlingAfterItsRerunPromotedLeavesTheJobCounted() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val notifications = DownloadNotifications(app)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val a = DownloadProgress("a", "A.mp4", DownloadPhase.DOWNLOADING, bytes = 1, total = dev.ahmed.savlino.domain.Size.Exact(4))
+        val b = a.copy(jobId = "b", filename = "B.mp4")
+        val old = Any(); val rerun = Any()
+        fun promote(job: DownloadProgress, attempt: Any) =
+            notifications.foreground(job, attempt).also { manager.notify(it.notificationId, it.notification) }
+        fun summaryTitle() = manager.activeNotifications.singleOrNull { it.tag == DownloadNotifications.SUMMARY_TAG }
+            ?.notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+        promote(a, old); promote(b, Any())
+        assertEquals(runningTitle(2), summaryTitle())
+        // The stopped attempt released the job; its rerun promotes before the old worker's finally runs.
+        val again = promote(a.copy(phase = DownloadPhase.PREPARING), rerun)
+        notifications.settled("a", old)
+        assertEquals("The rerun still runs under the same ID", runningTitle(2), summaryTitle())
+        manager.cancel(again.notificationId) // WorkManager drops the rerun's foreground notification when it ends.
+        notifications.settled("a", rerun)
+        notifications.finished(b.copy(phase = DownloadPhase.CANCELLED))
+        assertNull(summaryTitle())
+    }
+
+    @Test fun pausedJobLeavesTheGroupAndItsCount() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val notifications = DownloadNotifications(app)
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val a = DownloadProgress("a", "A.mp4", DownloadPhase.DOWNLOADING)
+        listOf(a, a.copy(jobId = "b", filename = "B.mp4")).forEach { job ->
+            notifications.foreground(job).let { manager.notify(it.notificationId, it.notification) }
+        }
+        val first = manager.activeNotifications.single { it.tag == null && it.notification.extras.getString(android.app.Notification.EXTRA_TITLE) == "A.mp4" }
+        notifications.paused(a.copy(paused = true))
+        manager.cancel(first.id)
+        val paused = manager.activeNotifications.single { it.tag == "paused" }.notification
+        assertNull(paused.group)
+        val summary = manager.activeNotifications.single { it.tag == DownloadNotifications.SUMMARY_TAG }.notification
+        assertEquals(app.resources.getQuantityString(dev.ahmed.savlino.R.plurals.downloads_running, 1,
+            dev.ahmed.savlino.locale.NezzelFormat.count(1, "en")), summary.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString())
+    }
 }

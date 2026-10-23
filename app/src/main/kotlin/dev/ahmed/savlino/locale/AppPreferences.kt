@@ -1,6 +1,9 @@
 package dev.ahmed.savlino.locale
 
 import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import dev.ahmed.savlino.domain.Preset
 import org.json.JSONArray
 
@@ -23,13 +26,25 @@ class AppPreferences(context: Context) {
         markOnboardingSeen()
         return false
     }
-    // Only these two cosmetic keys may follow a user to another installation.
+    // Portable user choices may follow a user to another installation.
     private val portable = context.getSharedPreferences("nezzel-portable", Context.MODE_PRIVATE)
     init {
         val missing = listOf("language", "theme").filter { !portable.contains(it) && prefs.contains(it) }
         if (missing.isNotEmpty()) portable.edit().apply {
             missing.forEach { key -> putString(key, prefs.getString(key, null)) }
         }.apply()
+    }
+    val parallelDownloads: Int get() = portable.getInt("parallel_downloads", 2).coerceIn(1, 3)
+    private val mutableParallelDownloads = MutableStateFlow(parallelDownloads)
+    val parallelDownloadsFlow = mutableParallelDownloads.asStateFlow()
+    private val parallelListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "parallel_downloads" || key == null) mutableParallelDownloads.value = parallelDownloads
+    }
+    init { portable.registerOnSharedPreferenceChangeListener(parallelListener) }
+    fun chooseParallelDownloads(n: Int) {
+        val chosen = n.coerceIn(1, 3)
+        portable.edit().putInt("parallel_downloads", chosen).apply()
+        mutableParallelDownloads.value = chosen
     }
     var lastPreset: Preset?
         get() = Preset.entries.find { it.name == prefs.getString("lastPreset", null) && it != Preset.AUDIO_MP3 }
