@@ -145,4 +145,16 @@ class JobStoreShareLinkTest {
         for ((pragma, expected) in listOf("journal_mode" to "delete", "secure_delete" to "1"))
             db.rawQuery("PRAGMA $pragma", null).use { assertTrue(it.moveToFirst()); assertEquals(expected, it.getString(0).lowercase()) }
     } }
+    /** C9: a file confirmed gone takes its link and artwork; the row stays, and a row with only artwork still counts. */
+    @Test fun forgetFileDropsLinkAndArtworkButKeepsTheRow() { JobStore(app, null, cipher).use { store ->
+        assertTrue(store.completed("gone")); assertTrue(store.completed("art-only"))
+        assertTrue(store.artwork.save("gone", byteArrayOf(1, 2, 3)))
+        store.dropShareLink("art-only"); assertTrue(store.artwork.save("art-only", byteArrayOf(1)))
+        assertEquals(setOf("gone", "art-only"), store.linkedFiles().map { it.jobId }.toSet())
+        store.forgetFile("gone")
+        assertNull(store.blob("gone")); assertFalse(store.artwork.has("gone"))
+        assertEquals(JobStage.COMPLETED, store.get("gone")!!.stage)
+        store.forgetFile("art-only")
+        assertTrue(store.linkedFiles().isEmpty())
+    } }
 }

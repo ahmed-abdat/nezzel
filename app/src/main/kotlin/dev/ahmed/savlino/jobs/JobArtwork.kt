@@ -43,6 +43,8 @@ class JobArtwork internal constructor(filesDir: File, private val codec: Preview
         } catch (_: Exception) { temp.delete(); false }
     }
 
+    internal fun has(jobId: String): Boolean = JobStore.validJobId(jobId) && File(root, jobId).isFile
+
     fun delete(jobId: String): Unit = synchronized(this) {
         if (!JobStore.validJobId(jobId)) return
         generation++; memory.remove(jobId)

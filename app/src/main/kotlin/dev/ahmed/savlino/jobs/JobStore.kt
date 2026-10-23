@@ -44,9 +44,10 @@ class JobRecord internal constructor(
     }
 }
 
-/** A completed download of the same link and format: where it was published and when. */
+/** A saved file that still holds a Copy link or artwork; [published] is the URI the job wrote. */
 class LinkedFile(val jobId: String, val published: Uri, val updatedAt: Long)
 
+/** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
 /** Blocking platform SQLite, schema v5. Older rows migrate without losing publication ownership. */
@@ -388,11 +389,17 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         changed
     }
 
-    /** Saved files that still carry a Copy link blob (at most the 100 kept terminal rows). */
-    @Synchronized fun linkedFiles(): List<LinkedFile> = readableDatabase.query("jobs", arrayOf("job_id", "pending_uri", "updated_at"),
-        "stage = 'COMPLETED' AND share_link IS NOT NULL AND pending_uri IS NOT NULL", null, null, null, null).use { c ->
-        buildList { while (c.moveToNext()) add(LinkedFile(c.getString(0), Uri.parse(c.getString(1)), c.getLong(2))) }
+    /** Saved files that still carry a Copy link blob or row artwork (at most the 100 kept terminal rows). */
+    @Synchronized fun linkedFiles(): List<LinkedFile> = readableDatabase.query("jobs",
+        arrayOf("job_id", "pending_uri", "updated_at", "share_link IS NOT NULL"),
+        "stage = 'COMPLETED' AND pending_uri IS NOT NULL", null, null, null, null).use { c ->
+        buildList { while (c.moveToNext()) {
+            if (c.getInt(3) == 1 || artwork.has(c.getString(0))) add(LinkedFile(c.getString(0), Uri.parse(c.getString(1)), c.getLong(2)))
+        } }
     }
+
+    /** The saved file is confirmed gone: its link and its artwork go too; the row stays. */
+    fun forgetFile(jobId: String) { dropShareLink(jobId); artwork.delete(jobId) }
 
     /** The reviewed link of a saved file, or null. A lost key or bad blob drops it; a busy Keystore only hides it. */
     fun shareLink(jobId: String): String? {
