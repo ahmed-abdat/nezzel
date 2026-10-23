@@ -7,9 +7,11 @@ import kotlinx.coroutines.*
 /** On-demand WorkManager initialization; workers cannot pass the coordinator's startup barrier. */
 open class NezzelApplication : Application(), Configuration.Provider {
     open val downloads by lazy { DownloadCoordinator(this) }
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // A failed background step (job store, widget, update schedule) must not close the app; the next launch retries it.
+    private val contained = CoroutineExceptionHandler { _, _ -> }
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
     /** Process-lifetime collectors stay out of [scope], so its startup jobs can be joined. */
-    private val collectors = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val collectors = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
     val appUpdates by lazy { dev.ahmed.savlino.update.AppUpdates(this, scope) }
     val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, downloads.completed, journal = { downloads.journal() }) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */

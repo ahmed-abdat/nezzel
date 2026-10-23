@@ -47,8 +47,10 @@ class MainActivity : AppCompatActivity() {
                 shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS))) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("notificationAsked", true).apply()
             notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        } else startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+        } else try {
+            startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+        } catch (_: android.content.ActivityNotFoundException) { /* Some OEM builds lack this screen. */ }
     }
     private lateinit var preferences: AppPreferences
     lateinit var links: LinkViewModel; private set

@@ -163,6 +163,22 @@ class YoutubedlEngineTest {
             }
         }
     }
+    /** On the device a class-init or recursion Error escaped catch (Exception) and closed the app. */
+    @Test fun anErrorFromTheEngineOrItsCallbackIsAFailedReadNotACrash() = runBlocking {
+        for (callback in listOf(false, true)) for (error in listOf<() -> Throwable>(
+            { ExceptionInInitializerError(IllegalStateException("init")) }, { NoClassDefFoundError("Missing") }, { StackOverflowError() })) {
+            val runtime = Runtime().apply { action = { _, line ->
+                if (callback) { line("[download] 1%"); "" } else throw error()
+            } }
+            val engine = YoutubedlEngine(runtime)
+            if (callback) {
+                // The progress callback itself fails on the reader thread.
+                val failing = Runtime().apply { action = { _, line -> line("x"); "" } }
+                val result = YoutubedlEngine(failing).download(command(), temp.newFolder()) { throw error() }
+                assertIs<TransferResult.Failure>(result)
+            } else assertIs<InspectResult.Failure>(engine.inspect(source, "error"))
+        }
+    }
     @Test fun warningOnlyEmptyExceptionStillMapsPhotoPostToNoVideo() = runBlocking {
         for (callback in listOf(true, false)) {
             val runtime = Runtime().apply { action = { _, line ->

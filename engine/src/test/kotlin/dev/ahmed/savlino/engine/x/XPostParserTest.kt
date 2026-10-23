@@ -14,6 +14,13 @@ class XPostParserTest {
     private fun rejected(body: ByteArray, reason: ImageFailure, id: String = X_ID,
         phase: ImagePhase = ImagePhase.PAGE) = assertEquals(XParseResult.Failure(reason, phase), parse(body, id))
 
+    @Test fun deeplyNestedJsonIsRefusedNotAStackOverflow() {
+        val body = ("[".repeat(200_000) + "]".repeat(200_000)).toByteArray()
+        var result: XParseResult? = null
+        // A small stack makes the recursion limit certain on any JVM.
+        Thread(null, { result = parse(body) }, "nested", 256 * 1024).apply { start(); join() }
+        assertEquals(XParseResult.Failure(ImageFailure.SOURCE_REFUSED), result)
+    }
     @Test fun mixedPostWithNoUsablePhotosKeepsVideoHandoff() {
         assertNotNull(assertIs<XParseResult.PhotosUnavailableVideo>(parse(xTweet(listOf("""{"type":"photo"}""", xVideo())))).infoJson)
     }

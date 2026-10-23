@@ -111,7 +111,7 @@ class Release(val version: String, val code: Long, val name: String, val size: L
             return cleanNotes(block.lineSequence().filter { it.startsWith("- ") }.map { it.drop(2) })
         }
         private fun cleanNotes(lines: Sequence<String>): List<String> = lines.map {
-                it.replace("**", "").replace("`", "").replace(Regex("\\[([^]]+)]\\([^)]*\\)"), "$1")
+                it.replace("**", "").replace("`", "").replace(Regex("\\[([^\\]]+)\\]\\([^)]*\\)"), "$1")
                     .replace(Regex("<[^>]*>"), "").filterNot { char -> char.isISOControl() || char in '\u202a'..'\u202e' || char in '\u2066'..'\u2069' }
                     .trim().take(1000)
             }.filter { it.isNotBlank() }.take(8).toList()

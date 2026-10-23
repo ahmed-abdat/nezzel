@@ -119,6 +119,11 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     ImageSourceType.DIRECT -> fetchDirect(operation)
                 } } catch (_: OutOfMemoryError) {
                     Fetched.Failed(failure(ImageFailure.BUDGET, operation.fetchPhase))
+                } catch (_: LinkageError) {
+                    // A class-init failure on the device reads as a refused post, never an app crash.
+                    Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, operation.fetchPhase))
+                } catch (_: StackOverflowError) {
+                    Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, operation.fetchPhase))
                 }
             }
             val asset = when (fetched) {

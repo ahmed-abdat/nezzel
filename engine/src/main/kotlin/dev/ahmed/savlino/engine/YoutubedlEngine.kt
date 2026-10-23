@@ -534,9 +534,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             checkCancelled(current)
             var callbackFailure: Exception? = null
             val result = runtime.execute(args, current.processId) { text ->
-                if (!current.cancelled.get()) try { line(text) } catch (failure: Exception) {
-                    // Upstream callback runs on its reader thread: do not throw and strand the child.
-                    callbackFailure = failure; current.cancelled.set(true)
+                if (!current.cancelled.get()) try { line(text) } catch (failure: Throwable) {
+                    // Upstream callback runs on its reader thread: do not throw and strand the child, or kill the app.
+                    callbackFailure = failure as? Exception ?: EngineError(failure); current.cancelled.set(true)
                 }
             }
             callbackFailure?.let { throw it }
@@ -545,6 +545,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         } finally { synchronized(runningArgv) { runningArgv.remove(args) } }
     }
     private class OperationCancelled : Exception()
+    private class EngineError(cause: Throwable) : Exception(cause.javaClass.name, cause)
 
     private suspend fun <T> operation(id: String, failure: (DownloadError, DownloadFailureCause) -> T, lockTimeoutMs: Long? = null,
         exclusive: Boolean = false, gated: Boolean = true, body: suspend (Operation) -> T): T = coroutineScope {
@@ -607,7 +608,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             } // Ungated probes are nested inside an operation that already holds the writer gate.
             withContext(Dispatchers.IO) {
                 checkCancelled(current)
-                val result = body(current)
+                // A class-init or deep-recursion Error is a failed read, not an app crash.
+                val result = try { body(current) } catch (error: LinkageError) { throw EngineError(error) }
+                    catch (error: StackOverflowError) { throw EngineError(error) }
                 currentCoroutineContext().ensureActive()
                 checkCancelled(current)
                 result

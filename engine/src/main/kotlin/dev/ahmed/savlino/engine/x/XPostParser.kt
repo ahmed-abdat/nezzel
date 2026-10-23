@@ -45,7 +45,7 @@ class XPostParser {
     fun parse(body: ByteArray, postId: String, length: Int = body.size, mediaIndex: Int? = null): XParseResult {
         if (length !in 0..body.size || length > MediaPageLimits.X)
             return XParseResult.Failure(ImageFailure.BUDGET)
-        val root = try { json.readTree(body, 0, length) } catch (_: Exception) { null }
+        val root = try { json.readTree(body, 0, length) } catch (_: Exception) { null } catch (_: StackOverflowError) { null }
         if (root == null || !root.isObject) return XParseResult.Failure(ImageFailure.SOURCE_REFUSED)
         when (root.path("__typename").asText(null)) {
             "Tweet" -> Unit

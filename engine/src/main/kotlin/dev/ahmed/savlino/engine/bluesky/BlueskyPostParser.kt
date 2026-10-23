@@ -67,7 +67,7 @@ class BlueskyPostParser {
     }
     private fun read(body: ByteArray, length: Int): JsonNode? {
         if (length !in 0..body.size || length > MediaPageLimits.BLUESKY) return null
-        return try { json.readTree(body, 0, length)?.takeIf { it.isObject } } catch (_: Exception) { null }
+        return try { json.readTree(body, 0, length)?.takeIf { it.isObject } } catch (_: Exception) { null } catch (_: StackOverflowError) { null }
     }
     private companion object {
         val json: ObjectMapper = ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
