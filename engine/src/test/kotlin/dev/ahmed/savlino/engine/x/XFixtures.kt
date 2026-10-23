@@ -15,7 +15,7 @@ internal fun xPhoto(name: String = "SyntheticPhoto1", ext: String = "jpg", width
 internal fun xVideo(type: String = "video") =
     """{"media_url_https":"https://pbs.twimg.com/ext_tw_video_thumb/1/pu/img/SyntheticThumb.jpg",""" +
         """"original_info":{"height":720,"width":1280},"type":"$type",""" +
-        """"video_info":{"aspect_ratio":[16,9],"variants":[{"bitrate":832000,"content_type":"video/mp4",""" +
+        """"video_info":{"aspect_ratio":[16,9],"variants":[{"bitrate":${if (type == "animated_gif") 0 else 832000},"content_type":"video/mp4",""" +
         """"url":"https://video.twimg.com/ext_tw_video/1/pu/vid/1280x720/Synthetic.mp4"}]}}"""
 
 internal fun xTweet(media: List<String>? = listOf(xPhoto()), id: String = X_ID, typename: String = "Tweet",

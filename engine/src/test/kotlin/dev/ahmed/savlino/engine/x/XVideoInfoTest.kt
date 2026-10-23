@@ -86,6 +86,26 @@ class XVideoInfoTest {
             .formats, map(info.toString()).formats)
     }
 
+    private fun gif(variants: String) = root().apply {
+        (path("mediaDetails")[0] as ObjectNode).apply {
+            put("type", "animated_gif")
+            set<JsonNode>("video_info", json.readTree("""{"variants":$variants}"""))
+        }
+    }
+
+    @Test fun aGifWithSeveralVariantsDeclinesToYtDlp() {
+        // The fixture's own video variants under a GIF type: three rows where yt-dlp gives one.
+        assertNull(build(root().apply { (path("mediaDetails")[0] as ObjectNode).put("type", "animated_gif") }))
+        assertNull(build(gif("""[{"bitrate":0,"content_type":"video/mp4","url":"https://video.twimg.com/tweet_video/A.mp4"},
+            {"bitrate":0,"content_type":"video/mp4","url":"https://video.twimg.com/tweet_video/B.mp4"}]""")))
+    }
+
+    @Test fun aGifWithAPositiveBitrateDeclinesToYtDlp() {
+        for (rate in listOf(999, 832000))
+            assertNull(build(gif("""[{"bitrate":$rate,"content_type":"video/mp4","url":"https://video.twimg.com/tweet_video/A.mp4"}]""")), "$rate")
+        assertNotNull(build(gif("""[{"content_type":"video/mp4","url":"https://video.twimg.com/tweet_video/A.mp4"}]""")))
+    }
+
     @Test fun idsUseYtDlpsIntegerDivisionAndBitrateFallback() {
         fun extra(bitrate: String) = ids(info(withVariant(variant(bitrate)))).last()
         assertEquals("http", extra(""""bitrate":999,"""))

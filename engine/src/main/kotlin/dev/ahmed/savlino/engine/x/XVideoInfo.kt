@@ -26,6 +26,9 @@ internal object XVideoInfo {
         if (videos.any { !it.isObject || it.path("type").asText("") !in VIDEO_TYPES }) return null
         val video = videos.firstOrNull() ?: return null
         val formats = formats(video) ?: return null
+        // A GIF is one progressive file without bitrate (yt-dlp: one `http` row); any other GIF shape → yt-dlp.
+        if (video.path("type").asText() == "animated_gif" && video.path("video_info").path("variants")
+                .filter { ".m3u8" !in it.path("url").asText("") }.let { it.size != 1 || bitrate(it.single()) != 0L }) return null
         return json.writeValueAsString(json.createObjectNode().apply {
             put("id", video.path("id_str").asText("").takeIf(DIGITS::matches) ?: postId)
             put("display_id", postId)
