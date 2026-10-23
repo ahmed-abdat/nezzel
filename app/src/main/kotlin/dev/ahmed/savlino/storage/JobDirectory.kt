@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.storage
 
 import dev.ahmed.savlino.domain.FilenameSanitizer
+import dev.ahmed.savlino.domain.PartialFileNames
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileVisitResult
@@ -9,9 +10,12 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
-interface JobDirectories { fun create(jobId: String): JobDirectory.Job }
+interface JobDirectories {
+    fun create(jobId: String): JobDirectory.Job
+    fun createOrAdopt(jobId: String): JobDirectory.Job = create(jobId)
+}
 
-/** Job IDs are opaque identifiers, never remote titles. Existing directories are never adopted. */
+/** Job IDs are opaque identifiers, never remote titles. New jobs always create exclusively. */
 class JobDirectory(filesDir: File) : JobDirectories {
     private val root = File(filesDir.canonicalFile, "downloads")
 
@@ -23,6 +27,34 @@ class JobDirectory(filesDir: File) : JobDirectories {
         // mkdir is exclusive: never clean up a preexisting job, even if its name is valid.
         if (!directory.mkdir()) invalidPath()
         return Job(root, directory)
+    }
+
+    /** The caller must own this ID in the journal and have stopped its previous writer. */
+    @Synchronized override fun createOrAdopt(jobId: String): Job {
+        if (!jobId.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))) invalidPath()
+        if (root.canonicalFile != root || Files.isSymbolicLink(root.toPath())) invalidPath()
+        val directory = File(root, jobId)
+        if (!Files.exists(directory.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)) return create(jobId)
+        if (Files.isSymbolicLink(directory.toPath()) || !directory.isDirectory) {
+            Files.delete(directory.toPath())
+            return create(jobId)
+        }
+        if (directory.canonicalFile != directory || directory.parentFile != root) invalidPath()
+        val job = Job(root, directory)
+        val files = directory.listFiles() ?: throw StorageException(StorageError.SaveFailed)
+        for (file in files) {
+            if (file.name == "result-path.txt" ||
+                (file.name.matches(Regex("output\\.[^.]+")) && !PartialFileNames.matches(file.name))) {
+                if (Files.isSymbolicLink(file.toPath()) || file.isFile) Files.delete(file.toPath())
+            }
+        }
+        if (directory.listFiles()?.all {
+                !Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name)
+            } != true) {
+            job.cleanup()
+            return create(jobId)
+        }
+        return job
     }
 
     class Job internal constructor(private val root: File, val directory: File) {

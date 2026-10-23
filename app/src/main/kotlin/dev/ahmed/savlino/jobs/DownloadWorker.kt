@@ -17,7 +17,8 @@ class DownloadWorker(context: Context, params: WorkerParameters,
         val id = jobId?.takeIf(JobStore::validJobId) ?: return Result.failure()
         val persistence = ProgressPersistence(coordinator.monotonicMillis) { event ->
             setProgress(workDataOf("phase" to event.phase.name, "bytes" to (event.bytes ?: -1L),
-                "percent" to (event.percent ?: -1)))
+                "percent" to (event.percent ?: -1), "restart_epoch" to event.restartEpoch,
+                "paused" to event.paused, "has_partial" to event.hasPartial))
             if (!event.terminal) notifications.progress(event)
         }
         val row = coordinator.execute(id, {
@@ -30,7 +31,7 @@ class DownloadWorker(context: Context, params: WorkerParameters,
             if (!isStopped) persistence.report(event)
         }
         if (row?.stage == JobStage.ENQUEUED) return Result.retry()
-        return if (row?.stage in setOf(JobStage.COMPLETED, JobStage.CANCELLED)) Result.success() else Result.failure()
+        return if (row?.stage in setOf(JobStage.COMPLETED, JobStage.CANCELLED, JobStage.PAUSED)) Result.success() else Result.failure()
     }
     class Factory(private val coordinator: DownloadCoordinator) : WorkerFactory() {
         override fun createWorker(context: Context, workerClassName: String, params: WorkerParameters): ListenableWorker? =

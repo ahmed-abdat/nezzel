@@ -43,14 +43,17 @@ sealed interface InspectResult {
 sealed interface EngineEvent {
     /** Cumulative transfer bytes across streams; estimates never become exact implicitly. */
     data class Progress(val bytesDownloaded: Long, val total: Size = Size.Unknown,
-        val fragmentIndex: Long? = null, val fragmentCount: Long? = null) : EngineEvent
+        val fragmentIndex: Long? = null, val fragmentCount: Long? = null,
+        val restartEpoch: Long = 0) : EngineEvent
+    /** Relative to this download call; the journal adds its durable attempt epoch. */
+    data class Restarting(val restartEpoch: Long) : EngineEvent
     /** Unmeasured post-processing, including lossless extraction and explicit audio conversion. */
     data object Merging : EngineEvent
 }
 
 sealed interface TransferResult {
     data class Success(val output: StagedOutput) : TransferResult
-    data class Failure(val error: DownloadError) : TransferResult
+    data class Failure(val error: DownloadError, val resumeAllowed: Boolean = true) : TransferResult
 }
 
 /** A single nonempty staged file, not a published/saved download. */

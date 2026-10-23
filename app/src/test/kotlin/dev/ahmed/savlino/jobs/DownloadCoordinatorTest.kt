@@ -107,6 +107,29 @@ class DownloadCoordinatorTest {
         }
     }
 
+    @Test fun pausedRowBlocksEngineMaintenanceAndStartupSchedulesOnlyQueuedRows() = runBlocking {
+        heldTransfer().use { f ->
+            f.store.enqueue(command("paused")); f.store.startTransfer("paused", "recipe")
+            File(app.filesDir, "downloads/paused").apply { mkdirs(); resolve("output.mp4.part").writeText("paused") }
+            f.store.pause("paused", true)
+            f.store.enqueue(command("queued")); f.store.requeue("queued", true)
+            File(app.filesDir, "downloads/queued").apply { mkdirs(); resolve("output.mp4.part").writeText("queued") }
+            f.coordinator.initialize()
+            assertEquals(JobStage.PAUSED, f.store.get("paused")!!.stage)
+            assertTrue(f.coordinator.progress.value.single { it.jobId == "paused" }.paused)
+            assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("paused").get().isEmpty())
+            val queued = WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get().single()
+            assertEquals(NetworkType.CONNECTED, queued.constraints.requiredNetworkType)
+            f.coordinator.cancel("queued")
+            assertFalse(f.coordinator.maintenance.updateNow())
+            assertEquals(EngineUpdateStatus.BUSY, f.coordinator.maintenance.state.value.status)
+            assertEquals("engine-42", f.engine.installedVersion())
+            f.coordinator.cancel("paused")
+            assertTrue(f.coordinator.maintenance.updateNow())
+            assertEquals("updated", f.engine.installedVersion())
+        }
+    }
+
     @Test fun delayedRetrySchedulingFailureCannotOverwriteLiveOrFinishedProgress() = runBlocking {
         heldTransfer().use { f ->
             f.coordinator.enqueue(command("running"))
@@ -163,7 +186,7 @@ class DownloadCoordinatorTest {
             }
             try {
                 withTimeout(5000) { foreground.await() }
-                assertEquals(JobStage.ENQUEUED, f.store.get("preparing")!!.stage)
+                assertEquals(JobStage.TRANSFERRING, f.store.get("preparing")!!.stage)
                 assertFalse(withTimeout(5000) { f.coordinator.retry("preparing") })
                 val preparing = f.coordinator.progress.value.single()
                 assertEquals(DownloadPhase.PREPARING, preparing.phase)
@@ -524,8 +547,9 @@ class DownloadCoordinatorTest {
         try {
             coordinator.initialize()
             coordinator.initialize()
-            assertEquals(JobStage.FAILED, store.get("interrupted")!!.stage)
-            assertEquals(DownloadError.Interrupted, store.get("interrupted")!!.error)
+            assertEquals(JobStage.ENQUEUED, store.get("interrupted")!!.stage)
+            assertNull(store.get("interrupted")!!.error)
+            assertFalse(store.get("interrupted")!!.hasPartial)
             assertNotNull(store.get("interrupted")!!.sourceUrl)
             assertFalse(File(app.filesDir, "downloads/interrupted").exists())
         } finally { store.close() }

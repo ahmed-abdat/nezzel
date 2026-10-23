@@ -263,18 +263,25 @@ internal fun matchesYtdlpChild(row: ProcProcess, parent: Int, python: String, sc
     args: List<String>): Boolean = row.parentPid == parent && row.command.size >= args.size + 2 &&
     row.command.take(2) == listOf(python, script) && row.command.takeLast(args.size) == args
 
-internal class YtdlpExecutionFailure(val error: DownloadError, val expiredUrl: Boolean = false) : Exception()
+internal class YtdlpExecutionFailure(val error: DownloadError, val expiredUrl: Boolean = false,
+    val resumeAllowed: Boolean = true) : Exception()
 internal class YtdlpDiagnostics {
     private val error = AtomicReference(DownloadError.Failed)
     private val expired = java.util.concurrent.atomic.AtomicBoolean()
+    private val httpFailure = java.util.concurrent.atomic.AtomicBoolean()
     fun accept(line: String) {
         if (expiredUrl(line)) expired.set(true)
+        if (blocksResume(line)) httpFailure.set(true)
         if (line.startsWith("ERROR:")) YtdlpErrorMapper.map(line).let {
             if (it != DownloadError.Failed) error.set(it)
         }
     }
-    fun failure() = YtdlpExecutionFailure(error.get(), expired.get())
+    fun failure() = YtdlpExecutionFailure(error.get(), expired.get(), !httpFailure.get())
     companion object {
+        fun blocksResume(message: String): Boolean = message.lineSequence().filter { it.startsWith("ERROR:") }.any {
+            Regex("\\bhttp error (429|5\\d\\d)\\b", RegexOption.IGNORE_CASE)
+                .containsMatchIn(it.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), ""))
+        }
         fun expiredUrl(message: String): Boolean = message.lineSequence().filter { it.startsWith("ERROR:") }.any { line ->
             val text = line.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "").lowercase(java.util.Locale.ROOT)
             Regex("\\bhttp error (401|403|410)\\b").containsMatchIn(text) ||

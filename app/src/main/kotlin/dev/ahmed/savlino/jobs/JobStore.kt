@@ -18,7 +18,7 @@ import org.json.JSONObject
 
 /** The coordinator serializes recovery and execution before using this journal (U12). */
 enum class JobStage(val terminal: Boolean = false) {
-    ENQUEUED, TRANSFERRING, STAGED, PENDING_INSERTED, PUBLISHING,
+    ENQUEUED, TRANSFERRING, PAUSED, STAGED, PENDING_INSERTED, PUBLISHING,
     COMPLETED(true), FAILED(true), CANCELLED(true)
 }
 
@@ -30,6 +30,7 @@ class JobRecord internal constructor(
     val error: DownloadError?,
     /** Explicit fresh transfer only; terminal staging is always deleted. */
     val retryable: Boolean,
+    val hasPartial: Boolean, val resumeRecipe: String?, val restartEpoch: Long,
 ) {
     /** Reconstruct only a still-confirmed nonterminal command. Recovery never starts it. */
     fun command(): DownloadCommand? {
@@ -43,10 +44,10 @@ class JobRecord internal constructor(
 /** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
-/** Blocking platform SQLite, schema v2. In-flight cache; v1 rows migrate without losing URI ownership. */
+/** Blocking platform SQLite, schema v4. Older rows migrate without losing publication ownership. */
 /** [sourceKeys]: keyed tags for "saved before"; null (no AndroidKeyStore) stores no tag and finds nothing. */
 class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred) :
-    SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 3) {
+    SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, 4) {
     private val jobRoot = File(context.filesDir.canonicalFile, "downloads")
     private val terminalLock = Any()
     private val infoCache = dev.ahmed.savlino.engine.YtdlpInfoCache(context.noBackupFilesDir)
@@ -66,13 +67,15 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         db.execSQL("""
             CREATE TABLE jobs (
                 job_id TEXT PRIMARY KEY NOT NULL,
-                stage TEXT NOT NULL CHECK(stage IN ('ENQUEUED','TRANSFERRING','STAGED',
+                stage TEXT NOT NULL CHECK(stage IN ('ENQUEUED','TRANSFERRING','PAUSED','STAGED',
                     'PENDING_INSERTED','PUBLISHING','COMPLETED','FAILED','CANCELLED')),
                 source_url TEXT, revision INTEGER NOT NULL, engine_version TEXT NOT NULL,
                 format_json TEXT NOT NULL, filename TEXT NOT NULL, preset TEXT,
                 pending_uri TEXT, display_name TEXT, created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL, error TEXT, retryable INTEGER NOT NULL DEFAULT 0,
-                source_key TEXT,
+                source_key TEXT, has_partial INTEGER NOT NULL DEFAULT 0 CHECK(has_partial IN (0,1)),
+                resume_recipe TEXT, restart_epoch INTEGER NOT NULL DEFAULT 0 CHECK(restart_epoch >= 0),
+                CHECK (has_partial = 0 OR stage IN ('ENQUEUED','TRANSFERRING','PAUSED')),
                 CHECK ((stage IN ('COMPLETED','CANCELLED') AND source_url IS NULL)
                     OR (stage = 'FAILED' AND (source_url IS NULL OR retryable = 1))
                     OR (stage NOT IN ('COMPLETED','FAILED','CANCELLED') AND source_url IS NOT NULL)),
@@ -82,18 +85,15 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion == 1 && newVersion == 3) {
-            // SQLiteOpenHelper owns the transaction. Never drop an unresolved publication URI.
-            db.execSQL("ALTER TABLE jobs RENAME TO jobs_v1")
+        if (oldVersion in 1..3 && newVersion == 4) {
+            // SQLiteOpenHelper owns the transaction, including the CHECK-constraint rebuild.
+            db.execSQL("ALTER TABLE jobs RENAME TO jobs_old")
             onCreate(db)
-            db.execSQL("INSERT INTO jobs ($V2_COLUMNS) SELECT $V2_COLUMNS FROM jobs_v1")
-            // v1 already erased terminal URLs; they cannot support explicit retry.
+            val columns = V2_COLUMNS + if (oldVersion >= 3) ", source_key" else ""
+            db.execSQL("INSERT INTO jobs ($columns) SELECT $columns FROM jobs_old")
             db.execSQL("UPDATE jobs SET retryable = 0 WHERE stage = 'FAILED' AND source_url IS NULL")
-            db.execSQL("DROP TABLE jobs_v1")
-            backfillSourceKeys(db)
-        } else if (oldVersion == 2 && newVersion == 3) {
-            db.execSQL("ALTER TABLE jobs ADD COLUMN source_key TEXT")
-            backfillSourceKeys(db)
+            db.execSQL("DROP TABLE jobs_old")
+            if (oldVersion < 3) backfillSourceKeys(db)
         } else recreate(db)
     }
 
@@ -201,18 +201,50 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         removed
     }
 
-    @Synchronized fun startTransfer(jobId: String): Boolean = transition(jobId,
-        setOf(JobStage.ENQUEUED), JobStage.TRANSFERRING)
-    @Synchronized internal fun requeue(jobId: String): Boolean = transition(jobId,
-        setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.ENQUEUED)
+    @Synchronized fun startTransfer(jobId: String, recipe: String? = null): Boolean {
+        scrubExpiredSources()
+        return transition(jobId, setOf(JobStage.ENQUEUED), JobStage.TRANSFERRING,
+            ContentValues().apply {
+                put("resume_recipe", recipe)
+                put("restart_epoch", Math.addExact(get(jobId)?.restartEpoch ?: 0, 1))
+            })
+    }
+    @Synchronized internal fun restartTransfer(jobId: String): Long? {
+        if (get(jobId)?.stage != JobStage.TRANSFERRING) return null
+        writableDatabase.execSQL("UPDATE jobs SET restart_epoch=restart_epoch+1, has_partial=0 WHERE job_id=? AND stage='TRANSFERRING'", arrayOf(jobId))
+        return get(jobId)?.restartEpoch
+    }
+    @Synchronized internal fun requeue(jobId: String, hasPartial: Boolean = false): Boolean {
+        scrubExpiredSources()
+        return transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.ENQUEUED,
+            ContentValues().apply { put("has_partial", if (hasPartial) 1 else 0); putNull("error") })
+    }
+    @Synchronized fun pause(jobId: String, hasPartial: Boolean? = null): Boolean {
+        scrubExpiredSources()
+        return transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.PAUSED,
+            ContentValues().apply { hasPartial?.let { put("has_partial", if (it) 1 else 0) }; putNull("error") })
+    }
+    @Synchronized internal fun transferPartial(jobId: String, hasPartial: Boolean) {
+        writableDatabase.update("jobs", ContentValues().apply { put("has_partial", if (hasPartial) 1 else 0) },
+            "job_id=? AND stage='TRANSFERRING'", arrayOf(jobId))
+    }
+    @Synchronized internal fun pausedPartial(jobId: String, hasPartial: Boolean) {
+        writableDatabase.update("jobs", ContentValues().apply { put("has_partial", if (hasPartial) 1 else 0) },
+            "job_id=? AND stage='PAUSED'", arrayOf(jobId))
+    }
+    @Synchronized fun resume(jobId: String): Boolean {
+        scrubExpiredSources()
+        return transition(jobId, setOf(JobStage.PAUSED), JobStage.ENQUEUED)
+    }
 
     internal fun cancelEnqueued(jobId: String): Boolean = finishTerminal(jobId) {
-        transition(jobId, setOf(JobStage.ENQUEUED), JobStage.CANCELLED,
+        transition(jobId, setOf(JobStage.ENQUEUED, JobStage.PAUSED), JobStage.CANCELLED,
             ContentValues().apply { put("error", DownloadError.Cancelled.name) })
     }
 
     @Synchronized fun markStaged(jobId: String): Boolean = transition(jobId,
         setOf(JobStage.TRANSFERRING), JobStage.STAGED)
+
     @Synchronized fun recordPending(jobId: String, pending: PendingPublication): Boolean = transition(jobId,
         setOf(JobStage.STAGED), JobStage.PENDING_INSERTED, ContentValues().apply {
             put("pending_uri", pending.uri.toString()); put("display_name", pending.displayName)
@@ -231,13 +263,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     /** Pending ownership must be resolved first by recovery; late cancellation cannot undo commit. */
     fun cancel(jobId: String): Boolean = finishTerminal(jobId) {
-        transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.STAGED), JobStage.CANCELLED,
+        transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED, JobStage.STAGED), JobStage.CANCELLED,
             ContentValues().apply { put("error", DownloadError.Cancelled.name) })
     }
 
     /** Retry keeps only a still-confirmed URL; partial bytes are never resumed. */
     fun fail(jobId: String, error: DownloadError, retryable: Boolean = retryableError(error)): Boolean = finishTerminal(jobId) {
-        transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.STAGED), JobStage.FAILED,
+        transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED, JobStage.STAGED), JobStage.FAILED,
             ContentValues().apply { put("error", error.name); put("retryable", if (retryable && retryableError(error)) 1 else 0) })
     }
 
@@ -300,6 +332,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     private fun transition(id: String, from: Set<JobStage>, to: JobStage, values: ContentValues = ContentValues()): Boolean {
         values.put("stage", to.name)
         values.put("updated_at", System.currentTimeMillis())
+        if (to !in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED)) values.put("has_partial", 0)
         if (to.terminal) {
             val retain = to == JobStage.FAILED && values.getAsInteger("retryable") == 1 &&
                 get(id)?.createdAt?.let { System.currentTimeMillis() - it <= CONFIRMATION_LIFETIME_MS } == true
@@ -311,9 +344,16 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     private fun scrubExpiredSources() {
+        val cutoff = System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS
+        val expired = writableDatabase.query("jobs", arrayOf("job_id"),
+            "stage IN ('ENQUEUED','PAUSED','TRANSFERRING') AND created_at < ?", arrayOf(cutoff.toString()),
+            null, null, null).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
+        writableDatabase.execSQL("UPDATE jobs SET stage='FAILED', error='FormatExpired', source_url=NULL, " +
+            "retryable=0, has_partial=0, updated_at=? WHERE stage IN ('ENQUEUED','PAUSED','TRANSFERRING') AND created_at < ?",
+            arrayOf(System.currentTimeMillis(), cutoff))
+        for (id in expired) { infoCache.remove(id); cleanupJobStaging(jobRoot, id) }
         writableDatabase.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0 " +
-            "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ?",
-            arrayOf(System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS))
+            "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ?", arrayOf(cutoff))
     }
 
     private fun read(cursor: Cursor): JobRecord {
@@ -322,7 +362,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         return JobRecord(text("job_id"), JobStage.valueOf(text("stage")), text("source_url"), long("revision"),
             text("engine_version"), decodeFormat(text("format_json")), text("filename"), text("preset")?.let(Preset::valueOf),
             text("pending_uri")?.let(Uri::parse), text("display_name"), long("created_at"), long("updated_at"),
-            text("error")?.let(DownloadError::valueOf), long("retryable") == 1L)
+            text("error")?.let(DownloadError::valueOf), long("retryable") == 1L,
+            long("has_partial") == 1L, text("resume_recipe"), long("restart_epoch"))
     }
 
     companion object {
@@ -377,9 +418,19 @@ internal fun cleanupJobStaging(root: File, id: String): Boolean = try {
     else {
         val path = File(root, id)
         if (Files.exists(path.toPath(), LinkOption.NOFOLLOW_LINKS)) {
-            check(Files.isDirectory(path.toPath(), LinkOption.NOFOLLOW_LINKS))
-            JobDirectory.Job(root, path).cleanup()
+            if (Files.isSymbolicLink(path.toPath())) Files.delete(path.toPath())
+            else {
+                check(Files.isDirectory(path.toPath(), LinkOption.NOFOLLOW_LINKS))
+                JobDirectory.Job(root, path).cleanup()
+            }
         }
         true
     }
 } catch (_: Exception) { false }
+
+/** Count only real files without following links. Unknown contents are validated before adoption. */
+internal fun stagingBytes(directory: File): Long = try {
+    if (directory.absoluteFile != directory.canonicalFile || Files.isSymbolicLink(directory.toPath()) || !directory.isDirectory) 0L
+    else directory.listFiles().orEmpty().filter { !Files.isSymbolicLink(it.toPath()) && it.isFile }
+        .fold(0L) { bytes, file -> Math.addExact(bytes, file.length()) }
+} catch (_: Exception) { 0L }

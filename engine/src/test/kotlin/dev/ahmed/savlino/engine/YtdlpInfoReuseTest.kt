@@ -89,7 +89,7 @@ class YtdlpInfoReuseTest {
             assertEquals(source.link.rawUrl, runtime.transfers.last().last())
         }
     }
-    @Test fun secondFailureNeverLoopsAndBytesOrCancellationSuppressFallback() = runBlocking {
+    @Test fun secondFailureNeverLoopsAndCancellationSuppressesFallback() = runBlocking {
         for (mode in listOf("twice", "progress", "disk", "cancel", "unrelated")) {
             val runtime = Runtime(json)
             val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
@@ -102,9 +102,79 @@ class YtdlpInfoReuseTest {
                     else "ERROR: HTTP Error 403: Forbidden")
             }
             assertIs<TransferResult.Failure>(engine.download(command, temp.newFolder()) {})
-            assertEquals(if (mode == "twice") 2 else 1, runtime.transfers.size, mode)
+            assertEquals(if (mode in listOf("twice", "progress", "disk")) 2 else 1, runtime.transfers.size, mode)
         }
     }
+    @Test fun expiredSignedUrlWithBytesWipesBeforeExactSelectionRefetchAndChangesEpoch() = runBlocking {
+        for (code in listOf(401, 403, 410)) {
+            val runtime = Runtime(json)
+            val cache = YtdlpInfoCache(temp.newFolder())
+            val engine = YoutubedlEngine(runtime, infoCache = cache)
+            val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
+            val dir = temp.newFolder()
+            val events = mutableListOf<EngineEvent>()
+            runtime.action = { args, line ->
+                if (runtime.transfers.size == 1) {
+                    File(dir, "output.mp4.part").writeText("old signed URL bytes")
+                    line("nezzel:18:100:1000:NA")
+                    error("ERROR: unable to download video data: HTTP Error $code")
+                }
+                assertTrue(dir.list()!!.isEmpty())
+                assertEquals("18", args[args.indexOf("-f") + 1])
+                assertFalse("--load-info-json" in args)
+                line("nezzel:18:1:1000:NA")
+                Runtime.output(args)
+            }
+            assertIs<TransferResult.Success>(engine.download(command, dir) { events += it })
+            assertEquals(2, runtime.transfers.size)
+            assertEquals(listOf(0L, 1L), events.filterIsInstance<EngineEvent.Progress>().map { it.restartEpoch })
+            assertTrue(events.any { it is EngineEvent.Restarting })
+            assertFalse(File(dir, "output.mp4.part").exists())
+        }
+    }
+    @Test fun adoptedPartialDirectoryIsAcceptedButForeignFileAndSymlinkAreRejected() {
+        val command = confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true))))
+        val dir = temp.newFolder()
+        File(dir, "output.mp4.part").writeText("partial")
+        File(dir, "output.f140.m4a").writeText("audio")
+        assertFalse("--no-continue" in YtdlpCommand.download(command, dir))
+        File(dir, "foreign").writeText("unknown")
+        assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command, dir) }
+    }
+
+    @Test fun expiredUrlOnAdoptedBytesWithoutCachedInfoWipesBeforeMissingExactFormatFails() = runBlocking {
+        val runtime = Runtime(json)
+        val engine = YoutubedlEngine(runtime)
+        val command = confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true))))
+        val dir = temp.newFolder()
+        File(dir, "output.mp4.part").writeText("old bytes")
+        runtime.action = { args, _ ->
+            assertEquals("18", args[args.indexOf("-f") + 1])
+            if (runtime.transfers.size == 1) error("ERROR: unable to download video data: HTTP Error 403")
+            assertTrue(dir.list()!!.isEmpty())
+            error("ERROR: requested format is not available")
+        }
+        assertEquals(TransferResult.Failure(DownloadError.FormatExpired), engine.download(command, dir) {})
+        assertEquals(2, runtime.transfers.size)
+        assertTrue(dir.list()!!.isEmpty())
+    }
+
+    @Test fun httpRateLimitAndServerErrorsNeverResumeEvenAfterTransportDiagnostics() = runBlocking {
+        for (code in listOf(429, 500, 503)) {
+            val runtime = Runtime(json)
+            val engine = YoutubedlEngine(runtime)
+            val command = confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true))))
+            runtime.action = { _, line ->
+                line("ERROR: connection reset")
+                line("ERROR: HTTP Error $code")
+                throw YtdlpExecutionFailure(DownloadError.Network)
+            }
+            val failure = assertIs<TransferResult.Failure>(engine.download(command, temp.newFolder()) {})
+            assertFalse(failure.resumeAllowed)
+            assertEquals(1, runtime.transfers.size)
+        }
+    }
+
     @Test fun writeFailureIsBestEffortAndSweepDeletesExpiredFilesOnly() = runBlocking {
         val root = temp.newFolder()
         val runtime = Runtime(json)

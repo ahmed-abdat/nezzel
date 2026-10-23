@@ -109,8 +109,9 @@ class DownloadWorkerTest {
             File(app.filesDir, "downloads/old").apply { mkdirs(); resolve("partial").writeText("bytes") }
             f.store.enqueue(command("new"))
             f.provider.onOpen = {
-                assertEquals(JobStage.FAILED, f.store.get("old")!!.stage)
-                assertEquals(DownloadError.Interrupted, f.store.get("old")!!.error)
+                assertEquals(JobStage.ENQUEUED, f.store.get("old")!!.stage)
+                assertNull(f.store.get("old")!!.error)
+                assertFalse(f.store.get("old")!!.hasPartial)
                 assertFalse(File(app.filesDir, "downloads/old").exists())
             }
             assertEquals(ListenableWorker.Result.success(), f.worker("new").doWork())
@@ -390,9 +391,12 @@ class DownloadWorkerTest {
     }
 
     @Test @Config(sdk = [29, 33, 35])
-    fun connectivityStopAfterBytesFailsRetryableNetworkAndCleansPartial() = runBlocking {
-        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Emit(EngineEvent.Progress(2, Size.Exact(4))),
-            FakeEngine.Step.AwaitCancellation))).use { f ->
+    fun connectivityStopAfterBytesRequeuesAndKeepsPartial() = runBlocking {
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            dir.resolve("output.mp4.part").writeText("bytes")
+            emit(EngineEvent.Progress(2, Size.Exact(4)))
+            awaitCancellation()
+        }).use { f ->
             shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
             f.store.enqueue(command("network-partial"))
             val worker = f.worker("network-partial")
@@ -402,11 +406,226 @@ class DownloadWorkerTest {
                 else WorkInfo.STOP_REASON_UNKNOWN)
             running.cancelAndJoin()
             val row = f.store.get("network-partial")!!
-            assertEquals(JobStage.FAILED, row.stage)
-            assertEquals(DownloadError.Network, row.error)
-            assertTrue(row.retryable)
+            assertEquals(JobStage.ENQUEUED, row.stage)
+            assertNull(row.error)
+            assertFalse(row.retryable)
+            assertTrue(row.hasPartial)
             assertNotNull(row.sourceUrl)
-            assertFalse(File(app.filesDir, "downloads/network-partial").exists())
+            assertEquals("bytes", File(app.filesDir, "downloads/network-partial/output.mp4.part").readText())
+        }
+    }
+
+    @Test fun stoppedWorkerWithDiskBytesReturnsRetryAndRetainsItsStaging() = runBlocking {
+        fixture(FakeEngine(), script = { _, dir, _ ->
+            dir.resolve("output.mp4.part").writeText("keep")
+            TransferResult.Failure(DownloadError.Cancelled)
+        }).use { f ->
+            f.store.enqueue(command("stopped-partial"))
+            val worker = f.worker("stopped-partial")
+            worker.stop(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
+            assertEquals(ListenableWorker.Result.retry(), worker.doWork())
+            val row = f.store.get("stopped-partial")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
+            assertNull(row.error); assertNotNull(row.sourceUrl)
+            assertEquals("keep", File(app.filesDir, "downloads/stopped-partial/output.mp4.part").readText())
+        }
+    }
+
+    @Test fun transientFailureWithDiskBytesReturnsWorkerRetryWithoutTerminalEvent() = runBlocking {
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            dir.resolve("output.mp4.part").writeText("keep")
+            emit(EngineEvent.Progress(4, Size.Exact(100)))
+            TransferResult.Failure(DownloadError.Network)
+        }).use { f ->
+            f.store.enqueue(command("transport"))
+            assertEquals(ListenableWorker.Result.retry(), f.worker("transport").doWork())
+            val row = f.store.get("transport")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
+            assertNotNull(row.sourceUrl); assertEquals(1L, row.restartEpoch)
+            assertEquals("keep", File(app.filesDir, "downloads/transport/output.mp4.part").readText())
+            assertFalse(f.phases.contains("FAILED")); assertTrue(f.provider.rows.isEmpty())
+        }
+    }
+
+    @Test fun networkFailureWithoutResumePermissionStillFailsAndDeletesPartial() = runBlocking {
+        fixture(FakeEngine(), script = { _, dir, _ ->
+            dir.resolve("output.mp4.part").writeText("discard")
+            TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
+        }).use { f ->
+            f.store.enqueue(command("http-failure"))
+            assertEquals(ListenableWorker.Result.failure(), f.worker("http-failure").doWork())
+            assertEquals(JobStage.FAILED, f.store.get("http-failure")!!.stage)
+            assertFalse(f.store.get("http-failure")!!.hasPartial)
+            assertFalse(File(app.filesDir, "downloads/http-failure").exists())
+        }
+    }
+
+    @Test fun pauseStopsTransferKeepsBytesResumeSchedulesAndCancelPausedScrubs() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), script = { _, dir, emit ->
+            dir.resolve("output.mp4.part").writeText("keep")
+            emit(EngineEvent.Progress(4, Size.Exact(100)))
+            entered.complete(Unit)
+            stopped.await()
+            TransferResult.Failure(DownloadError.Cancelled)
+        }, cancelHook = { stopped.complete(Unit) }).use { f ->
+            f.coordinator.enqueue(command("pause"))
+            val running = async(Dispatchers.Default) { f.worker("pause").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                assertTrue(f.coordinator.pause("pause"))
+                withTimeout(5000) { running.await() }
+                val row = f.store.get("pause")!!
+                assertEquals(JobStage.PAUSED, row.stage); assertTrue(row.hasPartial)
+                assertNotNull(row.sourceUrl); assertTrue(stopped.isCompleted)
+                assertEquals("keep", File(app.filesDir, "downloads/pause/output.mp4.part").readText())
+                assertTrue(f.coordinator.progress.value.single().paused)
+                assertFalse(f.phases.any { it in listOf("FAILED", "CANCELLED") })
+                assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("pause").get().all { it.state.isFinished })
+                val previous = WorkManager.getInstance(app).getWorkInfosForUniqueWork("pause").get().map { it.id }.toSet()
+                assertTrue(f.coordinator.resume("pause"))
+                assertEquals(JobStage.ENQUEUED, f.store.get("pause")!!.stage)
+                assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("pause").get().any { it.id !in previous })
+                assertTrue(f.coordinator.pause("pause"))
+                f.coordinator.cancel("pause")
+                assertEquals(JobStage.CANCELLED, f.store.get("pause")!!.stage)
+                assertNull(f.store.get("pause")!!.sourceUrl)
+                assertFalse(File(app.filesDir, "downloads/pause").exists())
+            } finally { stopped.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun cancelAfterPausedReportStillScrubsAndDeletesAfterWriterExit() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val exit = CompletableDeferred<Unit>()
+        val pausedReport = CompletableDeferred<Unit>()
+        val releaseReport = CompletableDeferred<Unit>()
+        val endings = mutableListOf<DownloadProgress>()
+        fixture(FakeEngine(), script = { _, dir, _ ->
+            dir.resolve("output.mp4.part").writeText("keep")
+            entered.complete(Unit); exit.await()
+            TransferResult.Failure(DownloadError.Cancelled)
+        }, cancelHook = { exit.complete(Unit) }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("late-paused-cancel"))
+            val running = async(Dispatchers.Default) {
+                f.coordinator.execute("late-paused-cancel", { WorkInfo.STOP_REASON_NOT_STOPPED }, {}, {}) {
+                    endings += it
+                    if (it.paused) { pausedReport.complete(Unit); releaseReport.await() }
+                }
+            }
+            try {
+                withTimeout(5000) { entered.await() }
+                assertTrue(f.coordinator.pause("late-paused-cancel"))
+                withTimeout(5000) { pausedReport.await() }
+                f.coordinator.cancel("late-paused-cancel")
+                releaseReport.complete(Unit)
+                val row = withTimeout(5000) { running.await() }!!
+                assertEquals(JobStage.CANCELLED, row.stage); assertNull(row.sourceUrl)
+                assertFalse(File(app.filesDir, "downloads/late-paused-cancel").exists())
+                assertEquals(1, endings.count { it.phase == DownloadPhase.CANCELLED })
+                assertFalse(endings.any { it.phase == DownloadPhase.FAILED })
+            } finally { exit.complete(Unit); releaseReport.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun recipeMismatchWipesPartialBeforeTransferAndKeepsExactSelection() = runBlocking {
+        fixture(FakeEngine(), script = { command, dir, emit ->
+            assertTrue(dir.list()!!.isEmpty())
+            assertEquals("exact/source", command.format.sourceFormatId)
+            emit(EngineEvent.Progress(1, Size.Exact(100)))
+            TransferResult.Failure(DownloadError.Failed)
+        }).use { f ->
+            f.coordinator.initialize()
+            f.store.enqueue(command("recipe")); f.store.startTransfer("recipe", "old-recipe")
+            File(app.filesDir, "downloads/recipe").apply { mkdirs(); resolve("output.mp4.part").writeText("old") }
+            f.store.pause("recipe", true); f.store.resume("recipe")
+            val first = mutableListOf<DownloadProgress>()
+            f.coordinator.execute("recipe", { first += it }, {})
+            assertEquals(DownloadPhase.PREPARING, first.single().phase)
+            assertNull(first.single().visiblePercent)
+            assertEquals(2L, f.store.get("recipe")!!.restartEpoch)
+            assertNotEquals("old-recipe", f.store.get("recipe")!!.resumeRecipe)
+            assertFalse(File(app.filesDir, "downloads/recipe").exists())
+        }
+    }
+
+    @Test fun matchingRecipeAdoptsPartialAndDropsOnlyStaleControlAndFinalOutput() = runBlocking {
+        fixture(FakeEngine(), script = { _, dir, _ ->
+            assertEquals(setOf("output.mp4.part"), dir.list()!!.toSet())
+            assertEquals("keep", dir.resolve("output.mp4.part").readText())
+            TransferResult.Failure(DownloadError.Failed)
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("matching-recipe"))
+            val recipe = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:engine-42:${YtdlpCommand.ARGV_VERSION}"
+            f.store.startTransfer("matching-recipe", recipe)
+            File(app.filesDir, "downloads/matching-recipe").apply {
+                mkdirs(); resolve("output.mp4.part").writeText("keep")
+                resolve("result-path.txt").writeText("old manifest"); resolve("output.mp4").writeText("old final")
+            }
+            f.store.pause("matching-recipe", true); f.store.resume("matching-recipe")
+            f.coordinator.execute("matching-recipe", {}, {})
+            assertEquals(1, f.attempts.get())
+            assertEquals(2L, f.store.get("matching-recipe")!!.restartEpoch)
+        }
+    }
+
+    @Test fun resumedEpochStartsIndeterminateDropsLateSamplesAndRebasesBytes() = runBlocking {
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val snapshots = mutableListOf<DownloadProgress>()
+        val starts = mutableListOf<DownloadProgress>()
+        var late: ((EngineEvent) -> Unit)? = null
+        lateinit var coordinator: DownloadCoordinator
+        fixture(FakeEngine(), clock = { 5000L }, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+            if (attempts.incrementAndGet() == 1) {
+                late = emit
+                dir.resolve("output.mp4.part").writeText("bytes")
+                emit(EngineEvent.Progress(90, Size.Exact(100)))
+                TransferResult.Failure(DownloadError.Network)
+            } else {
+                late!!(EngineEvent.Progress(99, Size.Exact(100)))
+                assertEquals(DownloadPhase.PREPARING, coordinator.progress.value.single().phase)
+                emit(EngineEvent.Progress(1, Size.Exact(100)))
+                snapshots += coordinator.progress.value.single()
+                emit(EngineEvent.Restarting(1))
+                snapshots += coordinator.progress.value.single()
+                emit(EngineEvent.Progress(99, Size.Exact(100), restartEpoch = 0))
+                snapshots += coordinator.progress.value.single()
+                emit(EngineEvent.Progress(2, Size.Exact(100), restartEpoch = 1))
+                snapshots += coordinator.progress.value.single()
+                TransferResult.Failure(DownloadError.Failed)
+            }
+        }).use { f ->
+            coordinator = f.coordinator
+            coordinator.initialize(); f.store.enqueue(command("epoch"))
+            coordinator.execute("epoch", { starts += it }, {})
+            assertEquals(JobStage.ENQUEUED, f.store.get("epoch")!!.stage)
+            coordinator.execute("epoch", { starts += it }, {})
+            assertEquals(listOf(1L, 2L), starts.map { it.restartEpoch })
+            assertTrue(starts.all { it.visiblePercent == null && it.bytes == null })
+            assertEquals(1, snapshots[0].visiblePercent)
+            assertEquals(DownloadPhase.PREPARING, snapshots[1].phase)
+            assertNull(snapshots[1].visiblePercent); assertEquals(snapshots[1], snapshots[2])
+            assertEquals(2, snapshots[3].visiblePercent)
+            assertEquals(3L, f.store.get("epoch")!!.restartEpoch)
+        }
+    }
+
+    @Test fun failedWithPartialAlwaysDeletesItAndExplicitRetryStartsEmpty() = runBlocking {
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        fixture(FakeEngine(), script = { _, dir, _ ->
+            assertTrue(dir.list()!!.isEmpty())
+            if (attempts.incrementAndGet() == 1) dir.resolve("output.mp4.part").writeText("discard")
+            TransferResult.Failure(DownloadError.MergeFailed)
+        }).use { f ->
+            f.coordinator.initialize(); f.store.enqueue(command("failed-partial"))
+            f.coordinator.execute("failed-partial", {}, {})
+            assertEquals(JobStage.FAILED, f.store.get("failed-partial")!!.stage)
+            assertFalse(f.store.get("failed-partial")!!.hasPartial)
+            assertFalse(File(app.filesDir, "downloads/failed-partial").exists())
+            assertTrue(f.coordinator.retry("failed-partial"))
+            f.coordinator.execute("failed-partial", {}, {})
+            assertEquals(2, attempts.get())
         }
     }
 
@@ -424,13 +643,12 @@ class DownloadWorkerTest {
             val cancel = async(Dispatchers.Default) { f.coordinator.cancel("start-race") }
             try {
                 assertTrue(withContext(Dispatchers.IO) { cancelling.await(5, java.util.concurrent.TimeUnit.SECONDS) })
-                val started = CompletableDeferred<Unit>()
                 val worker = async(Dispatchers.Default) {
-                    f.coordinator.execute("start-race", { started.complete(Unit) }, {})
+                    f.coordinator.execute("start-race", {}, {})
                 }
-                withTimeout(5000) { started.await() }
+                assertEquals(JobStage.CANCELLED, withTimeout(5000) { worker.await() }!!.stage)
                 release.countDown()
-                withTimeout(5000) { cancel.await(); worker.await() }
+                withTimeout(5000) { cancel.await() }
             } finally { release.countDown() }
             assertEquals(JobStage.CANCELLED, f.store.get("start-race")!!.stage)
             assertNull(f.store.get("start-race")!!.sourceUrl)

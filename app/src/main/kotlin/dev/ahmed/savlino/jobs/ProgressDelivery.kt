@@ -20,7 +20,11 @@ internal class ProgressDelivery(private val clock: () -> Long,
         @Synchronized get() = pending.count { it.phase == DownloadPhase.DOWNLOADING }
 
     @Synchronized fun offer(event: DownloadProgress) {
-        if (closed) return
+        if (closed || event.restartEpoch < (latest?.restartEpoch ?: 0)) return
+        if (event.restartEpoch > (latest?.restartEpoch ?: 0)) {
+            pending.clear()
+            latest = null; published = null; publishedAt = null; reported = null; reportedAt = null
+        }
         val phaseChanged = latest?.phase != event.phase
         if (phaseChanged) latest?.takeIf { it.phase == DownloadPhase.DOWNLOADING }?.let(::publishNow)
         latest = event
@@ -89,6 +93,9 @@ internal class ProgressPersistence(private val clock: () -> Long,
     private var pending: DownloadProgress? = null
 
     suspend fun report(event: DownloadProgress) {
+        val epoch = maxOf(last?.restartEpoch ?: 0, pending?.restartEpoch ?: 0)
+        if (event.restartEpoch < epoch) return
+        if (event.restartEpoch > epoch) { last = null; pending = null; writtenAt = null }
         if (event.phase == DownloadPhase.DOWNLOADING) {
             if (event == last && pending == null) return
             if (last?.phase == event.phase && !due(clock(), writtenAt, 1000)) {

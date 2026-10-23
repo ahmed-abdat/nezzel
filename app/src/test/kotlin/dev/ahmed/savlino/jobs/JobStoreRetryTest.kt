@@ -57,7 +57,7 @@ class JobStoreRetryTest {
                 store.fail(id, DownloadError.Network)
             }
             JobStore(app).use { store ->
-                assertEquals(3, store.readableDatabase.version)
+                assertEquals(4, store.readableDatabase.version)
                 assertTrue(store.retry(id))
                 assertEquals(format, store.get(id)!!.command()!!.format)
             }
@@ -274,7 +274,7 @@ class JobStoreRetryTest {
             )""")
             val format = """{"id":"legacy-id","sourceId":"legacy/video","container":"mp4",
                 "video":true,"audio":true,"merge":false,"sizeKind":"exact","bytes":1234}"""
-            for (stage in JobStage.entries) {
+            for (stage in JobStage.entries.filter { it != JobStage.PAUSED }) {
                 val uri = if (stage in setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.COMPLETED))
                     "content://media/external_primary/downloads/7" else null
                 db.execSQL("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", arrayOf<Any?>(
@@ -285,9 +285,9 @@ class JobStoreRetryTest {
             db.version = 1
         }
         JobStore(app).use { store ->
-            assertEquals(3, store.writableDatabase.version)
+            assertEquals(4, store.writableDatabase.version)
             assertEquals(8, store.all().size)
-            for (stage in JobStage.entries) {
+            for (stage in JobStage.entries.filter { it != JobStage.PAUSED }) {
                 val row = store.get(stage.name)!!
                 assertEquals(stage, row.stage)
                 assertEquals(now, row.createdAt)

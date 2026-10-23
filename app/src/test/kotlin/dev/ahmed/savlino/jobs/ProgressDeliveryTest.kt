@@ -8,6 +8,35 @@ class ProgressDeliveryTest {
     private fun event(bytes: Long = 0, phase: DownloadPhase = DownloadPhase.DOWNLOADING) =
         DownloadProgress("id", "clip.mp4", phase, bytes)
 
+    @Test fun newEpochDropsPendingAndLateOldSamplesAndAllowsLowerPercent() = runBlocking {
+        val visible = mutableListOf<DownloadProgress>()
+        val delivery = ProgressDelivery({ 0L }, { visible += it })
+        delivery.offer(event(90).copy(total = dev.ahmed.savlino.domain.Size.Exact(100), restartEpoch = 1))
+        delivery.offer(event(95).copy(restartEpoch = 1))
+        delivery.offer(event(phase = DownloadPhase.PREPARING).copy(bytes = null, restartEpoch = 2))
+        assertNull(visible.last().visiblePercent)
+        delivery.offer(event(1).copy(total = dev.ahmed.savlino.domain.Size.Exact(100), restartEpoch = 2))
+        delivery.offer(event(99).copy(restartEpoch = 1))
+        delivery.close()
+        val reported = mutableListOf<DownloadProgress>()
+        delivery.consume { reported += it }
+        assertEquals(listOf(2L, 2L), reported.map { it.restartEpoch })
+        assertEquals(1, reported.last().visiblePercent)
+        assertEquals(1L, visible.last().bytes)
+    }
+
+    @Test fun persistenceDiscardsHeldOldEpochWhenRestartIsReported() = runBlocking {
+        val written = mutableListOf<DownloadProgress>()
+        val persistence = ProgressPersistence({ 0L }, { written += it })
+        persistence.report(event(90).copy(restartEpoch = 1))
+        persistence.report(event(99).copy(restartEpoch = 1))
+        persistence.report(event(phase = DownloadPhase.PREPARING).copy(bytes = null, restartEpoch = 2))
+        persistence.report(event(1).copy(restartEpoch = 2))
+        persistence.report(event(100).copy(restartEpoch = 1))
+        assertEquals(listOf(1L, 2L, 2L), written.map { it.restartEpoch })
+        assertEquals(listOf(90L, null, 1L), written.map { it.bytes })
+    }
+
     @Test fun tenThousandPendingSamplesReplaceBeforeQueueAndUiAdmission() = runBlocking {
         var now = 0L
         val ui = mutableListOf<DownloadProgress>()

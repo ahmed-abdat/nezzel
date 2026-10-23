@@ -8,7 +8,8 @@ data class DownloadProgress(val jobId: String, val filename: String, val phase: 
     val bytes: Long? = null, val total: Size = Size.Unknown, val error: DownloadError? = null,
     val publishedUri: android.net.Uri? = null, val mimeType: String = "video/mp4", val qualityHeight: Int? = null, val awaitingSchedule: Boolean = false, val waiting: Boolean = false, val retryable: Boolean = false,
     val bytesPerSecond: Double? = null, val remainingTransferSeconds: Long? = null, val stalled: Boolean? = null,
-    val fragmentIndex: Long? = null, val fragmentCount: Long? = null) {
+    val fragmentIndex: Long? = null, val fragmentCount: Long? = null,
+    val paused: Boolean = false, val hasPartial: Boolean = false, val restartEpoch: Long = 0) {
     /** Byte estimates never supply a percentage; completed fragments can supply their own real fraction. */
     val percent: Int? get() {
         val fragments = fragmentCount?.takeIf { it > 0 }

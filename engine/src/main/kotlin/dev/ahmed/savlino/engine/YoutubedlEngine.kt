@@ -107,98 +107,124 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override fun prepareDownload(command: DownloadCommand) { infoCache?.prepare(command) }
 
     override suspend fun download(command: DownloadCommand, directory: File,
-        progress: (EngineEvent) -> Unit): TransferResult = operation(command.jobId, { TransferResult.Failure(it) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
-        if (!initialize()) return@operation unavailable.download(command, directory, progress)
-        if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
-        // Validate before launching yt-dlp. Caller owns staging cleanup; adapter never touches public storage.
-        prepareDownload(command)
-        val infoJson = infoCache?.freshFile(command.jobId)
-        var bytes = -1L
-        suspend fun transfer(info: File?) {
-            val args = YtdlpCommand.download(command, directory, info)
-            val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
-            val diagnostics = YtdlpDiagnostics()
-            current.expireIn(limits.stallMs)
-            try {
-                execute(current, args) { line ->
-                    diagnostics.accept(line)
-                    // Post-processors write no transfer bytes; a long remux is not a stall.
-                    if (POSTPROCESSORS.any(line::startsWith)) current.deadline = NO_DEADLINE
-                    if (!current.cancelled.get()) mapper.map(line)?.let { event ->
-                        when (event) {
-                            is EngineEvent.Progress -> if (event.bytesDownloaded > bytes) {
-                                bytes = event.bytesDownloaded; current.expireIn(limits.stallMs)
+        progress: (EngineEvent) -> Unit): TransferResult {
+        var resumeAllowed = true
+        return operation(command.jobId, { TransferResult.Failure(it, resumeAllowed) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+            if (!initialize()) return@operation unavailable.download(command, directory, progress)
+            if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
+            // Validate before launching yt-dlp. Caller owns staging cleanup; adapter never touches public storage.
+            prepareDownload(command)
+            val infoJson = infoCache?.freshFile(command.jobId)
+            var bytes = -1L
+            var restartEpoch = 0L
+            suspend fun transfer(info: File?) {
+                val attemptEpoch = restartEpoch
+                val args = YtdlpCommand.download(command, directory, info)
+                val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
+                val diagnostics = YtdlpDiagnostics()
+                current.expireIn(limits.stallMs)
+                try {
+                    execute(current, args) { line ->
+                        diagnostics.accept(line)
+                        // Post-processors write no transfer bytes; a long remux is not a stall.
+                        if (POSTPROCESSORS.any(line::startsWith)) current.deadline = NO_DEADLINE
+                        if (!current.cancelled.get()) mapper.map(line)?.let { event ->
+                            when (event) {
+                                is EngineEvent.Progress -> if (event.bytesDownloaded > bytes) {
+                                    bytes = event.bytesDownloaded; current.expireIn(limits.stallMs)
+                                }
+                                EngineEvent.Merging -> current.deadline = NO_DEADLINE
+                                is EngineEvent.Restarting -> Unit
                             }
-                            EngineEvent.Merging -> current.deadline = NO_DEADLINE
+                            progress(if (event is EngineEvent.Progress) event.copy(restartEpoch = attemptEpoch) else event)
                         }
-                        progress(event)
                     }
+                } catch (error: Exception) {
+                    resumeAllowed = diagnostics.failure().resumeAllowed &&
+                        (error !is YtdlpExecutionFailure || error.resumeAllowed) &&
+                        !YtdlpDiagnostics.blocksResume(error.message.orEmpty())
+                    if (error is CancellationException || current.cancelled.get()) throw error
+                    if ((error is YtdlpExecutionFailure && error.expiredUrl) ||
+                        diagnostics.failure().expiredUrl || YtdlpDiagnostics.expiredUrl(error.message.orEmpty()))
+                        throw YtdlpExecutionFailure(if (error is YtdlpExecutionFailure) error.error
+                            else diagnostics.failure().error.takeUnless { it == DownloadError.Failed }
+                                ?: YtdlpErrorMapper.map(error.message.orEmpty()), expiredUrl = true)
+                    throw error
                 }
-            } catch (error: Exception) {
-                if (error is CancellationException || current.cancelled.get()) throw error
-                if ((error is YtdlpExecutionFailure && error.expiredUrl) ||
-                    diagnostics.failure().expiredUrl || YtdlpDiagnostics.expiredUrl(error.message.orEmpty()))
-                    throw YtdlpExecutionFailure(if (error is YtdlpExecutionFailure) error.error
-                        else diagnostics.failure().error.takeUnless { it == DownloadError.Failed }
-                            ?: YtdlpErrorMapper.map(error.message.orEmpty()), expiredUrl = true)
-                throw error
             }
-        }
-        try { transfer(infoJson) }
-        catch (error: Exception) {
-            if (error is CancellationException) throw error
-            currentCoroutineContext().ensureActive()
+            try { transfer(infoJson) }
+            catch (error: Exception) {
+                if (error is CancellationException) throw error
+                currentCoroutineContext().ensureActive()
+                checkCancelled(current)
+                val hasBytes = bytes > 0 || directory.listFiles().orEmpty().any {
+                    !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name) && it.length() > 0
+                }
+                val retry = error is YtdlpExecutionFailure && error.expiredUrl && (infoJson != null || hasBytes)
+                if (!retry || !clearStaging(directory)) throw error
+                infoCache?.remove(command.jobId)
+                // A new extraction must never inherit bytes from expired signed URLs.
+                bytes = -1L
+                restartEpoch++
+                progress(EngineEvent.Restarting(restartEpoch))
+                transfer(null)
+            }
+            current.deadline = NO_DEADLINE
             checkCancelled(current)
-            val retry = infoJson != null && error is YtdlpExecutionFailure && error.expiredUrl
-            if (!retry || bytes > 0 || !clearEmptyStaging(directory)) throw error
-            infoCache.remove(command.jobId)
-            // One expired-info retry, using the same exact confirmed IDs from the URL.
-            transfer(null)
+            val output = try {
+                val root = directory.canonicalFile
+                val manifest = File(root, "result-path.txt")
+                require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
+                val paths = manifest.readLines().filter { it.isNotBlank() }
+                require(paths.size == 1)
+                val files = requireNotNull(root.listFiles()).filter { it.name != "result-path.txt" }
+                require(files.size == 1)
+                val file = files.single()
+                require(file.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
+                require(!java.nio.file.Files.isSymbolicLink(file.toPath()))
+                require(File(paths.single()).canonicalFile == file.canonicalFile)
+                require(file.isFile)
+                val row = command.format
+                val expected = (row.size as? Size.Exact)?.bytes
+                val extractsAudio = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
+                // Allow a 2% size shortfall for an unchanged single stream; remuxed/extracted/converted
+                // outputs and estimates cannot be compared to input sizes. Check before optional title rewriting.
+                // expected - expected / 50 is ceil(98% of expected), without overflowing Long.
+                if (!row.requiresMerge && row.conversion == null && !extractsAudio && expected != null &&
+                    file.length() < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
+                val output = StagedOutput.validate(root, listOf(file))
+                require(output.file.parentFile == root)
+                output
+            } catch (_: IllegalArgumentException) {
+                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+            }
+            // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
+            // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
+            if (command.format.hasVideo && !command.format.animatedGif && output.file.extension.equals("mp4", ignoreCase = true)) {
+                try { runtime.rewriteTitle(output.file, command.filename.substringBeforeLast('.'), current.processId) }
+                catch (cancel: CancellationException) { throw cancel }
+                catch (_: Exception) { /* Optional polish must never fail an otherwise successful transfer. */ }
+                checkCancelled(current)
+            }
+            TransferResult.Success(output)
         }
-        current.deadline = NO_DEADLINE
-        checkCancelled(current)
-        val output = try {
-            val root = directory.canonicalFile
-            val manifest = File(root, "result-path.txt")
-            require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
-            val paths = manifest.readLines().filter { it.isNotBlank() }
-            require(paths.size == 1)
-            val files = requireNotNull(root.listFiles()).filter { it.name != "result-path.txt" }
-            require(files.size == 1)
-            val file = files.single()
-            require(file.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
-            require(!java.nio.file.Files.isSymbolicLink(file.toPath()))
-            require(File(paths.single()).canonicalFile == file.canonicalFile)
-            require(file.isFile)
-            val row = command.format
-            val expected = (row.size as? Size.Exact)?.bytes
-            val extractsAudio = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
-            // Allow a 2% size shortfall for an unchanged single stream; remuxed/extracted/converted
-            // outputs and estimates cannot be compared to input sizes. Check before optional title rewriting.
-            // expected - expected / 50 is ceil(98% of expected), without overflowing Long.
-            if (!row.requiresMerge && row.conversion == null && !extractsAudio && expected != null &&
-                file.length() < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
-            val output = StagedOutput.validate(root, listOf(file))
-            require(output.file.parentFile == root)
-            output
-        } catch (_: IllegalArgumentException) {
-            throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
-        }
-        // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
-        // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
-        if (command.format.hasVideo && !command.format.animatedGif && output.file.extension.equals("mp4", ignoreCase = true)) {
-            try { runtime.rewriteTitle(output.file, command.filename.substringBeforeLast('.'), current.processId) }
-            catch (cancel: CancellationException) { throw cancel }
-            catch (_: Exception) { /* Optional polish must never fail an otherwise successful transfer. */ }
-            checkCancelled(current)
-        }
-        TransferResult.Success(output)
     }
 
-    private fun clearEmptyStaging(directory: File): Boolean = try {
-        val files = directory.listFiles()
-        files != null && files.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && it.length() == 0L } &&
-            files.all { it.delete() }
+    private fun clearStaging(directory: File): Boolean = try {
+        require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && directory.isDirectory)
+        // walkFileTree does not follow nested links; never touch anything outside this job.
+        java.nio.file.Files.walkFileTree(directory.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+            override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
+                java.nio.file.Files.delete(file)
+                return java.nio.file.FileVisitResult.CONTINUE
+            }
+            override fun postVisitDirectory(dir: java.nio.file.Path, error: java.io.IOException?): java.nio.file.FileVisitResult {
+                if (error != null) throw error
+                if (dir != directory.toPath()) java.nio.file.Files.delete(dir)
+                return java.nio.file.FileVisitResult.CONTINUE
+            }
+        })
+        true
     } catch (_: Exception) { false }
 
     /**

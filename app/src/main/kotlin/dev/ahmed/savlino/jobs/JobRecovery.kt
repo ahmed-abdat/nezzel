@@ -29,11 +29,11 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             when (row.stage) {
                 JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
                 JobStage.STAGED -> store.fail(row.jobId, DownloadError.SaveFailed)
-                JobStage.TRANSFERRING -> if (cleanup(row.jobId)) store.fail(row.jobId, DownloadError.Interrupted)
+                JobStage.TRANSFERRING -> recoverTransfer(row)
                 JobStage.FAILED -> { cleanupFailedTree(row); cleanup(row.jobId) }
                 JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(row.jobId)
-                JobStage.ENQUEUED -> if (System.currentTimeMillis() - row.createdAt > JobStore.CONFIRMATION_LIFETIME_MS)
-                    store.fail(row.jobId, DownloadError.FormatExpired)
+                JobStage.ENQUEUED -> if (row.hasPartial) recoverTransfer(row)
+                JobStage.PAUSED -> Unit
             }
         }
         store.pruneTerminal()
@@ -70,6 +70,19 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
                 if (path.name !in known && JobStore.validJobId(path.name) &&
                     Files.isDirectory(path.toPath(), LinkOption.NOFOLLOW_LINKS)) cleanup(path.name)
             }
+        }
+    }
+
+    private fun recoverTransfer(row: JobRecord) {
+        try {
+            val job = JobDirectory(requireNotNull(jobRoot.parentFile)).createOrAdopt(row.jobId)
+            val hasPartial = stagingBytes(job.directory) > 0
+            if (!hasPartial) job.cleanup()
+            if (row.stage == JobStage.TRANSFERRING || row.hasPartial != hasPartial)
+                store.requeue(row.jobId, hasPartial)
+        } catch (_: Exception) {
+            if (cleanup(row.jobId)) store.requeue(row.jobId)
+            else store.fail(row.jobId, DownloadError.SaveFailed)
         }
     }
 

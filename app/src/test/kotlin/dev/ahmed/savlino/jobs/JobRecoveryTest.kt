@@ -99,26 +99,53 @@ class JobRecoveryTest {
         assertEquals(Preset.AUDIO_MP3, row.preset)
     }
 
-    @Test fun transferringBecomesInterruptedAndDeletesOnlyItsPartialFiles() {
+    @Test fun transferringRequeuesAndKeepsOnlyValidPartialFiles() {
         val job = directories.create("transfer")
         store.enqueue(command("transfer"))
         assertTrue(store.startTransfer("transfer"))
         // Fake transfer has produced partial bytes when the process dies.
-        job.file("partial", "mp4").writeBytes(bytes.take(2).toByteArray())
+        File(job.directory, "output.mp4.part").writeBytes(bytes.take(2).toByteArray())
         val unrelated = File(app.filesDir, "outside").apply { writeText("keep") }
         val queued = directories.create("queued")
         store.enqueue(command("queued"))
         reopen()
         recoverTwice()
         val row = store.get("transfer")!!
-        assertEquals(JobStage.FAILED, row.stage)
-        assertEquals(DownloadError.Interrupted, row.error)
-        assertTrue(row.retryable)
+        assertEquals(JobStage.ENQUEUED, row.stage)
+        assertNull(row.error)
+        assertFalse(row.retryable)
+        assertTrue(row.hasPartial)
         assertNotNull(row.sourceUrl)
-        assertNull(row.command())
-        assertFalse(job.directory.exists())
+        assertNotNull(row.command())
+        assertArrayEquals(bytes.take(2).toByteArray(), File(job.directory, "output.mp4.part").readBytes())
         assertTrue(queued.directory.exists())
         assertEquals("keep", unrelated.readText())
+        assertEquals(0, publisher.inserts)
+    }
+
+    @Test fun killedTransfersRejectForeignContentsAndSymlinkButPausedAndQueuedPartialsSurvive() {
+        for (id in listOf("foreign", "symlink", "queued-partial", "paused")) store.enqueue(command(id))
+        store.startTransfer("foreign"); store.startTransfer("symlink"); store.startTransfer("paused")
+        val bad = directories.create("foreign").directory
+        bad.resolve("output.mp4.part").writeText("partial"); bad.resolve("unknown").writeText("foreign")
+        val outside = File(app.filesDir, "outside").apply { mkdirs(); resolve("precious").writeText("keep") }
+        Files.createSymbolicLink(File(root, "symlink").toPath(), outside.toPath())
+        directories.create("queued-partial").directory.resolve("output.mp4.part").writeText("queued")
+        store.requeue("queued-partial", true)
+        directories.create("paused").directory.resolve("output.mp4.part").writeText("paused")
+        store.pause("paused", true)
+        reopen(); recoverTwice()
+        for (id in listOf("foreign", "symlink")) {
+            assertEquals(JobStage.ENQUEUED, store.get(id)!!.stage)
+            assertFalse(store.get(id)!!.hasPartial); assertFalse(File(root, id).exists())
+        }
+        assertEquals("keep", outside.resolve("precious").readText())
+        assertEquals(JobStage.ENQUEUED, store.get("queued-partial")!!.stage)
+        assertTrue(store.get("queued-partial")!!.hasPartial)
+        assertEquals("queued", File(root, "queued-partial/output.mp4.part").readText())
+        assertEquals(JobStage.PAUSED, store.get("paused")!!.stage)
+        assertTrue(store.get("paused")!!.hasPartial)
+        assertEquals("paused", File(root, "paused/output.mp4.part").readText())
         assertEquals(0, publisher.inserts)
     }
 
@@ -337,7 +364,7 @@ class JobRecoveryTest {
 
     @Test fun schemaUsesDurableRollbackJournalAndSecureDelete() {
         val db = store.writableDatabase
-        assertEquals(3, db.version)
+        assertEquals(4, db.version)
         for ((pragma, expected) in listOf("journal_mode" to "delete", "synchronous" to "2", "secure_delete" to "1")) {
             db.rawQuery("PRAGMA $pragma", null).use { check(it.moveToFirst()); assertEquals(expected, it.getString(0)) }
         }
@@ -619,11 +646,11 @@ class JobRecoveryTest {
         assertArrayEquals(bytes, keep.readBytes())
     }
 
-    @Test fun newerJournalDowngradesToEmptyUsableVersionThree() {
+    @Test fun newerJournalDowngradesToEmptyUsableVersionFour() {
         store.enqueue(command("old-cache"))
-        store.writableDatabase.version = 4
+        store.writableDatabase.version = 5
         reopen()
-        assertEquals(3, store.writableDatabase.version)
+        assertEquals(4, store.writableDatabase.version)
         assertTrue(store.all().isEmpty())
         assertTrue(store.enqueue(command("new-cache")))
     }

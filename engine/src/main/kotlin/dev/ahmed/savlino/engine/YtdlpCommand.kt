@@ -5,6 +5,8 @@ import java.io.File
 
 /** Arguments passed directly to ProcessBuilder by the wrapper, never a shell. */
 object YtdlpCommand {
+    // Bump whenever download argv changes: partials from a different recipe must restart.
+    const val ARGV_VERSION = 1
     const val PROGRESS_TEMPLATE = "download:nezzel-v2:%(info.format_id)s:%(progress.downloaded_bytes)s:%(progress.total_bytes)s:%(progress.total_bytes_estimate)s:%(progress.fragment_index)s:%(progress.fragment_count)s"
     // Pinned yt-dlp grammar treats these names/extensions as selectors, even without operators.
     private val reservedId = Regex("(best|worst|b|w)(video|audio|v|a)?(\\.[1-9][0-9]*)?")
@@ -20,7 +22,9 @@ object YtdlpCommand {
         listOf("--dump-json", "--skip-download", "--", source.link.rawUrl)
     fun download(command: DownloadCommand, directory: File, infoJson: File? = null): List<String> {
         val root = directory.canonicalFile
-        require(root.isDirectory && root.list()?.isEmpty() == true) { "Staging directory must be empty" }
+        require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory &&
+            root.listFiles()?.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile &&
+                PartialFileNames.matches(it.name) } == true) { "Invalid staging directory" }
         val row = command.format
         // Generic direct-file IDs can equal a MIME subtype/container. A bare "mp4" is an extension selector,
         // not an exact ID; filter by the actual returned ID so it cannot silently choose a different format.

@@ -11,24 +11,26 @@ import java.io.IOException
 
 /** Q5 preflight reserves are budgets, never claimed media sizes or disk reservations. */
 internal object TransferSpacePolicy {
-    fun check(space: SpaceGate, format: Format) {
+    fun check(space: SpaceGate, format: Format, stagedBytes: Long = 0) {
+        require(stagedBytes >= 0)
+        fun remaining(budget: Long) = (budget - minOf(budget, stagedBytes)).coerceAtLeast(0)
         val output = when (val size = format.size) {
             is Size.Exact -> size.bytes
             is Size.Estimated -> {
                 val reserve = Math.addExact(size.bytes, Math.addExact(size.bytes / 4,
                     if (size.bytes % 4 == 0L) 0L else 1L))
                 // Q5 defines an aggregate estimated reserve; measured publication is checked later.
-                space.beforeTransfer(reserve, 0)
+                space.beforeTransfer(remaining(reserve), 0)
                 return
             }
             Size.Unknown -> {
                 // Aggregate 1 GiB reserve; SpaceBudget adds its 64 MiB margin on both volumes.
-                space.beforeTransfer(1024L * 1024 * 1024, 0)
+                space.beforeTransfer(remaining(1024L * 1024 * 1024), 0)
                 return
             }
         }
-        space.beforeTransfer(Math.multiplyExact(output,
-            if (format.requiresMerge || format.conversion != null) 3L else 1L), output)
+        val intermediate = if (format.requiresMerge || format.conversion != null) Math.multiplyExact(output, 2L) else 0L
+        space.beforeTransfer(Math.addExact(remaining(output), intermediate), output)
     }
 
     fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.any {
