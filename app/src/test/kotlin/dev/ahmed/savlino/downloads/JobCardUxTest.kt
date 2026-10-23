@@ -120,10 +120,8 @@ class JobCardUxTest {
                 compose.runOnIdle { progress = state }; compose.waitForIdle()
                 state.phase to compose.onNodeWithTag("card").fetchSemanticsNode().size.height
             }
-            // Narrow rows add one 56dp line (48dp button + 8dp) only while Pause/Resume is offered; every other phase keeps one height.
-            val line = (56 * a.resources.displayMetrics.density).toInt()
-            val stacked = width < 420 || fontScale >= 1.3f
-            val flat = heights.mapIndexed { i, h -> if (stacked && states[i].canPause) h.second - line else h.second }
+            // At large text the percent-less state keeps its real bytes on a third meta line, so the row may grow there.
+            val flat = heights.filterIndexed { i, _ -> !(fontScale >= 1.3f && i == 3) }.map { it.second }
             assertEquals("Card height jumped across phases: $heights", 1, flat.distinct().size)
             // Owner 2026-10-19: a running download is one flat list row, not a 160dp hero card.
             // Robolectric's Arabic fallback font is taller than Roboto's line height, so the dp check is English-only.
@@ -187,9 +185,9 @@ class JobCardUxTest {
         assertFalse(NezzelFormat.size(1_400_000_000, "ar").contains(' '))
     }
 
-    @Test fun rowBytesSharesMatchingUnitsButKeepsDifferentUnits() {
+    @Test @Config(qualifiers = "en-w700dp-h800dp-mdpi") fun rowBytesSharesMatchingUnitsButKeepsDifferentUnits() {
         var progress by mutableStateOf(downloading.copy(bytes = 12_000_000, total = Size.Exact(30_000_000)))
-        host(content = { JobRow(progress, {}, {}, {}) }) { _ ->
+        host(content = { Column(Modifier.width(600.dp)) { JobRow(progress, {}, {}, {}) } }) { _ ->
             compose.onNodeWithText("\u206612\u2069 of \u206630\u00a0MB\u2069", useUnmergedTree = true).assertExists()
             compose.runOnIdle { progress = progress.copy(bytes = 900_000, total = Size.Exact(1_200_000_000)) }
             compose.waitForIdle()
@@ -227,7 +225,8 @@ class JobCardUxTest {
     /** Every meta part on one line on a 360dp phone: percent, short time left and shared-unit bytes; speed stays in the notification. */
     private fun meteredRow(width: Int) =
         host(content = { Column(Modifier.width(width.dp).padding(16.dp)) { JobRow(downloading, {}, {}, {}) } }) { _ ->
-            listOf(NezzelFormat.isolate("25%"), context.getString(R.string.download_row_remaining, NezzelFormat.isolate("0:30")), context.getString(R.string.download_row_bytes, NezzelFormat.isolate("25"), NezzelFormat.isolate("100\u00a0MB")))
+            // Percent and time left always stay; the bytes give way ("of 100 MB" first) when the buttons leave little width.
+            listOf(NezzelFormat.isolate("25%"), context.getString(R.string.download_row_remaining, NezzelFormat.isolate("0:30")))
                 .forEach { compose.onNodeWithText(it, useUnmergedTree = true).assertExists() }
             compose.onNodeWithText("/s", substring = true, useUnmergedTree = true).assertDoesNotExist()
             compose.onNodeWithText(context.getString(R.string.download_transferring), useUnmergedTree = true).assertDoesNotExist()
@@ -255,7 +254,7 @@ class JobCardUxTest {
                 surface = MaterialTheme.colorScheme.surface.toArgb()
                 fill = (if (dark) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerHigh).toArgb()
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(downloading, {}, {}, {}, Modifier.testTag("card")) }
+                    Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(job.copy(waiting = true), {}, {}, {}, Modifier.testTag("card")) }
                 }
             } }
             compose.waitForIdle()
@@ -280,12 +279,12 @@ class JobCardUxTest {
         host(content = { Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(failed, {}, { removed++ }, { retried++ }, Modifier.testTag("card")) } }) { a ->
             val row = compose.onNodeWithTag("card").fetchSemanticsNode().boundsInRoot
             val density = a.resources.displayMetrics.density
-            listOf(compose.onNodeWithText(context.getString(R.string.try_again), useUnmergedTree = true),
+            listOf(compose.onNodeWithContentDescription(context.getString(R.string.try_again), useUnmergedTree = true),
                 compose.onNodeWithContentDescription(context.getString(R.string.download_remove), useUnmergedTree = true)).forEach { node ->
                 val b = node.fetchSemanticsNode().boundsInRoot
                 assertTrue("Action outside the row: $b in $row", b.left >= row.left - .5f && b.right <= row.right + .5f && b.bottom <= row.bottom + .5f)
             }
-            compose.onNodeWithText(context.getString(R.string.try_again), useUnmergedTree = true).performClick()
+            compose.onNodeWithContentDescription(context.getString(R.string.try_again), useUnmergedTree = true).performClick()
             compose.onNodeWithContentDescription(context.getString(R.string.download_remove), useUnmergedTree = true).performClick()
             assertEquals(1, retried); assertEquals(1, removed)
             assertTrue("Failed row shorter than a list row", row.height / density >= 71.5f)

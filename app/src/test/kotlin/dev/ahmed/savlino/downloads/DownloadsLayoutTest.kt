@@ -107,8 +107,8 @@ class DownloadsLayoutTest {
             val all = nodes(a)
             jobs.forEach { job ->
                 val title = all.single { texts(listOf(it)).contains(NezzelFormat.isolate(job.filename)) }
-                // Large text drops the kind tile: only the 48dp ring shares the title row (320 - 32 - 32 - 12 - 48 = 196dp).
-                assertTrue("Filename must get the row's text width: ${title.boundsInRoot}", title.boundsInRoot.width >= 195f)
+                // Large text drops the kind tile: Pause and Cancel (48dp each) share the title row (320 - 32 - 32 - 8 - 96 = 152dp, less rounding).
+                assertTrue("Filename must get the row's text width: ${title.boundsInRoot}", title.boundsInRoot.width >= 140f)
                 val layouts = mutableListOf<TextLayoutResult>()
                 assertEquals(true, title.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts))
                 assertTrue("Filename must allow two readable lines", layouts.single().layoutInput.maxLines >= 2)
@@ -116,17 +116,15 @@ class DownloadsLayoutTest {
                     it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(job.filename) && label.startsWith(context.getString(R.string.download_cancel_accessibility, "").trim()) } }
                 assertNotNull("Cancel must identify ${job.filename}", cancel)
                 bounded(cancel!!)
-                // The ring around Cancel is the progress; it sits at the row's end, beside the title, never over it.
+                // The fill is the progress; both buttons sit at the row's end, beside the title, never over it.
                 val density = context.resources.displayMetrics.density
-                val ring = all.filter { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) != null }
-                    .singleOrNull { it.boundsInRoot.overlaps(cancel.boundsInRoot) }
-                assertNotNull("Progress ring belongs around Cancel", ring)
-                val r = ring!!.boundsInRoot
-                assertFalse("Ring overlaps the title: $r, ${title.boundsInRoot}", r.overlaps(title.boundsInRoot))
-                assertTrue("Ring is the 48dp control: $r", r.width / density in 47.5f..48.5f && r.height / density in 47.5f..48.5f)
-                val c = cancel.boundsInRoot
-                assertTrue("Cancel sits inside the ring: $c in $r", c.left >= r.left - .5f && c.right <= r.right + .5f &&
-                    c.top >= r.top - .5f && c.bottom <= r.bottom + .5f)
+                val pause = all.singleOrNull { it.config.getOrNull(SemanticsActions.OnClick) != null &&
+                    it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(job.filename) && label == context.getString(R.string.download_pause_accessibility, NezzelFormat.isolate(job.filename)) } }
+                assertNotNull("Pause must identify ${job.filename}", pause)
+                listOf(pause!!, cancel).forEach { b ->
+                    assertFalse("Button overlaps the title: ${b.boundsInRoot}, ${title.boundsInRoot}", b.boundsInRoot.overlaps(title.boundsInRoot))
+                    assertTrue("Button is the 48dp control: ${b.boundsInRoot}", b.boundsInRoot.width / density >= 47.5f && b.boundsInRoot.height / density >= 47.5f)
+                }
             }
             val selected = jobs.first()
             val cancel = all.single { it.config.getOrNull(SemanticsActions.OnClick) != null && it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.contains(selected.filename) && label.startsWith(context.getString(R.string.download_cancel_accessibility, "").trim()) } }

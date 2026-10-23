@@ -150,7 +150,7 @@
     <string name="download_speed">%1$s/s</string>
     <string name="download_bytes_per_second">%1$s\u00A0B/s</string>
     <string name="download_transfer_remaining">متبقٍّ للتنزيل ≈ %1$s</string>
-    <string name="download_row_remaining">متبقٍّ ≈ %1$s</string>
+    <string name="download_row_remaining">متبقٍّ &#x2066;≈ %1$s&#x2069;</string>
     <string name="download_row_bytes">%1$s من %2$s</string>
     <string name="download_remove">إزالة من القائمة</string>
     <string name="files_location">مجلد الحفظ الحالي: %1$s، وقد تجد الملفات السابقة في مجلدات أخرى</string>
