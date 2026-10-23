@@ -15,6 +15,7 @@ import dev.ahmed.savlino.engine.InspectResult
 import dev.ahmed.savlino.engine.InspectionPhase
 import dev.ahmed.savlino.engine.InspectionTiming
 import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
+import dev.ahmed.savlino.engine.mediahttp.ShortLinks
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
@@ -64,7 +65,9 @@ sealed interface OptionsState {
      */
     class ImageReady(val inspection: MediaInspection, val rendition: MediaRendition.Image, val preview: ImageBitmap?,
         val discovery: ImageDiscovery, val availability: ImageSaveAvailability, val directImage: Boolean = false,
-        val previews: Map<MediaRenditionRef, ImageBitmap> = emptyMap(), val videoSource: LinkRevision? = null) : OptionsState {
+        val previews: Map<MediaRenditionRef, ImageBitmap> = emptyMap(), val videoSource: LinkRevision? = null,
+        /** The intake link when [inspection] read its resolved destination (a short link); staleness binds to it. */
+        val origin: LinkRevision? = null) : OptionsState {
         val photos = inspection.items.flatMap { it.renditions.filterIsInstance<MediaRendition.Image>() }
         val isCarousel get() = photos.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0 || discovery.notPreviewedCount > 0
         val image get() = rendition.image
@@ -118,6 +121,8 @@ class LinkViewModel(
     private val rememberHeight: (Int) -> Unit = {},
     private val earlyPreview: suspend (ValidatedLink) -> EarlyPreview? = { null },
     private val now: () -> Long = System::currentTimeMillis,
+    /** A known shortener's destination from its redirect alone; null keeps the short link (today's path). */
+    private val resolveShortLink: suspend (ValidatedLink) -> ValidatedLink? = { null },
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -503,26 +508,47 @@ class LinkViewModel(
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
         inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }
-        if (ImageRoute.isUnsupported(source.link)) {
-            optionsState = if (FacebookPostIdentity.isStoryLink(source.link.rawUrl))
+        if (ShortLinks.isShortLink(source.link)) startShortLink(source) else route(source, source)
+    }
+    /** Resolve a shortener's redirect first, so its destination takes its own fast route (YouTube, readers). */
+    private fun startShortLink(source: LinkRevision) {
+        val id = newOperationId()
+        operationId = id
+        optionsState = OptionsState.Checking(source, id)
+        val timing = requireNotNull(inspectionTiming)
+        inspectionJob = viewModelScope.launch(timing.context()) {
+            val resolved = try { resolveShortLink(source.link) }
+                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            if (operationId != id || currentSource()?.matches(source) != true) return@launch
+            operationId = null
+            timing.record(InspectionPhase.SHORT_LINK_DONE)
+            route(resolved?.let { LinkRevision(it, source.revision) } ?: source, source)
+        }
+    }
+    /** [input] is what gets read; [origin] is the intake link every staleness check binds to. */
+    private fun route(input: LinkRevision, origin: LinkRevision) {
+        val readerOrigin = origin.takeUnless { it.matches(input) }
+        if (ImageRoute.isUnsupported(input.link)) {
+            optionsState = if (FacebookPostIdentity.isStoryLink(input.link.rawUrl))
                 OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE)
                 else OptionsState.Error(DownloadError.Unsupported)
             return
         }
         // Image routes run before (and without) the yt-dlp availability gate.
-        val images = images ?: return startLegacyInspection(source)
-        when (val route = ImageRoute.of(source.link)) {
-            MediaSourceRoute.LEGACY -> startLegacyInspection(source)
+        val images = images ?: return startLegacyInspection(input, readerOrigin)
+        when (val route = ImageRoute.of(input.link)) {
+            MediaSourceRoute.LEGACY -> startLegacyInspection(input, readerOrigin)
             MediaSourceRoute.DIRECT_IMAGE, MediaSourceRoute.LINKEDIN, MediaSourceRoute.FACEBOOK, MediaSourceRoute.X,
             MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY ->
-                startImageInspection(images, source, route)
+                startImageInspection(images, input, route, origin)
         }
     }
-    private fun startImageInspection(images: ImageInspect, source: LinkRevision, route: MediaSourceRoute) {
+    private fun startImageInspection(images: ImageInspect, source: LinkRevision, route: MediaSourceRoute,
+        origin: LinkRevision = source) {
         val id = newOperationId()
         operationId = id
         imageOperation = true
-        optionsState = OptionsState.Checking(source, id, image = true)
+        optionsState = OptionsState.Checking(origin, id, image = true)
         // A video verdict or pre-verdict page failure hands off to yt-dlp; start that read now, beside the reader.
         if (route in HANDOFF_ROUTES) startRace(legacyReaderSource(source, route))
         // Not cancelled on invalidation: a late result must still arrive here so its preview is closed.
@@ -544,7 +570,7 @@ class LinkViewModel(
             catch (_: LinkageError) { MediaInspectResult.Failure(ImageFailure.UNAVAILABLE, ImagePhase.IMAGE) }
             catch (_: StackOverflowError) { MediaInspectResult.Failure(ImageFailure.UNAVAILABLE, ImagePhase.IMAGE) }
             InspectionTiming.mark(InspectionPhase.NATIVE_READER_DONE)
-            if (operationId != id || currentSource()?.matches(source) != true) {
+            if (operationId != id || currentSource()?.matches(origin) != true) {
                 (result as? MediaInspectResult.Success)?.close()
                 return@launch
             }
@@ -568,7 +594,7 @@ class LinkViewModel(
                         }.toMap()
                     } } finally { result.close() }
                     // Copying yields Main: a newer draft/inspection may now own the UI.
-                    if (operationId != id || currentSource()?.matches(source) != true) return@launch
+                    if (operationId != id || currentSource()?.matches(origin) != true) return@launch
                     selectedImageRefs = result.inspection.items.flatMap { it.renditions.filterIsInstance<MediaRendition.Image>() }
                         .map { it.ref }.toSet()
                     operationId = null; imageOperation = false
@@ -577,16 +603,16 @@ class LinkViewModel(
                         !result.inspection.source.matches(source) -> OptionsState.Error(DownloadError.FormatExpired)
                         rendition == null -> OptionsState.ImageError(ImageFailure.NO_MEDIA)
                         else -> OptionsState.ImageReady(result.inspection, rendition, previews[rendition.ref], result.discovery, result.saveAvailability,
-                            route == MediaSourceRoute.DIRECT_IMAGE, previews, result.videoSource)
+                            route == MediaSourceRoute.DIRECT_IMAGE, previews, result.videoSource, origin.takeUnless { it.matches(source) })
                     }
                 }
                 is MediaInspectResult.Failure -> {
                     operationId = null; imageOperation = false
-                    if (handoff) awaitRace(legacyReaderSource(source, route), source)
+                    if (handoff) awaitRace(legacyReaderSource(source, route), origin)
                     else if (readerFallsBack(route, result)) {
                         val landing = result.fallback?.takeIf { route == MediaSourceRoute.LINKEDIN &&
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
-                        startLegacyInspection(landing ?: legacyReaderSource(source, route), source,
+                        startLegacyInspection(landing ?: legacyReaderSource(source, route), origin,
                             noMedia = route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.NO_MEDIA)
                     } else optionsState = OptionsState.ImageError(result.reason, result.statusCode,
                         directImage = route == MediaSourceRoute.DIRECT_IMAGE, phase = result.phase)
@@ -603,7 +629,7 @@ class LinkViewModel(
                     val watch = result.source
                     // These readers hand back the user's own link; normalize existing X/Instagram aliases before yt-dlp.
                     if (route in HANDOFF_ROUTES) {
-                        if (handoff) awaitRace(legacyReaderSource(source, route), source)
+                        if (handoff) awaitRace(legacyReaderSource(source, route), origin)
                         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
                         return@launch
                     }
@@ -613,7 +639,7 @@ class LinkViewModel(
                         else -> null
                     }
                     if (canonical != null && watch.revision == source.revision &&
-                        canonical.matches(watch.link.rawUrl)) startLegacyInspection(watch, source)
+                        canonical.matches(watch.link.rawUrl)) startLegacyInspection(watch, origin)
                     else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
                 }
             }
@@ -993,19 +1019,21 @@ class LinkViewModel(
     fun inspectCarouselVideo() {
         val ready = optionsState as? OptionsState.ImageReady ?: return
         if (!ready.discovery.hasVideo || imageSaving) return
-        val source = currentSource()?.takeIf { it.matches(ready.inspection.source) } ?: return
+        val origin = ready.origin ?: ready.inspection.source
+        if (currentSource()?.matches(origin) != true) return
+        val source = ready.inspection.source
         val route = ImageRoute.of(source.link)
         val video = ready.videoSource
         invalidateOptions()
-        if (video == null) startLegacyInspection(legacyReaderSource(source, route), source)
+        if (video == null) startLegacyInspection(legacyReaderSource(source, route), origin)
         else if (route == MediaSourceRoute.FACEBOOK && video.revision == source.revision && CANONICAL_WATCH.matches(video.link.rawUrl))
-            startLegacyInspection(video, source)
+            startLegacyInspection(video, origin)
         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
     }
     init { imageSaver?.let { saver -> viewModelScope.launch { saver.outcome.collect { onImageOutcome(it) } } } }
     val imageSaveEnabled get() = (optionsState as? OptionsState.ImageReady)?.let { ready ->
         imageSaver != null && !imageSaving && ready.availability == ImageSaveAvailability.Available &&
-            ready.photos.any { it.ref in selectedImageRefs } && currentSource()?.matches(ready.inspection.source) == true
+            ready.photos.any { it.ref in selectedImageRefs } && currentSource()?.matches(ready.origin ?: ready.inspection.source) == true
     } == true
     /** Explicit Save of the chosen returned images. No notification permission: nothing is posted. */
     fun saveImage() {

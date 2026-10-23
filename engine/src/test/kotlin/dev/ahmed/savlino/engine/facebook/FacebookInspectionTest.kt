@@ -68,6 +68,52 @@ class FacebookInspectionTest : PublicImageTestBase() {
         }
     }
 
+    @Test fun videoShareStopsAtTheReelOrVideoHopWithoutRequestingItsPage() {
+        val reel = "https://www.facebook.com/reel/900000000000007?fs=e&rdid=synthetic"
+        val story = "https://www.facebook.com/story.php?story_fbid=900000000000001&id=42&rdid=synthetic"
+        val video = "https://www.facebook.com/SyntheticPage/videos/some-title/900000000000008/?rdid=synthetic"
+        for ((kind, hops) in listOf("r" to listOf(reel), "v" to listOf(story, video))) fixture(respond = { request, socket ->
+            val next = when {
+                request.target.startsWith("/share/") -> hops[0]
+                request.target.startsWith("/story.php") -> hops.getOrNull(1)
+                else -> null
+            }
+            if (next != null) socket.reply(302, headers = mapOf("Location" to next))
+            else socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
+        }) { f ->
+            val result = assertIs<MediaInspectResult.VideoRedirect>(f.inspectFacebook("https://www.facebook.com/share/$kind/Synthetic/", 7))
+            val id = if (kind == "r") "900000000000007" else "900000000000008"
+            assertEquals("https://www.facebook.com/watch/?v=$id", result.source.link.rawUrl)
+            assertEquals(7, result.source.revision)
+            // Only the redirects were requested: no reel/video page, so no page body was read.
+            assertEquals(hops.size, f.server.requests.size)
+            assertTrue(f.server.requests.none { it.target.startsWith("/reel/") || "/videos/" in it.target })
+        }
+    }
+
+    @Test fun aLoginWallHopToAReelKeepsTodaysUnwrapAndPageRead() {
+        val next = URLEncoder.encode("https://www.facebook.com/reel/900000000000007", "UTF-8")
+        fixture(respond = { request, socket ->
+            if (request.target.startsWith("/share/")) socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com/login.php?next=$next"))
+            else socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
+        }) { f ->
+            val result = assertIs<MediaInspectResult.VideoRedirect>(f.inspectFacebook("https://www.facebook.com/share/r/Synthetic/"))
+            assertEquals("https://www.facebook.com/watch/?v=900000000000007", result.source.link.rawUrl)
+            assertEquals(listOf("/share/r/Synthetic/", "/reel/900000000000007"), f.server.requests.map { it.target })
+        }
+    }
+
+    @Test fun anIdBearingPostNeverStopsAtAVideoHop() {
+        val target = "/synthetic/posts/900000000000005"
+        fixture(respond = { request, socket ->
+            if (request.target == target) socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com/reel/900000000000007"))
+            else socket.reply(body = facebookFixture("mixed-post.html").toByteArray(), headers = html)
+        }) { f ->
+            f.inspectFacebook("https://www.facebook.com$target")
+            assertEquals(listOf(target, "/reel/900000000000007"), f.server.requests.map { it.target })
+        }
+    }
+
     @Test fun mixedPostPhotosCarryItsCanonicalVideoLinkAtTheOperationsRevision() {
         val target = "/synthetic/posts/900000000000001"
         for (firstUnavailable in listOf(false, true)) fixture(respond = facebook("mixed-post.html", override = { request, socket ->

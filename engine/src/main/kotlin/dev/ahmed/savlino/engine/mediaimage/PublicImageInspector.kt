@@ -238,7 +238,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val requested = FacebookPostIdentity.parse(operation.source.link.rawUrl)
             ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
         val page = when (val result = http.fetchFacebookPage(operation.token, requested.fetchUrl)) {
-            is MediaHttpResult.Failure -> return Fetched.Failed(transportFailure(operation, result, ImagePhase.PAGE))
+            // A shortlink's redirect already named its video: no page body is read (speed-6).
+            is MediaHttpResult.Failure -> return result.takeIf { it.reason == MediaHttpFailure.LANDED && requested.isShortlink }
+                ?.landing?.let(FacebookPostIdentity::parse)?.videoId?.let { videoRedirect(operation, it) }
+                ?: Fetched.Failed(transportFailure(operation, result, ImagePhase.PAGE))
             is MediaHttpResult.Success -> result.response
         }
         val (html, resolved) = try {
@@ -688,7 +691,8 @@ internal fun mapTransport(reason: MediaHttpFailure): ImageFailure = when (reason
     MediaHttpFailure.INVALID_URL, MediaHttpFailure.INVALID_CONTEXT, MediaHttpFailure.ADDRESS_REJECTED,
     MediaHttpFailure.REDIRECT_LOOP, MediaHttpFailure.ENCODING -> ImageFailure.SOURCE_REFUSED
     MediaHttpFailure.PARTIAL_BODY, MediaHttpFailure.NETWORK, MediaHttpFailure.TIMEOUT -> ImageFailure.NETWORK
-    MediaHttpFailure.UNAVAILABLE, MediaHttpFailure.BUSY, MediaHttpFailure.CLOSED -> ImageFailure.UNAVAILABLE
+    MediaHttpFailure.UNAVAILABLE, MediaHttpFailure.BUSY, MediaHttpFailure.CLOSED,
+    MediaHttpFailure.LANDED -> ImageFailure.UNAVAILABLE
     MediaHttpFailure.LOGIN_REQUIRED -> ImageFailure.PRIVATE
     MediaHttpFailure.FACEBOOK_STORY -> ImageFailure.FACEBOOK_STORY
 }

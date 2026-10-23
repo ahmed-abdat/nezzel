@@ -8,6 +8,7 @@ import dev.ahmed.savlino.engine.LegacyMediaInspectionAdapter
 import dev.ahmed.savlino.engine.MediaSourceInspector
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpClient
+import dev.ahmed.savlino.engine.mediahttp.ShortLinkResolver
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.storage.DestinationPublisher
@@ -26,6 +27,8 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
     private val http by lazy { MediaHttpClient.create() }
     private val oembed by lazy { YouTubeOEmbed(http) }
     suspend fun earlyPreview(link: dev.ahmed.savlino.domain.ValidatedLink) = oembed.load(link.rawUrl)
+    private val shortLinks by lazy { ShortLinkResolver(http) }
+    suspend fun resolveShortLink(link: dev.ahmed.savlino.domain.ValidatedLink) = shortLinks.resolve(link)
     private val references by lazy { MediaReferenceStore() }
     private val inspector by lazy {
         MediaSourceInspector(PublicImageInspector(http, AndroidImagePreviewDecoder(), references), LegacyMediaInspectionAdapter(engine()))
