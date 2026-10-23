@@ -3,6 +3,7 @@ package dev.ahmed.savlino.jobs
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -99,6 +100,44 @@ class JobArtworkTest {
         SheetArtwork.offer("one", bitmap); SheetArtwork.offer("two", bitmap); SheetArtwork.offer("three", bitmap)
         assertNull(SheetArtwork.take("one"))
         assertTrue(SheetArtwork.take("two") != null && SheetArtwork.take("three") != null)
+        assertFalse(bitmap.isRecycled)
+    }
+
+    @Test fun deleteDuringDecodeIsNotCachedBack() = runBlocking {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val codec = object : dev.ahmed.savlino.preview.PreviewArtworkCodec() {
+            override fun decode(bytes: ByteArray, maxAxis: Int, maxAllocationBytes: Long): Bitmap? {
+                entered.countDown(); release.await()
+                return super.decode(bytes, maxAxis, maxAllocationBytes)
+            }
+        }
+        val artwork = JobArtwork(app.filesDir, codec)
+        assertTrue(artwork.save("racy", JobArtwork.encode(noisy(200, 200))!!))
+        val loading = async(kotlinx.coroutines.Dispatchers.IO) { artwork.load("racy") }
+        assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        artwork.delete("racy")
+        release.countDown()
+        assertNull(loading.await())
+        assertNull(artwork.load("racy"))
+    }
+
+    @Test fun reusedJobIdShowsTheNewArtwork() = runBlocking {
+        val artwork = JobArtwork(app.filesDir)
+        fun solid(color: Int) = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+        assertTrue(artwork.save("same", JobArtwork.encode(solid(android.graphics.Color.RED))!!))
+        assertTrue(android.graphics.Color.red(artwork.load("same")!!.getPixel(80, 80)) > 200)
+        assertTrue(artwork.save("same", JobArtwork.encode(solid(android.graphics.Color.BLUE))!!))
+        val pixel = artwork.load("same")!!.getPixel(80, 80)
+        assertTrue(android.graphics.Color.blue(pixel) > 200 && android.graphics.Color.red(pixel) < 60)
+    }
+
+    @Test fun confirmBeforeEncodeStillGetsBytes() {
+        val bitmap = noisy(320, 180)
+        SheetArtwork.show("early", bitmap) // background encode not run yet
+        val bytes = SheetArtwork.take("early")!!
+        assertTrue(bytes.size in 1..JobArtwork.MAX_BYTES)
+        assertTrue(SheetArtwork.take("early") === bytes)
         assertFalse(bitmap.isRecycled)
     }
 }

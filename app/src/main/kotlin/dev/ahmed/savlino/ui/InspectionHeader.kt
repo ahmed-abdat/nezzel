@@ -39,7 +39,9 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
     // Hand the shown artwork to a confirmed job (memory only; written to disk only on Download).
     LaunchedEffect(inspectionId, shown) {
         val bitmap = shown ?: return@LaunchedEffect
-        if (inspectionId != null) withContext(Dispatchers.Default) { SheetArtwork.offer(inspectionId, bitmap) }
+        if (inspectionId == null) return@LaunchedEffect
+        SheetArtwork.show(inspectionId, bitmap)
+        withContext(Dispatchers.Default) { SheetArtwork.take(inspectionId) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
         PreviewThumbnail(thumbnail, audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = { shown = it })

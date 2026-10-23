@@ -375,6 +375,18 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun confirmBeforeSheetEncodeStillStoresArtwork() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            val command = command("early-art")
+            val sheet = android.graphics.Bitmap.createBitmap(640, 360, android.graphics.Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(android.graphics.Color.rgb(0, 128, 128)) }
+            SheetArtwork.show(command.inspectionId, sheet) // shown, background encode not finished
+            assertTrue(f.coordinator.enqueue(command))
+            assertTrue(File(app.filesDir, "job-art/early-art").length() in 1..JobArtwork.MAX_BYTES.toLong())
+        }
+    }
+
     @Test fun noSheetArtworkStoresNothing() = runBlocking {
         fixture(FakeEngine()).use { f ->
             assertTrue(f.coordinator.enqueue(command("plain-job")))

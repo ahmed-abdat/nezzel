@@ -16,19 +16,25 @@ class JobArtwork internal constructor(filesDir: File, private val codec: Preview
 
     private val root = File(filesDir.canonicalFile, "job-art")
     private val memory = LruCache<String, Bitmap>(MEMORY_ENTRIES)
+    /** Bumped by every write/delete; a decode that raced one is not cached, so deleted pixels never come back. */
+    private var generation = 0L
 
     /** IO. Null when the sheet had no artwork, the file is gone or does not decode. */
     suspend fun load(jobId: String): Bitmap? = withContext(Dispatchers.IO) {
         if (!JobStore.validJobId(jobId)) return@withContext null
         memory.get(jobId)?.let { return@withContext it }
+        val started = synchronized(this) { generation }
         val bytes = try { File(root, jobId).takeIf { it.isFile && it.length() in 1..MAX_BYTES }?.readBytes() }
             catch (_: Exception) { null } ?: return@withContext null
-        codec.decode(bytes, SIDE, SIDE.toLong() * SIDE * 4)?.also { memory.put(jobId, it) }
+        val bitmap = codec.decode(bytes, SIDE, SIDE.toLong() * SIDE * 4) ?: return@withContext null
+        synchronized(this) { if (generation == started) memory.put(jobId, bitmap) else return@withContext null }
+        bitmap
     }
 
     /** Atomic write of already-capped bytes; false leaves no file. */
     internal fun save(jobId: String, bytes: ByteArray): Boolean = synchronized(this) {
         if (!JobStore.validJobId(jobId) || bytes.isEmpty() || bytes.size > MAX_BYTES) return false
+        generation++; memory.remove(jobId)
         val temp = File(root, "$jobId.tmp")
         try {
             root.mkdirs()
@@ -39,12 +45,13 @@ class JobArtwork internal constructor(filesDir: File, private val codec: Preview
 
     fun delete(jobId: String): Unit = synchronized(this) {
         if (!JobStore.validJobId(jobId)) return
-        memory.remove(jobId)
+        generation++; memory.remove(jobId)
         File(root, jobId).delete()
     }
 
     /** After the 100-row prune: drop artwork of every job the store no longer has. */
     internal fun retainOnly(jobIds: Set<String>): Unit = synchronized(this) {
+        generation++
         root.listFiles()?.forEach { file ->
             val id = file.name.removeSuffix(".tmp")
             if (id !in jobIds || file.name.endsWith(".tmp")) { memory.remove(id); file.delete() }
@@ -52,7 +59,7 @@ class JobArtwork internal constructor(filesDir: File, private val codec: Preview
     }
 
     fun clear(): Unit = synchronized(this) {
-        memory.evictAll()
+        generation++; memory.evictAll()
         root.listFiles()?.forEach { it.delete() }
     }
 
@@ -81,21 +88,35 @@ class JobArtwork internal constructor(filesDir: File, private val codec: Preview
 
 /**
  * Memory-only hand-off from the options sheet to [DownloadCoordinator.enqueue], keyed by inspection id.
- * Holds encoded bytes for the last two inspections only; nothing reaches disk until a download is confirmed.
+ * Holds the shown bitmap until it is encoded, for the last two inspections only; nothing reaches disk until a
+ * download is confirmed. A confirm that beats the background encode encodes the held bitmap itself.
  */
 object SheetArtwork {
-    private val pending = object : LinkedHashMap<String, ByteArray>(4, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>) = size > 2
+    private class Entry(@Volatile var bitmap: Bitmap?) { @Volatile var bytes: ByteArray? = null }
+
+    private val pending = object : LinkedHashMap<String, Entry>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>) = size > 2
     }
 
-    /** Encodes now (call off main); the sheet may drop its bitmap afterwards. */
+    /** Any thread, as soon as the sheet shows [bitmap]: a confirm from now on gets artwork. The caller keeps it. */
+    fun show(inspectionId: String, bitmap: Bitmap) = synchronized(pending) {
+        if (pending[inspectionId]?.bitmap !== bitmap) pending[inspectionId] = Entry(bitmap)
+    }
+
+    /** [show] then encode now (call off main), so the confirm finds bytes ready. */
     fun offer(inspectionId: String, bitmap: Bitmap) {
-        val bytes = JobArtwork.encode(bitmap) ?: return
-        synchronized(pending) { pending[inspectionId] = bytes }
+        show(inspectionId, bitmap)
+        take(inspectionId)
     }
 
-    /** Kept (not removed) so a second format from the same sheet also gets artwork; the two-entry cap bounds it. */
-    internal fun take(inspectionId: String): ByteArray? = synchronized(pending) { pending[inspectionId] }
+    /** Off main. Kept (not removed) so a second format from the same sheet also gets artwork; the cap bounds it. */
+    internal fun take(inspectionId: String): ByteArray? {
+        val entry = synchronized(pending) { pending[inspectionId] } ?: return null
+        entry.bytes?.let { return it }
+        val bytes = entry.bitmap?.let(JobArtwork::encode) ?: return null
+        entry.bytes = bytes; entry.bitmap = null
+        return bytes
+    }
 
     internal fun clear() = synchronized(pending) { pending.clear() }
 }
