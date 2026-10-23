@@ -90,7 +90,8 @@ class MainActivity : AppCompatActivity() {
                     initialPreset = preferences.lastPreset, rememberPreset = { preferences.lastPreset = it },
                     initialHeight = preferences.lastHeight, rememberHeight = { preferences.lastHeight = it },
                     rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
-                    images = media.inspect, imageSaver = media.saver, earlyPreview = media::earlyPreview) as T
+                    images = media.inspect, imageSaver = media.saver, earlyPreview = media::earlyPreview,
+                    resolveShortLink = media::resolveShortLink) as T
             }
         })[LinkViewModel::class.java]
         val appUpdates = (application as NezzelApplication).appUpdates

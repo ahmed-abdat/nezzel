@@ -27,7 +27,12 @@ enum class MediaHttpFailure {
     /** A provider page redirected to its login wall (after any login?next= unwrap). */
     LOGIN_REQUIRED,
     /** Facebook stories require sign-in; neither the story nor its login wall is fetched. */
-    FACEBOOK_STORY
+    FACEBOOK_STORY,
+    /**
+     * Not an error: a read stopped at an accepted redirect hop that already answers the question (a shortener's
+     * destination, a Facebook shortlink's video). The hop is in [MediaHttpResult.Failure.landing], never requested.
+     */
+    LANDED
 }
 /**
  * Extra host allowlist enforced on the first URL and on every redirect hop. X_MEDIA: `https://pbs.twimg.com/media/` only.
@@ -55,7 +60,7 @@ sealed interface MediaHttpResult {
         override fun toString() = "MediaHttpResult.Success(redacted)"
     }
     /**
-     * [landing]: LinkedIn page reads only — the clean public post URL (query/fragment stripped) the read had reached
+     * [landing]: the LANDED hop, or for LinkedIn page reads the clean public post URL (query/fragment stripped) the read had reached
      * when it failed, so the caller can hand that post to yt-dlp. Never a media URL; excluded from equality/toString.
      */
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpResult {

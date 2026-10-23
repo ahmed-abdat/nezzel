@@ -8,7 +8,8 @@ import kotlinx.coroutines.asContextElement
 enum class InspectionPhase(val label: String) {
     INTAKE_ACCEPTED("intake_accepted"), ENGINE_GATE_PASSED("engine_gate_passed"),
     NATIVE_READER_DONE("native_reader_done"), YTDLP_SPAWNED("ytdlp_spawned"),
-    JSON_PARSED("json_parsed"), OPTIONS_SHOWN("options_shown"), EARLY_TITLE("early_title"), THUMBNAIL_SHOWN("thumbnail_shown")
+    JSON_PARSED("json_parsed"), OPTIONS_SHOWN("options_shown"), EARLY_TITLE("early_title"), THUMBNAIL_SHOWN("thumbnail_shown"),
+    SHORT_LINK_DONE("short_link_done")
 }
 
 /** Coroutine-scoped bridge to the existing NezzelTiming debug journal, including blocking runtime calls. */

@@ -68,7 +68,7 @@ internal sealed interface MediaHttpImageTransferResult {
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpImageTransferResult
 }
 
-private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, YOUTUBE_OEMBED }
+private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, YOUTUBE_OEMBED, SHORT_LINK }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -115,7 +115,15 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
      * otherwise it ends as LOGIN_REQUIRED.
      */
     internal fun fetchFacebookPage(token: OperationToken, url: String): MediaHttpResult =
-        fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.FACEBOOK)
+        fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.FACEBOOK,
+            stopAt = if (FacebookPostIdentity.parse(url)?.isShortlink == true) ::isFacebookVideoHop else null)
+
+    /**
+     * A shortlink's accepted reel/watch/video hop names the video: it ends as [MediaHttpFailure.LANDED] with that hop,
+     * unrequested and with no body read. Login-wall unwraps never qualify; they keep the full page read.
+     */
+    private fun isFacebookVideoHop(located: HttpUrl, next: HttpUrl): Boolean = !FacebookPostIdentity.isLoginWall(located) &&
+        FacebookPostIdentity.parse(next.toString())?.let { !it.isShortlink && it.videoId != null } == true
 
     /**
      * Optional second Facebook page (the attachment's own /photo/ page) on the same operation. Its own
@@ -152,6 +160,22 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     internal fun fetchYouTubeOEmbed(token: OperationToken, url: String): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.YOUTUBE_OEMBED)
+
+    internal fun newShortLinkOperation(): OperationToken =
+        createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false, deadlineSeconds = 4)
+
+    /**
+     * Redirects of a known shortener, never a body: the first hop off the shortener ends as [MediaHttpFailure.LANDED]
+     * without being requested. Any non-redirect answer (interstitial, 404) fails, so the caller keeps the short link.
+     */
+    internal fun fetchShortLink(token: OperationToken, url: String): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.SHORT_LINK,
+            stopAt = { _, next -> !ShortLinks.isShortLink(next) })
+
+    /** The same public-address DNS check a request would make, without requesting [url]; throws ADDRESS_REJECTED. */
+    internal fun requirePublicHost(token: OperationToken, url: HttpUrl) {
+        PublicAddressDns(token, environment.rawResolver, resolverExecutor, resolverSlots).lookup(url.host)
+    }
 
     /**
      * A bad sibling must not retire valid carousel photos; policy, count, byte and deadline checks still apply.
@@ -366,7 +390,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     fun fetch(token: OperationToken, request: PublicMediaRequest): MediaHttpResult = fetchInternal(token, request, null)
 
     private fun fetchInternal(token: OperationToken, request: PublicMediaRequest, site: PageSite?,
-        optional: Boolean = false, imageCap: Int? = null): MediaHttpResult {
+        optional: Boolean = false, imageCap: Int? = null, stopAt: ((HttpUrl, HttpUrl) -> Boolean)? = null): MediaHttpResult {
         val linkedInPage = site == PageSite.LINKEDIN
         val facebookPage = site == PageSite.FACEBOOK
         val xPost = site == PageSite.X
@@ -374,6 +398,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val telegramPage = site == PageSite.TELEGRAM
         val blueskyPage = site == PageSite.BLUESKY
         val oembed = site == PageSite.YOUTUBE_OEMBED
+        val shortLink = site == PageSite.SHORT_LINK
         val browserPage = facebookPage || instagramPage || telegramPage
         if (token.owner !== this) return MediaHttpResult.Failure(MediaHttpFailure.CLOSED)
         var entered = false
@@ -389,6 +414,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             var url = MediaHttpPolicy.parse(request.url) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
             if (oembed && (request.purpose != MediaHttpPurpose.PAGE || !YouTubeOEmbed.isRequest(url)))
+                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (shortLink && (request.purpose != MediaHttpPurpose.PAGE || !ShortLinks.isShortLink(url)))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (linkedInPage && !MediaHttpPolicy.isLinkedInPageEntry(url))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
@@ -426,7 +453,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 token.requireActive()
                 token.budget.requireRequestRoom()
                 val wireRequest = Request.Builder().url(url).get()
-                    .header("User-Agent", if (browserPage) DESKTOP_BROWSER_AGENT else PUBLIC_USER_AGENT)
+                    .header("User-Agent", if (browserPage) DESKTOP_BROWSER_AGENT else if (shortLink) SHORT_LINK_AGENT else PUBLIC_USER_AGENT)
                     .header("Accept", if (browserPage) BROWSER_PAGE_ACCEPT else if (xPost || blueskyPage || oembed) JSON_ACCEPT
                         else if (request.purpose == MediaHttpPurpose.PAGE) PAGE_ACCEPT else IMAGE_ACCEPT)
                     .header("Accept-Encoding", "identity")
@@ -456,8 +483,13 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 if (MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
                                         ?.let(InstagramPostIdentity::isLoginWall) == true) MediaHttpFailure.LOGIN_REQUIRED
                                 else MediaHttpFailure.INVALID_CONTEXT)
-                            val located = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
-                                ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+                            val location = response.header("Location").orEmpty()
+                            val located = MediaHttpPolicy.resolve(url, location)
+                                // A shortener's http destination is read over HTTPS, as a pasted one is; an IP literal,
+                                // localhost or malformed destination is refused outright, so nothing hands it on.
+                                ?: if (shortLink) MediaHttpPolicy.resolve(url, location.replaceFirst(HTTP_SCHEME, "https://"))
+                                    ?: throw MediaHttpException(MediaHttpFailure.ADDRESS_REJECTED)
+                                else throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             val next = when {
                                 facebookPage -> facebookHop(url, located, seen)
                                 linkedInPage -> MediaHttpPolicy.linkedInHopTarget(located)
@@ -472,10 +504,14 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             if (request.pageContext != null && next.host != "media.licdn.com")
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (!seen.add(next.toString())) throw MediaHttpException(MediaHttpFailure.REDIRECT_LOOP)
+                            // The landing hop counts too: a stop never stretches the three-redirect limit.
                             token.budget.redirect()
+                            if (stopAt?.invoke(located, next) == true)
+                                return MediaHttpResult.Failure(MediaHttpFailure.LANDED, null, next.toString())
                             url = next
                         } else {
                             if (response.code != 200) throw MediaHttpException(MediaHttpFailure.HTTP_STATUS, response.code)
+                            if (shortLink) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (linkedInPage && !MediaHttpPolicy.isLinkedInPost(url))
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (facebookPage && FacebookPostIdentity.parse(url.toString()).let { it == null || it.isShortlink })
@@ -710,6 +746,9 @@ private val BROWSER_NAVIGATION_HEADERS = listOf("Accept-Language" to "en-US,en;q
     "Sec-Fetch-Site" to "none", "Sec-Fetch-Dest" to "document", "Sec-Fetch-User" to "?1", "Upgrade-Insecure-Requests" to "1")
 private const val IMAGE_ACCEPT = "image/jpeg,image/png,image/gif,image/webp;q=0.9"
 private const val SAVE_BODY_CAP = 20L * 1024 * 1024
+/** Shorteners (t.co, Instagram /share/) answer a browser with an HTML interstitial and anything else with the redirect. */
+private const val SHORT_LINK_AGENT = "Nezzel"
+private val HTTP_SCHEME = Regex("^http://", RegexOption.IGNORE_CASE)
 private const val PUBLIC_USER_AGENT = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
 
 /** Checks the exact route immediately before Socket.connect; fixture mapping is strictly below this guard. */

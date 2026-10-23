@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.domain
 
 import java.net.URI
+import java.net.URLDecoder
 import java.net.URISyntaxException
 
 /** Created by intake only. Raw reviewed bytes are retained for the eventual engine request. */
@@ -23,7 +24,7 @@ object LinkInput {
         return urls.findAll(text).mapNotNull { match ->
             // A copied http:// link is read over HTTPS; nothing is ever fetched in cleartext.
             val secure = if (match.value.startsWith("http://", ignoreCase = true)) "https://" + match.value.substring(7) else match.value
-            validate(unwrap(secure, text.getOrNull(match.range.first - 1)))
+            validate(alias(unwrap(secure, text.getOrNull(match.range.first - 1))))
         }.distinctBy { it.normalizedUrl }.toList()
     }
 
@@ -42,6 +43,25 @@ object LinkInput {
                 raw = raw.dropLast(1)
             } else break
         }
+        return raw
+    }
+
+    /**
+     * Network-free aliases: Facebook's outbound l.php wrapper becomes its u= target (validated like any pasted link),
+     * fb.com becomes www.facebook.com (fb.com's own redirect drops the query, e.g. watch?v=).
+     */
+    private fun alias(raw: String): String {
+        val uri = try { URI(raw) } catch (_: URISyntaxException) { return raw }
+        val host = uri.host?.lowercase() ?: return raw
+        if (uri.rawUserInfo != null || uri.port != -1) return raw
+        if (host in setOf("l.facebook.com", "lm.facebook.com") && uri.rawPath == "/l.php") {
+            val target = uri.rawQuery.orEmpty().split('&').filter { it.startsWith("u=") }.singleOrNull()?.substring(2) ?: return raw
+            val decoded = try { URLDecoder.decode(target, Charsets.UTF_8) } catch (_: IllegalArgumentException) { return "" }
+            val secure = if (decoded.startsWith("http://", ignoreCase = true)) "https://" + decoded.substring(7) else decoded
+            return secure.takeIf { it.startsWith("https://", ignoreCase = true) && it.none(Char::isWhitespace) }.orEmpty()
+        }
+        if (host == "fb.com" || host == "www.fb.com")
+            return "https://www.facebook.com" + raw.substring(raw.indexOf(uri.rawAuthority) + uri.rawAuthority.length)
         return raw
     }
 
