@@ -503,10 +503,12 @@ class DownloadWorkerTest {
     @Test @Config(sdk = [33])
     fun rerunOfTheSameJobWaitsForTheStoppedAttemptToUnwindAndThenRuns() = runBlocking {
         val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val started = CompletableDeferred<Unit>()
         val unwinding = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
         fixture(FakeEngine(), script = { _, dir, emit ->
             if (attempts.incrementAndGet() == 1) {
                 emit(EngineEvent.Progress(0, Size.Unknown))
+                started.complete(Unit)
                 try { awaitCancellation() }
                 finally { withContext(NonCancellable) { unwinding.complete(Unit); release.await() } }
             }
@@ -517,7 +519,8 @@ class DownloadWorkerTest {
             f.store.enqueue(command("rerun-overlap"))
             val first = f.worker("rerun-overlap")
             val stopped = launch(Dispatchers.Default) { first.doWork() }
-            withTimeout(5000) { while (f.store.get("rerun-overlap")!!.stage != JobStage.TRANSFERRING) yield() }
+            // The row turns TRANSFERRING before foreground promotion; stop only once the engine is running.
+            withTimeout(5000) { started.await() }
             first.stop(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
             stopped.cancel() // WorkManager cancels the stopped attempt's coroutine; a direct doWork() needs it here.
             withTimeout(5000) { unwinding.await() }
