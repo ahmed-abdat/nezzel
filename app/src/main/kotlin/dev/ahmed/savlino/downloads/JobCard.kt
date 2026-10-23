@@ -231,7 +231,7 @@ private fun JobThumb(art: ImageBitmap?, icon: Int, container: Color, content: Co
     Box(Modifier.testTag("job-art").size(40.dp)) {
         Image(art, null, Modifier.matchParentSize().clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
         if (badge != null) Box(Modifier.testTag("job-art-badge-${badge.name.lowercase()}").align(Alignment.BottomEnd)
-            .offset(3.dp, 3.dp).size(18.dp).background(ring, CircleShape).padding(2.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+            .offset(if (LocalLayoutDirection.current == LayoutDirection.Rtl) (-3).dp else 3.dp, 3.dp).size(18.dp).background(ring, CircleShape).padding(2.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
             val scheme = MaterialTheme.colorScheme
             when (badge) {
                 ThumbBadge.Audio -> Box(Modifier.matchParentSize().background(scheme.tertiaryContainer), contentAlignment = Alignment.Center) {
@@ -307,7 +307,7 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
     val percent = parts?.percent?.takeIf { job.percent != 100 }
     if (parts != null && percent != null) return listOfNotNull(MetaPart(percent, scheme.onSurface, bold = true, keep = true),
         parts.remaining?.let { job.remainingTransferSeconds?.let { seconds -> MetaPart(stringResource(R.string.download_row_remaining,
-            NezzelFormat.isolate(NezzelFormat.duration(seconds))), quiet, direction = TextDirection.Content, keep = true) } },
+            NezzelFormat.isolate(NezzelFormat.duration(seconds))), quiet, direction = TextDirection.Content, keep = true, trailing = true) } },
         MetaPart(rowBytes(job, language) ?: parts.bytes, quiet, direction = TextDirection.Content, short = rowBytesDone(job, language)))
     val bytes = if (parts != null) rowBytes(job, language) ?: parts.bytes else null
     // Without bytes yet (queued, preparing), the chosen quality tells two rows of the same video apart.
