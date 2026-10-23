@@ -216,6 +216,43 @@ class SelectionSemanticsTest {
         } finally { recomposer.cancel(); scope.cancel(); controller.pause().stop().destroy(); bitmap.recycle() }
     }
 
+    @Test fun missingEarlyImageFallsBackToTheEngineImage() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume()
+        val url = "https://www.youtube.com/shorts/aqz-KE-bpKQ"
+        val ready = Inspection(LinkRevision(LinkInput.parse(url)!!, 1), "fixture-v1", emptyList(), title = "Trip",
+            thumbnailUrl = "https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg")
+        val inspection = androidx.compose.runtime.mutableStateOf<Inspection?>(null)
+        val bitmap = android.graphics.Bitmap.createBitmap(16, 9, android.graphics.Bitmap.Config.ARGB_8888)
+        val loads = mutableListOf<String>()
+        val clock = BroadcastFrameClock()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + clock)
+        val recomposer = Recomposer(scope.coroutineContext)
+        scope.launch { recomposer.runRecomposeAndApplyChanges() }
+        try {
+            controller.get().setContent(parent = recomposer) {
+                NezzelTheme(ThemePref.Light, false) {
+                    androidx.compose.material3.Surface(androidx.compose.ui.Modifier.fillMaxSize()) {
+                        val current = inspection.value
+                        InspectionHeader(current, "youtube.com", checking = current == null,
+                            earlyPreview = if (current == null) dev.ahmed.savlino.engine.mediahttp.EarlyPreview(null,
+                                "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg") else null,
+                            // The derived early image is missing (404 → null); the engine image must still load.
+                            load = { loads += it; if (it.endsWith("hqdefault.jpg")) null else bitmap })
+                    }
+                }
+            }
+            controller.visible()
+            semantics(controller.get()); clock.sendFrame(System.nanoTime())
+            inspection.value = ready
+            Snapshot.sendApplyNotifications(); clock.sendFrame(System.nanoTime())
+            semantics(controller.get()); Snapshot.sendApplyNotifications(); clock.sendFrame(System.nanoTime())
+            val nodes = semantics(controller.get())
+            assertEquals(listOf("https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg",
+                "https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg"), loads)
+            assertFalse(nodes.any { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("preview_thumbnail") == true })
+        } finally { recomposer.cancel(); scope.cancel(); controller.pause().stop().destroy(); bitmap.recycle() }
+    }
+
     @Test fun loadedThumbnailIsDecorativeAndUrlChangeImmediatelyClearsOldImage() {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume()
         val url = androidx.compose.runtime.mutableStateOf<String?>("https://i.ytimg.com/one.jpg")
