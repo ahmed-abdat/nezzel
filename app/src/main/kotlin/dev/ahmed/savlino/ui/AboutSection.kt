@@ -77,7 +77,7 @@ internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: (
             }
             val contactIntro = stringResource(R.string.contact_whatsapp_intro)
             SettingsNavRow(stringResource(R.string.contact_whatsapp), R.drawable.logo_whatsapp) {
-                ReportLink.open(context, ReportLink.contactMessage(contactIntro, versionName, android.os.Build.VERSION.RELEASE))
+                ReportLink.open(context, contactIntro)
             }
             CrashReportActions()
         }

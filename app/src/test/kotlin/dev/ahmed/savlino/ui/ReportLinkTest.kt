@@ -80,11 +80,12 @@ class ReportLinkTest {
         assertNull(intent.data!!.fragment)
     }
 
-    @Test fun contactMessageCarriesOnlyVersionsAndStartsInTheUserLanguage() {
+    @Test fun contactMessageIsOnlyTheGreetingAndStartsInTheUserLanguage() {
         listOf("en", "ar", "fr").forEach { language ->
-            val intro = context(language).getString(R.string.contact_whatsapp_intro)
-            val message = ReportLink.contactMessage(intro, "1.2.3", "14")
-            assertEquals(listOf(intro, "Nezzel 1.2.3 · Android 14", "", ""), message.lines())
+            val message = context(language).getString(R.string.contact_whatsapp_intro)
+            // Owner 2026-10-23: a friendly hello + thanks only, no app or Android version.
+            assertEquals(1, message.lines().size)
+            assertFalse(message.any(Char::isDigit))
             assertFalse(message.contains('\u2066') || message.contains('\u2069'))
             assertEquals(message, ReportLink.intent(message).data!!.getQueryParameter("text"))
         }

@@ -238,7 +238,7 @@
     <string name="report_link">أبلغ عن هذا الرابط</string>
     <string name="report_link_intro">لم يستطع Nezzel قراءة هذا الرابط:</string>
     <string name="contact_whatsapp">راسلنا على واتساب</string>
-    <string name="contact_whatsapp_intro">مرحبًا، بخصوص Nezzel:</string>
+    <string name="contact_whatsapp_intro">مرحبًا 👋 شكرًا على Nezzel!</string>
     <string name="nezzel_close">إغلاق</string>
     <string name="saved_before">سبق حفظ هذا الملف في %1$s</string>
     <string name="network_title">تعذّر الاتصال</string>
