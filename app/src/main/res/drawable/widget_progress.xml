@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 4dp rounded bar: a quiet track, the fill in the widget's primary. -->
+<!-- 4dp rounded bar: a quiet track, the fill in the widget's primary. Gravity stays left: the
+     Material horizontal style mirrors the canvas in RTL (mirrorForRtl), so "start" would flip twice. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
         <shape><solid android:color="@color/widget_track" /><corners android:radius="2dp" /></shape>
     </item>
     <item android:id="@android:id/progress">
-        <scale android:scaleWidth="100%" android:scaleGravity="start|fill_vertical">
+        <scale android:scaleWidth="100%" android:scaleGravity="left|fill_vertical">
             <shape><solid android:color="@color/widget_primary" /><corners android:radius="2dp" /></shape>
         </scale>
     </item>
