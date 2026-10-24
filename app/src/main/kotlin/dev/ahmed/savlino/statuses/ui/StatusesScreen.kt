@@ -295,7 +295,7 @@ private fun accountLabel(source: StatusSource, access: StatusAccess.Ready, langu
 
 @Composable
 private fun Chip(selected: Boolean, label: String, onClick: () -> Unit) {
-    FilterChip(selected, onClick, label = { Text(label) }, modifier = Modifier.heightIn(min = 40.dp), shape = CircleShape,
+    FilterChip(selected, onClick, label = { Text(label) }, modifier = Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp), shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
             selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer))
 }

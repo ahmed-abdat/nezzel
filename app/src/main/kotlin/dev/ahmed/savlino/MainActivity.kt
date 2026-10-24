@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity() {
             NezzelTheme(theme, wallpaper) {
                 if (onboarding) dev.ahmed.savlino.ui.OnboardingScreen(::finishOnboarding)
                 else NezzelApp(links, language, theme, wallpaper, suggestions,
+                    statusLibrary = media.statusLibrary,
                     onPaste = ::pasteClipboard,
                     onDismissSuggestion = links::dismissSuggestion,
                     onAcceptSuggestion = { links.inspectSuggestion() },
