@@ -263,6 +263,7 @@ fun DownloadsScreen(
             SearchField(query, { query = it }, closeSearch)
         }
     } }) { padding ->
+        val hot = LocalHot.current
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
                 if(active.isNotEmpty()) {
@@ -270,6 +271,9 @@ fun DownloadsScreen(
                         SectionHeader(stringResource(if (runningCount(jobs) == 0) R.string.downloads_stopped_header else R.string.downloads_running_header,
                             NezzelFormat.count(if(runningCount(jobs) == 0) active.size else runningCount(jobs), language)), runningCount(jobs) == 0)
                     }
+                    // Severe heat holds downloads to one; say so once, above the rows that wait for it.
+                    if (hot && active.any { it.waiting && !it.awaitingSchedule && !it.paused && !it.terminal })
+                        item(key = "heat-note") { HeatNote(Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) }
                     items(active, key = { "job-${it.jobId}" }) { job ->
                         JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
                             Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)),
@@ -383,6 +387,17 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, onClose: () ->
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
             textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))
+    }
+}
+
+/** Heat guard note: plain words, no alarm colour; it goes away by itself when the phone cools. */
+@Composable
+private fun HeatNote(modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        Icon(painterResource(R.drawable.ic_ms_thermostat), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.downloads_heat_note), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

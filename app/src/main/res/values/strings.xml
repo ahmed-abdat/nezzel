@@ -147,6 +147,8 @@
     <string name="downloads_running_header">In progress · %1$s</string>
     <string name="downloads_stopped_header">Stopped · %1$s</string>
     <string name="download_waiting">Queued</string>
+    <string name="download_waiting_hot">Phone is hot, waiting</string>
+    <string name="downloads_heat_note">Your phone is hot, so one download runs for now. The rest start by themselves when it cools down.</string>
     <string name="download_waiting_for_data">Waiting for data…</string>
     <string name="download_retry_hint">Share or paste the link again to retry</string>
     <string name="download_cancel_accessibility">Cancel download %1$s</string>

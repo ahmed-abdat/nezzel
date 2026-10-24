@@ -213,6 +213,18 @@ class DownloadNotificationsTest {
             assertFalse("$phase: $text", text.contains(stalledLabel) || text.contains(speed) || text.contains(remaining))
         }
     }
+    @Test fun heatNamesTheWaitOnlyForJobsHeldBySlots() {
+        val context = RuntimeEnvironment.getApplication()
+        val hot = context.getString(dev.ahmed.savlino.R.string.download_waiting_hot)
+        val queued = DownloadProgress("q", "Q.mp4", DownloadPhase.PREPARING, waiting = true)
+        assertEquals(hot, DownloadNotifications.phase(context, queued, hot = true))
+        assertEquals(context.getString(dev.ahmed.savlino.R.string.download_waiting), DownloadNotifications.phase(context, queued))
+        val running = queued.copy(phase = DownloadPhase.DOWNLOADING, waiting = false)
+        assertNotEquals(hot, DownloadNotifications.phase(context, running, hot = true))
+        // Without NezzelApplication preferences nothing claims heat.
+        assertFalse(dev.ahmed.savlino.downloads.isHeatLimited(context))
+    }
+
     @Test fun actualEnglishNotificationShowsOnlyFactualTransferStallAndRecovery() = truthfulStallNotification("en")
     @Test fun actualArabicNotificationShowsOnlyFactualTransferStallAndRecovery() = truthfulStallNotification("ar")
 

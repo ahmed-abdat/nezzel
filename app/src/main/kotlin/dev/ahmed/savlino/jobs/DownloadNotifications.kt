@@ -102,7 +102,7 @@ class DownloadNotifications(private val base: Context) {
     private fun notification(progress: DownloadProgress): Notification {
         val ctx = context
         val offline = isOffline(base)
-        val description = text(ctx, progress, offline)
+        val description = text(ctx, progress, offline, dev.ahmed.savlino.downloads.isHeatLimited(base))
         val builder = NotificationCompat.Builder(ctx, if (progress.terminal) COMPLETED_CHANNEL else CHANNEL).setSmallIcon(R.drawable.ic_stat_nezzel)
             .setContentTitle(progress.filename).setContentText(description)
             .setStyle(NotificationCompat.BigTextStyle().bigText(description)).setOnlyAlertOnce(true)
@@ -166,11 +166,12 @@ class DownloadNotifications(private val base: Context) {
 
         private fun languageOf(context: Context): String = context.resources.configuration.locales[0].language
 
-        fun phase(context: Context, progress: DownloadProgress, offline: Boolean = false): String {
+        fun phase(context: Context, progress: DownloadProgress, offline: Boolean = false, hot: Boolean = false): String {
             if (progress.paused && !progress.terminal) return context.getString(R.string.download_paused)
             if (progress.waitingForNetwork(offline)) return context.getString(R.string.download_waiting_network)
             if (progress.restarting) return context.getString(R.string.download_restarting)
-            if (progress.waiting && !progress.awaitingSchedule) return context.getString(R.string.download_waiting)
+            if (progress.waiting && !progress.awaitingSchedule)
+                return context.getString(if (hot) R.string.download_waiting_hot else R.string.download_waiting)
             if (progress.phase == DownloadPhase.DOWNLOADING && progress.stalled == true)
                 return context.getString(R.string.download_waiting_for_data)
             // Every byte is in but the worker has not moved on yet: "Downloading" at 100% reads as stuck.
@@ -188,9 +189,9 @@ class DownloadNotifications(private val base: Context) {
             })
         }
 
-        fun text(context: Context, progress: DownloadProgress, offline: Boolean = false): String {
+        fun text(context: Context, progress: DownloadProgress, offline: Boolean = false, hot: Boolean = false): String {
             val language = languageOf(context)
-            val phase = phase(context, progress, offline)
+            val phase = phase(context, progress, offline, hot)
             if (progress.paused && !progress.terminal) return listOfNotNull(phase, progress.bytes?.takeIf { it >= 0 }
                 ?.let { NezzelFormat.isolate(NezzelFormat.size(it, language)) }).joinToString(" · ")
             return if (progress.phase == DownloadPhase.DOWNLOADING) {

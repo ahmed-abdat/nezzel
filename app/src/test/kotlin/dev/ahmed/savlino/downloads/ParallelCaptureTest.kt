@@ -87,6 +87,13 @@ class ParallelCaptureTest {
         }
     }
 
+    @Test fun heat() = shoot("heat") { lang ->
+        CompositionLocalProvider(LocalLinkCopy provides LinkCopy(find = { null }, copy = {}), LocalHot provides true) {
+            DownloadsScreen(listOf(first, queued), lang, {}, {}, {}, {}, {}, null, {}, {},
+                libraryLoad = LibraryLoadState.Ready(listOf(video)))
+        }
+    }
+
     @Test fun homeStrip() = shoot("home") { lang ->
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(Space.gutter)) {
             DownloadStrip(listOf(first, second), lang) {}

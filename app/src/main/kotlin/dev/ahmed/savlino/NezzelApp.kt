@@ -159,7 +159,8 @@ fun NezzelApp(
     val artwork: suspend (String) -> android.graphics.Bitmap? = remember(links.downloads) {
         val store = links.downloads?.artwork; { id -> store?.load(id) }
     }
-    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline(), LocalJobArtwork provides artwork) {
+    CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline(),
+        dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         // Onboarding replaces this composition in MainActivity. Other modals take priority;

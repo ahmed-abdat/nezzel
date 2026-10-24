@@ -293,7 +293,7 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
     val language = LocalConfiguration.current.locales[0].language
     val quiet = scheme.onSurfaceVariant
     // AnimatedContent retains the outgoing phase word. Never pair it with the incoming byte tick.
-    if (word != DownloadNotifications.phase(LocalContext.current, job, LocalOffline.current))
+    if (word != DownloadNotifications.phase(LocalContext.current, job, LocalOffline.current, LocalHot.current))
         return listOf(MetaPart(word, scheme.primary, direction = TextDirection.Content))
     // Paused keeps the last real numbers only: percent and bytes the journal had, no speed, no time left.
     if (job.paused) return listOfNotNull(MetaPart(word, scheme.primary, direction = TextDirection.Content, live = true),
@@ -319,7 +319,7 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
 private fun JobMeta(job: DownloadProgress) {
     val context = LocalContext.current
     val reduced = LocalReducedMotion.current
-    AnimatedContent(DownloadNotifications.phase(context, job, LocalOffline.current), Modifier.fillMaxWidth(), transitionSpec = {
+    AnimatedContent(DownloadNotifications.phase(context, job, LocalOffline.current, LocalHot.current), Modifier.fillMaxWidth(), transitionSpec = {
         (fadeIn(easeOut(reduced, Motion.FADE_IN, 50)) togetherWith fadeOut(easeOut(reduced, Motion.FADE_OUT)))
             .using(SizeTransform(clip = false))
     }, label = "phase") { word ->
