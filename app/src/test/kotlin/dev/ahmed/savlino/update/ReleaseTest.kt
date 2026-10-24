@@ -32,6 +32,11 @@ not a bullet
         assertEquals(listOf("Fix video"), r.notes("fr"))
         assertEquals(r.notes("en"), parse(release("<!-- nezzel:versionCode=362 --><!-- nezzel:notes:en -->\n- **Fix** `video`\n<!-- /nezzel:notes -->"))!!.notes("ar"))
     }
+    @Test fun apiImportantFieldOutsideManifestIsIgnored() {
+        assertFalse(parse(release())!!.important)
+        assertFalse(parse(release().put("important", true))!!.important)
+        assertFalse(parse(release("<!-- nezzel:versionCode=362 --><!-- important: true -->"))!!.important)
+    }
     @Test fun missingMalformedAndDuplicateMarkersFailClosed() {
         listOf("", "<!-- nezzel:versionCode=no -->", "<!-- nezzel:versionCode=0 -->", "<!-- nezzel:versionCode=362 --><!-- nezzel:versionCode=363 -->")
             .forEach { assertNull(parse(release(it))) }

@@ -21,8 +21,8 @@ class UpdateManifestTests(unittest.TestCase):
         self.notes.write_text("<!-- nezzel:notes:en -->\n- **Fix** `video`\n<!-- /nezzel:notes -->\n"
                               "<!-- nezzel:notes:ar -->\n- إصلاح\n<!-- /nezzel:notes -->", encoding="utf-8")
 
-    def run_generator(self, version="0.4.4", code="400"):
-        return subprocess.run([sys.executable, "-I", str(SCRIPT), version, code, str(self.apk), str(self.notes)],
+    def run_generator(self, version="0.4.4", code="400", important=False):
+        return subprocess.run([sys.executable, "-I", str(SCRIPT), version, code, str(self.apk), str(self.notes)] + (["--important"] if important else []),
                               cwd=self.root, capture_output=True, text=True, encoding="utf-8")
 
     def test_isolated_cli_hashes_exact_bytes_and_extracts_both_languages(self):
@@ -34,6 +34,14 @@ class UpdateManifestTests(unittest.TestCase):
                                   "sha256": hashlib.sha256(b"fake-apk\x00\xff").hexdigest()},
                           "notes": {"en": ["Fix video"], "ar": ["إصلاح"]}}, manifest)
         self.assertNotIn("url", manifest["apk"])
+
+    def test_important_flag_is_opt_in(self):
+        ordinary = self.run_generator()
+        self.assertEqual(0, ordinary.returncode, ordinary.stderr)
+        self.assertNotIn("important", json.loads(ordinary.stdout))
+        important = self.run_generator(important=True)
+        self.assertEqual(0, important.returncode, important.stderr)
+        self.assertIs(True, json.loads(important.stdout)["important"])
 
     def test_missing_or_empty_language_block_fails_without_output(self):
         for body in ["", "<!-- nezzel:notes:en -->\n- Fix\n<!-- /nezzel:notes -->",

@@ -26,6 +26,13 @@ class ManifestReleaseTest {
         assertEquals(listOf("Fixed"), release.notes("en")); assertEquals(listOf("إصلاح"), release.notes("ar"))
         assertEquals(listOf("Fixed"), release.notes("fr"))
     }
+    @Test fun importantRequiresAnActualBooleanTrue() {
+        assertFalse(parse(manifest())!!.important)
+        assertTrue(parse(manifest().put("important", true))!!.important)
+        for (value in listOf(false, "true", "false", 1, JSONObject.NULL, JSONObject())) {
+            assertFalse(parse(manifest().put("important", value))!!.important)
+        }
+    }
     @Test fun everyRequiredFieldMustBePresent() {
         listOf("schema", "version", "versionCode", "apk", "notes").forEach { field ->
             assertNull(field, parse(manifest().apply { remove(field) }))

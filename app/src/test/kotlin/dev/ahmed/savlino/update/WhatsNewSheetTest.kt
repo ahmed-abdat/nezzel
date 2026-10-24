@@ -146,6 +146,50 @@ class WhatsNewSheetTest {
     @Test fun freshInstallHasNoSheetOrUpdatedSnackbar() = homeWithoutNotes(false)
     @Test fun updateWithoutNotesKeepsUpdatedSnackbar() = homeWithoutNotes(true)
 
+    private fun offeredSheet() {
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val production = object : android.content.ContextWrapper(app) { override fun getPackageName() = UpdatePolicy.PACKAGE }
+        val manifest = org.json.JSONObject().put("schema", 1).put("version", "0.5.0").put("versionCode", 99999).put("important", true)
+            .put("apk", org.json.JSONObject().put("name", "update.apk").put("size", 100).put("sha256", "a".repeat(64)))
+            .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("New improvement"))
+                .put("ar", org.json.JSONArray().put("تحسين جديد")))
+        app.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().putString("release", manifest.toString())
+            .putString("release-format", "manifest").commit()
+        val updates = AppUpdates(production, owner)
+        val links = LinkViewModel(SavedStateHandle())
+        var rationale by mutableStateOf(true)
+        updates.onAppOpen()
+        try {
+            renderThemed({ nodes(it) }, {
+                val state by updates.state.collectAsState()
+                AppUpdateSheets(updates, state, links, language, rationale)
+            }) { a ->
+                fun visible() = nodes(a).any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" }
+                assertFalse(visible())
+                assertFalse(updates.prefs.getBoolean("sheet-99999", false))
+                links.edit("https://example.org/video"); links.checkLink()
+                rationale = false
+                assertFalse(visible()) // Includes format selection and download confirmation.
+                links.dismissOptions()
+                links.navigate("Settings")
+                assertFalse(visible()) // Settings has its own dialogs/sheets.
+                links.navigate("Home")
+                assertTrue(visible())
+                assertTrue(updates.prefs.getBoolean("sheet-99999", false))
+                click(a, app.getString(R.string.update_later))
+                assertFalse(visible())
+                updates.onAppClosed(); updates.onAppOpen()
+                assertTrue(visible())
+                click(a, app.getString(R.string.update_action))
+                assertFalse(visible()) // Waits for the hide animation that precedes navigation.
+                assertEquals("AppUpdate", links.destination)
+            }
+        } finally { owner.cancel() }
+    }
+    @Test fun offeredSheetWaitsForModalsAndLaterDefersUntilNextOpenEnglish() = offeredSheet()
+    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi")
+    fun offeredSheetWaitsForModalsAndLaterDefersUntilNextOpenArabic() = offeredSheet()
+
     private fun sheet() {
         val notes = WhatsNew("0.4.5", (1..8).map { "Improvement $it" }, (1..8).map { "تحسين $it" })
         var visible by mutableStateOf(true)

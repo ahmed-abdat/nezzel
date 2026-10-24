@@ -104,7 +104,7 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
             "Statuses" -> Icon(painterResource(R.drawable.ic_status_ring), null)
             "Settings" -> BadgedBox(badge = {
                 if (updateAvailable) {
-                    val description = stringResource(R.string.update_available_title)
+                    val description = stringResource(R.string.update_badge_description)
                     Badge(Modifier.semantics { contentDescription = description }, containerColor = MaterialTheme.colorScheme.primary)
                 }
             }) { Icon(Icons.Default.Settings, null) }

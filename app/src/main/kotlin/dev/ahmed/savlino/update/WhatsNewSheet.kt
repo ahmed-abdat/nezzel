@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +22,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun WhatsNewSheet(whatsNew: WhatsNew, language: String, onDismiss: () -> Unit) {
+internal fun WhatsNewSheet(whatsNew: WhatsNew, language: String, update: (() -> Unit)? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -39,10 +40,33 @@ internal fun WhatsNewSheet(whatsNew: WhatsNew, language: String, onDismiss: () -
             notes.take(6).forEach { NoteBullet(it, large = true) }
             if (notes.size > 6) TextButton(onClick = { openUpdateReleasePage(context, whatsNew.version) },
                 modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.update_full_notes)) }
-            Button(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text(stringResource(R.string.whats_new_ok))
+            if (update != null) {
+                Button(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { update() } },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.update_action)) }
+                TextButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.update_later)) }
+            } else {
+                Button(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.whats_new_ok)) }
             }
         }
+    }
+}
+
+/** Onboarding owns a separate composition. All Home modals take priority over update prompts. */
+@Composable
+internal fun AppUpdateSheets(updates: AppUpdates, state: AppUpdateState, links: dev.ahmed.savlino.ui.LinkViewModel,
+    language: String, notificationRationaleShowing: Boolean) {
+    if (links.destination != "Home" || links.optionsState != dev.ahmed.savlino.ui.OptionsState.Hidden ||
+        links.moreFormats || links.hasPendingShare || links.hasPendingNotificationChoice ||
+        links.confirmPausedUpdate || notificationRationaleShowing) return
+    val installed = state.whatsNew
+    val offered = state.offerSheet
+    if (installed != null) WhatsNewSheet(installed, language, onDismiss = updates::dismissWhatsNew)
+    else if (offered != null) {
+        LaunchedEffect(offered.code) { updates.offerSheetShown(offered.code) }
+        WhatsNewSheet(WhatsNew(offered.version, offered.english, offered.arabic, offered.french), language,
+            update = { updates.dismissOfferSheet(); links.navigate("AppUpdate") }, onDismiss = updates::dismissOfferSheet)
     }
 }
 

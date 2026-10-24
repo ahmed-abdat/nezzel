@@ -156,6 +156,10 @@ class MainActivity : AppCompatActivity() {
         if (onboarding && share != null) finishOnboarding()
         setIntent(Intent(this, MainActivity::class.java))
     }
+    override fun onStart() {
+        super.onStart()
+        if (!onboarding) (application as NezzelApplication).appUpdates.onAppOpen()
+    }
     override fun onResume() {
         super.onResume(); resumed = true
         links.clipboardForeground = hasWindowFocus()
@@ -167,6 +171,7 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
     override fun onStop() {
+        if (!isChangingConfigurations) (application as NezzelApplication).appUpdates.onAppClosed()
         pasteRequested = false
         super.onStop()
     }

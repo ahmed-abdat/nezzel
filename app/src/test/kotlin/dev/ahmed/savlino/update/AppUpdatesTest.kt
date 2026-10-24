@@ -47,16 +47,115 @@ class AppUpdatesTest {
         assertTrue(AppPreferences(context).helpImprove)
         assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork(AppUpdates.WORK).get().any { !it.state.isFinished })
     }
-    @Test fun schedulingKeepsExistingWorkAndItsJitter() {
+    @Test fun schedulingUpdatesExistingPeriodToTwelveHours() {
         val updates = AppUpdates(production, scope)
-        updates.setAutomatic(true)
         val work = WorkManager.getInstance(context)
-        val first = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().single { !it.state.isFinished }
-        assertTrue(first.initialDelayMillis in 86_400_000L..108_000_000L)
+        val old = androidx.work.PeriodicWorkRequestBuilder<AppUpdateWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+            .setInitialDelay(24, java.util.concurrent.TimeUnit.HOURS).build()
+        work.enqueueUniquePeriodicWork(AppUpdates.WORK, androidx.work.ExistingPeriodicWorkPolicy.KEEP, old).result.get()
         updates.setAutomatic(true)
-        val kept = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().single { !it.state.isFinished }
-        assertEquals(first.id, kept.id)
-        assertEquals(first.initialDelayMillis, kept.initialDelayMillis)
+        val updated = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().single { !it.state.isFinished }
+        assertEquals(old.id, updated.id)
+        assertTrue(updated.initialDelayMillis in 21_600_000L..43_200_000L)
+        assertEquals(43_200_000L, updated.periodicityInfo!!.repeatIntervalMillis)
+        assertEquals(androidx.work.NetworkType.CONNECTED, updated.constraints.requiredNetworkType)
+        assertTrue(updated.constraints.requiresBatteryNotLow())
+    }
+    @Test fun sixHourSuccessGateChecksOnlyWhenOlder() = runBlocking {
+        var now = 100_000_000L
+        var requests = 0
+        val updates = AppUpdates(production, scope, { now }) { object : UpdateHttp("test") {
+            override suspend fun manifest(): ByteArray { requests++; return manifestBytes() }
+        } }
+        updates.check(manual = false)
+        now += 21_600_000L
+        updates.check(manual = false)
+        assertEquals(1, requests)
+        now++
+        updates.check(manual = false)
+        assertEquals(2, requests)
+    }
+    @Test fun onlyTheFirstCheckOfAUtcDayIsCounted() = runBlocking {
+        var now = 10 * UpdatePolicy.DAY + 1_000L
+        val counted = mutableListOf<Boolean>()
+        val updates = AppUpdates(production, scope, { now }) { count -> counted += count; object : UpdateHttp("test") {
+            override suspend fun manifest(): ByteArray = manifestBytes()
+        } }
+        updates.check(manual = true)
+        now += 7 * 3_600_000L
+        updates.check(manual = true)
+        now = 11 * UpdatePolicy.DAY
+        updates.check(manual = false)
+        assertEquals(listOf(true, false, true), counted)
+    }
+    @Test fun dismissalPersistsPerVersionAndExpiresAtThreeDays() {
+        val updates = cachedRelease()
+        updates.dismiss()
+        val dismissed = updates.state.value.dismissedAt!!
+        val restored = AppUpdates(production, scope)
+        assertFalse(restored.state.value.card(1, dismissed + 259_199_999L))
+        assertTrue(restored.state.value.card(1, dismissed + 259_200_000L))
+        assertTrue(restored.state.value.badge(1))
+        restored.skip(99999)
+        assertFalse(restored.state.value.card(1, dismissed + 259_200_000L))
+    }
+    @Test fun reminderWaitsThreeDaysAndIsConsumedOnlyWhenActuallyShown() {
+        val updates = cachedRelease()
+        val firstSeen = updates.prefs.getLong("offered-99999", -1)
+        assertTrue(firstSeen > 0)
+        fun open(time: Long): AppUpdates = AppUpdates(production, scope, { time }) { error("No network") }
+            .also { it.onAppOpen() }
+        assertNull(open(firstSeen + 259_199_999L).state.value.offerSheet)
+        val due = open(firstSeen + 259_200_000L)
+        assertNotNull(due.state.value.offerSheet)
+        // A blocked modal has not shown/consumed the prompt.
+        val deferred = open(firstSeen + 259_200_001L)
+        assertNotNull(deferred.state.value.offerSheet)
+        deferred.offerSheetShown(99999)
+        deferred.dismissOfferSheet()
+        assertNull(deferred.state.value.offerSheet)
+        assertNull(open(firstSeen + 259_200_002L).state.value.offerSheet)
+    }
+    private fun importantRelease(): AppUpdates {
+        val manifest = org.json.JSONObject(manifestBytes().toString(Charsets.UTF_8)).put("important", true)
+        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit()
+            .putString("release", manifest.toString()).putString("release-format", "manifest").commit()
+        return AppUpdates(production, scope)
+    }
+    @Test fun importantSheetReturnsEachOpenEvenWhenSkippedButSwitchWins() {
+        val updates = importantRelease()
+        updates.skip(99999)
+        updates.onAppOpen()
+        assertNotNull(updates.state.value.offerSheet)
+        assertFalse(updates.state.value.badge(1))
+        updates.offerSheetShown(99999); updates.dismissOfferSheet()
+        assertNull(updates.state.value.offerSheet)
+        updates.onAppOpen() // A configuration change/resume within the same open is not a new reminder.
+        assertNull(updates.state.value.offerSheet)
+        updates.onAppClosed(); updates.onAppOpen()
+        assertNotNull(updates.state.value.offerSheet)
+        updates.setAutomatic(false)
+        assertNull(updates.state.value.offerSheet)
+        updates.onAppClosed(); updates.onAppOpen()
+        assertNull(updates.state.value.offerSheet)
+    }
+    @Test fun importantRenotifiesAtMostOncePerDayAndSkipStillWins() {
+        val first = importantRelease()
+        val manager = context.getSystemService(NotificationManager::class.java)
+        first.postNotification(); manager.cancel(UpdateNotifications.ID)
+        val notifiedAt = first.prefs.getLong("notified-at-99999", -1)
+        assertTrue(notifiedAt > 0)
+        var now = notifiedAt + 86_399_999L
+        val updates = AppUpdates(production, scope, { now }) { error("No network") }
+        updates.postNotification()
+        assertTrue(manager.activeNotifications.isEmpty())
+        now++
+        updates.postNotification()
+        assertEquals(1, manager.activeNotifications.size)
+        manager.cancel(UpdateNotifications.ID)
+        updates.skip(99999); now += 86_400_000L
+        updates.postNotification()
+        assertTrue(manager.activeNotifications.isEmpty())
     }
     @Test fun jitterIncludesBothBoundsAndUsesInjectedRandom() {
         fun fixed(upper: Boolean) = object : kotlin.random.Random() {
@@ -346,6 +445,119 @@ class AppUpdatesTest {
         updates.download(); settle()
         assertEquals(UpdateStage.READY, updates.state.value.stage)
         return updates
+    }
+    private suspend fun backgroundOffer(valid: Boolean, canPrepare: Boolean = true): AppUpdates {
+        val bytes = "verified apk".toByteArray()
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        val manifest = org.json.JSONObject(manifestBytes().toString(Charsets.UTF_8))
+        manifest.getJSONObject("apk").put("size", bytes.size).put("sha256", digest)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun manifest() = manifest.toString().toByteArray()
+            override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
+                assertTrue("No ready notification before verification", manager.activeNotifications.isEmpty())
+                file.writeBytes(bytes)
+                // Matching bytes with a different archive version must still fail closed.
+                archive(file, if (valid) release.code else release.code + 1)
+                archive(java.io.File(file.parentFile, release.name), release.code)
+            }
+        } }
+        updates.check(manual = true)
+        updates.notifyInBackground(canPrepare)
+        return updates
+    }
+    @Test fun backgroundVerifiesBeforePostingReadyAndTapUsesExistingUpdateRoute() = runBlocking {
+        val updates = backgroundOffer(valid = true)
+        assertEquals(UpdateStage.READY, updates.state.value.stage)
+        assertNotNull(updates.readyFile)
+        val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single().notification
+        assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_ready),
+            notification.extras.getString(android.app.Notification.EXTRA_TEXT))
+        assertEquals(UpdateNotifications.OPEN, org.robolectric.Shadows.shadowOf(notification.contentIntent).savedIntent.action)
+        // Preparation must not create an install session or authorize installation.
+        assertFalse(updates.prefs.contains("install-session"))
+        assertNull(updates.state.value.confirmation)
+    }
+    @Test fun backgroundVerificationFailureFallsBackToAvailableAndCleansFile() = runBlocking {
+        val updates = backgroundOffer(valid = false)
+        assertEquals(UpdateFailure.VERIFY, updates.state.value.failure)
+        assertNull(updates.readyFile)
+        assertTrue(updates.directory.listFiles().orEmpty().isEmpty())
+        val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single().notification
+        assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
+            notification.extras.getString(android.app.Notification.EXTRA_TEXT))
+    }
+    @Test fun meteredOrLowBatteryOnlyNotifiesAvailableWithoutDownloading() = runBlocking {
+        val updates = backgroundOffer(valid = true, canPrepare = false)
+        assertEquals(UpdateStage.IDLE, updates.state.value.stage)
+        assertNull(updates.readyFile)
+        assertFalse(updates.directory.exists())
+        val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single().notification
+        assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
+            notification.extras.getString(android.app.Notification.EXTRA_TEXT))
+    }
+    @Test fun backgroundRechecksAnAlreadyReadyFileBeforeAdvertisingIt() = runBlocking {
+        val updates = downloaded()
+        updates.readyFile!!.writeText("tampered apk")
+        updates.notifyInBackground(true)
+        assertNull(updates.readyFile)
+        assertEquals(UpdateFailure.VERIFY, updates.state.value.failure)
+        val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single().notification
+        assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
+            notification.extras.getString(android.app.Notification.EXTRA_TEXT))
+    }
+    @Test fun preparationNeedsAnUnmeteredNetworkAndKnownNotLowBattery() {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val network = org.robolectric.Shadows.shadowOf(manager)
+        fun connection(type: Int) {
+            network.setActiveNetworkInfo(org.robolectric.shadows.ShadowNetworkInfo.newInstance(
+                android.net.NetworkInfo.DetailedState.CONNECTED, type, 0, true, true))
+        }
+        fun battery(low: Boolean) {
+            context.sendStickyBroadcast(android.content.Intent(android.content.Intent.ACTION_BATTERY_CHANGED)
+                .putExtra(android.os.BatteryManager.EXTRA_BATTERY_LOW, low))
+        }
+        connection(android.net.ConnectivityManager.TYPE_WIFI)
+        context.sendStickyBroadcast(android.content.Intent(android.content.Intent.ACTION_BATTERY_CHANGED))
+        assertFalse(canPrepareUpdate(context)) // Missing battery state fails closed.
+        battery(false)
+        assertTrue(canPrepareUpdate(context))
+        battery(true)
+        assertFalse(canPrepareUpdate(context))
+        battery(false)
+        connection(android.net.ConnectivityManager.TYPE_MOBILE)
+        assertFalse(canPrepareUpdate(context))
+        network.setActiveNetworkInfo(null)
+        assertFalse(canPrepareUpdate(context))
+    }
+    @Test fun backgroundNetworkFailureFallsBackToAvailable() = runBlocking {
+        cachedRelease()
+        val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
+            override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
+                throw java.io.IOException("offline")
+            }
+        } }
+        updates.notifyInBackground(true)
+        assertEquals(UpdateFailure.NETWORK, updates.state.value.failure)
+        assertNull(updates.readyFile)
+        val notification = context.getSystemService(NotificationManager::class.java).activeNotifications.single().notification
+        assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
+            notification.extras.getString(android.app.Notification.EXTRA_TEXT))
+    }
+    @Test fun skippedOrDisabledBackgroundNeverTransfersOrNotifies() = runBlocking {
+        val updates = cachedRelease()
+        updates.skip(99999)
+        updates.notifyInBackground(true)
+        assertEquals(UpdateStage.IDLE, updates.state.value.stage)
+        assertFalse(updates.directory.exists())
+        assertTrue(context.getSystemService(NotificationManager::class.java).activeNotifications.isEmpty())
+        updates.prefs.edit().remove("skipped").commit()
+        val disabled = AppUpdates(production, scope)
+        disabled.setAutomatic(false)
+        disabled.notifyInBackground(true)
+        assertEquals(UpdateStage.IDLE, disabled.state.value.stage)
+        assertFalse(disabled.directory.exists())
+        assertTrue(context.getSystemService(NotificationManager::class.java).activeNotifications.isEmpty())
     }
     @Test fun verifiedDownloadRestoresReadyAcrossProcessRestart() = runBlocking {
         val first = downloaded()

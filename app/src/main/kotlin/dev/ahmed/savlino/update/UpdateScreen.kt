@@ -135,7 +135,7 @@ internal fun UpdateSettings(updates: AppUpdates?, version: String = BuildConfig.
     }
 }
 
-/** Daily check opt-out, under Settings → Advanced. */
+/** Automatic check opt-out, under Settings → Advanced. */
 @Composable
 internal fun UpdateAutoSetting(updates: AppUpdates) {
     val state by updates.state.collectAsState()

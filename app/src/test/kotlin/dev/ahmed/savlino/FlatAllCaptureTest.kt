@@ -73,14 +73,15 @@ class FlatAllCaptureTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250))
     }
 
-    private fun save(view: View, name: String) {
+    private fun save(view: View, name: String, windows: List<View> = listOf(view)) {
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        view.draw(Canvas(bitmap))
+        val canvas = Canvas(bitmap)
+        windows.filter { it.isAttachedToWindow && it.width > 0 && it.height > 0 }.forEach { it.draw(canvas) }
         dir!!.mkdirs()
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun shoot(name: String, height: Int = 832, content: @androidx.compose.runtime.Composable (String) -> Unit) {
+    private fun shoot(name: String, height: Int = 832, allWindows: Boolean = false, content: @androidx.compose.runtime.Composable (String) -> Unit) {
         assumeTrue(dir != null)
         for (lang in listOf("en", "ar")) for (dark in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers("+$lang-h${height}dp-${if (dark) "night" else "notnight"}")
@@ -88,7 +89,10 @@ class FlatAllCaptureTest {
             try {
                 controller.get().setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) { Surface(Modifier.fillMaxSize()) { content(lang) } } }
                 idle()
-                save(controller.get().window.decorView, "$prefix-$name-$lang-${if (dark) "dark" else "light"}")
+                val activity = controller.get()
+                if (allWindows) semanticsNodes(activity)
+                save(activity.window.decorView, "$prefix-$name-$lang-${if (dark) "dark" else "light"}",
+                    if (allWindows) windowViews(activity) else listOf(activity.window.decorView))
             } finally { controller.pause().stop().destroy() }
         }
     }
@@ -123,6 +127,13 @@ class FlatAllCaptureTest {
 
     @Test fun updatePermission() = shoot("update-permission", 900) { lang ->
         UpdateScreen(AppUpdateState(release = release, transfer = release, stage = UpdateStage.READY), lang, false, {}, {}, {}, {}, {}, {})
+    }
+
+    @Test @Config(sdk = [29])
+    fun updateOfferSheet() = shoot("update-offer-sheet", allWindows = true) { lang ->
+        dev.ahmed.savlino.update.WhatsNewSheet(
+            dev.ahmed.savlino.update.WhatsNew(release.version, release.english, release.arabic), lang,
+            update = {}, onDismiss = {})
     }
 
     private fun shootFooter(name: String, lang: String, dark: Boolean, scale: Float = 1f, content: @androidx.compose.runtime.Composable () -> Unit) {

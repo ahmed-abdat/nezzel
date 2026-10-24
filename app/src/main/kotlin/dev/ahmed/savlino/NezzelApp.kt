@@ -223,14 +223,7 @@ fun NezzelApp(
         dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
-        // Onboarding replaces this composition in MainActivity. Other modals take priority;
-        // keep the pending record intact until its own dismiss callback runs.
-        val whatsNew = updateState.whatsNew
-        if (updates != null && whatsNew != null && links.destination == "Home" &&
-            links.optionsState == OptionsState.Hidden && !links.moreFormats && !links.hasPendingShare &&
-            !links.hasPendingNotificationChoice && !notificationRationaleShowing) {
-            WhatsNewSheet(whatsNew, language, updates::dismissWhatsNew)
-        }
+        if (updates != null) AppUpdateSheets(updates, updateState, links, language, notificationRationaleShowing)
         if (links.destination == "AppUpdate" && updates != null) {
             Box(Modifier.fillMaxSize()) {
                 AppUpdateRoute(updates, language) { links.navigate(updateBack) }

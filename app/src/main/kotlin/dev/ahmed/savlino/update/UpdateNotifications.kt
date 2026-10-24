@@ -15,7 +15,7 @@ import dev.ahmed.savlino.locale.NezzelFormat
 internal class UpdateNotifications(private val base: Context) {
     private val manager get() = base.getSystemService(NotificationManager::class.java)
     fun cancel() = manager.cancel(ID)
-    fun post(release: Release): Boolean {
+    fun post(release: Release, ready: Boolean = false): Boolean {
         if (!UpdatePolicy.enabled(base.packageName) ||
             (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(base, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) ||
             !manager.areNotificationsEnabled()) return false
@@ -26,7 +26,7 @@ internal class UpdateNotifications(private val base: Context) {
             val intent = Intent(base, MainActivity::class.java).setAction(OPEN)
             manager.notify(ID, NotificationCompat.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_stat_nezzel)
                 .setContentTitle(context.getString(R.string.update_notification_title, NezzelFormat.isolate(release.version)))
-                .setContentText(context.getString(R.string.update_notification_text)).setAutoCancel(true)
+                .setContentText(context.getString(if (ready) R.string.update_notification_ready else R.string.update_notification_text)).setAutoCancel(true)
                 .setContentIntent(PendingIntent.getActivity(base, ID, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build())
             true
         } catch (_: SecurityException) { false }

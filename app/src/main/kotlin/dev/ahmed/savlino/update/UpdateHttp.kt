@@ -15,7 +15,7 @@ import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
 internal open class UpdateHttp(private val version: String, private val calls: Call.Factory? = null,
-                                private val versionCode: Int = BuildConfig.VERSION_CODE) : Closeable {
+                                private val versionCode: Int = BuildConfig.VERSION_CODE, private val count: Boolean = true) : Closeable {
     private val clientState = lazy { OkHttpClient.Builder().cookieJar(CookieJar.NO_COOKIES).cache(null)
         .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE).proxy(Proxy.NO_PROXY)
         .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
@@ -54,9 +54,9 @@ internal open class UpdateHttp(private val version: String, private val calls: C
         }
         throw IOException()
     }
-    // Debug builds and JVM tests skip the counting path so only release installs show in the version count.
+    // Only one release check a day takes the counting path; debug builds and JVM tests never do.
     open suspend fun manifest(): ByteArray =
-        metadata(if (calls == null && BuildConfig.DEBUG) Release.MANIFEST_ASSET else Release.manifest(versionCode), false, Release.MANIFEST_CAP)
+        metadata(if (!count || calls == null && BuildConfig.DEBUG) Release.MANIFEST_ASSET else Release.manifest(versionCode), false, Release.MANIFEST_CAP)
     open suspend fun latest(): ByteArray = metadata(Release.API, true, Release.BODY_CAP)
     /** One preferred asset attempt, then one API fallback; cancellation never starts another request. */
     suspend fun latestRelease(): Triple<Release, ByteArray, String> {
