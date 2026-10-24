@@ -250,7 +250,7 @@ class DownloadsTest {
         val space = dev.ahmed.savlino.storage.SpaceBudget(app.filesDir, app.cacheDir, dev.ahmed.savlino.storage.FreeSpace { Long.MAX_VALUE })
         val publisher = dev.ahmed.savlino.storage.MediaStorePublisher(app.contentResolver, space, app.packageName) { }
         val engine = FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))
-        val coordinator = DownloadCoordinator(app, engine, store, publisher, space = space)
+        val coordinator = DownloadCoordinator(app, engine, store, publisher, space = space, probe = { null })
         coordinator.initialize()
         app.coordinatorOverride = coordinator
         shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)).apply {
