@@ -11,18 +11,37 @@ open class NezzelApplication : Application(), Configuration.Provider {
     private val thermalStatus = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE)
     private val thermalListener = android.os.PowerManager.OnThermalStatusChangedListener { thermalStatus.value = it }
     open val downloads by lazy { DownloadCoordinator(this, parallelDownloads = preferences.parallelDownloadsFlow,
-        thermalStatus = thermalStatus) }
+        thermalStatus = thermalStatus, usage = usage) }
     // A failed background step (job store, widget, update schedule) must not close the app; the next launch retries it.
     private val contained = CoroutineExceptionHandler { _, _ -> }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
     /** Process-lifetime collectors stay out of [scope], so its startup jobs can be joined. */
     private val collectors = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
     val appUpdates by lazy { dev.ahmed.savlino.update.AppUpdates(this, scope) }
-    /** Private report inbox; posts only after the user taps Send on a preview. */
+    /** Private inbox for failure/crash reports and the daily usage counts, all only while Help improve Nezzel is on. */
     open val reports by lazy { dev.ahmed.savlino.report.InboxClient() }
+    open val usage: dev.ahmed.savlino.usage.UsageEvents by lazy { usageStore }
+    internal val usageStore by lazy {
+        val crashes = dev.ahmed.savlino.diagnostics.CrashReports.store(this)
+        dev.ahmed.savlino.usage.Usage(getSharedPreferences("usage", MODE_PRIVATE), { preferences.helpImprove },
+            { path, json -> reports.post(path, json) }, scope, dev.ahmed.savlino.BuildConfig.VERSION_NAME,
+            dev.ahmed.savlino.BuildConfig.VERSION_CODE, android.os.Build.VERSION.SDK_INT,
+            dev.ahmed.savlino.usage.PhoneSnapshot(this, preferences), object : dev.ahmed.savlino.usage.Usage.Crashes {
+                override fun pending() = crashes.pending()
+                override fun delete() = crashes.deleteReports()
+                override fun engineVersion() = downloads.maintenance.state.value.version
+            })
+    }
+    /** Off clears every counter, queued report and the crash file at once; the daily work stays only for what is on. */
+    fun chooseHelpImprove(on: Boolean) {
+        preferences.helpImprove = on
+        // Off: drop counters, queued reports and the crash file. On again: a crash recorded while off is never sent.
+        scope.launch { if (on) usageStore.dropCrash() else usageStore.clear() }
+        appUpdates.reschedule()
+    }
     val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */
-    open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope) }
+    open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope, usage) }
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(DownloadWorker.Factory(downloads)).build()
     private var startupMaintenance: Job? = null

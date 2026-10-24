@@ -53,6 +53,7 @@ internal fun SettingsScreen(
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
     val app = LocalContext.current.applicationContext as? NezzelApplication
+    var helpImprove by remember(app) { mutableStateOf(app?.preferences?.helpImprove ?: true) }
     BackHandler(advanced) { advanced = false }
     val reduced = LocalReducedMotion.current
     AnimatedContent(advanced, transitionSpec = {
@@ -62,7 +63,7 @@ internal fun SettingsScreen(
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
             links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks,
             app?.preferences?.parallelDownloadsFlow?.collectAsState()?.value, { app?.preferences?.chooseParallelDownloads(it) },
-            language) { advanced = false }
+            language, helpImprove.takeIf { app != null }, { on -> helpImprove = on; app?.chooseHelpImprove(on) }) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
             onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
     }
@@ -118,13 +119,18 @@ internal suspend fun clearLinkHistory(clear: suspend () -> Unit): Boolean = with
     try { clear(); true } catch (_: Exception) { false }
 }
 
-/** One row: forgets every saved file's link after one confirmation. Files stay. */
+/**
+ * Forgets every saved file's link after one confirmation (files stay), and the Help improve Nezzel switch: a title only,
+ * no supporting text (owner 2026-10-24); PRIVACY.md says what it sends.
+ */
 @Composable
-internal fun PrivacySettings(onClear: () -> Unit) {
+internal fun PrivacySettings(onClear: (() -> Unit)?, helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {}) {
     var confirm by rememberSaveable { mutableStateOf(false) }
+    if (onClear == null && helpImprove == null) return
     SettingsGroup(stringResource(R.string.settings_privacy)) {
-        SettingsNavRow(stringResource(R.string.clear_link_history), R.drawable.ic_ms_link,
+        if (onClear != null) SettingsNavRow(stringResource(R.string.clear_link_history), R.drawable.ic_ms_link,
             body = stringResource(R.string.clear_link_history_help), chevron = false) { confirm = true }
+        helpImprove?.let { SwitchSetting(stringResource(R.string.help_improve), null, it, R.drawable.ic_ms_bug_report, onHelpImprove) }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false },
         title = { Text(stringResource(R.string.clear_link_history_title)) },
@@ -133,7 +139,7 @@ internal fun PrivacySettings(onClear: () -> Unit) {
             TextButton(onClick = { confirm = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) }
         },
         confirmButton = {
-            TextButton(onClick = { confirm = false; onClear() }, modifier = Modifier.heightIn(min = 48.dp)) {
+            TextButton(onClick = { confirm = false; onClear?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.clear))
             }
         })
@@ -148,7 +154,8 @@ internal fun PrivacySettings(onClear: () -> Unit) {
 internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: () -> Unit, updates: AppUpdates?,
     automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
     confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, onClearLinks: (() -> Unit)? = null,
-    parallel: Int? = null, onParallel: (Int) -> Unit = {}, language: String = "en", back: () -> Unit) {
+    parallel: Int? = null, onParallel: (Int) -> Unit = {}, language: String = "en",
+    helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {}, back: () -> Unit) {
     if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
         title = { Text(stringResource(R.string.engine_update_paused_title)) },
         text = { Text(stringResource(R.string.engine_update_paused_body)) },
@@ -173,7 +180,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
             parallel?.let { count ->
                 SettingsGroup(stringResource(R.string.downloads)) { ParallelSetting(count, language, onParallel) }
             }
-            onClearLinks?.let { PrivacySettings(it) }
+            PrivacySettings(onClearLinks, helpImprove, onHelpImprove)
             engine?.let { engine ->
                 val updating = engine.status == EngineUpdateStatus.UPDATING
                 val builtIn = engine.usingBuiltIn && engine.status in setOf(EngineUpdateStatus.IDLE, EngineUpdateStatus.FAILED)

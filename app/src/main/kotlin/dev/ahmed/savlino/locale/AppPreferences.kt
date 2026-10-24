@@ -77,6 +77,10 @@ class AppPreferences(context: Context) {
     var appUpdates: Boolean
         get() = prefs.getBoolean("app_updates", true)
         set(value) { prefs.edit().putBoolean("app_updates", value).commit() }
+    /** "Help improve Nezzel": the daily usage counts and failure/crash reports. */
+    var helpImprove: Boolean
+        get() = prefs.getBoolean("help_improve", true)
+        set(value) { prefs.edit().putBoolean("help_improve", value).commit() }
     var automaticOptions: Boolean
         get() = prefs.getBoolean("automatic_options", true)
         set(value) { prefs.edit().putBoolean("automatic_options", value).apply() }

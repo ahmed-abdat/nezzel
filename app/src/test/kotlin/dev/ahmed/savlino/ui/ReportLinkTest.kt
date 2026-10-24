@@ -9,6 +9,8 @@ import android.os.Looper
 import androidx.lifecycle.SavedStateHandle
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.report.Report
+import dev.ahmed.savlino.usage.UsageEvents
+import dev.ahmed.savlino.usage.UsageKeys
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.domain.LinkRevision
@@ -35,11 +37,6 @@ class ReportLinkTest {
         return app.createConfigurationContext(Configuration(app.resources.configuration).apply {
             setLocale(Locale.forLanguageTag(language))
         })
-    }
-
-    @Test fun reportLabelsExistInEveryLanguage() {
-        assertEquals("أبلغ عن هذا الرابط", context("ar").getString(R.string.report_link))
-        assertEquals("Sent", context("en").getString(R.string.report_sent))
     }
 
     @Test fun downloadEligibilityMatchesTheCompleteAllowlist() {
@@ -80,75 +77,64 @@ class ReportLinkTest {
         assertEquals(1, attempts)
     }
 
-    private fun failing(error: DownloadError, engineVersion: String? = "fixture-engine",
-                        send: suspend (Report) -> Boolean = { false }) = LinkViewModel(SavedStateHandle(),
-        engine = FakeEngine(InspectResult.Failure(error)), currentEngineVersion = { engineVersion }, sendReport = send).also {
+    /** Records what the view model hands to the automatic reporter. */
+    private class Recorder : UsageEvents {
+        val counts = mutableListOf<String>()
+        val failures = mutableListOf<List<String?>>()
+        override fun count(key: String) { counts += key }
+        override fun failed(stage: String, code: String, link: String?, engineVersion: String?) {
+            failures += listOf(stage, code, link, engineVersion)
+        }
+    }
+
+    private fun failing(error: DownloadError, usage: Recorder, engineVersion: String? = "fixture-engine") = LinkViewModel(SavedStateHandle(),
+        engine = FakeEngine(InspectResult.Failure(error)), currentEngineVersion = { engineVersion }, usage = usage).also {
         it.edit(link); it.checkLink(); shadowOf(Looper.getMainLooper()).idle()
         assertEquals(OptionsState.Error(error), it.optionsState)
     }
 
-    @Test fun viewModelReportsTheSiteAndCachedEngineVersionOnlyForEligibleFailures() {
-        val vm = failing(DownloadError.Failed)
-        assertTrue(vm.canReportLink)
-        val report = vm.failureReport("1.2.3", 35)!!
-        assertEquals("example.com", report.site)
-        assertEquals("Failed", report.code)
-        assertEquals("fixture-engine", report.engineVersion)
-        assertEquals(link, report.link)
-        val offline = failing(DownloadError.Offline)
-        assertFalse(offline.canReportLink)
-        assertNull(offline.failureReport("1.2.3", 35))
-        vm.edit("")
-        assertFalse(vm.canReportLink)
-        assertNull(vm.failureReport("1.2.3", 35))
+    @Test fun eligibleReadFailuresAreReportedOnceWithTheExactLinkAndEngine() {
+        val usage = Recorder()
+        val vm = failing(DownloadError.Failed, usage)
+        assertEquals(listOf(listOf(Report.OPTIONS, "Failed", link, "fixture-engine")), usage.failures)
+        assertTrue(UsageKeys.FUNNEL_LINK in usage.counts)
+        vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(2, usage.failures.size) // A new failure card is a new report.
+        val offline = Recorder()
+        failing(DownloadError.Offline, offline)
+        assertTrue(offline.failures.isEmpty())
+    }
+
+    @Test fun automaticallyReadCopiedLinkIsNotReportedUntilThePersonChecksIt() {
+        val usage = Recorder()
+        val vm = LinkViewModel(SavedStateHandle(), engine = FakeEngine(InspectResult.Failure(DownloadError.Failed)),
+            currentEngineVersion = { "fixture-engine" }, usage = usage, rememberHandledClipboard = { true })
+        vm.suggest(true, true, true) { link }; shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+        assertTrue(usage.failures.isEmpty())
+        assertFalse(UsageKeys.CLIP_ACCEPTED in usage.counts)
+        vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(listOf(listOf(Report.OPTIONS, "Failed", link, "fixture-engine")), usage.failures)
     }
 
     @Test fun imageFailureUsesItsEnumNameAndUnknownEngineWithoutProbing() {
+        val usage = Recorder()
         val vm = LinkViewModel(SavedStateHandle(), images = FakeImages {
             MediaInspectResult.Failure(ImageFailure.DECODE, ImagePhase.DECODE)
-        })
+        }, usage = usage)
         vm.edit("https://example.com/photo.jpg"); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
         assertEquals(OptionsState.ImageError(ImageFailure.DECODE, phase = ImagePhase.DECODE, directImage = true), vm.optionsState)
-        assertTrue(vm.canReportLink)
-        val report = vm.failureReport("1.2.3", 35)!!
-        assertEquals("DECODE", report.code)
-        assertNull(report.engineVersion)
+        assertEquals(listOf(listOf(Report.OPTIONS, "DECODE", "https://example.com/photo.jpg", null)), usage.failures)
     }
 
     @Test fun refusedRedirectReportsTheReviewedLinkRatherThanTheRedirect() {
         val reviewed = "https://example.com/photo.jpg?value=%2f&other=two#part"
+        val usage = Recorder()
         val vm = LinkViewModel(SavedStateHandle(), images = FakeImages { source ->
             MediaInspectResult.VideoRedirect(LinkRevision(LinkInput.parse("https://example.org/resolved/watch")!!, source.revision))
-        })
+        }, usage = usage)
         vm.edit(reviewed); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
         assertEquals(OptionsState.ImageError(ImageFailure.UNSUPPORTED), vm.optionsState)
-        assertEquals(reviewed, vm.failureReport("1.2.3", 35)!!.link)
-        assertEquals("example.com", vm.failureReport("1.2.3", 35)!!.site)
-    }
-
-    @Test fun oneAcceptedReportPerFailureCard() {
-        val sent = mutableListOf<Report>()
-        val vm = failing(DownloadError.Failed) { sent += it; true }
-        vm.sendFailureReport("1.2.3", 35); shadowOf(Looper.getMainLooper()).idle()
-        assertEquals(1, sent.size)
-        assertEquals(link, sent.single().link)
-        assertTrue(vm.reportSent)
-        assertEquals(true, vm.reportOutcome)
-        vm.consumeReportOutcome()
-        assertNull(vm.sendFailureReport("1.2.3", 35))
-        assertEquals(1, sent.size)
-        // A new failure is a new card with its own report.
-        vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
-        assertFalse(vm.reportSent)
-    }
-
-    @Test fun failedSendSaysSoAndLeavesTheButtonForALaterTry() {
-        var attempts = 0
-        val vm = failing(DownloadError.Unsupported) { attempts++; false }
-        vm.sendFailureReport("1.2.3", 35); shadowOf(Looper.getMainLooper()).idle()
-        assertEquals(1, attempts)
-        assertEquals(false, vm.reportOutcome)
-        assertFalse(vm.reportSent)
-        assertFalse(vm.reportSending)
+        assertEquals(reviewed, usage.failures.single()[2])
     }
 }

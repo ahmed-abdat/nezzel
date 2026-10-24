@@ -153,7 +153,6 @@ class FacebookVideoHandoffTest {
         for (host in listOf("www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com")) {
             check("https://$host/stories/900000000000001/Synthetic/")
             assertEquals(OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE), vm.optionsState)
-            assertFalse(vm.canReportLink)
             assertFalse(vm.canUpdateAndRetry)
         }
         assertTrue(images.routes.isEmpty())
@@ -170,7 +169,6 @@ class FacebookVideoHandoffTest {
         images.result = { MediaInspectResult.Failure(ImageFailure.FACEBOOK_STORY, ImagePhase.PAGE) }
         check("https://www.facebook.com/share/Synthetic/")
         assertEquals(OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE), vm.optionsState)
-        assertFalse(vm.canReportLink)
         assertFalse(vm.canUpdateAndRetry)
         assertEquals(listOf(MediaSourceRoute.FACEBOOK), images.routes)
         assertTrue(engine.inspected.isEmpty())

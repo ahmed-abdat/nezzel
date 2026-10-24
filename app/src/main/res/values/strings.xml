@@ -266,7 +266,6 @@
     <string name="quality_very_low">Very low</string>
     <string name="quality_very_low_hint">Saves more data</string>
     <string name="paste_another_link">Paste another link</string>
-    <string name="report_link">Report this link</string>
     <string name="contact_whatsapp">Message us on WhatsApp</string>
     <string name="contact_whatsapp_intro">Hi 👋 Thanks for Nezzel!</string>
     <string name="nezzel_close">Close</string>
@@ -365,6 +364,7 @@
     <string name="settings_privacy">Privacy</string>
     <string name="clear_link_history">Clear link history</string>
     <string name="clear_link_history_help">Forget where your downloads came from. Your files stay.</string>
+    <string name="help_improve">Help improve Nezzel</string>
     <string name="clear_link_history_title">Clear link history?</string>
     <string name="clear_link_history_body">Nezzel will forget the links of all your downloads. Your files stay on your phone.</string>
     <string name="clear_link_history_failed">Couldn’t clear link history. Try again.</string>
@@ -477,17 +477,4 @@
         <item quantity="one">%1$s new</item>
         <item quantity="other">%1$s new</item>
     </plurals>
-    <string name="report_sheet_title">Send a report?</string>
-    <string name="report_sheet_body">Only this is sent. No name, no ID.</string>
-    <string name="report_field_site">Site</string>
-    <string name="report_field_error">Error</string>
-    <string name="report_field_app">Nezzel</string>
-    <string name="report_field_engine">Engine</string>
-    <string name="report_field_android">Android</string>
-    <string name="report_field_link">Link</string>
-    <string name="report_field_details">Details</string>
-    <string name="report_send">Send</string>
-    <string name="report_sent">Sent</string>
-    <string name="report_sent_snackbar">Report sent. Thanks</string>
-    <string name="report_failed_snackbar">Couldn\'t send. Try again later</string>
 </resources>

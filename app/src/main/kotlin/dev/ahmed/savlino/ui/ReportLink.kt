@@ -4,16 +4,11 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import dev.ahmed.savlino.BuildConfig
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.engine.mediaimage.ImageFailure
-import dev.ahmed.savlino.report.FailureReportSheet
 
 internal object ReportLink {
-    /** About's contact row only; failure reports go to the inbox after a preview. */
+    /** About's contact row only; failures in these sets are reported to the inbox automatically (UsageReporter). */
     const val WHATSAPP_NUMBER = "22237928327"
 
     val downloadErrors = setOf(DownloadError.Failed, DownloadError.Unsupported, DownloadError.Unavailable,
@@ -28,17 +23,4 @@ internal object ReportLink {
         try { context.startActivity(intent(message)) }
         catch (_: ActivityNotFoundException) { }
     }
-}
-
-/** The failure card's report button: [sent] once this failure was reported, [busy] while a Send is in flight. */
-internal class ReportAction(val sent: Boolean, val busy: Boolean, val onClick: () -> Unit)
-
-@Composable
-internal fun reportLinkAction(links: LinkViewModel): ReportAction? {
-    if (!links.canReportLink) return null
-    var preview by rememberSaveable { mutableStateOf(false) }
-    if (preview) FailureReportSheet({ links.failureReport(BuildConfig.VERSION_NAME, Build.VERSION.SDK_INT) },
-        onSend = { links.sendFailureReport(BuildConfig.VERSION_NAME, Build.VERSION.SDK_INT) },
-        onDismiss = { preview = false })
-    return ReportAction(links.reportSent, links.reportSending) { preview = true }
 }

@@ -85,7 +85,7 @@ class CopyLinkUiTest {
 
     @Test fun clearLinkHistoryClearsOnlyAfterConfirmation() {
         var cleared = 0
-        render({ PrivacySettings { cleared++ } }) { a ->
+        render({ PrivacySettings({ cleared++ }) }) { a ->
             click(a, context.getString(R.string.clear_link_history))
             assertTrue(texts(nodes(a)).contains(context.getString(R.string.clear_link_history_title)))
             click(a, context.getString(R.string.cancel))

@@ -23,7 +23,8 @@ import kotlinx.coroutines.CoroutineScope
  * Process-wide media services. The guarded HTTP client serves image inspection/Save and optional
  * YouTube metadata; references remain memory-only. Services are created only when authorized work needs them.
  */
-class MediaServices(context: Context, engine: () -> EngineAdapter, scope: CoroutineScope) {
+class MediaServices(context: Context, engine: () -> EngineAdapter, scope: CoroutineScope,
+    private val usage: dev.ahmed.savlino.usage.UsageEvents = dev.ahmed.savlino.usage.UsageEvents.None) {
     private val http by lazy { MediaHttpClient.create() }
     private val oembed by lazy { YouTubeOEmbed(http) }
     suspend fun earlyPreview(link: dev.ahmed.savlino.domain.ValidatedLink) = oembed.load(link.rawUrl)
@@ -41,7 +42,13 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
     private val statusSaver = dev.ahmed.savlino.statuses.StatusSaver(context)
     /** Statuses tab storage: one READ-only folder grant; created on first use. */
     val statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary by lazy {
-        dev.ahmed.savlino.statuses.DocumentStatusLibrary.create(context, statusSaver)
+        val library = dev.ahmed.savlino.statuses.DocumentStatusLibrary.create(context, statusSaver)
+        object : dev.ahmed.savlino.statuses.StatusLibrary by library {
+            override suspend fun save(items: List<dev.ahmed.savlino.statuses.StatusItem>) = library.save(items).also { results ->
+                results.filterIsInstance<dev.ahmed.savlino.statuses.StatusSaveResult.Saved>()
+                    .forEach { _ -> usage.count(dev.ahmed.savlino.usage.UsageKeys.STATUSES_SAVED) }
+            }
+        }
     }
     val saver: ImageSaver = run {
         val destinations = SaveDestinations(context)
