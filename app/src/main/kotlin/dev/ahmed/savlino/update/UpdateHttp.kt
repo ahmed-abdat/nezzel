@@ -54,7 +54,9 @@ internal open class UpdateHttp(private val version: String, private val calls: C
         }
         throw IOException()
     }
-    open suspend fun manifest(): ByteArray = metadata(Release.manifest(versionCode), false, Release.MANIFEST_CAP)
+    // Debug builds and JVM tests skip the counting path so only release installs show in the version count.
+    open suspend fun manifest(): ByteArray =
+        metadata(if (calls == null && BuildConfig.DEBUG) Release.MANIFEST_ASSET else Release.manifest(versionCode), false, Release.MANIFEST_CAP)
     open suspend fun latest(): ByteArray = metadata(Release.API, true, Release.BODY_CAP)
     /** One preferred asset attempt, then one API fallback; cancellation never starts another request. */
     suspend fun latestRelease(): Triple<Release, ByteArray, String> {
