@@ -71,65 +71,65 @@ internal fun UpdateCard(release: Release, language: String, open: () -> Unit, di
 }
 
 /**
- * Top of Settings: who you are running (mark, version, build) and the update state in one card. The automatic
- * check switch lives under Advanced ([UpdateAutoSetting]); a missing updater still shows the identity.
+ * Top of Settings: who you are running (mark, name, version) and the update state in one compact row, with the
+ * manual check at its end. The automatic check switch lives under Advanced ([UpdateAutoSetting]); a missing
+ * updater still shows the identity.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun UpdateSettings(updates: AppUpdates?, open: () -> Unit) {
+internal fun UpdateSettings(updates: AppUpdates?, version: String = BuildConfig.VERSION_NAME, open: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val language = LocalConfiguration.current.locales[0].language
-    // An open header on the page, not another box: the mark carries the brand, an offer carries the teal.
-    run {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                dev.ahmed.savlino.ui.NezzelMark(Modifier.size(56.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    // The build number is for support; it sits at the bottom of Settings → Advanced.
-                    Text(stringResource(R.string.about_version, NezzelFormat.isolate(BuildConfig.VERSION_NAME)),
-                        style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                }
+    val state = updates?.takeIf { it.available }?.state?.collectAsState()?.value
+    // The nav dot follows any cached offer (automatic or restored), so Settings must expose it whatever the manual check did;
+    // a manual check also reveals a skipped version
+    val offer = state?.release?.takeIf { state.check == UpdateCheck.AVAILABLE || state.badge(BuildConfig.VERSION_CODE.toLong()) }
+    // "Latest" only when no newer release is known (a skipped one is still newer).
+    val latest = state != null && (state.check == UpdateCheck.LATEST ||
+        (state.lastChecked != null && (state.release?.code ?: 0L) <= BuildConfig.VERSION_CODE.toLong()))
+    val checking = state?.check == UpdateCheck.CHECKING
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        dev.ahmed.savlino.ui.NezzelMark(Modifier.size(48.dp))
+        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // Name and version share a line and wrap apart only when the text is very large.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                // The build number is for support; it sits at the bottom of Settings → Advanced.
+                Text(stringResource(R.string.about_version, NezzelFormat.isolate(version)),
+                    style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
-            if (updates == null || !updates.available) return@Column
-            val state by updates.state.collectAsState()
-            // The nav dot follows any cached offer (automatic or restored), so Settings must expose it whatever the manual check did;
-            // a manual check also reveals a skipped version
-            val offer = state.release?.takeIf { state.check == UpdateCheck.AVAILABLE || state.badge(BuildConfig.VERSION_CODE.toLong()) }
-            if (offer != null) {
-                Button(onClick = open, modifier = Modifier.testTag("settings_update_offer").fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(offer.version)))
-                }
-                return@Column
-            }
-            // "Latest" only when no newer release is known (a skipped one is still newer).
-            val latest = state.check == UpdateCheck.LATEST ||
-                (state.lastChecked != null && (state.release?.code ?: 0L) <= BuildConfig.VERSION_CODE.toLong())
-            @Composable fun Status(modifier: Modifier) = Box(modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                when {
-                    state.check == UpdateCheck.CHECKING -> LinearProgressIndicator(Modifier.fillMaxWidth())
-                    state.check == UpdateCheck.FAILED ->
-                        Text(stringResource(R.string.update_check_failed), style = MaterialTheme.typography.bodyMedium, color = colors.error)
-                    else -> Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (latest) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp), tint = colors.primary)
-                            Text(stringResource(R.string.update_latest), style = MaterialTheme.typography.bodyMedium)
-                        }
-                        // The date and time never wrap apart (no stray "PM" or "م" on its own line).
-                        state.lastChecked?.let { checked ->
-                            Text(stringResource(R.string.settings_updates_last_checked) + " " +
-                                NezzelFormat.firstStrong(NezzelFormat.checkedAt(checked, language).replace(' ', '\u00A0')),
-                                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
+            when {
+                state == null -> Unit
+                offer != null -> Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(offer.version)),
+                    style = MaterialTheme.typography.bodyMedium, color = colors.primary, fontWeight = FontWeight.Medium)
+                state.check == UpdateCheck.FAILED ->
+                    Text(stringResource(R.string.update_check_failed), style = MaterialTheme.typography.bodySmall, color = colors.error)
+                else -> {
+                    if (latest) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp), tint = colors.primary)
+                        Text(stringResource(R.string.update_latest), style = MaterialTheme.typography.bodyMedium)
+                    }
+                    // The date and time never wrap apart (no stray "PM" or "م" on its own line).
+                    state.lastChecked?.let { checked ->
+                        Text(stringResource(R.string.settings_updates_last_checked) + " " +
+                            NezzelFormat.firstStrong(NezzelFormat.checkedAt(checked, language).replace(' ', '\u00A0')),
+                            style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     }
                 }
             }
-            // Status over a quiet text action: neither has to squeeze the other in any language or text size.
-            Status(Modifier.fillMaxWidth())
-            TextButton(onClick = updates::checkNow, enabled = state.check != UpdateCheck.CHECKING,
-                modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
-                Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.settings_updates_check_now))
+        }
+        if (offer != null) {
+            Button(onClick = open, modifier = Modifier.testTag("settings_update_offer").heightIn(min = 48.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp)) { Text(stringResource(R.string.update_action)) }
+        } else if (updates != null && state != null) {
+            val label = stringResource(R.string.settings_updates_check_now)
+            // A spinner in place of the icon while checking; the label stays for TalkBack.
+            FilledTonalIconButton(onClick = updates::checkNow, enabled = !checking,
+                modifier = Modifier.semantics { contentDescription = label }) {
+                if (checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Default.Refresh, null, Modifier.size(20.dp))
             }
         }
     }

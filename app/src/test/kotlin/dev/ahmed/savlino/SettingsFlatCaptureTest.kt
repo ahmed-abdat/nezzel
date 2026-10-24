@@ -29,6 +29,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.time.Duration
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 
 /** Design review captures: Settings + Advanced + empty Downloads. Runs only with NEZZEL_CAPTURE_DIR (+ NEZZEL_CAPTURE_PREFIX). */
 @RunWith(RobolectricTestRunner::class)
@@ -63,7 +65,9 @@ class SettingsFlatCaptureTest {
         }
     }
 
-    private fun <T> withUpdates(block: (AppUpdates) -> T): T {
+    private fun <T> withUpdates(checkedAt: Long? = null, block: (AppUpdates) -> T): T {
+        val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("app-updates", android.content.Context.MODE_PRIVATE)
+        prefs.edit().clear().apply { checkedAt?.let { putLong("success", it) } }.commit()
         val owner = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Unconfined)
         val production = object : android.content.ContextWrapper(RuntimeEnvironment.getApplication()) { override fun getPackageName() = "dev.ahmed.savlino" }
         return try { block(AppUpdates(production, owner)) } finally { owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel() }
@@ -81,6 +85,35 @@ class SettingsFlatCaptureTest {
             SettingsScreen(LinkViewModel(SavedStateHandle()), lang, ThemePref.System, false, true,
                 {}, {}, {}, {}, {}, {}, updates = updates, onClearLinks = {})
         }
+    }
+
+    private fun header(name: String, updates: AppUpdates) {
+      for (scale in listOf(1f, 1.5f)) shoot("$name${if (scale > 1f) "-big" else ""}", 300) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides
+                androidx.compose.ui.unit.Density(density.density, scale)) {
+                androidx.compose.material3.Surface {
+                    androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(top = 24.dp)) {
+                        dev.ahmed.savlino.update.UpdateSettings(updates, "0.4.9") {}
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun header() = withUpdates(System.currentTimeMillis() - 300_000) { header("header-latest", it) }
+
+    @Test fun headerOffer() {
+        val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("app-updates", android.content.Context.MODE_PRIVATE)
+        val json = org.json.JSONObject().put("tag_name", "v0.5.0").put("body", "<!-- nezzel:versionCode=99999 -->")
+            .put("assets", org.json.JSONArray().put(org.json.JSONObject().put("name", "update.apk").put("size", 100)
+                .put("browser_download_url", "https://github.com/asset").put("digest", "sha256:" + "a".repeat(64))))
+        val owner = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Unconfined)
+        val production = object : android.content.ContextWrapper(RuntimeEnvironment.getApplication()) { override fun getPackageName() = "dev.ahmed.savlino" }
+        try {
+            prefs.edit().clear().putString("release", json.toString()).commit()
+            header("header-offer", AppUpdates(production, owner))
+        } finally { owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel(); prefs.edit().clear().commit() }
     }
 
     @Test fun downloadsEmpty() = shoot("downloads-empty") { lang ->
