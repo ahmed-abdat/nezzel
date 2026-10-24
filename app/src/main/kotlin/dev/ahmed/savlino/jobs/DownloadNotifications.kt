@@ -20,12 +20,17 @@ import dev.ahmed.savlino.downloads.waitingForNetwork
 import dev.ahmed.savlino.locale.AppLocale
 import dev.ahmed.savlino.locale.NezzelFormat
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Display-ready transfer numbers; each is null when the journal has no honest value for it. */
 data class TransferParts(val percent: String?, val bytes: String, val speed: String?, val remaining: String?)
 
 /** [leaderId] names the job the widget shows too; only that one may become a Live Update (Android 16 QPR2). */
-class DownloadNotifications(private val base: Context, private val leaderId: () -> String? = { null }) {
+class DownloadNotifications(private val base: Context,
+    private val batchMember: (String) -> Boolean = { id ->
+        (base.applicationContext as? NezzelApplication)?.downloads?.batches?.containsJob(id) == true
+    }, private val leaderId: () -> String? = { null }) {
     private val context: Context get() = AppLocale.localized(base)
     private val manager = base.getSystemService(NotificationManager::class.java)
     private fun channel() {
@@ -49,10 +54,48 @@ class DownloadNotifications(private val base: Context, private val leaderId: () 
     fun finished(progress: DownloadProgress) {
         // Foreground service removes the active ID when work stops; use a separate result ID.
         dismissPaused(progress.jobId)
+        if (batchMember(progress.jobId)) {
+            manager.cancel(activeId(progress.jobId) xor Int.MIN_VALUE)
+            summary(excluding = progress.jobId)
+            return
+        }
         if (progress.phase == DownloadPhase.CANCELLED) manager.cancel(activeId(progress.jobId))
         else post(activeId(progress.jobId) xor Int.MIN_VALUE, notification(progress))
         summary(excluding = progress.jobId)
     }
+    private val playlistSignatures = HashMap<String, List<Any>>()
+    /** One tagged ID per batch from first progress through final result. Never emits item completions. */
+    fun playlist(batch: PlaylistBatch) {
+        val failed = batch.items.count { it.state == BatchItemState.FAILED }
+        val skipped = batch.items.count { it.state == BatchItemState.SKIPPED }
+        val signature = listOf(batch.record.state, batch.saved, batch.total, failed, skipped, batch.record.error?.name.orEmpty())
+        if (playlistSignatures[batch.id] == signature) return
+        val ctx = context
+        val language = languageOf(ctx)
+        val text = if (batch.record.state in setOf(BatchState.STOPPED, BatchState.EXPIRED))
+            ctx.getString(R.string.playlist_stopped, NezzelFormat.count(skipped, language))
+        else ctx.getString(if (batch.terminal) R.string.playlist_notification_done else R.string.playlist_notification_progress,
+            NezzelFormat.count(batch.saved, language), NezzelFormat.count(if (batch.terminal) failed else batch.total, language))
+        val tag = "playlist:${batch.id}"
+        // Keep a dismissed final dismissed across process restarts. Only counts/state, never links or titles.
+        val finalKey = "${batch.record.state}:${batch.saved}:$failed:$skipped"
+        val receipts = base.getSharedPreferences("playlist_notifications", Context.MODE_PRIVATE)
+        if (batch.terminal && receipts.getString(batch.id, null) == finalKey) {
+            playlistSignatures[batch.id] = signature
+            return
+        }
+        val builder = NotificationCompat.Builder(ctx, if (batch.terminal) COMPLETED_CHANNEL else CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_nezzel).setContentTitle(ctx.getString(R.string.app_name)).setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text)).setOnlyAlertOnce(!batch.terminal)
+            .setOngoing(!batch.terminal && !batch.paused).setAutoCancel(batch.terminal)
+            .setContentIntent(PendingIntent.getActivity(base, 0, Intent(base, MainActivity::class.java), FLAGS))
+        if (!batch.terminal) builder.setProgress(batch.total, batch.finished, false).setSilent(true)
+        if (!post(0, builder.build(), tag)) return
+        playlistSignatures[batch.id] = signature
+        if (batch.terminal) receipts.edit().putString(batch.id, finalKey).apply()
+        else receipts.edit().remove(batch.id).apply()
+    }
+
     /** A paused job has no worker, so no foreground service: its notification is plain and lives under the result ID. */
     fun paused(progress: DownloadProgress) {
         post(activeId(progress.jobId), notification(progress), PAUSED_TAG)
@@ -72,7 +115,7 @@ class DownloadNotifications(private val base: Context, private val leaderId: () 
      * them under it). The summary then stays while any job remains and goes with the last one: cancelling it earlier would
      * take the group's plain (non-foreground) children with it, and the shade hides a summary over a single child anyway.
      */
-    private fun summary(including: String? = null, excluding: String? = null) = synchronized(SUMMARY_LOCK) {
+    private fun summary(including: String? = null, excluding: String? = null): Unit = synchronized(SUMMARY_LOCK) {
         val shown = try { manager.activeNotifications.toList() } catch (_: RuntimeException) { return@synchronized }
         val ids = shown.filter { it.tag == null && it.notification.group == GROUP &&
             it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }.map { it.id }.toMutableSet()
@@ -93,10 +136,11 @@ class DownloadNotifications(private val base: Context, private val leaderId: () 
         }
     }
     fun dismissPaused(jobId: String) { manager.cancel(PAUSED_TAG, activeId(jobId)) }
-    private fun post(id: Int, notification: Notification, tag: String? = null) {
+    private fun post(id: Int, notification: Notification, tag: String? = null): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(base,
-                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        try { channel(); manager.notify(tag, id, notification) } catch (_: SecurityException) { /* In-app progress remains available. */ }
+                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        return try { channel(); manager.notify(tag, id, notification); true }
+        catch (_: SecurityException) { false } // In-app progress remains available.
     }
     private fun control(action: String, jobId: String): PendingIntent = PendingIntent.getBroadcast(base, 0,
         Intent(base, DownloadControlReceiver::class.java).setAction(action).setData(android.net.Uri.parse("nezzel:$action/$jobId"))
@@ -110,6 +154,7 @@ class DownloadNotifications(private val base: Context, private val leaderId: () 
             .setStyle(NotificationCompat.BigTextStyle().bigText(description)).setOnlyAlertOnce(true)
             .setOngoing(!progress.terminal && !progress.paused).setAutoCancel(progress.terminal)
             .setContentIntent(PendingIntent.getActivity(base, 0, Intent(base, MainActivity::class.java), FLAGS))
+        if (batchMember(progress.jobId)) builder.setSilent(true)
         // Live jobs share a group under one summary; results and paused rows stand alone, so the group counts only work in flight.
         if (!progress.terminal && !progress.paused) builder.setGroup(GROUP)
         if (!progress.terminal) {
@@ -341,7 +386,9 @@ object DownloadControls {
     /** False when the coordinator refuses (already joining/saving): the caller shows nothing, the row is moving on. */
     suspend fun pause(context: Context, app: NezzelApplication, id: String): Boolean {
         if (!app.downloads.pause(id)) return false
-        app.downloads.progress.value.find { it.jobId == id && it.paused }?.let { DownloadNotifications(context).paused(it) }
+        withContext(Dispatchers.IO) {
+            app.downloads.progress.value.find { it.jobId == id && it.paused }?.let { DownloadNotifications(context).paused(it) }
+        }
         return true
     }
     suspend fun resume(context: Context, app: NezzelApplication, id: String): Boolean {
@@ -353,8 +400,10 @@ object DownloadControls {
     /** One paused notification per job that actually paused, grouped like a per-row pause. */
     suspend fun pauseAll(context: Context, app: NezzelApplication, ids: List<String>): Int {
         val count = app.downloads.pauseAll(ids)
-        val notifications = DownloadNotifications(context)
-        app.downloads.progress.value.filter { it.jobId in ids && it.paused }.forEach { notifications.paused(it) }
+        withContext(Dispatchers.IO) {
+            val notifications = DownloadNotifications(context)
+            app.downloads.progress.value.filter { it.jobId in ids && it.paused }.forEach { notifications.paused(it) }
+        }
         return count
     }
     suspend fun resumeAll(context: Context, app: NezzelApplication, ids: List<String>): Int {

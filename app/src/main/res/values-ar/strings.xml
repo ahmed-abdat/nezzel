@@ -592,4 +592,36 @@
     <string name="saved_rename_invalid">أدخل من 1 إلى 200 حرف، دون / أو المحرف الفارغ.</string>
     <string name="saved_rename_failed">تعذّرت إعادة تسمية الملف. أعد المحاولة.</string>
     <string name="saved_renamed">تمت إعادة التسمية إلى %1$s</string>
+
+    <!-- Playlist selection and batch presentation. -->
+    <string name="playlist_title">قائمة تشغيل · %1$s فيديو</string>
+    <string name="playlist_download">تنزيل %1$s فيديو</string>
+    <string name="playlist_select_all">تحديد الكل</string>
+    <string name="playlist_select_none">إلغاء التحديد</string>
+    <string name="playlist_selected">تم تحديد %1$s</string>
+    <string name="playlist_quality_helper">كل فيديو يأخذ أقرب جودة متوفرة له.</string>
+    <string name="playlist_sizes">تظهر الأحجام عند بدء كل فيديو.</string>
+    <string name="playlist_limit">حتى 200 فيديو في المرة.</string>
+    <string name="playlist_live">بث مباشر</string>
+    <string name="playlist_private">خاص</string>
+    <string name="playlist_unavailable">غير متاح</string>
+    <string name="playlist_see_all">ضمن قائمة تشغيل · عرض كل الفيديوهات</string>
+    <string name="playlist_saved_before">حُفظ سابقًا</string>
+    <string name="playlist_progress">قائمة تشغيل %1$s من %2$s</string>
+    <string name="playlist_pause_all">إيقاف الكل مؤقتًا</string>
+    <string name="playlist_retry">إعادة المحاولة (%1$s)</string>
+    <string name="playlist_waiting_network">في انتظار الشبكة</string>
+    <string name="playlist_slowed">طلب يوتيوب إبطاء الطلبات. تم الإيقاف مؤقتًا.</string>
+    <string name="playlist_stop">إيقاف</string>
+    <string name="playlist_stop_confirm">إيقاف قائمة التشغيل هذه؟ تبقى الفيديوهات المحفوظة.</string>
+    <string name="playlist_show_videos">عرض الفيديوهات</string>
+    <string name="playlist_hide_videos">إخفاء الفيديوهات</string>
+    <string name="playlist_done">اكتمل: تم حفظ %1$s، وتعذّر حفظ %2$s</string>
+    <string name="playlist_see_why">عرض السبب</string>
+    <string name="playlist_notification_progress">قائمة تشغيل: تم حفظ %1$s من %2$s</string>
+    <string name="playlist_notification_done">تم حفظ قائمة التشغيل: %1$s فيديو، وتعذّر حفظ %2$s</string>
+    <string name="playlist_stopped">تم الإيقاف: لم يبدأ %1$s</string>
+    <string name="playlist_load_failed">تعذّر تحميل قائمة التشغيل.</string>
+    <string name="playlist_submit_failed">تعذّر بدء حفظ قائمة التشغيل. حاول مجددًا.</string>
+    <string name="playlist_done_saved">اكتمل: تم حفظ %1$s</string>
 </resources>

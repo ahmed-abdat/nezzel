@@ -6,7 +6,7 @@ import org.junit.Test
 
 class PlaylistBatchNoticeTest {
     @Test fun warnsOnlyWhenTheLinkWouldSaveTheFirstPlaylistVideo() {
-        assertEquals(R.string.playlist_first_video_warning, playlistNotice("https://youtube.com/playlist?list=PLabcdefghij"))
+        assertNull(playlistNotice("https://youtube.com/playlist?list=PLabcdefghij"))
         assertNull(playlistNotice("https://youtube.com/watch?v=abcdefghijk&list=PLabcdefghij"))
         assertNull(playlistNotice("https://youtu.be/abcdefghijk"))
         assertNull(playlistNotice("https://youtube.com/watch?v=abcdefghijk&list=WL"))

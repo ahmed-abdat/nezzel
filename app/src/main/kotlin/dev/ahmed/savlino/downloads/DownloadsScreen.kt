@@ -221,6 +221,8 @@ fun DownloadsScreen(
     onDeleteSelected: (List<SavedMedia>, (cleared: Boolean) -> Unit) -> Unit = { _, done -> done(true) },
     canShowFiles: (SavedMedia) -> Boolean = { true },
     onBatch: (BatchAction) -> Unit = {}, batchBusy: Boolean = false,
+    playlists: List<dev.ahmed.savlino.jobs.PlaylistBatch> = emptyList(),
+    onPlaylistAction: (String, PlaylistBatchAction) -> Unit = { _, _ -> }, playlistBusy: Set<String> = emptySet(),
     warnings: List<CheckWarning> = emptyList(), onTryAgain: (String) -> Unit = {}, onDismissWarning: (String) -> Unit = {},
     renameRepository: SavedMediaRepository? = null,
 ) {
@@ -238,8 +240,11 @@ fun DownloadsScreen(
     var deletingUri by rememberSaveable { mutableStateOf<String?>(null) }
     val saved = libraryLoad.lastSuccessfulRows.orEmpty()
     val deleting = saved.find { it.uri.toString() == deletingUri }
-    val started = rememberStartOrder(jobs)
-    val active = rememberWithSavedMoment(jobs, remember(jobs, started) { visibleJobs(jobs, started) })
+    var expandedPlaylists by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val memberIds = playlists.flatMap { batch -> batch.items.map { it.jobId } }.toSet()
+    val standalone = jobs.filter { it.jobId !in memberIds }
+    val started = rememberStartOrder(standalone)
+    val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) })
     val reduced = LocalReducedMotion.current
     val filters = remember(saved) { availableMediaFilters(saved) }
     val effectiveFilter = MediaFilter.valueOf(filterName).takeIf { it in filters } ?: MediaFilter.ALL
@@ -289,6 +294,20 @@ fun DownloadsScreen(
         val hot = LocalHot.current
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
+                playlists.forEach { batch ->
+                    item(key = "playlist-${batch.id}") {
+                        PlaylistBatchCard(batch, language, batch.id in expandedPlaylists,
+                            { expandedPlaylists = if (batch.id in expandedPlaylists) expandedPlaylists - batch.id else expandedPlaylists + batch.id },
+                            { onPlaylistAction(batch.id, it) }, busy = batch.id in playlistBusy)
+                    }
+                    if (batch.id in expandedPlaylists) {
+                        val members = batch.items.mapNotNull { item -> jobs.find { it.jobId == item.jobId } }
+                        items(members, key = { "playlist-job-${it.jobId}" }) { job ->
+                            JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
+                                onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
+                        }
+                    }
+                }
                 if(active.isNotEmpty()) {
                     stickyHeader(key = "jobs-header") {
                         val batch = batchAction(active)
@@ -358,7 +377,7 @@ fun DownloadsScreen(
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                } else if (libraryLoad is LibraryLoadState.Ready) item(key = "empty") {
+                } else if (libraryLoad is LibraryLoadState.Ready && playlists.isEmpty()) item(key = "empty") {
                     // One quiet block on the page surface: a bare glyph (no tile), what this tab will hold, the one action.
                     Column(Modifier.fillMaxWidth().padding(top = Space.xxl * 2, bottom = Space.xxl), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(Space.s)) {

@@ -26,9 +26,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class PlaylistBatchUiTest {
-    @Test fun englishOptionsWarnThatOnlyTheFirstPlaylistVideoIsSaved() = sheet("en", true)
-    @Test @Config(qualifiers = "ar") fun arabicOptionsWarnThatOnlyTheFirstPlaylistVideoIsSaved() = sheet("ar", true)
-    @Test @Config(qualifiers = "fr") fun frenchOptionsWarnThatOnlyTheFirstPlaylistVideoIsSaved() = sheet("fr", true)
+    @Test fun englishOptionsOpenThePlaylistWithoutInspectingTheFirstVideo() = sheet("en", true)
+    @Test @Config(qualifiers = "ar") fun arabicOptionsOpenThePlaylistWithoutInspectingTheFirstVideo() = sheet("ar", true)
+    @Test @Config(qualifiers = "fr") fun frenchOptionsOpenThePlaylistWithoutInspectingTheFirstVideo() = sheet("fr", true)
     @Test fun videoSharedFromAPlaylistDoesNotShowTheFirstVideoWarning() = sheet("en", false)
 
     private fun sheet(language: String, pure: Boolean) {
@@ -38,9 +38,14 @@ class PlaylistBatchUiTest {
         val recomposer = Recomposer(scope.coroutineContext)
         scope.launch { recomposer.runRecomposeAndApplyChanges() }
         val engine = object : EngineAdapter by FakeEngine() {
-            override suspend fun inspect(source: LinkRevision, operationId: String) = InspectResult.Success(
+            override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?) =
+                PlaylistResult.Success(PlaylistPage("Fixture playlist", emptyList(), 0, null))
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+                check(!pure) { "Pure playlists must not inspect the first video" }
+                return InspectResult.Success(
                 Inspection(source, "fixture", listOf(Format("18", "mp4", true, true, height = 720)),
                     listOf(PresetChoice(Preset.BALANCED, "18")), title = "Fixture"))
+            }
         }
         val vm = LinkViewModel(SavedStateHandle(), engine = engine)
         try {
@@ -58,9 +63,55 @@ class PlaylistBatchUiTest {
                 shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
             }
             val labels = texts(semanticsNodes(controller.get(), rounds = 4, idleMillis = 200))
-            assertTrue(vm.optionsState is OptionsState.Ready)
-            assertEquals(pure, controller.get().getString(R.string.playlist_first_video_warning) in labels)
+            assertEquals(pure, vm.playlist.visible)
+            assertEquals(!pure, vm.optionsState is OptionsState.Ready)
+            assertFalse(controller.get().getString(R.string.playlist_first_video_warning) in labels)
         } finally { vm.dismissOptions(); recomposer.cancel(); scope.cancel(); controller.pause().stop().destroy() }
+    }
+
+    @Test fun videoInListFetchesNothingUntilSeeAllAndManualPurePlaylistWaitsForCheck() {
+        var listings = 0
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?): PlaylistResult {
+                listings++
+                return PlaylistResult.Success(PlaylistPage("List", emptyList(), 0, null))
+            }
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine)
+        try {
+            vm.paste("https://youtube.com/watch?v=abcdefghijk&list=PLabcdefghij")
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0, listings)
+            vm.showPlaylist(); shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(1, listings)
+            vm.dismissOptions()
+            vm.automaticOptions = false
+            vm.paste("https://youtube.com/playlist?list=PLabcdefghij")
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(1, listings); assertFalse(vm.playlist.visible)
+            vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(2, listings); assertTrue(vm.playlist.visible)
+        } finally { vm.dismissOptions() }
+    }
+
+    @Test fun onePlaylistTapUsesTheExistingNotificationChoiceAndDismissalInvalidatesIt() {
+        var prompts = 0
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?) = PlaylistResult.Success(
+                PlaylistPage("List", listOf(PlaylistItem("abcdefghijk", "https://youtube.com/watch?v=abcdefghijk", "Video", 60)), 1, null))
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine)
+        vm.notificationPrompt = { prompts++ }
+        try {
+            vm.paste("https://youtube.com/playlist?list=PLabcdefghij")
+            shadowOf(Looper.getMainLooper()).idle()
+            vm.playlist.confirm(); vm.playlist.confirm()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(1, prompts); assertTrue(vm.hasPendingNotificationChoice); assertTrue(vm.playlist.submitting)
+            vm.dismissOptions(); vm.finishNotificationRequest()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertFalse(vm.hasPendingNotificationChoice); assertFalse(vm.playlist.visible); assertNull(vm.acceptedJob)
+        } finally { vm.dismissOptions() }
     }
 
     @Test fun videosSharedFromPrivateListsStillReachReadyOptions() {

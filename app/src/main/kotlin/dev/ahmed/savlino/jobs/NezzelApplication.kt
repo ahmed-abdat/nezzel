@@ -6,7 +6,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.channels.awaitClose
 
 /** On-demand WorkManager initialization; workers cannot pass the coordinator's startup barrier. */
@@ -21,6 +24,8 @@ open class NezzelApplication : Application(), Configuration.Provider {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
     /** Process-lifetime collectors stay out of [scope], so its startup jobs can be joined. */
     private val collectors = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
+    /** UI and notifications share a single SQLite poller. */
+    val playlistBatches by lazy { downloads.playlistBatches.stateIn(collectors, SharingStarted.WhileSubscribed(5_000), emptyList()) }
     val appUpdates by lazy { dev.ahmed.savlino.update.AppUpdates(this, scope) }
     /** Private inbox for failure/crash reports and the daily usage counts, all only while Help improve Nezzel is on. */
     open val reports by lazy { dev.ahmed.savlino.report.InboxClient() }
@@ -74,6 +79,11 @@ open class NezzelApplication : Application(), Configuration.Provider {
             downloads.batchFeeder.start(this,
                 downloads.progress.map { rows -> rows.map { Triple(it.jobId, it.phase, it.paused) } }.distinctUntilChanged(),
                 batchConnectivity())
+        }
+        collectors.launch {
+            downloads.initialize()
+            val notifications = DownloadNotifications(this@NezzelApplication)
+            playlistBatches.collect { batches -> batches.forEach(notifications::playlist) }
         }
         scope.launch { downloads.maintenance.onLaunch(); downloads.start(scope).join() }
         scope.launch {

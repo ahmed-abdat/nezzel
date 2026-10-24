@@ -50,15 +50,20 @@ class DownloadCoordinator(
         override suspend fun retry(id: String) = this@DownloadCoordinator.retry(id)
     }, parallelDownloads, thermalStatus) }
 
+    private val playlistRefresh = MutableStateFlow(0L)
     /** Called by the later sheet only after its Download-N tap. */
     suspend fun confirmBatch(id: String, title: String, preset: Preset, items: List<PlaylistItem>): Boolean = withContext(Dispatchers.IO) {
         initialize()
-        batches.create(id, title, preset, items).also { if (it) batchFeeder.wake() }
+        batches.create(id, title, preset, items).also {
+            if (it) { playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
+        }
     }
+    /** Read-only presentation stream; feeder controls and per-job behavior are unchanged. */
+    val playlistBatches get() = batches.observePlaylists(playlistRefresh)
     suspend fun pauseBatch(id: String) = batchFeeder.pause(id)
     suspend fun resumeBatch(id: String) = batchFeeder.resume(id)
     suspend fun stopBatch(id: String) = batchFeeder.stop(id)
-    suspend fun retryBatch(id: String) = batchFeeder.retry(id)
+    suspend fun retryBatch(id: String) = batchFeeder.retry(id).also { playlistRefresh.update { revision -> revision + 1 } }
 
     /** Replay durable batch controls before startup admits any worker; publications have already recovered. */
     private fun restoreBatchControls() {
