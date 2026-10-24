@@ -4,5 +4,5 @@
     <color name="widget_on_surface">#DEE4E1</color>
     <color name="widget_on_surface_variant">#BEC9C5</color>
     <color name="widget_primary">#82D5C5</color>
-    <color name="widget_on_primary">#003731</color>
+    <color name="widget_track">#33BEC9C5</color>
 </resources>

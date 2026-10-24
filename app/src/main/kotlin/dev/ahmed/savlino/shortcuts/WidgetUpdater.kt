@@ -3,14 +3,12 @@ package dev.ahmed.savlino.shortcuts
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import dev.ahmed.savlino.downloads.running
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
-import dev.ahmed.savlino.jobs.JobRecord
-import dev.ahmed.savlino.jobs.JobStage
+import dev.ahmed.savlino.jobs.LiveLeader
+import dev.ahmed.savlino.jobs.running
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -18,20 +16,24 @@ import kotlinx.coroutines.launch
 /**
  * Only fields visible in RemoteViews participate in equality; 37% floors to the 35% bucket.
  * [more] counts the other running jobs behind the shown one ("+1"); queued ones are not counted.
+ * No [title] means idle: the widget shows progress only, never a finished or failed job.
  */
 data class WidgetUiState(val title: String? = null, val phase: DownloadPhase? = null,
     val percent: Int? = null, val paused: Boolean = false, val waiting: Boolean = false, val more: Int = 0) {
     companion object {
-        fun from(job: DownloadProgress?, more: Int = 0): WidgetUiState = if (job == null) WidgetUiState() else WidgetUiState(
-            job.filename, job.phase, job.visiblePercent?.let { it / 5 * 5 }, job.paused,
-            !job.terminal && (job.waiting || job.awaitingSchedule), more)
+        fun from(job: DownloadProgress?, more: Int = 0): WidgetUiState = if (job == null || job.terminal) WidgetUiState() else WidgetUiState(
+            title(job.filename), job.phase, (if (job.paused) job.percent else job.visiblePercent)?.let { it / 5 * 5 }, job.paused,
+            job.waiting || job.awaitingSchedule, more)
 
-        /** The newest running job, then the newest live one, then the newest of any kind. */
+        /** The newest running job, then the newest live one (queued or paused); idle otherwise. */
         fun from(jobs: List<DownloadProgress>): WidgetUiState {
-            val running = jobs.filter { it.running }
-            return running.lastOrNull()?.let { from(it, running.size - 1) }
-                ?: from(jobs.lastOrNull { !it.terminal } ?: jobs.lastOrNull())
+            // Same leader as the Live Update notification.
+            return LiveLeader.pick(jobs)?.let { from(it, jobs.count { job -> job.running } - 1) } ?: from(jobs.lastOrNull { !it.terminal })
         }
+
+        // A trailing ".mp4"-like suffix only: "Part 1. Intro" and "v1.2" keep their dots.
+        private val extension = Regex("""\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,5}$""")
+        internal fun title(filename: String): String = filename.trim().replace(extension, "").trim().ifBlank { filename.trim() }
     }
 }
 
@@ -39,27 +41,16 @@ data class WidgetUiState(val title: String? = null, val phase: DownloadPhase? = 
 class WidgetUpdater(
     private val context: Context,
     private val progress: StateFlow<List<DownloadProgress>>,
-    private val completed: Flow<DownloadProgress> = emptyFlow(),
-    /** The coordinator's own journal: a second JobStore would scrub staging without knowing its live writers. */
-    private val journal: () -> List<JobRecord> = { emptyList() },
     private val widgetIds: () -> IntArray = {
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, NezzelWidgetProvider::class.java))
     },
     private val render: (WidgetUiState, IntArray) -> Unit = { state, ids -> NezzelWidgetProvider.render(context, ids, state) },
 ) {
     @Volatile private var cached: WidgetUiState? = null
-    // Buffered until start() collects: a startup sweep can confirm a file gone before the widget subscribes.
-    private val forgotten = Channel<String>(Channel.UNLIMITED)
-    /** The saved file is gone: a widget still showing it as the latest download falls back. */
-    fun forget(jobId: String) { forgotten.trySend(jobId) }
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value)
 
     fun start(scope: CoroutineScope): Job = scope.launch {
-        // The process scope runs on IO. A restart has no completion events to replay, and live
-        // snapshots deliberately omit completed rows. Seed the widget without emitting a snackbar.
-        val latest = LatestJob(try { journal() } catch (_: Exception) { emptyList() })
-        merge(progress.map { Event.Snapshot(it) }, completed.map { Event.Finished(it) }, forgotten.receiveAsFlow().map { Event.Forgotten(it) })
-            .map { latest.accept(it) }
+        progress.map { WidgetUiState.from(it) }
             .distinctUntilChanged()
             .onEach { cached = it }
             .conflate()
@@ -67,51 +58,9 @@ class WidgetUpdater(
                 val ids = widgetIds()
                 if (ids.isNotEmpty()) {
                     render(state, ids)
-                    // Conflate during the cooldown, then deliver the latest state, including terminal states.
+                    // Conflate during the cooldown, then deliver the latest state, including the return to idle.
                     delay(2_000)
                 }
             }
-    }
-
-    private sealed interface Event {
-        data class Snapshot(val jobs: List<DownloadProgress>) : Event
-        data class Finished(val job: DownloadProgress) : Event
-        data class Forgotten(val jobId: String) : Event
-    }
-
-    /** Coordinator snapshots are in admission order. Completed jobs are removed from that list. */
-    private class LatestJob(journal: List<JobRecord>) {
-        private var snapshot = emptyList<DownloadProgress>()
-        private var knownIds = journal.map { it.jobId }.toSet()
-        // Reverse admission order breaks timestamp ties in favor of the newer admission.
-        private var rememberedId: String? = null
-        private var remembered = journal.asReversed().maxByOrNull { it.updatedAt }?.let { row ->
-            rememberedId = row.jobId
-            WidgetUiState(row.displayName ?: row.filename, when (row.stage) {
-                JobStage.ENQUEUED, JobStage.PAUSED -> DownloadPhase.PREPARING
-                JobStage.COMPLETED -> DownloadPhase.COMPLETED
-                JobStage.CANCELLED -> DownloadPhase.CANCELLED
-                else -> DownloadPhase.FAILED
-            }, paused = row.stage == JobStage.PAUSED, waiting = row.stage == JobStage.ENQUEUED)
-        }
-        fun accept(event: Event): WidgetUiState {
-            when (event) {
-                is Event.Snapshot -> {
-                    if (event.jobs.any { !it.terminal } ||
-                        event.jobs.any { it.jobId !in knownIds } ||
-                        (remembered?.phase != DownloadPhase.COMPLETED && snapshot.any { it.jobId == rememberedId } &&
-                            event.jobs.none { it.jobId == rememberedId })) remembered = null
-                    // Empty startup snapshots must not make recovered journal rows look newly admitted.
-                    if (event.jobs.isNotEmpty()) knownIds = event.jobs.map { it.jobId }.toSet()
-                    snapshot = event.jobs
-                }
-                is Event.Finished -> {
-                    rememberedId = event.job.jobId
-                    remembered = WidgetUiState.from(event.job)
-                }
-                is Event.Forgotten -> if (event.jobId == rememberedId && remembered?.phase == DownloadPhase.COMPLETED) remembered = null
-            }
-            return remembered ?: WidgetUiState.from(snapshot)
-        }
     }
 }

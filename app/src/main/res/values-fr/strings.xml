@@ -430,16 +430,16 @@
     <string name="update_downloading">Téléchargement de %1$s</string>
     <string name="settings_update_accessibility">Paramètres, mise à jour disponible</string>
     <string name="shortcut_paste_link">Coller un lien</string>
-    <string name="widget_empty">Copiez un lien, puis appuyez sur Coller</string>
+    <string name="widget_idle">Aucun téléchargement en cours</string>
+    <string name="widget_preview_title">Vidéo d\'exemple</string>
     <string name="widget_paused">En pause</string>
-    <string name="widget_failed">Échec du téléchargement</string>
     <string name="widget_more">+%1$s</string>
     <plurals name="widget_more_running">
         <item quantity="one">%1$s autre en cours</item>
         <item quantity="many">%1$s autres en cours</item>
         <item quantity="other">%1$s autres en cours</item>
     </plurals>
-    <string name="widget_description">\u2066Nezzel\u2069 : coller un lien copié</string>
+    <string name="widget_description">\u2066Nezzel\u2069 : suivez la progression</string>
     <string name="shortcut_downloads_short">Fichiers</string>
     <string name="download_battery_error">Android a arrêté ce téléchargement pour économiser la batterie</string>
     <string name="battery_settings">Réglages batterie</string>

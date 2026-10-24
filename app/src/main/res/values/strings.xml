@@ -423,15 +423,16 @@
     <string name="update_downloading">Downloading %1$s</string>
     <string name="settings_update_accessibility">Settings, update available</string>
     <string name="shortcut_paste_link">Paste link</string>
-    <string name="widget_empty">Copy a link, then tap Paste</string>
+    <string name="widget_idle">No downloads right now</string>
+    <string name="widget_preview_title">Sample video</string>
+    <string name="widget_preview_percent" translatable="false">45%</string>
     <string name="widget_paused">Paused</string>
-    <string name="widget_failed">Didn\'t finish</string>
     <string name="widget_more">+%1$s</string>
     <plurals name="widget_more_running">
         <item quantity="one">%1$s more running</item>
         <item quantity="other">%1$s more running</item>
     </plurals>
-    <string name="widget_description">\u2066Nezzel\u2069: paste a copied link</string>
+    <string name="widget_description">\u2066Nezzel\u2069: follow your download progress</string>
     <string name="shortcut_downloads_short">Downloads</string>
     <string name="download_battery_error">Android stopped this download to save battery</string>
     <string name="battery_settings">Battery settings</string>

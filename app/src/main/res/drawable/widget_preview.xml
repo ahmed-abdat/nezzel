@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Picker image before API 31: mark, a title line and a 45% bar. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item><shape><size android:width="280dp" android:height="64dp" /><solid android:color="@color/widget_surface" /><corners android:radius="16dp" /></shape></item>
-    <item android:width="32dp" android:height="32dp" android:start="16dp" android:gravity="start|center_vertical" android:drawable="@drawable/ic_widget_mark" />
-    <item android:width="104dp" android:height="48dp" android:start="64dp" android:gravity="start|center_vertical"><shape><solid android:color="@color/widget_primary" /><corners android:radius="24dp" /></shape></item>
-    <item android:width="24dp" android:height="24dp" android:start="104dp" android:gravity="start|center_vertical" android:drawable="@drawable/ic_paste" />
+    <item android:width="24dp" android:height="24dp" android:start="16dp" android:gravity="start|center_vertical" android:drawable="@drawable/ic_widget_mark" />
+    <item android:width="140dp" android:height="8dp" android:start="52dp" android:top="22dp" android:gravity="start|top"><shape><solid android:color="@color/widget_track" /><corners android:radius="4dp" /></shape></item>
+    <item android:width="212dp" android:height="4dp" android:start="52dp" android:top="40dp" android:gravity="start|top"><shape><solid android:color="@color/widget_track" /><corners android:radius="2dp" /></shape></item>
+    <item android:width="95dp" android:height="4dp" android:start="52dp" android:top="40dp" android:gravity="start|top"><shape><solid android:color="@color/widget_primary" /><corners android:radius="2dp" /></shape></item>
 </layer-list>

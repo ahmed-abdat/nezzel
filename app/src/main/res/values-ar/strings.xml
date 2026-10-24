@@ -469,9 +469,9 @@
     <string name="update_downloading">جارٍ التنزيل %1$s</string>
     <string name="settings_update_accessibility">الإعدادات، يتوفر تحديث</string>
     <string name="shortcut_paste_link">الصق الرابط</string>
-    <string name="widget_empty">انسخ رابطًا ثم اضغط الصق</string>
+    <string name="widget_idle">لا تنزيلات الآن</string>
+    <string name="widget_preview_title">فيديو تجريبي</string>
     <string name="widget_paused">متوقف مؤقتًا</string>
-    <string name="widget_failed">لم يكتمل</string>
     <string name="widget_more">+%1$s</string>
     <plurals name="widget_more_running">
         <item quantity="zero">لا تنزيلات أخرى جارية</item>
@@ -481,7 +481,7 @@
         <item quantity="many">%1$s تنزيلًا آخر جاريًا</item>
         <item quantity="other">%1$s تنزيل آخر جارٍ</item>
     </plurals>
-    <string name="widget_description">\u2066Nezzel\u2069: الصق رابطًا منسوخًا</string>
+    <string name="widget_description">\u2066Nezzel\u2069: تابع تقدّم التنزيل</string>
     <string name="shortcut_downloads_short">التنزيلات</string>
     <string name="download_battery_error">أوقف \u2066Android\u2069 التنزيل لتوفير البطارية</string>
     <string name="battery_settings">إعدادات البطارية</string>

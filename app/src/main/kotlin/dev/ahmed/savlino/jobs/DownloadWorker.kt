@@ -5,7 +5,7 @@ import androidx.work.*
 
 class DownloadWorker(context: Context, params: WorkerParameters,
     private val coordinator: DownloadCoordinator) : CoroutineWorker(context, params) {
-    private val notifications = DownloadNotifications(context)
+    private val notifications = DownloadNotifications(context) { LiveLeader.pick(coordinator.progress.value)?.jobId }
     private val jobId get() = inputData.getString(JOB_ID)
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val progress = coordinator.progress.value.firstOrNull { it.jobId == jobId }

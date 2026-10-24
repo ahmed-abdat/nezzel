@@ -63,7 +63,7 @@ fun NezzelApp(
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val shareLinks = remember(links.downloads) {
-        links.downloads?.shareLinks { id -> (context.applicationContext as? NezzelApplication)?.widgets?.forget(id) }
+        links.downloads?.shareLinks()
     }
     val library = rememberLibraryState(snackbar, sweep = shareLinks?.let { it::sweep })
     val jobs by (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()

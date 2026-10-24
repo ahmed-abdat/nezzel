@@ -64,8 +64,6 @@ class DownloadCoordinator(
     val cancelled: kotlinx.coroutines.flow.SharedFlow<DownloadProgress> = cancellationEvents
     private val mutableError = MutableStateFlow<DownloadError?>(null)
     val error: StateFlow<DownloadError?> = mutableError.asStateFlow()
-    /** Journal rows for observers that need history the live snapshot omits (widget after a restart). */
-    fun journal(): List<JobRecord> = store.all()
 
     init {
         store.onExpired = { row ->
@@ -689,7 +687,7 @@ class DownloadCoordinator(
         if (removed || store.get(id) == null) mutableProgress.update { it.filterNot { event -> event.jobId == id } }
     }
     /** Copy link and the gone-file sweep, on this coordinator's journal. */
-    fun shareLinks(onGone: (String) -> Unit) = dev.ahmed.savlino.downloads.ShareLinks(context.contentResolver, store, onGone)
+    fun shareLinks(onGone: (String) -> Unit = {}) = dev.ahmed.savlino.downloads.ShareLinks(context.contentResolver, store, onGone)
     /** Settings › Clear link history: every kept link and its key go; the files stay. */
     suspend fun clearShareLinks() = withContext(Dispatchers.IO) {
         engine.clearRecentLinks()

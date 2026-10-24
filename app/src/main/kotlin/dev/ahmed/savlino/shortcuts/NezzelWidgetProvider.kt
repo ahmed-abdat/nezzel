@@ -23,7 +23,7 @@ class NezzelWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        // Below a typical three-cell width leave all space for the mark and the 48dp Paste action.
+        // Two cells leave room for the bar and the status only; the title still reaches TalkBack.
         private fun narrow(options: Bundle): Boolean = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250) < 200
 
         fun render(context: Context, ids: IntArray, state: WidgetUiState, language: String = AppLocale.current(context)) {
@@ -34,40 +34,41 @@ class NezzelWidgetProvider : AppWidgetProvider() {
 
         internal fun views(context: Context, state: WidgetUiState, narrow: Boolean): RemoteViews {
             val language = context.resources.configuration.locales[0].language
-            val title = state.title?.let(NezzelFormat::isolate).orEmpty()
+            // First-strong, not LTR: an Arabic title reads right to left and ellipsizes at its own end.
+            val title = state.title?.let(NezzelFormat::firstStrong)
             val status = when {
-                state.title == null -> context.getString(R.string.widget_empty)
+                title == null -> context.getString(R.string.widget_idle)
                 state.paused -> context.getString(R.string.widget_paused)
                 state.waiting -> context.getString(R.string.download_waiting)
-                state.phase == DownloadPhase.DOWNLOADING && state.percent != null -> context.getString(
-                    R.string.update_downloading, NezzelFormat.percent(state.percent, language).let { if (language == "ar") NezzelFormat.isolate(it) else it })
+                state.phase == DownloadPhase.DOWNLOADING && state.percent != null ->
+                    NezzelFormat.percent(state.percent, language).let { if (language == "ar") NezzelFormat.isolate(it) else it }
                 else -> context.getString(when (state.phase) {
-                    DownloadPhase.PREPARING -> R.string.download_preparing
                     DownloadPhase.DOWNLOADING -> R.string.download_transferring
                     DownloadPhase.JOINING -> R.string.download_joining
                     DownloadPhase.CONVERTING -> R.string.download_converting
                     DownloadPhase.SAVING -> R.string.download_saving
-                    DownloadPhase.COMPLETED -> R.string.download_saved
-                    DownloadPhase.CANCELLED -> R.string.download_cancelled
-                    else -> R.string.widget_failed
+                    else -> R.string.download_preparing
                 })
             }
             // "+1" when more run behind the shown job: isolated, so the sign stays before the digit in RTL.
-            val more = state.more.takeIf { it > 0 && state.title != null }
+            val more = state.more.takeIf { it > 0 && title != null }
             val shown = more?.let { "$status · ${NezzelFormat.isolate(context.getString(R.string.widget_more, NezzelFormat.count(it, language)))}" } ?: status
             val spoken = listOfNotNull(context.getString(R.string.downloads), title, status,
                 more?.let { context.resources.getQuantityString(R.plurals.widget_more_running, it, NezzelFormat.count(it, language)) })
+            // A real percent fills the bar; preparing, queued and unknown sizes move without a number. Paused freezes, dimmed.
+            val live = title != null
+            val determinate = state.paused || state.percent != null && !state.waiting
             return RemoteViews(context.packageName, R.layout.widget_nezzel).apply {
                 setInt(R.id.widget_root, "setLayoutDirection", context.resources.configuration.layoutDirection)
-                setTextViewText(R.id.widget_paste, context.getString(R.string.shortcut_paste_link))
-                setContentDescription(R.id.widget_paste, context.getString(R.string.shortcut_paste_link))
-                setTextViewText(R.id.widget_title, title)
-                setViewVisibility(R.id.widget_title, if (state.title == null) View.GONE else View.VISIBLE)
+                setTextViewText(R.id.widget_title, title.orEmpty())
+                setViewVisibility(R.id.widget_title, if (live && !narrow) View.VISIBLE else View.GONE)
                 setTextViewText(R.id.widget_status, shown)
-                setViewVisibility(R.id.widget_latest, if (narrow) View.GONE else View.VISIBLE)
-                setContentDescription(R.id.widget_latest, spoken.joinToString(". "))
-                setOnClickPendingIntent(R.id.widget_paste, ShortcutActions.pendingIntent(context, ShortcutActions.PASTE_LINK))
-                setOnClickPendingIntent(R.id.widget_latest, ShortcutActions.pendingIntent(context, ShortcutActions.OPEN_DOWNLOADS))
+                setViewVisibility(R.id.widget_progress, if (live && !state.paused) View.VISIBLE else View.GONE)
+                setViewVisibility(R.id.widget_progress_paused, if (live && state.paused) View.VISIBLE else View.GONE)
+                if (live) setProgressBar(if (state.paused) R.id.widget_progress_paused else R.id.widget_progress,
+                    100, state.percent ?: 0, !determinate)
+                setContentDescription(R.id.widget_root, spoken.joinToString(". "))
+                setOnClickPendingIntent(R.id.widget_root, ShortcutActions.pendingIntent(context, ShortcutActions.OPEN_DOWNLOADS))
             }
         }
     }
