@@ -6,6 +6,25 @@ Version entries describe existing builds, not public APK availability.
 
 ## [Unreleased]
 
+### Added
+
+- Pause a download and resume it later; a dropped connection waits and resumes where it stopped.
+- Up to 3 downloads at once (Settings → Advanced, default 2).
+- Shortcuts: a "Paste link" Quick Settings tile, app-icon shortcuts, and "Open in Nezzel" for a link selected in a browser.
+- Copy the link of any saved file from Downloads.
+- On mobile data, a large download says how much data it will use.
+
+### Changed
+
+- YouTube download options show up about 8× faster (about 2.5 s instead of 20 s on the same phone).
+- Flatter screens: settings, notes, quality rows and the empty Downloads tab drop their boxes; Home's footer fits one row.
+
+### Fixed
+
+- Saved audio keeps its title and cover, and Downloads shows the cover instead of a music icon.
+- More link forms work, and a cut-off download is retried instead of saved broken.
+- A dropped connection during the format re-check waits for the network.
+
 ## [0.4.8] - 2026-10-22
 
 ### Added
