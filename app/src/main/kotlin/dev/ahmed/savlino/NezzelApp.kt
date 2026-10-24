@@ -55,9 +55,10 @@ fun NezzelApp(
     onAutomaticOptions: (Boolean) -> Unit = {},
     onHowItWorks: () -> Unit = {},
     notificationRationaleShowing: Boolean = false,
+    statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary? = null,
 ) {
     var updateBack by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
-    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads")) updateBack = links.destination }
+    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack = links.destination }
     BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack else "Home") }
     val reduced = rememberReducedMotion()
     val snackbar = remember { SnackbarHostState() }
@@ -220,6 +221,7 @@ fun NezzelApp(
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks)
+                        "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(statusLibrary, language)
                         "Downloads" -> DownloadsScreen(jobs, language,
                             cancel,
                             removeFailed, library.open, library.share, library.openWith,

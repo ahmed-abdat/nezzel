@@ -444,4 +444,48 @@
     <string name="download_battery_error">Android a arrêté ce téléchargement pour économiser la batterie</string>
     <string name="battery_settings">Réglages batterie</string>
     <string name="battery_hint_samsung">Samsung : ajoutez Nezzel aux « Applications jamais en veille » dans les réglages batterie</string>
+    <!-- Statuses tab (0.5) -->
+    <string name="statuses_tab">Statuts</string>
+    <string name="statuses_intro_title">Gardez les statuts que vous avez vus</string>
+    <string name="statuses_step_1">Ouvrez le statut dans WhatsApp</string>
+    <string name="statuses_step_2">Revenez ici et enregistrez-le</string>
+    <string name="statuses_grant">Autoriser l’accès</string>
+    <string name="statuses_next_screen">À l’écran suivant :</string>
+    <string name="statuses_use_folder">Utiliser ce dossier</string>
+    <string name="statuses_allow">Autoriser</string>
+    <string name="statuses_grant_hint">Touchez « Utiliser ce dossier », puis « Autoriser »</string>
+    <string name="statuses_privacy">Nezzel ne fait que lire ces fichiers. Ne gardez que ce qui vous revient.</string>
+    <string name="statuses_not_installed">WhatsApp n’est pas sur ce téléphone</string>
+    <string name="statuses_wrong_folder">Ce n’est pas le bon dossier. Touchez « Utiliser ce dossier » sur cet écran.</string>
+    <string name="statuses_access_lost">Nezzel n’a plus accès au dossier. Choisissez-le à nouveau.</string>
+    <string name="statuses_empty">Aucun statut pour l’instant. Ouvrez-en un dans WhatsApp, puis revenez.</string>
+    <string name="statuses_open_whatsapp">Ouvrir WhatsApp</string>
+    <string name="statuses_save">Enregistrer</string>
+    <string name="statuses_saved">Enregistré</string>
+    <string name="statuses_filter_all">Tout</string>
+    <string name="statuses_filter_photos">Photos</string>
+    <string name="statuses_filter_videos">Vidéos</string>
+    <string name="statuses_hide_saved">Masquer les enregistrés</string>
+    <string name="statuses_new">Nouveau</string>
+    <string name="statuses_account_n">Compte %1$s</string>
+    <string name="statuses_photo">Photo</string>
+    <string name="statuses_video">Vidéo</string>
+    <string name="statuses_save_failed">Échec de l’enregistrement. Réessayez.</string>
+    <string name="statuses_select">Sélectionner</string>
+    <string name="statuses_preview_close">Fermer</string>
+    <plurals name="statuses_save_n">
+        <item quantity="one">Enregistrer %1$s</item>
+        <item quantity="many">Enregistrer %1$s</item>
+        <item quantity="other">Enregistrer %1$s</item>
+    </plurals>
+    <plurals name="statuses_gone">
+        <item quantity="one">%1$s statut n’existait plus</item>
+        <item quantity="many">%1$s statuts n’existaient plus</item>
+        <item quantity="other">%1$s statuts n’existaient plus</item>
+    </plurals>
+    <plurals name="statuses_new_n">
+        <item quantity="one">%1$s nouveau</item>
+        <item quantity="many">%1$s nouveaux</item>
+        <item quantity="other">%1$s nouveaux</item>
+    </plurals>
 </resources>

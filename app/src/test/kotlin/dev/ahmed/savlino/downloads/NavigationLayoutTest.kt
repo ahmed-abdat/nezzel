@@ -31,6 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
@@ -42,6 +43,19 @@ class NavigationLayoutTest {
 
     @Test @Config(qualifiers = "en-w360dp-h800dp-mdpi")
     fun portraitKeepsBarAndDestinationsWork() = navigation(false)
+
+    // Real font metrics (native graphics) so a clipped or ellipsized label shows up as overflow.
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "en-w360dp-h800dp-xxhdpi")
+    fun englishPortraitBarFitsFourLabelsAtLargeText() = navigation(false, checkClip = true)
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "ar-w360dp-h800dp-xxhdpi")
+    fun arabicPortraitBarFitsFourLabelsAtLargeText() = navigation(false, rtl = true, checkClip = true)
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "fr-w360dp-h800dp-xxhdpi")
+    fun frenchPortraitBarFitsFourLabelsAtLargeText() = navigation(false, checkClip = true)
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "fr-w800dp-h360dp-xxhdpi")
+    fun frenchLandscapeRailFitsFourLabelsAtLargeText() = navigation(true, checkClip = true)
 
     @Test @Config(qualifiers = "en-w800dp-h480dp-mdpi")
     fun height480KeepsBar() = navigation(false)
@@ -59,7 +73,7 @@ class NavigationLayoutTest {
     @Test @Config(sdk = [35], qualifiers = "ar-w800dp-h360dp-mdpi")
     fun arabicLandscapeProtectsCutoutAndNavigationBarAtBothEdges() = navigation(true, rtl = true, sideInsets = true)
 
-    private fun navigation(rail: Boolean, rtl: Boolean = false, sideInsets: Boolean = false, fontScale: Float = 1.3f) {
+    private fun navigation(rail: Boolean, rtl: Boolean = false, sideInsets: Boolean = false, fontScale: Float = 1.3f, checkClip: Boolean = false) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         val activity = controller.get()
         var route by mutableStateOf("Home")
@@ -103,12 +117,32 @@ class NavigationLayoutTest {
             } else {
                 assertTrue("Portrait bar stays below content", content.bottom <= navigation.top)
             }
-            for ((destination, label) in listOf("Settings" to R.string.settings, "Downloads" to R.string.downloads, "Home" to R.string.home)) {
+            val labels = listOf("Settings" to R.string.settings, "Statuses" to R.string.statuses_tab, "Downloads" to R.string.shortcut_downloads_short, "Home" to R.string.home)
+            for ((destination, label) in labels) {
                 val item = compose.onNode(hasText(activity.getString(label)) and hasClickAction())
                 if (rail) item.performScrollTo()
                 item.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 item.performClick().assertIsSelected()
                 compose.runOnIdle { assertEquals(destination, route) }
+            }
+            // Four labels, none ellipsized: each keeps its full text on screen (spec T5: icon-only is not allowed).
+            if (checkClip) for ((_, label) in labels) {
+                val text = compose.onAllNodes(hasText(activity.getString(label)) and
+                    SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult), useUnmergedTree = true).onFirst().fetchSemanticsNode()
+                val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                text.config[SemanticsActions.GetTextLayoutResult].action!!(layouts)
+                layouts.single().let {
+                    // Center-aligned labels report width "overflow" against their paragraph box; ellipsis or cut height are the real clips.
+                    assertFalse("${activity.getString(label)} must not ellipsize: lines=${it.lineCount}", it.isLineEllipsized(it.lineCount - 1))
+                    assertFalse("${activity.getString(label)} must not clip vertically", it.didOverflowHeight)
+                }
+            }
+            if (!rail) {
+                val tops = labels.map { compose.onNode(hasText(activity.getString(it.second)) and hasClickAction()).fetchSemanticsNode().boundsInRoot }
+                assertTrue("All four bar items sit inside the one bar: $tops / $navigation", tops.all { it.top >= navigation.top && it.bottom <= navigation.bottom + 1f })
+                // Bar order follows reading direction: Home, Downloads, Statuses, Settings from the start edge.
+                val starts = tops.reversed().map { if (rtl) -it.right else it.left }
+                assertEquals(starts.sorted(), starts)
             }
             compose.onNodeWithContentDescription(activity.getString(R.string.downloads_running_accessibility, "1")).assertExists()
             compose.runOnIdle { jobs = jobs.takeLast(1) }

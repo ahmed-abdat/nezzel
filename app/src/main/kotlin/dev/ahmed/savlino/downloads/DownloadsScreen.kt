@@ -5,7 +5,7 @@ import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.shape.CircleShape
-import android.util.Size
+import dev.ahmed.savlino.ui.ThumbnailKind
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -100,6 +100,8 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
     @Composable fun DestinationIcon(destination: String) {
         when (destination) {
             "Home" -> Icon(Icons.Default.Home, null)
+            // A generic dashed ring, never a messaging app's logo or colour (spec 0.5 §5.5).
+            "Statuses" -> Icon(painterResource(R.drawable.ic_status_ring), null)
             "Settings" -> BadgedBox(badge = {
                 if (updateAvailable) {
                     val description = stringResource(R.string.update_available_title)
@@ -116,7 +118,7 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
             }
         }
     }
-    val destinations = listOf("Home" to R.string.home, "Downloads" to R.string.downloads, "Settings" to R.string.settings)
+    val destinations = listOf("Home" to R.string.home, "Downloads" to R.string.shortcut_downloads_short, "Statuses" to R.string.statuses_tab, "Settings" to R.string.settings)
     if (rail) {
         NavigationRail(modifier = Modifier.testTag("navigation_rail").fillMaxHeight().verticalScroll(rememberScrollState()),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -579,29 +581,8 @@ fun mediaMeta(item: SavedMedia, language: String, withFormat: Boolean = false): 
     item.size?.let { NezzelFormat.size(it, language) } ?: stringResource(R.string.saved_size_unknown)
 ).joinToString(stringResource(R.string.separator)).let(NezzelFormat::isolate)
 
-/** MediaStore rows get system thumbnails (album art for audio); custom-folder documents often don't, so decode one ourselves. */
-private fun loadThumbnail(context: android.content.Context, item: SavedMedia): Bitmap? {
-    try { return context.contentResolver.loadThumbnail(item.uri, Size(320, 180), null) } catch (_: Exception) { }
-    return try {
-        if (item.kind == SavedMediaKind.VIDEO || item.kind == SavedMediaKind.AUDIO) {
-            val retriever = android.media.MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(context, item.uri)
-                if (item.kind == SavedMediaKind.VIDEO)
-                    retriever.getScaledFrameAtTime(-1, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 320, 320)
-                else retriever.embeddedPicture?.let { art ->
-                    android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(art))) { decoder, info, _ ->
-                        val scale = maxOf(1, info.size.width / 320, info.size.height / 180)
-                        decoder.setTargetSize(maxOf(1, info.size.width / scale), maxOf(1, info.size.height / scale))
-                    }
-                }
-            } finally { retriever.release() }
-        } else android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(context.contentResolver, item.uri)) { decoder, info, _ ->
-            val scale = maxOf(1, info.size.width / 320, info.size.height / 180)
-            decoder.setTargetSize(maxOf(1, info.size.width / scale), maxOf(1, info.size.height / scale))
-        }
-    } catch (_: Exception) { null } catch (_: OutOfMemoryError) { null }
-}
+private fun loadThumbnail(context: android.content.Context, item: SavedMedia): Bitmap? = dev.ahmed.savlino.ui.loadMediaThumbnail(context, item.uri,
+    when (item.kind) { SavedMediaKind.VIDEO -> ThumbnailKind.VIDEO; SavedMediaKind.AUDIO -> ThumbnailKind.AUDIO; else -> ThumbnailKind.IMAGE })
 
 @Composable
 fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
