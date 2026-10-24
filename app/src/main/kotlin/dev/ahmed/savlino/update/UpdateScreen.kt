@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
@@ -50,10 +51,10 @@ internal fun openUpdateReleasePage(context: Context, version: String? = null) {
 
 @Composable
 internal fun UpdateCard(release: Release, language: String, open: () -> Unit, dismiss: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().testTag("app-update-card"), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(Icons.Default.Refresh, null, Modifier.size(24.dp))
+    // A flat row on the page: the filled Update button is the only emphasis, so there is no box around it.
+    Row(Modifier.fillMaxWidth().testTag("app-update-card"), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(Icons.Default.Refresh, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(release.version)),
                     Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
@@ -63,9 +64,8 @@ internal fun UpdateCard(release: Release, language: String, open: () -> Unit, di
             Button(onClick = open, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
                 Text(stringResource(R.string.update_action))
             }
-            IconButton(onClick = dismiss, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Close, stringResource(R.string.update_not_now))
-            }
+        IconButton(onClick = dismiss, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Default.Close, stringResource(R.string.update_not_now))
         }
     }
 }
@@ -182,8 +182,9 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                 UpdateStage.VERIFYING, UpdateStage.INSTALLING -> UpdateProgressButton(
                     stringResource(if (state.stage == UpdateStage.VERIFYING) R.string.update_verifying else R.string.update_installing))
                 UpdateStage.READY -> {
-                    if (!canInstall) Surface(color = colors.surfaceContainer, shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!canInstall) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Default.Info, null, Modifier.size(24.dp), tint = colors.onSurfaceVariant)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(stringResource(R.string.update_permission_title), style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.fillMaxWidth().semantics { heading() })
                             Text(stringResource(R.string.update_permission_body), Modifier.fillMaxWidth())

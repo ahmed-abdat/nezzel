@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
@@ -42,9 +43,21 @@ internal fun MadeByHululsoft(modifier: Modifier = Modifier) {
     }
         .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-        // The mark is shown as supplied: never recoloured, cropped or mirrored.
-        Image(painterResource(R.drawable.hululsoft_mark), null, Modifier.size(16.dp))
         Text(madeBy(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // The mark is shown as supplied: never recoloured, cropped or mirrored. It follows the brand word in reading order.
+        Image(painterResource(R.drawable.hululsoft_mark), null, Modifier.size(16.dp))
+    }
+}
+
+/** Home's footer in one row: signature at the start, privacy line at the end; wraps to two rows when it does not fit. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun HomeFooter(modifier: Modifier = Modifier) {
+    FlowRow(modifier.fillMaxWidth().testTag("home_footer"), horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(Space.xs), itemVerticalAlignment = Alignment.CenterVertically) {
+        MadeByHululsoft(Modifier.padding(end = Space.l))
+        Text(stringResource(R.string.privacy), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

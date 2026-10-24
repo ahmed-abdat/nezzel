@@ -108,12 +108,14 @@ internal fun largeOnMobileData(format: Format, roughBytes: Long?, metered: Boole
  * another copy; this never blocks.
  */
 @Composable
-private fun SavedBeforeNotice(saved: SavedBefore, container: String?, language: String) {
+internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language: String) {
     val context = LocalContext.current
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth().testTag("saved_before")) {
-        Row(Modifier.padding(start = Space.m, end = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.saved_before, NezzelFormat.shortDate(saved.savedAt, language)),
+    // Plain note: a leading glyph, the sentence, a text action. No box around one row.
+    Row(Modifier.fillMaxWidth().testTag("saved_before"), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        Icon(painterResource(R.drawable.ic_download), contentDescription = null, Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.saved_before, NezzelFormat.shortDate(saved.savedAt, language)),
                 Modifier.weight(1f).padding(vertical = Space.m), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
                 try {
@@ -125,6 +127,5 @@ private fun SavedBeforeNotice(saved: SavedBefore, container: String?, language: 
                     android.widget.Toast.makeText(context, R.string.open_file_failed, android.widget.Toast.LENGTH_SHORT).show()
                 }
             }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.open_file)) }
-        }
     }
 }

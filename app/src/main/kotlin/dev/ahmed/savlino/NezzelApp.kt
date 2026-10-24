@@ -30,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.LinkViewModel
+import dev.ahmed.savlino.ui.PendingShareNote
+import dev.ahmed.savlino.ui.NextLinkNote
+import dev.ahmed.savlino.ui.EngineUnavailableNote
 import dev.ahmed.savlino.ui.OptionsScreen
 import dev.ahmed.savlino.ui.OptionsState
 import dev.ahmed.savlino.media.ImageSaveState
@@ -277,40 +280,9 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
                 }
-                if (links.hasPendingShare) {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                            Text(stringResource(R.string.pending_share), style = MaterialTheme.typography.bodyLarge)
-                            links.pendingShareHost?.let { host ->
-                                Text(stringResource(R.string.pending_share_from, NezzelFormat.isolate(host)),
-                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                                FilledTonalButton(onClick = links::acceptShare, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.replace_link)) }
-                                TextButton(onClick = links::dismissShare, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.dismiss)) }
-                            }
-                        }
-                    }
-                }
+                if (links.hasPendingShare) PendingShareNote(links.pendingShareHost, links::acceptShare, links::dismissShare)
                 links.nextLinkHost?.let { host ->
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Column(Modifier.fillMaxWidth().padding(Space.l).semantics { liveRegion = LiveRegionMode.Polite },
-                            verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                            Text(stringResource(R.string.next_link, NezzelFormat.count(links.nextLinkNumber, language),
-                                NezzelFormat.count(links.linkQueueTotal, language)),
-                                style = MaterialTheme.typography.titleSmall)
-                            Text(NezzelFormat.isolate(host), style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                                FilledTonalButton(onClick = links::openNextLink, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text(stringResource(R.string.open_file))
-                                }
-                                TextButton(onClick = links::skipRemainingLinks, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text(stringResource(R.string.skip_remaining_links))
-                                }
-                            }
-                        }
-                    }
+                    NextLinkNote(host, links.nextLinkNumber, links.linkQueueTotal, language, links::openNextLink, links::skipRemainingLinks)
                 }
                 HomeLinkCard(links, copiedHost, onAccept, onDismiss, onPaste)
                 DownloadStrip(jobs, language, onCancel, onRemove, onRetry, onPause, onResume) { links.navigate("Downloads") }
@@ -323,22 +295,9 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
                 }
                 LibraryLoadStatus(library.load, library.onRetry)
                 RecentFiles(library.media, language, library.open) { links.navigate("Downloads") }
-                if (links.engineUnavailable) {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Column(Modifier.fillMaxWidth().padding(Space.l).semantics { liveRegion = LiveRegionMode.Polite },
-                            verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                            Text(stringResource(R.string.unavailable_title), style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.semantics { heading() })
-                            Text(stringResource(R.string.unavailable_body), style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
+                if (links.engineUnavailable) EngineUnavailableNote()
             }
-            Column(Modifier.padding(top = Space.xl), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                Text(stringResource(R.string.privacy), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                dev.ahmed.savlino.ui.MadeByHululsoft()
-            }
+            dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(top = Space.xl))
             }
         }
     }
