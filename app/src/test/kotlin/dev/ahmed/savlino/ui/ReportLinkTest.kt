@@ -5,10 +5,10 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Looper
 import androidx.lifecycle.SavedStateHandle
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.report.Report
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.domain.LinkRevision
@@ -37,24 +37,9 @@ class ReportLinkTest {
         })
     }
 
-    @Test fun englishMessageKeepsTheReviewedLinkVerbatim() {
-        val intro = context("en").getString(R.string.report_link_intro)
-        assertEquals("Nezzel couldn't read this link:", intro)
-        assertEquals(listOf(intro, link, "Nezzel 1.2.3 · engine 2026.01.01 · Failed"),
-            ReportLink.message(intro, link, "1.2.3", "2026.01.01", "Failed").lines())
-    }
-
-    @Test fun arabicMessageKeepsTheLinkLinkable() {
-        val intro = context("ar").getString(R.string.report_link_intro)
-        assertEquals("لم يستطع Nezzel قراءة هذا الرابط:", intro)
-        assertEquals(listOf(intro, link, "Nezzel 1.2.3 · engine 2026.01.01 · NO_MEDIA"),
-            ReportLink.message(intro, link, "1.2.3", "2026.01.01", "NO_MEDIA").lines())
+    @Test fun reportLabelsExistInEveryLanguage() {
         assertEquals("أبلغ عن هذا الرابط", context("ar").getString(R.string.report_link))
-    }
-
-    @Test fun unknownEngineVersionIsAQuestionMark() {
-        val message = ReportLink.message(context("en").getString(R.string.report_link_intro), link, "1.2.3", null, "Unavailable")
-        assertEquals("Nezzel 1.2.3 · engine ? · Unavailable", message.lines().last())
+        assertEquals("Sent", context("en").getString(R.string.report_sent))
     }
 
     @Test fun downloadEligibilityMatchesTheCompleteAllowlist() {
@@ -67,17 +52,6 @@ class ReportLinkTest {
         val expected = setOf(ImageFailure.NO_MEDIA, ImageFailure.UNSUPPORTED, ImageFailure.UNAVAILABLE, ImageFailure.DECODE,
             ImageFailure.INVALID_IMAGE, ImageFailure.DIMENSIONS, ImageFailure.HTTP, ImageFailure.BUDGET)
         for (error in ImageFailure.entries) assertEquals(error.name, error in expected, error in ReportLink.imageFailures)
-    }
-
-    @Test fun viewIntentEncodesTheWholeMessageAsOneQueryValue() {
-        val message = ReportLink.message(context("ar").getString(R.string.report_link_intro), link, "1.2.3", null, "HTTP")
-        val intent = ReportLink.intent(message)
-        assertEquals(Intent.ACTION_VIEW, intent.action)
-        assertEquals("https://wa.me/${ReportLink.WHATSAPP_NUMBER}?text=" + Uri.encode(message), intent.dataString)
-        assertEquals(message, intent.data!!.getQueryParameter("text"))
-        assertEquals(setOf("text"), intent.data!!.queryParameterNames)
-        assertTrue(intent.dataString!!.contains("%0A"))
-        assertNull(intent.data!!.fragment)
     }
 
     @Test fun contactMessageIsOnlyTheGreetingAndStartsInTheUserLanguage() {
@@ -106,23 +80,27 @@ class ReportLinkTest {
         assertEquals(1, attempts)
     }
 
-    private fun failing(error: DownloadError, engineVersion: String? = "fixture-engine") = LinkViewModel(SavedStateHandle(),
-        engine = FakeEngine(InspectResult.Failure(error)), currentEngineVersion = { engineVersion }).also {
+    private fun failing(error: DownloadError, engineVersion: String? = "fixture-engine",
+                        send: suspend (Report) -> Boolean = { false }) = LinkViewModel(SavedStateHandle(),
+        engine = FakeEngine(InspectResult.Failure(error)), currentEngineVersion = { engineVersion }, sendReport = send).also {
         it.edit(link); it.checkLink(); shadowOf(Looper.getMainLooper()).idle()
         assertEquals(OptionsState.Error(error), it.optionsState)
     }
 
-    @Test fun viewModelReportsTheOriginalLinkAndCachedEngineVersionOnlyForEligibleFailures() {
+    @Test fun viewModelReportsTheSiteAndCachedEngineVersionOnlyForEligibleFailures() {
         val vm = failing(DownloadError.Failed)
         assertTrue(vm.canReportLink)
-        assertEquals(listOf("intro", link, "Nezzel 1.2.3 · engine fixture-engine · Failed"),
-            vm.reportMessage("intro", "1.2.3")!!.lines())
+        val report = vm.failureReport("1.2.3", 35)!!
+        assertEquals("example.com", report.site)
+        assertEquals("Failed", report.code)
+        assertEquals("fixture-engine", report.engineVersion)
+        assertEquals(link, report.link)
         val offline = failing(DownloadError.Offline)
         assertFalse(offline.canReportLink)
-        assertNull(offline.reportMessage("intro", "1.2.3"))
+        assertNull(offline.failureReport("1.2.3", 35))
         vm.edit("")
         assertFalse(vm.canReportLink)
-        assertNull(vm.reportMessage("intro", "1.2.3"))
+        assertNull(vm.failureReport("1.2.3", 35))
     }
 
     @Test fun imageFailureUsesItsEnumNameAndUnknownEngineWithoutProbing() {
@@ -132,16 +110,45 @@ class ReportLinkTest {
         vm.edit("https://example.com/photo.jpg"); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
         assertEquals(OptionsState.ImageError(ImageFailure.DECODE, phase = ImagePhase.DECODE, directImage = true), vm.optionsState)
         assertTrue(vm.canReportLink)
-        assertEquals("Nezzel 1.2.3 · engine ? · DECODE", vm.reportMessage("intro", "1.2.3")!!.lines().last())
+        val report = vm.failureReport("1.2.3", 35)!!
+        assertEquals("DECODE", report.code)
+        assertNull(report.engineVersion)
     }
 
     @Test fun refusedRedirectReportsTheReviewedLinkRatherThanTheRedirect() {
         val reviewed = "https://example.com/photo.jpg?value=%2f&other=two#part"
         val vm = LinkViewModel(SavedStateHandle(), images = FakeImages { source ->
-            MediaInspectResult.VideoRedirect(LinkRevision(LinkInput.parse("https://example.com/resolved/watch")!!, source.revision))
+            MediaInspectResult.VideoRedirect(LinkRevision(LinkInput.parse("https://example.org/resolved/watch")!!, source.revision))
         })
         vm.edit(reviewed); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
         assertEquals(OptionsState.ImageError(ImageFailure.UNSUPPORTED), vm.optionsState)
-        assertEquals(reviewed, vm.reportMessage("intro", "1.2.3")!!.lines()[1])
+        assertEquals(reviewed, vm.failureReport("1.2.3", 35)!!.link)
+        assertEquals("example.com", vm.failureReport("1.2.3", 35)!!.site)
+    }
+
+    @Test fun oneAcceptedReportPerFailureCard() {
+        val sent = mutableListOf<Report>()
+        val vm = failing(DownloadError.Failed) { sent += it; true }
+        vm.sendFailureReport("1.2.3", 35); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(1, sent.size)
+        assertEquals(link, sent.single().link)
+        assertTrue(vm.reportSent)
+        assertEquals(true, vm.reportOutcome)
+        vm.consumeReportOutcome()
+        assertNull(vm.sendFailureReport("1.2.3", 35))
+        assertEquals(1, sent.size)
+        // A new failure is a new card with its own report.
+        vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(vm.reportSent)
+    }
+
+    @Test fun failedSendSaysSoAndLeavesTheButtonForALaterTry() {
+        var attempts = 0
+        val vm = failing(DownloadError.Unsupported) { attempts++; false }
+        vm.sendFailureReport("1.2.3", 35); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(1, attempts)
+        assertEquals(false, vm.reportOutcome)
+        assertFalse(vm.reportSent)
+        assertFalse(vm.reportSending)
     }
 }

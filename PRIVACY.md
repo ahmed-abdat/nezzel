@@ -1,6 +1,6 @@
 # Privacy
 
-Nezzel has no analytics, no telemetry, no ads and no account. It has no server either: all processing happens on your phone.
+Nezzel has no ads and no account. All processing of what you save happens on your phone.
 
 ## What goes over the network
 
@@ -8,8 +8,8 @@ Nezzel has no analytics, no telemetry, no ads and no account. It has no server e
 - **Automatic options:** when **Show options automatically** is on, Nezzel loads a link's details and preview once you open the app with a copied link, or share or paste one. Turn it off to load options only when you ask. Nothing is ever saved without you tapping Download or Save.
 - **Clipboard:** Nezzel reads the clipboard only while it's open on screen. It never monitors the clipboard in the background.
 - **Site support updates:** once a week at startup, Nezzel checks the official yt-dlp releases for a newer stable version (at most one automatic attempt a day, never while downloads are running). Settings also has a manual update. Nezzel doesn't pin the hash of the downloaded update itself; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- **App updates:** while **Check for app updates** is on (the default), Nezzel checks GitHub at most once a day. It downloads `nezzel-update.json` from the latest release on `github.com`. If that fails, it tries `api.github.com` once. GitHub sees your IP address and the Nezzel version (in the User-Agent). No cookies, account or device identifiers are sent. The APK is downloaded only after you tap Download update, and Android asks you to confirm the install. Before installing, Nezzel checks the APK's SHA-256, package name, signing certificate and version.
-- **Report this link:** this button opens WhatsApp with the link and the app and engine versions filled in. Nothing is sent unless you press Send in WhatsApp.
+- **App updates:** while **Check for app updates** is on (the default), Nezzel checks at most once a day. It asks `nezzel.hululsoft.mr/update/<version code>`, which redirects to `nezzel-update.json` in the latest release on `github.com`. If that fails, it tries `api.github.com` once. These servers see your IP address and the Nezzel version. No cookies, account or device identifiers are sent. The APK is downloaded only after you tap Download update, and Android asks you to confirm the install. Before installing, Nezzel checks the APK's SHA-256, package name, signing certificate and version.
+- **Report this link:** when a link fails, this button shows exactly what would be sent: the link, the error, and the Nezzel, engine and Android versions. Nothing is sent until you tap Send.
 
 ## What stays on your phone
 
@@ -30,3 +30,8 @@ Nezzel has no analytics, no telemetry, no ads and no account. It has no server e
 | App-scoped `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX internal protection; signature-level, no prompt |
 
 Nezzel doesn't ask for storage, contacts, microphone, camera or location permission.
+
+## Usage counts and reports
+
+- Once a day, Nezzel sends anonymous totals of the features you used and the sites you saved from (domain only; never links, titles, file names or an ID). They are kept as daily totals only. Turn it off in Settings → Advanced → Help improve Nezzel.
+- Reports are sent only after you tap Send on a preview of exactly what is sent. Links in reports are deleted after 30 days.

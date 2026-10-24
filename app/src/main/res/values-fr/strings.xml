@@ -273,7 +273,6 @@
     <string name="quality_very_low_hint">Économise plus de données</string>
     <string name="paste_another_link">Coller un autre lien</string>
     <string name="report_link">Signaler ce lien</string>
-    <string name="report_link_intro">Nezzel n’a pas pu lire ce lien :</string>
     <string name="contact_whatsapp">Nous écrire sur WhatsApp</string>
     <string name="contact_whatsapp_intro">Bonjour 👋 Merci pour Nezzel\u00a0!</string>
     <string name="nezzel_close">Fermer</string>
@@ -488,4 +487,17 @@
         <item quantity="many">%1$s nouveaux</item>
         <item quantity="other">%1$s nouveaux</item>
     </plurals>
+    <string name="report_sheet_title">Envoyer un rapport\u00a0?</string>
+    <string name="report_sheet_body">Seul ceci est envoyé. Ni nom ni identifiant.</string>
+    <string name="report_field_site">Site</string>
+    <string name="report_field_error">Erreur</string>
+    <string name="report_field_app">Nezzel</string>
+    <string name="report_field_engine">Moteur</string>
+    <string name="report_field_android">Android</string>
+    <string name="report_field_link">Lien</string>
+    <string name="report_field_details">Détails</string>
+    <string name="report_send">Envoyer</string>
+    <string name="report_sent">Envoyé</string>
+    <string name="report_sent_snackbar">Rapport envoyé. Merci</string>
+    <string name="report_failed_snackbar">Envoi impossible. Réessayez plus tard</string>
 </resources>

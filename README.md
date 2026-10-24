@@ -70,7 +70,7 @@ A link doesn't work? Tap **Report this link** on the error screen, or [open an i
 
 **Android warned me on install.** That's normal for any app installed outside Google Play.
 
-**Is anything sent to a Nezzel server?** No. There is no server: your phone talks to the site directly. No analytics either. See [PRIVACY.md](PRIVACY.md).
+**Is anything sent to a Nezzel server?** No account and no ads. See [PRIVACY.md](PRIVACY.md).
 
 <div dir="rtl">
 

@@ -362,7 +362,7 @@ private fun moreFormatDetail(format: Format, language: String): String = listOfN
 /** Truthful copy per failure type; Try again only where a retry can succeed. */
 @Composable
 private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> Unit, onPasteAnother: (String?) -> Unit,
-    onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null, onReport: (() -> Unit)? = null) {
+    onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null, onReport: ReportAction? = null) {
     val (title, body) = when (error) {
         DownloadError.EngineUnavailable -> R.string.unavailable_title to R.string.unavailable_body
         DownloadError.Unsupported -> R.string.unsupported_title to R.string.unsupported_body

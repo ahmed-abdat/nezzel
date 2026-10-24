@@ -7,7 +7,7 @@ import java.io.File
 
 internal object CrashReports {
     fun store(context: Context) = CrashReportStore(File(context.filesDir, "crash"),
-        CrashMetadata(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT, Build.MODEL))
+        CrashMetadata(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT))
 
     fun install(context: Context) {
         // Android installs RuntimeInit's terminating handler before Application creation.

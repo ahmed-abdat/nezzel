@@ -8,8 +8,9 @@ import org.junit.rules.TemporaryFolder
 
 class CrashReportStoreTest {
     @get:Rule val temporary = TemporaryFolder()
-    private val metadata = CrashMetadata("0.4.2", 310, 35, "TestPhone 1")
-    private fun store(directory: File = File(temporary.root, "crash")) = CrashReportStore(directory, metadata)
+    private val metadata = CrashMetadata("0.4.2", 310, 35)
+    private var clock = 1_760_000_000_000L
+    private fun store(directory: File = File(temporary.root, "crash")) = CrashReportStore(directory, metadata) { clock }
     private fun failure(): Throwable = try {
         throw IllegalStateException("https://example.invalid/x content://private/1 /storage/title 'Secret title'",
             IllegalArgumentException("https://example.invalid/x content://private/2 /data/private \"Secret title\""))
@@ -19,10 +20,10 @@ class CrashReportStoreTest {
         val store = store()
         store.record(Thread("main"), failure())
         val text = store.latestReports()!!
-        listOf("https:", "example.invalid", "content:", "/storage", "/data", "Secret title").forEach {
+        listOf("https:", "example.invalid", "content:", "/storage", "/data", "Secret title", "Device", "T0").forEach {
             assertFalse("Leaked $it", it in text)
         }
-        listOf("0.4.2", "310", "35", "TestPhone 1", "Thread: main", "Timestamp:",
+        listOf("0.4.2", "310", "35", "Thread: main", "Timestamp: 2025-10-09\n",
             "java.lang.IllegalStateException", "Caused by: java.lang.IllegalArgumentException",
             "dev.ahmed.savlino.diagnostics.CrashReportStoreTest.failure").forEach { assertTrue("Missing $it", it in text) }
         val files = File(temporary.root, "crash").listFiles()!!
@@ -57,23 +58,41 @@ class CrashReportStoreTest {
         assertFalse(file.readText().contains("safe.Worker.run:3999"))
     }
 
-    @Test fun onlyLastThreeReportsAreKeptAndSharedNewestFirst() {
+    @Test fun onlyTheLatestReportIsKept() {
         val store = store()
-        repeat(5) { index ->
+        repeat(3) { index ->
             // Different instances still serialize rotation, reads and deletion for this process.
             store().record(Thread("main"), IllegalStateException().apply {
                 stackTrace = arrayOf(StackTraceElement("safe.Crash$index", "run", "Worker.kt", index))
             })
         }
-        assertEquals(3, File(temporary.root, "crash").listFiles()!!.size)
+        assertEquals(1, File(temporary.root, "crash").listFiles()!!.size)
         val text = store.latestReports()!!
-        assertFalse("safe.Crash0" in text); assertFalse("safe.Crash1" in text)
-        assertTrue(text.indexOf("safe.Crash4") < text.indexOf("safe.Crash3"))
-        assertTrue(text.indexOf("safe.Crash3") < text.indexOf("safe.Crash2"))
+        assertFalse("safe.Crash0" in text); assertFalse("safe.Crash1" in text); assertTrue("safe.Crash2" in text)
         store.deleteReports()
         assertFalse(store.hasReports())
         assertNull(store.latestReports())
         assertTrue(File(temporary.root, "crash").listFiles().orEmpty().isEmpty())
+    }
+
+    @Test fun pendingAsksForAWeekThenDeletesSilently() {
+        val store = store()
+        assertNull(store.pending())
+        store.record(Thread("main"), IllegalStateException())
+        clock += CrashReportStore.MAX_AGE_MS
+        assertTrue(store.pending()!!.contains("java.lang.IllegalStateException"))
+        assertTrue(store.hasReports())
+        clock += 1
+        assertNull(store.pending())
+        assertFalse(store.hasReports())
+    }
+
+    @Test fun takePendingReadsOnceAndDeletes() {
+        val store = store()
+        store.record(Thread("main"), IllegalStateException())
+        assertTrue(store.takePending()!!.contains("java.lang.IllegalStateException"))
+        assertFalse(store.hasReports())
+        assertNull(store.takePending())
     }
 
     @Test(timeout = 2000) fun cyclicCausesAndSuppressedMessagesCannotExpandOrLeak() {
