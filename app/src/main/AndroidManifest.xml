@@ -11,6 +11,9 @@
     <queries>
         <package android:name="com.google.android.documentsui" />
         <package android:name="com.android.documentsui" />
+        <!-- Statuses: only these two apps are looked up (no QUERY_ALL_PACKAGES). -->
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="content" android:mimeType="vnd.android.document/directory" />
