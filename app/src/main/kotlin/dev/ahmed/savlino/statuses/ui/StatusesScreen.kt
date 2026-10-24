@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
@@ -308,55 +309,46 @@ private fun AppIcon(packageName: String, media: StatusMedia, size: Dp) {
     else Surface(Modifier.size(size), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {}
 }
 
-/** The tab's first screen with several accounts: one card each, the app's icon, counts and the newest few statuses. */
+/** The tab's first screen with several accounts: one open section each (icon, counts, newest few statuses); space alone separates them. */
 @Composable
 private fun AccountList(state: StatusesState, access: StatusAccess.Ready, media: StatusMedia, language: String) {
-    LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(),
-        contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.l),
-        verticalArrangement = Arrangement.spacedBy(Space.m)) {
+    LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), contentPadding = PaddingValues(bottom = Space.l)) {
         items(state.accounts, key = { "${it.source.packageName}/${it.source.accountIndex}" }) { summary ->
-            AccountCard(summary, access, media, language) { state.open(summary.source) }
+            AccountSection(summary, access, media, language) { state.open(summary.source) }
         }
     }
 }
 
 @Composable
-private fun AccountCard(summary: AccountSummary, access: StatusAccess.Ready, media: StatusMedia, language: String, onOpen: () -> Unit) {
+private fun AccountSection(summary: AccountSummary, access: StatusAccess.Ready, media: StatusMedia, language: String, onOpen: () -> Unit) {
     val title = appLabel(summary.source, access, language)
     val count = pluralStringResource(R.plurals.statuses_count, summary.total, NezzelFormat.count(summary.total, language))
     val subtitle = listOfNotNull(accountNumber(summary.source, access, language), count).joinToString(stringResource(R.string.separator))
     val newText = if (summary.newCount > 0)
         pluralStringResource(R.plurals.statuses_new_n, summary.newCount, NezzelFormat.count(summary.newCount, language)) else null
     val description = listOfNotNull(title, subtitle, newText).joinToString(stringResource(R.string.separator))
-    val shape = MaterialTheme.shapes.extraLarge
-    // One TalkBack stop per card: the click stays on the outer node, the parts read as one sentence.
-    Surface(Modifier.fillMaxWidth().clip(shape).clickable(onClickLabel = stringResource(R.string.statuses_open), role = Role.Button, onClick = onOpen)
-        .clearAndSetSemantics { contentDescription = description }, shape = shape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                Surface(Modifier.size(56.dp), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
-                    Box(contentAlignment = Alignment.Center) { AppIcon(summary.source.packageName, media, 40.dp) }
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                newText?.let {
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
-                        Text(it, Modifier.padding(horizontal = Space.m, vertical = Space.xs),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
-                    }
-                }
+    // Flat: no card. The whole section is one full-width touch target and one TalkBack stop that reads as a sentence.
+    Column(Modifier.fillMaxWidth().clickable(onClickLabel = stringResource(R.string.statuses_open), role = Role.Button, onClick = onOpen)
+        .clearAndSetSemantics { contentDescription = description }.padding(horizontal = Space.gutter, vertical = Space.l),
+        verticalArrangement = Arrangement.spacedBy(Space.m)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+            AppIcon(summary.source.packageName, media, 40.dp)
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                val more = summary.total - (PREVIEW_COUNT - 1)
-                repeat(PREVIEW_COUNT) { index ->
-                    val item = summary.preview.getOrNull(index)
-                    Box(Modifier.weight(1f).aspectRatio(1f)) {
-                        if (item != null) PreviewThumb(item, media, if (index == PREVIEW_COUNT - 1 && more > 1) more else null, language)
-                    }
+            newText?.let {
+                Text(it, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary)
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            val more = summary.total - (PREVIEW_COUNT - 1)
+            repeat(PREVIEW_COUNT) { index ->
+                val item = summary.preview.getOrNull(index)
+                Box(Modifier.weight(1f).aspectRatio(1f)) {
+                    if (item != null) PreviewThumb(item, media, if (index == PREVIEW_COUNT - 1 && more > 1) more else null, language)
                 }
             }
         }
