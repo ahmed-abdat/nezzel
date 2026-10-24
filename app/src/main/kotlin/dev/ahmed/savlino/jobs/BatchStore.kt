@@ -22,7 +22,7 @@ class BatchItemRecord(val batchId: String, val position: Int, val itemId: String
 /** Same database/upgrade owner as jobs; source URLs are authenticated ciphertext, never a plaintext fallback. */
 class BatchStore internal constructor(internal val jobs: JobStore, private val cipher: LinkCipher = KeystoreLinkCipher.current(),
     private val now: () -> Long = System::currentTimeMillis) {
-    private val db get() = jobs.writableDatabase
+    private val db get() = jobs.database
 
     /** Call only after the one explicit Download-N confirmation. Nothing is persisted while selecting. */
     @Synchronized fun create(id: String, title: String, preset: Preset, items: List<PlaylistItem>): Boolean {

@@ -66,6 +66,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     /** Called under this helper's monitor; observers must not acquire coordinator locks or read the store. */
     internal var onExpired: (JobRecord) -> Unit = {}
     private val infoCache = dev.ahmed.savlino.engine.YtdlpInfoCache(context.noBackupFilesDir)
+    @Volatile private var opened: SQLiteDatabase? = null
+    /**
+     * The open database without this helper's monitor once opened. [writableDatabase] synchronizes on this object, so a
+     * BatchStore transaction (holding the only connection) that reached it again would wait on a JobStore caller that
+     * holds the monitor while waiting for that connection: the 0.5.0-beta4 playlist deadlock.
+     */
+    internal val database: SQLiteDatabase get() = opened?.takeIf { it.isOpen } ?: writableDatabase.also { opened = it }
 
     init {
         setOpenParams(SQLiteDatabase.OpenParams.Builder().setJournalMode("DELETE")

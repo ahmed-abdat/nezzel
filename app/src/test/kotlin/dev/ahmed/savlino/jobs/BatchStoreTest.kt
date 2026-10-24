@@ -29,6 +29,21 @@ class BatchStoreTest {
     }
     @After fun close() { jobs.close() }
 
+    @Test fun batchCallsDoNotWaitOnTheJobStoreMonitor() {
+        // 0.5.0-beta4 on the phone: a batch transaction re-read jobs.writableDatabase (synchronized on the JobStore)
+        // while a JobStore caller held that monitor and waited for the transaction's connection.
+        assertTrue(batches.create("batch", "Fixture", Preset.BALANCED, batchItems(2)))
+        val held = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val holder = Thread { synchronized(jobs) { held.countDown(); release.await() } }.apply { start() }
+        try {
+            assertTrue(held.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            val done = java.util.concurrent.CountDownLatch(1)
+            Thread { batches.scrubExpired(); batches.finishIfIdle("batch"); done.countDown() }.start()
+            assertTrue("batch store blocked on the JobStore monitor", done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        } finally { release.countDown(); holder.join() }
+    }
+
     @Test fun confirmationIsAtomicCappedAndStoresOnlySealedUrls() {
         assertTrue(batches.create("batch", "Fixture", Preset.BALANCED, batchItems(3)))
         assertFalse(batches.create("batch", "Duplicate", Preset.BEST, batchItems(1)))
