@@ -31,11 +31,13 @@ class ThumbRowTest {
     private val failed = DownloadProgress("c", "City at night.mp4", DownloadPhase.FAILED, error = DownloadError.Network, retryable = true)
     private val asked = mutableListOf<String>()
 
-    private fun render(job: DownloadProgress, art: Bitmap?, check: () -> Unit) {
+    private fun render(job: DownloadProgress, art: Bitmap?, check: () -> Unit) = render(job, { art }, check)
+
+    private fun render(job: DownloadProgress, art: () -> Bitmap?, check: () -> Unit) {
         val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                CompositionLocalProvider(LocalReducedMotion provides true, LocalJobArtwork provides { id -> asked += id; art }) {
+                CompositionLocalProvider(LocalReducedMotion provides true, LocalJobArtwork provides { id -> asked += id; art() }) {
                     JobRow(job, {}, {}, {})
                 }
             } }
@@ -46,7 +48,7 @@ class ThumbRowTest {
     private val picture = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888)
 
     @Test fun noArtworkKeepsTheKindIcon() = render(video, null) {
-        assertEquals(listOf("a"), asked)
+        assertEquals("a", asked.first())
         assertTrue(tagged("job-art").isEmpty())
     }
 
@@ -61,6 +63,21 @@ class ThumbRowTest {
         render(failed, picture) { assertEquals(1, tagged("job-art-badge-failed").size); assertEquals(1, tagged("job-art").size) }
         // Without artwork the failed tile is still the error icon on its own, no badge.
         render(failed, null) { assertTrue(tagged("job-art").isEmpty() && tagged("job-art-badge-failed").isEmpty()) }
+    }
+
+    @Test fun artworkSavedAfterTheRowShowsStillAppears() {
+        var saved: Bitmap? = null
+        render(video, { saved }) {
+            assertTrue(tagged("job-art").isEmpty())
+            saved = picture
+            // The retry waits in real time, a second after the first look.
+            compose.waitUntil(5_000) { tagged("job-art").isNotEmpty() }
+        }
+    }
+
+    @Test fun aFinishedJobLooksOnce() = render(failed, null) {
+        Thread.sleep(1_500); compose.waitForIdle()
+        assertEquals(listOf("c"), asked)
     }
 
     @Test fun artworkIsDecorative() = render(audio, picture) {

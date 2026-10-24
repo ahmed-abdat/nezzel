@@ -123,7 +123,7 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
             // The tile gives way at large text and on narrow rows (phones under ~390dp), so the meta line keeps
             // percent · time left and "Joining audio and video…" keeps its one line.
             val tile = !isLargeText() && maxWidth >= 340.dp
-            val art = if (tile) rememberJobArtwork(job.jobId) else null
+            val art = if (tile) rememberJobArtwork(job.jobId, job.terminal) else null
             // A badge's ring takes the colour right behind the tile: the fill once it has passed the tile, else the row.
             val behind = if (fraction != null && maxWidth * fraction >= Space.rowH + 40.dp)
                 fillColor(MaterialTheme.colorScheme, job.paused, light).compositeOver(tone) else tone
@@ -211,10 +211,19 @@ internal fun DownloadProgress.kindIcon(): Int = when {
 val LocalJobArtwork = staticCompositionLocalOf<suspend (String) -> Bitmap?> { { null } }
 
 @Composable
-private fun rememberJobArtwork(jobId: String): ImageBitmap? {
+private fun rememberJobArtwork(jobId: String, settled: Boolean): ImageBitmap? {
     val load = LocalJobArtwork.current
-    return produceState<ImageBitmap?>(null, jobId, load) { value = load(jobId)?.asImageBitmap() }.value
+    // A row can show before its preview is saved (playlist items, a quick confirm): an active job looks again briefly.
+    return produceState<ImageBitmap?>(null, jobId, settled, load) {
+        for (wait in ARTWORK_RETRY_MS) {
+            delay(wait)
+            load(jobId)?.let { value = it.asImageBitmap(); return@produceState }
+            if (settled) return@produceState
+        }
+    }.value
 }
+
+private val ARTWORK_RETRY_MS = longArrayOf(0, 1_000, 3_000, 8_000)
 
 internal enum class ThumbBadge { Audio, Failed }
 
