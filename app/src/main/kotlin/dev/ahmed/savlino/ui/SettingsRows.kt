@@ -1,13 +1,11 @@
 package dev.ahmed.savlino.ui
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
@@ -24,17 +22,18 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.isLargeText
 
-/** Rows of one group share one continuous rounded surface: one container level, no tiles, no dividers. */
-private val GroupShape = RoundedCornerShape(20.dp)
-
+/**
+ * A flat M3 list section: a teal header, then full-width rows straight on the page surface. No container, tile or
+ * divider; the section gap is the only separation. Rows pad themselves, so the screen must not add side padding.
+ */
 @Composable
 internal fun SettingsGroup(title: String?, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+    Column(Modifier.fillMaxWidth()) {
         title?.let {
-            Text(it, Modifier.padding(horizontal = Space.l).semantics { heading() },
+            Text(it, Modifier.padding(horizontal = Space.l).padding(bottom = Space.xs).semantics { heading() },
                 style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         }
-        Column(Modifier.fillMaxWidth().clip(GroupShape).background(MaterialTheme.colorScheme.surfaceContainer), content = content)
+        content()
     }
 }
 

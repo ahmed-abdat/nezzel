@@ -30,12 +30,13 @@ import dev.ahmed.savlino.ui.*
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.update.AppUpdates
 import dev.ahmed.savlino.update.UpdateAutoSetting
 import dev.ahmed.savlino.update.UpdateSettings
 
 /**
- * Everyday choices on one page in grouped cards; automatic options, downloads at the same time, clearing link
+ * Everyday choices on one page as a flat list under section headers; automatic options, downloads at the same time, clearing link
  * history, engine tools and the update-check switch sit one level down under Advanced, so the first screen stays
  * short.
  */
@@ -81,7 +82,7 @@ private fun MainSettings(
         ThemePref.Dark to stringResource(R.string.theme_dark))
     Scaffold(topBar = { ScreenHeader(stringResource(R.string.settings)) }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
-            .padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.xl),
+            .padding(top = Space.s, bottom = Space.xl),
             verticalArrangement = Arrangement.spacedBy(Space.xl)) {
             UpdateSettings(updates) { links.navigate("AppUpdate") }
             SettingsGroup(stringResource(R.string.settings_general)) {
@@ -161,7 +162,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
         })
     }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
-            .padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.xl),
+            .padding(top = Space.s, bottom = Space.xl),
             verticalArrangement = Arrangement.spacedBy(Space.xl)) {
             automaticOptions?.let { on ->
                 SettingsGroup(stringResource(R.string.link_handling)) {
@@ -186,7 +187,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                             EngineUpdateStatus.FAILED -> R.string.engine_update_failed
                             EngineUpdateStatus.BUSY -> R.string.engine_update_busy
                         }), enabled = !updating, chevron = false, liveNote = true, onClick = onUpdateEngine)
-                    if (updating) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (updating) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = Space.l))
                 }
             }
             updates?.let { updates ->
@@ -208,7 +209,9 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
 @Composable
 private fun ParallelSetting(count: Int, language: String, onCount: (Int) -> Unit) = Column {
     SettingsRow(stringResource(R.string.parallel_downloads), icon = R.drawable.ic_download, body = stringResource(R.string.parallel_downloads_help))
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, bottom = Space.m)) {
+    // Lines up with the title text (past the 24dp icon and its gap) so it reads as part of the row, not a second box.
+    val indent = if (isLargeText()) Space.l else Space.l + 24.dp + Space.l
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(start = indent, end = Space.l, bottom = Space.m)) {
         (1..3).forEach { n ->
             val label = NezzelFormat.count(n, language)
             val spoken = stringResource(R.string.parallel_downloads_option, label)

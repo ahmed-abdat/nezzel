@@ -192,8 +192,8 @@
         <item quantity="other">%1$s selected</item>
     </plurals>
     <string name="saved_deleted">Deleted</string>
-    <string name="saved_empty_title">No saved files yet</string>
-    <string name="saved_empty_body">Paste a link to save your first file</string>
+    <string name="saved_empty_title">Nothing saved yet</string>
+    <string name="saved_empty_body">Files you save show up here</string>
     <string name="saved_no_matches">No matching files</string>
     <string name="saved_snackbar">Saved to %1$s</string>
     <string name="saved_action_failed">Couldn’t open this file or complete the action — try the Files app</string>

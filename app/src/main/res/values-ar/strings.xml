@@ -196,8 +196,8 @@
         <item quantity="other">%1$s ملف محدد</item>
     </plurals>
     <string name="saved_deleted">تم الحذف</string>
-    <string name="saved_empty_title">لم تحفظ أي ملف بعد</string>
-    <string name="saved_empty_body">الصق رابطًا لحفظ أول ملف</string>
+    <string name="saved_empty_title">لم تحفظ شيئًا بعد</string>
+    <string name="saved_empty_body">تظهر هنا الملفات التي تحفظها</string>
     <string name="saved_no_matches">لا توجد ملفات مطابقة</string>
     <string name="saved_snackbar">تم الحفظ في %1$s</string>
     <string name="saved_action_failed">تعذّر فتح الملف أو إتمام الإجراء، جرّب تطبيق الملفات</string>
