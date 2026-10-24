@@ -24,6 +24,7 @@ import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
 import dev.ahmed.savlino.engine.YtdlpInfoCache
+import dev.ahmed.savlino.engine.facebook.FacebookLinkKind
 import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
@@ -603,7 +604,7 @@ class LinkViewModel(
                 return@launch
             }
             val handoff = route in HANDOFF_ROUTES && when (result) {
-                is MediaInspectResult.Failure -> readerFallsBack(route, result)
+                is MediaInspectResult.Failure -> readerFallsBack(route, result, source)
                 is MediaInspectResult.VideoRedirect -> result.source.matches(source)
                 else -> false
             }
@@ -637,7 +638,7 @@ class LinkViewModel(
                 is MediaInspectResult.Failure -> {
                     operationId = null; imageOperation = false
                     if (handoff) awaitRace(legacyReaderSource(source, route), origin)
-                    else if (readerFallsBack(route, result)) {
+                    else if (readerFallsBack(route, result, source)) {
                         val landing = result.fallback?.takeIf { route == MediaSourceRoute.LINKEDIN &&
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
                         startLegacyInspection(landing ?: legacyReaderSource(source, route), origin,
@@ -683,15 +684,18 @@ class LinkViewModel(
         return canonical?.let(LinkInput::parse)?.let { LinkRevision(it, source.revision) } ?: source
     }
 
-    /** Only pre-verdict post-page failures get one legacy inspection; media verdicts stay terminal. */
-    private fun readerFallsBack(route: MediaSourceRoute, result: MediaInspectResult.Failure): Boolean =
+    /** Only pre-verdict post-page failures get one legacy inspection; media verdicts stay terminal.
+     *  yt-dlp cannot read a Facebook /share/ link, so a failed share-page read shows its own error (with Retry). */
+    private fun readerFallsBack(route: MediaSourceRoute, result: MediaInspectResult.Failure, source: LinkRevision): Boolean =
         route != MediaSourceRoute.DIRECT_IMAGE && result.phase == ImagePhase.PAGE && when (result.reason) {
-            ImageFailure.HTTP -> result.statusCode != 404 && result.statusCode != 410
-            ImageFailure.SOURCE_REFUSED, ImageFailure.BUDGET, ImageFailure.UNAVAILABLE, ImageFailure.NETWORK -> true
+            ImageFailure.HTTP -> result.statusCode != 404 && result.statusCode != 410 && !facebookShare(route, source)
+            ImageFailure.SOURCE_REFUSED, ImageFailure.BUDGET, ImageFailure.UNAVAILABLE, ImageFailure.NETWORK -> !facebookShare(route, source)
             ImageFailure.NO_MEDIA -> route in setOf(MediaSourceRoute.FACEBOOK, MediaSourceRoute.LINKEDIN,
                 MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY)
             else -> false
         }
+    private fun facebookShare(route: MediaSourceRoute, source: LinkRevision) = route == MediaSourceRoute.FACEBOOK &&
+        FacebookPostIdentity.parse(source.link.rawUrl)?.kind == FacebookLinkKind.SHARE
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
     private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false) {
         // A carousel's explicit View video options starts a new inspection without startInspection().

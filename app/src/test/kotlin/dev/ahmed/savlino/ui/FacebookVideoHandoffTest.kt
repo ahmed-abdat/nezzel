@@ -206,6 +206,18 @@ class FacebookVideoHandoffTest {
         }
     }
 
+    @Test fun sharePageFailuresShowTheirOwnErrorBecauseYtdlpCannotReadShareLinks() {
+        val share = "https://www.facebook.com/share/v/Synthetic/"
+        for ((reason, status) in listOf(ImageFailure.BUDGET to null, ImageFailure.NETWORK to null,
+            ImageFailure.UNAVAILABLE to null, ImageFailure.SOURCE_REFUSED to null, ImageFailure.HTTP to 500)) {
+            engine.inspected.clear()
+            images.result = { MediaInspectResult.Failure(reason, ImagePhase.PAGE, status) }
+            check(share)
+            assertTrue("$reason", engine.inspected.isEmpty())
+            assertEquals(OptionsState.ImageError(reason, status, phase = ImagePhase.PAGE), vm.optionsState)
+        }
+    }
+
     @Test fun videoPostInspectsTheWatchUrlOnceAndTheConfirmedJobUsesIt() {
         check(post)
         assertEquals(listOf(MediaSourceRoute.FACEBOOK), images.routes)
