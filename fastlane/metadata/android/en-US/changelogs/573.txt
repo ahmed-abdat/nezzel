@@ -1,0 +1,4 @@
+0.4.9
+• Download options show up 8× faster on YouTube: about 2.5 s instead of 20 s
+• Pause and resume downloads, even after a connection drops
+• Up to 3 downloads at once (Settings → Advanced)

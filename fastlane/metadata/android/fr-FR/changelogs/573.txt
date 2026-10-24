@@ -1,0 +1,4 @@
+0.4.9
+• Les options de téléchargement s’affichent 8 fois plus vite sur YouTube : environ 2,5 s au lieu de 20 s
+• Mettez un téléchargement en pause, puis reprenez-le, même après une coupure réseau
+• Jusqu’à 3 téléchargements simultanés (Paramètres → Avancé)

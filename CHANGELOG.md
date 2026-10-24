@@ -4,7 +4,7 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
-## [Unreleased]
+## [0.4.9] - 2026-10-24
 
 ### Added
 
