@@ -437,4 +437,45 @@
     <string name="download_battery_error">Android stopped this download to save battery</string>
     <string name="battery_settings">Battery settings</string>
     <string name="battery_hint_samsung">Samsung: add Nezzel to “Never sleeping apps” in Battery settings</string>
+    <!-- Statuses tab (0.5) -->
+    <string name="statuses_tab">Statuses</string>
+    <string name="statuses_intro_title">Save statuses you’ve seen</string>
+    <string name="statuses_step_1">Open the status in WhatsApp</string>
+    <string name="statuses_step_2">Come back here and save it</string>
+    <string name="statuses_grant">Allow access</string>
+    <string name="statuses_next_screen">On the next screen:</string>
+    <string name="statuses_use_folder">Use this folder</string>
+    <string name="statuses_allow">Allow</string>
+    <string name="statuses_grant_hint">Tap “Use this folder”, then “Allow”</string>
+    <string name="statuses_privacy">Nezzel only reads these files. Save only what you may keep.</string>
+    <string name="statuses_not_installed">WhatsApp isn’t on this phone</string>
+    <string name="statuses_wrong_folder">That’s not it. Tap “Use this folder” on this screen.</string>
+    <string name="statuses_access_lost">Nezzel lost access to the folder. Choose it again.</string>
+    <string name="statuses_empty">No statuses yet. Open one in WhatsApp, then come back.</string>
+    <string name="statuses_open_whatsapp">Open WhatsApp</string>
+    <string name="statuses_save">Save</string>
+    <string name="statuses_saved">Saved</string>
+    <string name="statuses_filter_all">All</string>
+    <string name="statuses_filter_photos">Photos</string>
+    <string name="statuses_filter_videos">Videos</string>
+    <string name="statuses_hide_saved">Hide saved</string>
+    <string name="statuses_new">New</string>
+    <string name="statuses_account_n">Account %1$s</string>
+    <string name="statuses_photo">Photo</string>
+    <string name="statuses_video">Video</string>
+    <string name="statuses_save_failed">Couldn’t save. Try again.</string>
+    <string name="statuses_select">Select</string>
+    <string name="statuses_preview_close">Close</string>
+    <plurals name="statuses_save_n">
+        <item quantity="one">Save %1$s</item>
+        <item quantity="other">Save %1$s</item>
+    </plurals>
+    <plurals name="statuses_gone">
+        <item quantity="one">%1$s status was gone</item>
+        <item quantity="other">%1$s statuses were gone</item>
+    </plurals>
+    <plurals name="statuses_new_n">
+        <item quantity="one">%1$s new</item>
+        <item quantity="other">%1$s new</item>
+    </plurals>
 </resources>

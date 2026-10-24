@@ -486,4 +486,57 @@
     <string name="download_battery_error">أوقف \u2066Android\u2069 التنزيل لتوفير البطارية</string>
     <string name="battery_settings">إعدادات البطارية</string>
     <string name="battery_hint_samsung">سامسونج: أضف Nezzel إلى «التطبيقات التي لا تدخل السكون أبدًا» في إعدادات البطارية</string>
+    <!-- Statuses tab (0.5) -->
+    <string name="statuses_tab">الحالات</string>
+    <string name="statuses_intro_title">احفظ الحالات التي شاهدتها</string>
+    <string name="statuses_step_1">افتح الحالة في واتساب</string>
+    <string name="statuses_step_2">ارجع إلى هنا واحفظها</string>
+    <string name="statuses_grant">السماح بالوصول</string>
+    <string name="statuses_next_screen">في الشاشة التالية:</string>
+    <string name="statuses_use_folder">استخدام هذا المجلد</string>
+    <string name="statuses_allow">سماح</string>
+    <string name="statuses_grant_hint">اضغط «استخدام هذا المجلد» ثم «سماح»</string>
+    <string name="statuses_privacy">يقرأ Nezzel هذه الملفات فقط. احفظ ما يحق لك فقط.</string>
+    <string name="statuses_not_installed">واتساب غير مثبّت على هذا الهاتف</string>
+    <string name="statuses_wrong_folder">ليس هذا هو المجلد. اضغط «استخدام هذا المجلد» في هذه الشاشة.</string>
+    <string name="statuses_access_lost">فقد Nezzel الوصول إلى المجلد. اختره من جديد.</string>
+    <string name="statuses_empty">لا حالات بعد. افتح حالة في واتساب ثم عد إلى هنا.</string>
+    <string name="statuses_open_whatsapp">افتح واتساب</string>
+    <string name="statuses_save">حفظ</string>
+    <string name="statuses_saved">تم الحفظ</string>
+    <string name="statuses_filter_all">الكل</string>
+    <string name="statuses_filter_photos">صور</string>
+    <string name="statuses_filter_videos">فيديو</string>
+    <string name="statuses_hide_saved">إخفاء المحفوظة</string>
+    <string name="statuses_new">جديدة</string>
+    <string name="statuses_account_n">الحساب %1$s</string>
+    <string name="statuses_photo">صورة</string>
+    <string name="statuses_video">فيديو</string>
+    <string name="statuses_save_failed">تعذّر الحفظ. حاول مرة أخرى.</string>
+    <string name="statuses_select">تحديد</string>
+    <string name="statuses_preview_close">إغلاق</string>
+    <plurals name="statuses_save_n">
+        <item quantity="zero">حفظ %1$s</item>
+        <item quantity="one">حفظ %1$s</item>
+        <item quantity="two">حفظ %1$s</item>
+        <item quantity="few">حفظ %1$s</item>
+        <item quantity="many">حفظ %1$s</item>
+        <item quantity="other">حفظ %1$s</item>
+    </plurals>
+    <plurals name="statuses_gone">
+        <item quantity="zero">لم تختفِ أي حالة</item>
+        <item quantity="one">حالة واحدة لم تعد موجودة</item>
+        <item quantity="two">حالتان لم تعودا موجودتين</item>
+        <item quantity="few">%1$s حالات لم تعد موجودة</item>
+        <item quantity="many">%1$s حالة لم تعد موجودة</item>
+        <item quantity="other">%1$s حالة لم تعد موجودة</item>
+    </plurals>
+    <plurals name="statuses_new_n">
+        <item quantity="zero">لا جديد</item>
+        <item quantity="one">حالة جديدة</item>
+        <item quantity="two">حالتان جديدتان</item>
+        <item quantity="few">%1$s حالات جديدة</item>
+        <item quantity="many">%1$s حالة جديدة</item>
+        <item quantity="other">%1$s حالة جديدة</item>
+    </plurals>
 </resources>
