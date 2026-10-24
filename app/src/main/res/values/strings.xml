@@ -342,6 +342,9 @@
     <string name="onboarding_copy_illustration">Copy or share a link to open it in Nezzel</string>
     <string name="onboarding_quality_illustration">Example: select a video quality or photos to save</string>
     <string name="onboarding_saved_illustration">Example: a saved file appears in Downloads</string>
+    <string name="onboarding_statuses_title">WhatsApp statuses too</string>
+    <string name="onboarding_statuses_body">Open the Statuses tab, allow access once, then save photos and videos from every WhatsApp account</string>
+    <string name="onboarding_statuses_illustration">Example: WhatsApp statuses ready to save, one already saved</string>
     <string name="onboarding_page">Page %1$s of %2$s</string>
     <string name="onboarding_anywhere_title">Keep what you love</string>
     <string name="onboarding_anywhere_body">Videos, audio and photos from public links. Clean, ad-free, no account</string>

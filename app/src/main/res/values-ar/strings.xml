@@ -384,6 +384,9 @@
     <string name="onboarding_copy_illustration">انسخ رابطًا أو شاركه لفتحه في Nezzel</string>
     <string name="onboarding_quality_illustration">مثال: اختيار جودة فيديو أو صور لحفظها</string>
     <string name="onboarding_saved_illustration">مثال: ظهور ملف محفوظ في التنزيلات</string>
+    <string name="onboarding_statuses_title">حالات واتساب أيضًا</string>
+    <string name="onboarding_statuses_body">افتح تبويب «الحالات» واسمح بالوصول مرة واحدة، ثم احفظ الصور والفيديو من كل حسابات واتساب</string>
+    <string name="onboarding_statuses_illustration">مثال: حالات واتساب جاهزة للحفظ، وإحداها محفوظة</string>
     <string name="onboarding_page">الصفحة %1$s من %2$s</string>
     <string name="onboarding_anywhere_title">احتفظ بما تحب</string>
     <string name="onboarding_anywhere_body">فيديو وصوت وصور من الروابط العامة، بتجربة نظيفة بلا إعلانات ولا حساب</string>

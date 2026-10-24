@@ -58,7 +58,8 @@ internal fun TourIllustration(page: Int, description: String, modifier: Modifier
                     0 -> MediaIllustration()
                     1 -> CopyIllustration()
                     2 -> OptionsIllustration()
-                    else -> SavedIllustration(active)
+                    3 -> SavedIllustration(active)
+                    else -> StatusesIllustration(active)
                 }
             }
         }
@@ -187,14 +188,33 @@ private fun OptionRow(title: String, hint: String?, selected: Boolean) {
     }
 }
 
+/** Drawn from the first frame at full size; pops once each time its page settles. */
 @Composable
-private fun SavedIllustration(active: Boolean) {
-    // The check is drawn from the first frame and pops once each time this page settles
+private fun rememberPop(active: Boolean): Animatable<Float, *> {
     val reduced = rememberReducedMotion()
     val pop = remember { Animatable(1f) }
     LaunchedEffect(active, reduced) {
         if (active && !reduced) { pop.snapTo(0.5f); pop.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMediumLow)) }
     }
+    return pop
+}
+
+/** A tab pill as the navigation bar draws it when selected. */
+@Composable
+private fun TabPill(glyph: Int, label: Int, tag: String) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = CircleShape, color = colors.secondaryContainer) {
+        Row(Modifier.padding(horizontal = Space.l, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            Icon(painterResource(glyph), null, Modifier.size(20.dp).testTag(tag), tint = colors.onSecondaryContainer)
+            Text(stringResource(label), style = MaterialTheme.typography.labelLarge, color = colors.onSecondaryContainer)
+        }
+    }
+}
+
+@Composable
+private fun SavedIllustration(active: Boolean) {
+    val pop = rememberPop(active)
     val colors = MaterialTheme.colorScheme
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
         SnapshotCard {
@@ -211,14 +231,39 @@ private fun SavedIllustration(active: Boolean) {
                 }
             }
         }
-        // The Downloads tab as the navigation bar shows it when selected
-        Surface(shape = CircleShape, color = colors.secondaryContainer) {
-            Row(Modifier.padding(horizontal = Space.l, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                Icon(painterResource(R.drawable.ic_download), null, Modifier.size(20.dp).testTag("tour_downloads"),
-                    tint = colors.onSecondaryContainer)
-                Text(stringResource(R.string.downloads), style = MaterialTheme.typography.labelLarge, color = colors.onSecondaryContainer)
+        TabPill(R.drawable.ic_download, R.string.downloads, "tour_downloads")
+    }
+}
+
+@Composable
+private fun StatusesIllustration(active: Boolean) {
+    val pop = rememberPop(active)
+    val colors = MaterialTheme.colorScheme
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
+        // One account as the Statuses tab lists it: the app, then its newest statuses; no invented names or pictures
+        SnapshotCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                LogoTile(SiteLogos.whatsapp, 40.dp, Modifier.testTag("tour_whatsapp"))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Placeholder(110.dp); Placeholder(70.dp, 8.dp) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                listOf(colors.tertiaryContainer, colors.primaryContainer, colors.secondaryContainer).forEachIndexed { index, tint ->
+                    Box(Modifier.weight(1f).aspectRatio(0.8f).background(Brush.verticalGradient(listOf(tint, tint.copy(alpha = 0.45f))),
+                        RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                        when (index) {
+                            0 -> Icon(painterResource(R.drawable.ic_movie), null, Modifier.size(24.dp), tint = colors.onTertiaryContainer)
+                            1 -> Icon(painterResource(R.drawable.ic_image), null, Modifier.size(24.dp), tint = colors.onPrimaryContainer)
+                            else -> Surface(Modifier.size(36.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                                shape = CircleShape, color = colors.primary) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.Check, null, Modifier.size(22.dp).testTag("tour_status_saved"), tint = colors.onPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+        TabPill(R.drawable.ic_status_ring, R.string.statuses_tab, "tour_statuses")
     }
 }

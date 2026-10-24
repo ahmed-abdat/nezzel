@@ -31,10 +31,20 @@ import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+// Title, body and illustration description per page, in order; the last page carries Start
+private val tourPages = listOf(
+    Triple(R.string.onboarding_anywhere_title, R.string.onboarding_anywhere_body, R.string.onboarding_anywhere_illustration),
+    Triple(R.string.onboarding_copy_title, R.string.onboarding_copy_body, R.string.onboarding_copy_illustration),
+    Triple(R.string.onboarding_quality_title, R.string.onboarding_quality_body, R.string.onboarding_quality_illustration),
+    Triple(R.string.onboarding_saved_title, R.string.onboarding_saved_body, R.string.onboarding_saved_illustration),
+    Triple(R.string.onboarding_statuses_title, R.string.onboarding_statuses_body, R.string.onboarding_statuses_illustration),
+)
+
 /** A local, illustrative tour: none of these drawings owns intake, jobs or an engine. */
 @Composable
 internal fun OnboardingScreen(onFinish: () -> Unit) {
-    val pager = rememberPagerState(pageCount = { 4 })
+    val last = tourPages.lastIndex
+    val pager = rememberPagerState(pageCount = { tourPages.size })
     val scope = rememberCoroutineScope()
     val reduced = rememberReducedMotion()
     val landscape = LocalConfiguration.current.screenHeightDp < 480
@@ -47,30 +57,16 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
         Surface(Modifier.fillMaxSize().testTag("onboarding"), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = Space.xl)) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.End) {
-                    if (pager.currentPage < 3) TextButton(onClick = onFinish, modifier = Modifier.heightIn(min = 48.dp)) {
+                    if (pager.currentPage < last) TextButton(onClick = onFinish, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(stringResource(R.string.onboarding_skip))
                     }
                 }
                 // Pager and indicators inherit direction: the first page is at start in either language.
                 HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("onboarding_pager")) { page ->
-                    val title = stringResource(when (page) {
-                        0 -> R.string.onboarding_anywhere_title
-                        1 -> R.string.onboarding_copy_title
-                        2 -> R.string.onboarding_quality_title
-                        else -> R.string.onboarding_saved_title
-                    })
-                    val body = stringResource(when (page) {
-                        0 -> R.string.onboarding_anywhere_body
-                        1 -> R.string.onboarding_copy_body
-                        2 -> R.string.onboarding_quality_body
-                        else -> R.string.onboarding_saved_body
-                    })
-                    val description = stringResource(when (page) {
-                        0 -> R.string.onboarding_anywhere_illustration
-                        1 -> R.string.onboarding_copy_illustration
-                        2 -> R.string.onboarding_quality_illustration
-                        else -> R.string.onboarding_saved_illustration
-                    })
+                    val (titleRes, bodyRes, descriptionRes) = tourPages[page]
+                    val title = stringResource(titleRes)
+                    val body = stringResource(bodyRes)
+                    val description = stringResource(descriptionRes)
                     val illustration: @Composable (Modifier) -> Unit = { modifier ->
                         TourIllustration(page, description, active = pager.settledPage == page, modifier =
                             modifier.graphicsLayer {
@@ -105,17 +101,12 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                     }
                 }
                 val position = stringResource(R.string.onboarding_page,
-                    NezzelFormat.count(pager.settledPage + 1, "en"), NezzelFormat.count(4, "en"))
-                val currentTitle = stringResource(when (pager.settledPage) {
-                    0 -> R.string.onboarding_anywhere_title
-                    1 -> R.string.onboarding_copy_title
-                    2 -> R.string.onboarding_quality_title
-                    else -> R.string.onboarding_saved_title
-                })
+                    NezzelFormat.count(pager.settledPage + 1, "en"), NezzelFormat.count(tourPages.size, "en"))
+                val currentTitle = stringResource(tourPages[pager.settledPage].first)
                 val announcement = stringResource(R.string.onboarding_page_announcement, position, currentTitle)
                 Row(Modifier.align(Alignment.CenterHorizontally).padding(vertical = Space.s).testTag("onboarding_position")
                     .clearAndSetSemantics { contentDescription = announcement; liveRegion = LiveRegionMode.Polite }, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                    repeat(4) { index ->
+                    repeat(tourPages.size) { index ->
                         val width by animateDpAsState(if (index == pager.currentPage) 24.dp else 8.dp,
                             easeOut(reduced), label = "page indicator")
                         Box(Modifier.testTag("onboarding_dot_$index").width(width).height(8.dp).background(
@@ -129,9 +120,9 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(stringResource(R.string.onboarding_back))
                     }
-                    Button(onClick = { if (pager.currentPage == 3) onFinish() else go(pager.currentPage + 1) },
+                    Button(onClick = { if (pager.currentPage == last) onFinish() else go(pager.currentPage + 1) },
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                        Text(stringResource(if (pager.currentPage == 3) R.string.onboarding_start else R.string.onboarding_next))
+                        Text(stringResource(if (pager.currentPage == last) R.string.onboarding_start else R.string.onboarding_next))
                     }
                 }
             }

@@ -47,11 +47,12 @@ internal object SiteLogos {
     val telegram = SiteLogo(R.drawable.logo_telegram, white, Color(0xFF26A5E4), 54.dp)
     val x = SiteLogo(R.drawable.logo_x, black, Color.White, 40.dp)
     val snapchat = SiteLogo(R.drawable.logo_snapchat, SolidColor(Color(0xFFFFFC00)), Color.White, 46.dp, outline = Color.Black)
-    val all = listOf(youtube, whatsapp, instagram, facebook, tiktok, telegram, x, snapchat)
+    // Order decides where each tile falls on the wall: WhatsApp (Statuses) lands on clear cells, not under the mark
+    val all = listOf(youtube, facebook, instagram, whatsapp, tiktok, telegram, x, snapchat)
 }
 
-// The arc has room for about seven logos: the most used sites take the closest spots
-private val arcOrder = with(SiteLogos) { listOf(youtube, tiktok, instagram, whatsapp, facebook, snapchat, x, telegram) }
+// The arc has room for about seven logos: the most used sites take the closest spots, WhatsApp beside the mark for Statuses
+private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, instagram, facebook, snapchat, x, telegram) }
 
 /** A tilted wall of every site tile, larger than its parent so it bleeds off the edges. Purely decorative. */
 @Composable
