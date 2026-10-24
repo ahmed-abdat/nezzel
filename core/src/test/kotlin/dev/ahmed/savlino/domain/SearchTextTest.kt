@@ -56,4 +56,10 @@ class SearchTextTest {
             assertTrue(SearchText.matches(SearchText.fold("file"), "FILE"))
         } finally { Locale.setDefault(previous) }
     }
+    @Test fun queryTokensSplitOnUnicodeSpaces() {
+        val key = SearchText.fold("Cat video clip")
+        assertTrue(SearchText.matches(key, "cat\u00A0clip"))
+        assertTrue(SearchText.matches(key, "video\u2028cat"))
+        assertFalse(SearchText.matches(key, "cat\u2028dog"))
+    }
 }

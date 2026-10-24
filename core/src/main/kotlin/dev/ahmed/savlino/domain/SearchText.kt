@@ -5,7 +5,7 @@ import java.util.Locale
 
 object SearchText {
     private val ignored = Regex("[\\p{Mn}\\p{Cf}\u0640]")
-    private val whitespace = Regex("(?U)\\s+")
+    private val whitespace = Regex("[\\s\\p{Z}]+")
 
     fun fold(s: String): String {
         val normalized = Normalizer.normalize(Normalizer.normalize(s, Normalizer.Form.NFKC).lowercase(Locale.ROOT), Normalizer.Form.NFD)
