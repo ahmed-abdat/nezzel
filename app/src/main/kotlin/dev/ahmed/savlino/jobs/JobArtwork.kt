@@ -123,7 +123,16 @@ object SheetArtwork {
         }
     }
 
-    internal fun clear() = synchronized(pending) { pending.clear() }
+    private val sources = object : LinkedHashMap<String, String>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>) = size > 2
+    }
+
+    /** The preview's address, for a confirm that beats the sheet's own load: the job fetches it afterwards. */
+    fun source(inspectionId: String, url: String) = synchronized(sources) { sources[inspectionId] = url }
+
+    internal fun sourceOf(inspectionId: String): String? = synchronized(sources) { sources[inspectionId] }
+
+    internal fun clear() { synchronized(pending) { pending.clear() }; synchronized(sources) { sources.clear() } }
 }
 
 /**

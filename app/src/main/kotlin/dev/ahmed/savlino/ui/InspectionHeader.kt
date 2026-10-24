@@ -41,6 +41,8 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
     val thumbnail = kept ?: inspection?.thumbnailUrl ?: earlyPreview?.thumbnailUrl
     var shown by remember { mutableStateOf<Bitmap?>(null) }
     val inspectionId = inspection?.inspectionId
+    // A Download tapped before the preview draws still gets it: the job fetches this address afterwards.
+    LaunchedEffect(inspectionId, thumbnail) { if (inspectionId != null && thumbnail != null) SheetArtwork.source(inspectionId, thumbnail) }
     // Hand the shown artwork to a confirmed job (memory only; written to disk only on Download).
     LaunchedEffect(inspectionId, shown) {
         val bitmap = shown ?: return@LaunchedEffect

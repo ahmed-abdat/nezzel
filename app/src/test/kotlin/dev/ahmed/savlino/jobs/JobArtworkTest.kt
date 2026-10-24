@@ -132,6 +132,19 @@ class JobArtworkTest {
         assertTrue(android.graphics.Color.blue(pixel) > 200 && android.graphics.Color.red(pixel) < 60)
     }
 
+    @Test fun downloadTappedBeforeThePreviewDrewFetchesItAfterwards() = runBlocking {
+        JobStore(app).use { store ->
+            val loaded = mutableListOf<String>()
+            val coordinator = DownloadCoordinator(app, dev.ahmed.savlino.engine.FakeEngine(), store,
+                workManager = { error("No background scheduler in this fixture") }, previewArtwork = { loaded += it; noisy(64, 48) })
+            val early = command("early")
+            SheetArtwork.source(early.inspectionId, "https://example.com/preview.jpg")
+            assertTrue(coordinator.enqueue(early))
+            kotlinx.coroutines.withTimeout(5_000) { while (!store.artwork.has("early")) kotlinx.coroutines.delay(20) }
+            assertEquals(listOf("https://example.com/preview.jpg"), loaded)
+        }
+    }
+
     @Test fun confirmBeforeEncodeStillGetsBytes() {
         val bitmap = noisy(320, 180)
         SheetArtwork.show("early", bitmap) // background encode not run yet

@@ -64,6 +64,13 @@ class DownloadCoordinator(
     }
     /** Playlist rows never pass through an options sheet; their artwork follows the confirm, off the feeder's path. */
     private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** A Download tapped before the sheet's preview drew: fetch that preview now, unless the sheet's arrived meanwhile. */
+    private suspend fun saveLateArtwork(jobId: String, url: String) {
+        if (store.artwork.has(jobId)) return
+        val bitmap = previewArtwork(url) ?: return
+        try { if (!store.artwork.has(jobId)) JobArtwork.encode(bitmap)?.let { store.artwork.save(jobId, it) } } finally { bitmap.recycle() }
+    }
     /** Read-only presentation stream; feeder controls and per-job behavior are unchanged. */
     val playlistBatches get() = batches.observePlaylists(playlistRefresh)
     suspend fun pauseBatch(id: String) = batchFeeder.pause(id)
@@ -168,7 +175,11 @@ class DownloadCoordinator(
         maintenance.withDownload {
             initializeUnderMaintenanceGate()
             val inserted = store.enqueue(command, preset)
-            if (inserted) SheetArtwork.take(command.inspectionId)?.let { store.artwork.save(command.jobId, it) }
+            if (inserted) {
+                val bytes = SheetArtwork.take(command.inspectionId)
+                if (bytes != null) store.artwork.save(command.jobId, bytes)
+                else SheetArtwork.sourceOf(command.inspectionId)?.let { url -> artworkScope.launch { saveLateArtwork(command.jobId, url) } }
+            }
             // A scheduling failure leaves a durable ENQUEUED row for startup to retry.
             if (inserted) {
                 usage.count(UsageKeys.download(UsageKeys.Download.STARTED, command.format))
