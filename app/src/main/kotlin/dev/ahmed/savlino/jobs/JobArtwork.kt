@@ -125,3 +125,18 @@ object SheetArtwork {
 
     internal fun clear() = synchronized(pending) { pending.clear() }
 }
+
+/**
+ * Row artwork for a confirmed playlist, in list order: the same previews the playlist sheet showed, saved under each
+ * item's job id before or while the feeder queues it. A row that already has artwork, or a preview that fails, is skipped.
+ */
+internal suspend fun saveBatchArtwork(artwork: JobArtwork, rows: List<BatchItemRecord>, items: List<dev.ahmed.savlino.engine.PlaylistItem>,
+    load: suspend (String) -> Bitmap?) {
+    val previews = items.associate { it.id to it.thumbnailUrl }
+    for (row in rows.sortedBy { it.position }) {
+        val url = previews[row.itemId] ?: continue
+        if (artwork.has(row.jobId)) continue
+        val bitmap = load(url) ?: continue
+        try { JobArtwork.encode(bitmap)?.let { artwork.save(row.jobId, it) } } finally { bitmap.recycle() }
+    }
+}

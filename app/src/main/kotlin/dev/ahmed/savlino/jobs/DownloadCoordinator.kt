@@ -39,6 +39,7 @@ class DownloadCoordinator(
     private val usage: UsageEvents = UsageEvents.None,
     private val probe: dev.ahmed.savlino.media.MediaProbe = dev.ahmed.savlino.media.AndroidMediaProbe(context),
     private val checkTimeoutMs: Long = CHECK_TIMEOUT_MS,
+    private val previewArtwork: suspend (String) -> android.graphics.Bitmap? = { dev.ahmed.savlino.ui.ThumbnailLoader().load(it) },
 ) {
     /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
     val batches by lazy { BatchStore(store) }
@@ -55,9 +56,14 @@ class DownloadCoordinator(
     suspend fun confirmBatch(id: String, title: String, preset: Preset, items: List<PlaylistItem>): Boolean = withContext(Dispatchers.IO) {
         initialize()
         batches.create(id, title, preset, items).also {
-            if (it) { playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
+            if (it) {
+                playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake()
+                artworkScope.launch { saveBatchArtwork(store.artwork, batches.items(id), items, previewArtwork) }
+            }
         }
     }
+    /** Playlist rows never pass through an options sheet; their artwork follows the confirm, off the feeder's path. */
+    private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** Read-only presentation stream; feeder controls and per-job behavior are unchanged. */
     val playlistBatches get() = batches.observePlaylists(playlistRefresh)
     suspend fun pauseBatch(id: String) = batchFeeder.pause(id)

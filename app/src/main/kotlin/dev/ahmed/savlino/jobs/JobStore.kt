@@ -532,7 +532,10 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             """.trimIndent())
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
-        artwork.retainOnly(all().mapTo(HashSet()) { it.jobId })
+        // Playlist items not queued yet already hold their artwork.
+        val kept = all().mapTo(HashSet()) { it.jobId }
+        db.rawQuery("SELECT job_id FROM batch_items", null).use { while (it.moveToNext()) kept += it.getString(0) }
+        artwork.retainOnly(kept)
     }
 
     private fun transition(id: String, from: Set<JobStage>, to: JobStage, values: ContentValues = ContentValues()): Boolean {

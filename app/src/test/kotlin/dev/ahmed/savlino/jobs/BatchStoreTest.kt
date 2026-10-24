@@ -29,6 +29,26 @@ class BatchStoreTest {
     }
     @After fun close() { jobs.close() }
 
+    @Test fun confirmedPlaylistRowsGetTheSheetPreviewsAndKeepThemThroughThePrune() {
+        val items = batchItems(3).mapIndexed { index, item ->
+            PlaylistItem(item.id, item.sourceUrl, item.title, item.durationSeconds,
+                thumbnailUrl = if (index == 1) null else "https://i.ytimg.com/vi/${item.id}/hqdefault.jpg")
+        }
+        assertTrue(batches.create("batch", "Fixture", Preset.BEST, items))
+        val rows = batches.items("batch")
+        val loaded = mutableListOf<String>()
+        kotlinx.coroutines.runBlocking {
+            saveBatchArtwork(jobs.artwork, rows, items) { url ->
+                loaded += url; android.graphics.Bitmap.createBitmap(320, 180, android.graphics.Bitmap.Config.ARGB_8888)
+            }
+        }
+        assertEquals(listOf(true, false, true), rows.sortedBy { it.position }.map { jobs.artwork.has(it.jobId) })
+        jobs.pruneTerminal() // startup: no job row exists yet, the batch still owns these ids
+        assertEquals(listOf(true, false, true), rows.sortedBy { it.position }.map { jobs.artwork.has(it.jobId) })
+        kotlinx.coroutines.runBlocking { saveBatchArtwork(jobs.artwork, rows, items) { loaded += it; null } }
+        assertEquals(2, loaded.size) // rows that already have artwork are not fetched again
+    }
+
     @Test fun batchCallsDoNotWaitOnTheJobStoreMonitor() {
         // 0.5.0-beta4 on the phone: a batch transaction re-read jobs.writableDatabase (synchronized on the JobStore)
         // while a JobStore caller held that monitor and waited for the transaction's connection.
