@@ -131,13 +131,33 @@ class BatchStoreTest {
         assertEquals(300, batches.items("batch").single().title.length)
     }
 
+    @Test fun versionSevenFromBeta2GainsTheConsecutiveFailureColumnAndKeepsBatches() {
+        batches.create("beta2", "Fixture", Preset.BEST, batchItems(2))
+        // 0.5.0-beta2 shipped v7 batches without consecutive_failures.
+        with(jobs.writableDatabase) {
+            execSQL("CREATE TABLE batches_beta2 AS SELECT batch_id, title, preset, state, created_at, error, network_failures, refused_failures FROM batches")
+            execSQL("DROP TABLE batches"); execSQL("ALTER TABLE batches_beta2 RENAME TO batches")
+            version = 7
+        }
+        jobs.close()
+        jobs = JobStore(app)
+        batches = BatchStore(jobs, batchCipher()) { now }
+        assertEquals(JobStore.DATABASE_VERSION, jobs.writableDatabase.version)
+        val columns = jobs.readableDatabase.rawQuery("PRAGMA table_info(batches)", null).use { c ->
+            buildList { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
+        }
+        assertTrue("consecutive_failures" in columns)
+        assertEquals(listOf("beta2"), batches.all().map { it.id })
+        assertFalse(jobs.remove("missing")) // Runs the batch-counter UPDATE that failed on the phone.
+    }
+
     @Test fun reupgradeDiscardsBatchesLeftBehindByVersionSix() {
         batches.create("old-confirmation", "Fixture", Preset.BEST, batchItems(2))
         jobs.writableDatabase.version = 6 // v6 leaves unknown batch tables alone on downgrade.
         jobs.close()
         jobs = JobStore(app)
         batches = BatchStore(jobs, batchCipher()) { now }
-        assertEquals(7, jobs.writableDatabase.version)
+        assertEquals(JobStore.DATABASE_VERSION, jobs.writableDatabase.version)
         assertTrue(batches.all().isEmpty())
         jobs.readableDatabase.rawQuery("SELECT COUNT(*) FROM batch_items", null).use {
             assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
@@ -176,7 +196,7 @@ class BatchStoreTest {
         jobs.writableDatabase.version = 6
         jobs.close()
         jobs = JobStore(app)
-        assertEquals(7, jobs.writableDatabase.version)
+        assertEquals(JobStore.DATABASE_VERSION, jobs.writableDatabase.version)
         val after = jobs.readableDatabase.rawQuery("SELECT sql FROM sqlite_master WHERE name='jobs'", null).use { it.moveToFirst(); it.getString(0) }
         assertEquals(before, after)
         assertEquals(rowsBefore, snapshot())

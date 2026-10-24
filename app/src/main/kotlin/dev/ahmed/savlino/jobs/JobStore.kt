@@ -105,7 +105,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion == 6 && newVersion == 7) {
+        if (oldVersion == 7 && newVersion == DATABASE_VERSION) {
+            // 0.5.0-beta2 shipped v7 batches before the consecutive-failure guard existed.
+            val columns = db.rawQuery("PRAGMA table_info(batches)", null).use { c ->
+                buildList { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
+            }
+            if ("consecutive_failures" !in columns) db.execSQL("ALTER TABLE batches ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0")
+        } else if (oldVersion == 6 && newVersion == DATABASE_VERSION) {
             // v6 ignores unknown tables on downgrade; old confirmations must never revive.
             db.execSQL("DROP TABLE IF EXISTS batch_items")
             db.execSQL("DROP TABLE IF EXISTS batches")
@@ -581,7 +587,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
             DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
-        const val DATABASE_VERSION = 7
+        const val DATABASE_VERSION = 8
         private const val SHARE_LINK_COLUMN = "share_link BLOB CHECK(share_link IS NULL OR stage = 'COMPLETED')"
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
 
