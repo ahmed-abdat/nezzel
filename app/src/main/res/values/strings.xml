@@ -27,7 +27,7 @@
     <string name="copied_help">Only while Nezzel is open</string>
     <string name="save_location">Save location</string>
     <string name="save_path">Downloads/Nezzel</string>
-    <string name="privacy">No ads or tracking</string>
+    <string name="privacy">No ads, no account</string>
     <string name="shared_video">Shared link</string>
     <string name="checking_qualities">Getting qualities…</string>
     <string name="nothing_downloads">Saving starts only when you tap Download or Save</string>
@@ -276,7 +276,7 @@
     <string name="crash_share">Share crash report</string>
     <string name="crash_delete">Delete crash reports</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_body">Nezzel is free and downloads files on your phone without ads or tracking, using open-source software: yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) and Python (PSF) — source: github.com/ahmed-abdat/nezzel</string>
+    <string name="about_body">Nezzel is free and downloads files on your phone without ads, using open-source software: yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) and Python (PSF) — source: github.com/ahmed-abdat/nezzel</string>
     <string name="company_name" translatable="false">Hululsoft</string>
     <string name="company_site" translatable="false">hululsoft.mr</string>
     <string name="company_made_by">Made by %1$s</string>

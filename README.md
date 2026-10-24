@@ -7,7 +7,7 @@
 **Copy a link. Pick a quality. Save it.**
 
 Save videos, audio and photos from public links on Android.<br>
-No ads, no account, no tracking. In Arabic, English and French.
+No ads, no account. In Arabic, English and French.
 
 <a href="https://github.com/ahmed-abdat/nezzel/releases/latest"><img src=".github/assets/download-apk.svg" alt="Download APK" height="64"></a>
 

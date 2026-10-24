@@ -27,7 +27,7 @@
     <string name="copied_help">Seulement quand Nezzel est ouvert</string>
     <string name="save_location">Dossier d’enregistrement</string>
     <string name="save_path">Downloads/Nezzel</string>
-    <string name="privacy">Sans publicité ni suivi</string>
+    <string name="privacy">Sans publicité ni compte</string>
     <string name="shared_video">Lien partagé</string>
     <string name="checking_qualities">Récupération des qualités…</string>
     <string name="nothing_downloads">L’enregistrement commence seulement si vous appuyez sur Télécharger ou Enregistrer</string>
@@ -282,7 +282,7 @@
     <string name="crash_share">Partager le rapport d’erreur</string>
     <string name="crash_delete">Supprimer les rapports d’erreur</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_body">Nezzel est gratuit et télécharge les fichiers sur votre téléphone sans publicité ni suivi, grâce à des logiciels libres : yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) et Python (PSF) — source : github.com/ahmed-abdat/nezzel</string>
+    <string name="about_body">Nezzel est gratuit et télécharge les fichiers sur votre téléphone sans publicité, grâce à des logiciels libres : yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) et Python (PSF) — source : github.com/ahmed-abdat/nezzel</string>
     <string name="company_made_by">Créé par %1$s</string>
     <string name="company_open_site">Ouvrir le site de %1$s</string>
     <string name="company_facebook">Facebook</string>
