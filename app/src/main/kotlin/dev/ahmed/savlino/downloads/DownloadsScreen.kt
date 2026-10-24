@@ -216,6 +216,7 @@ fun DownloadsScreen(
     onShareSelected: (List<SavedMedia>) -> Unit = {},
     onDeleteSelected: (List<SavedMedia>, (cleared: Boolean) -> Unit) -> Unit = { _, done -> done(true) },
     canShowFiles: (SavedMedia) -> Boolean = { true },
+    onBatch: (BatchAction) -> Unit = {},
 ) {
     var filterName by rememberSaveable { mutableStateOf(MediaFilter.ALL.name) }
     var search by rememberSaveable { mutableStateOf(false) }
@@ -268,8 +269,10 @@ fun DownloadsScreen(
             LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
                 if(active.isNotEmpty()) {
                     stickyHeader(key = "jobs-header") {
+                        val batch = batchAction(active)
                         SectionHeader(stringResource(if (runningCount(jobs) == 0) R.string.downloads_stopped_header else R.string.downloads_running_header,
-                            NezzelFormat.count(if(runningCount(jobs) == 0) active.size else runningCount(jobs), language)), runningCount(jobs) == 0)
+                            NezzelFormat.count(if(runningCount(jobs) == 0) active.size else runningCount(jobs), language)), runningCount(jobs) == 0,
+                            batch?.let { { BatchButton(it, language) { onBatch(it) } } })
                     }
                     // Severe heat holds downloads to one; say so once, above the rows that wait for it.
                     if (hot && active.any { it.waiting && !it.awaitingSchedule && !it.paused && !it.terminal })
@@ -402,10 +405,30 @@ private fun HeatNote(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SectionHeader(text: String, error: Boolean = false) {
+private fun SectionHeader(text: String, error: Boolean = false, action: (@Composable RowScope.() -> Unit)? = null) {
     Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-        Text(text, Modifier.padding(top = Space.m, bottom = Space.xs).semantics { heading() }, style = MaterialTheme.typography.titleSmall,
-            color = if(error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        // With an action the 48dp button sets the row's height and the title centres on it, level with the button's label.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            Text(text, Modifier.weight(1f).then(if (action == null) Modifier.padding(top = Space.m, bottom = Space.xs) else Modifier)
+                .semantics { heading() }, style = MaterialTheme.typography.titleSmall,
+                color = if(error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            action?.invoke(this)
+        }
+    }
+}
+
+/** Pause all / Resume all / Retry all at the header's end; acts at once (every action is reversible), TalkBack hears the count. */
+@Composable
+private fun BatchButton(batch: BatchAction, language: String, onClick: () -> Unit) {
+    val text = stringResource(when (batch.kind) {
+        BatchKind.PAUSE -> R.string.downloads_pause_all
+        BatchKind.RESUME -> R.string.downloads_resume_all
+        BatchKind.RETRY -> R.string.downloads_retry_all
+    })
+    val label = stringResource(R.string.downloads_batch_accessibility, text,
+        pluralStringResource(R.plurals.downloads_count, batch.ids.size, NezzelFormat.count(batch.ids.size, language)))
+    TextButton(onClick, Modifier.heightIn(min = 48.dp).testTag("batch_action").semantics { contentDescription = label }) {
+        Text(text, maxLines = 2, textAlign = TextAlign.End)
     }
 }
 

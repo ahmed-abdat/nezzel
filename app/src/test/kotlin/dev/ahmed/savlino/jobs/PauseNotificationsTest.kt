@@ -92,6 +92,28 @@ class PauseNotificationsTest {
         } finally { app.coordinatorOverride = null; store.close() }
     }
 
+    @Test fun pauseAllPostsOnePausedNotificationPerJobOutsideTheLiveGroupAndResumeAllClearsThem() = runBlocking {
+        WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder().build())
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val store = JobStore(app)
+        val coordinator = DownloadCoordinator(app, engine = FakeEngine(), store = store)
+        app.coordinatorOverride = coordinator
+        val manager = app.getSystemService(NotificationManager::class.java)
+        try {
+            val ids = listOf("a", "b", "c")
+            ids.forEach { assertTrue(coordinator.enqueue(command(it))) }
+            assertEquals(3, DownloadControls.pauseAll(app, app, ids + "gone"))
+            val shown = manager.activeNotifications.toList()
+            assertEquals(3, shown.size)
+            // Paused rows stand alone (tagged, ungrouped): the "N downloads running" summary counts only work in flight.
+            assertTrue(shown.all { it.tag == "paused" && it.notification.group == null })
+            assertTrue(shown.none { it.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0 })
+            shown.forEach { assertEquals(listOf("Resume", "Cancel"), titles(it.notification)) }
+            assertEquals(3, DownloadControls.resumeAll(app, app, ids))
+            assertTrue(manager.activeNotifications.isEmpty())
+        } finally { app.coordinatorOverride = null; store.close() }
+    }
+
     @Test fun finishingOrCancellingClearsAPausedNotification() {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val notifications = DownloadNotifications(app)

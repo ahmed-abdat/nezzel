@@ -250,6 +250,11 @@ class DownloadCoordinator(
         catch (_: Exception) { mutableError.value = DownloadError.ExecutionRestricted; false }
     }
 
+    /** Batch forms of the per-row calls, over a snapshot of IDs in display order; each returns how many rows changed. */
+    suspend fun pauseAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { pause(it) } }
+    suspend fun resumeAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { resume(it) } }
+    suspend fun retryAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { retry(it) } }
+
     suspend fun execute(id: String, foreground: suspend (DownloadProgress) -> Unit,
         report: suspend (DownloadProgress) -> Unit): JobRecord? = execute(id,
             { WorkInfo.STOP_REASON_NOT_STOPPED }, foreground, report, report)
