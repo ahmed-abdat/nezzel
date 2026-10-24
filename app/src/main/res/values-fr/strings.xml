@@ -514,4 +514,10 @@
     <string name="better_quality_support">Revérifie ce lien</string>
     <string name="better_quality_note">Vous avez enregistré en %1$s. Les qualités supérieures sont en premier.</string>
     <string name="better_quality_none">Rien de mieux trouvé pour ce lien</string>
+    <string name="share_sheet_open_app">Ouvrir dans Nezzel</string>
+    <string name="share_sheet_started">Téléchargement lancé</string>
+    <string name="share_sheet_pane">Nezzel, options de téléchargement</string>
+    <string name="share_notify_line">Autorisez les notifications pour suivre la progression. Le téléchargement marche sans.</string>
+    <string name="download_again">Télécharger à nouveau</string>
+    <string name="download_again_size">Télécharger à nouveau · %1$s</string>
 </resources>

@@ -22,14 +22,18 @@ import dev.ahmed.savlino.jobs.SavedBefore
 import dev.ahmed.savlino.jobs.mimeTypeFor
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.motionSpec
+import dev.ahmed.savlino.ui.theme.rememberReducedMotion
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Notifications
 
 /**
  * Saved-before notice and destination, at the end of the scrolling options: at large text a pinned footer that
  * held them would crowd out the choices themselves.
  */
 @Composable
-internal fun ConfirmationDetails(links: LinkViewModel, language: String) {
-    if (!links.confirmed) links.savedBefore?.let { SavedBeforeNotice(it, links.selectedFormat?.container, language) }
+internal fun ConfirmationDetails(links: LinkViewModel, language: String, savedNotice: Boolean = true) {
+    if (savedNotice && !links.confirmed) links.savedBefore?.let { SavedBeforeNotice(it, links.selectedFormat?.container, language) }
     SavesTo()
 }
 
@@ -39,9 +43,20 @@ internal fun SavesTo() = Text(stringResource(R.string.saves_to, NezzelFormat.iso
 
 /** The explicit Download action for the chosen quality, pinned under the options; nothing is queued until it is pressed. */
 @Composable
-fun ConfirmationScreen(links: LinkViewModel, language: String) {
+fun ConfirmationScreen(links: LinkViewModel, language: String, share: ShareSheetHooks? = null) {
     val metered = rememberMetered()
     Column(Modifier.fillMaxWidth().padding(Space.l).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        if (share != null) {
+            // The share sheet confirms on the button itself (a check), then closes; no second line of text.
+            val done = links.confirmed || share.sent
+            if (!done && share.notifyLine) NotifyLine(share.onAllowNotifications)
+            val reduced = rememberReducedMotion()
+            androidx.compose.animation.Crossfade(done, animationSpec = motionSpec(reduced, androidx.compose.animation.core.tween(300)),
+                label = "download_check") { checked ->
+                if (checked) StartedCheck() else DownloadButton(links, language, metered, again = links.savedBefore != null)
+            }
+            return@Column
+        }
         if (links.confirmed) {
             Text(stringResource(R.string.choice_confirmed), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.titleMedium)
@@ -50,21 +65,61 @@ fun ConfirmationScreen(links: LinkViewModel, language: String) {
             Text(stringResource(R.string.options_changed), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodyMedium)
         }
+        DownloadButton(links, language, metered)
+    }
+}
+
+/** [again]: the chosen format was saved before; the button says so and still saves another copy. */
+@Composable
+private fun DownloadButton(links: LinkViewModel, language: String, metered: Boolean, again: Boolean = false) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         val format = links.selectedFormat
         val roughBytes = format?.let(links::roughSizeBytes)
         val sized = format != null && (format.size != Size.Unknown || roughBytes != null)
         if (format != null && !links.confirmed && largeOnMobileData(format, roughBytes, metered)) {
             MobileDataNote(format, roughBytes, language)
         }
+        val sizedLabel = if (again) R.string.download_again_size else R.string.download_size
         val label = if (links.refreshing) stringResource(R.string.checking_again)
-            else if (sized) stringResource(R.string.download_size, sizeLabel(format!!, language, roughBytes)) else stringResource(R.string.download)
+            else if (sized) stringResource(sizedLabel, sizeLabel(format!!, language, roughBytes))
+            else stringResource(if (again) R.string.download_again else R.string.download)
         // TalkBack hears "About 4.7 MB, estimated", never the ≈ symbol.
-        val spoken = if (sized && !links.refreshing) stringResource(R.string.download_size, spokenSize(format!!, language, roughBytes)) else label
+        val spoken = if (sized && !links.refreshing) stringResource(sizedLabel, spokenSize(format!!, language, roughBytes)) else label
         Button(onClick = links::requestDownload, enabled = links.downloadEnabled,
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
                 contentDescription = spoken
                 if (links.refreshing) liveRegion = LiveRegionMode.Polite
             }) { Text(label) }
+    }
+}
+
+/** The Download button's place after the tap: a check and "Download started", announced once. */
+@Composable
+private fun StartedCheck() {
+    val label = stringResource(R.string.share_sheet_started)
+    Surface(shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("download_started").semantics(mergeDescendants = true) {
+            liveRegion = LiveRegionMode.Polite
+        }) {
+        Row(Modifier.padding(horizontal = Space.l), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Icon(androidx.compose.material.icons.Icons.Filled.Check, contentDescription = null, Modifier.size(20.dp))
+            Spacer(Modifier.width(Space.s))
+            Text(label, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+/** First download from the share sheet only: one line instead of a separate permission screen. */
+@Composable
+private fun NotifyLine(onAllow: () -> Unit) {
+    Row(Modifier.fillMaxWidth().testTag("share_notify_line"), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        Icon(androidx.compose.material.icons.Icons.Outlined.Notifications, contentDescription = null, Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.share_notify_line), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = onAllow, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.allow_notifications)) }
     }
 }
 
@@ -108,7 +163,7 @@ internal fun largeOnMobileData(format: Format, roughBytes: Long?, metered: Boole
  * another copy; this never blocks.
  */
 @Composable
-internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language: String) {
+internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language: String, onOpened: () -> Unit = {}) {
     val context = LocalContext.current
     // Plain note: a leading glyph, the sentence, a text action. No box around one row.
     Row(Modifier.fillMaxWidth().testTag("saved_before"), verticalAlignment = Alignment.CenterVertically,
@@ -119,8 +174,11 @@ internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language:
                 Modifier.weight(1f).padding(vertical = Space.m), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
                 try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(saved.uri, container?.let(::mimeTypeFor))
+                    // Before a format is picked only the file knows its type; MediaStore keeps it for our own rows.
+                    val type = container?.let(::mimeTypeFor) ?: context.contentResolver.getType(saved.uri)
+                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(saved.uri, type)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                    onOpened()
                 } catch (_: ActivityNotFoundException) {
                     android.widget.Toast.makeText(context, R.string.open_file_failed, android.widget.Toast.LENGTH_SHORT).show()
                 } catch (_: SecurityException) {

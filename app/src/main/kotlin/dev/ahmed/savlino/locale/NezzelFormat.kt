@@ -31,12 +31,9 @@ object NezzelFormat {
     fun percent(value: Int, language: String): String = "${number(value.coerceIn(0, 100).toDouble(), language, 0)}%"
     fun count(value: Int, language: String): String = number(value.toDouble(), language, 0)
     /** "Oct 12" / "12 أكتوبر", with Latin digits in every language. */
-    fun shortDate(epochMillis: Long, language: String): String {
-        val locale = Locale.forLanguageTag(numericTag(language))
-        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMd")
-        return java.time.format.DateTimeFormatter.ofPattern(pattern, locale)
-            .format(java.time.Instant.ofEpochMilli(epochMillis).atZone(java.time.ZoneId.systemDefault()))
-    }
+    fun shortDate(epochMillis: Long, language: String): String =
+        android.icu.text.DateFormat.getInstanceForSkeleton("MMMd", android.icu.util.ULocale.forLanguageTag(numericTag(language)))
+            .format(java.util.Date(epochMillis))
     fun shortDateTime(epochMillis: Long, language: String): String =
         java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT)
             .withLocale(Locale.forLanguageTag(numericTag(language)))

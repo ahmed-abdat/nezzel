@@ -4,6 +4,10 @@ package dev.ahmed.savlino.jobs
 class IsolatedTestApplication : NezzelApplication() {
     var coordinatorOverride: DownloadCoordinator? = null
     override val downloads: DownloadCoordinator get() = coordinatorOverride ?: super.downloads
+    var imageInspectOverride: dev.ahmed.savlino.media.ImageInspect? = null
+    override val imageInspect get() = imageInspectOverride ?: super.imageInspect
+    var imageSaverOverride: dev.ahmed.savlino.media.ImageSaver? = null
+    override val imageSaver get() = imageSaverOverride ?: super.imageSaver
     var maintenanceRequests = 0
         private set
     override fun startMaintenanceAfterOnboarding() { maintenanceRequests++ }

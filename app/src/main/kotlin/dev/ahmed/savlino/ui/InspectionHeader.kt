@@ -32,8 +32,9 @@ import dev.ahmed.savlino.ui.theme.Space
 
 @Composable
 internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null,
-    load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }, onThumbnail: () -> Unit = {}) {
-    val title = inspection?.title ?: earlyPreview?.title
+    load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }, onThumbnail: () -> Unit = {}, hint: String? = null) {
+    // The sender's own words stand in until a real title arrives; the title skeleton shows only without them.
+    val title = inspection?.title ?: earlyPreview?.title ?: hint
     // The early (oEmbed) preview and the engine name different images of the same video. Once one has drawn,
     // keep it for this link: switching would blank the tile and fetch a second, larger image.
     var kept by remember { mutableStateOf<String?>(null) }

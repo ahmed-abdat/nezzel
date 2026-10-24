@@ -390,6 +390,19 @@ class LinkViewModel(
     private var savedFormats by mutableStateOf<Map<String, dev.ahmed.savlino.jobs.SavedBefore>>(emptyMap())
     /** The chosen format of this link was saved before (file still present): a notice, never a block. */
     val savedBefore get() = selectedFormat?.let { savedFormats[it.id] }
+    /** Newest earlier save of the shared link (any format, file still present), looked up at intake before the engine answers. */
+    var savedLink by mutableStateOf<dev.ahmed.savlino.jobs.SavedBefore?>(null); private set
+    private var savedLinkJob: Job? = null
+    private fun lookUpSavedLink(link: ValidatedLink) {
+        val coordinator = downloads ?: return
+        val revision = revision
+        savedLinkJob = viewModelScope.launch {
+            val newest = coordinator.savedBefore(link.normalizedUrl).values.maxByOrNull { it.savedAt }
+            if (this@LinkViewModel.revision == revision) savedLink = newest
+        }
+    }
+    /** The sender's words around a shared link; shown only until the real title arrives (never stored or logged). */
+    var shareHint by mutableStateOf<String?>(null); private set
     // Restore the whole pick together: a cleared member must not revive an older initial preference.
     private val restoredPick = saved.contains("lastPreset") || saved.contains("lastHeight")
     private var lastUsedHeight by mutableStateOf(
@@ -407,6 +420,8 @@ class LinkViewModel(
                 .maxByOrNull { FormatChoices.quality(it)!! }
     }
     val confirmed get() = submitted
+    /** The last job the coordinator accepted from this view model; the share sheet closes on it. */
+    var acceptedJob by mutableStateOf<String?>(null); private set
     /** A stale sheet stays tappable: Download reads the link again first (see [confirmDownload]). An unknown engine version can't confirm anything. */
     val downloadEnabled get() = !submitted && !refreshing && !optionsChanged && !engineUpdating && engine.isAvailable && selectedFormat != null &&
         inspection != null && engineVersion() != null && confirmAgainst?.let { currentSource()?.matches(it) } == true
@@ -472,6 +487,8 @@ class LinkViewModel(
             pendingShare = link.rawUrl; saved["pendingShare"] = pendingShare
         } else {
             updateText(link.rawUrl)
+            shareHint = input.hint
+            lookUpSavedLink(link)
             shareActive = true; saved["shareActive"] = true
             if (automaticOptions) checkLink()
         }
@@ -532,6 +549,8 @@ class LinkViewModel(
     private fun updateText(value: String, persist: Boolean = true) {
         clearBetter()
         automaticClipboardDraft = false
+        shareHint = null
+        savedLinkJob?.cancel(); savedLinkJob = null; savedLink = null
         setTyped(false)
         revision++
         invalidateOptions()
@@ -947,6 +966,7 @@ class LinkViewModel(
             } else pendingClipboardDismissals += link
         }
         invalidateOptions()
+        shareHint = null; savedLink = null
         if (automaticClipboardDraft) {
             automaticClipboardDraft = false
             text = ""; saved.remove<String>("text")
@@ -1032,7 +1052,7 @@ class LinkViewModel(
                         try {
                             coordinator.enqueue(confirmed, preset)
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
-                                if (submissionId == confirmed.jobId) { dismissOptions(); clearField() }
+                                if (submissionId == confirmed.jobId) { acceptedJob = confirmed.jobId; dismissOptions(); clearField() }
                             }
                         } catch (cancelled: CancellationException) { throw cancelled }
                         catch (failure: Throwable) {

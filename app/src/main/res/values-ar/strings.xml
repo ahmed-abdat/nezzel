@@ -568,4 +568,10 @@
     <string name="better_quality_support">يفحص الرابط مرة أخرى</string>
     <string name="better_quality_note">حفظتَ بجودة %1$s. الجودات الأعلى في الأعلى.</string>
     <string name="better_quality_none">لم نجد جودة أفضل لهذا الرابط</string>
+    <string name="share_sheet_open_app">فتح في Nezzel</string>
+    <string name="share_sheet_started">بدأ التنزيل</string>
+    <string name="share_sheet_pane">Nezzel، خيارات التنزيل</string>
+    <string name="share_notify_line">اسمح بالإشعارات لمتابعة التقدّم. التنزيل يعمل بدونها.</string>
+    <string name="download_again">تنزيل مرة أخرى</string>
+    <string name="download_again_size">تنزيل مرة أخرى · %1$s</string>
 </resources>

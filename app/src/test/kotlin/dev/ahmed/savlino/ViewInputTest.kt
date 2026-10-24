@@ -25,7 +25,7 @@ class ViewInputTest {
         assertEquals(".MainActivity", pasteAlias.getAttribute("android:targetActivity"))
         val alias = aliasEntries.single { it.getAttribute("android:name") == ".OpenWithLinks" }
         assertEquals("@bool/open_with_links", alias.getAttribute("android:enabled"))
-        assertEquals(".MainActivity", alias.getAttribute("android:targetActivity"))
+        assertEquals(".ShareSheetActivity", alias.getAttribute("android:targetActivity"))
         val filters = alias.getElementsByTagName("intent-filter")
         assertEquals(1, filters.length)
         assertNotEquals("true", (filters.item(0) as org.w3c.dom.Element).getAttribute("android:autoVerify"))
