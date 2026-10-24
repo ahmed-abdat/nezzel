@@ -19,6 +19,13 @@ class ResultJudgeTest {
     @Test fun promisedSoundMissingIsAProblem() =
         assertEquals(ResultCheck.Problem.NO_SOUND, judge(merged, ProbeFacts(1, 0, 60_000, 1000)))
 
+    @Test fun mergedVideoOnlyRowWhoseOutputLostItsSoundIsAProblem() {
+        // YtdlpMetadataMapper keeps the video row's hasAudio=false and adds the audio partner via audioFormatId.
+        val pair = merged.copy(hasAudio = false, audioCodec = null)
+        assertEquals(ResultCheck.Problem.NO_SOUND, judge(pair, ProbeFacts(1, 0, 60_000, 1000)))
+        assertEquals(ResultCheck.Verified(video = true, audio = true), judge(pair, ProbeFacts(1, 1, 60_000, 1000)))
+    }
+
     @Test fun missingPictureIsAProblem() =
         assertEquals(ResultCheck.Problem.NO_PICTURE, judge(merged, ProbeFacts(0, 1, 60_000, 1000)))
 

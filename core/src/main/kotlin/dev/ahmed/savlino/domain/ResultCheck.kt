@@ -25,8 +25,10 @@ object ResultJudge {
         // A null duration (some MKV/WebM) is never a problem; only an explicit zero is
         if (facts.durationMs == 0L) return ResultCheck.Problem.DAMAGED
         if (format.hasVideo && facts.videoTracks == 0) return ResultCheck.Problem.NO_PICTURE
-        // X animated GIFs carry no sound by design; unreported audio is not a promise
-        val promisedAudio = format.hasAudio && !format.animatedGif && !format.unreportedStreams
+        // X animated GIFs carry no sound by design; unreported audio is not a promise.
+        // A merge pairs a video-only row with an audio row: the mapper keeps hasAudio=false there, the merge is the promise.
+        val promisedAudio = (format.hasAudio || format.requiresMerge && format.audioFormatId != null) &&
+            !format.animatedGif && !format.unreportedStreams
         if (promisedAudio && facts.audioTracks == 0) return ResultCheck.Problem.NO_SOUND
         if (format.unreportedStreams && !format.animatedGif && facts.audioTracks == 0) return ResultCheck.NoSoundExpected
         return ResultCheck.Verified(video = format.hasVideo, audio = facts.audioTracks > 0 && !format.animatedGif)
