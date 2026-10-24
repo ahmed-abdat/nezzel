@@ -3,6 +3,8 @@ package dev.ahmed.savlino.engine
 import android.content.Context
 import android.os.SystemClock
 import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.download.*
+import dev.ahmed.savlino.engine.mediahttp.VideoCdnPolicy
 import dev.ahmed.savlino.engine.youtube.FastResult
 import dev.ahmed.savlino.engine.youtube.NpeFastSource
 import dev.ahmed.savlino.engine.youtube.NpeInfoJson
@@ -39,7 +41,13 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private val limits: EngineLimits = EngineLimits(), private val infoCache: YtdlpInfoCache? = null,
     private val fastSource: YoutubeFastSource? = null,
     private val recent: RecentInspections = RecentInspections(),
-    private val native: NativeState = NativeState.process) : EngineAdapter {
+    private val native: NativeState = NativeState.process,
+    private val directFactory: (Host) -> DirectDownloader = { site -> DirectDownloader(transport = { VideoTransport(site) }) },
+    private val directSelect: (DownloadCommand, File) -> DirectRequest? = { command, file ->
+        RangeEligibility.select(command.source.link.host, command.format, file.readText()) {
+            VideoCdnPolicy.allows(command.source.link.host, it) != null
+        }
+    }) : EngineAdapter {
     constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
         fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime))
     private val unavailable = UnavailableEngine()
@@ -59,6 +67,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val timedOut = AtomicBoolean()
         @Volatile var deadline = NO_DEADLINE
         @Volatile var byteWatchdog = false
+        @Volatile var directCancel: (() -> Unit)? = null
         @Volatile var timeoutCause = DownloadFailureCause.TRANSPORT
         @Synchronized fun expireIn(ms: Long) { deadline = System.nanoTime() + ms * 1_000_000 }
     }
@@ -342,15 +351,26 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
 
+    override fun resumeEngine(command: DownloadCommand, directory: File): String {
+        val record = DirectResume.read(directory)
+        if (record != null && !record.native) return "ytdlp"
+        if (record == null && directory.listFiles().orEmpty().isNotEmpty()) return "ytdlp"
+        val info = infoCache?.freshFile(command.jobId) ?: return "ytdlp"
+        return if (try { directSelect(command, info) != null } catch (_: Exception) { false }) "native" else "ytdlp"
+    }
+
     override suspend fun download(command: DownloadCommand, directory: File,
         progress: (EngineEvent) -> Unit): TransferResult {
         var resumeAllowed = true
         return operation(command.jobId, { error, cause -> TransferResult.Failure(error, resumeAllowed, cause) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
             if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
-            // Validate before launching yt-dlp. Caller owns staging cleanup; adapter never touches public storage.
+            // Both paths validate before any staging write. Caller owns staging cleanup/publication.
+            try { YtdlpCommand.validateStaging(directory) }
+            catch (_: IllegalArgumentException) { return@operation TransferResult.Failure(DownloadError.ExecutionRestricted) }
             prepareDownload(command)
             var infoJson = infoCache?.freshFile(command.jobId)
+            val transferEngine = resumeEngine(command, directory)
             val canRebuild = YtdlpCommand.isYouTube(command.source) && fastSource != null
             var rebuilt = false
             suspend fun rebuildOnce(): File? {
@@ -458,11 +478,65 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     }
                 }
             }
+            var nativeComplete = false
+            var nativeExpired = false
+            val directRequest = if (transferEngine == "native") infoJson?.let {
+                try { directSelect(command, it) } catch (_: Exception) { null }
+            } else null
+            if (directRequest != null) {
+                synchronized(current) { current.byteWatchdog = false; current.expireIn(limits.firstByteMs) }
+                val result = directFactory(command.source.link.host).download(directRequest, directory,
+                    { current.cancelled.get() }, { current.timedOut.get() }, { event ->
+                        synchronized(current) {
+                            checkCancelled(current)
+                            when (event) {
+                                is EngineEvent.Restarting -> {
+                                    restartEpoch++
+                                    progress(EngineEvent.Restarting(restartEpoch))
+                                }
+                                is EngineEvent.Progress -> {
+                                    bytes = event.bytesDownloaded
+                                    if (bytes > 0) { current.byteWatchdog = true; current.expireIn(limits.stallMs) }
+                                    progress(event.copy(restartEpoch = restartEpoch))
+                                }
+                                else -> progress(event)
+                            }
+                        }
+                    }, { cancel ->
+                        synchronized(current) {
+                            current.directCancel = cancel
+                            if (current.cancelled.get()) cancel?.invoke()
+                        }
+                    })
+                when (result) {
+                    DirectResult.Complete -> nativeComplete = true
+                    is DirectResult.Failed -> return@operation TransferResult.Failure(result.error, true,
+                        if (current.timedOut.get()) current.timeoutCause else result.cause)
+                    else -> {
+                        nativeExpired = result == DirectResult.Expired
+                        checkCancelled(current)
+                        if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                        restartEpoch++; bytes = -1; progress(EngineEvent.Restarting(restartEpoch))
+                        if (nativeExpired) {
+                            discardInfo(); infoJson = verifiedInfo(current, command); fromPage = true
+                        }
+                    }
+                }
+            }
+            // A changed eligibility/policy cannot hand native bytes to yt-dlp.
+            val changingToYtdlp = !nativeComplete && DirectResume.read(directory)?.native == true
+            if (changingToYtdlp) {
+                if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                restartEpoch++; bytes = -1; progress(EngineEvent.Restarting(restartEpoch))
+            }
+            // Only fallback jobs need a marker; ordinary yt-dlp jobs keep their previous staging contract.
+            if (!nativeComplete && (directRequest != null || changingToYtdlp || DirectResume.read(directory) != null))
+                DirectResume.write(directory, DirectResume.Record(null, null, null))
             var attempts = 0
-            var retriedPageExpiry = false
+            var retriedPageExpiry = nativeExpired
             // Legacy jobs retain their two-attempt path. NPE can add one JSON attempt, never a loop.
             val transferLimit = if (canRebuild) 3 else 2
-            while (true) {
+            while (!nativeComplete) {
                 try { attempts++; transfer(infoJson); break }
                 catch (error: Exception) {
                     if (error is CancellationException) throw error
@@ -470,10 +544,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     // Keep the typed timeout diagnostic instead of replacing it with OperationCancelled.
                     if (current.timedOut.get()) throw error
                     checkCancelled(current)
-                    if (error !is YtdlpExecutionFailure || error.reextractionBlocked || attempts >= transferLimit) throw error
-                    val hasBytes = bytes > 0 || directory.listFiles().orEmpty().any {
-                        !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name) && it.length() > 0
-                    }
+                    if (error !is YtdlpExecutionFailure || error.reextractionBlocked || attempts >= transferLimit || nativeExpired) throw error
+                    val hasBytes = bytes > 0 || hasPartialBytes(directory)
                     val inspected = infoJson.takeUnless { fromPage }
                     val expiry = error.expiredUrl && (inspected != null || hasBytes)
                     val rejected = !error.expiredUrl && inspected?.let { infoCache?.isNpe(it) } == true &&
@@ -504,6 +576,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.deadline = NO_DEADLINE
             current.byteWatchdog = false
             checkCancelled(current)
+            val marker = File(directory, DirectResume.NAME)
+            if (marker.exists() && !marker.delete()) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
             val output = try {
                 val root = directory.canonicalFile
                 val manifest = File(root, "result-path.txt")
@@ -616,21 +690,28 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     }
 
     override fun cancel(operationId: String) {
+        var stopDirect: (() -> Unit)? = null
         synchronized(lifecycleLock) {
-            operations[operationId]?.let { current ->
-                if (!current.finished.get()) { current.cancelled.set(true); current.cancellation.complete(Unit) }
-                return
-            }
-            // A brief pre-registration window, never a permanent tombstone for an unknown ID.
-            if (operationId in recentlyFinished) return
-            if (pendingCancellation.containsKey(operationId)) return
-            val pending = PendingCancellation()
-            pendingCancellation[operationId] = pending
-            cancellationScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                delay(CANCELLATION_WINDOW_MS)
-                synchronized(lifecycleLock) { pendingCancellation.remove(operationId, pending) }
+            val current = operations[operationId]
+            if (current != null) {
+                if (!current.finished.get()) {
+                    current.cancelled.set(true)
+                    current.cancellation.complete(Unit)
+                    stopDirect = current.directCancel
+                }
+            } else {
+                // A brief pre-registration window, never a permanent tombstone for an unknown ID.
+                if (operationId in recentlyFinished || pendingCancellation.containsKey(operationId)) return
+                val pending = PendingCancellation()
+                pendingCancellation[operationId] = pending
+                cancellationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    delay(CANCELLATION_WINDOW_MS)
+                    synchronized(lifecycleLock) { pendingCancellation.remove(operationId, pending) }
+                }
             }
         }
+        // A writer/progress callback may re-enter cancel: never invoke it under the global lifecycle lock.
+        stopDirect?.invoke()
     }
     private fun initialize() = runtime.initialization.ensure(runtime::resetPartialInstall, runtime::needsExtraction,
         runtime::initialize)
@@ -701,7 +782,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                         current.timedOut.set(true); current.cancelled.set(true)
                     }
                 }
-                if (current.cancelled.get()) current.cancellation.complete(Unit)
+                if (current.cancelled.get()) { current.directCancel?.invoke(); current.cancellation.complete(Unit) }
                 if (current.cancelled.get() && !destroyed) {
                     destroyed = try { runtime.destroy(current.processId) } catch (_: Exception) { false }
                 }
@@ -830,4 +911,10 @@ internal class NativeGate(private val permits: Int = 8) {
     }
     suspend fun <T> shared(block: suspend () -> T): T { val held = lockShared(); try { return block() } finally { unlock(held) } }
     suspend fun <T> exclusive(block: suspend () -> T): T { val held = lockExclusive(); try { return block() } finally { unlock(held) } }
+}
+
+/** Real continuation bytes, used by the expiry retry guard. */
+internal fun hasPartialBytes(directory: File): Boolean = directory.listFiles().orEmpty().any {
+    !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && it.name != DirectResume.NAME &&
+        PartialFileNames.matches(it.name) && it.length() > 0
 }
