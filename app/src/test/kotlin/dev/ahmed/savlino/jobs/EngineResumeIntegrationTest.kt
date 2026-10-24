@@ -250,7 +250,9 @@ class EngineResumeIntegrationTest {
     private inner class Fixture(val id: String, limits: EngineLimits, cold: Boolean = false,
         val format: Format? = null) : AutoCloseable {
         val runtime = Runtime(cold)
-        val engine = YoutubedlEngine(runtime, limits, YtdlpInfoCache(app.noBackupFilesDir))
+        // Robolectric shares process-wide engine state per SDK sandbox; a share stranded by another class would
+        // block this fixture's exclusive updater.
+        val engine = YoutubedlEngine(runtime, limits, YtdlpInfoCache(app.noBackupFilesDir), native = NativeState())
         val store = JobStore(app, null)
         val provider = TestDownloadsProvider(File(app.cacheDir, "$id-published"), app.packageName)
         val part = File(app.filesDir, "downloads/$id/output.mp4.part")
