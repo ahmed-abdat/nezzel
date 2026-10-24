@@ -9,7 +9,9 @@ data class DownloadProgress(val jobId: String, val filename: String, val phase: 
     val publishedUri: android.net.Uri? = null, val mimeType: String = "video/mp4", val qualityHeight: Int? = null, val awaitingSchedule: Boolean = false, val waiting: Boolean = false, val retryable: Boolean = false,
     val bytesPerSecond: Double? = null, val remainingTransferSeconds: Long? = null, val stalled: Boolean? = null,
     val fragmentIndex: Long? = null, val fragmentCount: Long? = null,
-    val paused: Boolean = false, val hasPartial: Boolean = false, val restartEpoch: Long = 0) {
+    val paused: Boolean = false, val hasPartial: Boolean = false, val restartEpoch: Long = 0,
+    /** Result check of a COMPLETED file (null on every other event, and when nothing could be judged). */
+    val check: dev.ahmed.savlino.domain.ResultCheck? = null) {
     /** Byte estimates never supply a percentage; completed fragments can supply their own real fraction. */
     val percent: Int? get() {
         val fragments = fragmentCount?.takeIf { it > 0 }
@@ -32,3 +34,7 @@ data class DownloadProgress(val jobId: String, val filename: String, val phase: 
 
 /** Holds a transfer slot: admitted and not paused. Preparing counts, so a row does not move when its bytes start. */
 internal val DownloadProgress.running get() = !terminal && !awaitingSchedule && !waiting && !paused
+
+/** A saved file the result check found wrong. In memory only: gone after a process restart. */
+data class CheckWarning(val jobId: String, val displayName: String, val uri: android.net.Uri?,
+    val problem: dev.ahmed.savlino.domain.ResultCheck.Problem, val canRetry: Boolean)

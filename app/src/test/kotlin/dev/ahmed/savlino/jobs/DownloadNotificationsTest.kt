@@ -391,4 +391,20 @@ class DownloadNotificationsTest {
         assertTrue(preparing.extras.getBoolean(android.app.Notification.EXTRA_PROGRESS_INDETERMINATE))
         assertFalse(preparing.extras.containsKey("android.requestPromotedOngoing"))
     }
+
+    @Test fun completedTextCarriesTheMeasuredVerdictAndPlainSavedOtherwise() {
+        val app = RuntimeEnvironment.getApplication()
+        val done = DownloadProgress("c", "Clip.mp4", DownloadPhase.COMPLETED)
+        val full = { check: dev.ahmed.savlino.domain.ResultCheck? -> DownloadNotifications.text(app, done.copy(check = check)) }
+        assertTrue(full(dev.ahmed.savlino.domain.ResultCheck.Verified(true, true)).startsWith(app.getString(dev.ahmed.savlino.R.string.check_saved_video)))
+        assertTrue(full(dev.ahmed.savlino.domain.ResultCheck.Verified(false, true)).startsWith(app.getString(dev.ahmed.savlino.R.string.check_saved_audio)))
+        assertTrue(full(dev.ahmed.savlino.domain.ResultCheck.NoSoundExpected).startsWith(app.getString(dev.ahmed.savlino.R.string.check_saved_silent)))
+        assertTrue(full(dev.ahmed.savlino.domain.ResultCheck.Problem.NO_SOUND).startsWith(app.getString(dev.ahmed.savlino.R.string.check_problem_no_sound)))
+        assertTrue(full(dev.ahmed.savlino.domain.ResultCheck.Problem.DAMAGED).startsWith(app.getString(dev.ahmed.savlino.R.string.check_problem_damaged)))
+        // A silent X GIF and an unchecked file claim nothing: today's plain "Saved".
+        assertEquals(app.getString(dev.ahmed.savlino.R.string.download_saved), full(dev.ahmed.savlino.domain.ResultCheck.Verified(true, false)).substringBefore(" · "))
+        assertEquals(app.getString(dev.ahmed.savlino.R.string.download_saved), full(null).substringBefore(" · "))
+        assertNull(DownloadNotifications.checkLine(dev.ahmed.savlino.domain.ResultCheck.Problem.NO_PICTURE))
+        assertEquals(dev.ahmed.savlino.R.string.check_line_video, DownloadNotifications.checkLine(dev.ahmed.savlino.domain.ResultCheck.Verified(true, true)))
+    }
 }

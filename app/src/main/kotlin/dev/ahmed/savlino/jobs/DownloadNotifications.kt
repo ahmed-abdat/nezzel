@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
 import dev.ahmed.savlino.MainActivity
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.domain.ResultCheck
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.downloads.isOffline
@@ -204,9 +205,38 @@ class DownloadNotifications(private val base: Context, private val leaderId: () 
             return if (progress.phase == DownloadPhase.DOWNLOADING) {
                 (listOf(phase) + transferDetails(context, progress)).joinToString(" · ")
             } else if (progress.phase == DownloadPhase.COMPLETED) {
-                listOfNotNull(phase, progress.qualityHeight?.let { context.getString(R.string.video_quality,
+                listOfNotNull(checkSaved(progress.check)?.let(context::getString) ?: phase, progress.qualityHeight?.let { context.getString(R.string.video_quality,
                     NezzelFormat.count(it, language)) }, bytes(context, progress, language)).joinToString(" · ")
             } else phase
+        }
+
+        /** The completed line for a measured verdict (replaces plain "Saved"); null = plain "Saved", claims nothing. */
+        @androidx.annotation.StringRes fun checkSaved(check: ResultCheck?): Int? = when (check) {
+            is ResultCheck.Verified -> when {
+                check.video && check.audio -> R.string.check_saved_video
+                !check.video && check.audio -> R.string.check_saved_audio
+                else -> null // a silent X GIF: just "Saved"
+            }
+            ResultCheck.NoSoundExpected -> R.string.check_saved_silent
+            is ResultCheck.Problem -> checkProblem(check)
+            ResultCheck.Unchecked, null -> null
+        }
+
+        /** The second snackbar line for Verified/Info; problems use [checkProblem] alone. */
+        @androidx.annotation.StringRes fun checkLine(check: ResultCheck?): Int? = when (check) {
+            is ResultCheck.Verified -> when {
+                check.video && check.audio -> R.string.check_line_video
+                !check.video && check.audio -> R.string.check_line_audio
+                else -> null
+            }
+            ResultCheck.NoSoundExpected -> R.string.check_line_silent
+            else -> null
+        }
+
+        @androidx.annotation.StringRes fun checkProblem(problem: ResultCheck.Problem): Int = when (problem) {
+            ResultCheck.Problem.NO_SOUND -> R.string.check_problem_no_sound
+            ResultCheck.Problem.NO_PICTURE -> R.string.check_problem_no_picture
+            ResultCheck.Problem.DAMAGED -> R.string.check_problem_damaged
         }
 
         /** One presentation policy for the app and notifications; no estimation or Format.size fallback. */

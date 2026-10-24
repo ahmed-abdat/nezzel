@@ -497,4 +497,21 @@
     <string name="tiktok_sound">Son</string>
     <string name="image_expired">Plus disponible</string>
     <string name="image_expired_body">Rouvrez le lien pour actualiser les photos.</string>
+
+    <!-- Result check (R3/R4) -->
+    <string name="check_saved_video">Enregistré · image et son présents</string>
+    <string name="check_saved_audio">Enregistré · son présent</string>
+    <string name="check_saved_silent">Enregistré · cette vidéo n’a pas de son</string>
+    <string name="check_line_video">Image et son présents</string>
+    <string name="check_line_audio">Son présent</string>
+    <string name="check_line_silent">Cette vidéo n’a pas de son</string>
+    <string name="check_problem_no_sound">Enregistré, mais sans son</string>
+    <string name="check_problem_no_picture">Enregistré, mais l’image est absente</string>
+    <string name="check_problem_damaged">Enregistré, mais le fichier semble abîmé</string>
+    <string name="check_needs_look">À vérifier</string>
+    <!-- Look for better quality (B2/B3) -->
+    <string name="better_quality_action">Chercher une meilleure qualité</string>
+    <string name="better_quality_support">Revérifie ce lien</string>
+    <string name="better_quality_note">Vous avez enregistré en %1$s. Les qualités supérieures sont en premier.</string>
+    <string name="better_quality_none">Rien de mieux trouvé pour ce lien</string>
 </resources>

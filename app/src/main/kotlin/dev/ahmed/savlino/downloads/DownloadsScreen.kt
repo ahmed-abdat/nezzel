@@ -217,6 +217,7 @@ fun DownloadsScreen(
     onDeleteSelected: (List<SavedMedia>, (cleared: Boolean) -> Unit) -> Unit = { _, done -> done(true) },
     canShowFiles: (SavedMedia) -> Boolean = { true },
     onBatch: (BatchAction) -> Unit = {}, batchBusy: Boolean = false,
+    warnings: List<CheckWarning> = emptyList(), onTryAgain: (String) -> Unit = {}, onDismissWarning: (String) -> Unit = {},
 ) {
     var filterName by rememberSaveable { mutableStateOf(MediaFilter.ALL.name) }
     var search by rememberSaveable { mutableStateOf(false) }
@@ -281,6 +282,15 @@ fun DownloadsScreen(
                         JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
                             Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)),
                             onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
+                    }
+                }
+                // Result check: saved files that need a look, above the Saved list (in memory only).
+                if (warnings.isNotEmpty()) {
+                    item(key = "warnings-header") { SectionHeader(stringResource(R.string.check_needs_look), error = true) }
+                    items(warnings, key = { "warning-${it.jobId}" }) { warning ->
+                        CheckWarningRow(warning, (libraryLoad as? LibraryLoadState.Ready)?.rows?.firstOrNull { it.uri == warning.uri },
+                            { onTryAgain(warning.jobId) }, { onDismissWarning(warning.jobId) },
+                            Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)))
                     }
                 }
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }
@@ -524,6 +534,10 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
     val scope = rememberCoroutineScope()
     val copy = LocalLinkCopy.current
     val link by produceState<String?>(null, item.uri) { value = copy?.find?.invoke(item) }
+    val better = LocalBetterQuality.current
+    val canLookForBetter by produceState(false, item.uri) {
+        value = item.kind == SavedMediaKind.VIDEO && better?.eligible?.invoke(item) == true
+    }
     fun act(action: () -> Unit) {
         action()
         scope.launch { sheet.hide() }.invokeOnCompletion { open = false }
@@ -547,6 +561,8 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
                 SheetAction(R.drawable.ic_ms_link, stringResource(R.string.copy_link),
                     supporting = android.net.Uri.parse(url).host?.removePrefix("www.")) { act { copy?.copy?.invoke(url) } }
             }
+            if (canLookForBetter) SheetAction(R.drawable.ic_ms_tune, stringResource(R.string.better_quality_action),
+                supporting = stringResource(R.string.better_quality_support), supportingLtr = false) { act { better?.open?.invoke(item) } }
             SheetAction(R.drawable.ic_ms_open_in_new, stringResource(R.string.saved_open_with)) { act(onOpenWith) }
             if (onShowFiles != null) SheetAction(R.drawable.ic_ms_folder, stringResource(R.string.saved_show_files)) { act { onShowFiles(item) } }
             HorizontalDivider(Modifier.padding(horizontal = Space.xl, vertical = Space.s))
@@ -557,7 +573,7 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
 
 @Composable
 private fun SheetAction(icon: Int, label: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        supporting: String? = null, onClick: () -> Unit) {
+                        supporting: String? = null, supportingLtr: Boolean = true, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button, onClick = onClick)
         .padding(horizontal = Space.xl, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.l)) {
@@ -566,7 +582,7 @@ private fun SheetAction(icon: Int, label: String, tint: Color = MaterialTheme.co
             Text(label, style = MaterialTheme.typography.bodyLarge,
                 color = if (tint == MaterialTheme.colorScheme.error) tint else MaterialTheme.colorScheme.onSurface)
             // Hosts stay LTR inside Arabic.
-            if (supporting != null) Text(supporting, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+            if (supporting != null) Text(supporting, style = MaterialTheme.typography.bodySmall.copy(textDirection = if (supportingLtr) TextDirection.Ltr else TextDirection.Content),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
