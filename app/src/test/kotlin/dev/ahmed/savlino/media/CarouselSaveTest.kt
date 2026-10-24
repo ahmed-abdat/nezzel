@@ -89,6 +89,36 @@ class CarouselSaveTest {
         assertTrue(staging.walkTopDown().none { it.isFile })
     }
 
+    @Test fun subsetKeepsOriginalPaddedPositionsAtPublication() = runBlocking {
+        val publisher = RecordingPublisher()
+        val saver = ImageSaver(ImageFetch { _, sink -> sink.write(byteArrayOf(1)); ImageSaveResult.Success(image) },
+            publisher, staging, noSpaceCheck, scope)
+        val chosen = listOf(2, 11).map { n ->
+            val request = request(n)
+            ImageSaveRequest(request.selection, image, indexedImageTitle("Post", n, "jpg", 11))
+        }
+        assertTrue(saver.saveBatch(chosen))
+        withTimeout(10_000) { saver.awaitIdle() }
+        assertEquals(listOf("Post_02.jpg", "Post_11.jpg"), publisher.names)
+    }
+
+    @Test fun tikTokBatchesAllowFortyPhotosButNeverFortyOne() = runBlocking {
+        val post = LinkRevision(LinkInput.parse("https://www.tiktok.com/@synthetic/photo/900000001")!!, 1)
+        val requests = (1..41).map { n ->
+            val selection = MediaSelection(post, identity, MediaRenditionRef(MediaItemRef(identity.adapterId, "photo-$n"), "original"),
+                MediaKind.IMAGE, validity)
+            ImageSaveRequest(selection, image, indexedImageTitle("Post", n, "jpg", 41))
+        }
+        val publisher = RecordingPublisher()
+        val saver = ImageSaver(ImageFetch { _, sink -> sink.write(byteArrayOf(1)); ImageSaveResult.Success(image) },
+            publisher, staging, noSpaceCheck, scope)
+        assertFalse(saver.saveBatch(requests))
+        assertTrue(saver.saveBatch(requests.take(40)))
+        withTimeout(10_000) { saver.awaitIdle() }
+        assertEquals(40, publisher.published.get())
+        assertEquals(40, (saver.outcome.value as ImageSaveState.BatchFinished).saved.size)
+    }
+
     @Test fun numericSuffixSurvivesTheFilenameCapsAndKeepsRealEncoding() {
         for (title in listOf("a".repeat(100), "صورة جميلة ".repeat(30), "😀".repeat(100))) {
             val name = FilenameSanitizer.sanitize(indexedImageTitle(title, 20, "webp"), "webp")

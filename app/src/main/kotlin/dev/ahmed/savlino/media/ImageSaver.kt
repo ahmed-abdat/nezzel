@@ -44,7 +44,7 @@ sealed interface ImageSaveState {
     class Saving(val selection: MediaSelection, val current: Int = 1, val total: Int = 1) : ImageSaveState
     class Saved(val selection: MediaSelection, val uri: Uri, val displayName: String) : ImageSaveState
     class BatchFinished(val selection: MediaSelection, val saved: List<Saved>, val total: Int,
-        val cancelled: Boolean, val failure: Failed?) : ImageSaveState
+        val cancelled: Boolean, val failure: Failed?, val failures: List<Failed> = listOfNotNull(failure)) : ImageSaveState
     class Failed(val selection: MediaSelection, val image: ImageFailure? = null, val statusCode: Int? = null,
         val storage: StorageError? = null) : ImageSaveState
 }
@@ -53,8 +53,9 @@ sealed interface ImageSaveState {
 class ImageSaveRequest(val selection: MediaSelection, val image: MediaImageMetadata, val title: String)
 
 /** Reserve the numeric suffix before the existing Unicode/byte-safe filename cap. Keep the real encoding. */
-internal fun indexedImageTitle(title: String, index: Int, extension: String): String {
-    val suffix = "_$index"
+internal fun indexedImageTitle(title: String, index: Int, extension: String, total: Int = index): String {
+    require(index > 0 && total >= index)
+    val suffix = "_" + index.toString().padStart(total.toString().length, '0')
     val max = 80 - suffix.length
     val shortened = if (title.codePointCount(0, title.length) > max)
         title.substring(0, title.offsetByCodePoints(0, max)) else title
@@ -105,7 +106,7 @@ class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher
 
     /** One explicit batch; publications stay sequential and independent, including after a sibling failure. */
     fun saveBatch(requests: List<ImageSaveRequest>): Boolean = synchronized(lock) {
-        if (running?.isActive == true || requests.isEmpty() || requests.size > 20 ||
+        if (running?.isActive == true || requests.isEmpty() || requests.size > batchLimit(requests) ||
             requests.map { it.selection }.distinct().size != requests.size) return false
         val chosen = requests.toList()
         val cancellation = CancellationSignal()
@@ -116,6 +117,7 @@ class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher
                 sweepLocked()
                 val saved = ArrayList<ImageSaveState.Saved>()
                 var failure: ImageSaveState.Failed? = null
+                val failures = ArrayList<ImageSaveState.Failed>()
                 for ((index, request) in chosen.withIndex()) {
                     if (cancellation.isCanceled) break
                     state.value = ImageSaveState.Saving(request.selection, index + 1, chosen.size)
@@ -123,16 +125,23 @@ class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher
                         is ImageSaveState.Saved -> saved += result
                         is ImageSaveState.Failed -> {
                             failure = result
+                            failures += result
                             if (result.image == ImageFailure.CANCELLED) break
                         }
                         else -> Unit
                     }
                 }
                 state.value = ImageSaveState.BatchFinished(chosen.first().selection, saved.toList(), chosen.size,
-                    cancellation.isCanceled || failure?.image == ImageFailure.CANCELLED, failure)
+                    cancellation.isCanceled || failure?.image == ImageFailure.CANCELLED, failure, failures.toList())
             }
         }
         true
+    }
+
+    private fun batchLimit(requests: List<ImageSaveRequest>): Int {
+        val first = requests.firstOrNull()?.selection?.source ?: return 20
+        return if (dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity.parse(first.link.rawUrl) != null &&
+            requests.all { it.selection.source.matches(first) }) 40 else 20
     }
 
     /** Stops the transfer or the copy; a commit that already happened wins and stays saved. */

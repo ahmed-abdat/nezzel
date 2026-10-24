@@ -32,6 +32,7 @@ object ImageRoute {
         XPostIdentity.parse(link.rawUrl) != null -> MediaSourceRoute.X
         // Instagram /p/ posts read their photos first; reels and /tv/ are videos and stay on yt-dlp directly.
         InstagramPostIdentity.parse(link.rawUrl)?.kind == InstagramLinkKind.POST -> MediaSourceRoute.INSTAGRAM
+        dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity.parse(link.rawUrl)?.isPhoto == true -> MediaSourceRoute.TIKTOK
         TelegramPostIdentity.parse(link.rawUrl) != null -> MediaSourceRoute.TELEGRAM
         BlueskyPostIdentity.parse(link.rawUrl) != null -> MediaSourceRoute.BLUESKY
         isImagePath(link.rawUrl) || isKnownImageCdn(link.rawUrl) -> MediaSourceRoute.DIRECT_IMAGE

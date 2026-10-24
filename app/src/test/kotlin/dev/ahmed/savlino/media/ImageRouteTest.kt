@@ -8,6 +8,13 @@ import org.junit.Test
 class ImageRouteTest {
     private fun route(url: String) = ImageRoute.of(requireNotNull(LinkInput.parse(url)) { "fixture must be a valid link: $url" })
 
+    @Test fun onlyTikTokPhotoPathsUseTheReaderBeforeYtdlp() {
+        assertEquals(MediaSourceRoute.TIKTOK, route("https://www.tiktok.com/@synthetic/photo/900000001"))
+        for (url in listOf("https://www.tiktok.com/@synthetic/video/900000001",
+            "https://vm.tiktok.com/Synthetic/", "https://tiktok.com.evil.example/@synthetic/photo/900000001",
+            "https://www.tiktok.com/@synthetic/photo/no-id")) assertEquals(MediaSourceRoute.LEGACY, route(url))
+    }
+
     @Test fun telegramAndBlueskyOnlyRoutePublicPostShapes() {
         for (url in listOf("https://t.me/synthetic_channel/123", "https://telegram.me/synthetic_channel/123?single"))
             assertEquals("TELEGRAM", route(url).name)

@@ -481,4 +481,10 @@
         <item quantity="one">%1$s new</item>
         <item quantity="other">%1$s new</item>
     </plurals>
+
+    <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
+    <string name="saved_post_position">%1$s of %2$s</string>
+    <string name="tiktok_sound">Sound</string>
+    <string name="image_expired">Not available anymore</string>
+    <string name="image_expired_body">Reopen the link to refresh the photos.</string>
 </resources>

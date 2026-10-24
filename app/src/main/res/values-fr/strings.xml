@@ -491,4 +491,10 @@
         <item quantity="many">%1$s nouveaux</item>
         <item quantity="other">%1$s nouveaux</item>
     </plurals>
+
+    <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
+    <string name="saved_post_position">%1$s sur %2$s</string>
+    <string name="tiktok_sound">Son</string>
+    <string name="image_expired">Plus disponible</string>
+    <string name="image_expired_body">Rouvrez le lien pour actualiser les photos.</string>
 </resources>

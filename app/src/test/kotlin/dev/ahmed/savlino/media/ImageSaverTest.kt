@@ -63,6 +63,16 @@ class ImageSaverTest {
     private val proof = MediaImageProof("a".repeat(64), fixture.size.toLong())
     private val image = MediaImageMetadata(MediaImageFormat.JPEG, Size.Exact(fixture.size.toLong()), 640, 480, proof)
 
+    @Test fun indexedTitlesPadByPostTotalAndReserveTheSuffix() {
+        assertEquals("Post_01", indexedImageTitle("Post", 1, "jpg", 11))
+        assertEquals("Post_011", indexedImageTitle("Post", 11, "png", 120))
+        assertEquals("Post_7", indexedImageTitle("Post", 7, "webp", 7))
+        val title = indexedImageTitle("😀".repeat(100), 1, "jpg", 120)
+        assertTrue(title.endsWith("_001"))
+        assertTrue(title.codePointCount(0, title.length) <= 80)
+        assertTrue(FilenameSanitizer.sanitize(title, "jpg").toByteArray().size <= 240)
+    }
+
     @Test fun treeImageSaveDoesNotPreflightDownloadsSpaceAndDefaultStillDoes() = runBlocking {
         val documents = SaveDestinationTest.Provider()
         documents.attachInfo(app, ProviderInfo().apply {

@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import dev.ahmed.savlino.domain.MediaRenditionRef
@@ -53,26 +54,38 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
     if (state.isCarousel) {
         Text(pluralStringResource(R.plurals.image_available_count, state.photos.size,
             NezzelFormat.count(state.photos.size, language)), style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = { onSelectAll(selected.size != state.photos.size) }, enabled = enabled,
+        val available = state.photos.count { it.ref !in state.expiredPhotos }
+        val allSelected = available > 0 && state.photos.filter { it.ref !in state.expiredPhotos }.all { it.ref in selected }
+        TextButton(onClick = { onSelectAll(!allSelected) }, enabled = enabled && available > 0,
             modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(if (selected.size == state.photos.size) R.string.image_select_none else R.string.image_select_all))
+            Text(stringResource(if (allSelected) R.string.image_select_none else R.string.image_select_all))
         }
         // Regular Rows compose every bounded item and inherit LayoutDirection, including the reading order in Arabic.
-        state.photos.chunked(3).forEachIndexed { row, photos ->
+        state.photos.chunked(3).forEach { photos ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                photos.forEachIndexed { column, photo ->
-                    val index = row * 3 + column + 1
+                photos.forEach { photo ->
+                    val index = state.inspection.items.single { it.ref == photo.ref.item }.position + 1
+                    val expired = photo.ref in state.expiredPhotos
                     val checked = photo.ref in selected
+                    val expiredLabel = stringResource(R.string.image_expired)
                     val label = stringResource(R.string.image_thumbnail_desc, NezzelFormat.count(index, language),
-                        NezzelFormat.count(state.photos.size, language))
+                        NezzelFormat.count(maxOf(state.discovery.claimedCount ?: 0, state.inspection.items.maxOf { it.position + 1 }), language))
                     Box(Modifier.weight(1f).aspectRatio(1f).heightIn(min = 48.dp)
                         .clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                        .toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onToggle(photo.ref) })
-                        .semantics(mergeDescendants = true) { contentDescription = label }) {
+                        .toggleable(checked, enabled = enabled && !expired, role = Role.Checkbox, onValueChange = { onToggle(photo.ref) })
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = label
+                            if (expired) stateDescription = expiredLabel
+                        }) {
+                        if (state.previews[photo.ref] == null) Text(NezzelFormat.count(index, language),
+                            Modifier.align(Alignment.Center).clearAndSetSemantics {}, style = MaterialTheme.typography.headlineMedium)
                         state.previews[photo.ref]?.let { bitmap ->
                             Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         }
-                        Checkbox(checked, onCheckedChange = null, modifier = Modifier.align(Alignment.TopEnd)
+                        if (expired) Text(expiredLabel, Modifier.fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)).padding(Space.s),
+                            style = MaterialTheme.typography.bodySmall)
+                        Checkbox(checked, onCheckedChange = null, enabled = !expired, modifier = Modifier.align(Alignment.TopEnd)
                             .clearAndSetSemantics {})
                     }
                 }
@@ -89,7 +102,7 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
     if (state.discovery.previewQuality) Text(stringResource(R.string.image_preview_quality),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (state.discovery.cappedCount > 0) Text(stringResource(R.string.image_first_limit,
-        NezzelFormat.count(20, language)), style = MaterialTheme.typography.bodyMedium)
+        NezzelFormat.count(state.discovery.photoLimit, language)), style = MaterialTheme.typography.bodyMedium)
     if (state.discovery.unavailableCount > 0) Text(pluralStringResource(R.plurals.image_unavailable_count,
         state.discovery.unavailableCount, NezzelFormat.count(state.discovery.unavailableCount, language)),
         style = MaterialTheme.typography.bodyMedium)
@@ -99,8 +112,25 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
     if (found > state.photos.size && state.discovery.unavailableCount == 0 && state.discovery.cappedCount == 0 && state.discovery.notPreviewedCount == 0)
         Text(stringResource(R.string.image_available_of, NezzelFormat.count(state.photos.size, language),
             NezzelFormat.count(found, language)), style = MaterialTheme.typography.bodyMedium)
+    state.discovery.sound?.let { sound ->
+        OutlinedCard(onClick = onVideo, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp)) {
+            Row(Modifier.padding(Space.m), horizontalArrangement = Arrangement.spacedBy(Space.m),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(painterResource(R.drawable.ic_music), contentDescription = null)
+                Column {
+                    Text(stringResource(R.string.tiktok_sound), style = MaterialTheme.typography.titleSmall)
+                    sound.title?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodyMedium) }
+                    sound.author?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        }
+    }
     if (state.discovery.hasVideo) TextButton(onClick = onVideo, enabled = enabled,
         modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.image_video_options)) }
+    if (!state.isCarousel && state.expiredPhotos.isNotEmpty()) {
+        Text(stringResource(R.string.image_expired), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.image_expired_body), style = MaterialTheme.typography.bodySmall)
+    }
     if (state.availability is ImageSaveAvailability.Unavailable) Text(stringResource(R.string.image_changed),
         Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
 }
@@ -124,8 +154,9 @@ internal fun ImageSaveBar(links: LinkViewModel, language: String) {
         } else {
             // Only the complete measured body is a size; otherwise none is shown.
             val bytes = ready.image.proof?.measuredBytes
-            val label = if (ready.isCarousel) pluralStringResource(R.plurals.image_save_count, links.selectedImageRefs.size,
-                NezzelFormat.count(links.selectedImageRefs.size, language)) else if (bytes != null) stringResource(R.string.image_save_size, NezzelFormat.isolate(NezzelFormat.size(bytes, language)))
+            val count = (links.selectedImageRefs - ready.expiredPhotos).size
+            val label = if (ready.isCarousel) pluralStringResource(R.plurals.image_save_count, count,
+                NezzelFormat.count(count, language)) else if (bytes != null) stringResource(R.string.image_save_size, NezzelFormat.isolate(NezzelFormat.size(bytes, language)))
                 else stringResource(R.string.image_save)
             Button(onClick = links::saveImage, enabled = links.imageSaveEnabled,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(label) }
@@ -144,6 +175,7 @@ internal fun ImageInspectionError(state: OptionsState.ImageError, onRetry: () ->
 }
 
 internal fun imageErrorCopy(state: OptionsState.ImageError): Triple<Int, Int?, Boolean> = when (state.failure) {
+    ImageFailure.EXPIRED -> Triple(R.string.image_expired, R.string.image_expired_body, true)
     ImageFailure.PREVIEW_LIMIT -> Triple(R.string.image_preview_limit_title, R.string.image_preview_limit_body, false)
     ImageFailure.LINKED_ELSEWHERE -> Triple(R.string.image_linked_elsewhere, null, false)
     ImageFailure.NO_MEDIA -> Triple(R.string.image_none_title, R.string.image_none_body, false)

@@ -11,7 +11,7 @@ import okhttp3.HttpUrl
 /** Redirect-only link shapes: their destination is known from the redirect alone, so no page is ever read. */
 object ShortLinks {
     private val hosts = setOf("bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "buff.ly", "is.gd", "cutt.ly", "rb.gy",
-        "fb.me", "pin.it", "lnkd.in")
+        "fb.me", "pin.it", "lnkd.in", "vm.tiktok.com", "vt.tiktok.com")
     private val token = Regex("/[A-Za-z0-9_-]{1,64}/?")
     private val instagramShare = Regex("/share/(?:reel/|p/)?[A-Za-z0-9_-]{1,64}/?")
     private val pinterestRedirect = Regex("/url_shortener/[A-Za-z0-9_-]{1,64}/redirect/?")

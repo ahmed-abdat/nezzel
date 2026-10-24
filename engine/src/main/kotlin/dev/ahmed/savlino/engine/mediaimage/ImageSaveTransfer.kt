@@ -4,6 +4,7 @@ import android.system.ErrnoException
 import android.system.OsConstants
 import dev.ahmed.savlino.domain.MediaSelection
 import dev.ahmed.savlino.engine.mediahttp.*
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicBoolean
@@ -50,6 +51,53 @@ class ImageSaveTransfer(private val http: MediaHttpClient, private val reference
         val reference = references.resolve(operation.selection) ?: return failure(
             if (references.wasEvicted(operation.selection)) ImageFailure.SAVE_UNAVAILABLE else ImageFailure.STALE)
         if (reference.linkedIn && reference.postContext == null) return failure(ImageFailure.SAVE_UNAVAILABLE)
+        if (reference.hostRule == MediaHostRule.TIKTOK_CDN && reference.mirrors.isNotEmpty()) {
+            // A mirror must not append to a partly written original. Keep at most one bounded (20 MiB)
+            // validated body until an attempt succeeds, then write it once to caller staging.
+            var last: ImageSaveResult = failure(ImageFailure.UNAVAILABLE)
+            var lastNonExpired: ImageSaveResult.Failure? = null
+            for (url in listOf(reference.url) + reference.mirrors.take(1)) {
+                retired(operation, reference)?.let { return failure(it) }
+                val bytes = MirrorImageBuffer()
+                val result = try { transferReference(operation, reference, bytes, url, bytes::prepare) }
+                    catch (_: OutOfMemoryError) { return failure(ImageFailure.BUDGET) }
+                last = result
+                if (result is ImageSaveResult.Failure && result.reason != ImageFailure.EXPIRED) lastNonExpired = result
+                if (result is ImageSaveResult.Success) {
+                    val admission = references.admitSave(reference) {} ?: return failure(ImageFailure.STALE)
+                    return try {
+                        val copy = ProofSink(staging, validator.newStream(result.image.format.mimeType)) {
+                            admission.current && retired(operation, reference) == null
+                        }
+                        val guarded = object : OutputStream() {
+                            override fun write(value: Int) = write(byteArrayOf(value.toByte()), 0, 1)
+                            override fun write(buffer: ByteArray, offset: Int, length: Int) {
+                                var cursor = offset
+                                while (cursor < offset + length) {
+                                    if (!admission.current || retired(operation, reference) != null) throw SaveAbort()
+                                    val count = minOf(8192, offset + length - cursor)
+                                    copy.write(buffer, cursor, count)
+                                    cursor += count
+                                }
+                            }
+                        }
+                        try { bytes.writeTo(guarded) } catch (_: IOException) {
+                            return failure(copy.failure ?: retired(operation, reference) ?: ImageFailure.STAGING)
+                        }
+                        retired(operation, reference)?.let { failure(it) } ?: result
+                    } catch (_: IOException) { failure(retired(operation, reference) ?: ImageFailure.STAGING) }
+                    finally { admission.release() }
+                }
+                if (result is ImageSaveResult.Failure && result.reason in setOf(ImageFailure.CANCELLED,
+                        ImageFailure.STALE, ImageFailure.STAGING, ImageFailure.INSUFFICIENT_SPACE)) return result
+            }
+            return lastNonExpired ?: last
+        }
+        return transferReference(operation, reference, staging, reference.url)
+    }
+
+    private fun transferReference(operation: ImageSaveOperation, reference: StoredImageReference,
+        staging: OutputStream, url: String, prepareBody: (Long) -> Unit = {}): ImageSaveResult {
         val token = http.newSaveOperation()
         try {
             val registered = synchronized(operation.lock) {
@@ -62,7 +110,7 @@ class ImageSaveTransfer(private val http: MediaHttpClient, private val reference
                 ?: return failure(retired(operation, reference) ?: ImageFailure.STALE)
             return try {
                 afterAdmission()
-                transferAdmitted(operation, reference, admission, token, staging)
+                transferAdmitted(operation, reference, admission, token, staging, url, prepareBody)
             } finally { admission.release() }
         } finally {
             token.close()
@@ -70,7 +118,8 @@ class ImageSaveTransfer(private val http: MediaHttpClient, private val reference
     }
 
     private fun transferAdmitted(operation: ImageSaveOperation, reference: StoredImageReference,
-        admission: MediaReferenceStore.SaveAdmission, token: OperationToken, staging: OutputStream): ImageSaveResult {
+        admission: MediaReferenceStore.SaveAdmission, token: OperationToken, staging: OutputStream, url: String,
+        prepareBody: (Long) -> Unit): ImageSaveResult {
         val pageContext = reference.postContext?.let { stored ->
             http.bindSaveContext(token, stored,
                 MediaHttpSaveBinding(reference.source, reference.identity, reference.validity))
@@ -80,11 +129,13 @@ class ImageSaveTransfer(private val http: MediaHttpClient, private val reference
         // Lock-free: retirement may hold the store lock while draining this Save's in-flight write.
         val sink = ProofSink(staging, stream) { admission.current }
         val transferred = http.transferImage(token,
-            PublicMediaRequest(reference.url, MediaHttpPurpose.IMAGE, pageContext, reference.hostRule), sink)
+            PublicMediaRequest(url, MediaHttpPurpose.IMAGE, pageContext, reference.hostRule), sink, prepareBody)
         val success = when (transferred) {
             is MediaHttpImageTransferResult.Failure -> {
                 sink.failure?.let { return failure(it) }
                 retired(operation, reference)?.let { return failure(it) }
+                if (reference.hostRule == MediaHostRule.TIKTOK_CDN && transferred.statusCode in setOf(403, 410))
+                    return ImageSaveResult.Failure(ImageFailure.EXPIRED, transferred.statusCode)
                 val reason = mapTransport(transferred.reason)
                 return ImageSaveResult.Failure(reason, if (reason == ImageFailure.HTTP) transferred.statusCode else null)
             }
@@ -159,3 +210,12 @@ internal class ProofSink(private val staging: OutputStream, private val stream: 
 }
 
 private class SaveAbort : IOException("image_save_aborted")
+
+/** Reserve the validated HTTP length before streaming so a large mirror body does not double its buffer. */
+internal class MirrorImageBuffer : ByteArrayOutputStream() {
+    fun prepare(contentLength: Long) {
+        if (contentLength in 1..20L * 1024 * 1024 && contentLength > buf.size) {
+            buf = ByteArray(contentLength.toInt())
+        }
+    }
+}

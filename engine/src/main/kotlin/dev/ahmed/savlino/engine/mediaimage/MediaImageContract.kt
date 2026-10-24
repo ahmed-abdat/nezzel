@@ -11,6 +11,8 @@ enum class ImageFailure {
     PRIVATE,
     /** Facebook stories cannot be read without signing in. */
     FACEBOOK_STORY,
+    /** A signed photo expired or was removed; reopening the post may refresh its capability. */
+    EXPIRED,
     /**
      * Nezzel refused the source itself: the page or redirect did not prove the same public post, or the
      * transport rejected the URL/address/encoding. Not an image-type verdict (that stays [UNSUPPORTED]).
@@ -18,13 +20,14 @@ enum class ImageFailure {
     SOURCE_REFUSED
 }
 enum class ImagePhase { PAGE, IMAGE, DECODE }
-enum class ImageSourceType { DIRECT, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY }
+enum class ImageSourceType { DIRECT, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK }
 enum class DiscoveryCompleteness { UNKNOWN, PARTIAL, COMPLETE }
 /** previewQuality: the page offered only a reduced copy (og:image, or a smaller rendition than it declares). */
 data class ImageDiscovery(val discoveredCount: Int, val completeness: DiscoveryCompleteness,
     val claimedCount: Int? = null, val previewQuality: Boolean = false,
     val unavailableCount: Int = 0, val cappedCount: Int = 0, val hasVideo: Boolean = false,
-    val notPreviewedCount: Int = 0)
+    val notPreviewedCount: Int = 0, val sound: dev.ahmed.savlino.engine.tiktok.TikTokSound? = null,
+    val photoLimit: Int = 20)
 
 interface OwnedImagePreview : Closeable {
     val width: Int
