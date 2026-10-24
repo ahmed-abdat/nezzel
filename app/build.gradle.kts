@@ -151,6 +151,8 @@ val prepareRobolectricSdks by tasks.registering(Sync::class) {
 tasks.withType<Test>().configureEach {
     // Robolectric API35 closes real fixture descriptors via java.io reflection on JDK17.
     jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED")
+    // One JVM runs ~2000 Robolectric tests over three SDKs; the 512 MB default runs out near the end
+    maxHeapSize = "2g"
     dependsOn(prepareRobolectricSdks)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-sdks").get().asFile.absolutePath)
