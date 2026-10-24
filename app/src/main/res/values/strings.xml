@@ -122,12 +122,12 @@
     <string name="completed_channel">Completed downloads</string>
     <string name="engine_version_unknown">Unknown</string>
     <string name="engine_update_now">Update site support</string>
-    <string name="engine_updating">Updating engine…</string>
-    <string name="engine_updated">Engine is up to date</string>
-    <string name="engine_update_failed">Engine update failed — try again in Settings</string>
-    <string name="engine_update_rolled_back">Engine update failed — using the built-in version</string>
+    <string name="engine_updating">Updating site support…</string>
+    <string name="engine_updated">Site support is up to date</string>
+    <string name="engine_update_failed">Couldn\'t update site support. Try again in Settings</string>
+    <string name="engine_update_rolled_back">Couldn\'t update site support. Using the built-in version</string>
     <string name="engine_getting_ready">Getting ready…</string>
-    <string name="engine_preparing">Preparing the engine (first time only)…</string>
+    <string name="engine_preparing">Getting ready (first time only)…</string>
     <string name="engine_update_busy">Nezzel is busy — try again in a moment</string>
     <string name="engine_update_paused_title">Update now?</string>
     <string name="engine_update_paused_body">Paused downloads will start over.</string>
@@ -136,7 +136,7 @@
     <string name="parallel_downloads_help">Fewer keeps the phone cooler</string>
     <string name="parallel_downloads_option">%1$s at a time</string>
     <string name="engine_update_help">Updates itself every week</string>
-    <string name="engine_update_retry">Update engine and try again</string>
+    <string name="engine_update_retry">Update site support and try again</string>
     <string name="notification_rationale_title">Follow your download</string>
     <string name="notification_rationale_body">Allow notifications to follow download progress and know when your file is saved — downloads also work without notifications</string>
     <string name="notification_skip">Not now</string>
@@ -515,7 +515,7 @@
     <string name="download_again_size">Download again · %1$s</string>
     <!-- Playlist notices (0.5). -->
     <string name="playlist_first_video_warning">This link is a playlist. Only the first video will be saved.</string>
-    <string name="playlist_mix_note">Mixes can\'t be saved as a list. Only this video.</string>
+    <string name="playlist_mix_note">YouTube mixes can\'t be saved as a list. Only this video.</string>
     <string name="playlist_private_message">This list is private and can\'t be opened.</string>
     <string name="filter_videos">Videos</string>
     <string name="saved_sort_accessibility">Sort saved files: %1$s</string>

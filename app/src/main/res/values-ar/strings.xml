@@ -122,12 +122,12 @@
     <string name="completed_channel">التنزيلات المكتملة</string>
     <string name="engine_version_unknown">غير معروف</string>
     <string name="engine_update_now">تحديث دعم المواقع</string>
-    <string name="engine_updating">جارٍ تحديث المحرّك…</string>
-    <string name="engine_updated">المحرّك محدّث</string>
-    <string name="engine_update_failed">تعذّر تحديث المحرّك، أعد المحاولة من الإعدادات</string>
-    <string name="engine_update_rolled_back">تعذّر تحديث المحرّك، نستخدم الإصدار المدمج</string>
+    <string name="engine_updating">جارٍ تحديث دعم المواقع…</string>
+    <string name="engine_updated">دعم المواقع محدّث</string>
+    <string name="engine_update_failed">تعذّر تحديث دعم المواقع، أعد المحاولة من الإعدادات</string>
+    <string name="engine_update_rolled_back">تعذّر تحديث دعم المواقع، نستخدم الإصدار المدمج</string>
     <string name="engine_getting_ready">جارٍ التجهيز…</string>
-    <string name="engine_preparing">جارٍ تجهيز المحرّك (لأول مرة فقط)…</string>
+    <string name="engine_preparing">جارٍ التجهيز (لأول مرة فقط)…</string>
     <string name="engine_update_busy">&#x2066;Nezzel&#x2069; مشغول الآن، أعد المحاولة بعد قليل</string>
     <string name="engine_update_paused_title">التحديث الآن؟</string>
     <string name="engine_update_paused_body">التنزيلات المتوقفة مؤقتًا ستبدأ من جديد.</string>
@@ -136,7 +136,7 @@
     <string name="parallel_downloads_help">العدد الأقل يُبقي الهاتف أبرد</string>
     <string name="parallel_downloads_option">%1$s في وقت واحد</string>
     <string name="engine_update_help">يتحدّث تلقائيًا كل أسبوع</string>
-    <string name="engine_update_retry">تحديث المحرّك وإعادة المحاولة</string>
+    <string name="engine_update_retry">تحديث دعم المواقع وإعادة المحاولة</string>
     <string name="notification_rationale_title">تابع تنزيلك</string>
     <string name="notification_rationale_body">اسمح بالإشعارات لتتابع تقدّم التنزيل وتعرف متى يُحفظ الملف، ويمكنك التنزيل دون إشعارات أيضًا</string>
     <string name="notification_skip">ليس الآن</string>
@@ -579,7 +579,7 @@
     <string name="download_again_size">تنزيل مرة أخرى · %1$s</string>
     <!-- Playlist notices (0.5). -->
     <string name="playlist_first_video_warning">هذا الرابط قائمة تشغيل. سيُحفظ أول فيديو فقط.</string>
-    <string name="playlist_mix_note">قوائم الميكس لا تُحفظ كقائمة. هذا الفيديو فقط.</string>
+    <string name="playlist_mix_note">قوائم «ميكس» في يوتيوب لا تُحفظ كقائمة. هذا الفيديو فقط.</string>
     <string name="playlist_private_message">هذه القائمة خاصة ولا يمكن فتحها.</string>
     <string name="filter_videos">فيديوهات</string>
     <string name="saved_sort_accessibility">ترتيب الملفات المحفوظة: %1$s</string>

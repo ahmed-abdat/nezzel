@@ -122,12 +122,12 @@
     <string name="completed_channel">Téléchargements terminés</string>
     <string name="engine_version_unknown">Inconnue</string>
     <string name="engine_update_now">Mettre à jour les sites</string>
-    <string name="engine_updating">Mise à jour du moteur…</string>
-    <string name="engine_updated">Le moteur est à jour</string>
-    <string name="engine_update_failed">Échec de la mise à jour du moteur — réessayez dans les paramètres</string>
-    <string name="engine_update_rolled_back">Échec de la mise à jour du moteur — version intégrée utilisée</string>
+    <string name="engine_updating">Mise à jour des sites…</string>
+    <string name="engine_updated">Les sites sont à jour</string>
+    <string name="engine_update_failed">Échec de la mise à jour des sites — réessayez dans les paramètres</string>
+    <string name="engine_update_rolled_back">Échec de la mise à jour des sites — version intégrée utilisée</string>
     <string name="engine_getting_ready">Préparation…</string>
-    <string name="engine_preparing">Préparation du moteur (la première fois seulement)…</string>
+    <string name="engine_preparing">Préparation (la première fois seulement)…</string>
     <string name="engine_update_busy">Nezzel est occupé — réessayez dans un instant</string>
     <string name="engine_update_paused_title">Mettre à jour maintenant ?</string>
     <string name="engine_update_paused_body">Les téléchargements en pause recommenceront depuis le début.</string>
@@ -525,7 +525,7 @@
     <string name="download_again_size">Télécharger à nouveau · %1$s</string>
     <!-- Playlist notices (0.5). -->
     <string name="playlist_first_video_warning">Ce lien est une playlist. Seule la première vidéo sera enregistrée.</string>
-    <string name="playlist_mix_note">Les mix ne s’enregistrent pas en liste. Cette vidéo seulement.</string>
+    <string name="playlist_mix_note">Les mix YouTube ne s’enregistrent pas en liste. Cette vidéo seulement.</string>
     <string name="playlist_private_message">Cette liste est privée et ne peut pas être ouverte.</string>
     <string name="filter_videos">Vidéos</string>
     <string name="saved_sort_accessibility">Trier les fichiers enregistrés : %1$s</string>
