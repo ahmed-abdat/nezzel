@@ -15,7 +15,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
@@ -39,6 +42,8 @@ internal fun MultiLinkSheet(vm: MultiLinkViewModel, language: String, onDismiss:
 internal fun MultiLinkSheetContent(vm: MultiLinkViewModel, language: String) {
     val count = vm.links.size
     val title = pluralStringResource(R.plurals.multi_link_title, count, NezzelFormat.count(count, language))
+    // Links stay LTR but align to the layout start, so Arabic rows line up with the title.
+    val layoutStart = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextAlign.Right else TextAlign.Left
     Column(Modifier.fillMaxWidth().fillMaxHeight().navigationBarsPadding().testTag("multi_link_sheet")) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.xs)) {
@@ -69,7 +74,7 @@ internal fun MultiLinkSheetContent(vm: MultiLinkViewModel, language: String) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("multi_link_item_$index"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     Text(NezzelFormat.isolate(label), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr))
+                        style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr, textAlign = layoutStart))
                     IconButton({ vm.remove(index) }, enabled = !vm.submitting, modifier = Modifier.size(48.dp).testTag("multi_link_remove_$index")) {
                         Icon(Icons.Default.Close, stringResource(R.string.multi_link_remove, MultiLinkLabel.host(link)), Modifier.size(20.dp))
                     }

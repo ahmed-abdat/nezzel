@@ -115,11 +115,11 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 applyControls()
                 if (batches.get(batch.id)?.state != BatchState.ACTIVE || activeCount() >= lookahead()) break
                 when (result) {
-                    // Photos are saved through the single-link sheet only: say so instead of a generic failure.
-                    is InspectResult.Failure -> if (result.error == DownloadError.NoVideo)
+                    // A link batch says why a photo post is skipped: photos are saved from the single-link sheet only.
+                    is InspectResult.Failure -> if (result.error == DownloadError.NoVideo && item.itemId.startsWith(BatchStore.LINK_ITEM))
                         batches.finish(item, BatchItemState.SKIPPED, DownloadError.PhotoPost)
                     else batches.finish(item,
-                        if (result.error in setOf(DownloadError.Unavailable, DownloadError.NotAPost, DownloadError.Unsupported))
+                        if (result.error in setOf(DownloadError.Unavailable, DownloadError.NoVideo, DownloadError.NotAPost, DownloadError.Unsupported))
                             BatchItemState.SKIPPED else BatchItemState.FAILED,
                         result.error, JobStore.retryableError(result.error))
                     is InspectResult.Success -> {

@@ -479,6 +479,15 @@ class BatchFeederTest {
         assertEquals(2, jobs.all().size)
     }
 
+    @Test fun aPlaylistItemWithNoVideoStaysSkippedAsNoVideo() = runBlocking {
+        create(1)
+        engine.failFor = { DownloadError.NoVideo }
+        feeder().tick()
+        val item = batches.items("batch").single()
+        assertEquals(BatchItemState.SKIPPED, item.state)
+        assertEquals(DownloadError.NoVideo, item.error)
+    }
+
     @Test fun aFailedLinkInALinkBatchRetriesTheSameItem() = runBlocking {
         assertTrue(batches.createLinks("links", "2 links", links("https://www.tiktok.com/@a/video/1", "https://x.com/a/status/2"), Preset.BALANCED))
         engine.failFor = { if (it.link.host == Host.X) DownloadError.Network else null }
