@@ -518,7 +518,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
      * Caller schedules authorized maintenance. [prepareYtdlpUpdate] downloads and verifies the release without the
      * native gate; [installYtdlpUpdate] then runs in [updateScope] holding the exclusive gate from the first version
      * read until the new yt-dlp passed its self-test or the bundled one was restored. The caller only stops waiting
-     * after [EngineLimits.updateMs]; the gate stays closed until the install ends.
+     * after [EngineLimits.updateMs]; the gate stays closed until the install ends. [updateYtdlp] waits for both
+     * stages: up to [EngineLimits.fetchMs] for the network, then the install wait starts.
      */
     override suspend fun updateYtdlp(): EngineUpdateResult = installYtdlpUpdate(prepareYtdlpUpdate())
     override suspend fun prepareYtdlpUpdate(): PreparedUpdate = try {
@@ -547,6 +548,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val updated = probe()
             if (updated != null) {
                 runtime.initialization.installedVersion = updated
+                // The install already put the bundled copy back: Settings must say so, like a failed self-test.
+                if (outcome.exceptionOrNull() is YtdlpBundledRestored)
+                    return@operation EngineUpdateResult.Failure(DownloadError.Failed, usingBuiltIn = true)
                 outcome.getOrThrow()
                 EngineUpdateResult.Success(old, updated)
             } else {

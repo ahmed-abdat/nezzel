@@ -45,6 +45,60 @@ internal class StagedYtdlp(val file: File?, val tag: String, val name: String) :
 /** Fixed messages only: no URL, tag or server text reaches an exception or log. */
 internal class ReleaseFetchException(reason: String) : IOException(reason)
 
+/** The install failed and put the bundled yt-dlp back: the app now runs the built-in copy. */
+internal class YtdlpBundledRestored : IOException("bundled restored")
+
+/**
+ * Local stage of the update, crash-safe. The verified copy is synced beside [dir], the old [dir] is renamed aside,
+ * the copy is renamed in, and [record] writes the preferences last. A kill leaves the old install, no binary (the
+ * next init copies the bundled one and drops the stale tag) or the new verified binary with a stale tag; never a
+ * truncated one. A failure puts the old install back, else restores the bundled one ([YtdlpBundledRestored]).
+ */
+internal class YtdlpStagedInstall(private val dir: File, private val binaryName: String,
+    private val update: () -> Unit, private val record: (StagedYtdlp, Long) -> Boolean,
+    private val restoreBundled: () -> Unit) {
+    private val incoming = File(dir.parentFile, "${dir.name}.incoming")
+    private val retired = File(dir.parentFile, "${dir.name}.retired")
+
+    /** Leftovers of an install killed midway. */
+    fun sweep() { incoming.delete(); retired.deleteRecursively() }
+
+    fun install(prepared: PreparedUpdate) {
+        val staged = prepared as? StagedYtdlp ?: return update()
+        val file = staged.file ?: return // ALREADY_UP_TO_DATE: 0.18.1 touches no file or preference.
+        try {
+            sweep()
+            val size = file.inputStream().use { input ->
+                java.io.FileOutputStream(incoming).use { out -> input.copyTo(out); out.fd.sync(); out.channel.size() }
+            }
+            val hadInstall = dir.exists()
+            if (hadInstall && !dir.renameTo(retired)) throw ReleaseFetchException("install") // Nothing changed yet.
+            try {
+                if (!dir.mkdirs() || !incoming.renameTo(File(dir, binaryName)) || !record(staged, size))
+                    throw ReleaseFetchException("install")
+            } catch (error: Exception) {
+                dir.deleteRecursively()
+                if (hadInstall && retired.renameTo(dir)) throw ReleaseFetchException("install")
+                restoreBundled()
+                throw YtdlpBundledRestored()
+            }
+            retired.deleteRecursively()
+        } catch (error: YtdlpBundledRestored) { throw error }
+        catch (error: ReleaseFetchException) { throw error }
+        catch (_: Exception) { throw ReleaseFetchException("install") } // Fixed text: no paths in diagnostics.
+        finally { file.delete(); incoming.delete() }
+    }
+
+    companion object {
+        /** Our own installed size, beside the 0.18.1 version preferences. */
+        const val SIZE_KEY = "nezzelYtdlpSize"
+
+        /** Expected plain-file size: bundled with no recorded update, the size we recorded, or null (unknown: keep). */
+        fun expectedSize(recordedVersion: String?, recordedSize: Long?, bundled: () -> Long): Long? =
+            if (recordedVersion == null) bundled() else recordedSize
+    }
+}
+
 /**
  * Network-only stage of the yt-dlp update. Cancelling the caller cancels the in-flight call; the temporary file is
  * always deleted unless returned verified.
@@ -54,6 +108,8 @@ internal class YtdlpReleaseFetcher(private val client: OkHttpClient, private val
     private val mapper = ObjectMapper()
 
     suspend fun fetch(): PreparedUpdate {
+        // A stage cancelled after its file was verified leaves it behind; only one fetch runs at a time.
+        cacheDir.listFiles { file -> file.name.startsWith(TEMP_PREFIX) }?.forEach { it.delete() }
         val release = try { mapper.readTree(text(apiUrl)) } catch (_: com.fasterxml.jackson.core.JsonProcessingException) {
             throw ReleaseFetchException("release metadata")
         }
@@ -65,7 +121,7 @@ internal class YtdlpReleaseFetcher(private val client: OkHttpClient, private val
         val sums = assetUrl(release, YtdlpRelease.SUMS) ?: return rejected()
         val expected = expectedSha256(text(sums)) ?: return rejected()
         cacheDir.mkdirs()
-        val temp = File.createTempFile(YtdlpRelease.ASSET, null, cacheDir)
+        val temp = File.createTempFile(TEMP_PREFIX, null, cacheDir)
         var kept = false
         try {
             val actual = get(binary, YtdlpRelease.MAX_ASSET_BYTES) { body -> temp.outputStream().use { body(it) } }
@@ -130,6 +186,9 @@ internal class YtdlpReleaseFetcher(private val client: OkHttpClient, private val
     }
 
     companion object {
+        /** Distinct from anything yt-dlp writes to TMPDIR (also the cache directory). */
+        const val TEMP_PREFIX = "yt-dlp-update-"
+
         /** Production transport: no automatic redirects (checked per hop above), same connect/read limits as 0.18.1. */
         fun client(callTimeoutMs: Long): OkHttpClient = OkHttpClient.Builder()
             .followRedirects(false).followSslRedirects(false)

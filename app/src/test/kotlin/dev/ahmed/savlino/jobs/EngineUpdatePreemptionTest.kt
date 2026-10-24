@@ -23,12 +23,13 @@ class EngineUpdatePreemptionTest {
         var onFetched: () -> Unit = {}
         var prepares = 0; var installs = 0; var discards = 0; var fullUpdates = 0
         var fetchCancelled = false
+        val cancelled = CompletableDeferred<Unit>()
         var holdManual: CompletableDeferred<Unit>? = null
         override suspend fun installedVersion() = version
         override suspend fun prepareYtdlpUpdate(): PreparedUpdate {
             prepares++
             fetching.complete(Unit)
-            try { releaseFetch.await() } catch (cancelled: CancellationException) { fetchCancelled = true; throw cancelled }
+            try { releaseFetch.await() } catch (error: CancellationException) { fetchCancelled = true; cancelled.complete(Unit); throw error }
             onFetched()
             return prepared
         }
@@ -61,10 +62,11 @@ class EngineUpdatePreemptionTest {
         assertEquals(now, prefs.getLong("attempt", -1)) // Stamped before network, as before.
         assertEquals(EngineUpdateStatus.UPDATING, maintenance.state.value.status)
         var entered = false
-        // The network stage never finishes on its own: admission within 1 s means it did not wait for it.
-        withTimeout(1000) { admit(maintenance) { entered = true } }
+        // The network stage never finishes on its own, so admission at all means it did not wait for it.
+        withTimeout(10_000) { admit(maintenance) { entered = true } }
         assertTrue(entered)
-        assertFalse(withTimeout(1000) { update.await() })
+        withTimeout(10_000) { engine.cancelled.await() } // The cancellation reached the network call.
+        assertFalse(withTimeout(10_000) { update.await() })
         assertTrue(engine.fetchCancelled)
         assertEquals(0, engine.installs); assertEquals(0, engine.fullUpdates)
         assertEquals("2025.11.12", engine.installedVersion()) // Old runtime untouched.

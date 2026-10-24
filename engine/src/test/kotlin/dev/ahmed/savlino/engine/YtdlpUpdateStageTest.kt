@@ -2,6 +2,8 @@ package dev.ahmed.savlino.engine
 
 import com.yausername.youtubedl_android.YoutubeDL
 import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.domain.LinkInput
+import dev.ahmed.savlino.domain.LinkRevision
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -195,9 +197,9 @@ class YtdlpUpdateStageTest {
         assertEquals("2025.11.12", engine.installedVersion())
         val prepare = async(Dispatchers.Default) { engine.prepareYtdlpUpdate() }
         withTimeout(2000) { runtime.fetching.await() }
-        // A gated operation runs while the network stage is in flight.
-        assertTrue(withTimeout(1000) { engine.warmUp() })
-        withTimeout(1000) { prepare.cancelAndJoin() }
+        // A gated operation runs while the network stage is in flight; the fetch never finishes on its own.
+        assertTrue(withTimeout(10_000) { engine.warmUp() })
+        withTimeout(10_000) { prepare.cancelAndJoin() }
         assertTrue(runtime.fetchCancelled)
         assertEquals(0, runtime.updates); assertTrue(runtime.installs.isEmpty())
         assertEquals("2025.11.12", engine.installedVersion())
@@ -229,5 +231,119 @@ class YtdlpUpdateStageTest {
         val engine = YoutubedlEngine(runtime)
         assertEquals(EngineUpdateResult.Failure(DownloadError.Network), engine.updateYtdlp())
         assertEquals(0, runtime.installs)
+    }
+    @Test fun fetchSweepsStaleUpdateFilesOnly() = runBlocking {
+        val cache = temp.newFolder()
+        val stale = File(cache, "${YtdlpReleaseFetcher.TEMP_PREFIX}1.tmp").apply { writeBytes(asset) }
+        val other = File(cache, "yt-dlp-other.tmp").apply { writeText("x") }
+        assertIs<StagedYtdlp>(fetcher(github(), cache, installed = "2026.10.21").fetch())
+        assertFalse(stale.exists()); assertTrue(other.exists())
+    }
+
+    private inner class Install(val hadInstall: Boolean = true, val recordOk: Boolean = true) {
+        val base = temp.newFolder()
+        val dir = File(base, "yt-dlp")
+        val staged = temp.newFile().apply { writeBytes(asset) }
+        var updates = 0; var restores = 0
+        val records = mutableListOf<Pair<String, Long>>()
+        val installer = YtdlpStagedInstall(dir, "yt-dlp", { updates++ },
+            { release, size -> records += release.tag to size; recordOk }, { restores++; dir.mkdirs() })
+        init {
+            if (hadInstall) { File(dir, "yt-dlp").apply { parentFile.mkdirs(); writeText("old") }; File(dir, "yt-dlp.zip").writeText("zip") }
+        }
+        fun leftovers() = base.list()!!.filter { it != "yt-dlp" }
+    }
+
+    @Test fun stagedInstallReplacesTheOldInstallAndRecordsLast() {
+        val install = Install()
+        install.installer.install(StagedYtdlp(install.staged, "2026.10.21", "n"))
+        assertContentEquals(asset, File(install.dir, "yt-dlp").readBytes())
+        assertEquals(listOf("yt-dlp"), install.dir.list()!!.toList()) // Materialized leftovers go with the old dir.
+        assertEquals(listOf("2026.10.21" to asset.size.toLong()), install.records)
+        assertFalse(install.staged.exists()); assertTrue(install.leftovers().isEmpty())
+        assertEquals(0, install.updates); assertEquals(0, install.restores)
+    }
+
+    @Test fun currentTagTouchesNoFileAndNeverRunsTheLibraryUpdater() {
+        val install = Install()
+        install.installer.install(StagedYtdlp(null, "2026.10.21", "n"))
+        assertEquals("old", File(install.dir, "yt-dlp").readText())
+        assertEquals(0, install.updates); assertTrue(install.records.isEmpty()); assertEquals(0, install.restores)
+        install.installer.install(PreparedUpdate.Unstaged)
+        assertEquals(1, install.updates)
+    }
+
+    @Test fun failedInstallPutsTheOldInstallBackElseTheBundledOne() {
+        val kept = Install(recordOk = false)
+        assertFailsWith<ReleaseFetchException> { kept.installer.install(StagedYtdlp(kept.staged, "t", "n")) }
+        assertEquals("old", File(kept.dir, "yt-dlp").readText()); assertEquals("zip", File(kept.dir, "yt-dlp.zip").readText())
+        assertEquals(0, kept.restores); assertFalse(kept.staged.exists()); assertTrue(kept.leftovers().isEmpty())
+
+        val fresh = Install(hadInstall = false, recordOk = false)
+        assertFailsWith<YtdlpBundledRestored> { fresh.installer.install(StagedYtdlp(fresh.staged, "t", "n")) }
+        assertEquals(1, fresh.restores); assertFalse(fresh.staged.exists())
+    }
+
+    @Test fun startupSweepDropsAnInstallKilledMidway() {
+        val install = Install()
+        File(install.base, "yt-dlp.incoming").writeBytes(asset.copyOf(3))
+        File(install.base, "yt-dlp.retired").apply { mkdirs(); File(this, "yt-dlp").writeText("older") }
+        install.installer.sweep()
+        assertTrue(install.leftovers().isEmpty()); assertEquals("old", File(install.dir, "yt-dlp").readText())
+    }
+
+    @Test fun repairKnowsOurRecordedSizeButKeepsUnknownUpdates() {
+        assertEquals(7L, YtdlpStagedInstall.expectedSize(null, 99, { 7 }))
+        assertEquals(99L, YtdlpStagedInstall.expectedSize("2026.10.21", 99, { 7 }))
+        assertNull(YtdlpStagedInstall.expectedSize("2026.10.21", null, { 7 }))
+    }
+
+    private class BlockingInstallRuntime(val failWith: Exception? = null) : YtdlpRuntime {
+        override val initialization = EngineInitialization()
+        val installing = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val events = java.util.Collections.synchronizedList(mutableListOf<String>())
+        override fun initialize() = Unit
+        override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
+            if ("--dump-json" in args) {
+                events += "inspect"
+                return """{"formats":[{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac"}]}"""
+            }
+            return "2025.11.12"
+        }
+        override fun destroy(processId: String) = true
+        override fun update() = Unit
+        override fun installUpdate(prepared: PreparedUpdate) {
+            installing.countDown()
+            release.await(30, TimeUnit.SECONDS)
+            events += "installed"
+            failWith?.let { throw it }
+        }
+    }
+
+    @Test fun inspectionAfterTheCallerStoppedWaitingStillWaitsForTheInstall() = runBlocking {
+        val runtime = BlockingInstallRuntime()
+        val engine = YoutubedlEngine(runtime, EngineLimits(updateMs = 300))
+        assertEquals("2025.11.12", engine.installedVersion())
+        // The caller (EngineMaintenance) gives up after updateMs and releases its own gate.
+        assertEquals(EngineUpdateResult.Failure(DownloadError.Network), engine.installYtdlpUpdate(PreparedUpdate.Unstaged))
+        assertTrue(runtime.installing.await(0, TimeUnit.SECONDS))
+        val source = LinkRevision(assertNotNull(LinkInput.parse("https://example.org/video")), 1)
+        val inspection = async(Dispatchers.Default) { engine.inspect(source, "during-install") }
+        try {
+            // The install still holds the native writer gate.
+            assertNull(withTimeoutOrNull(500) { inspection.await() })
+            assertTrue(runtime.events.isEmpty())
+        } finally { runtime.release.countDown() }
+        assertIs<InspectResult.Success>(withTimeout(10_000) { inspection.await() })
+        assertEquals(listOf("installed", "inspect"), runtime.events.toList())
+    }
+
+    @Test fun installThatRestoredTheBundledCopyReportsBuiltIn() = runBlocking {
+        val runtime = BlockingInstallRuntime(failWith = YtdlpBundledRestored()).apply { release.countDown() }
+        val engine = YoutubedlEngine(runtime)
+        assertEquals(EngineUpdateResult.Failure(DownloadError.Failed, usingBuiltIn = true),
+            engine.installYtdlpUpdate(PreparedUpdate.Unstaged))
+        assertEquals("2025.11.12", engine.installedVersion())
     }
 }
