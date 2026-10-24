@@ -29,3 +29,6 @@ data class DownloadProgress(val jobId: String, val filename: String, val phase: 
     val terminal get() = phase in setOf(DownloadPhase.COMPLETED, DownloadPhase.FAILED, DownloadPhase.CANCELLED)
 }
 
+
+/** Holds a transfer slot: admitted and not paused. Preparing counts, so a row does not move when its bytes start. */
+internal val DownloadProgress.running get() = !terminal && !awaitingSchedule && !waiting && !paused

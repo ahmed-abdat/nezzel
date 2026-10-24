@@ -78,8 +78,6 @@ fun visibleJobs(jobs: List<DownloadProgress>, started: List<String> = emptyList(
         jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }.asReversed()
 }
 
-/** Holds a transfer slot: admitted and not paused. Preparing counts, so a row does not move when its bytes start. */
-internal val DownloadProgress.running get() = !terminal && !awaitingSchedule && !waiting && !paused
 
 /** Job IDs in the order this screen saw them start running; a job that stops running gives up its place. */
 @Composable

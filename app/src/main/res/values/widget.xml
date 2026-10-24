@@ -4,8 +4,7 @@
     <color name="widget_on_surface">#171D1B</color>
     <color name="widget_on_surface_variant">#3F4946</color>
     <color name="widget_primary">#006B5E</color>
-    <color name="widget_on_primary">#FFFFFF</color>
-    <color name="widget_ripple">#4082D5C5</color>
+    <color name="widget_track">#333F4946</color>
     <dimen name="widget_radius">16dp</dimen>
     <bool name="open_with_links">false</bool>
 </resources>

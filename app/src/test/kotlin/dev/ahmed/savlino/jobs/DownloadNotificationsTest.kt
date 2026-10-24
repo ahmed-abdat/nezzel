@@ -367,4 +367,28 @@ class DownloadNotificationsTest {
         assertEquals(app.resources.getQuantityString(dev.ahmed.savlino.R.plurals.downloads_running, 1,
             dev.ahmed.savlino.locale.NezzelFormat.count(1, "en")), summary.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString())
     }
+
+    /** Robolectric has no API 36 jar: below it the leader's notification must equal today's, with no promotion request. */
+    @Test @Config(sdk = [33, 35]) fun leaderNotificationBelowAndroid16IsTodaysUnpromotedOne() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val job = DownloadProgress("lead", "Lead.mp4", DownloadPhase.DOWNLOADING, bytes = 45, total = dev.ahmed.savlino.domain.Size.Exact(100))
+        val plain = DownloadNotifications(app).foreground(job).notification
+        val leader = DownloadNotifications(app) { "lead" }.foreground(job).notification
+        for (n in listOf(plain, leader)) {
+            assertFalse(n.extras.containsKey("android.requestPromotedOngoing"))
+            assertEquals(45, n.extras.getInt(android.app.Notification.EXTRA_PROGRESS))
+            assertEquals(100, n.extras.getInt(android.app.Notification.EXTRA_PROGRESS_MAX))
+            assertFalse(n.extras.getBoolean(android.app.Notification.EXTRA_PROGRESS_INDETERMINATE))
+            assertEquals(DownloadNotifications.GROUP, n.group)
+            assertTrue(n.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0)
+        }
+        assertEquals(plain.actions.map { it.title.toString() }, leader.actions.map { it.title.toString() })
+        assertEquals(listOf("Pause", "Cancel"), leader.actions.map { it.title.toString() })
+        assertEquals(plain.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString(),
+            leader.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
+        val preparing = DownloadNotifications(app) { "lead" }.foreground(job.copy(phase = DownloadPhase.PREPARING, bytes = null)).notification
+        assertTrue(preparing.extras.getBoolean(android.app.Notification.EXTRA_PROGRESS_INDETERMINATE))
+        assertFalse(preparing.extras.containsKey("android.requestPromotedOngoing"))
+    }
 }

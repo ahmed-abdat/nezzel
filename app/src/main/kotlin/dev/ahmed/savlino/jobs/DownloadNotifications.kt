@@ -23,7 +23,8 @@ import kotlinx.coroutines.launch
 /** Display-ready transfer numbers; each is null when the journal has no honest value for it. */
 data class TransferParts(val percent: String?, val bytes: String, val speed: String?, val remaining: String?)
 
-class DownloadNotifications(private val base: Context) {
+/** [leaderId] names the job the widget shows too; only that one may become a Live Update (Android 16 QPR2). */
+class DownloadNotifications(private val base: Context, private val leaderId: () -> String? = { null }) {
     private val context: Context get() = AppLocale.localized(base)
     private val manager = base.getSystemService(NotificationManager::class.java)
     private fun channel() {
@@ -132,7 +133,13 @@ class DownloadNotifications(private val base: Context) {
             builder.addAction(0, ctx.getString(R.string.try_again), PendingIntent.getActivity(base, 0,
                 Intent(base, MainActivity::class.java), FLAGS))
         }
-        return builder.build()
+        return live(ctx, progress, builder.build())
+    }
+    /** Older Android, Live Updates off, a non-leading job or any build failure: today's notification as is. */
+    private fun live(ctx: Context, progress: DownloadProgress, plain: Notification): Notification {
+        if (Build.VERSION.SDK_INT < 36 || !LiveUpdate.supported) return plain
+        val spec = LiveUpdateSpec.from(progress, leaderId() == progress.jobId, LiveUpdate.canPost(manager), languageOf(ctx)) ?: return plain
+        return LiveUpdate.apply(ctx, plain, spec)
     }
     companion object {
         const val CHANNEL = "downloads"

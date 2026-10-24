@@ -24,6 +24,7 @@ Nezzel has no analytics, no telemetry, no ads and no account. It has no server e
 | `INTERNET` | Loading options and previews, downloading, and updates |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` | Downloads you started keep running when you leave the app |
 | `POST_NOTIFICATIONS` | Download progress, results and app updates (Android 13+). Downloads still work if you say no |
+| `POST_PROMOTED_NOTIFICATIONS` | On Android 16, the running download's percent in the status bar and on the lock screen (Live Updates). No prompt; you can turn it off in system settings |
 | `REQUEST_INSTALL_PACKAGES` | Installing an app update you confirmed, through Android's installer |
 | `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED` | Added by WorkManager: running queued work, waiting for a connection, rescheduling after a restart |
 | App-scoped `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX internal protection; signature-level, no prompt |
