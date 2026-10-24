@@ -33,6 +33,18 @@ class LocaleResourcesTest {
         }
     }
 
+    @Test fun playlistCopyKeepsAllThreeLocalesAndArgumentsInParity() {
+        val english = entries("values").filterKeys { it.startsWith("playlist_") }
+        for (locale in listOf("values-ar", "values-fr")) {
+            val translated = entries(locale).filterKeys { it.startsWith("playlist_") }
+            assertEquals(english.keys, translated.keys)
+            english.forEach { (name, original) ->
+                assertTrue(translated.getValue(name).textContent.isNotBlank())
+                assertEquals(name, arguments(original.textContent), arguments(translated.getValue(name).textContent))
+            }
+        }
+    }
+
     @Test fun frenchResourcesCoverEveryTranslatableEntryAndKeepFormatArguments() {
         val english = entries("values")
         val french = entries("values-fr", translatedOnly = false)

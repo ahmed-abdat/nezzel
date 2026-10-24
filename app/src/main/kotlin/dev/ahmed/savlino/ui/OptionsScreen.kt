@@ -36,6 +36,10 @@ import java.net.URI
 @Composable
 fun OptionsScreen(links: LinkViewModel, language: String, onDismiss: () -> Unit, snackbarHost: @Composable () -> Unit = {}) {
     if (links.optionsState == OptionsState.Hidden) return
+    if (links.playlist.visible) {
+        PlaylistSheet(links.playlist, language, onDismiss)
+        return
+    }
     if (links.moreFormats) {
         MoreFormatsScreen(links, language, snackbarHost)
         return
@@ -55,6 +59,10 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
 
 @Composable
 internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss: () -> Unit, share: ShareSheetHooks?) {
+    if (links.playlist.visible) {
+        PlaylistSheetContent(links.playlist, language)
+        return
+    }
     androidx.compose.runtime.SideEffect { links.optionsShown() }
     Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)) {
         // A footer (Download or Save bar) brings its own 16dp top padding; the body doesn't add a second one.
@@ -77,6 +85,9 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                         (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown,
                         hint = links.shareHint)
                 }
+            }
+            if (YouTubeLinkKind.classify(links.text) == YouTubeLinkKind.VideoInList) {
+                PlaylistOptionsRow(links::showPlaylist)
             }
             // The share sheet says "saved before" first, from intake on; the app keeps it at the end of the choices.
             if (share != null && !failed && !links.confirmed) (links.savedBefore ?: links.savedLink)?.let { saved ->
@@ -455,7 +466,6 @@ internal fun BetterQualityNote(savedTier: Int, language: String) {
 
 /** Kept separate so every intake kind uses the same one-line notice. */
 internal fun playlistNotice(text: String): Int? = when (YouTubeLinkKind.classify(text)) {
-    YouTubeLinkKind.Playlist -> R.string.playlist_first_video_warning
     YouTubeLinkKind.Mix -> R.string.playlist_mix_note
     YouTubeLinkKind.PrivateList -> R.string.playlist_private_message
     else -> null

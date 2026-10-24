@@ -514,4 +514,36 @@
     <string name="playlist_first_video_warning">This link is a playlist. Only the first video will be saved.</string>
     <string name="playlist_mix_note">Mixes can\'t be saved as a list. Only this video.</string>
     <string name="playlist_private_message">This list is private and can\'t be opened.</string>
+
+    <!-- Playlist selection and batch presentation. -->
+    <string name="playlist_title">Playlist · %1$s videos</string>
+    <string name="playlist_download">Download %1$s videos</string>
+    <string name="playlist_select_all">Select all</string>
+    <string name="playlist_select_none">Select none</string>
+    <string name="playlist_selected">%1$s selected</string>
+    <string name="playlist_quality_helper">Each video gets the closest quality it has.</string>
+    <string name="playlist_sizes">Sizes appear as videos start.</string>
+    <string name="playlist_limit">Up to 200 at a time.</string>
+    <string name="playlist_live">Live</string>
+    <string name="playlist_private">Private</string>
+    <string name="playlist_unavailable">Unavailable</string>
+    <string name="playlist_see_all">Part of a playlist · See all videos</string>
+    <string name="playlist_saved_before">Saved before</string>
+    <string name="playlist_progress">Playlist %1$s of %2$s</string>
+    <string name="playlist_pause_all">Pause all</string>
+    <string name="playlist_retry">Retry failed (%1$s)</string>
+    <string name="playlist_waiting_network">Waiting for network</string>
+    <string name="playlist_slowed">YouTube asked us to slow down. Paused.</string>
+    <string name="playlist_stop">Stop</string>
+    <string name="playlist_stop_confirm">Stop this playlist? Saved videos stay.</string>
+    <string name="playlist_show_videos">Show videos</string>
+    <string name="playlist_hide_videos">Hide videos</string>
+    <string name="playlist_done">Done: %1$s saved, %2$s couldn\'t be saved</string>
+    <string name="playlist_see_why">See why</string>
+    <string name="playlist_notification_progress">Playlist: %1$s of %2$s saved</string>
+    <string name="playlist_notification_done">Playlist saved: %1$s videos, %2$s failed</string>
+    <string name="playlist_stopped">Stopped: %1$s not started</string>
+    <string name="playlist_load_failed">Couldn’t load the playlist.</string>
+    <string name="playlist_submit_failed">Couldn’t start saving the playlist. Try again.</string>
+    <string name="playlist_done_saved">Done: %1$s saved</string>
 </resources>

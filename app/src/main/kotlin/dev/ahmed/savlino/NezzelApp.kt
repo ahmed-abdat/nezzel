@@ -111,6 +111,27 @@ fun NezzelApp(
     val app = context.applicationContext as? NezzelApplication
     val pause: (String) -> Unit = { id -> scope.launch { app?.let { DownloadControls.pause(context, it, id) } } }
     val resume: (String) -> Unit = { id -> scope.launch { app?.let { DownloadControls.resume(context, it, id) } } }
+    val playlists by remember(app) {
+        app?.playlistBatches ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    var playlistBusy by remember { mutableStateOf(emptySet<String>()) }
+    val playlistAction: (String, dev.ahmed.savlino.downloads.PlaylistBatchAction) -> Unit = { id, action ->
+        if (id !in playlistBusy) {
+            playlistBusy = playlistBusy + id
+            scope.launch {
+                try {
+                    links.downloads?.let { coordinator ->
+                        when (action) {
+                            dev.ahmed.savlino.downloads.PlaylistBatchAction.PAUSE -> coordinator.pauseBatch(id)
+                            dev.ahmed.savlino.downloads.PlaylistBatchAction.RESUME -> coordinator.resumeBatch(id)
+                            dev.ahmed.savlino.downloads.PlaylistBatchAction.STOP -> coordinator.stopBatch(id)
+                            dev.ahmed.savlino.downloads.PlaylistBatchAction.RETRY -> coordinator.retryBatch(id)
+                        }
+                    }
+                } finally { playlistBusy = playlistBusy - id }
+            }
+        }
+    }
     val cancel: (String) -> Unit = { id -> links.cancelDownload(id); DownloadNotifications(context).dismissPaused(id) }
     // A paused notification outlives its pause only if the job expired or was removed elsewhere: clear it when the row leaves Paused.
     var pausedIds by remember { mutableStateOf(emptySet<String>()) }
@@ -260,6 +281,7 @@ fun NezzelApp(
                             retry, pause, resume, libraryLoad = library.load, onLibraryRetry = library.onRetry,
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
                             canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy,
+                            playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) })
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
                             onRemove = removeFailed, onRetry = retry,

@@ -137,7 +137,8 @@ class LinkViewModel(
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
-    val hasPendingNotificationChoice get() = pendingPermissionChoice != null
+    private var pendingPlaylistPermission: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    val hasPendingNotificationChoice get() = pendingPermissionChoice != null || pendingPlaylistPermission != null
     fun requestDownload() {
         if (!downloadEnabled || pendingPermissionChoice != null) return
         pendingPermissionChoice = (inspection ?: return) to (selectedId ?: return)
@@ -145,6 +146,7 @@ class LinkViewModel(
     }
     /** Grant, denial and skipping all continue the same explicit, still-current choice. */
     fun finishNotificationRequest() {
+        pendingPlaylistPermission?.let { pendingPlaylistPermission = null; it.complete(Unit); return }
         val pending = pendingPermissionChoice ?: return
         pendingPermissionChoice = null
         if (inspection === pending.first && selectedId == pending.second) confirmDownload()
@@ -386,6 +388,35 @@ class LinkViewModel(
     val presetRows get() = presetOptions.groupBy { it.second.id }.values
         .map { group -> PresetRowChoice(group.first().first, group.first().second, group.mapTo(LinkedHashSet()) { it.first }) }
     val selectedFormat get() = eligibleFormats.singleOrNull { it.id == selectedId }
+    private var playlistSubmissionId: String? = null
+    val playlist = PlaylistViewModel(engine, viewModelScope,
+        wasSaved = { item -> LinkInput.parse(item.sourceUrl)?.let { downloads?.savedBefore(it.normalizedUrl)?.isNotEmpty() } == true },
+        submit = { title, preset, items ->
+            // The same first-download permission choice; grant, denial and skipping all keep this one confirmation.
+            val permission = kotlinx.coroutines.CompletableDeferred<Unit>()
+            pendingPlaylistPermission = permission
+            try {
+                notificationPrompt?.invoke() ?: finishNotificationRequest()
+                permission.await()
+            } finally { if (pendingPlaylistPermission === permission) pendingPlaylistPermission = null }
+            val id = newOperationId()
+            playlistSubmissionId = id
+            // Confirmation survives closing the Activity, as the single-video handoff does.
+            (coordinatorScope ?: viewModelScope).async {
+                downloads?.confirmBatch(id, title, preset, items) == true
+            }.await()
+        },
+        onAccepted = { acceptedJob = playlistSubmissionId; dismissOptions(); clearField() })
+    /** Video-in-list stays single-video until this explicit action. */
+    fun showPlaylist() {
+        val source = currentSource() ?: return
+        if (YouTubeLinkKind.classify(source.link) in setOf(YouTubeLinkKind.Playlist, YouTubeLinkKind.VideoInList)) {
+            invalidateOptions()
+            optionsState = OptionsState.Checking(source, newOperationId())
+            playlist.open(source)
+        }
+    }
+
     /** Earlier completed downloads of this link, by format id (looked up once per inspection). */
     private var savedFormats by mutableStateOf<Map<String, dev.ahmed.savlino.jobs.SavedBefore>>(emptyMap())
     /** The chosen format of this link was saved before (file still present): a notice, never a block. */
@@ -575,6 +606,11 @@ class LinkViewModel(
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
+        if (YouTubeLinkKind.classify(source.link) == YouTubeLinkKind.Playlist) {
+            optionsState = OptionsState.Checking(source, newOperationId())
+            playlist.open(source)
+            return
+        }
         if (YouTubeLinkKind.classify(source.link) == YouTubeLinkKind.PrivateList) {
             optionsState = OptionsState.Error(DownloadError.LoginRequired)
             return
@@ -994,6 +1030,8 @@ class LinkViewModel(
         if (next.normalizedUrl != failed) paste(value)
     }
     private fun invalidateOptions() {
+        pendingPlaylistPermission?.cancel(); pendingPlaylistPermission = null
+        playlist.close()
         failedReadGeneration = null
         photosUnavailable = false
         pendingPermissionChoice = null

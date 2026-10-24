@@ -524,4 +524,36 @@
     <string name="playlist_first_video_warning">Ce lien est une playlist. Seule la première vidéo sera enregistrée.</string>
     <string name="playlist_mix_note">Les mix ne s’enregistrent pas en liste. Cette vidéo seulement.</string>
     <string name="playlist_private_message">Cette liste est privée et ne peut pas être ouverte.</string>
+
+    <!-- Playlist selection and batch presentation. -->
+    <string name="playlist_title">Playlist · %1$s vidéos</string>
+    <string name="playlist_download">Télécharger %1$s vidéos</string>
+    <string name="playlist_select_all">Tout sélectionner</string>
+    <string name="playlist_select_none">Tout désélectionner</string>
+    <string name="playlist_selected">%1$s sélectionnées</string>
+    <string name="playlist_quality_helper">Chaque vidéo reçoit la qualité la plus proche disponible.</string>
+    <string name="playlist_sizes">Les tailles apparaissent au démarrage de chaque vidéo.</string>
+    <string name="playlist_limit">Jusqu’à 200 à la fois.</string>
+    <string name="playlist_live">En direct</string>
+    <string name="playlist_private">Privée</string>
+    <string name="playlist_unavailable">Indisponible</string>
+    <string name="playlist_see_all">Dans une playlist · Voir toutes les vidéos</string>
+    <string name="playlist_saved_before">Déjà enregistrée</string>
+    <string name="playlist_progress">Playlist %1$s sur %2$s</string>
+    <string name="playlist_pause_all">Tout mettre en pause</string>
+    <string name="playlist_retry">Réessayer (%1$s)</string>
+    <string name="playlist_waiting_network">En attente du réseau</string>
+    <string name="playlist_slowed">YouTube nous demande de ralentir. En pause.</string>
+    <string name="playlist_stop">Arrêter</string>
+    <string name="playlist_stop_confirm">Arrêter cette playlist ? Les vidéos enregistrées restent.</string>
+    <string name="playlist_show_videos">Afficher les vidéos</string>
+    <string name="playlist_hide_videos">Masquer les vidéos</string>
+    <string name="playlist_done">Terminé : %1$s enregistrées, %2$s n’ont pas pu être enregistrées</string>
+    <string name="playlist_see_why">Voir pourquoi</string>
+    <string name="playlist_notification_progress">Playlist : %1$s sur %2$s enregistrées</string>
+    <string name="playlist_notification_done">Playlist enregistrée : %1$s vidéos, %2$s échecs</string>
+    <string name="playlist_stopped">Arrêtée : %1$s non démarrées</string>
+    <string name="playlist_load_failed">Impossible de charger la playlist.</string>
+    <string name="playlist_submit_failed">L’enregistrement de la playlist n’a pas pu démarrer. Réessayez.</string>
+    <string name="playlist_done_saved">Terminé : %1$s enregistrées</string>
 </resources>

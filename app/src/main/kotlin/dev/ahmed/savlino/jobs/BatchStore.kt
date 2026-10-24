@@ -60,6 +60,10 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     @Synchronized fun items(id: String): List<BatchItemRecord> = db.query("batch_items", null, "batch_id=?", arrayOf(id), null, null, "position")
         .use { c -> buildList { while (c.moveToNext()) add(item(c)) } }
 
+    /** Read-only notification membership lookup, including the interval before QUEUED reconciliation. */
+    @Synchronized fun containsJob(jobId: String): Boolean = db.query("batch_items", arrayOf("job_id"),
+        "job_id=?", arrayOf(jobId), null, null, null, "1").use { it.moveToFirst() }
+
     /** Unavailable Keystore is transient; a lost key is permanent and its blob is discarded. */
     @Synchronized internal fun source(item: BatchItemRecord): String? {
         val blob = db.query("batch_items", arrayOf("source_url"), "batch_id=? AND position=?", args(item), null, null, null)
