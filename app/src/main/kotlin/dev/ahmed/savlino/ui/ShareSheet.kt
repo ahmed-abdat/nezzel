@@ -11,8 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -48,12 +46,9 @@ fun ShareSheet(links: LinkViewModel, language: String, hooks: ShareSheetHooks) {
 @Composable
 internal fun ShareSheetBody(links: LinkViewModel, language: String, hooks: ShareSheetHooks) {
     val pane = stringResource(R.string.share_sheet_pane)
-    // The done view keeps the last height, so the sheet does not jump in the half second before it closes.
-    var height by remember { mutableIntStateOf(0) }
-    val minHeight = with(LocalDensity.current) { height.toDp() }
-    Box(Modifier.fillMaxWidth().semantics { paneTitle = pane }.onSizeChanged { if (!hooks.sent) height = it.height }) {
+    Box(Modifier.fillMaxWidth().semantics { paneTitle = pane }) {
         when {
-            hooks.sent && links.optionsState == OptionsState.Hidden -> StartedBody(minHeight)
+            hooks.sent && links.optionsState == OptionsState.Hidden -> StartedBody(hooks.onFinish)
             links.optionsState != OptionsState.Hidden -> OptionsSheetBody(links, language, hooks.onFinish, hooks)
             else -> PreviewBody(links, language, hooks)
         }
@@ -86,15 +81,16 @@ private fun PreviewBody(links: LinkViewModel, language: String, hooks: ShareShee
 @Composable
 private fun OpenInNezzelBelow(hooks: ShareSheetHooks) = Column(Modifier.padding(top = Space.s)) { OpenInNezzel(hooks.onOpenApp) }
 
-/** After the coordinator took the job: the same check the button showed, until the sheet closes. */
+/** After the coordinator took the job: a compact check and one line; it closes by itself unless an accessibility service is on. */
 @Composable
-private fun StartedBody(minHeight: androidx.compose.ui.unit.Dp) {
-    Column(Modifier.fillMaxWidth().heightIn(min = minHeight).padding(Space.l).testTag("share_started_body"),
-        verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Check, contentDescription = null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onPrimary)
+private fun StartedBody(onClose: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.s).testTag("share_started_body"),
+        verticalArrangement = Arrangement.spacedBy(Space.m), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Check, contentDescription = null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
         }
-        Text(stringResource(R.string.share_sheet_started), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.share_sheet_started), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.titleMedium)
+        TextButton(onClick = onClose, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nezzel_close)) }
     }
 }

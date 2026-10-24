@@ -72,11 +72,12 @@ class ShareSheetActivity : AppCompatActivity() {
                 sentAt = android.os.SystemClock.uptimeMillis()
                 haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             }
-            // Close only once the coordinator has the job (enqueue done), and after the check was seen.
+            // Close only once the coordinator has the job (enqueue done), after the check was seen. With an
+            // accessibility service on, the sheet stays until dismissed (Close, Back or outside).
             LaunchedEffect(links.acceptedJob, links.optionsState) {
-                if (links.acceptedJob == null || links.optionsState != OptionsState.Hidden) return@LaunchedEffect
+                if (links.acceptedJob == null || links.optionsState != OptionsState.Hidden || accessibilityOn()) return@LaunchedEffect
                 val shown = android.os.SystemClock.uptimeMillis() - (sentAt ?: android.os.SystemClock.uptimeMillis())
-                delay((dwellMillis() - shown).coerceAtLeast(0))
+                delay((STARTED_MILLIS - shown).coerceAtLeast(0))
                 finishAndRemoveTask()
             }
             LaunchedEffect(links.moreFormats) { if (links.moreFormats) openInNezzel() }
@@ -133,9 +134,13 @@ class ShareSheetActivity : AppCompatActivity() {
         if (links.optionsState == OptionsState.Hidden) window.decorView.postDelayed({ finishAndRemoveTask() }, dwellMillis())
     }
 
-    /** Long enough to see the check; TalkBack gets time to read it. */
+    private fun accessibilityOn() = getSystemService(AccessibilityManager::class.java)?.isEnabled == true
+
+    /** After a photo save the toast carries the result; TalkBack gets time to read it. */
     private fun dwellMillis(): Long =
         if (getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true) 900 else 450
+
+    private companion object { const val STARTED_MILLIS = 1_500L }
 
     /** The full app takes the same shared text, through the same Share path (explicit, so the moved filter does not matter). */
     private fun openInNezzel() {

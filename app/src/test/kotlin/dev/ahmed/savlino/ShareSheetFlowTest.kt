@@ -123,8 +123,27 @@ class ShareSheetFlowTest {
         assertEquals(jobs.all().single().jobId, activity.links.acceptedJob)
         assertEquals(JobStage.ENQUEUED, jobs.all().single().stage)
         assertEquals(OptionsState.Hidden, activity.links.optionsState)
+        val started = sheetTexts(activity)
+        assertTrue(started.contains(activity.getString(R.string.share_sheet_started)))
+        assertTrue(started.contains(activity.getString(R.string.nezzel_close)))
+        assertFalse("the check stays about 1.5 s", activity.isFinishing)
         waitFor("sheet closes after the check") { activity.isFinishing }
         waitFor("link marked handled") { prefs.dismissedHashes.isNotEmpty() }
+    }
+
+    @Test fun withAccessibilityOnTheStartedSheetStaysUntilClosed() {
+        val engine = Engine(); install(engine)
+        shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)).setEnabled(true)
+        val activity = launch(share(url))
+        waitFor("options") { activity.links.downloadEnabled }
+        activity.links.requestDownload()
+        waitFor("job accepted") { activity.links.acceptedJob != null }
+        repeat(4) { sheetTexts(activity) }
+        assertFalse("no auto-close while an accessibility service is on", activity.isFinishing)
+        val close = semanticsNodes(activity, rounds = 1).last { it.config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick) &&
+            activity.getString(R.string.nezzel_close) in texts(descendants(it)) }
+        assertEquals(true, close.config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action?.invoke())
+        waitFor("closed by Close") { activity.isFinishing }
     }
 
     @Test fun dismissingTheSheetEnqueuesNothingAndMarksNothing() {
