@@ -77,16 +77,86 @@ class BatchStoreTest {
         assertNull(BatchStore(jobs, cipher).source(item))
     }
 
+    @Test fun lastItemBreakerStillCompletesWithoutPendingWork() {
+        for ((index, error) in listOf(DownloadError.Network, DownloadError.SourceRefused, DownloadError.Failed).withIndex()) {
+            val id = "last-$index"
+            val count = if (error == DownloadError.SourceRefused) 3 else 5
+            batches.create(id, "Fixture", Preset.BEST, batchItems(count))
+            batches.items(id).forEach { batches.finish(it, BatchItemState.FAILED, error, true) }
+            assertEquals(if (error == DownloadError.Network) BatchState.WAITING_NETWORK else BatchState.PAUSED, batches.get(id)!!.state)
+            batches.finishIfIdle(id)
+            assertEquals(BatchState.COMPLETED, batches.get(id)!!.state)
+            assertTrue(batches.items(id).all { it.state == BatchItemState.FAILED })
+        }
+    }
+
+    @Test fun terminalBatchRetentionDeletesItemsButKeepsRecentAndUnfinishedBatches() {
+        for (id in listOf("completed", "stopped", "expired", "unfinished"))
+            batches.create(id, "Fixture", Preset.BEST, batchItems(1))
+        batches.finish(batches.items("completed").single(), BatchItemState.DONE)
+        batches.finishIfIdle("completed")
+        batches.stop("stopped")
+        batches.state("expired", BatchState.EXPIRED)
+        batches.queued(batches.items("unfinished").single())
+        now += 30L * 86_400_000
+        batches.create("recent", "Fixture", Preset.BEST, batchItems(1))
+        batches.scrubExpired()
+        for (id in listOf("completed", "stopped", "expired")) {
+            assertNull(batches.get(id)); assertTrue(batches.items(id).isEmpty())
+        }
+        assertNotNull(batches.get("recent")); assertNotNull(batches.get("unfinished"))
+        jobs.readableDatabase.rawQuery("SELECT COUNT(*) FROM batch_items WHERE batch_id NOT IN (SELECT batch_id FROM batches)", null).use {
+            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        }
+    }
+
+    @Test fun clearLinkHistoryDeletesEndedBatchesAndKeepsARunningOne() {
+        batches.create("batch", "Fixture", Preset.BEST, batchItems(2))
+        batches.create("ended", "Fixture", Preset.BEST, batchItems(2))
+        batches.stop("ended")
+        jobs.clearShareLinks()
+        assertEquals(listOf("batch"), batches.all().map { it.id })
+        assertNull(batches.get("ended"))
+        jobs.readableDatabase.rawQuery("SELECT COUNT(*) FROM batch_items WHERE batch_id='ended'", null).use {
+            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        }
+        assertEquals(2, batches.items("batch").size)
+    }
+
+    @Test fun storedItemAndBatchTitlesAreBounded() {
+        val longTitle = "x".repeat(1000)
+        batches.create("batch", longTitle, Preset.BEST,
+            listOf(PlaylistItem("abcdefghijk", "https://youtube.com/watch?v=abcdefghijk", longTitle, 60)))
+        assertEquals(300, batches.get("batch")!!.title.length)
+        assertEquals(300, batches.items("batch").single().title.length)
+    }
+
+    @Test fun reupgradeDiscardsBatchesLeftBehindByVersionSix() {
+        batches.create("old-confirmation", "Fixture", Preset.BEST, batchItems(2))
+        jobs.writableDatabase.version = 6 // v6 leaves unknown batch tables alone on downgrade.
+        jobs.close()
+        jobs = JobStore(app)
+        batches = BatchStore(jobs, batchCipher()) { now }
+        assertEquals(7, jobs.writableDatabase.version)
+        assertTrue(batches.all().isEmpty())
+        jobs.readableDatabase.rawQuery("SELECT COUNT(*) FROM batch_items", null).use {
+            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        }
+        assertTrue(batches.create("fresh-confirmation", "Fixture", Preset.BEST, batchItems(1)))
+    }
+
     @Test fun versionSixToSevenAddsOnlyBatchTablesAndPreservesEveryJobColumnAndRow() {
         val source = LinkRevision(LinkInput.parse("https://youtube.com/watch?v=abcdefghijk")!!, 3)
         val format = Format("18", "mp4", true, true, size = Size.Exact(123))
         val command = (DownloadCommand.confirm("existing", Inspection(source, "fixture", listOf(format)), source, "18", "Fixture") as ConfirmResult.Confirmed).command
         jobs.enqueue(command, Preset.BEST)
-        for (id in listOf("paused", "completed")) {
+        for (id in listOf("paused", "completed", "transferring", "failed")) {
             val other = (DownloadCommand.confirm(id, Inspection(source, "fixture", listOf(format)), source, "18", "Fixture") as ConfirmResult.Confirmed).command
             jobs.enqueue(other, Preset.BEST)
         }
         jobs.pause("paused")
+        jobs.startTransfer("transferring", "fixture-recipe"); jobs.transferPartial("transferring", true)
+        jobs.fail("failed", DownloadError.Network)
         val pending = PendingPublication(android.net.Uri.parse("content://media/external/downloads/1"), "fixture.mp4")
         jobs.startTransfer("completed"); jobs.markStaged("completed"); jobs.recordPending("completed", pending)
         jobs.markPublishing("completed"); jobs.complete("completed", PublishedFile(pending.uri, pending.displayName))
@@ -114,7 +184,12 @@ class BatchStoreTest {
         assertEquals(command.source.link.rawUrl, jobs.get("existing")!!.sourceUrl)
         assertEquals(JobStage.ENQUEUED, jobs.get("existing")!!.stage)
         assertEquals(Preset.BEST, jobs.get("existing")!!.preset)
+        assertEquals(JobStage.TRANSFERRING, jobs.get("transferring")!!.stage)
+        assertTrue(jobs.get("transferring")!!.hasPartial)
+        assertEquals(JobStage.FAILED, jobs.get("failed")!!.stage)
+        assertTrue(jobs.get("failed")!!.retryable)
         assertEquals(0, BatchStore(jobs, batchCipher()).all().size)
+        assertTrue(BatchStore(jobs, batchCipher()).create("new-batch", "Fixture", Preset.BEST, batchItems(1)))
     }
 }
 

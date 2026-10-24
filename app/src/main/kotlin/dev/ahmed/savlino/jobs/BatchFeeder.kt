@@ -23,6 +23,11 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
     private val actions: BatchJobActions, private val limit: StateFlow<Int>, private val thermal: StateFlow<Int>) {
     private val jobs get() = batches.jobs
     private val gate = Mutex()
+    private val tickGate = Mutex()
+    // Accessed under gate; inspection itself releases gate so controls remain responsive.
+    private var resolvingBatch: String? = null
+    private var resolvingOperation: String? = null
+    private var resolvingJob: Job? = null
     private val wakeups = Channel<Unit>(Channel.CONFLATED)
     private var runner: Job? = null
 
@@ -45,7 +50,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
     }
     fun wake() { wakeups.trySend(Unit) }
 
-    internal suspend fun tick() = gate.withLock {
+    internal suspend fun tick() = tickGate.withLock { gate.withLock {
         reconcile() // First adopt any enqueue committed just before process death.
         batches.scrubExpired()
         applyControls()
@@ -75,9 +80,33 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                     continue
                 }
                 val source = LinkRevision(link, 0)
-                val result = try { engine.inspect(source, "resolve-${item.jobId}") }
-                    catch (cancelled: CancellationException) { throw cancelled }
+                // A control can persist while the source is being read, before resolution starts.
+                if (batches.get(batch.id)?.state != BatchState.ACTIVE) break
+                val operation = "resolve-${item.jobId}"
+                resolvingBatch = batch.id
+                resolvingOperation = operation
+                val result = coroutineScope {
+                    val resolve = async(start = CoroutineStart.LAZY) {
+                        try { engine.inspect(source, operation) }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { InspectResult.Failure(DownloadError.Failed) }
+                    }
+                    resolvingJob = resolve
+                    gate.unlock()
+                    try { resolve.await() }
+                    catch (cancelled: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        null
+                    }
                     catch (_: Exception) { InspectResult.Failure(DownloadError.Failed) }
+                    finally {
+                        // Reacquire even on parent cancellation: withLock must own the mutex on exit.
+                        withContext(NonCancellable) { resolve.join(); gate.lock() }
+                        resolvingBatch = null
+                        resolvingOperation = null
+                        resolvingJob = null
+                    }
+                } ?: break
                 // Completion, heat and the original confirmation deadline can change during inspection.
                 reconcile()
                 batches.scrubExpired()
@@ -112,7 +141,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
             }
             batches.finishIfIdle(batch.id)
         }
-    }
+    } }
 
     private fun lookahead() = (if (thermal.value >= PowerManager.THERMAL_STATUS_SEVERE) 1 else limit.value.coerceIn(1, 3)) + 1
     private fun activeCount() = batches.all().sumOf { batch -> batches.items(batch.id).count { item ->
@@ -123,12 +152,13 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
     private fun reconcile() {
         for (batch in batches.all()) {
             for (item in batches.items(batch.id)) {
-                if (item.state !in setOf(BatchItemState.WAITING, BatchItemState.QUEUED)) continue
+                if (item.state !in setOf(BatchItemState.WAITING, BatchItemState.QUEUED, BatchItemState.FAILED)) continue
                 val job = jobs.get(item.jobId)
                 if (job == null) {
                     if (item.state == BatchItemState.QUEUED) batches.finish(item, BatchItemState.FAILED, DownloadError.Interrupted)
                     continue
                 }
+                if (item.state == BatchItemState.FAILED && job.stage != JobStage.COMPLETED) continue
                 // A requested retry waits for a lookahead vacancy instead of requeueing N jobs at once.
                 if (item.state == BatchItemState.WAITING && item.retryable && job.stage == JobStage.FAILED) continue
                 if (item.state == BatchItemState.WAITING) batches.queued(item, job.preset != batch.preset)
@@ -154,9 +184,14 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
         }
     }
 
-    suspend fun pause(id: String) = gate.withLock {
-        if (batches.get(id)?.state in setOf(BatchState.ACTIVE, BatchState.WAITING_NETWORK)) {
-            batches.state(id, BatchState.PAUSED)
+    suspend fun pause(id: String) {
+        if (batches.get(id)?.state !in setOf(BatchState.ACTIVE, BatchState.WAITING_NETWORK)) return
+        batches.state(id, BatchState.PAUSED)
+        gate.withLock {
+            if (resolvingBatch == id) {
+                try { resolvingOperation?.let(engine::cancel) }
+                finally { resolvingJob?.cancel() }
+            }
             batches.items(id).filter { it.state == BatchItemState.QUEUED }.forEach { actions.pause(it.jobId) }
         }
     }
@@ -164,14 +199,22 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
     private suspend fun resumeUnderGate(id: String) {
         batches.scrubExpired()
         if (batches.get(id)?.state !in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) return
+        batches.requestRetries(id)
         if (!batches.state(id, BatchState.ACTIVE)) return
         batches.items(id).filter { it.state == BatchItemState.QUEUED && jobs.get(it.jobId)?.stage == JobStage.PAUSED }
             .forEach { actions.resume(it.jobId) }
     }
-    suspend fun stop(id: String) = gate.withLock {
-        for (jobId in batches.stop(id)) if (jobs.get(jobId)?.stage?.terminal == false) actions.cancel(jobId)
-        reconcile()
-        wake()
+    suspend fun stop(id: String) {
+        val jobIds = batches.stop(id)
+        gate.withLock {
+            if (resolvingBatch == id) {
+                try { resolvingOperation?.let(engine::cancel) }
+                finally { resolvingJob?.cancel() }
+            }
+            for (jobId in jobIds) if (jobs.get(jobId)?.stage?.terminal == false) actions.cancel(jobId)
+            reconcile()
+            wake()
+        }
     }
     suspend fun retry(id: String) = gate.withLock { retryUnderGate(id); wake() }
     private suspend fun retryUnderGate(id: String) {

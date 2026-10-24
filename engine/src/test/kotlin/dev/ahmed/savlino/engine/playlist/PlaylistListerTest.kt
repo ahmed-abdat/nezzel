@@ -51,6 +51,29 @@ class PlaylistListerTest {
         assertNull(second.next)
     }
 
+    @Test fun nativeContinuationFailureRestartsFlatFromOneWithoutDroppingUnseenRows(): Unit = runBlocking {
+        val lister = PlaylistLister({ _, token, _ ->
+            if (token != null) throw IllegalStateException()
+            PlaylistPage("Fixture", listOf(PlaylistItem("v0000000002", "https://youtube.com/watch?v=v0000000002", "Fixture", 60)),
+                101, PlaylistPageToken(source.link.normalizedUrl, 1, org.schabi.newpipe.extractor.Page("https://youtube.com/continuation")))
+        }, { _, start, end ->
+            if (start == 1) {
+                assertEquals(100, end)
+                flat((1..100).joinToString(",") { entry(it) }, 101)
+            } else {
+                assertEquals(101, start); assertEquals(200, end)
+                flat(entry(101), 101)
+            }
+        })
+        val first = assertIs<PlaylistResult.Success>(lister.list(source)).page
+        val second = assertIs<PlaylistResult.Success>(lister.list(source, first.next)).page
+        val third = assertIs<PlaylistResult.Success>(lister.list(source, second.next)).page
+        val ids = (first.items + second.items + third.items).map { it.id }
+        assertEquals(101, ids.size)
+        assertEquals((1..101).map { "v${it.toString().padStart(10, '0')}" }.toSet(), ids.toSet())
+        assertNull(third.next)
+    }
+
     @Test fun npeFailureFallsBackAndMixPrivateAndChannelsNeverFetch(): Unit = runBlocking {
         val lister = PlaylistLister({ _, _, _ -> throw IllegalStateException() }, { _, _, _ -> flat(entry(1), 1) })
         assertEquals(1, assertIs<PlaylistResult.Success>(lister.list(source)).page.items.size)
