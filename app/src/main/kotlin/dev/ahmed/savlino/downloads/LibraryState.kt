@@ -64,6 +64,8 @@ fun rememberLibraryState(
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** Runs on each listed snapshot: every delete path ends in a reload, and so do deletes outside Nezzel. */
     sweep: (suspend (rows: List<SavedMedia>, listedAt: Long) -> Unit)? = null,
+    /** Null keeps the cold start plain Loading; tests pass their own file. */
+    cache: LibraryCache? = LocalContext.current.let { remember(it) { LibraryCache(java.io.File(it.noBackupFilesDir, LibraryCache.FILE_NAME)) } },
 ): LibraryState {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -87,6 +89,11 @@ fun rememberLibraryState(
     LaunchedEffect(repository, owner, refresh, observe, ioDispatcher) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             load = LibraryLoadState.Loading(load.lastSuccessfulRows)
+            // Cold start only: the last listed rows fill in while the fresh query runs; any result wins.
+            if (load.lastSuccessfulRows == null && cache != null) launch {
+                val cached = withContext(ioDispatcher) { cache.read() }
+                if (cached != null && load == LibraryLoadState.Loading()) load = LibraryLoadState.Loading(cached)
+            }
             (observe?.invoke() ?: repository.observe(ioDispatcher)).catch { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 emit(Result.failure(error))
@@ -99,6 +106,10 @@ fun rememberLibraryState(
         }
     }
     LaunchedEffect(load, sweep) { (load as? LibraryLoadState.Ready)?.let { sweep?.invoke(it.rows, listedAt) } }
+    LaunchedEffect(load, cache, ioDispatcher) {
+        val ready = load as? LibraryLoadState.Ready ?: return@LaunchedEffect
+        if (cache != null) withContext(ioDispatcher) { cache.write(ready.rows) }
+    }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val uri = pendingUri?.let(android.net.Uri::parse)
         pendingUri = null

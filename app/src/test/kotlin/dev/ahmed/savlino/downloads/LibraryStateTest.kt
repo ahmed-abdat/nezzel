@@ -382,7 +382,8 @@ class LibraryStateTest {
             provider.queryGate = CountDownLatch(1)
             controller = Robolectric.buildActivity(ComponentActivity::class.java).create(saved).start().resume().visible()
             state = null; content(); drain()
-            assertTrue(state!!.media.isEmpty())
+            // Cached rows may show; the parked provider query has not listed the library.
+            assertFalse(state!!.load is LibraryLoadState.Ready)
             registry.dispatchResult(registry.request!!, Activity.RESULT_OK, Intent())
             await { provider.db.rawQuery("SELECT _id FROM media", null).use { it.count } == 0 }
             assertEquals(0, provider.db.rawQuery("SELECT _id FROM media", null).use { it.count })
