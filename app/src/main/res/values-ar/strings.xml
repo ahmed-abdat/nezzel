@@ -595,7 +595,14 @@
 
     <!-- Playlist selection and batch presentation. -->
     <string name="playlist_title">قائمة تشغيل · %1$s فيديو</string>
-    <string name="playlist_download">تنزيل %1$s فيديو</string>
+    <plurals name="playlist_download">
+        <item quantity="zero">تنزيل</item>
+        <item quantity="one">تنزيل فيديو واحد</item>
+        <item quantity="two">تنزيل فيديوين</item>
+        <item quantity="few">تنزيل %1$s فيديوهات</item>
+        <item quantity="many">تنزيل %1$s فيديو</item>
+        <item quantity="other">تنزيل %1$s فيديو</item>
+    </plurals>
     <string name="playlist_select_all">تحديد الكل</string>
     <string name="playlist_select_none">إلغاء التحديد</string>
     <string name="playlist_selected">تم تحديد %1$s</string>

@@ -531,7 +531,10 @@
 
     <!-- Playlist selection and batch presentation. -->
     <string name="playlist_title">Playlist · %1$s videos</string>
-    <string name="playlist_download">Download %1$s videos</string>
+    <plurals name="playlist_download">
+        <item quantity="one">Download %1$s video</item>
+        <item quantity="other">Download %1$s videos</item>
+    </plurals>
     <string name="playlist_select_all">Select all</string>
     <string name="playlist_select_none">Select none</string>
     <string name="playlist_selected">%1$s selected</string>

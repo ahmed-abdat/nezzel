@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextDirection
@@ -114,7 +115,7 @@ internal fun PlaylistSheetContent(vm: PlaylistViewModel, language: String) {
                 }
             }
             Button(vm::confirm, Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("playlist_download"), enabled = vm.canConfirm) {
-                Text(stringResource(R.string.playlist_download, NezzelFormat.count(vm.selected.size, language)))
+                Text(pluralStringResource(R.plurals.playlist_download, vm.selected.size, NezzelFormat.count(vm.selected.size, language)))
             }
         }
     }

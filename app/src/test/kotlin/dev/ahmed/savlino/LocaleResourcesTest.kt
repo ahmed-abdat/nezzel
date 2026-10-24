@@ -52,7 +52,8 @@ class LocaleResourcesTest {
             assertEquals(english.keys, translated.keys)
             english.forEach { (name, original) ->
                 assertTrue(translated.getValue(name).textContent.isNotBlank())
-                assertEquals(name, arguments(original.textContent), arguments(translated.getValue(name).textContent))
+                // Plurals differ in item count per language (Arabic has six), so compare the arguments used.
+                assertEquals(name, arguments(original.textContent).toSet(), arguments(translated.getValue(name).textContent).toSet())
             }
         }
     }
