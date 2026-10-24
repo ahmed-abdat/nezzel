@@ -41,6 +41,37 @@ class SavedMediaRepositoryTest {
         assertEquals(listOf("Saved 2"), filterMedia(list, MediaFilter.AUDIO).map { it.title })
         assertTrue(filterMedia(list, MediaFilter.VIDEO, "2").isEmpty())
     }
+    @Test fun searchFindsArabicVariantsInTitleAndFilename() = fixture { repo, provider ->
+        provider.db.execSQL("UPDATE media SET _display_name = ?, title = ? WHERE _id = 1",
+            arrayOf("محمـد ٢٠٢٤.mp4", "أَحْمَد في المدرسة"))
+        val items = repo.query()
+        for (query in listOf("احمد", "مدرسه", "محمد", "2024", "محمد احمد", "2024 مدرسه")) {
+            assertEquals(query, items, filterMedia(items, MediaFilter.ALL, query))
+        }
+        assertTrue(filterMedia(items, MediaFilter.ALL, "احمد 2025").isEmpty())
+        assertTrue(filterMedia(items, MediaFilter.ALL, "مفقود").isEmpty())
+    }
+    @Test fun searchCombinesFilterChipWithLatinCaseAndAccents() = fixture { repo, provider ->
+        provider.insertRow(2, "audio/mpeg", 200)
+        provider.db.execSQL("UPDATE media SET _display_name = ?, title = ?", arrayOf("été.mp3", "Summer"))
+        val items = repo.query()
+        assertEquals(items, filterMedia(items, MediaFilter.ALL, "SUMMER ETE"))
+        assertEquals(listOf("MP3"), filterMedia(items, MediaFilter.AUDIO, "ETE").map { it.format })
+        assertEquals(listOf("MP4"), filterMedia(items, MediaFilter.VIDEO, "summer").map { it.format })
+        assertTrue(filterMedia(items, MediaFilter.IMAGE, "ete").isEmpty())
+        assertTrue(filterMedia(items, MediaFilter.AUDIO, "winter").isEmpty())
+    }
+    @Test fun cachedSearchKeyDoesNotChangeEqualityAndCopyUsesNewText() = fixture { repo, _ ->
+        val item = repo.query().single().copy(title = "أحمد", filename = "مدرسة.mp4")
+        val copy = item.copy()
+        val hash = item.hashCode()
+        assertEquals("احمد مدرسه.mp4", item.searchKey)
+        assertEquals(copy, item)
+        assertEquals(hash, item.hashCode())
+        val renamed = item.copy(title = "محمد", filename = "جديد.mp4")
+        assertEquals(listOf(renamed), filterMedia(listOf(renamed), MediaFilter.ALL, "محمد جديد"))
+        assertTrue(filterMedia(listOf(renamed), MediaFilter.ALL, "احمد").isEmpty())
+    }
     @Test fun missingOrNumericProviderTitleUsesTheConfirmedDisplayName() = fixture { repo, provider ->
         for (title in listOf(null, "", "1058356515425744", " 1058356515425744 ", "١٠٥٨٣٥٦٥١٥٤٢٥٧٤٤")) {
             provider.db.execSQL("UPDATE media SET _display_name = ?, title = ? WHERE _id = 1",
