@@ -58,6 +58,8 @@ class LinkViewModelRaceTest {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("engine-maintenance", 0).edit().clear().commit()
         store = JobStore(app)
+        // The first SQLite open loads Robolectric's native runtime (seconds when cold); keep it out of timed waits.
+        store.all()
         coordinator = DownloadCoordinator(app, engine, store, workManager = { error("No background scheduler in this fixture") })
         vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator, images = images,
             newOperationId = { "op-${++nextId}" }, previewDispatcher = Dispatchers.Unconfined, previewImage = ::testBitmap,

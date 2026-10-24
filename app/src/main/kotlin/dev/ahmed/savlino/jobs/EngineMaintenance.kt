@@ -1,9 +1,11 @@
 package dev.ahmed.savlino.jobs
 
 import android.content.Context
+import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.engine.EngineAdapter
 import dev.ahmed.savlino.engine.EngineUpdateResult
 import dev.ahmed.savlino.engine.EngineReadiness
+import dev.ahmed.savlino.engine.PreparedUpdate
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +34,10 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     private var launchRecorded = false
     private var firstLaunch = true
     private var inspectionFinished = false
+    /** The automatic update's network stage, run outside [gate]; admission cancels it. Accessed only under gate. */
+    private var preemptible: Job? = null
+    /** A link pre-empted this process's automatic update; the next launch retries under the usual cadence. */
+    private var preempted = false
     /** Local discovery only; publish startup warm-up's installed version without attempting an update. */
     suspend fun refreshVersion() = withContext(Dispatchers.IO) {
         gate.withLock {
@@ -103,21 +109,23 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
         }
     }
     private suspend fun admit(register: () -> Unit) {
-        // The owner keeps this gate throughout maintenance, including its version refresh. Healthy updates
+        // Manual maintenance and every install keep this gate, including the version refresh; healthy updates
         // may exceed a media readiness deadline. Wait for release, cancellably, then start that deadline.
-        gate.withLock { register() }
+        // An automatic update's network stage runs without it: a link or download cancels that stage at once.
+        gate.withLock {
+            preemptible?.cancel()
+            register()
+        }
     }
-    private enum class UpdateDecision { UPDATED, NO_UPDATE, INSPECTION_BUSY }
+    private enum class UpdateDecision { UPDATED, NO_UPDATE, INSPECTION_BUSY, PREEMPTED }
     suspend fun checkOnStartup(): Boolean = update(false) == UpdateDecision.UPDATED
     /** [includePaused]: the user confirmed that paused downloads start over (their resume recipe pins the engine). */
     suspend fun updateNow(includePaused: Boolean = false): Boolean = update(true, includePaused) == UpdateDecision.UPDATED
     private suspend fun update(manual: Boolean, includePaused: Boolean = false): UpdateDecision = withContext(Dispatchers.IO) {
         if (!manual) onLaunch()
-        if (!gate.tryLock()) {
-            if (mutableState.value.status != EngineUpdateStatus.UPDATING)
-                mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.BUSY)
-            return@withContext UpdateDecision.NO_UPDATE
-        }
+        if (!gate.tryLock()) return@withContext busy()
+        var locked = true
+        if (preemptible != null) { gate.unlock(); return@withContext busy() } // Automatic network stage running.
         try {
             if (downloads > 0 || (if (manual && includePaused) hasRunningDownloads() else hasDownloads())) {
                 mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.BUSY)
@@ -132,8 +140,9 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
             // Version discovery can await first extraction. A link arriving meanwhile wins over automatic maintenance.
             if (!manual && inspectionBusy()) return@withContext UpdateDecision.INSPECTION_BUSY
             val time = now()
-            if (!manual && ((prefs.contains("success") && time - prefs.getLong("success", 0) < 7 * DAY) ||
+            if (!manual && (preempted || (prefs.contains("success") && time - prefs.getLong("success", 0) < 7 * DAY) ||
                     (prefs.contains("attempt") && time - prefs.getLong("attempt", 0) < DAY))) return@withContext UpdateDecision.NO_UPDATE
+            val previousAttempt = if (prefs.contains("attempt")) prefs.getLong("attempt", 0) else null
             // Persist before network work so process death cannot cause an automatic retry loop.
             if (!prefs.edit().putLong("attempt", time).commit()) {
                 mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.FAILED)
@@ -142,14 +151,37 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
             mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.UPDATING,
                 generation = mutableState.value.generation + 1)
             var succeeded = false
+            var preemptedNow = false
             try {
-                val result = engine.updateYtdlp()
+                val result = if (manual) engine.updateYtdlp() else {
+                    // Network stage without the gate, so admission can cancel it; the install re-takes the gate.
+                    val stage = async {
+                        try { engine.prepareYtdlpUpdate() } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { PreparedUpdate.Failed(EngineUpdateResult.Failure(DownloadError.Failed)) }
+                    }
+                    preemptible = stage
+                    gate.unlock(); locked = false
+                    stage.join()
+                    withContext(NonCancellable) { gate.lock(); locked = true }
+                    preemptible = null
+                    val prepared = if (stage.isCancelled) null else stage.await()
+                    if (prepared == null || inspections > 0 || downloads > 0 || hasDownloads()) {
+                        prepared?.let(engine::discardYtdlpUpdate)
+                        // A pre-empted attempt is not an attempt: restore the stamp, never retry in this process.
+                        prefs.edit().apply { if (previousAttempt == null) remove("attempt") else putLong("attempt", previousAttempt) }.commit()
+                        preempted = true; preemptedNow = true
+                        mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.IDLE)
+                        return@withContext UpdateDecision.PREEMPTED
+                    }
+                    // Unstaged: the engine has no separate network stage, so the whole update runs under the gate.
+                    if (prepared is PreparedUpdate.Unstaged) engine.updateYtdlp() else engine.installYtdlpUpdate(prepared)
+                }
                 succeeded = result is EngineUpdateResult.Success
                 if (succeeded) succeeded = prefs.edit().putLong("success", now()).remove(BUILT_IN).commit()
                 else if ((result as? EngineUpdateResult.Failure)?.usingBuiltIn == true) prefs.edit().putBoolean(BUILT_IN, true).commit()
             } finally {
                 // A failed updater can still replace the binary. Refresh even on cancellation.
-                withContext(NonCancellable) {
+                if (!preemptedNow) withContext(NonCancellable) {
                     val version = try { engine.installedVersion() } catch (_: Exception) { null }
                     mutableState.value = EngineMaintenanceState(version, prefs.contains("success"),
                         if (succeeded) EngineUpdateStatus.SUCCEEDED else EngineUpdateStatus.FAILED, mutableState.value.generation,
@@ -161,7 +193,15 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
         catch (_: Exception) {
             mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.FAILED)
             UpdateDecision.NO_UPDATE // Raw updater diagnostics can contain URLs; keep only a localized Settings result.
-        } finally { gate.unlock() }
+        } finally {
+            // Unlocked only when this caller was cancelled during the network stage, which cancels that child too.
+            if (locked) gate.unlock() else withContext(NonCancellable) { gate.withLock { preemptible = null } }
+        }
+    }
+    private fun busy(): UpdateDecision {
+        if (mutableState.value.status != EngineUpdateStatus.UPDATING)
+            mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.BUSY)
+        return UpdateDecision.NO_UPDATE
     }
     private companion object { const val DAY = 86_400_000L; const val BUILT_IN = "using-built-in" }
 }

@@ -99,6 +99,21 @@ class YtdlpDirectoryTest {
             override fun bundledYtdlpSizeForRepair() = bundledSize.takeIf { native.prefs["dlpVersion"] == null }
         }, dir, enabled)
 
+    @Test fun truncatedRecordedUpdateIsReplacedByTheBundledCopyAtTheNextStart() = runBlocking {
+        val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)
+        val update = File(temporary.root, "update-fixture.zip"); zip(update, "updated")
+        for (materialize in listOf(false, true)) {
+            dir.deleteRecursively(); executable.writeBytes(update.readBytes().copyOf(12)) // Killed mid-copy.
+            val native = Native(mutableMapOf("dlpVersion" to "updated", "dlpVersionName" to "stable"))
+            val runtime = DirectoryYtdlpRuntime(object : YtdlpRuntime by native {
+                override fun bundledYtdlpSizeForRepair() =
+                    YtdlpStagedInstall.expectedSize(native.prefs["dlpVersion"], update.length(), { bundle.length() })
+            }, dir, materialize)
+            assertEquals("bundled", YoutubedlEngine(runtime).installedVersion(), "materialize=$materialize")
+            assertTrue(native.prefs.isEmpty())
+        }
+    }
+
     @Test fun bundledRepairPreservesRecordedUpdatesAndValidPlainOrMaterializedBundles() {
         val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)
         val native = Native()
