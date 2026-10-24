@@ -112,27 +112,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion == 7 && newVersion == DATABASE_VERSION) {
-            // 0.5.0-beta2 shipped v7 batches before the consecutive-failure guard existed.
-            val columns = db.rawQuery("PRAGMA table_info(batches)", null).use { c ->
-                buildList { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
-            }
-            if ("consecutive_failures" !in columns) db.execSQL("ALTER TABLE batches ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0")
-        } else if (oldVersion == 6 && newVersion == DATABASE_VERSION) {
-            // v6 ignores unknown tables on downgrade; old confirmations must never revive.
-            db.execSQL("DROP TABLE IF EXISTS batch_items")
-            db.execSQL("DROP TABLE IF EXISTS batches")
-            BatchStore.createTables(db)
-        } else if (oldVersion in 4..5 && newVersion == DATABASE_VERSION) {
-            if (oldVersion == 4) {
-                db.execSQL("ALTER TABLE jobs ADD COLUMN transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0)")
-                db.execSQL("ALTER TABLE jobs ADD COLUMN stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0)")
-                db.execSQL("ALTER TABLE jobs ADD COLUMN resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0)")
-            }
-            db.execSQL("ALTER TABLE jobs ADD COLUMN $SHARE_LINK_COLUMN")
-            BatchStore.createTables(db)
-        } else if (oldVersion in 1..3 && newVersion == DATABASE_VERSION) {
-            // The rebuild creates the current shape (share_link included); no ALTER follows it.
+        if (newVersion != DATABASE_VERSION) return recreate(db)
+        if (oldVersion in 1..3) {
+            // The rebuild creates the current shape (share_link and batches included); no step follows it.
             // SQLiteOpenHelper owns the transaction, including the CHECK-constraint rebuild.
             db.execSQL("ALTER TABLE jobs RENAME TO jobs_old")
             onCreate(db)
@@ -141,7 +123,37 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             db.execSQL("UPDATE jobs SET retryable = 0 WHERE stage = 'FAILED' AND source_url IS NULL")
             db.execSQL("DROP TABLE jobs_old")
             if (oldVersion < 3) backfillSourceKeys(db)
-        } else recreate(db)
+            return
+        }
+        if (oldVersion !in 4 until DATABASE_VERSION) return recreate(db)
+        // One step per shipped version, in order: a v4 phone runs 4, 5, 6 and 7. A new version adds one step here and
+        // never edits an old one. BatchStore.createTables writes the current shape, so later batch steps must tolerate it.
+        for (version in oldVersion until DATABASE_VERSION) when (version) {
+            4 -> {
+                addColumn(db, "jobs", "transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0)")
+                addColumn(db, "jobs", "stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0)")
+                addColumn(db, "jobs", "resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0)")
+            }
+            5 -> addColumn(db, "jobs", SHARE_LINK_COLUMN)
+            6 -> {
+                // v6 ignores unknown tables on downgrade; old confirmations must never revive.
+                db.execSQL("DROP TABLE IF EXISTS batch_items")
+                db.execSQL("DROP TABLE IF EXISTS batches")
+                BatchStore.createTables(db)
+            }
+            // 0.5.0-beta2 shipped v7 batches before the consecutive-failure guard existed.
+            7 -> addColumn(db, "batches", "consecutive_failures INTEGER NOT NULL DEFAULT 0")
+            else -> error("no upgrade step from database version $version")
+        }
+    }
+
+    /** ALTER TABLE ADD COLUMN unless a current-shape table already has it. */
+    private fun addColumn(db: SQLiteDatabase, table: String, definition: String) {
+        val name = definition.substringBefore(' ')
+        val columns = db.rawQuery("PRAGMA table_info($table)", null).use { c ->
+            buildList { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("name"))) }
+        }
+        if (name !in columns) db.execSQL("ALTER TABLE $table ADD COLUMN $definition")
     }
 
     /** Inside the upgrade transaction: rows that still hold their link (active, retryable) get its tag. */
