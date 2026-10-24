@@ -1,6 +1,8 @@
 package dev.ahmed.savlino.viewer
 
 import android.media.MediaPlayer
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.VideoView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -68,8 +70,9 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
     }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        AndroidView({ context ->
-            VideoView(context).apply {
+        // A full-screen frame gives the VideoView exact bounds, so it scales the video to fit
+        // (keeping its aspect ratio) instead of showing a low-resolution file at its pixel size.
+        AndroidView({ context -> FrameLayout(context).apply { addView(VideoView(context).apply {
                 setOnPreparedListener { prepared ->
                     prepared.isLooping = true
                     prepared.setVolume(if (latestMuted) 0f else 1f, if (latestMuted) 0f else 1f)
@@ -82,8 +85,8 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
                 setOnClickListener { play(!playing) }
                 setVideoURI(item.uri)
                 video = this
-            }
-        }, onRelease = { it.stopPlayback(); video = null; player = null })
+            }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER)) }
+        }, Modifier.fillMaxSize(), onRelease = { (it.getChildAt(0) as? VideoView)?.stopPlayback(); video = null; player = null })
         if (!rendering) poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
 
         // Media controls keep left-to-right time in RTL too, like the phone's own players.
