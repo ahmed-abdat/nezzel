@@ -18,4 +18,9 @@ class LiveUpdateManifestTest {
         assertTrue(requested.toString(), "android.permission.POST_PROMOTED_NOTIFICATIONS" in requested)
         assertTrue("android.permission.POST_NOTIFICATIONS" in requested)
     }
+
+    /** Below Android 16 QPR2 the gate is closed without touching any API 36 member (no linkage error). */
+    @Test @Config(sdk = [29, 33, 35]) fun promotionStaysOffBelowAndroid16() {
+        org.junit.Assert.assertFalse(LiveUpdate.supported)
+    }
 }
