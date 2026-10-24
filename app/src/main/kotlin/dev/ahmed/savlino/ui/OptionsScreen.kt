@@ -83,6 +83,8 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                 SavedBeforeNotice(saved, links.selectedFormat?.container?.takeIf { links.savedBefore != null }, language,
                     onOpened = share.onFinish)
             }
+            playlistNotice(links.text)?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (links.photosUnavailable) Text(stringResource(R.string.image_photos_unavailable),
                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
             when (val state = links.optionsState) {
@@ -449,4 +451,12 @@ internal fun BetterQualityNote(savedTier: Int, language: String) {
     Text(stringResource(R.string.better_quality_note, NezzelFormat.isolate(stringResource(R.string.video_quality, NezzelFormat.count(savedTier, language)))),
         Modifier.fillMaxWidth().testTag("better_quality_note").semantics { liveRegion = LiveRegionMode.Polite },
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** Kept separate so every intake kind uses the same one-line notice. */
+internal fun playlistNotice(text: String): Int? = when (YouTubeLinkKind.classify(text)) {
+    YouTubeLinkKind.Playlist -> R.string.playlist_first_video_warning
+    YouTubeLinkKind.Mix -> R.string.playlist_mix_note
+    YouTubeLinkKind.PrivateList -> R.string.playlist_private_message
+    else -> null
 }

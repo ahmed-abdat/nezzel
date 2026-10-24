@@ -99,6 +99,60 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
 
+    override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?): PlaylistResult =
+        operation(operationId, { error, _ -> PlaylistResult.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+            // Reject unsupported kinds before local initialization or any network request.
+            when (YouTubeLinkKind.classify(source.link)) {
+                YouTubeLinkKind.PrivateList -> return@operation PlaylistResult.Failure(DownloadError.LoginRequired)
+                YouTubeLinkKind.Playlist, YouTubeLinkKind.VideoInList -> Unit
+                else -> return@operation PlaylistResult.Failure(DownloadError.Unsupported)
+            }
+            if (!initialize()) return@operation PlaylistResult.Failure(DownloadError.EngineUnavailable)
+            current.expireIn(limits.inspectMs)
+            val lister = PlaylistLister({ input, token, id -> fastPlaylist(current, input, token, id) }, { input, start, end ->
+                current.expireIn(limits.inspectMs)
+                version(current)
+                execute(current, YtdlpCommand.playlist(input, start, end))
+            })
+            lister.list(source, page, operationId)
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun fastPlaylist(current: Operation, source: LinkRevision, page: PlaylistPageToken?, id: String): PlaylistPage? {
+        val fast = fastSource ?: return null
+        checkCancelled(current)
+        if (limits.npeBudgetMs <= 0 || !fastSourceInFlight.compareAndSet(false, true)) return null
+        synchronized(current) { current.deadline = NO_DEADLINE }
+        val started = System.nanoTime()
+        val abandoned = AtomicBoolean()
+        // As with single-video NPE: a timed-out Rhino worker retains the slot until it actually exits.
+        val result = fastSourceScope.async {
+            try {
+                if (current.cancelled.get() || abandoned.get()) null
+                else fast.playlist(source, page, id, limits.npeBudgetMs)
+            } catch (_: Exception) { null }
+            catch (_: LinkageError) { null }
+            finally { fastSourceInFlight.set(false) }
+        }
+        var abandon = true
+        try {
+            return select {
+                current.cancellation.onAwait { throw OperationCancelled() }
+                result.onAwait { resultPage ->
+                    if (System.nanoTime() - started >= limits.npeBudgetMs * 1_000_000) null
+                    else { abandon = false; resultPage }
+                }
+                onTimeout(limits.npeBudgetMs + NPE_GRACE_MS) { null }
+            }
+        } finally {
+            if (abandon) {
+                abandoned.set(true)
+                try { fast.cancel(id) } catch (_: Exception) {} catch (_: LinkageError) {}
+            }
+            current.expireIn(limits.inspectMs)
+        }
+    }
+
     override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
         // Read before any wait: a Clear link history after this call began keeps its result out of [recent].
         val epoch = recent.epoch()

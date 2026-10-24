@@ -22,6 +22,12 @@ object YtdlpCommand {
     internal fun isYouTube(source: LinkRevision): Boolean = source.link.host == Host.YOUTUBE
     fun inspect(source: LinkRevision) = listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + NETWORK +
         listOf("--dump-json", "--skip-download", "--", source.link.rawUrl)
+    fun playlist(source: LinkRevision, start: Int, end: Int): List<String> {
+        require(isYouTube(source) && start > 0 && end >= start && end - start < 100)
+        return listOf("--ignore-config", "--yes-playlist", "--flat-playlist", "--lazy-playlist",
+            "--dump-single-json", "--skip-download", "--playlist-items", "$start:$end") + NETWORK +
+            listOf("--", source.link.rawUrl)
+    }
     /** Shared by both transfer engines before any staging write. */
     internal fun validateStaging(directory: File): File {
         val root = directory.canonicalFile

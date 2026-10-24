@@ -13,6 +13,7 @@ class FakeEngine(
     val steps: List<Step> = emptyList(),
     val waitForInspectCancellation: Boolean = false,
     val inspectionScripts: Map<String, InspectionScript> = emptyMap(),
+    val playlistResult: PlaylistResult = PlaylistResult.Failure(DownloadError.Unsupported),
 ) : EngineAdapter {
     data class InspectionScript(val result: InspectResult, val awaitRelease: Boolean = false)
     sealed interface Step {
@@ -31,6 +32,7 @@ class FakeEngine(
         inspectionReleases.computeIfAbsent(operationId) { CompletableDeferred() }.complete(Unit)
     }
     override val isAvailable: Boolean get() = true
+    override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?): PlaylistResult = playlistResult
     override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
         val cancellation = register(operationId) ?: return InspectResult.Failure(DownloadError.InvalidInput)
         try {

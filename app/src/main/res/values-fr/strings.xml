@@ -520,4 +520,8 @@
     <string name="share_notify_line">Autorisez les notifications pour suivre la progression. Le téléchargement marche sans.</string>
     <string name="download_again">Télécharger à nouveau</string>
     <string name="download_again_size">Télécharger à nouveau · %1$s</string>
+    <!-- Playlist notices (0.5). -->
+    <string name="playlist_first_video_warning">Ce lien est une playlist. Seule la première vidéo sera enregistrée.</string>
+    <string name="playlist_mix_note">Les mix ne s’enregistrent pas en liste. Cette vidéo seulement.</string>
+    <string name="playlist_private_message">Cette liste est privée et ne peut pas être ouverte.</string>
 </resources>

@@ -54,7 +54,7 @@ class Reopen internal constructor(val link: String, val format: Format, val pres
 /** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
-/** Blocking platform SQLite, schema v5. Older rows migrate without losing publication ownership. */
+/** Blocking platform SQLite, schema v7. Older rows migrate without losing publication ownership. */
 /** [sourceKeys]: keyed tags for "saved before"; null (no AndroidKeyStore) stores no tag and finds nothing. */
 class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred,
     private val links: LinkCipher? = KeystoreLinkCipher.current()) :
@@ -101,16 +101,20 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 CHECK (stage NOT IN ('PENDING_INSERTED','PUBLISHING','COMPLETED') OR pending_uri IS NOT NULL)
             )
         """.trimIndent())
+        BatchStore.createTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion in 4..5 && newVersion == DATABASE_VERSION) {
+        if (oldVersion == 6 && newVersion == 7) {
+            BatchStore.createTables(db)
+        } else if (oldVersion in 4..5 && newVersion == DATABASE_VERSION) {
             if (oldVersion == 4) {
                 db.execSQL("ALTER TABLE jobs ADD COLUMN transport_resumes INTEGER NOT NULL DEFAULT 0 CHECK(transport_resumes >= 0)")
                 db.execSQL("ALTER TABLE jobs ADD COLUMN stall_restarts INTEGER NOT NULL DEFAULT 0 CHECK(stall_restarts >= 0)")
                 db.execSQL("ALTER TABLE jobs ADD COLUMN resume_reset_bytes INTEGER NOT NULL DEFAULT 0 CHECK(resume_reset_bytes >= 0)")
             }
             db.execSQL("ALTER TABLE jobs ADD COLUMN $SHARE_LINK_COLUMN")
+            BatchStore.createTables(db)
         } else if (oldVersion in 1..3 && newVersion == DATABASE_VERSION) {
             // The rebuild creates the current shape (share_link included); no ALTER follows it.
             // SQLiteOpenHelper owns the transaction, including the CHECK-constraint rebuild.
@@ -138,6 +142,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = recreate(db)
 
     private fun recreate(db: SQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS batch_items")
+        db.execSQL("DROP TABLE IF EXISTS batches")
         db.execSQL("DROP TABLE IF EXISTS jobs")
         onCreate(db)
     }
@@ -546,7 +552,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
             DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
-        const val DATABASE_VERSION = 6
+        const val DATABASE_VERSION = 7
         private const val SHARE_LINK_COLUMN = "share_link BLOB CHECK(share_link IS NULL OR stage = 'COMPLETED')"
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
 
