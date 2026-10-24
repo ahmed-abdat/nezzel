@@ -383,9 +383,22 @@ class DownloadCoordinator(
                 try {
                     var command = row.command() ?: error("Invalid job command")
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
-                    val recipe = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:$engineVersion:${YtdlpCommand.ARGV_VERSION}"
+                    val baseRecipe = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:$engineVersion:${YtdlpCommand.ARGV_VERSION}"
+                    val transferEngine = engine.resumeEngine(command, stagingRoot(id))
+                    val recipe = "$baseRecipe:engine=$transferEngine"
+                    // One-time migration: only pre-native jobs can lack an engine marker. Preserve
+                    // their bytes with the same yt-dlp/argv; new jobs always write engine=.
+                    // Native fallback ownership is also durable in staging.
+                    val legacyRecipe = row.resumeRecipe?.let {
+                        ":engine=" !in it && it.substringBefore(':').toIntOrNull() != null &&
+                            it.substringAfter(':') == "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
+                    } == true
+                    val nativeFallback = row.resumeRecipe == "$baseRecipe:engine=native" &&
+                        DirectResume.read(stagingRoot(id))?.native == false
+                    val compatibleRecipe = row.resumeRecipe == recipe ||
+                        (transferEngine == "ytdlp" && (legacyRecipe || nativeFallback))
                     val adopting = row.restartEpoch > 0 || row.hasPartial
-                    if (adopting && row.resumeRecipe != recipe) {
+                    if (adopting && !compatibleRecipe) {
                         check(cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id))
                         check(store.discardInfoJson(id))
                     }
@@ -401,7 +414,7 @@ class DownloadCoordinator(
                     var checkedAt: Long? = null
                     var stale = false
                     var engineReturned = false
-                    var hasPartial = row.hasPartial && row.resumeRecipe == recipe
+                    var hasPartial = row.hasPartial && compatibleRecipe
                     val initial = DownloadProgress(id, row.filename, DownloadPhase.PREPARING,
                         restartEpoch = epoch, hasPartial = hasPartial,
                         mimeType = mime(command.format), qualityHeight = VideoQuality.of(command.format.width, command.format.height))

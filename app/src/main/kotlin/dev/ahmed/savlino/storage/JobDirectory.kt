@@ -2,6 +2,7 @@ package dev.ahmed.savlino.storage
 
 import dev.ahmed.savlino.domain.FilenameSanitizer
 import dev.ahmed.savlino.domain.PartialFileNames
+import dev.ahmed.savlino.domain.DirectResume
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileVisitResult
@@ -48,7 +49,14 @@ class JobDirectory(filesDir: File) : JobDirectories {
                 if (Files.isSymbolicLink(file.toPath()) || file.isFile) Files.delete(file.toPath())
             }
         }
-        if (directory.listFiles()?.all {
+        val sidecar = File(directory, DirectResume.NAME)
+        val record = DirectResume.read(directory)
+        val validRecord = !sidecar.exists() || (record != null && (!record.native ||
+            (File(directory, DirectResume.PART).isFile && directory.listFiles()?.all {
+                it.name in setOf(DirectResume.NAME, DirectResume.PART)
+            } == true && (record.total?.let { File(directory, DirectResume.PART).length() <= it } != false) &&
+                (record.syncedBytes?.let { it <= File(directory, DirectResume.PART).length() } != false))))
+        if (!validRecord || directory.listFiles()?.all {
                 !Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name)
             } != true) {
             job.cleanup()

@@ -592,6 +592,8 @@ internal fun cleanupJobStaging(root: File, id: String): Boolean = try {
 /** Count only real files without following links. Unknown contents are validated before adoption. */
 internal fun stagingBytes(directory: File): Long = try {
     if (directory.absoluteFile != directory.canonicalFile || Files.isSymbolicLink(directory.toPath()) || !directory.isDirectory) 0L
-    else directory.listFiles().orEmpty().filter { !Files.isSymbolicLink(it.toPath()) && it.isFile }
+    else directory.listFiles().orEmpty().filter {
+        !Files.isSymbolicLink(it.toPath()) && it.isFile && it.name != DirectResume.NAME
+    }
         .fold(0L) { bytes, file -> Math.addExact(bytes, file.length()) }
 } catch (_: Exception) { 0L }

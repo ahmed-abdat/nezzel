@@ -39,6 +39,8 @@ interface EngineAdapter {
     fun prefetched(link: ValidatedLink, json: String) = Unit
     /** Clear link history: forget every link's recent result. */
     fun clearRecentLinks() = Unit
+    /** Local selection only; transfer ownership is durable in staging, never inferred from byte names alone. */
+    fun resumeEngine(command: DownloadCommand, directory: File): String = "ytdlp"
     suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult
     fun cancel(operationId: String)
 }

@@ -22,12 +22,17 @@ object YtdlpCommand {
     internal fun isYouTube(source: LinkRevision): Boolean = source.link.host == Host.YOUTUBE
     fun inspect(source: LinkRevision) = listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + NETWORK +
         listOf("--dump-json", "--skip-download", "--", source.link.rawUrl)
-    fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
-        embedAudioTags: Boolean = true): List<String> {
+    /** Shared by both transfer engines before any staging write. */
+    internal fun validateStaging(directory: File): File {
         val root = directory.canonicalFile
         require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory &&
             root.listFiles()?.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile &&
                 PartialFileNames.matches(it.name) } == true) { "Invalid staging directory" }
+        return root
+    }
+    fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
+        embedAudioTags: Boolean = true): List<String> {
+        val root = validateStaging(directory)
         val row = command.format
         // Generic direct-file IDs can equal a MIME subtype/container. A bare "mp4" is an extension selector,
         // not an exact ID; filter by the actual returned ID so it cannot silently choose a different format.
