@@ -13,12 +13,16 @@ import androidx.annotation.RequiresApi
 internal object LiveUpdate {
     /** 36.1 (QPR2) is where promotion lands; a plain API 36 phone keeps today's look. */
     val supported: Boolean by lazy {
-        Build.VERSION.SDK_INT >= 36 && try { Build.VERSION.SDK_INT_FULL >= Build.VERSION_CODES_FULL.BAKLAVA_1 } catch (_: LinkageError) { false }
+        Build.VERSION.SDK_INT >= 36 && try {
+            Build.VERSION.SDK_INT_FULL >= Build.VERSION_CODES_FULL.BAKLAVA_1 &&
+                Notification.Builder::class.java.getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType) != null
+        } catch (_: LinkageError) { false } catch (_: ReflectiveOperationException) { false }
     }
 
     /** The user can turn Live Updates off for Nezzel in system settings; then the plain notification stays. */
     @RequiresApi(36)
-    fun canPost(manager: NotificationManager): Boolean = try { manager.canPostPromotedNotifications() } catch (_: Exception) { false }
+    fun canPost(manager: NotificationManager): Boolean =
+        try { manager.canPostPromotedNotifications() } catch (_: Exception) { false } catch (_: LinkageError) { false }
 
     @RequiresApi(36)
     fun apply(context: Context, plain: Notification, spec: LiveSpec): Notification = try {
