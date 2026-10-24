@@ -23,6 +23,8 @@ object UsageKeys {
     const val STATUSES_SAVED = "statuses.saved"
     const val WIDGET_ADDED = "widget.added"
     const val UPDATE_INSTALLED = "update.installed"
+    /** Sites past the local cap of distinct sites between sends. */
+    const val SITE_OTHER = "site.other"
     const val FUNNEL_LINK = "funnel.link"
     const val FUNNEL_OPTIONS = "funnel.options"
     const val FUNNEL_TAPPED = "funnel.tapped"
@@ -41,7 +43,7 @@ object UsageKeys {
     /** Every fixed key; [SITE], [SDK] and [BRAND] are the only patterned ones. */
     val fixed: Set<String> = buildSet {
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
-            STATUSES_OPENED, STATUSES_SAVED, WIDGET_ADDED, UPDATE_INSTALLED,
+            STATUSES_OPENED, STATUSES_SAVED, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
             FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED))
         for (event in events) for ((kind, names) in tiers) for (tier in names) add("dl.$event.$kind.$tier")
         for (path in Path.entries) for (time in optionTimes) add("options.${path.key}.$time")

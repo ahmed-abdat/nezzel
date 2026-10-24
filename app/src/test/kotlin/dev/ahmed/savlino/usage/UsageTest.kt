@@ -9,7 +9,10 @@ import dev.ahmed.savlino.jobs.NezzelApplication
 import dev.ahmed.savlino.report.InboxClient
 import dev.ahmed.savlino.report.Report
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -26,12 +29,14 @@ class UsageTest {
     private val context: Context = RuntimeEnvironment.getApplication()
     private var on = true
     private var answer = true
+    /** When set, every POST waits on it: the switch can flip while a request is in flight. */
+    private var gate: CompletableDeferred<Boolean>? = null
     private val posts = mutableListOf<Pair<String, String>>()
     private var clock = 1_000_000_000_000L
     private val crashDir = File(context.cacheDir, "usage-test-crash").apply { deleteRecursively() }
     private val crashStore = CrashReportStore(crashDir, CrashMetadata("0.5.0", 400, 35)) { clock }
     private val prefs = context.getSharedPreferences("usage-test", Context.MODE_PRIVATE).apply { edit().clear().commit() }
-    private val usage = Usage(prefs, { on }, { path, json -> posts += path to json; answer }, CoroutineScope(Dispatchers.Unconfined),
+    private val usage = Usage(prefs, { on }, { path, json -> posts += path to json; gate?.await() ?: answer }, CoroutineScope(Dispatchers.Unconfined),
         "0.5.0", 400, 35, { listOf("set.theme.dark", UsageKeys.brand("Samsung"), "sdk:35") }, object : Usage.Crashes {
             override fun pending() = crashStore.pending()
             override fun delete() = crashStore.deleteReports()
@@ -142,7 +147,8 @@ class UsageTest {
         assertEquals("brand:other", UsageKeys.brand(""))
         assertEquals("site:bbc.co.uk", UsageKeys.site("https://www.bbc.co.uk/news/1"))
         assertNull(UsageKeys.site("content://media/1"))
-        assertThrows(IllegalArgumentException::class.java) { usage.count("title:secret") }
+        usage.count("title:secret") // Dropped, never thrown on a download path.
+        assertFalse(prefs.all.keys.any { it.contains("title") })
         val p1080 = Format("1", "mp4", hasVideo = true, hasAudio = true, width = 1920, height = 1080)
         assertEquals("dl.started.video.fhd", UsageKeys.download(UsageKeys.Download.STARTED, p1080))
         assertEquals("dl.failed.audio.mp3", UsageKeys.download(UsageKeys.Download.FAILED, Format("2", "mp3", false, true)))
@@ -163,12 +169,72 @@ class UsageTest {
         app.usage.count(UsageKeys.SHARE)
         val crashes = dev.ahmed.savlino.diagnostics.CrashReports.store(app)
         crashes.record(Thread.currentThread(), IllegalStateException())
-        app.chooseHelpImprove(false)
+        app.chooseHelpImprove(false); settle(app)
         assertFalse(app.preferences.helpImprove)
         assertTrue(app.getSharedPreferences("usage", Context.MODE_PRIVATE).all.isEmpty())
         assertNull(crashes.pending())
         app.usage.count(UsageKeys.SHARE)
         assertTrue(app.getSharedPreferences("usage", Context.MODE_PRIVATE).all.isEmpty())
-        app.chooseHelpImprove(true)
+        app.chooseHelpImprove(true); settle(app)
+    }
+
+    private fun settle(app: NezzelApplication) = runBlocking { app.scope.coroutineContext[Job]!!.children.toList().forEach { it.join() } }
+
+    @Test fun crashRecordedWhileOffIsNeverSentAfterSwitchingBackOn() {
+        val app = context as NezzelApplication
+        app.chooseHelpImprove(false); settle(app)
+        val crashes = dev.ahmed.savlino.diagnostics.CrashReports.store(app)
+        crashes.record(Thread.currentThread(), IllegalStateException())
+        app.chooseHelpImprove(true); settle(app)
+        assertNull(crashes.pending())
+    }
+
+    @Test fun switchingOffWhileAFailurePostIsInFlightKeepsNothing() = runBlocking {
+        gate = CompletableDeferred()
+        usage.failed(Report.DOWNLOAD, "Failed", link, null)
+        on = false; usage.clear()
+        gate!!.complete(false)
+        assertTrue(usage.queued().isEmpty())
+        assertTrue(prefs.all.isEmpty())
+    }
+
+    @Test fun switchingOffDuringTheDailySendStopsItAndKeepsNothing() = runBlocking {
+        usage.count(UsageKeys.SHARE)
+        answer = false; usage.failed(Report.DOWNLOAD, "Failed", link, null); answer = true
+        crashStore.record(Thread.currentThread(), IllegalStateException())
+        gate = CompletableDeferred(); posts.clear()
+        val run = CoroutineScope(Dispatchers.Unconfined).launch { usage.sendDaily() }
+        assertEquals(listOf(InboxClient.USAGE), posts.map { it.first })
+        on = false; usage.clear()
+        gate!!.complete(true); run.join()
+        assertEquals(1, posts.size) // Neither the crash nor the queued report went out.
+        assertTrue(prefs.all.isEmpty())
+        assertNull(crashStore.pending())
+    }
+
+    @Test fun refusedPostsUseNoDailySlotAndADailyRunStaysUnderTheInboxLimit() = runBlocking {
+        answer = false
+        repeat(Usage.MAX_REPORTS) { usage.failed(Report.DOWNLOAD, "Failed", link, null) }
+        assertEquals(Usage.MAX_REPORTS, usage.queued().size)
+        answer = true; posts.clear()
+        usage.failed(Report.DOWNLOAD, "Unsupported", link, null)
+        assertEquals(1, posts.size) // The refused posts burned no slot.
+        posts.clear()
+        usage.sendDaily()
+        assertEquals(Usage.MAX_POSTS, posts.size)
+        assertEquals(Usage.MAX_REPORTS - (Usage.MAX_POSTS - 1), usage.queued().size)
+        answer = false; posts.clear()
+        usage.sendDaily()
+        assertEquals(1, posts.size) // A refused usage ping ends the run.
+    }
+
+    @Test fun distinctSitesAreCappedBetweenSends() = runBlocking {
+        repeat(Usage.MAX_SITES + 5) { usage.site("https://www.site$it.com/x") }
+        usage.site("https://site0.com/y")
+        usage.sendDaily()
+        val sent = counts(usagePosts().single())
+        assertEquals(Usage.MAX_SITES, sent.keys.count { it.startsWith(UsageKeys.SITE) })
+        assertEquals(5, sent[UsageKeys.SITE_OTHER])
+        assertEquals(2, sent["site:site0.com"])
     }
 }

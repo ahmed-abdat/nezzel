@@ -45,15 +45,19 @@ class Usage(
     }
 
     private val lock = Any()
+    /** Bumped by [clear]: a send or queue write begun before the switch went off never lands after it. */
+    private var generation = 0L
 
+    /** Unknown keys are dropped (a hook must never break a download); at most [MAX_SITES] sites, the rest as one. */
     override fun count(key: String) {
-        require(UsageKeys.allowed(key))
-        if (!enabled()) return
+        if (!UsageKeys.allowed(key) || !enabled()) return
         synchronized(lock) {
-            expire()
+            if (!enabled()) return
+            val stored = if (key.startsWith(UsageKeys.SITE) && !prefs.contains(COUNT + key) &&
+                prefs.all.keys.count { it.startsWith(COUNT + UsageKeys.SITE) } >= MAX_SITES) UsageKeys.SITE_OTHER else key
             val edit = prefs.edit()
             if (!prefs.contains(SINCE)) edit.putLong(SINCE, now())
-            edit.putInt(COUNT + key, (prefs.getInt(COUNT + key, 0) + 1).coerceAtMost(MAX_N)).apply()
+            edit.putInt(COUNT + stored, (prefs.getInt(COUNT + stored, 0) + 1).coerceAtMost(MAX_N)).apply()
         }
     }
 
@@ -64,28 +68,37 @@ class Usage(
         val report = Report.failure(link, code, appVersion, engineVersion, sdk, stage)
         if (report.link == null || report.code == null) return
         val json = report.json()
+        val started = synchronized(lock) { generation }
         scope.launch {
-            val sent = takeDailySlot() && post(InboxClient.REPORT, json)
-            if (!sent && enabled()) queue(json)
+            if (!on(started)) return@launch
+            if (slotLeft() && post(InboxClient.REPORT, json)) takeSlot() else queue(json, started)
         }
     }
 
-    /** Switch off: nothing kept, nothing sent. */
-    fun clear() = synchronized(lock) {
-        prefs.edit().clear().commit()
-        crash.delete()
+    /** Switch off: nothing kept, nothing sent. Call off the main thread. */
+    fun clear() {
+        synchronized(lock) {
+            generation++
+            prefs.edit().clear().commit()
+        }
+        dropCrash()
     }
+
+    /** A crash recorded while the switch was off is never sent later. */
+    fun dropCrash() { try { crash.delete() } catch (_: Exception) {} }
 
     /**
      * The daily send: one usage ping (counters subtracted only after the inbox's 204, so counts added meanwhile stay),
-     * the pending crash, then queued failures up to the day's cap. A failed POST keeps its part for the next day.
+     * the pending crash, then queued failures up to the day's cap. The first failed POST (offline, 429) ends the run and
+     * keeps the rest; at most [MAX_POSTS] requests, under the inbox's per-minute limit.
      */
     suspend fun sendDaily() {
         if (!enabled()) { clear(); return }
-        synchronized(lock) { expire() }
-        val counts = synchronized(lock) { counters() }
-        val payload = payload(counts)
-        if (post(InboxClient.USAGE, payload.second)) synchronized(lock) {
+        val started = synchronized(lock) { expire(); generation }
+        val payload = payload(synchronized(lock) { counters() })
+        if (!on(started) || !post(InboxClient.USAGE, payload.second)) return
+        synchronized(lock) {
+            if (generation != started) return
             val edit = prefs.edit()
             for ((key, n) in payload.first) {
                 val left = prefs.getInt(COUNT + key, 0) - n
@@ -93,15 +106,23 @@ class Usage(
             }
             edit.putLong(SINCE, now()).commit()
         }
+        var posts = 1
         crash.pending()?.let { text ->
             val report = Report.crash(text, appVersion, crash.engineVersion(), sdk)
-            if (report.trace != null && enabled() && post(InboxClient.REPORT, report.json())) crash.delete()
+            if (report.trace == null || !on(started)) return
+            if (!post(InboxClient.REPORT, report.json())) return
+            posts++
+            dropCrash()
         }
         for (json in queued()) {
-            if (!enabled() || !takeDailySlot()) break
-            if (post(InboxClient.REPORT, json)) unqueue(json) else break
+            if (posts >= MAX_POSTS || !on(started) || !slotLeft()) break
+            posts++
+            if (!post(InboxClient.REPORT, json)) break
+            synchronized(lock) { if (generation == started) { unqueue(json); takeSlot() } }
         }
     }
+
+    private fun on(started: Long) = synchronized(lock) { generation == started && enabled() }
 
     /** Counted keys plus once-per-ping keys, at most [MAX_KEYS]: fixed keys first, then the most counted sites. */
     internal fun payload(counts: Map<String, Int>): Pair<Map<String, Int>, String> {
@@ -122,7 +143,7 @@ class Usage(
         else key.removePrefix(COUNT).takeIf(UsageKeys::allowed)?.let { it to value }
     }.toMap()
 
-    /** Counters unsent for 7 days and queued reports older than that are dropped. */
+    /** Counters unsent for 7 days and queued reports older than that are dropped. Only on send and queue. */
     private fun expire() {
         val since = prefs.getLong(SINCE, -1)
         val edit = prefs.edit()
@@ -130,8 +151,7 @@ class Usage(
             prefs.all.keys.filter { it.startsWith(COUNT) }.forEach(edit::remove)
             edit.remove(SINCE)
         }
-        val fresh = queuedEntries().filter { now() - it.first in 0..MAX_AGE_MS }
-        edit.putString(QUEUE, JSONArray(fresh.map { JSONObject().put("at", it.first).put("json", it.second) }).toString())
+        writeQueue(edit, queuedEntries().filter { now() - it.first in 0..MAX_AGE_MS })
         edit.commit()
     }
 
@@ -140,30 +160,44 @@ class Usage(
         (0 until array.length()).map { array.getJSONObject(it).let { o -> o.getLong("at") to o.getString("json") } }
     } catch (_: org.json.JSONException) { emptyList() }
 
+    private fun writeQueue(edit: SharedPreferences.Editor, entries: List<Pair<Long, String>>) =
+        edit.putString(QUEUE, JSONArray(entries.map { JSONObject().put("at", it.first).put("json", it.second) }).toString())
+
     internal fun queued(): List<String> = synchronized(lock) { queuedEntries().map { it.second } }
 
-    private fun queue(json: String) = synchronized(lock) {
-        val entries = (queuedEntries() + (now() to json)).takeLast(MAX_REPORTS)
-        prefs.edit().putString(QUEUE, JSONArray(entries.map { JSONObject().put("at", it.first).put("json", it.second) }).toString()).commit()
+    /** Kept for the daily send, unless the switch went off since the report was made. */
+    private fun queue(json: String, started: Long) {
+        synchronized(lock) {
+            if (generation != started || !enabled()) return
+            expire()
+            val edit = prefs.edit()
+            writeQueue(edit, (queuedEntries() + (now() to json)).takeLast(MAX_REPORTS))
+            edit.commit()
+        }
     }
 
-    private fun unqueue(json: String) = synchronized(lock) {
+    private fun unqueue(json: String) {
         val entries = queuedEntries().toMutableList().apply { indexOfFirst { it.second == json }.takeIf { it >= 0 }?.let(::removeAt) }
-        prefs.edit().putString(QUEUE, JSONArray(entries.map { JSONObject().put("at", it.first).put("json", it.second) }).toString()).commit()
+        val edit = prefs.edit(); writeQueue(edit, entries); edit.commit()
     }
 
-    /** At most [MAX_REPORTS] failure reports per UTC day, immediate and queued together. */
-    private fun takeDailySlot(): Boolean = synchronized(lock) {
-        val day = now() / DAY_MS
-        val used = if (prefs.getLong(SLOT_DAY, -1) == day) prefs.getInt(SLOTS, 0) else 0
-        if (used >= MAX_REPORTS) return false
-        prefs.edit().putLong(SLOT_DAY, day).putInt(SLOTS, used + 1).commit()
+    /** At most [MAX_REPORTS] failure reports per UTC day, immediate and queued together; a slot is used only on a 204. */
+    private fun used(): Int = synchronized(lock) { if (prefs.getLong(SLOT_DAY, -1) == now() / DAY_MS) prefs.getInt(SLOTS, 0) else 0 }
+    private fun slotLeft() = used() < MAX_REPORTS
+    private fun takeSlot() {
+        synchronized(lock) {
+            if (!enabled()) return
+            prefs.edit().putLong(SLOT_DAY, now() / DAY_MS).putInt(SLOTS, used() + 1).apply()
+        }
     }
 
     companion object {
         const val MAX_KEYS = 200
         const val MAX_N = 10_000
         const val MAX_REPORTS = 20
+        const val MAX_SITES = 50
+        /** Requests per daily run; the inbox allows 10 a minute per address. */
+        const val MAX_POSTS = 8
         private const val DAY_MS = 86_400_000L
         const val MAX_AGE_MS = 7 * DAY_MS
         private const val COUNT = "c:"

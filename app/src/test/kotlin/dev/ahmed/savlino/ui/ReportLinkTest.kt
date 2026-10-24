@@ -105,6 +105,18 @@ class ReportLinkTest {
         assertTrue(offline.failures.isEmpty())
     }
 
+    @Test fun automaticallyReadCopiedLinkIsNotReportedUntilThePersonChecksIt() {
+        val usage = Recorder()
+        val vm = LinkViewModel(SavedStateHandle(), engine = FakeEngine(InspectResult.Failure(DownloadError.Failed)),
+            currentEngineVersion = { "fixture-engine" }, usage = usage, rememberHandledClipboard = { true })
+        vm.suggest(true, true, true) { link }; shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+        assertTrue(usage.failures.isEmpty())
+        assertFalse(UsageKeys.CLIP_ACCEPTED in usage.counts)
+        vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(listOf(listOf(Report.OPTIONS, "Failed", link, "fixture-engine")), usage.failures)
+    }
+
     @Test fun imageFailureUsesItsEnumNameAndUnknownEngineWithoutProbing() {
         val usage = Recorder()
         val vm = LinkViewModel(SavedStateHandle(), images = FakeImages {

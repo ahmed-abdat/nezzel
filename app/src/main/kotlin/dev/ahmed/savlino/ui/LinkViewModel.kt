@@ -284,7 +284,10 @@ class LinkViewModel(
         private set(value) {
             val fresh = value !== options
             options = value; publishPendingLink()
-            if (fresh) reportCode(value)?.let { usage.failed(Report.OPTIONS, it, currentSource()?.link?.rawUrl, engineVersion()) }
+            // A copied link read automatically stays memory-only: it is reported only once the person checks it.
+            if (fresh && !automaticClipboardDraft) reportCode(value)?.let {
+                usage.failed(Report.OPTIONS, it, currentSource()?.link?.rawUrl, engineVersion())
+            }
         }
     private fun hasPendingLink() = pendingShare != null || suggestion != null || linkQueue != null ||
         optionsState is OptionsState.Checking || optionsState is OptionsState.Ready || (optionsState == OptionsState.Hidden && LinkInput.parse(text) != null)
@@ -1217,7 +1220,7 @@ class LinkViewModel(
         }
     }
     private fun acceptSuggestion(offered: ValidatedLink, automatically: Boolean) {
-        usage.count(UsageKeys.CLIP_ACCEPTED)
+        if (!automatically) usage.count(UsageKeys.CLIP_ACCEPTED)
         suggestion = null
         updateText(offered.rawUrl, persist = !automatically)
         automaticClipboardDraft = automatically

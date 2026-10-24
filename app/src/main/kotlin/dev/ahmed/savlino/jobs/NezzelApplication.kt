@@ -35,7 +35,8 @@ open class NezzelApplication : Application(), Configuration.Provider {
     /** Off clears every counter, queued report and the crash file at once; the daily work stays only for what is on. */
     fun chooseHelpImprove(on: Boolean) {
         preferences.helpImprove = on
-        if (!on) usageStore.clear()
+        // Off: drop counters, queued reports and the crash file. On again: a crash recorded while off is never sent.
+        scope.launch { if (on) usageStore.dropCrash() else usageStore.clear() }
         appUpdates.reschedule()
     }
     val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress) }
