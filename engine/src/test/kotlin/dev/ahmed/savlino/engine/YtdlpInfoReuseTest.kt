@@ -14,11 +14,14 @@ class YtdlpInfoReuseTest {
     private class Runtime(private val json: String) : YtdlpRuntime {
         override val initialization = EngineInitialization()
         val transfers = mutableListOf<List<String>>()
+        /** Every --dump-json call: the inspection's and the page reads of a download without its info JSON. */
+        var extractions = 0
+        var page: () -> String = { json }
         var action: (List<String>, (String) -> Unit) -> Unit = { args, _ -> output(args) }
         override fun initialize() = Unit
         override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
             if ("--version" in args) return "version"
-            if ("--dump-json" in args) return json
+            if ("--dump-json" in args) { extractions++; return page() }
             transfers += args; action(args, line); return ""
         }
         override fun destroy(processId: String) = true
@@ -30,6 +33,11 @@ class YtdlpInfoReuseTest {
                 File(output.parentFile, "result-path.txt").writeText(output.path)
             }
         }
+    }
+    /** Transfers from the checked page JSON (stored under the job), never from the URL. */
+    private fun assertPage(args: List<String>) {
+        assertFalse(source.link.rawUrl in args)
+        assertTrue(File(args[args.indexOf("--load-info-json") + 1]).name.endsWith(".json"))
     }
     private fun confirm(inspection: Inspection, id: String = "job") =
         assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(id, inspection, source, "18", "title")).command
@@ -51,7 +59,7 @@ class YtdlpInfoReuseTest {
         assertEquals("18", args[args.indexOf("-f") + 1])
         assertEquals(json, File(args[args.indexOf("--load-info-json") + 1]).readText())
     }
-    @Test fun missingStaleAndClockRollbackUseUrlWithoutExtendingInspectAge() = runBlocking {
+    @Test fun missingStaleAndClockRollbackReadThePageAgainWithoutExtendingInspectAge() = runBlocking {
         for (age in listOf(3_600_000L, 3_600_001L, -1L)) {
             var now = 10_000_000L
             val runtime = Runtime(json)
@@ -61,13 +69,13 @@ class YtdlpInfoReuseTest {
             engine.prepareDownload(command)
             now += age
             assertIs<TransferResult.Success>(engine.download(command, temp.newFolder()) {})
-            assertEquals(source.link.rawUrl, runtime.transfers.single().last())
-            assertFalse("--load-info-json" in runtime.transfers.single())
+            assertPage(runtime.transfers.single())
+            assertEquals(2, runtime.extractions)
         }
         val runtime = Runtime(json)
         assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
             .download(confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true)))), temp.newFolder()) {})
-        assertEquals(source.link.rawUrl, runtime.transfers.single().last())
+        assertPage(runtime.transfers.single())
     }
     @Test fun forbiddenAndExpiredUrlsBeforeBytesFallBackExactlyOnce() = runBlocking {
         for (message in listOf("ERROR: unable to download video data: HTTP Error 403: Forbidden",
@@ -85,8 +93,8 @@ class YtdlpInfoReuseTest {
             assertIs<TransferResult.Success>(engine.download(command, temp.newFolder()) {})
             assertEquals(2, runtime.transfers.size)
             assertTrue("--load-info-json" in runtime.transfers.first())
-            assertFalse("--load-info-json" in runtime.transfers.last())
-            assertEquals(source.link.rawUrl, runtime.transfers.last().last())
+            assertPage(runtime.transfers.last())
+            assertEquals(2, runtime.extractions)
         }
     }
     @Test fun secondFailureNeverLoopsAndCancellationSuppressesFallback() = runBlocking {
@@ -121,7 +129,7 @@ class YtdlpInfoReuseTest {
                 }
                 assertTrue(dir.list()!!.isEmpty())
                 assertEquals("18", args[args.indexOf("-f") + 1])
-                assertFalse("--load-info-json" in args)
+                assertPage(args)
                 line("nezzel:18:1:1000:NA")
                 Runtime.output(args)
             }
@@ -161,7 +169,7 @@ class YtdlpInfoReuseTest {
         assertTrue(dir.list()!!.isEmpty())
     }
 
-    @Test fun resumeAfterInfoJsonExpiredWipesPartialsAndExtractsFromUrl() = runBlocking {
+    @Test fun resumeAfterInfoJsonExpiredWipesPartialsAndReadsThePageAgain() = runBlocking {
         var now = 10_000_000L
         val runtime = Runtime(json)
         val cache = YtdlpInfoCache(temp.newFolder()) { now }
@@ -175,8 +183,7 @@ class YtdlpInfoReuseTest {
         val events = mutableListOf<EngineEvent>()
         runtime.action = { args, line ->
             assertTrue(dir.list()!!.isEmpty())
-            assertFalse("--load-info-json" in args)
-            assertTrue(source.link.rawUrl in args)
+            assertPage(args)
             line("nezzel:18:1:1000:NA")
             Runtime.output(args)
         }
@@ -230,7 +237,8 @@ class YtdlpInfoReuseTest {
         val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
         engine.prepareDownload(command); cache.remove(command.jobId)
         assertIs<TransferResult.Success>(engine.download(command, temp.newFolder()) {})
-        assertFalse("--load-info-json" in runtime.transfers.single())
+        assertPage(runtime.transfers.single())
+        assertEquals(2, runtime.extractions)
     }
     @Test fun cachedCommandDiagnosticsNeverLogRawJsonOrItsFields() {
         val logs = mutableListOf<String>()
@@ -250,7 +258,9 @@ class YtdlpInfoReuseTest {
         now += 3_600_000
         engine.download(confirm(inspection), temp.newFolder()) {}
         assertEquals(2, runtime.transfers.size)
-        assertTrue(runtime.transfers.all { "--load-info-json" !in it && it.last() == source.link.rawUrl })
+        // Each one read the page again (2 checks after the inspection) instead of borrowing its JSON.
+        assertEquals(3, runtime.extractions)
+        runtime.transfers.forEach(::assertPage)
     }
     @Test fun runtimePreservesExpiryFlagWithoutKeepingPrivateMessages() {
         val diagnostics = YtdlpDiagnostics()

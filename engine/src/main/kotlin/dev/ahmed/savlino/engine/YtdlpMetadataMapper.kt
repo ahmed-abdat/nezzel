@@ -10,7 +10,12 @@ internal class UnsupportedMetadataException(val emptyResult: Boolean = false) : 
 /** Pure JVM mapping. Missing codecs stay unknown; narrowly recover direct files and explicit HLS stream roles. */
 object YtdlpMetadataMapper {
     private val json = ObjectMapper()
-    fun map(metadata: String, source: LinkRevision, engineVersion: String): Inspection {
+    private class Parsed(val root: JsonNode, val genericDirect: JsonNode?, val rows: List<Pair<Format, JsonNode>>)
+
+    /** The returned streams before pairing or derived rows, by format id: what a confirmed row was built from. */
+    internal fun streams(metadata: String): Map<String, Format> = parse(metadata).rows.associate { it.first.id to it.first }
+
+    private fun parse(metadata: String): Parsed {
         // readTree(String) silently ignores trailing documents. Consume the entire stdout stream.
         val documents = json.factory.createParser(metadata).use { parser ->
             buildList<JsonNode> {
@@ -52,7 +57,15 @@ object YtdlpMetadataMapper {
                 }
         // X animated GIF (silent): keep only its own video rows, so no audio partner, M4A or MP3 is ever derived.
         val animatedGif = returned.any { it.first.animatedGif }
-        val parsed = if (animatedGif) returned.filter { it.first.animatedGif } else returned
+        return Parsed(root, genericDirect, if (animatedGif) returned.filter { it.first.animatedGif } else returned)
+    }
+
+    fun map(metadata: String, source: LinkRevision, engineVersion: String): Inspection {
+        val parsing = parse(metadata)
+        val root = parsing.root
+        val genericDirect = parsing.genericDirect
+        val parsed = parsing.rows
+        val animatedGif = parsed.any { it.first.animatedGif }
         // HLS rows carry only peak manifest BANDWIDTH; prefer a direct row of the same height and codec family.
         fun hls(node: JsonNode) = node.text("protocol")?.startsWith("m3u8") == true
         fun twin(row: Format) = row.height to VideoCodecs.family(row.videoCodec)
