@@ -54,6 +54,9 @@ class DownloadsScreenWarningsTest {
             assertTrue(all.contains(context.getString(R.string.check_needs_look)))
             assertTrue(all.contains(context.getString(R.string.check_problem_no_sound)))
             assertTrue(all.contains(context.getString(R.string.check_problem_damaged)))
+            // Same display title as the library row: no extension, also when the file is not listed.
+            assertFalse(all.any { it.contains("Movie.mp4") || it.contains("Other.mp4") })
+            assertTrue(all.contains(dev.ahmed.savlino.locale.NezzelFormat.firstStrong("Other")))
             // Try again only where the link is kept: one button for two rows.
             val tryAgain = nodes(a).filter { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(context.getString(R.string.try_again)) == true }
             assertEquals(1, tryAgain.size)

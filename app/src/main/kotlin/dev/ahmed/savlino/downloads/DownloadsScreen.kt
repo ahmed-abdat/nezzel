@@ -288,7 +288,8 @@ fun DownloadsScreen(
                 if (warnings.isNotEmpty()) {
                     item(key = "warnings-header") { SectionHeader(stringResource(R.string.check_needs_look), error = true) }
                     items(warnings, key = { "warning-${it.jobId}" }) { warning ->
-                        CheckWarningRow(warning, { onTryAgain(warning.jobId) }, { onDismissWarning(warning.jobId) },
+                        CheckWarningRow(warning, (libraryLoad as? LibraryLoadState.Ready)?.rows?.firstOrNull { it.uri == warning.uri },
+                            { onTryAgain(warning.jobId) }, { onDismissWarning(warning.jobId) },
                             Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)))
                     }
                 }
