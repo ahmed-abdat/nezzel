@@ -479,6 +479,14 @@ class BatchFeederTest {
         assertEquals(2, jobs.all().size)
     }
 
+    @Test fun aQueuedLinkHandsItsInspectedThumbnailToTheRunningRow() = runBlocking {
+        SheetArtwork.clear()
+        assertTrue(batches.createLinks("links", "1 link", links("https://www.tiktok.com/@a/video/1"), Preset.BALANCED))
+        engine.thumbnail = "https://example.com/t.jpg"
+        feeder().tick()
+        assertEquals("https://example.com/t.jpg", SheetArtwork.sourceOf(engine.inspections.single().inspectionId))
+    }
+
     @Test fun aPlaylistItemWithNoVideoStaysSkippedAsNoVideo() = runBlocking {
         create(1)
         engine.failFor = { DownloadError.NoVideo }
@@ -516,12 +524,14 @@ class BatchFeederTest {
         var calls = 0
         var duringInspect: suspend () -> Unit = {}
         var onCancel: (String) -> Unit = {}
+        var thumbnail: String? = null
+        val inspections = mutableListOf<Inspection>()
         override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
             duringInspect()
             calls++
             (failure ?: failFor(source))?.let { return InspectResult.Failure(it) }
             return InspectResult.Success(Inspection(source, "fixture", formats,
-                if (failAfter != null && calls > failAfter!!) emptyList() else presets))
+                if (failAfter != null && calls > failAfter!!) emptyList() else presets, thumbnailUrl = thumbnail).also { inspections += it })
         }
         override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult = error("No transfers in feeder tests")
         override fun cancel(operationId: String) = onCancel(operationId)

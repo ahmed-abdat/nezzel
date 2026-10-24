@@ -130,6 +130,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                             val confirmed = DownloadCommand.confirm(item.jobId, result.inspection, source, format.id, item.title)
                             if (confirmed !is ConfirmResult.Confirmed) batches.finish(item, BatchItemState.FAILED, DownloadError.FormatExpired)
                             else {
+                                // Link items have no list artwork: the running row fetches the inspected thumbnail late.
+                                result.inspection.thumbnailUrl?.let { SheetArtwork.source(result.inspection.inspectionId, it) }
                                 try {
                                     actions.enqueue(confirmed.command, actualPreset)
                                 } catch (cancelled: CancellationException) { throw cancelled }
