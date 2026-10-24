@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate nezzel-update.json from the APK and marked EN/AR notes, optionally FR (stdlib, -I safe)."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -31,7 +32,7 @@ def notes_block(body, language):
     return notes
 
 
-def generate(version, code, apk_path, notes_path):
+def generate(version, code, apk_path, notes_path, important=False):
     if not SEMVER.fullmatch(version):
         raise ValueError("invalid semver (omit the v prefix)")
     prerelease = version.split("+", 1)[0].partition("-")[2]
@@ -57,6 +58,8 @@ def generate(version, code, apk_path, notes_path):
                 "notes": {language: notes_block(body, language) for language in ("en", "ar")}}
     if "<!-- nezzel:notes:fr -->" in body:
         manifest["notes"]["fr"] = notes_block(body, "fr")
+    if important:
+        manifest["important"] = True
     output = json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n"
     if len(output.encode("utf-8")) > 64 * 1024:
         raise ValueError("manifest exceeds 64 KiB")
@@ -64,11 +67,15 @@ def generate(version, code, apk_path, notes_path):
 
 
 def main():
-    if len(sys.argv) != 5:
-        print("usage: update-manifest.py <version> <versionCode> <apk-path> <notes.md>", file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("version")
+    parser.add_argument("versionCode")
+    parser.add_argument("apk_path")
+    parser.add_argument("notes_path")
+    parser.add_argument("--important", action="store_true", help="mark the release important (daily reminders and a sheet on each app open)")
+    args = parser.parse_args()
     try:
-        output = generate(*sys.argv[1:])
+        output = generate(args.version, args.versionCode, args.apk_path, args.notes_path, args.important)
     except (OSError, ValueError, UnicodeError) as error:
         print("update-manifest: " + str(error), file=sys.stderr)
         return 1

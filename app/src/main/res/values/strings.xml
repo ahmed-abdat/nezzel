@@ -409,12 +409,15 @@
     <string name="update_done">Updated to %1$s</string>
     <string name="settings_updates_heading">App updates</string>
     <string name="settings_updates_auto">Look for new versions</string>
-    <string name="settings_updates_auto_body">Once a day. Nothing installs without your OK</string>
+    <string name="settings_updates_auto_body">Checks twice a day. Nothing installs without your OK</string>
     <string name="settings_updates_check_now">Check now</string>
     <string name="update_latest">You have the latest version</string>
     <string name="update_check_failed">Couldn\'t check for updates — try again later</string>
     <string name="update_channel">App updates</string>
     <string name="update_notification_title">Nezzel %1$s is ready</string>
+    <string name="update_notification_ready">Ready to install. Tap to update</string>
+    <string name="update_later">Later</string>
+    <string name="update_badge_description">Update available</string>
     <string name="update_notification_text">Tap to see what\'s new and update</string>
     <string name="settings_updates_last_checked">Last checked</string>
     <string name="whats_new_title">What\'s new in Nezzel %1$s</string>

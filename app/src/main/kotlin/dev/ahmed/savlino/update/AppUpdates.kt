@@ -2,6 +2,9 @@ package dev.ahmed.savlino.update
 
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.os.BatteryManager
 import android.os.storage.StorageManager
 import androidx.work.*
 import dev.ahmed.savlino.BuildConfig
@@ -24,6 +27,13 @@ internal fun hasUpdateSpace(context: Context, size: Long, allocatable: () -> Lon
 }, usable: () -> Long = { context.cacheDir.usableSpace }): Boolean =
     (try { allocatable() } catch (_: Exception) { usable() }) >= requiredUpdateSpace(size)
 
+internal fun canPrepareUpdate(context: Context): Boolean = try {
+    val network = context.getSystemService(ConnectivityManager::class.java)
+    val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    network.activeNetwork != null && !network.isActiveNetworkMetered &&
+        battery != null && !battery.getBooleanExtra(BatteryManager.EXTRA_BATTERY_LOW, true)
+} catch (_: Exception) { false }
+
 enum class UpdateStage { IDLE, DOWNLOADING, VERIFYING, READY, INSTALLING, ERROR }
 enum class UpdateFailure { NETWORK, SPACE, VERIFY, INSTALL }
 enum class UpdateCheck { NONE, CHECKING, LATEST, AVAILABLE, FAILED }
@@ -35,17 +45,19 @@ class WhatsNew(val version: String, val english: List<String>, val arabic: List<
     }
 }
 data class AppUpdateState(val automatic: Boolean = true, val release: Release? = null, val skipped: Long? = null,
-    val dismissed: Boolean = false, val check: UpdateCheck = UpdateCheck.NONE, val stage: UpdateStage = UpdateStage.IDLE,
+    val dismissedAt: Long? = null, val check: UpdateCheck = UpdateCheck.NONE, val stage: UpdateStage = UpdateStage.IDLE,
     val bytes: Long = 0, val failure: UpdateFailure? = null, val transfer: Release? = null,
-    val confirmation: Intent? = null, val lastChecked: Long? = null, val whatsNew: WhatsNew? = null) {
+    val confirmation: Intent? = null, val lastChecked: Long? = null, val whatsNew: WhatsNew? = null,
+    val offerSheet: Release? = null) {
     fun badge(current: Long) = release?.let { UpdatePolicy.offer(it.code, current, skipped) } == true
-    fun card(current: Long) = !dismissed && badge(current)
+    fun card(current: Long, now: Long = System.currentTimeMillis()) =
+        badge(current) && (dismissedAt == null || now - dismissedAt >= UpdatePolicy.REMINDER_AGE)
 }
 
 /** Process-owned work; no Activity or file survives as an authorization to install. */
 class AppUpdates internal constructor(private val context: Context, private val scope: CoroutineScope,
-    private val httpFactory: () -> UpdateHttp) {
-    constructor(context: Context, scope: CoroutineScope) : this(context, scope, { UpdateHttp(BuildConfig.VERSION_NAME) })
+    private val now: () -> Long = System::currentTimeMillis, private val httpFactory: (count: Boolean) -> UpdateHttp) {
+    constructor(context: Context, scope: CoroutineScope) : this(context, scope, httpFactory = { count -> UpdateHttp(BuildConfig.VERSION_NAME, count = count) })
     val available = UpdatePolicy.enabled(context.packageName)
     internal val prefs = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
     private val appPrefs = AppPreferences(context)
@@ -55,7 +67,9 @@ class AppUpdates internal constructor(private val context: Context, private val 
         lastChecked = prefs.getLong("success", 0).takeIf { prefs.contains("success") },
         whatsNew = readWhatsNew()))
     val state: StateFlow<AppUpdateState> = mutable.asStateFlow()
-    init { currentNotes() } // Discard notes retained by an older build, even before About opens
+    private var foreground = false
+    private var handledInOpen: Long? = null
+    init { currentNotes(); refreshPresentation() } // Discard notes retained by an older build, even before About opens
     private val checkGate = Mutex()
     private val filesGate = Mutex()
     private val scheduleLock = Any()
@@ -107,15 +121,16 @@ class AppUpdates internal constructor(private val context: Context, private val 
         mutable.update { it.copy(automatic = value) }
         schedule()
         if (!value) UpdateNotifications(context).cancel()
+        refreshPresentation()
     }
     // Reads the switch under the lock, so a toggle during start-up's background schedule still ends in the switch's state.
     private fun schedule(): Unit = synchronized(scheduleLock) {
         val work = WorkManager.getInstance(context)
-        // The same daily work carries the usage send, so it stays while either switch is on.
+        // The same periodic work carries the usage send, so it stays while either switch is on.
         if (!available || !appPrefs.appUpdates && !appPrefs.helpImprove) { work.cancelUniqueWork(WORK); return }
-        work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<AppUpdateWorker>(24, TimeUnit.HOURS)
-                .setInitialDelay(DAY + updateCheckJitterMillis(), TimeUnit.MILLISECONDS)
+        work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<AppUpdateWorker>(12, TimeUnit.HOURS)
+                .setInitialDelay(UpdatePolicy.CHECK_AGE + updateCheckJitterMillis(), TimeUnit.MILLISECONDS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
                 .build())
     }
@@ -123,52 +138,111 @@ class AppUpdates internal constructor(private val context: Context, private val 
     fun checkNow() { scope.launch { check(manual = true) } }
     suspend fun check(manual: Boolean, notify: Boolean = false) = checkGate.withLock {
         if (!available || (!manual && !appPrefs.appUpdates)) return@withLock
-        if (!manual && prefs.contains("success") && System.currentTimeMillis() - prefs.getLong("success", 0) <= DAY) {
-            if (notify) postNotification()
+        if (!manual && prefs.contains("success") && now() - prefs.getLong("success", 0) <= UpdatePolicy.CHECK_AGE) {
+            if (notify) notifyInBackground()
             return@withLock
         }
         if (manual) mutable.update { it.copy(check = UpdateCheck.CHECKING) }
         try {
-            val (parsed, bytes, format) = withContext(Dispatchers.IO) { httpFactory().use { it.latestRelease() } }
+            // The site counts phones per day, so only the first check of a UTC day goes through it.
+            val day = now() / UpdatePolicy.DAY
+            val count = prefs.getLong("counted-day", -1) != day
+            val (parsed, bytes, format) = withContext(Dispatchers.IO) { httpFactory(count).use { it.latestRelease() } }
+            if (count && format == "manifest") prefs.edit().putLong("counted-day", day).apply()
             val release = parsed.takeIf { it.code > BuildConfig.VERSION_CODE }
-            val checked = System.currentTimeMillis()
+            val checked = now()
             if (!prefs.edit().putLong("success", checked).putString("release", bytes.toString(Charsets.UTF_8))
                     .putString("release-format", format).commit())
                 throw java.io.IOException()
-            mutable.update { it.copy(release = release, lastChecked = checked, dismissed = if (it.release?.code == release?.code) it.dismissed else false,
+            mutable.update { it.copy(release = release, lastChecked = checked,
                 check = if (manual) { if (release == null) UpdateCheck.LATEST else UpdateCheck.AVAILABLE } else it.check) }
-            if (notify) postNotification()
+            refreshPresentation()
+            if (notify) notifyInBackground()
         } catch (cancelled: CancellationException) {
             if (manual) mutable.update { it.copy(check = UpdateCheck.NONE) }
             throw cancelled
         }
         catch (_: Exception) { if (manual) mutable.update { it.copy(check = UpdateCheck.FAILED) } }
     }
-    @Synchronized internal fun postNotification() {
+    @Synchronized internal fun postNotification(ready: Boolean = false) {
         val release = state.value.release ?: return
         if (UpdatePolicy.notify(context.packageName, appPrefs.appUpdates, release.code, BuildConfig.VERSION_CODE.toLong(),
-                state.value.skipped, prefs.getLong("notified", -1)) && UpdateNotifications(context).post(release))
-            prefs.edit().putLong("notified", release.code).commit()
+                state.value.skipped, prefs.getLong("notified", -1), release.important,
+                prefs.getLong("notified-at-${release.code}", 0).takeIf { prefs.contains("notified-at-${release.code}") }, now()) &&
+            UpdateNotifications(context).post(release, ready))
+            prefs.edit().putLong("notified", release.code).putLong("notified-at-${release.code}", now()).commit()
     }
-    fun dismiss() { mutable.update { it.copy(dismissed = true) } }
+    fun dismiss() {
+        val code = state.value.release?.code ?: return
+        prefs.edit().putLong("dismissed-$code", now()).commit()
+        refreshPresentation()
+    }
+    @Synchronized fun onAppOpen() {
+        if (foreground || !available) return
+        foreground = true
+        handledInOpen = null
+        refreshPresentation()
+    }
+    @Synchronized fun onAppClosed() {
+        foreground = false
+        mutable.update { it.copy(offerSheet = null) }
+    }
+    fun offerSheetShown(code: Long) { prefs.edit().putBoolean("sheet-$code", true).commit() }
+    @Synchronized fun dismissOfferSheet() {
+        handledInOpen = state.value.offerSheet?.code
+        mutable.update { it.copy(offerSheet = null) }
+    }
+    @Synchronized private fun refreshPresentation() {
+        val state = state.value
+        val release = state.release
+        val code = release?.code
+        val offered = state.badge(BuildConfig.VERSION_CODE.toLong())
+        if (code != null && state.automatic && offered && !prefs.contains("offered-$code"))
+            prefs.edit().putLong("offered-$code", now()).commit()
+        val due = code != null && prefs.contains("offered-$code") &&
+            now() - prefs.getLong("offered-$code", 0) >= UpdatePolicy.REMINDER_AGE && !prefs.getBoolean("sheet-$code", false)
+        val sheet = release?.takeIf {
+            foreground && state.automatic && it.code > BuildConfig.VERSION_CODE && (offered || it.important) &&
+                (state.offerSheet?.code == code || handledInOpen != code && (it.important || due))
+        }
+        val dismissedAt = code?.let { c -> prefs.getLong("dismissed-$c", 0).takeIf {
+            prefs.contains("dismissed-$c") && now() - it < UpdatePolicy.REMINDER_AGE
+        } }
+        mutable.update { it.copy(dismissedAt = dismissedAt, offerSheet = sheet) }
+    }
+    /** Uses exactly the foreground transfer/verification path; preparation never authorizes installation. */
+    internal suspend fun notifyInBackground(canPrepare: Boolean = canPrepareUpdate(context)) {
+        val release = state.value.release ?: return
+        if (!appPrefs.appUpdates || !state.value.badge(BuildConfig.VERSION_CODE.toLong())) return
+        if (canPrepare) launchDownload()?.join()
+        val current = state.value
+        postNotification(readyFile != null && current.stage == UpdateStage.READY &&
+            current.transfer?.code == release.code && current.transfer?.digest == release.digest)
+    }
     @Synchronized fun skip(code: Long) {
         if (!available) return
         prefs.edit().putLong("skipped", code).commit()
         mutable.update { it.copy(skipped = code) }
+        refreshPresentation()
         UpdateNotifications(context).cancel()
     }
     @Synchronized fun install() {
         if (installation?.isActive == true) return
         installation = scope.launch { UpdateInstaller.install(context, this@AppUpdates) }
     }
-    fun download() {
-        if (!available || transfer?.isActive == true || state.value.stage == UpdateStage.INSTALLING) return
-        val release = state.value.release ?: return
+    fun download() { launchDownload() }
+    @Synchronized private fun launchDownload(): Job? {
+        if (!available || state.value.stage == UpdateStage.INSTALLING) return null
+        transfer?.takeIf { it.isActive }?.let { return it }
+        val release = state.value.release ?: return null
         transfer = scope.launch(Dispatchers.IO) {
             filesGate.withLock {
                 sweepOnce()
                 if (readyFile != null && state.value.transfer?.code == release.code &&
-                    state.value.transfer?.digest == release.digest) return@withLock
+                    state.value.transfer?.digest == release.digest) {
+                    if (!UpdateVerifier.verify(context, readyFile!!, release)) fail(UpdateFailure.VERIFY)
+                    return@withLock
+                }
                 val resume = partMatches(release)
                 val keep = if (resume) setOf(release.name + ".part", release.name + ".part.json") else emptySet()
                 cleanFiles(keep)
@@ -184,7 +258,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
                             .put("sha256", release.digest).toString().toByteArray())
                         out.fd.sync()
                     }
-                    if (file.length() != release.size) httpFactory().use { client ->
+                    if (file.length() != release.size) httpFactory(false).use { client ->
                         http = client
                         client.download(release, file) { bytes -> mutable.update { it.copy(bytes = bytes) } }
                     }
@@ -217,6 +291,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
                 }
             }
         }
+        return transfer
     }
     fun cancel() {
         val cancelled = transfer
@@ -239,7 +314,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
     internal fun installing() { mutable.update { it.copy(stage = UpdateStage.INSTALLING) } }
     internal fun installed() {
         cleanFiles()
-        mutable.update { it.copy(release = null, transfer = null, stage = UpdateStage.IDLE, confirmation = null) }
+        mutable.update { it.copy(release = null, transfer = null, stage = UpdateStage.IDLE, confirmation = null, offerSheet = null) }
     }
     internal fun cleanFiles(keep: Set<String> = emptySet()) {
         readyFile = null
@@ -310,7 +385,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
     private fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.take(10).any {
         it is android.system.ErrnoException && it.errno == android.system.OsConstants.ENOSPC || it.message?.contains("ENOSPC") == true
     }
-    companion object { const val WORK = "app-updates"; private const val DAY = 86_400_000L; internal const val MARGIN = 64L * 1024 * 1024 }
+    companion object { const val WORK = "app-updates"; internal const val MARGIN = 64L * 1024 * 1024 }
 }
 
 class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {

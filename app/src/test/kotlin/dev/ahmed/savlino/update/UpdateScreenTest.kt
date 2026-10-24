@@ -234,7 +234,7 @@ class UpdateScreenTest {
         renderThemed({ nodes(it) }, {
             dev.ahmed.savlino.downloads.DownloadNavigation("Home", emptyList(), "en", offered) {}
         }) { a ->
-            fun badges() = nodes(a).count { context.getString(R.string.update_available_title) in
+            fun badges() = nodes(a).count { context.getString(R.string.update_badge_description) in
                 it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
             // TalkBack reads the merged item: Material3 drops the badge's own description there
             fun announced() = compose.onAllNodes(androidx.compose.ui.test.hasContentDescription(

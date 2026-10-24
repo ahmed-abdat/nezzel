@@ -9,7 +9,7 @@ import org.json.JSONTokener
 /** Untrusted release data; never use its generated toString in diagnostics. */
 class Release(val version: String, val code: Long, val name: String, val size: Long,
               val url: String, val digest: String, internal val english: List<String>, internal val arabic: List<String>,
-              internal val french: List<String> = emptyList()) {
+              internal val french: List<String> = emptyList(), val important: Boolean = false) {
     fun notes(language: String): List<String> = when {
         language == "ar" && arabic.isNotEmpty() -> arabic
         language == "fr" && french.isNotEmpty() -> french
@@ -63,7 +63,7 @@ class Release(val version: String, val code: Long, val name: String, val size: L
                     return cleanNotes(lines.asSequence())
                 }
                 Release(version, code, name, size,
-                    "https://github.com/ahmed-abdat/nezzel/releases/download/v$version/$name", digest, language("en"), language("ar"), language("fr"))
+                    "https://github.com/ahmed-abdat/nezzel/releases/download/v$version/$name", digest, language("en"), language("ar"), language("fr"), json.opt("important") == true)
             } catch (_: Exception) { null }
         }
         fun parse(bytes: ByteArray): Release? {

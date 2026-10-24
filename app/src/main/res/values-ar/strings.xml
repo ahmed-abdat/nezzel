@@ -455,12 +455,15 @@
     <string name="update_done">تم التحديث إلى %1$s</string>
     <string name="settings_updates_heading">تحديثات التطبيق</string>
     <string name="settings_updates_auto">البحث عن إصدارات جديدة</string>
-    <string name="settings_updates_auto_body">مرة يوميًا، ولا يُثبّت شيء دون موافقتك</string>
+    <string name="settings_updates_auto_body">يتحقق مرتين يوميًا، ولا يُثبّت شيء دون موافقتك</string>
     <string name="settings_updates_check_now">تحقق الآن</string>
     <string name="update_latest">لديك أحدث إصدار</string>
     <string name="update_check_failed">تعذّر التحقق من التحديثات، أعد المحاولة لاحقًا</string>
     <string name="update_channel">تحديثات التطبيق</string>
     <string name="update_notification_title">⁦Nezzel %1$s⁩ جاهز</string>
+    <string name="update_notification_ready">التحديث جاهز للتثبيت. اضغط للتحديث</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="update_badge_description">يتوفر تحديث</string>
     <string name="update_notification_text">اضغط لمعرفة الجديد وتحديث التطبيق</string>
     <string name="settings_updates_last_checked">آخر تحقق</string>
     <string name="whats_new_title">الجديد في ⁦Nezzel %1$s⁩</string>

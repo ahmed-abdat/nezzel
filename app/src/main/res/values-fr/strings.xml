@@ -416,12 +416,15 @@
     <string name="update_done">Mise à jour vers %1$s effectuée</string>
     <string name="settings_updates_heading">Mises à jour de l’application</string>
     <string name="settings_updates_auto">Rechercher de nouvelles versions</string>
-    <string name="settings_updates_auto_body">Une fois par jour. Aucune installation sans votre accord</string>
+    <string name="settings_updates_auto_body">Vérifie deux fois par jour. Aucune installation sans votre accord</string>
     <string name="settings_updates_check_now">Vérifier</string>
     <string name="update_latest">Vous avez la dernière version</string>
     <string name="update_check_failed">Impossible de rechercher les mises à jour — réessayez plus tard</string>
     <string name="update_channel">Mises à jour de l’application</string>
     <string name="update_notification_title">Nezzel %1$s est prêt</string>
+    <string name="update_notification_ready">Prêt à être installé. Appuyez pour mettre à jour</string>
+    <string name="update_later">Plus tard</string>
+    <string name="update_badge_description">Mise à jour disponible</string>
     <string name="update_notification_text">Appuyez pour voir les nouveautés et mettre à jour</string>
     <string name="settings_updates_last_checked">Dernière vérification</string>
     <string name="whats_new_title">Nouveautés de Nezzel %1$s</string>
