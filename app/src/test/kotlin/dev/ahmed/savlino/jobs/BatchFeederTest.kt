@@ -467,6 +467,31 @@ class BatchFeederTest {
         assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
     }
 
+    private fun links(vararg urls: String) = urls.map { LinkInput.parse(it)!! }
+
+    @Test fun linkBatchFeedsAnyHostAYouTubeListAsItsFirstVideoAndSkipsAPhotoPostWithItsReason() = runBlocking {
+        assertTrue(batches.createLinks("links", "3 links", links("https://www.tiktok.com/@a/video/1",
+            "https://www.youtube.com/watch?v=abcdefghijk&list=PL0123456789", "https://www.instagram.com/p/photos/"), Preset.BALANCED))
+        engine.failFor = { if (it.link.host == Host.INSTAGRAM) DownloadError.NoVideo else null }
+        limit.value = 3; feeder().tick()
+        assertEquals(listOf(BatchItemState.QUEUED, BatchItemState.QUEUED, BatchItemState.SKIPPED), batches.items("links").map { it.state })
+        assertEquals(DownloadError.PhotoPost, batches.items("links").last().error)
+        assertEquals(2, jobs.all().size)
+    }
+
+    @Test fun aFailedLinkInALinkBatchRetriesTheSameItem() = runBlocking {
+        assertTrue(batches.createLinks("links", "2 links", links("https://www.tiktok.com/@a/video/1", "https://x.com/a/status/2"), Preset.BALANCED))
+        engine.failFor = { if (it.link.host == Host.X) DownloadError.Network else null }
+        val f = feeder(); f.tick()
+        val failed = batches.items("links").last()
+        assertEquals(BatchItemState.FAILED, failed.state); assertTrue(failed.retryable)
+        engine.failFor = { null }
+        f.retry("links"); f.tick()
+        assertEquals(BatchItemState.QUEUED, batches.items("links").last().state)
+        assertEquals(failed.jobId, batches.items("links").last().jobId)
+        assertEquals(2, jobs.all().size)
+    }
+
     private fun complete(id: String, uri: Uri = Uri.parse("content://media/external/downloads/$id")) {
         val pending = PendingPublication(uri, "fixture.mp4")
         jobs.startTransfer(id); jobs.markStaged(id); jobs.recordPending(id, pending); jobs.markPublishing(id)
@@ -477,6 +502,7 @@ class BatchFeederTest {
         var formats = listOf(Format("18", "mp4", true, true, height = 720))
         var presets = listOf(PresetChoice(Preset.BALANCED, "18"))
         var failure: DownloadError? = null
+        var failFor: (LinkRevision) -> DownloadError? = { null }
         var failAfter: Int? = null
         var calls = 0
         var duringInspect: suspend () -> Unit = {}
@@ -484,7 +510,7 @@ class BatchFeederTest {
         override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
             duringInspect()
             calls++
-            failure?.let { return InspectResult.Failure(it) }
+            (failure ?: failFor(source))?.let { return InspectResult.Failure(it) }
             return InspectResult.Success(Inspection(source, "fixture", formats,
                 if (failAfter != null && calls > failAfter!!) emptyList() else presets))
         }

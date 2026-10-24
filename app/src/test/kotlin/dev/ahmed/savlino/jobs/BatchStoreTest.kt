@@ -246,6 +246,29 @@ class BatchStoreTest {
         assertEquals(0, BatchStore(jobs, batchCipher()).all().size)
         assertTrue(BatchStore(jobs, batchCipher()).create("new-batch", "Fixture", Preset.BEST, batchItems(1)))
     }
+
+    @Test fun oneLinkConfirmCreatesOneBatchWithSealedLinksAndHostOnlyTitles() {
+        val raw = listOf("https://www.tiktok.com/@name/video/123?secret=token", "https://youtu.be/abcdefghijk", "https://example.org/clip")
+        assertTrue(batches.createLinks("links", "3 links", raw.map { LinkInput.parse(it)!! }, Preset.SMALL))
+        assertEquals(1, batches.all().size)
+        val rows = batches.items("links")
+        assertEquals(listOf("tiktok.com", "youtu.be", "example.org"), rows.map { it.title })
+        assertEquals(raw, rows.map { batches.source(it) })
+        jobs.readableDatabase.rawQuery("SELECT source_url, title, item_id FROM batch_items", null).use { c ->
+            while (c.moveToNext()) {
+                val blob = String(c.getBlob(0), Charsets.ISO_8859_1)
+                raw.forEach { assertFalse(blob.contains(it.substringAfter("://"))) }
+                assertFalse(c.getString(1).contains("/")); assertTrue(c.getString(2).startsWith(BatchStore.LINK_ITEM))
+            }
+        }
+        assertTrue(PlaylistBatch(batches.get("links")!!, rows).links)
+    }
+
+    @Test fun playlistCreateStillTakesOnlyYouTubeVideos() {
+        assertFalse(batches.create("p", "P", Preset.BEST, listOf(PlaylistItem("t", "https://www.tiktok.com/@a/video/1", "T", 60))))
+        assertTrue(batches.create("p", "P", Preset.BEST, batchItems(1)))
+        assertFalse(PlaylistBatch(batches.get("p")!!, batches.items("p")).links)
+    }
 }
 
 internal fun batchItems(count: Int) = (0 until count).map {

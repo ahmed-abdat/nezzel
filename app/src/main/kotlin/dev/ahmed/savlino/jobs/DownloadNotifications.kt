@@ -74,6 +74,9 @@ class DownloadNotifications(private val base: Context,
         val language = languageOf(ctx)
         val text = if (batch.record.state in setOf(BatchState.STOPPED, BatchState.EXPIRED))
             ctx.getString(R.string.playlist_stopped, NezzelFormat.count(skipped, language))
+        else if (batch.links) ctx.getString(if (batch.terminal) R.string.multi_link_notification_done else R.string.multi_link_notification_progress,
+            ctx.resources.getQuantityString(R.plurals.multi_link_title, batch.total, NezzelFormat.count(batch.total, language)),
+            NezzelFormat.count(batch.saved, language), NezzelFormat.count(if (batch.terminal) failed else batch.total, language))
         else ctx.getString(if (batch.terminal) R.string.playlist_notification_done else R.string.playlist_notification_progress,
             NezzelFormat.count(batch.saved, language), NezzelFormat.count(if (batch.terminal) failed else batch.total, language))
         val tag = "playlist:${batch.id}"
@@ -346,6 +349,7 @@ class DownloadNotifications(private val base: Context,
             DownloadError.Unsupported -> R.string.unsupported_title
             DownloadError.NoFormats -> R.string.no_formats_title
             DownloadError.NoVideo -> R.string.no_video_title
+            DownloadError.PhotoPost -> R.string.multi_link_photo_post
             DownloadError.Unavailable -> R.string.video_gone_title
             DownloadError.NotAPost -> R.string.not_a_post_title
             DownloadError.EngineUnavailable -> R.string.unavailable_title

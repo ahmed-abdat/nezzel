@@ -14,7 +14,9 @@ enum class DownloadError {
     /** The site refused the request (HTTP 403); neither lost connectivity nor an expired media selection. */
     SourceRefused,
     /** Android stopped the transfer for battery/background limits (API 31+ stop reason only, never guessed). */
-    StoppedByBattery;
+    StoppedByBattery,
+    /** A link batch met a photos-only post; photos are saved from the single-link sheet. */
+    PhotoPost;
 
     /** Default for adapters that already return concrete connectivity errors. */
     val cause: DownloadFailureCause get() = when (this) {

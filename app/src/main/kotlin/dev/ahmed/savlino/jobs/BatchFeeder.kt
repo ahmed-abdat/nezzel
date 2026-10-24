@@ -75,7 +75,9 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                     break
                 }
                 val link = LinkInput.parse(raw)
-                if (link == null || YouTubeLinkKind.classify(link) != YouTubeLinkKind.Video) {
+                // Playlist rows were sealed as YouTube videos; pasted links may be any host. A YouTube list or mix
+                // resolves its first video only (inspection runs with --no-playlist), as a single paste does.
+                if (link == null || !batchable(link)) {
                     batches.finish(item, BatchItemState.SKIPPED, DownloadError.InvalidInput)
                     continue
                 }
@@ -113,8 +115,11 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 applyControls()
                 if (batches.get(batch.id)?.state != BatchState.ACTIVE || activeCount() >= lookahead()) break
                 when (result) {
-                    is InspectResult.Failure -> batches.finish(item,
-                        if (result.error in setOf(DownloadError.Unavailable, DownloadError.NoVideo, DownloadError.NotAPost, DownloadError.Unsupported))
+                    // Photos are saved through the single-link sheet only: say so instead of a generic failure.
+                    is InspectResult.Failure -> if (result.error == DownloadError.NoVideo)
+                        batches.finish(item, BatchItemState.SKIPPED, DownloadError.PhotoPost)
+                    else batches.finish(item,
+                        if (result.error in setOf(DownloadError.Unavailable, DownloadError.NotAPost, DownloadError.Unsupported))
                             BatchItemState.SKIPPED else BatchItemState.FAILED,
                         result.error, JobStore.retryableError(result.error))
                     is InspectResult.Success -> {
@@ -143,6 +148,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
         }
     } }
 
+    private fun batchable(link: ValidatedLink) = link.host != Host.YOUTUBE ||
+        YouTubeLinkKind.classify(link) in setOf(YouTubeLinkKind.Video, YouTubeLinkKind.VideoInList, YouTubeLinkKind.Playlist, YouTubeLinkKind.Mix)
     private fun lookahead() = (if (thermal.value >= PowerManager.THERMAL_STATUS_SEVERE) 1 else limit.value.coerceIn(1, 3)) + 1
     private fun activeCount() = batches.all().sumOf { batch -> batches.items(batch.id).count { item ->
         item.state == BatchItemState.QUEUED && jobs.get(item.jobId)?.let { !it.stage.terminal && it.stage != JobStage.PAUSED } == true

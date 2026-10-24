@@ -26,13 +26,28 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
 
     /** Call only after the one explicit Download-N confirmation. Nothing is persisted while selecting. */
     @Synchronized fun create(id: String, title: String, preset: Preset, items: List<PlaylistItem>): Boolean {
-        if (!JobStore.validJobId(id) || items.isEmpty() || items.size > 200 || items.any { !it.selectable } ||
-            items.map { it.id }.distinct().size != items.size) return false
-        val sealed = items.map { item ->
+        if (items.any { !it.selectable }) return false
+        val links = items.map { item ->
             val link = LinkInput.parse(item.sourceUrl) ?: return false
             if (YouTubeLinkKind.classify(link) != YouTubeLinkKind.Video) return false
-            cipher.seal(link.rawUrl) ?: return false
+            Triple(item.id, item.title, link)
         }
+        return insert(id, title, preset, links)
+    }
+
+    /**
+     * Pasted/shared links, after the same single confirmation. Any validated link; titles are the host only,
+     * so no path or query is ever stored in plaintext. Item ids carry [LINK_ITEM] so presentation can tell them apart.
+     */
+    @Synchronized fun createLinks(id: String, title: String, links: List<ValidatedLink>, preset: Preset): Boolean =
+        insert(id, title, preset, links.mapIndexed { position, link ->
+            Triple("$LINK_ITEM$position", MultiLinkLabel.host(link), link)
+        })
+
+    private fun insert(id: String, title: String, preset: Preset, items: List<Triple<String, String, ValidatedLink>>): Boolean {
+        if (!JobStore.validJobId(id) || items.isEmpty() || items.size > 200 ||
+            items.map { it.first }.distinct().size != items.size) return false
+        val sealed = items.map { cipher.seal(it.third.rawUrl) ?: return false }
         db.beginTransaction()
         try {
             if (get(id) != null) return false
@@ -40,9 +55,9 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
                 put("batch_id", id); put("title", PreviewMetadata.text(title, 300).orEmpty()); put("preset", preset.name)
                 put("state", BatchState.ACTIVE.name); put("created_at", now())
             })
-            items.forEachIndexed { position, item ->
+            items.forEachIndexed { position, (itemId, itemTitle) ->
                 db.insertOrThrow("batch_items", null, ContentValues().apply {
-                    put("batch_id", id); put("position", position); put("item_id", item.id); put("title", PreviewMetadata.text(item.title, 300).orEmpty())
+                    put("batch_id", id); put("position", position); put("item_id", itemId); put("title", PreviewMetadata.text(itemTitle, 300).orEmpty())
                     put("source_url", sealed[position]); put("state", BatchItemState.WAITING.name)
                     // Allocate before inspection/enqueue. Crash recovery adopts this exact ID, never a second job.
                     put("job_id", "batch-${UUID.randomUUID()}")
@@ -182,6 +197,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     companion object {
         internal const val LIFETIME_MS = 86_400_000L
         internal const val RETENTION_MS = 30L * LIFETIME_MS
+        internal const val LINK_ITEM = "link-"
         internal fun createTables(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE IF NOT EXISTS batches (
                 batch_id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, preset TEXT NOT NULL,

@@ -283,6 +283,7 @@ fun NezzelApp(
                 }
             }
             if (showOptions) OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
+            if (links.multi.visible) dev.ahmed.savlino.ui.MultiLinkSheet(links.multi, language, links::dismissMulti)
         }
     }
     }

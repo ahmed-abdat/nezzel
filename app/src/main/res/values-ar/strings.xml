@@ -645,4 +645,26 @@
     <string name="viewer_position">الموضع</string>
     <string name="library_show_grid">عرض كشبكة</string>
     <string name="library_show_list">عرض كقائمة</string>
+    <!-- multi-link: Download all for several pasted or shared links -->
+    <plurals name="multi_link_title">
+        <item quantity="zero">لا روابط</item>
+        <item quantity="one">رابط واحد</item>
+        <item quantity="two">رابطان</item>
+        <item quantity="few">%1$s روابط</item>
+        <item quantity="many">%1$s رابطًا</item>
+        <item quantity="other">%1$s رابط</item>
+    </plurals>
+    <plurals name="multi_link_limit">
+        <item quantity="zero">لا روابط</item>
+        <item quantity="one">أول %1$s رابط فقط</item>
+        <item quantity="two">أول رابطين فقط</item>
+        <item quantity="few">أول %1$s روابط فقط</item>
+        <item quantity="many">أول %1$s رابطًا فقط</item>
+        <item quantity="other">أول %1$s رابط فقط</item>
+    </plurals>
+    <string name="multi_link_remove">إزالة %1$s</string>
+    <string name="multi_link_notification_progress">%1$s: تم حفظ %2$s من %3$s</string>
+    <string name="multi_link_notification_done">%1$s: تم حفظ %2$s، وتعذّر حفظ %3$s</string>
+    <string name="multi_link_submit_failed">تعذّر بدء التنزيلات. حاول مجددًا.</string>
+    <string name="multi_link_photo_post">منشور صور: افتحه وحده</string>
 </resources>

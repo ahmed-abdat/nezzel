@@ -37,10 +37,12 @@ class MultiLinkQueueTest {
         assertEquals(number, vm.nextLinkNumber); assertEquals(total, vm.linkQueueTotal)
         assertEquals(host, vm.nextLinkHost)
     }
-    @Test fun shareDismissOpenRepeatsUntilQueueEmptyWithoutAutomaticDownload() {
-        val vm = vm(); vm.onNewShare(share(input)); idle()
+    /** Paste/Share of several links opens the Download-all sheet; the one-by-one queue stays for the clipboard suggestion. */
+    private fun suggested(vm: LinkViewModel) { vm.suggest(true, true, true) { input }; idle() }
+    @Test fun suggestionDismissOpenRepeatsUntilQueueEmptyWithoutAutomaticDownload() {
+        val vm = vm(); suggested(vm)
         assertEquals(first, vm.text); assertTrue(vm.optionsState is OptionsState.Ready)
-        assertNull(vm.nextLinkHost)
+        assertFalse(vm.multi.visible); assertNull(vm.nextLinkHost)
         vm.dismissOptions(); assertNext(vm, 2, 3, "second.org")
         vm.openNextLink(); idle()
         assertEquals(second, (vm.optionsState as OptionsState.Ready).inspection.source.link.rawUrl)
@@ -52,24 +54,21 @@ class MultiLinkQueueTest {
     }
     @Test fun queueNeverEntersSavedStateAndProcessRecreationDropsIt() {
         val state = SavedStateHandle(); val vm = vm(state)
-        vm.onNewShare(share(input)); idle(); vm.dismissOptions()
+        suggested(vm); vm.dismissOptions()
         val snapshot = state.keys().associateWith { state.get<Any?>(it) }
         assertFalse(snapshot.values.toString().contains(second))
         assertFalse(snapshot.values.toString().contains(third))
         assertNull(vm(SavedStateHandle(snapshot)).nextLinkHost)
     }
-    @Test fun newShareIncludingSameFirstAndPasteReplaceQueueAndSkipClearsIt() {
-        val vm = vm(); vm.onNewShare(share(input)); idle()
-        vm.onNewShare(share("$first https://replacement.org/new")); idle()
-        vm.dismissOptions(); assertNext(vm, 2, 2, "replacement.org")
+    @Test fun pasteOrShareOfSeveralLinksReplacesTheQueueWithTheSheet() {
+        val vm = vm(); suggested(vm); vm.dismissOptions(); assertNext(vm, 2, 3, "second.org")
         vm.paste("https://new.org/one https://pasted.org/two"); idle()
-        assertNull(vm.nextLinkHost)
-        vm.dismissOptions(); assertNext(vm, 2, 2, "pasted.org")
-        vm.skipRemainingLinks(); assertNull(vm.nextLinkHost)
-        vm.dismissOptions(); assertNull(vm.nextLinkHost)
+        assertNull(vm.nextLinkHost); assertEquals(2, vm.multi.links.size)
+        vm.dismissMulti(); vm.onNewShare(share(input)); idle()
+        assertNull(vm.nextLinkHost); assertEquals(3, vm.multi.links.size)
     }
     @Test fun openWithAutomaticLoadingDisabledOnlyFillsDraft() {
-        val vm = vm(); vm.paste(input); idle(); vm.dismissOptions()
+        val vm = vm(); suggested(vm); vm.dismissOptions()
         vm.automaticOptions = false; vm.openNextLink(); idle()
         assertEquals(second, vm.text); assertEquals(OptionsState.Hidden, vm.optionsState)
         assertNull(vm.takeConfirmedCommand()); assertNull(vm.nextLinkHost)
@@ -87,21 +86,6 @@ class MultiLinkQueueTest {
         vm.suggest(true, true, true) { error("Queue must guard clipboard read") }
         vm.openNextLink(); idle(); assertEquals(second, vm.text)
     }
-    @Test fun pasteOfActiveFirstDropsAnOlderPendingShareBeforeReplacingQueue() {
-        val vm = vm(); vm.edit(first); vm.checkLink(); idle()
-        vm.onNewShare(share("https://unaccepted.org/new https://old.org/remainder"))
-        assertTrue(vm.hasPendingShare)
-        vm.paste("$first $second")
-        assertFalse(vm.hasPendingShare)
-        vm.acceptShare(); assertEquals(first, vm.text)
-        vm.dismissOptions(); assertNext(vm, 2, 2, "second.org")
-    }
-    @Test fun dismissedPendingShareDoesNotLeaveUnacceptedRemainder() {
-        val vm = vm(); vm.edit("https://typed.org/draft")
-        vm.onNewShare(share(input)); assertTrue(vm.hasPendingShare)
-        vm.dismissShare(); vm.checkLink(); idle(); vm.dismissOptions()
-        assertNull(vm.nextLinkHost)
-    }
     @Test fun downloadHandoffClearsFieldButRetainsNextPrompt() {
         val app = org.robolectric.RuntimeEnvironment.getApplication() as dev.ahmed.savlino.jobs.IsolatedTestApplication
         val store = dev.ahmed.savlino.jobs.JobStore(app)
@@ -110,7 +94,7 @@ class MultiLinkQueueTest {
         val scope = kotlinx.coroutines.CoroutineScope(parent + kotlinx.coroutines.Dispatchers.Main.immediate)
         try {
             val vm = LinkViewModel(SavedStateHandle(), engine = Engine(), downloads = coordinator, coordinatorScope = scope)
-            vm.onNewShare(share(input)); idle(); vm.requestDownload(); idle()
+            suggested(vm); vm.requestDownload(); idle()
             kotlinx.coroutines.runBlocking {
                 kotlinx.coroutines.withTimeout(5000) {
                     while (parent.children.any { it.isActive }) { idle(); kotlinx.coroutines.delay(10) }

@@ -31,20 +31,17 @@ class HomeSemanticsTest {
         return semanticsNodes(activity, rounds = 3, idleMillis = 100)
     }
     @Test @Config(qualifiers = "en")
-    fun distinctShareShowsShortEnglishFirstLinkNotice() = assertMultipleLinkNotice(
-        "3 links found — starting with the first")
+    fun distinctShareOpensTheEnglishDownloadAllSheet() = assertMultipleLinkNotice("3 links")
 
     @Test @Config(qualifiers = "ar")
-    fun distinctShareShowsShortArabicFirstLinkNotice() = assertMultipleLinkNotice(
-        "وجدنا 3 روابط، سنبدأ بالأول")
+    fun distinctShareOpensTheArabicDownloadAllSheet() = assertMultipleLinkNotice("3 روابط")
 
     @Test fun repeatedIdenticalShareDoesNotShowMultipleLinkNotice() = assertMultipleLinkNotice(
         "3 links found — starting with the first", repeated = true)
 
-    @Test fun distinctPasteShowsFirstLinkNotice() = assertMultipleLinkNotice(
-        "3 links found — starting with the first", paste = true)
+    @Test fun distinctPasteOpensTheDownloadAllSheet() = assertMultipleLinkNotice("3 links", paste = true)
 
-    @Test fun automaticShareShowsNoticeInsideTheOptionsWindow() {
+    @Test fun automaticShareOfSeveralLinksOpensTheSheetWithoutReadingAnyLink() {
         val app = org.robolectric.RuntimeEnvironment.getApplication() as dev.ahmed.savlino.jobs.IsolatedTestApplication
         val store = dev.ahmed.savlino.jobs.JobStore(app)
         app.coordinatorOverride = dev.ahmed.savlino.jobs.DownloadCoordinator(app,
@@ -59,10 +56,8 @@ class HomeSemanticsTest {
                 .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT,
                     "https://youtu.be/clipA https://youtu.be/clipB https://example.org/clipC")))
             semantics(controller.get())
-            assertTrue(links.optionsState is dev.ahmed.savlino.ui.OptionsState.Error)
-            val modalTexts = texts(windowViews(controller.get()).filter { it !== controller.get().window.decorView }
-                .flatMap(::roots).flatMap { descendants(it.semanticsOwner.unmergedRootSemanticsNode) })
-            assertTrue("Notice must be visible above the modal sheet", "3 links found — starting with the first" in modalTexts)
+            assertEquals(dev.ahmed.savlino.ui.OptionsState.Hidden, links.optionsState)
+            assertTrue("Sheet must show its title", "3 links" in modalTexts(controller.get()))
         } finally { controller.pause().stop().destroy(); store.close(); app.coordinatorOverride = null }
     }
 
@@ -78,10 +73,16 @@ class HomeSemanticsTest {
             controller.visible()
             val links = controller.get().links
             links.automaticOptions = true
-            links.onNewShare(dev.ahmed.savlino.entry.ShareInput.from(android.content.Intent(android.content.Intent.ACTION_SEND)
-                .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT,
-                    "https://youtu.be/first https://example.org/second?secret=private https://third.org/third")))
-            semantics(controller.get())
+            // Paste/Share of several links opens the Download-all sheet; the one-by-one card stays for the clipboard suggestion.
+            // Clipboard setup finishes off the main thread; offer until the suggestion lands.
+            repeat(50) {
+                if (links.text.isEmpty()) {
+                    links.clipboardForeground = true // Robolectric windows never report focus.
+                    links.suggest(true, true, true) { "https://youtu.be/first https://example.org/second?secret=private https://third.org/third" }
+                    semantics(controller.get())
+                }
+            }
+            assertEquals("https://youtu.be/first", links.text)
             links.dismissOptions()
             val nodes = semantics(controller.get())
             assertTrue(expected in texts(nodes))
@@ -102,6 +103,8 @@ class HomeSemanticsTest {
         } finally { controller.pause().stop().destroy() }
     }
 
+    private fun modalTexts(activity: MainActivity) = texts(windowViews(activity).filter { it !== activity.window.decorView }
+        .flatMap(::roots).flatMap { descendants(it.semanticsOwner.unmergedRootSemanticsNode) })
     private fun assertMultipleLinkNotice(expected: String, repeated: Boolean = false, paste: Boolean = false) {
         val controller = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
         try {
@@ -113,10 +116,10 @@ class HomeSemanticsTest {
             if (paste) links.paste(input) else links.onNewShare(dev.ahmed.savlino.entry.ShareInput.from(
                 android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(android.content.Intent.EXTRA_TEXT, input)))
-            val texts = semantics(controller.get()).flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty() }
-                .map { it.text }
-            assertEquals(!repeated, expected in texts)
-            assertEquals("https://youtu.be/clipA", links.text)
+            semantics(controller.get())
+            assertEquals(!repeated, expected in modalTexts(controller.get()))
+            assertEquals(!repeated, links.multi.visible)
+            assertEquals(if (repeated) "https://youtu.be/clipA" else "", links.text)
         } finally { controller.pause().stop().destroy() }
     }
     @Test @Config(qualifiers = "en")

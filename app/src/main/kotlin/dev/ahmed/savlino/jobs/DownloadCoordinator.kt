@@ -62,6 +62,13 @@ class DownloadCoordinator(
             }
         }
     }
+    /** Pasted/shared links after the multi-link sheet's one Download tap: the same batch machinery, no preview artwork. */
+    suspend fun confirmLinks(id: String, title: String, preset: Preset, links: List<ValidatedLink>): Boolean = withContext(Dispatchers.IO) {
+        initialize()
+        batches.createLinks(id, title, links, preset).also {
+            if (it) { playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
+        }
+    }
     /** Playlist rows never pass through an options sheet; their artwork follows the confirm, off the feeder's path. */
     private val artworkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

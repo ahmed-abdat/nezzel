@@ -138,6 +138,22 @@ class LinkViewModel(
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
     private var pendingPlaylistPermission: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    /** Paste/Share of 2..50 links: one sheet, one Download tap, one batch. Never opened from the automatic clipboard suggestion. */
+    val multi = MultiLinkViewModel(viewModelScope,
+        submit = { title, preset, chosen ->
+            val permission = kotlinx.coroutines.CompletableDeferred<Unit>()
+            pendingPlaylistPermission = permission
+            try {
+                notificationPrompt?.invoke() ?: finishNotificationRequest()
+                permission.await()
+            } finally { if (pendingPlaylistPermission === permission) pendingPlaylistPermission = null }
+            val id = newOperationId()
+            playlistSubmissionId = id
+            (coordinatorScope ?: viewModelScope).async {
+                downloads?.confirmLinks(id, title, preset, chosen) == true
+            }.await().also { accepted -> if (accepted) markAllHandled(chosen) }
+        },
+        onAccepted = { acceptedJob = playlistSubmissionId; publishPendingLink() })
     val hasPendingNotificationChoice get() = pendingPermissionChoice != null || pendingPlaylistPermission != null
     fun requestDownload() {
         if (!downloadEnabled || pendingPermissionChoice != null) return
@@ -302,7 +318,7 @@ class LinkViewModel(
                 usage.failed(Report.OPTIONS, it, currentSource()?.link?.rawUrl, engineVersion())
             }
         }
-    private fun hasPendingLink() = pendingShare != null || suggestion != null || linkQueue != null ||
+    private fun hasPendingLink() = pendingShare != null || suggestion != null || linkQueue != null || multi.visible ||
         optionsState is OptionsState.Checking || optionsState is OptionsState.Ready || (optionsState == OptionsState.Hidden && LinkInput.parse(text) != null)
     private fun publishPendingLink() {
         val maintenance = downloads?.maintenance ?: return
@@ -407,6 +423,25 @@ class LinkViewModel(
             }.await()
         },
         onAccepted = { acceptedJob = playlistSubmissionId; dismissOptions(); clearField() })
+    /** Handled-link marks for the clipboard after the confirm, like a single Download. */
+    private fun markAllHandled(chosen: List<ValidatedLink>) {
+        if (!clipboardReady) return
+        chosen.forEach(gate::dismiss)
+        val hashes = gate.dismissedHashes()
+        viewModelScope.launch { persistClipboard(hashes) }
+    }
+    /** True when [text] opened the multi-link sheet; the single-link intake below is then skipped entirely. */
+    private fun openMulti(text: String?): Boolean {
+        val found = MultiLinks.from(text) ?: return false
+        if (optionsState != OptionsState.Hidden) dismissOptions()
+        dismissShare()
+        skipRemainingLinks()
+        suggestion = null
+        multi.open(found)
+        publishPendingLink()
+        return true
+    }
+    fun dismissMulti() { multi.close(); publishPendingLink() }
     /** Video-in-list stays single-video until this explicit action. */
     fun showPlaylist() {
         val source = currentSource() ?: return
@@ -466,7 +501,7 @@ class LinkViewModel(
     var automaticOptions by mutableStateOf(true)
     var editorFocused by mutableStateOf(false)
     val clipboardEligible get() = clipboardReady && clipboardForeground && suggestionsEnabled && !editorFocused && destination == "Home" &&
-        !hasSuggestion && !hasPendingShare && linkQueue == null && !invalidShare && !shareActive && text.isEmpty() &&
+        !hasSuggestion && !hasPendingShare && linkQueue == null && !multi.visible && !invalidShare && !shareActive && text.isEmpty() &&
         optionsState == OptionsState.Hidden && !hasPendingNotificationChoice
     var destination by mutableStateOf(saved.get<String>("destination") ?: "Home")
         private set
@@ -500,6 +535,7 @@ class LinkViewModel(
     }
     fun onNewShare(input: ShareInput?) {
         if (input == null) return
+        if (openMulti(input.text)) { navigate("Home"); usage.count(UsageKeys.SHARE); return }
         val candidates = LinkInput.candidates(input.text)
         val link = candidates.firstOrNull()
         dismissShare()
@@ -547,6 +583,7 @@ class LinkViewModel(
     private fun setTyped(value: Boolean) { typedDraft = value; saved["typedDraft"] = value }
     fun paste(value: String?) {
         if (value == null) return
+        if (openMulti(value)) { usage.count(UsageKeys.PASTE); return }
         val candidates = LinkInput.candidates(value)
         val link = candidates.firstOrNull()
         dismissShare()

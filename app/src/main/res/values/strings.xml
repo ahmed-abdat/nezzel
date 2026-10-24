@@ -577,4 +577,18 @@
     <string name="viewer_position">Position</string>
     <string name="library_show_grid">Show as grid</string>
     <string name="library_show_list">Show as list</string>
+    <!-- multi-link: Download all for several pasted or shared links -->
+    <plurals name="multi_link_title">
+        <item quantity="one">%1$s link</item>
+        <item quantity="other">%1$s links</item>
+    </plurals>
+    <plurals name="multi_link_limit">
+        <item quantity="one">Only the first %1$s link</item>
+        <item quantity="other">Only the first %1$s links</item>
+    </plurals>
+    <string name="multi_link_remove">Remove %1$s</string>
+    <string name="multi_link_notification_progress">%1$s: %2$s of %3$s saved</string>
+    <string name="multi_link_notification_done">%1$s: %2$s saved, %3$s failed</string>
+    <string name="multi_link_submit_failed">Couldn’t start the downloads. Try again.</string>
+    <string name="multi_link_photo_post">Photo post: open this link on its own</string>
 </resources>

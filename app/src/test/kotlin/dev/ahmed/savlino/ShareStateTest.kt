@@ -76,9 +76,9 @@ class ShareStateTest {
         assertNull(vm.takeConfirmedCommand())
     }
 
-    @Test fun distinctShareWaitsForReplacementAcceptanceThenInspectsOnlyFirstCandidate() {
+    @Test fun distinctShareWaitsForReplacementAcceptanceThenInspectsIt() {
         val engine = Engine(); val vm = ready(engine); val options = vm.optionsState
-        vm.onNewShare(share("$second https://youtu.be/clipC")); idle()
+        vm.onNewShare(share("$second")); idle()
         assertTrue(vm.hasPendingShare); assertSame(options, vm.optionsState)
         assertEquals(1, engine.inspected.size)
         vm.acceptShare(); idle()
@@ -98,7 +98,7 @@ class ShareStateTest {
     @Test fun pasteAndColdShareInspectFirstValidCandidateOnly() {
         for (paste in listOf(false, true)) {
             val engine = Engine(); val vm = LinkViewModel(SavedStateHandle(), engine = engine)
-            val input = "http://localhost/no https://localhost/no $first $second"
+            val input = "http://localhost/no https://localhost/no $first"
             if (paste) vm.paste(input) else vm.onCreateShare(share(input))
             idle()
             assertEquals(first, vm.text)
