@@ -28,6 +28,8 @@ class InboxClient(private val calls: Call.Factory? = null, private val version: 
     /** True only for the inbox's 204; any failure is false and nothing is queued. */
     suspend fun post(path: String, json: String): Boolean = withContext(Dispatchers.IO) {
         require(path in PATHS)
+        // Debug builds and JVM tests never reach the live inbox; only release builds count.
+        if (calls == null && BuildConfig.DEBUG) return@withContext false
         try {
             val request = Request.Builder().url(BASE + path).header("User-Agent", "Nezzel/$version")
                 .post(json.toRequestBody(JSON)).build()

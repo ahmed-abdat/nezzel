@@ -17,12 +17,14 @@ internal class PlaylistLister(
             else -> return PlaylistResult.Failure(DownloadError.Unsupported)
         }
         if (token != null && token.link != source.link.normalizedUrl) return PlaylistResult.Failure(DownloadError.InvalidInput)
-        // A flat continuation stays flat. NPE can fail mid-list: flat resumes at the consumed raw offset.
+        // A flat continuation stays flat. NPE offsets omit extraction errors, so switching backends restarts at 1.
         val native = if (token == null || token.nativePage != null) try { primary(source, token, operationId) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { null }
             catch (_: LinkageError) { null } else null
-        val page = native ?: parseFlat(flat(source, (token?.offset ?: 0) + 1, (token?.offset ?: 0) + PAGE_SIZE), source, token)
+        val flatToken = token?.takeIf { it.nativePage == null }
+        val page = native ?: parseFlat(flat(source, (flatToken?.offset ?: 0) + 1,
+            (flatToken?.offset ?: 0) + PAGE_SIZE), source, flatToken)
         val seen = token?.seen.orEmpty().toMutableSet()
         val items = page.items.filter { seen.add(it.id) }
         val next = page.next?.let { PlaylistPageToken(it.link, it.offset, it.nativePage, seen.toSet(), page.title, page.totalCount) }

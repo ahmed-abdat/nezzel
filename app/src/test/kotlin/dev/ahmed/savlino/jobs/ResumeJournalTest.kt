@@ -87,10 +87,14 @@ class ResumeJournalTest {
             db.execSQL("INSERT INTO jobs_v4 ($columns) SELECT $columns FROM jobs")
             db.execSQL("DROP TABLE jobs")
             db.execSQL("ALTER TABLE jobs_v4 RENAME TO jobs")
+            db.execSQL("DROP TABLE batch_items"); db.execSQL("DROP TABLE batches")
             db.version = 4
         }
         JobStore(app, null).use { store ->
             assertEquals(JobStore.DATABASE_VERSION, store.readableDatabase.version); assertShareLinkOnlyOnCompleted(store)
+            val batches = BatchStore(store, batchCipher())
+            assertTrue(batches.create("migrated-batch", "Fixture", Preset.BEST, batchItems(1)))
+            assertEquals(BatchItemState.WAITING, batches.items("migrated-batch").single().state)
             val paused = store.get("v4-paused")!!
             assertEquals(JobStage.PAUSED, paused.stage); assertTrue(paused.hasPartial)
             assertEquals("recipe", paused.resumeRecipe); assertEquals(1L, paused.restartEpoch)
@@ -290,10 +294,14 @@ class ResumeJournalTest {
             db.execSQL("INSERT INTO jobs_v5 ($columns) SELECT $columns FROM jobs")
             db.execSQL("DROP TABLE jobs")
             db.execSQL("ALTER TABLE jobs_v5 RENAME TO jobs")
+            db.execSQL("DROP TABLE batch_items"); db.execSQL("DROP TABLE batches")
             db.version = 5
         }
         JobStore(app, null).use { store ->
             assertEquals(JobStore.DATABASE_VERSION, store.readableDatabase.version); assertShareLinkOnlyOnCompleted(store)
+            val batches = BatchStore(store, batchCipher())
+            assertTrue(batches.create("migrated-batch", "Fixture", Preset.BEST, batchItems(1)))
+            assertEquals(BatchItemState.WAITING, batches.items("migrated-batch").single().state)
             assertEquals(JobStage.ENQUEUED, store.get("v5-queued")!!.stage)
             store.readableDatabase.rawQuery("SELECT share_link FROM jobs", null).use { assertTrue(it.moveToFirst()); assertTrue(it.isNull(0)) }
         }
