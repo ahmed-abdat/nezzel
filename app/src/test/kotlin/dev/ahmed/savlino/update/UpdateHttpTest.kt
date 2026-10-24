@@ -85,5 +85,35 @@ class UpdateHttpTest {
             } finally { file.delete(); client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
         }
     }
-
+    private fun manifestRoute(siteLocation: String?) = runBlocking {
+        val requests = mutableListOf<String>()
+        val client = OkHttpClient.Builder().followRedirects(false).addInterceptor { chain ->
+            val url = chain.request().url.toString()
+            requests += url
+            val location = when {
+                url.startsWith("https://nezzel.hululsoft.mr/") -> siteLocation
+                url == Release.MANIFEST_ASSET -> "https://release-assets.githubusercontent.com/manifest"
+                else -> null
+            }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(if (location != null) 302 else 200).message("test")
+                .apply { if (location != null) header("Location", location) }.body("{}".toResponseBody()).build()
+        }.build()
+        try {
+            UpdateHttp("test", client, versionCode = 412).use { http ->
+                try { http.latestRelease() } catch (_: IOException) {}
+            }
+        } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
+        requests
+    }
+    @Test fun manifestGoesThroughTheSiteVersionPathThenGitHub() {
+        assertEquals(listOf("https://nezzel.hululsoft.mr/update/412", Release.MANIFEST_ASSET,
+            "https://release-assets.githubusercontent.com/manifest", Release.API), manifestRoute(Release.MANIFEST_ASSET))
+    }
+    @Test fun siteRedirectAnywhereElseFallsBackToTheApiOnce() {
+        assertEquals(listOf("https://nezzel.hululsoft.mr/update/412", Release.API),
+            manifestRoute("https://release-assets.githubusercontent.com/other"))
+    }
+    @Test fun aBodyFromTheSiteIsNeverTakenAsTheManifest() {
+        assertEquals(listOf("https://nezzel.hululsoft.mr/update/412", Release.API), manifestRoute(null))
+    }
 }

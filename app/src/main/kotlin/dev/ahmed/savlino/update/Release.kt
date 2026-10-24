@@ -17,7 +17,10 @@ class Release(val version: String, val code: Long, val name: String, val size: L
     }
     companion object {
         const val API = "https://api.github.com/repos/ahmed-abdat/nezzel/releases/latest"
-        const val MANIFEST = "https://github.com/ahmed-abdat/nezzel/releases/latest/download/nezzel-update.json"
+        const val MANIFEST_ASSET = "https://github.com/ahmed-abdat/nezzel/releases/latest/download/nezzel-update.json"
+        const val SITE = "nezzel.hululsoft.mr"
+        /** The site counts requests per path, then redirects to [MANIFEST_ASSET]; the path carries the versionCode only. */
+        fun manifest(versionCode: Int) = "https://$SITE/update/$versionCode"
         const val BODY_CAP = 256 * 1024
         const val MANIFEST_CAP = 64 * 1024
         private val semver = Regex("v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?")

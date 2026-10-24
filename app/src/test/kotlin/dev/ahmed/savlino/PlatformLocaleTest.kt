@@ -47,7 +47,7 @@ class PlatformLocaleTest {
         assertEquals("Téléchargements", localized.getString(R.string.downloads))
         assertEquals("123", java.text.NumberFormat.getIntegerInstance(locale).format(123))
         assertEquals(android.view.View.LAYOUT_DIRECTION_LTR, localized.resources.configuration.layoutDirection)
-        assertTrue(localized.getString(R.string.report_link_intro).startsWith("Nezzel n’a pas pu"))
+        assertTrue(localized.getString(R.string.report_sent_snackbar).startsWith("Rapport envoyé"))
     }
     @Test @Config(sdk = [29, 33])
     fun invalidAppLocaleChoiceDoesNotReplaceFrench() {

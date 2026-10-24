@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.update
 
+import dev.ahmed.savlino.BuildConfig
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
@@ -13,7 +14,8 @@ import java.io.IOException
 import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
-internal open class UpdateHttp(private val version: String, private val calls: Call.Factory? = null) : Closeable {
+internal open class UpdateHttp(private val version: String, private val calls: Call.Factory? = null,
+                                private val versionCode: Int = BuildConfig.VERSION_CODE) : Closeable {
     private val clientState = lazy { OkHttpClient.Builder().cookieJar(CookieJar.NO_COOKIES).cache(null)
         .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE).proxy(Proxy.NO_PROXY)
         .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
@@ -43,7 +45,8 @@ internal open class UpdateHttp(private val version: String, private val calls: C
                 call.cancel(); response.close()
                 url = next?.takeIf { hop < 5 } ?: throw IOException()
             } else {
-                if ((response.code != 200 && !(offset > 0 && response.code == 206)) || response.header("Content-Encoding")?.let { it != "identity" } == true) {
+                // The site only counts versions and redirects: a body from it is never the manifest.
+                if (response.request.url.host == Release.SITE || (response.code != 200 &&!(offset > 0 && response.code == 206)) || response.header("Content-Encoding")?.let { it != "identity" } == true) {
                     call.cancel(); response.close(); throw IOException()
                 }
                 return response
@@ -51,7 +54,7 @@ internal open class UpdateHttp(private val version: String, private val calls: C
         }
         throw IOException()
     }
-    open suspend fun manifest(): ByteArray = metadata(Release.MANIFEST, false, Release.MANIFEST_CAP)
+    open suspend fun manifest(): ByteArray = metadata(Release.manifest(versionCode), false, Release.MANIFEST_CAP)
     open suspend fun latest(): ByteArray = metadata(Release.API, true, Release.BODY_CAP)
     /** One preferred asset attempt, then one API fallback; cancellation never starts another request. */
     suspend fun latestRelease(): Triple<Release, ByteArray, String> {

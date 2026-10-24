@@ -41,21 +41,29 @@ class ReportLinkUiTest {
         renderThemed({ nodes(it) }, { OptionsSheetContent(vm, "en", vm::dismissOptions) }, check)
     }
 
-    @Test fun failedOffersReportAndOpensWhatsAppOnlyAfterATap() = render(DownloadError.Failed) { activity ->
-        val label = activity.getString(R.string.report_link)
-        val action = nodes(activity).last { node ->
-            node.config.getOrNull(SemanticsActions.OnClick) != null &&
-                descendants(node).any { label in texts(listOf(it)) }
-        }
+    private fun reportButton(activity: ComponentActivity, label: String) = nodes(activity).last { node ->
+        node.config.getOrNull(SemanticsActions.OnClick) != null && descendants(node).any { label in texts(listOf(it)) }
+    }
+
+    @Test fun failedOffersReportThatOpensNoOtherApp() = render(DownloadError.Failed) { activity ->
+        val action = reportButton(activity, activity.getString(R.string.report_link))
         assertEquals(Role.Button, action.config.getOrNull(SemanticsProperties.Role))
         assertTrue(action.layoutInfo.height / activity.resources.displayMetrics.density >= 48f)
-        assertNull(shadowOf(activity).nextStartedActivity)
         assertEquals(true, action.config[SemanticsActions.OnClick].action?.invoke())
-        val intent = shadowOf(activity).nextStartedActivity
-        assertEquals("wa.me", intent.data!!.host)
-        assertEquals(listOf(activity.getString(R.string.report_link_intro), link,
-            "Nezzel ${BuildConfig.VERSION_NAME} · engine fixture-engine · Failed"),
-            intent.data!!.getQueryParameter("text")!!.lines())
+        compose.waitForIdle()
+        assertNull(shadowOf(activity).nextStartedActivity)
+    }
+
+    @Test fun acceptedReportTurnsTheButtonIntoADisabledSent() {
+        val vm = LinkViewModel(SavedStateHandle(), engine = FakeEngine(InspectResult.Failure(DownloadError.Failed)),
+            sendReport = { true })
+        vm.edit(link); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+        vm.sendFailureReport(BuildConfig.VERSION_NAME, 33); shadowOf(Looper.getMainLooper()).idle()
+        renderThemed({ nodes(it) }, { OptionsSheetContent(vm, "en", vm::dismissOptions) }) { activity ->
+            assertFalse(activity.getString(R.string.report_link) in texts(nodes(activity)))
+            val sent = reportButton(activity, activity.getString(R.string.report_sent))
+            assertTrue(sent.config.contains(SemanticsProperties.Disabled))
+        }
     }
 
     @Test fun offlineDoesNotOfferReport() = render(DownloadError.Offline) { activity ->

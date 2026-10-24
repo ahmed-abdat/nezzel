@@ -135,7 +135,7 @@ internal fun ImageSaveBar(links: LinkViewModel, language: String) {
 
 @Composable
 internal fun ImageInspectionError(state: OptionsState.ImageError, onRetry: () -> Unit, onDismiss: () -> Unit,
-    host: String? = null, onPasteAnother: ((String?) -> Unit)? = null, onReport: (() -> Unit)? = null) {
+    host: String? = null, onPasteAnother: ((String?) -> Unit)? = null, onReport: ReportAction? = null) {
     val (title, body, retry) = imageErrorCopy(state)
     // A failed Save is about this image, not the link: no "Paste another link" there.
     val saveFailure = state.failure in setOf(ImageFailure.STAGING, ImageFailure.INSUFFICIENT_SPACE, ImageFailure.STALE, ImageFailure.PROOF_MISMATCH,

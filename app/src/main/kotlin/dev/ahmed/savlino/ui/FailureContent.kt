@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -14,7 +15,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -37,7 +37,7 @@ import dev.ahmed.savlino.ui.theme.Space
 @Composable
 internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: String?, onRetry: (() -> Unit)?,
     onPasteAnother: ((String?) -> Unit)?, onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null,
-    onReport: (() -> Unit)? = null) {
+    onReport: ReportAction? = null) {
     val context = LocalContext.current
     Column(Modifier.testTag("failure_content"), verticalArrangement = Arrangement.spacedBy(Space.m)) {
         Row(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
@@ -88,12 +88,13 @@ internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: 
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             secondary?.invoke()
-            if (onReport != null) TextButton(onClick = onReport, modifier = Modifier.heightIn(min = 48.dp)) {
-                // WhatsApp's own mark in its brand green (Simple Icons, decorative): the button opens WhatsApp.
-                Icon(painterResource(R.drawable.logo_whatsapp), contentDescription = null, tint = Color(0xFF25D366),
-                    modifier = Modifier.size(18.dp))
+            if (onReport != null) TextButton(onClick = onReport.onClick, enabled = !onReport.sent && !onReport.busy,
+                modifier = Modifier.heightIn(min = 48.dp)) {
+                // One report per failure: the button stays as a quiet "Sent" receipt.
+                if (onReport.sent) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                else Icon(painterResource(R.drawable.ic_ms_bug_report), contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(Space.xs))
-                Text(stringResource(R.string.report_link))
+                Text(stringResource(if (onReport.sent) R.string.report_sent else R.string.report_link))
             }
             TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nezzel_close)) }
         }

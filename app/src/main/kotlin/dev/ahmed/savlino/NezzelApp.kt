@@ -136,6 +136,12 @@ fun NezzelApp(
         if (message != null) { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(message) }
         } finally { batchBusy = false } }
     }
+    LaunchedEffect(links.reportOutcome) {
+        val sent = links.reportOutcome ?: return@LaunchedEffect
+        links.consumeReportOutcome()
+        snackbar.currentSnackbarData?.dismiss()
+        snackbar.showSnackbar(context.getString(if (sent) R.string.report_sent_snackbar else R.string.report_failed_snackbar))
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(links.downloads, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {

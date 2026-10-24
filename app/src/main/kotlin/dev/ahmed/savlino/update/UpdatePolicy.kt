@@ -9,13 +9,21 @@ object UpdatePolicy {
     const val PACKAGE = "dev.ahmed.savlino"
     val hosts = setOf("github.com", "api.github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
     fun enabled(packageName: String) = packageName == PACKAGE
+    private val sitePath = Regex("/update/[1-9][0-9]{0,9}")
+    /** The site is allowed only for its version-count path, which may only redirect to the manifest asset. */
     fun allowed(value: String): Boolean = try {
         val uri = URI(value)
-        uri.scheme == "https" && uri.host in hosts && uri.rawUserInfo == null &&
-            uri.port in setOf(-1, 443) && uri.rawFragment == null
+        uri.scheme == "https" && uri.rawUserInfo == null && uri.port in setOf(-1, 443) && uri.rawFragment == null &&
+            (uri.host in hosts || uri.host == Release.SITE && uri.rawQuery == null && sitePath.matches(uri.rawPath.orEmpty()))
     } catch (_: Exception) { false }
     fun redirect(from: String, location: String): String? = try {
-        URI(from).resolve(location).toString().takeIf(::allowed)
+        val next = URI(from).resolve(location).toString().takeIf(::allowed)
+        when {
+            next == null -> null
+            URI(from).host == Release.SITE -> next.takeIf { it == Release.MANIFEST_ASSET }
+            URI(next).host == Release.SITE -> null
+            else -> next
+        }
     } catch (_: Exception) { null }
     fun offer(remote: Long, current: Long, skipped: Long?) = remote > current && remote != skipped
     fun notify(packageName: String, automatic: Boolean, remote: Long, current: Long, skipped: Long?, notified: Long?) =

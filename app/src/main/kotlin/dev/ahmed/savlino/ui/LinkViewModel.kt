@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.EngineAdapter
+import dev.ahmed.savlino.report.Report
 import dev.ahmed.savlino.engine.InspectResult
 import dev.ahmed.savlino.engine.InspectionPhase
 import dev.ahmed.savlino.engine.InspectionTiming
@@ -124,6 +125,8 @@ class LinkViewModel(
     private val now: () -> Long = System::currentTimeMillis,
     /** A known shortener's destination from its redirect alone; Unresolved keeps the short link (today's path). */
     private val resolveShortLink: suspend (ValidatedLink) -> ShortLinkOutcome = { ShortLinkOutcome.Unresolved },
+    /** Posts one report to the inbox; true only when it was accepted. */
+    private val sendReport: suspend (Report) -> Boolean = { false },
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -211,10 +214,32 @@ class LinkViewModel(
         else -> null
     }
     internal val canReportLink get() = reportCode() != null && currentSource() != null
-    internal fun reportMessage(intro: String, versionName: String): String? {
+    /** The report the preview shows and Send posts, with the reviewed link. */
+    internal fun failureReport(versionName: String, sdk: Int): Report? {
         val code = reportCode() ?: return null
         val source = currentSource() ?: return null
-        return ReportLink.message(intro, source.link.rawUrl, versionName, engineVersion(), code)
+        return Report.failure(source.link.rawUrl, code, versionName, engineVersion(), sdk)
+    }
+    internal fun reportEngineVersion() = engineVersion()
+    /** One report per failure card: the failed state it was sent for. */
+    private var reportedFailure by mutableStateOf<OptionsState?>(null)
+    internal val reportSent get() = reportedFailure != null && reportedFailure === optionsState
+    internal var reportSending by mutableStateOf(false)
+        private set
+    /** Sent (true) or failed (false) outcome for the snackbar; the screen consumes it. */
+    internal var reportOutcome by mutableStateOf<Boolean?>(null)
+        private set
+    internal fun consumeReportOutcome() { reportOutcome = null }
+    internal fun sendFailureReport(versionName: String, sdk: Int): Job? {
+        if (reportSending || reportSent) return null
+        val report = failureReport(versionName, sdk) ?: return null
+        val failed = optionsState
+        reportSending = true
+        return viewModelScope.launch {
+            val sent = try { sendReport(report) } finally { reportSending = false }
+            if (sent) reportedFailure = failed
+            reportOutcome = sent
+        }
     }
     private var gate = SuggestionGate(dismissed, linkKeyer)
     private var clipboardReady by mutableStateOf(initializeClipboard == null)
