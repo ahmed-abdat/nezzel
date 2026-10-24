@@ -543,15 +543,22 @@ fun mediaMeta(item: SavedMedia, language: String, withFormat: Boolean = false): 
     item.size?.let { NezzelFormat.size(it, language) } ?: stringResource(R.string.saved_size_unknown)
 ).joinToString(stringResource(R.string.separator)).let(NezzelFormat::isolate)
 
-/** MediaStore rows get system thumbnails; custom-folder documents often don't, so decode one frame ourselves. */
+/** MediaStore rows get system thumbnails (album art for audio); custom-folder documents often don't, so decode one ourselves. */
 private fun loadThumbnail(context: android.content.Context, item: SavedMedia): Bitmap? {
     try { return context.contentResolver.loadThumbnail(item.uri, Size(320, 180), null) } catch (_: Exception) { }
     return try {
-        if (item.kind == SavedMediaKind.VIDEO) {
+        if (item.kind == SavedMediaKind.VIDEO || item.kind == SavedMediaKind.AUDIO) {
             val retriever = android.media.MediaMetadataRetriever()
             try {
                 retriever.setDataSource(context, item.uri)
-                retriever.getScaledFrameAtTime(-1, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 320, 320)
+                if (item.kind == SavedMediaKind.VIDEO)
+                    retriever.getScaledFrameAtTime(-1, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 320, 320)
+                else retriever.embeddedPicture?.let { art ->
+                    android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(art))) { decoder, info, _ ->
+                        val scale = maxOf(1, info.size.width / 320, info.size.height / 180)
+                        decoder.setTargetSize(maxOf(1, info.size.width / scale), maxOf(1, info.size.height / scale))
+                    }
+                }
             } finally { retriever.release() }
         } else android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(context.contentResolver, item.uri)) { decoder, info, _ ->
             val scale = maxOf(1, info.size.width / 320, info.size.height / 180)
@@ -564,8 +571,8 @@ private fun loadThumbnail(context: android.content.Context, item: SavedMedia): B
 fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
     val context = LocalContext.current
     val bitmap by produceState<Bitmap?>(null, item.uri) {
-        if(item.kind == SavedMediaKind.IMAGE || item.kind == SavedMediaKind.VIDEO)
-            value = withContext(Dispatchers.IO) { loadThumbnail(context, item) }
+        // Audio shows its embedded cover; the music icon stays only when the file has none.
+        if(item.kind != null) value = withContext(Dispatchers.IO) { loadThumbnail(context, item) }
     }
     Surface(modifier.clip(shape), color = if (item.kind == SavedMediaKind.AUDIO) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
