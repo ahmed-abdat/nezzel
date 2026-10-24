@@ -4,6 +4,10 @@ import android.app.Application
 import androidx.work.Configuration
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.channels.awaitClose
 
 /** On-demand WorkManager initialization; workers cannot pass the coordinator's startup barrier. */
 open class NezzelApplication : Application(), Configuration.Provider {
@@ -62,6 +66,12 @@ open class NezzelApplication : Application(), Configuration.Provider {
         dev.ahmed.savlino.diagnostics.CrashReports.install(this)
         dev.ahmed.savlino.DebugStrictMode.install()
         collectors.launch { widgets.start(this) }
+        collectors.launch {
+            downloads.initialize()
+            downloads.batchFeeder.start(this,
+                downloads.progress.map { rows -> rows.map { Triple(it.jobId, it.phase, it.paused) } }.distinctUntilChanged(),
+                batchConnectivity())
+        }
         scope.launch { downloads.maintenance.onLaunch(); downloads.start(scope).join() }
         scope.launch {
             try {
@@ -72,4 +82,17 @@ open class NezzelApplication : Application(), Configuration.Provider {
         }
         scope.launch { media.saver.sweep() }
     }
+    private fun batchConnectivity() = callbackFlow {
+        val manager = getSystemService(android.net.ConnectivityManager::class.java)
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+                trySend(capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+            }
+            override fun onLost(network: android.net.Network) { trySend(false) }
+        }
+        val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }
+            catch (_: RuntimeException) { false }
+        awaitClose { if (registered) runCatching { manager?.unregisterNetworkCallback(callback) } }
+    }
+
 }

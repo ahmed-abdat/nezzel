@@ -528,6 +528,10 @@ class LinkViewModel(
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
+        if (YouTubeLinkKind.classify(source.link) == YouTubeLinkKind.PrivateList) {
+            optionsState = OptionsState.Error(DownloadError.LoginRequired)
+            return
+        }
         inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }
         inspectionStartedAt = now()
         usage.count(UsageKeys.FUNNEL_LINK)

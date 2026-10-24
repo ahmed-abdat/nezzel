@@ -32,6 +32,9 @@ interface EngineAdapter {
         if (prepared is PreparedUpdate.Failed) prepared.failure else updateYtdlp()
     /** Drops a prepared download without installing it. */
     fun discardYtdlpUpdate(prepared: PreparedUpdate) = Unit
+    /** Explicit playlist-listing path; ordinary inspection remains single-video. */
+    suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken? = null): PlaylistResult =
+        PlaylistResult.Failure(DownloadError.Unsupported)
     suspend fun inspect(source: LinkRevision, operationId: String): InspectResult
     /** Local best-effort persistence of already inspected metadata, after explicit confirmation. */
     fun prepareDownload(command: DownloadCommand) = Unit

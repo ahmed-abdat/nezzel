@@ -71,6 +71,8 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                         (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown)
                 }
             }
+            playlistNotice(links.text)?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (links.photosUnavailable) Text(stringResource(R.string.image_photos_unavailable),
                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
             when (val state = links.optionsState) {
@@ -386,3 +388,11 @@ private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> 
 
 private val RETRYABLE_INSPECTION = setOf(DownloadError.EngineUnavailable, DownloadError.Offline, DownloadError.Network, DownloadError.FormatExpired,
     DownloadError.Failed, DownloadError.ExecutionRestricted)
+
+/** Kept separate so every intake kind uses the same one-line notice. */
+internal fun playlistNotice(text: String): Int? = when (YouTubeLinkKind.classify(text)) {
+    YouTubeLinkKind.Playlist -> R.string.playlist_first_video_warning
+    YouTubeLinkKind.Mix -> R.string.playlist_mix_note
+    YouTubeLinkKind.PrivateList -> R.string.playlist_private_message
+    else -> null
+}

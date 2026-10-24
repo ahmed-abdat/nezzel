@@ -18,6 +18,8 @@ internal sealed interface FastResult {
 /** Blocking on the caller thread. Never retain failures. */
 internal interface YoutubeFastSource {
     fun infoJson(url: String, operationId: String, timeoutMs: Long): FastResult
+    fun playlist(source: dev.ahmed.savlino.domain.LinkRevision, token: dev.ahmed.savlino.engine.PlaylistPageToken?,
+        operationId: String, timeoutMs: Long): dev.ahmed.savlino.engine.PlaylistPage? = null
     fun cancel(operationId: String)
 }
 
@@ -43,6 +45,22 @@ internal class NpeFastSource(private val downloader: NpeDownloader = NpeDownload
             }?.let(FastResult::Json) ?: miss()
         } catch (_: Exception) { miss() }
         catch (_: LinkageError) { FastResult.Miss }
+        finally { operations.remove(operationId, cancelled) }
+    }
+
+    override fun playlist(source: dev.ahmed.savlino.domain.LinkRevision,
+        token: dev.ahmed.savlino.engine.PlaylistPageToken?, operationId: String, timeoutMs: Long): dev.ahmed.savlino.engine.PlaylistPage? {
+        if (timeoutMs <= 0) return null
+        val cancelled = AtomicBoolean()
+        if (operations.putIfAbsent(operationId, cancelled) != null) return null
+        val started = System.nanoTime()
+        return try {
+            installed
+            downloader.operation(operationId, timeoutMs) {
+                if (cancelled.get()) null else NpePlaylistPage.read(source, token)
+            }?.takeIf { !cancelled.get() && System.nanoTime() - started < TimeUnit.MILLISECONDS.toNanos(timeoutMs) }
+        } catch (_: Exception) { null }
+        catch (_: LinkageError) { null }
         finally { operations.remove(operationId, cancelled) }
     }
 

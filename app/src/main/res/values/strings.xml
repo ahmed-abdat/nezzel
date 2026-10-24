@@ -486,4 +486,9 @@
         <item quantity="one">%1$s new</item>
         <item quantity="other">%1$s new</item>
     </plurals>
+
+    <!-- Playlist notices (0.5). -->
+    <string name="playlist_first_video_warning">This link is a playlist. Only the first video will be saved.</string>
+    <string name="playlist_mix_note">Mixes can\'t be saved as a list. Only this video.</string>
+    <string name="playlist_private_message">This list is private and can\'t be opened.</string>
 </resources>

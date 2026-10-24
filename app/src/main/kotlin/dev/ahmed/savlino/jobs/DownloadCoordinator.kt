@@ -38,6 +38,38 @@ class DownloadCoordinator(
     thermalStatus: StateFlow<Int> = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE),
     private val usage: UsageEvents = UsageEvents.None,
 ) {
+    /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
+    val batches by lazy { BatchStore(store) }
+    val batchFeeder by lazy { BatchFeeder(batches, engine, object : BatchJobActions {
+        override suspend fun enqueue(command: DownloadCommand, preset: Preset) = this@DownloadCoordinator.enqueue(command, preset)
+        override suspend fun pause(id: String) = this@DownloadCoordinator.pause(id)
+        override suspend fun resume(id: String) = this@DownloadCoordinator.resume(id)
+        override suspend fun cancel(id: String) { this@DownloadCoordinator.cancel(id) }
+        override suspend fun retry(id: String) = this@DownloadCoordinator.retry(id)
+    }, parallelDownloads, thermalStatus) }
+
+    /** Called by the later sheet only after its Download-N tap. */
+    suspend fun confirmBatch(id: String, title: String, preset: Preset, items: List<PlaylistItem>): Boolean = withContext(Dispatchers.IO) {
+        initialize()
+        batches.create(id, title, preset, items).also { if (it) batchFeeder.wake() }
+    }
+    suspend fun pauseBatch(id: String) = batchFeeder.pause(id)
+    suspend fun resumeBatch(id: String) = batchFeeder.resume(id)
+    suspend fun stopBatch(id: String) = batchFeeder.stop(id)
+    suspend fun retryBatch(id: String) = batchFeeder.retry(id)
+
+    /** Replay durable batch controls before startup admits any worker; publications have already recovered. */
+    private fun restoreBatchControls() {
+        batches.scrubExpired()
+        for (batch in batches.all()) {
+            if (batch.state !in setOf(BatchState.STOPPED, BatchState.PAUSED, BatchState.WAITING_NETWORK)) continue
+            for (item in batches.items(batch.id)) {
+                if (batch.state == BatchState.STOPPED) store.cancelEnqueued(item.jobId)
+                else store.pause(item.jobId)
+            }
+        }
+    }
+
     val maintenance = EngineMaintenance(context, engine, {
         active.isNotEmpty() || store.all().any { !it.stage.terminal }
     }, hasRunningDownloads = {
@@ -99,6 +131,7 @@ class DownloadCoordinator(
             if (initialized) return@withLock
             store.sweepInfoJson()
             recovery.recover() // Never recover the whole journal after this barrier opens.
+            restoreBatchControls()
             for (row in store.all()) {
                 if (row.stage == JobStage.ENQUEUED) {
                     updateQueue(fromRecord(row))

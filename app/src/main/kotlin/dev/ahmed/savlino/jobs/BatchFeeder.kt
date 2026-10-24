@@ -1,0 +1,210 @@
+package dev.ahmed.savlino.jobs
+
+import android.os.PowerManager
+import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/** Scheduling/control seam; the journal remains real in feeder tests. */
+internal interface BatchJobActions {
+    suspend fun enqueue(command: DownloadCommand, preset: Preset): Boolean
+    suspend fun pause(id: String): Boolean
+    suspend fun resume(id: String): Boolean
+    suspend fun cancel(id: String)
+    suspend fun retry(id: String): Boolean
+}
+
+/** Sequential inspection, durable identity, bounded lookahead. No transfer slot or publication logic lives here. */
+class BatchFeeder internal constructor(private val batches: BatchStore, private val engine: EngineAdapter,
+    private val actions: BatchJobActions, private val limit: StateFlow<Int>, private val thermal: StateFlow<Int>) {
+    private val jobs get() = batches.jobs
+    private val gate = Mutex()
+    private val wakeups = Channel<Unit>(Channel.CONFLATED)
+    private var runner: Job? = null
+
+    /** App/process lifetime; the parent's cancellation also closes observers and any pending inspection. */
+    @Synchronized internal fun start(scope: CoroutineScope, changes: Flow<*>, online: Flow<Boolean>): Job {
+        runner?.takeIf { it.isActive }?.let { return it }
+        return scope.launch {
+            launch { changes.collect { wake() } }
+            launch { combine(limit, thermal) { _, _ -> Unit }.collect { wake() } }
+            launch { online.distinctUntilChanged().collect { if (it) networkAvailable() } }
+            wake()
+            while (isActive) {
+                // Also scrub a quiet/paused batch when its confirmation expires.
+                withTimeoutOrNull(60_000) { wakeups.receive() }
+                try { tick() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* Retain durable state; retry on next signal, never log row contents. */ }
+            }
+        }.also { runner = it }
+    }
+    fun wake() { wakeups.trySend(Unit) }
+
+    internal suspend fun tick() = gate.withLock {
+        reconcile() // First adopt any enqueue committed just before process death.
+        batches.scrubExpired()
+        applyControls()
+        for (batch in batches.all()) {
+            while (batches.get(batch.id)?.state == BatchState.ACTIVE && activeCount() < lookahead()) {
+                val item = batches.items(batch.id).firstOrNull { it.state == BatchItemState.WAITING } ?: break
+                val existing = jobs.get(item.jobId)
+                if (existing != null) {
+                    if (existing.stage == JobStage.FAILED && item.retryable) {
+                        if (actions.retry(item.jobId)) batches.queued(item, existing.preset != batch.preset)
+                        else batches.finish(item, BatchItemState.FAILED, existing.error ?: DownloadError.FormatExpired)
+                    } else batches.queued(item, existing.preset != batch.preset)
+                    reconcile()
+                    applyControls()
+                    continue
+                }
+                val raw = batches.source(item)
+                if (raw == null) {
+                    // A temporarily locked Keystore must not turn all rows into permanent failures.
+                    if (batches.items(batch.id).first { it.position == item.position }.state == BatchItemState.WAITING)
+                        batches.state(batch.id, BatchState.PAUSED, DownloadError.ExecutionRestricted)
+                    break
+                }
+                val link = LinkInput.parse(raw)
+                if (link == null || YouTubeLinkKind.classify(link) != YouTubeLinkKind.Video) {
+                    batches.finish(item, BatchItemState.SKIPPED, DownloadError.InvalidInput)
+                    continue
+                }
+                val source = LinkRevision(link, 0)
+                val result = try { engine.inspect(source, "resolve-${item.jobId}") }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { InspectResult.Failure(DownloadError.Failed) }
+                // Completion, heat and the original confirmation deadline can change during inspection.
+                reconcile()
+                batches.scrubExpired()
+                applyControls()
+                if (batches.get(batch.id)?.state != BatchState.ACTIVE || activeCount() >= lookahead()) break
+                when (result) {
+                    is InspectResult.Failure -> batches.finish(item,
+                        if (result.error in setOf(DownloadError.Unavailable, DownloadError.NoVideo, DownloadError.NotAPost, DownloadError.Unsupported))
+                            BatchItemState.SKIPPED else BatchItemState.FAILED,
+                        result.error, JobStore.retryableError(result.error))
+                    is InspectResult.Success -> {
+                        val selected = choose(result.inspection, batch.preset)
+                        if (selected == null) batches.finish(item, BatchItemState.SKIPPED, DownloadError.NoFormats)
+                        else {
+                            val (format, actualPreset) = selected
+                            val confirmed = DownloadCommand.confirm(item.jobId, result.inspection, source, format.id, item.title)
+                            if (confirmed !is ConfirmResult.Confirmed) batches.finish(item, BatchItemState.FAILED, DownloadError.FormatExpired)
+                            else {
+                                try {
+                                    actions.enqueue(confirmed.command, actualPreset)
+                                } catch (cancelled: CancellationException) { throw cancelled }
+                                catch (_: Exception) { /* An insert may have committed: inspect the row before deciding. */ }
+                                if (jobs.get(item.jobId) != null) {
+                                    batches.queued(item, actualPreset != batch.preset)
+                                    reconcile() // Scheduling can already have failed or completed.
+                                } else batches.finish(item, BatchItemState.FAILED, DownloadError.ExecutionRestricted, retryable = true)
+                            }
+                        }
+                    }
+                }
+                applyControls()
+            }
+            batches.finishIfIdle(batch.id)
+        }
+    }
+
+    private fun lookahead() = (if (thermal.value >= PowerManager.THERMAL_STATUS_SEVERE) 1 else limit.value.coerceIn(1, 3)) + 1
+    private fun activeCount() = batches.all().sumOf { batch -> batches.items(batch.id).count { item ->
+        item.state == BatchItemState.QUEUED && jobs.get(item.jobId)?.let { !it.stage.terminal && it.stage != JobStage.PAUSED } == true
+    } }
+
+    /** No re-inspection of a job inserted before death; terminal item flags survive jobs' 100-row pruning. */
+    private fun reconcile() {
+        for (batch in batches.all()) {
+            for (item in batches.items(batch.id)) {
+                if (item.state !in setOf(BatchItemState.WAITING, BatchItemState.QUEUED)) continue
+                val job = jobs.get(item.jobId)
+                if (job == null) {
+                    if (item.state == BatchItemState.QUEUED) batches.finish(item, BatchItemState.FAILED, DownloadError.Interrupted)
+                    continue
+                }
+                // A requested retry waits for a lookahead vacancy instead of requeueing N jobs at once.
+                if (item.state == BatchItemState.WAITING && item.retryable && job.stage == JobStage.FAILED) continue
+                if (item.state == BatchItemState.WAITING) batches.queued(item, job.preset != batch.preset)
+                when (job.stage) {
+                    JobStage.COMPLETED -> batches.finish(item, BatchItemState.DONE)
+                    JobStage.CANCELLED -> batches.finish(item, BatchItemState.SKIPPED, DownloadError.Cancelled)
+                    JobStage.FAILED -> batches.finish(item, BatchItemState.FAILED, job.error, job.retryable)
+                    else -> Unit
+                }
+            }
+            batches.finishIfIdle(batch.id)
+        }
+    }
+
+    private suspend fun applyControls() {
+        for (batch in batches.all()) if (batch.state == BatchState.STOPPED) {
+            // Stop may have persisted just before process death, before coordinator cancellation ran.
+            for (item in batches.items(batch.id)) if (item.state == BatchItemState.QUEUED &&
+                jobs.get(item.jobId)?.stage?.terminal == false) actions.cancel(item.jobId)
+        } else if (batch.state in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) {
+            for (item in batches.items(batch.id)) if (item.state == BatchItemState.QUEUED &&
+                jobs.get(item.jobId)?.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) actions.pause(item.jobId)
+        }
+    }
+
+    suspend fun pause(id: String) = gate.withLock {
+        if (batches.get(id)?.state in setOf(BatchState.ACTIVE, BatchState.WAITING_NETWORK)) {
+            batches.state(id, BatchState.PAUSED)
+            batches.items(id).filter { it.state == BatchItemState.QUEUED }.forEach { actions.pause(it.jobId) }
+        }
+    }
+    suspend fun resume(id: String) = gate.withLock { resumeUnderGate(id); wake() }
+    private suspend fun resumeUnderGate(id: String) {
+        batches.scrubExpired()
+        if (batches.get(id)?.state !in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) return
+        if (!batches.state(id, BatchState.ACTIVE)) return
+        batches.items(id).filter { it.state == BatchItemState.QUEUED && jobs.get(it.jobId)?.stage == JobStage.PAUSED }
+            .forEach { actions.resume(it.jobId) }
+    }
+    suspend fun stop(id: String) = gate.withLock {
+        for (jobId in batches.stop(id)) if (jobs.get(jobId)?.stage?.terminal == false) actions.cancel(jobId)
+        reconcile()
+        wake()
+    }
+    suspend fun retry(id: String) = gate.withLock { retryUnderGate(id); wake() }
+    private suspend fun retryUnderGate(id: String) {
+        batches.scrubExpired()
+        val batch = batches.get(id) ?: return
+        if (batch.state in setOf(BatchState.STOPPED, BatchState.EXPIRED)) return
+        val changed = batches.requestRetries(id)
+        if (changed) {
+            batches.state(id, BatchState.ACTIVE)
+            batches.items(id).filter { it.state == BatchItemState.QUEUED && jobs.get(it.jobId)?.stage == JobStage.PAUSED }
+                .forEach { actions.resume(it.jobId) }
+        }
+    }
+    internal suspend fun networkAvailable() = gate.withLock {
+        for (batch in batches.all()) if (batch.state == BatchState.WAITING_NETWORK) {
+            retryUnderGate(batch.id)
+            resumeUnderGate(batch.id)
+        }
+        wake()
+    }
+
+    private fun choose(inspection: Inspection, requested: Preset): Pair<Format, Preset>? {
+        val chain = when (requested) {
+            Preset.BALANCED -> listOf(Preset.BALANCED, Preset.SMALL)
+            Preset.AUDIO_M4A -> listOf(Preset.AUDIO_M4A, Preset.AUDIO_MP3)
+            else -> listOf(requested)
+        }
+        for (preset in chain) {
+            val id = inspection.presets.firstOrNull { it.preset == preset }?.formatId ?: continue
+            val row = inspection.formats.firstOrNull { it.id == id } ?: continue
+            if (preset == Preset.BALANCED && row.height?.let { it <= 720 } != true) continue
+            return row to preset
+        }
+        return null
+    }
+}
