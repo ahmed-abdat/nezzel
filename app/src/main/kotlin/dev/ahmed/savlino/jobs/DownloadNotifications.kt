@@ -76,7 +76,8 @@ class DownloadNotifications(private val base: Context,
             ctx.getString(R.string.playlist_stopped, NezzelFormat.count(skipped, language))
         else if (batch.links) ctx.getString(if (batch.terminal) R.string.multi_link_notification_done else R.string.multi_link_notification_progress,
             ctx.resources.getQuantityString(R.plurals.multi_link_title, batch.total, NezzelFormat.count(batch.total, language)),
-            NezzelFormat.count(batch.saved, language), NezzelFormat.count(if (batch.terminal) failed else batch.total, language))
+            // Link batches count skipped items (photo posts, gone links) as not saved too.
+            NezzelFormat.count(batch.saved, language), NezzelFormat.count(if (batch.terminal) failed + skipped else batch.total, language))
         else ctx.getString(if (batch.terminal) R.string.playlist_notification_done else R.string.playlist_notification_progress,
             NezzelFormat.count(batch.saved, language), NezzelFormat.count(if (batch.terminal) failed else batch.total, language))
         val tag = "playlist:${batch.id}"

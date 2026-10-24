@@ -69,6 +69,18 @@ class PlaylistNotificationsTest {
         }
     }
 
+    @Test fun linkBatchSummaryCountsSkippedItemsAsNotSaved() {
+        val app = RuntimeEnvironment.getApplication()
+        val manager = app.getSystemService(NotificationManager::class.java)
+        val record = playlistFixture(BatchState.COMPLETED).record
+        fun item(position: Int, state: BatchItemState, error: DownloadError? = null) =
+            BatchItemRecord("list", position, "${BatchStore.LINK_ITEM}$position", "tiktok.com", state, "job-$position", error, false, false)
+        val batch = PlaylistBatch(record, listOf(item(0, BatchItemState.DONE), item(1, BatchItemState.DONE),
+            item(2, BatchItemState.SKIPPED, DownloadError.PhotoPost)))
+        DownloadNotifications(app, batchMember = { true }).playlist(batch)
+        assertEquals("3 links: 2 saved, 1 not saved", manager.activeNotifications.single().notification.extras.getString(Notification.EXTRA_TEXT))
+    }
+
     @Test fun completedSummaryCountsOnlyFailedItems() {
         val app = RuntimeEnvironment.getApplication()
         val manager = app.getSystemService(NotificationManager::class.java)

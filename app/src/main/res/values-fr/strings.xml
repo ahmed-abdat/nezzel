@@ -601,7 +601,7 @@
     </plurals>
     <string name="multi_link_remove">Retirer %1$s</string>
     <string name="multi_link_notification_progress">%1$s : %2$s sur %3$s enregistrés</string>
-    <string name="multi_link_notification_done">%1$s : %2$s enregistrés, %3$s échecs</string>
+    <string name="multi_link_notification_done">%1$s : %2$s enregistrés, %3$s non enregistrés</string>
     <string name="multi_link_submit_failed">Impossible de lancer les téléchargements. Réessayez.</string>
     <string name="multi_link_photo_post">Publication photo : ouvrez ce lien seul</string>
 </resources>

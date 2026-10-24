@@ -588,7 +588,7 @@
     </plurals>
     <string name="multi_link_remove">Remove %1$s</string>
     <string name="multi_link_notification_progress">%1$s: %2$s of %3$s saved</string>
-    <string name="multi_link_notification_done">%1$s: %2$s saved, %3$s failed</string>
+    <string name="multi_link_notification_done">%1$s: %2$s saved, %3$s not saved</string>
     <string name="multi_link_submit_failed">Couldn’t start the downloads. Try again.</string>
     <string name="multi_link_photo_post">Photo post: open this link on its own</string>
 </resources>
