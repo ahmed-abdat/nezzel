@@ -54,7 +54,7 @@ class LinkedInVideoHandoffTest {
     private fun pump() = shadowOf(Looper.getMainLooper()).idle()
     private fun check(url: String) { vm.edit(url); vm.checkLink(); pump() }
     private fun awaitRows() = runBlocking {
-        withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } }
+        withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }
         pump()
         store.all()
     }

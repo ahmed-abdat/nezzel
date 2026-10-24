@@ -148,7 +148,7 @@ class EngineUpdateFlowTest {
             assertTrue(vm.downloadEnabled)
             vm.confirmDownload(); pump()
             assertEquals(2, engine.inspected.size)
-            runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } } }
+            runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } } }
             assertEquals("2026.08.19", store.all().single().engineVersion)
         } finally { vm.dismissOptions(); store.close() }
     }

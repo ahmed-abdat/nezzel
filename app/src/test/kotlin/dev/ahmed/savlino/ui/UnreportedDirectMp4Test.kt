@@ -68,7 +68,7 @@ class UnreportedDirectMp4Test {
         assertTrue(vm.formatOptions.any { !it.hasVideo })
         assertTrue(vm.downloadEnabled)
         vm.confirmDownload()
-        val job = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } }; pump(); store.all().single() }
+        val job = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }; pump(); store.all().single() }
         assertEquals("hd", job.format.sourceFormatId)
         assertEquals("Inspected post title.mp4", job.filename)
     }
@@ -123,7 +123,7 @@ class UnreportedDirectMp4Test {
         assertEquals("http", vm.selectedFormat?.id)
         assertTrue(vm.downloadEnabled)
         vm.confirmDownload()
-        val job = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } }; pump(); store.all().single() }
+        val job = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }; pump(); store.all().single() }
         assertEquals("http", job.format.sourceFormatId)
         assertEquals(Size.Unknown, job.format.size)
     }
@@ -169,7 +169,7 @@ class UnreportedDirectMp4Test {
         vm.selectFormat("g480")
         assertTrue(vm.downloadEnabled)
         vm.confirmDownload()
-        val job = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } }; pump(); store.all().single() }
+        val job = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }; pump(); store.all().single() }
         assertEquals(gif, job.format)
     }
 

@@ -96,7 +96,7 @@ class NotificationPermissionFlowTest {
                 }
             }
             runBlocking { withTimeout(5000) {
-                while (store.all().isEmpty()) { shadowOf(Looper.getMainLooper()).idle(); delay(5) }
+                while (store.all().isEmpty()) { shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(5) }
             } }
             assertEquals("Real title.mp4", store.all().single().filename)
             assertEquals(JobStage.ENQUEUED, store.all().single().stage)

@@ -119,7 +119,7 @@ class StaleSheetTest {
         val vm = model(engine, DownloadCoordinator(app, engine, store))
         try {
             age(); vm.confirmDownload(); idle()
-            runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { idle(); delay(5) } } }
+            runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { idle(); Thread.sleep(5) } } }
             idle()
             val job = store.all().single()
             assertEquals("22", job.format.id)

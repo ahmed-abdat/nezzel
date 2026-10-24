@@ -73,7 +73,7 @@ class InstagramPostFlowTest {
         assertEquals(listOf("http"), vm.formatOptions.map { it.id })
         vm.selectFormat("http")
         vm.confirmDownload()
-        val row = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); delay(5) } }; pump(); store.all().single() }
+        val row = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }; pump(); store.all().single() }
         assertEquals(canonicalPost, row.sourceUrl)
     }
 
