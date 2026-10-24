@@ -48,6 +48,7 @@ class ImageSaverTest {
     }
 
     @Before fun setUp() {
+        SaveDestinations(app).savedFiles()
         provider = Provider(File(app.cacheDir, "image-provider").apply { deleteRecursively(); mkdirs() })
         provider.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
         ShadowContentResolver.registerProviderInternal("media", provider)
@@ -543,6 +544,37 @@ class ImageSaverTest {
         assertArrayEquals(fixture, avStaging.readBytes())
     }
 
+    @Test fun defaultSweepOnlyDeletesOwnDefaultImagesAndLeavesStatusesAndForeignRows() = runBlocking {
+        val ownDefault = provider.seed("own.png", "image/png", 1)
+        val foreignDefault = provider.seed("foreign.png", "image/png", 1, owner = "other.package")
+        val ownStatus = provider.seed("status.png", "image/png", 1, path = "Download/Nezzel/Statuses/")
+        val foreignStatus = provider.seed("foreign-status.png", "image/png", 1, owner = "other.package", path = "Download/Nezzel/Statuses/")
+        val ownVideo = provider.seed("status.mp4", "video/mp4", 1, path = "Download/Nezzel/Statuses/")
+        saver(FakeFetch()).sweep()
+        assertFalse(provider.rows.containsKey(ContentUris.parseId(ownDefault)))
+        assertEquals(setOf(foreignDefault, ownStatus, foreignStatus, ownVideo).map(ContentUris::parseId).toSet(), provider.rows.keys)
+        for (uri in listOf(foreignDefault, ownStatus, foreignStatus, ownVideo)) {
+            assertArrayEquals(fixture, provider.file(uri).readBytes())
+        }
+    }
+
+    @Test fun startupServiceSweepsStatusesAndTheirStageWithoutTouchingJournalledDownloads() = runBlocking {
+        val statusRoot = File(app.noBackupFilesDir, "status-save")
+        val statusJob = JobDirectory(statusRoot.apply { mkdirs() }).create("status-876")
+        statusJob.file("output", "png").writeBytes(fixture)
+        val statusImage = provider.seed("status.png", "image/png", 1, path = "Download/Nezzel/Statuses/")
+        val statusVideo = provider.seed("status.mp4", "video/mp4", 1, path = "Download/Nezzel/Statuses/")
+        val kept = provider.seed("kept.mp4", "video/mp4", 0, path = "Download/Nezzel/Statuses/")
+        val regularVideo = provider.seed("job.mp4", "video/mp4", 1)
+        val foreign = provider.seed("foreign.png", "image/png", 1, owner = "other.package", path = "Download/Nezzel/Statuses/")
+        val unrelated = provider.seed("other.png", "image/png", 1, path = "Download/Other/")
+        MediaServices(app, { error("Sweep must not load the engine") }, scope).saver.sweep()
+        assertFalse(provider.rows.containsKey(ContentUris.parseId(statusImage)))
+        assertFalse(provider.rows.containsKey(ContentUris.parseId(statusVideo)))
+        assertEquals(setOf(kept, regularVideo, foreign, unrelated).map(ContentUris::parseId).toSet(), provider.rows.keys)
+        assertFalse(statusJob.directory.exists())
+    }
+
     /** Robolectric has no MediaProvider. Rows + bytes persist through ContentResolver/PFD; pending rows need MATCH_INCLUDE. */
     private inner class Provider(private val directory: File) : ContentProvider() {
         val rows = linkedMapOf<Long, ContentValues>()
@@ -552,11 +584,11 @@ class ImageSaverTest {
         override fun getType(uri: Uri) = "image/jpeg"
         fun row(uri: Uri) = rows.getValue(ContentUris.parseId(uri))
         fun file(uri: Uri) = File(directory, ContentUris.parseId(uri).toString())
-        fun seed(name: String, mime: String, pending: Int, owner: String = app.packageName): Uri {
+        fun seed(name: String, mime: String, pending: Int, owner: String = app.packageName, path: String = "Download/Nezzel/"): Uri {
             val id = ++nextId
             rows[id] = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, name); put(MediaStore.Downloads.MIME_TYPE, mime)
-                put(MediaStore.Downloads.RELATIVE_PATH, "Download/Nezzel/"); put(MediaStore.Downloads.IS_PENDING, pending)
+                put(MediaStore.Downloads.RELATIVE_PATH, path); put(MediaStore.Downloads.IS_PENDING, pending)
                 put(MediaStore.Downloads.OWNER_PACKAGE_NAME, owner)
             }
             return ContentUris.withAppendedId(collection, id).also { file(it).writeBytes(fixture) }
@@ -599,11 +631,13 @@ class ImageSaverTest {
         private fun matches(values: ContentValues, selection: String?, args: Array<out String>?): Boolean {
             if (selection == null || args == null) return true
             if (selection.contains("mime_type LIKE")) {
-                assertEquals("is_pending = ? AND owner_package_name = ? AND relative_path = ? AND mime_type LIKE ?", selection)
+                assertEquals(listOf("1", app.packageName, "Download/Nezzel/", "image/%", "Download/Nezzel/Statuses/", "image/%", "video/%"), args.toList())
+                val path = values.getAsString(MediaStore.Downloads.RELATIVE_PATH)
+                val mime = values.getAsString(MediaStore.Downloads.MIME_TYPE)
                 return values.getAsInteger(MediaStore.Downloads.IS_PENDING).toString() == args[0] &&
                     values.getAsString(MediaStore.Downloads.OWNER_PACKAGE_NAME) == args[1] &&
-                    values.getAsString(MediaStore.Downloads.RELATIVE_PATH) == args[2] &&
-                    args[3] == "image/%" && values.getAsString(MediaStore.Downloads.MIME_TYPE).startsWith("image/")
+                    ((path == args[2] && mime.startsWith("image/")) ||
+                        (path == args[4] && (mime.startsWith("image/") || mime.startsWith("video/"))))
             }
             return values.getAsString(MediaStore.Downloads.RELATIVE_PATH) in args &&
                 values.getAsInteger(MediaStore.Downloads.IS_PENDING) == 0
@@ -618,11 +652,13 @@ class ImageSaverTest {
         override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
             val row = rows[ContentUris.parseId(uri)] ?: return 0
             assertEquals("is_pending = ? AND owner_package_name = ? AND relative_path = ?", selection)
-            assertEquals(listOf("1", app.packageName, "Download/Nezzel/"), selectionArgs?.toList())
-            // Removing published output, a foreign row or a video row fails the test.
+            assertEquals(listOf("1", app.packageName, row.getAsString(MediaStore.Downloads.RELATIVE_PATH)), selectionArgs?.toList())
+            // Removing published output, a foreign row or a journalled download fails the test.
             assertEquals(app.packageName, row.getAsString(MediaStore.Downloads.OWNER_PACKAGE_NAME))
             if (row.getAsInteger(MediaStore.Downloads.IS_PENDING) != 1) return 0
-            assertTrue(row.getAsString(MediaStore.Downloads.MIME_TYPE).startsWith("image/"))
+            assertTrue(row.getAsString(MediaStore.Downloads.MIME_TYPE).startsWith("image/") ||
+                (row.getAsString(MediaStore.Downloads.RELATIVE_PATH) == "Download/Nezzel/Statuses/" &&
+                    row.getAsString(MediaStore.Downloads.MIME_TYPE).startsWith("video/")))
             rows.remove(ContentUris.parseId(uri))
             file(uri).delete()
             return 1
