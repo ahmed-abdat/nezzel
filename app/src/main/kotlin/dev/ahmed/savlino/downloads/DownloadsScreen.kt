@@ -228,7 +228,7 @@ fun DownloadsScreen(
     val started = rememberStartOrder(jobs)
     val active = rememberWithSavedMoment(jobs, remember(jobs, started) { visibleJobs(jobs, started) })
     val reduced = LocalReducedMotion.current
-    val filtered = remember(saved, filterName, query) { filterMedia(saved, MediaFilter.valueOf(filterName), query) }
+    val filtered = remember(saved, filterName, query) { filterMedia(groupDownloads(saved), MediaFilter.valueOf(filterName), query) }
     // Changing the filter/search exits selection; hidden files never receive a bulk action.
     var selectedUris by remember(filterName, query) { mutableStateOf(emptySet<String>()) }
     val selected = filtered.filter { it.uri.toString() in selectedUris }
@@ -478,6 +478,11 @@ private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onS
     }
     @Composable fun Texts(modifier: Modifier) = Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
         Text(NezzelFormat.firstStrong(item.title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        item.postPosition?.let { position ->
+            Text(stringResource(R.string.saved_post_position, NezzelFormat.count(position.index, language),
+                NezzelFormat.count(position.total, language)), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Text(meta, Modifier.fillMaxWidth(), style = metaStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     // The item's animation modifier goes on the outermost node, the lazy list's direct child.

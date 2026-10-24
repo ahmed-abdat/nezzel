@@ -87,6 +87,11 @@ internal object MediaHttpPolicy {
         Regex("/img/(?:feed_fullsize|feed_thumbnail)/plain/(?:${BlueskyPostIdentity.DID})/[A-Za-z0-9_-]{1,256}(?:@(?:jpeg|png|webp|avif))?")
             .matches(url.encodedPath) && url.encodedQuery == null
 
+    /** TikTok photo CDN, including p16-/p19- signed hosts; suffix boundaries reject lookalikes. */
+    internal fun isTikTokImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 &&
+        (url.host.endsWith(".tiktokcdn.com") || url.host.endsWith(".tiktokcdn-us.com")) &&
+        url.encodedPath != "/"
+
     internal fun withoutQuery(url: HttpUrl): String = url.newBuilder().query(null).fragment(null).build().toString()
 
     internal fun safeText(raw: String): Boolean = raw.length in 1..8192 && raw.none {

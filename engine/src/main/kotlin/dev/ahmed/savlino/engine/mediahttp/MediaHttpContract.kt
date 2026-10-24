@@ -10,14 +10,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  * PAGES_AND_IMAGE: at most two page fetches and one image. PAGES_AND_CAROUSEL: Facebook (post,
  * then an optional single photo page) and Bluesky (handle resolution + post), at most two page/API
  * reads with the same carousel image/request/deadline budgets.
+ * TIKTOK_PAGE_AND_CAROUSEL: one page, 40 photos sharing 4 MiB, up to 80 image requests
+ * (a refused resize may try the original), 84 requests including redirects, same 15 s deadline.
  * LINKEDIN_PAGE_AND_CAROUSEL: one page + up to 64 images, 68 requests including redirects,
  * sharing the same 2 MiB image budget and 15 s fetch deadline.
  */
 enum class MediaHttpOperation { DIRECT_IMAGE, PAGE_AND_IMAGE, PAGES_AND_IMAGE, PAGE_AND_CAROUSEL, PAGES_AND_CAROUSEL,
-    LINKEDIN_PAGE_AND_CAROUSEL;
+    LINKEDIN_PAGE_AND_CAROUSEL, TIKTOK_PAGE_AND_CAROUSEL;
     internal val isCarousel: Boolean get() = this == PAGE_AND_CAROUSEL || this == PAGES_AND_CAROUSEL ||
-        this == LINKEDIN_PAGE_AND_CAROUSEL
-    internal val maxImages: Int get() = if (this == LINKEDIN_PAGE_AND_CAROUSEL) 64 else if (isCarousel) 20 else 1
+        this == LINKEDIN_PAGE_AND_CAROUSEL || this == TIKTOK_PAGE_AND_CAROUSEL
+    internal val maxImages: Int get() = if (this == LINKEDIN_PAGE_AND_CAROUSEL) 64 else if (this == TIKTOK_PAGE_AND_CAROUSEL) 40 else if (isCarousel) 20 else 1
 }
 enum class MediaHttpPurpose { PAGE, IMAGE }
 enum class MediaHttpFailure {
@@ -38,7 +40,7 @@ enum class MediaHttpFailure {
  * Extra host allowlist enforced on the first URL and on every redirect hop. X_MEDIA: `https://pbs.twimg.com/media/` only.
  * INSTAGRAM_CDN: `instagram.f<pop>.fna.fbcdn.net` / `scontent[-<pop>].cdninstagram.com` image paths only.
  */
-enum class MediaHostRule { ANY, FACEBOOK_CDN, X_MEDIA, INSTAGRAM_CDN, TELEGRAM_CDN, BLUESKY_CDN }
+enum class MediaHostRule { ANY, FACEBOOK_CDN, X_MEDIA, INSTAGRAM_CDN, TELEGRAM_CDN, BLUESKY_CDN, TIKTOK_CDN }
 
 class PublicMediaRequest(val url: String, val purpose: MediaHttpPurpose,
     val pageContext: MediaHttpTarget? = null, val hostRule: MediaHostRule = MediaHostRule.ANY) {

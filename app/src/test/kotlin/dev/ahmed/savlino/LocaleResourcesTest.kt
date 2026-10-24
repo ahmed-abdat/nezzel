@@ -21,6 +21,18 @@ class LocaleResourcesTest {
     private fun arguments(text: String): List<String> =
         Regex("%(?:[0-9]+\\$)?[sd]").findAll(text).map { it.value }.sorted().toList()
 
+    @Test fun multiMediaPostCopyKeepsArabicAndFrenchArgumentsInParity() {
+        val english = entries("values")
+        for (locale in listOf("values-ar", "values-fr")) {
+            val translated = entries(locale)
+            for (name in listOf("saved_post_position", "tiktok_sound", "image_expired", "image_expired_body")) {
+                val entry = translated.getValue(name)
+                assertTrue("$locale/$name", entry.textContent.isNotBlank())
+                assertEquals("$locale/$name", arguments(english.getValue(name).textContent), arguments(entry.textContent))
+            }
+        }
+    }
+
     @Test fun frenchResourcesCoverEveryTranslatableEntryAndKeepFormatArguments() {
         val english = entries("values")
         val french = entries("values-fr", translatedOnly = false)

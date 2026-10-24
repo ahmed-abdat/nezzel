@@ -129,7 +129,7 @@ class MediaReferenceStore : Closeable {
 internal class StoredImageReference(val source: LinkRevision, val identity: MediaAdapterIdentity,
     val validity: MediaInspectionValidity, val rendition: MediaRenditionRef, val url: String,
     val image: MediaImageMetadata, val linkedIn: Boolean, val postContext: MediaHttpPostContext?,
-    val hostRule: MediaHostRule = MediaHostRule.ANY) {
+    val hostRule: MediaHostRule = MediaHostRule.ANY, val mirrors: List<String> = emptyList()) {
     fun matches(selection: MediaSelection): Boolean = source.matches(selection.source) &&
         identity == selection.identity && validity === selection.validity && rendition == selection.renditionRef
     override fun toString() = "StoredImageReference(opaque)"

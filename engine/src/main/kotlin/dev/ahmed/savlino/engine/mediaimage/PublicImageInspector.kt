@@ -22,6 +22,7 @@ import dev.ahmed.savlino.engine.bluesky.BlueskyParseResult
 import dev.ahmed.savlino.engine.x.XParseResult
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.x.XPostParser
+import dev.ahmed.savlino.engine.tiktok.*
 import java.io.Closeable
 import java.util.UUID
 import java.util.concurrent.Callable
@@ -75,6 +76,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             InstagramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             TelegramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             BlueskyPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
+            TikTokPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL
             else -> MediaHttpOperation.DIRECT_IMAGE
         }
         val previous = synchronized(lock) {
@@ -116,6 +118,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     ImageSourceType.INSTAGRAM -> fetchInstagram(operation)
                     ImageSourceType.TELEGRAM -> fetchTelegram(operation)
                     ImageSourceType.BLUESKY -> fetchBluesky(operation)
+                    ImageSourceType.TIKTOK -> fetchTikTok(operation)
                     ImageSourceType.DIRECT -> fetchDirect(operation)
                 } } catch (_: OutOfMemoryError) {
                     Fetched.Failed(failure(ImageFailure.BUDGET, operation.fetchPhase))
@@ -180,7 +183,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             val discovery: ImageDiscovery, val validity: MediaInspectionValidity,
             val postContext: MediaHttpPostContext?, val linkedIn: Boolean,
             val hostRule: MediaHostRule = MediaHostRule.ANY, val metadata: MediaMetadata = MediaMetadata(),
-            val position: Int = 0, val previewOnly: Boolean = false, val videoSource: LinkRevision? = null) : Fetched {
+            val position: Int = 0, val previewOnly: Boolean = false, val videoSource: LinkRevision? = null,
+            val mirrors: List<String> = emptyList()) : Fetched {
             override fun toString() = "Fetched.Asset(redacted)"
         }
     }
@@ -401,6 +405,53 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             MediaMetadata(parsed.title, parsed.author), parsed.previewCandidates)
     }
 
+    private fun fetchTikTok(operation: ImageInspectionOperation): Fetched {
+        val identity = TikTokPostIdentity.parse(operation.source.link.rawUrl)
+            ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
+        val parsed = when (val page = TikTokPostInspector(http).read(operation.token, identity)) {
+            is TikTokPageResult.Failure -> return Fetched.Failed(MediaInspectResult.Failure(page.reason, ImagePhase.PAGE, page.statusCode))
+            is TikTokPageResult.Parsed -> when (val result = page.result) {
+                is TikTokParseResult.Failure -> return Fetched.Failed(failure(result.reason, ImagePhase.PAGE))
+                TikTokParseResult.Video -> return redirectTo(operation, LinkInput.parse(identity.videoUrl))
+                is TikTokParseResult.Success -> result
+            }
+        }
+        operation.fetchPhase = ImagePhase.IMAGE
+        val validity = MediaInspectionValidity.processLocal()
+        val soundSource = if (parsed.sound != null) LinkInput.parse(identity.videoUrl)?.let {
+            LinkRevision(it, operation.source.revision)
+        } else null
+        val discovery = parsed.discovery.copy(sound = parsed.sound, photoLimit = TikTokPostParser.MAX_PHOTOS)
+        val metadata = MediaMetadata(title = parsed.title)
+        val assets = ArrayList<Fetched.Asset>()
+        var notPreviewed = 0
+        for (photo in parsed.photos) {
+            val original = photo.urls.first()
+            val preview = TikTokPostInspector.previewUrl(original)
+            fun placeholder() = Fetched.Asset(null, MediaImageMetadata(photo.format),
+                original, 1, discovery, validity, null, false, MediaHostRule.TIKTOK_CDN, metadata,
+                photo.position, previewOnly = true, videoSource = soundSource, mirrors = photo.urls.drop(1))
+            val cap = operation.token.budget.imageLimit(thumbnail = true)
+            if (cap <= 0 || operation.token.checkActive() != null) {
+                assets += placeholder(); notPreviewed++; continue
+            }
+            fun fetch(url: String) = fetchAsset(operation,
+                PublicMediaRequest(url, MediaHttpPurpose.IMAGE, hostRule = MediaHostRule.TIKTOK_CDN), cap) { bytes, image ->
+                // A preview never claims the original's size or dimensions; Save validates the full original.
+                Fetched.Asset(bytes, image, original, 1, discovery, validity, null, false,
+                    MediaHostRule.TIKTOK_CDN, metadata, photo.position, previewOnly = true,
+                    videoSource = soundSource, mirrors = photo.urls.drop(1))
+            }
+            var fetched = fetch(preview)
+            // A signature may reject resizing. Failed HTTP replies have no image body; use the original once.
+            if (preview != original && fetched is Fetched.Failed && fetched.result.reason == ImageFailure.HTTP)
+                fetched = fetch(original)
+            if (fetched is Fetched.Asset) assets += fetched
+            else { assets += placeholder(); notPreviewed++ }
+        }
+        return Fetched.Carousel(assets, discovery.copy(notPreviewedCount = notPreviewed))
+    }
+
     /** Small CDN renditions share 2 MiB; LinkedIn validates its evidenced images with the full per-image limit. */
     private fun fetchCarousel(operation: ImageInspectionOperation, urls: List<String>, discovery: ImageDiscovery,
         rule: MediaHostRule, metadata: MediaMetadata, previewUrls: List<String>, pageContext: MediaHttpTarget? = null,
@@ -599,12 +650,16 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     else decoder.decode(bytes.bytes, asset.image.format.mimeType, active, bytes.length)
                 } catch (_: Exception) { ImageDecodeResult.Failure(ImageFailure.DECODE) }
                 catch (_: OutOfMemoryError) { ImageDecodeResult.Failure(ImageFailure.DECODE) }
-                if (decoded is ImageDecodeResult.Failure) { lastFailure = decoded.reason; continue }
-                val preview = (decoded as? ImageDecodeResult.Success)?.preview
+                if (decoded is ImageDecodeResult.Failure) {
+                    lastFailure = decoded.reason
+                    if (asset.hostRule != MediaHostRule.TIKTOK_CDN) continue
+                }
+                var preview = (decoded as? ImageDecodeResult.Success)?.preview
                 // Also bound injected decoders, independently of compressed bytes. Native thumbnails use <=256².
                 val axis = if (carousel) 256 else 1024
                 if (preview != null && (preview.width !in 1..axis || preview.height !in 1..axis || preview.allocationBytes > axis * axis * 4L)) {
-                    preview.close(); continue
+                    preview.close(); preview = null
+                    if (asset.hostRule != MediaHostRule.TIKTOK_CDN) continue
                 }
                 val item = MediaItemRef(operation.identity.adapterId, opaqueId())
                 val rendition = MediaRenditionRef(item, opaqueId())
@@ -614,7 +669,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                 items += MediaItem(item, asset.position, MediaKind.IMAGE, asset.metadata,
                     listOf(MediaRendition.Image(rendition, original)))
                 stored += StoredImageReference(operation.source, operation.identity, asset.validity, rendition,
-                    asset.url, original, asset.linkedIn, asset.postContext, asset.hostRule)
+                    asset.url, original, asset.linkedIn, asset.postContext, asset.hostRule, asset.mirrors)
                 if (!carousel) for (position in 1 until asset.candidates) {
                     items += MediaItem(MediaItemRef(operation.identity.adapterId, opaqueId()), position,
                         MediaKind.IMAGE, asset.metadata, emptyList())
@@ -637,6 +692,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             val discovery = if (fetched is Fetched.Carousel) {
                 val dropped = assets.size - items.size
                 fetched.discovery.copy(discoveredCount = items.size,
+                    notPreviewedCount = if (first.hostRule == MediaHostRule.TIKTOK_CDN) items.size - previews.size
+                        else fetched.discovery.notPreviewedCount,
                     unavailableCount = fetched.discovery.unavailableCount + dropped,
                     completeness = if (dropped > 0) DiscoveryCompleteness.PARTIAL else fetched.discovery.completeness)
             } else first.discovery

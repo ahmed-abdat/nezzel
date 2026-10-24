@@ -21,6 +21,7 @@ import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
 import dev.ahmed.savlino.engine.mediahttp.ShortLinkOutcome
 import dev.ahmed.savlino.engine.mediahttp.ShortLinks
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
+import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
 import dev.ahmed.savlino.engine.YtdlpInfoCache
@@ -73,7 +74,10 @@ sealed interface OptionsState {
         /** The intake link when [inspection] read its resolved destination (a short link); staleness binds to it. */
         val origin: LinkRevision? = null) : OptionsState {
         val photos = inspection.items.flatMap { it.renditions.filterIsInstance<MediaRendition.Image>() }
-        val isCarousel get() = photos.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0 || discovery.notPreviewedCount > 0
+        var expiredPhotos by mutableStateOf<Set<MediaRenditionRef>>(emptySet())
+            internal set
+        val isCarousel get() = photos.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0 ||
+            (discovery.photoLimit != 40 && discovery.notPreviewedCount > 0)
         val image get() = rendition.image
         val selection get() = inspection.selection(rendition.ref)
         override fun toString() = "ImageReady(redacted)"
@@ -524,6 +528,7 @@ class LinkViewModel(
         startInspection()
     }
     private fun startInspection() {
+        refreshedTikTok = false
         invalidateOptions()
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
@@ -567,12 +572,13 @@ class LinkViewModel(
         when (val route = ImageRoute.of(input.link)) {
             MediaSourceRoute.LEGACY -> startLegacyInspection(input, readerOrigin)
             MediaSourceRoute.DIRECT_IMAGE, MediaSourceRoute.LINKEDIN, MediaSourceRoute.FACEBOOK, MediaSourceRoute.X,
-            MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY ->
+            MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK ->
                 startImageInspection(images, input, route, origin)
         }
     }
     private fun startImageInspection(images: ImageInspect, source: LinkRevision, route: MediaSourceRoute,
-        origin: LinkRevision = source) {
+        origin: LinkRevision = source, legacyFallback: Inspection? = null,
+        selectedPositions: Set<Int>? = null) {
         val id = newOperationId()
         operationId = id
         imageOperation = true
@@ -625,6 +631,8 @@ class LinkViewModel(
                     if (operationId != id || currentSource()?.matches(origin) != true) return@launch
                     selectedImageRefs = result.inspection.items.flatMap { it.renditions.filterIsInstance<MediaRendition.Image>() }
                         .map { it.ref }.toSet()
+                    if (selectedPositions != null) selectedImageRefs = result.inspection.items
+                        .filter { it.position in selectedPositions }.flatMap { it.renditions }.map { it.ref }.toSet()
                     operationId = null; imageOperation = false
                     val rendition = result.inspection.items.firstOrNull()?.renditions?.firstOrNull() as? MediaRendition.Image
                     optionsState = when {
@@ -636,12 +644,20 @@ class LinkViewModel(
                 }
                 is MediaInspectResult.Failure -> {
                     operationId = null; imageOperation = false
-                    if (handoff) awaitRace(legacyReaderSource(source, route), origin)
+                    if (legacyFallback != null && route == MediaSourceRoute.TIKTOK) showReady(legacyFallback, origin)
+                    else if (selectedPositions != null && route == MediaSourceRoute.TIKTOK)
+                        optionsState = OptionsState.ImageError(
+                            if (result.reason == ImageFailure.NO_MEDIA ||
+                                (result.reason == ImageFailure.HTTP && result.statusCode in setOf(404, 410)))
+                                ImageFailure.EXPIRED else result.reason,
+                            result.statusCode, phase = result.phase)
+                    else if (handoff) awaitRace(legacyReaderSource(source, route), origin)
                     else if (readerFallsBack(route, result)) {
                         val landing = result.fallback?.takeIf { route == MediaSourceRoute.LINKEDIN &&
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
                         startLegacyInspection(landing ?: legacyReaderSource(source, route), origin,
-                            noMedia = route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.NO_MEDIA)
+                            noMedia = route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.NO_MEDIA,
+                            tikTokPhotos = route != MediaSourceRoute.TIKTOK)
                     } else optionsState = OptionsState.ImageError(result.reason, result.statusCode,
                         directImage = route == MediaSourceRoute.DIRECT_IMAGE, phase = result.phase)
                 }
@@ -654,12 +670,20 @@ class LinkViewModel(
                     // A Facebook/LinkedIn video post: yt-dlp inspects (and the job downloads) only its own clean link:
                     // Facebook's exact watch link, LinkedIn's exact post URL; from that route's reader, at this revision.
                     photosUnavailable = result.photosUnavailable
+                    if (legacyFallback != null && route == MediaSourceRoute.TIKTOK) {
+                        showReady(legacyFallback, origin); return@launch
+                    }
                     val watch = result.source
                     // These readers hand back the user's own link; normalize existing X/Instagram aliases before yt-dlp.
                     if (route in HANDOFF_ROUTES) {
                         if (handoff) awaitRace(legacyReaderSource(source, route), origin)
                         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
                         return@launch
+                    }
+                    if (route == MediaSourceRoute.TIKTOK && watch.revision == source.revision &&
+                        TikTokPostIdentity.parse(watch.link.rawUrl)?.videoUrl == watch.link.rawUrl &&
+                        TikTokPostIdentity.parse(watch.link.rawUrl)?.postId == TikTokPostIdentity.parse(source.link.rawUrl)?.postId) {
+                        startLegacyInspection(watch, origin, tikTokPhotos = false); return@launch
                     }
                     val canonical = when (route) {
                         MediaSourceRoute.FACEBOOK -> CANONICAL_WATCH
@@ -678,6 +702,7 @@ class LinkViewModel(
             MediaSourceRoute.LINKEDIN -> LinkedInPostIdentity.parse(source.link.rawUrl)?.cleanUrl
             MediaSourceRoute.X -> XPostIdentity.parse(source.link.rawUrl)?.legacyUrl
             MediaSourceRoute.INSTAGRAM -> InstagramPostIdentity.parse(source.link.rawUrl)?.legacyUrl
+            MediaSourceRoute.TIKTOK -> TikTokPostIdentity.parse(source.link.rawUrl)?.videoUrl
             else -> null
         }
         return canonical?.let(LinkInput::parse)?.let { LinkRevision(it, source.revision) } ?: source
@@ -689,11 +714,12 @@ class LinkViewModel(
             ImageFailure.HTTP -> result.statusCode != 404 && result.statusCode != 410
             ImageFailure.SOURCE_REFUSED, ImageFailure.BUDGET, ImageFailure.UNAVAILABLE, ImageFailure.NETWORK -> true
             ImageFailure.NO_MEDIA -> route in setOf(MediaSourceRoute.FACEBOOK, MediaSourceRoute.LINKEDIN,
-                MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY)
+                MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK)
             else -> false
         }
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
-    private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false) {
+    private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false,
+        tikTokPhotos: Boolean = true) {
         // A carousel's explicit View video options starts a new inspection without startInspection().
         val timing = inspectionTiming ?: InspectionTiming().also {
             it.record(InspectionPhase.INTAKE_ACCEPTED)
@@ -720,7 +746,7 @@ class LinkViewModel(
                 }
             }
         }
-        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia) }
+        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia, tikTokPhotos) }
     }
     /** One yt-dlp read under maintenance admission; generations are captured there and applied only by [showLegacy]. */
     private class LegacyRead(val result: InspectResult, val readGeneration: Long? = null,
@@ -777,7 +803,8 @@ class LinkViewModel(
             showLegacy(read, id, source, readerOrigin, noMedia = false)
         }
     }
-    private fun showLegacy(read: LegacyRead, id: String, source: LinkRevision, origin: LinkRevision?, noMedia: Boolean) {
+    private fun showLegacy(read: LegacyRead, id: String, source: LinkRevision, origin: LinkRevision?, noMedia: Boolean,
+        tikTokPhotos: Boolean = true) {
         read.version?.let { (version, generation) ->
             inspectedEngineVersion = version
             inspectedMaintenanceGeneration = generation
@@ -798,11 +825,18 @@ class LinkViewModel(
                 when {
                     !returned.source.matches(source) -> optionsState = OptionsState.Error(DownloadError.FormatExpired)
                     displayFormats(returned).isEmpty() -> optionsState = OptionsState.Error(DownloadError.NoFormats)
+                    tikTokPhotos && images != null && isTikTokPhotoAudio(returned) ->
+                        startImageInspection(images, source, MediaSourceRoute.TIKTOK, origin ?: source, returned)
                     else -> showReady(returned, origin)
                 }
             }
         }
     }
+    /** Derived MP3 choices still name the same returned audio source; real video formats never trigger a page read. */
+    private fun isTikTokPhotoAudio(inspection: Inspection): Boolean =
+        TikTokPostIdentity.parse(inspection.source.link.rawUrl)?.isPhoto == false && inspection.formats.isNotEmpty() &&
+            inspection.formats.all { !it.hasVideo && it.hasAudio && it.sourceFormatId == "audio" }
+
     private fun showReady(returned: Inspection, origin: LinkRevision?) {
         val ready = OptionsState.Ready(returned, origin)
         readAt = now()
@@ -1027,6 +1061,7 @@ class LinkViewModel(
         }
     }
     /** The Save this sheet started; outcomes for any other selection are ignored. */
+    private var refreshedTikTok = false
     private var pendingImageSave by mutableStateOf<MediaSelection?>(null)
     private val imageEventChannel = Channel<ImageSaveState>(Channel.UNLIMITED) // Tiny events; none may be lost.
     /** Saved or failed outcomes of this sheet's Save, for the snackbar; kept until the screen collects them. */
@@ -1038,24 +1073,28 @@ class LinkViewModel(
     val imageSaving get() = pendingImageSave != null
     fun toggleImage(ref: MediaRenditionRef) {
         val ready = optionsState as? OptionsState.ImageReady ?: return
-        if (imageSaving || ready.photos.none { it.ref == ref }) return
+        if (imageSaving || ref in ready.expiredPhotos || ready.photos.none { it.ref == ref }) return
         selectedImageRefs = if (ref in selectedImageRefs) selectedImageRefs - ref else selectedImageRefs + ref
     }
     fun selectAllImages(selected: Boolean) {
         val ready = optionsState as? OptionsState.ImageReady ?: return
-        if (!imageSaving) selectedImageRefs = if (selected) ready.photos.map { it.ref }.toSet() else emptySet()
+        if (!imageSaving) selectedImageRefs = if (selected) ready.photos.map { it.ref }.toSet() - ready.expiredPhotos else emptySet()
     }
-    /** Only a reader's actual video evidence exposes this switch; the existing legacy route performs inspection. */
+    /** Only returned video or sound evidence exposes this switch; the existing legacy route performs inspection. */
     fun inspectCarouselVideo() {
         val ready = optionsState as? OptionsState.ImageReady ?: return
-        if (!ready.discovery.hasVideo || imageSaving) return
+        if ((!ready.discovery.hasVideo && ready.discovery.sound == null) || imageSaving) return
         val origin = ready.origin ?: ready.inspection.source
         if (currentSource()?.matches(origin) != true) return
         val source = ready.inspection.source
         val route = ImageRoute.of(source.link)
         val video = ready.videoSource
         invalidateOptions()
-        if (video == null) startLegacyInspection(legacyReaderSource(source, route), origin)
+        if (ready.discovery.sound != null && video != null && video.revision == source.revision &&
+            TikTokPostIdentity.parse(video.link.rawUrl)?.videoUrl == video.link.rawUrl &&
+            TikTokPostIdentity.parse(video.link.rawUrl)?.postId == TikTokPostIdentity.parse(source.link.rawUrl)?.postId)
+            startLegacyInspection(video, origin, tikTokPhotos = false)
+        else if (video == null) startLegacyInspection(legacyReaderSource(source, route), origin)
         else if (route == MediaSourceRoute.FACEBOOK && video.revision == source.revision && CANONICAL_WATCH.matches(video.link.rawUrl))
             startLegacyInspection(video, origin)
         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
@@ -1063,13 +1102,13 @@ class LinkViewModel(
     init { imageSaver?.let { saver -> viewModelScope.launch { saver.outcome.collect { onImageOutcome(it) } } } }
     val imageSaveEnabled get() = (optionsState as? OptionsState.ImageReady)?.let { ready ->
         imageSaver != null && !imageSaving && ready.availability == ImageSaveAvailability.Available &&
-            ready.photos.any { it.ref in selectedImageRefs } && currentSource()?.matches(ready.origin ?: ready.inspection.source) == true
+            ready.photos.any { it.ref in selectedImageRefs && it.ref !in ready.expiredPhotos } && currentSource()?.matches(ready.origin ?: ready.inspection.source) == true
     } == true
     /** Explicit Save of the chosen returned images. No notification permission: nothing is posted. */
     fun saveImage() {
         if (!imageSaveEnabled) return
         val ready = optionsState as? OptionsState.ImageReady ?: return
-        val chosen = ready.photos.filter { it.ref in selectedImageRefs }
+        val chosen = ready.photos.filter { it.ref in selectedImageRefs && it.ref !in ready.expiredPhotos }
         val first = chosen.firstOrNull() ?: return
         val metadata = ready.inspection.items.first().metadata
         val title = (metadata.title ?: metadata.uploader)?.let(::shortFileTitle)?.takeIf { it.isNotBlank() } ?: "Nezzel_" +
@@ -1083,10 +1122,13 @@ class LinkViewModel(
                 usage.count(UsageKeys.photo(UsageKeys.Download.STARTED))
             }
         } else {
+            val total = maxOf(ready.discovery.claimedCount ?: 0, ready.inspection.items.maxOf { it.position + 1 },
+                ready.photos.size + ready.discovery.unavailableCount + ready.discovery.cappedCount)
             val requests = chosen.map { photo ->
                 val item = ready.inspection.items.single { it.ref == photo.ref.item }
                 dev.ahmed.savlino.media.ImageSaveRequest(checkNotNull(ready.inspection.selection(photo.ref)), photo.image,
-                    dev.ahmed.savlino.media.indexedImageTitle(title, item.position + 1, photo.image.format.extension))
+                    if (total == 1) title else dev.ahmed.savlino.media.indexedImageTitle(title, item.position + 1,
+                        photo.image.format.extension, total))
             }
             if (imageSaver?.saveBatch(requests) == true) {
                 pendingImageSave = selection; imageSaveProgress = 1 to requests.size
@@ -1124,14 +1166,32 @@ class LinkViewModel(
                 if (showing && outcome.saved.size == outcome.total) { dismissOptions(); clearField() }
                 else if (showing) selectedImageRefs = selectedImageRefs - outcome.saved.map { it.selection.renditionRef }.toSet()
                 imageEventChannel.trySend(outcome)
+                if (showing && ready != null) refreshExpiredImages(ready, outcome.failures)
             }
             outcome is ImageSaveState.Saved -> { if (showing) { dismissOptions(); clearField() }; imageEventChannel.trySend(outcome) }
             (outcome as ImageSaveState.Failed).image == ImageFailure.CANCELLED -> Unit // Back to the same choice.
+            showing && ready != null && outcome.image == ImageFailure.EXPIRED -> {
+                imageEventChannel.trySend(outcome)
+                refreshExpiredImages(ready, listOf(outcome))
+            }
             showing -> optionsState = OptionsState.ImageError(outcome.image ?: ImageFailure.STAGING, outcome.statusCode, outcome.storage,
                 ready?.directImage == true)
             else -> imageEventChannel.trySend(outcome)
         }
     }
+    private fun refreshExpiredImages(ready: OptionsState.ImageReady, failures: List<ImageSaveState.Failed>) {
+        val expired = failures.filter { it.image == ImageFailure.EXPIRED }.map { it.selection.renditionRef }
+        if (expired.isEmpty()) return
+        ready.expiredPhotos = ready.expiredPhotos + expired
+        if (!refreshedTikTok && images != null && TikTokPostIdentity.parse(ready.inspection.source.link.rawUrl) != null) {
+            refreshedTikTok = true
+            val positions = ready.inspection.items.filter { item -> item.renditions.any { it.ref in selectedImageRefs } }
+                .map { it.position }.toSet()
+            startImageInspection(images, ready.inspection.source, MediaSourceRoute.TIKTOK,
+                ready.origin ?: ready.inspection.source, selectedPositions = positions)
+        }
+    }
+
     private fun countPhotos(outcome: ImageSaveState, link: String?) {
         val (saved, failed) = when (outcome) {
             is ImageSaveState.BatchFinished -> outcome.saved.size to outcome.total - outcome.saved.size

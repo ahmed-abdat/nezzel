@@ -550,4 +550,10 @@
         <item quantity="many">%1$s حالة جديدة</item>
         <item quantity="other">%1$s حالة جديدة</item>
     </plurals>
+
+    <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
+    <string name="saved_post_position">%1$s من %2$s</string>
+    <string name="tiktok_sound">الصوت</string>
+    <string name="image_expired">لم تعد الصورة متاحة</string>
+    <string name="image_expired_body">أعد فتح الرابط لتحديث الصور.</string>
 </resources>

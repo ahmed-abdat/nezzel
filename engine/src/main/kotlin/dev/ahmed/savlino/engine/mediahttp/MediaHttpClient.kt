@@ -34,6 +34,7 @@ import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
+import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
 import okhttp3.Authenticator
 import okhttp3.Call
 import okhttp3.ConnectionPool
@@ -68,7 +69,7 @@ internal sealed interface MediaHttpImageTransferResult {
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpImageTransferResult
 }
 
-private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, YOUTUBE_OEMBED, SHORT_LINK }
+private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, YOUTUBE_OEMBED, SHORT_LINK }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -152,6 +153,9 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     internal fun fetchTelegramPost(token: OperationToken, identity: TelegramPostIdentity): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.TELEGRAM)
 
+    internal fun fetchTikTokPost(token: OperationToken, identity: TikTokPostIdentity): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(identity.videoUrl, MediaHttpPurpose.PAGE), PageSite.TIKTOK)
+
     internal fun fetchBlueskyApi(token: OperationToken, url: String): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.BLUESKY)
 
@@ -186,7 +190,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             (if (token.operation == MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL)
                 request.pageContext == null || request.hostRule != MediaHostRule.ANY
             else request.hostRule !in setOf(MediaHostRule.FACEBOOK_CDN, MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN,
-                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN)))
+                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN, MediaHostRule.TIKTOK_CDN)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
         else fetchInternal(token, request, null, optional = true, imageCap = cap)
 
@@ -225,7 +229,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     /** Streams HTTP bytes into private caller staging. Success is not permission to publish an image. */
     internal fun transferImage(token: OperationToken, request: PublicMediaRequest,
-        sink: OutputStream): MediaHttpImageTransferResult {
+        sink: OutputStream, prepareBody: (Long) -> Unit = {}): MediaHttpImageTransferResult {
         if (token.owner !== this) return MediaHttpImageTransferResult.Failure(MediaHttpFailure.CLOSED)
         var entered = false
         try {
@@ -271,7 +275,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             url = next
                         } else {
                             if (response.code != 200) throw MediaHttpException(MediaHttpFailure.HTTP_STATUS, response.code)
-                            return streamSaveBody(token, save, response, sink)
+                            return streamSaveBody(token, save, response, sink, prepareBody)
                         }
                     } finally { call.cancel(); response.close() }
                 } finally { unregister() }
@@ -292,7 +296,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     }
 
     private fun streamSaveBody(token: OperationToken, save: ImageSaveState, response: Response,
-        sink: OutputStream): MediaHttpImageTransferResult.Success {
+        sink: OutputStream, prepareBody: (Long) -> Unit): MediaHttpImageTransferResult.Success {
         if (response.headers.values("Content-Encoding").any { !it.trim().equals("identity", ignoreCase = true) })
             throw MediaHttpException(MediaHttpFailure.ENCODING)
         val lengths = response.headers.values("Content-Length").flatMap { it.split(',') }.map { it.trim() }
@@ -306,6 +310,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         if (codings.any { !it.trim().equals("chunked", ignoreCase = true) }) throw MediaHttpException(MediaHttpFailure.ENCODING)
         val declared = response.body.contentLength()
         if (declared > SAVE_BODY_CAP) throw MediaHttpException(MediaHttpFailure.BODY_LIMIT)
+        token.requireActive()
+        prepareBody(declared)
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(8192)
         var count = 0L
@@ -397,9 +403,10 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val instagramPage = site == PageSite.INSTAGRAM
         val telegramPage = site == PageSite.TELEGRAM
         val blueskyPage = site == PageSite.BLUESKY
+        val tiktokPage = site == PageSite.TIKTOK
         val oembed = site == PageSite.YOUTUBE_OEMBED
         val shortLink = site == PageSite.SHORT_LINK
-        val browserPage = facebookPage || instagramPage || telegramPage
+        val browserPage = facebookPage || instagramPage || telegramPage || tiktokPage
         if (token.owner !== this) return MediaHttpResult.Failure(MediaHttpFailure.CLOSED)
         var entered = false
         // LinkedIn: the last public post URL this read reached (entry or accepted hop), query/fragment stripped.
@@ -441,6 +448,10 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     !BlueskyPostIdentity.isApiRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (request.purpose == MediaHttpPurpose.PAGE && ((!telegramPage && url.host in setOf("t.me", "telegram.me")) ||
                     (!blueskyPage && url.host == BlueskyPostIdentity.API_HOST))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (tiktokPage && (request.purpose != MediaHttpPurpose.PAGE || token.operation != MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL ||
+                    !TikTokPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (!tiktokPage && request.purpose == MediaHttpPurpose.PAGE && url.host in setOf("www.tiktok.com", "tiktok.com", "m.tiktok.com"))
+                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             requireHostRule(request, url)
             val entry = if (linkedInPage) MediaHttpPolicy.withoutQuery(url) else null
             validateContext(token, request, url)
@@ -477,6 +488,15 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     try {
                         token.requireActive()
                         if (response.code in REDIRECTS) {
+                            // Keep the one-page read bound to the same post, with DNS checked again on each hop.
+                            if (tiktokPage) {
+                                val next = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
+                                    ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+                                val identity = TikTokPostIdentity.parse(next.toString())
+                                if (identity == null || next.host != "www.tiktok.com" ||
+                                    identity.postId != TikTokPostIdentity.parse(request.url)?.postId)
+                                    throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                            }
                             if (telegramPage) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
                             if (xPost || blueskyPage || oembed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (instagramPage) throw MediaHttpException(
@@ -491,6 +511,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                     ?: throw MediaHttpException(MediaHttpFailure.ADDRESS_REJECTED)
                                 else throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             val next = when {
+                                tiktokPage -> MediaHttpPolicy.parse(checkNotNull(TikTokPostIdentity.parse(located.toString())).videoUrl)
+                                    ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                                 facebookPage -> facebookHop(url, located, seen)
                                 linkedInPage -> MediaHttpPolicy.linkedInHopTarget(located)
                                 else -> located
@@ -503,7 +525,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             requireHostRule(request, next)
                             if (request.pageContext != null && next.host != "media.licdn.com")
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-                            if (!seen.add(next.toString())) throw MediaHttpException(MediaHttpFailure.REDIRECT_LOOP)
+                            if (!seen.add((if (tiktokPage) located else next).toString()))
+                                throw MediaHttpException(MediaHttpFailure.REDIRECT_LOOP)
                             // The landing hop counts too: a stop never stretches the three-redirect limit.
                             token.budget.redirect()
                             if (stopAt?.invoke(located, next) == true)
@@ -520,6 +543,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             val complete = readComplete(token, request.purpose, url, response, call,
                                 if (oembed) YouTubeOEmbed.MAX_BYTES else if (facebookPage) MediaPageLimits.FACEBOOK else if (xPost) MediaPageLimits.X
                                 else if (instagramPage) MediaPageLimits.INSTAGRAM
+                                else if (tiktokPage) MediaPageLimits.TIKTOK
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN
                                 else imageCap?.let { minOf(it, token.budget.imageLimit()) })
@@ -572,6 +596,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             MediaHostRule.INSTAGRAM_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isInstagramImage(url)
             MediaHostRule.TELEGRAM_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isTelegramImage(url)
             MediaHostRule.BLUESKY_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isBlueskyImage(url)
+            MediaHostRule.TIKTOK_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isTikTokImage(url)
         }
         if (!allowed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
     }

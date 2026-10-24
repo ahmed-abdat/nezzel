@@ -15,6 +15,8 @@ class OperationId internal constructor(internal val owner: Any) {
 }
 
 class OperationBudget internal constructor(private val operation: MediaHttpOperation) {
+    private val imageBudget = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 4 * 1024 * 1024 else 2 * 1024 * 1024
+    private val thumbnailLimit = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 512 * 1024 else 192 * 1024
     private var requests = 0
     private var redirects = 0
     private var bytes = 0L
@@ -31,6 +33,7 @@ class OperationBudget internal constructor(private val operation: MediaHttpOpera
             MediaHttpOperation.PAGES_AND_IMAGE -> 7
             MediaHttpOperation.PAGE_AND_CAROUSEL, MediaHttpOperation.PAGES_AND_CAROUSEL -> 24
             MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL -> 68
+            MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL -> 84
         }
         if (requests >= limit)
             throw MediaHttpException(MediaHttpFailure.REQUEST_LIMIT)
@@ -44,22 +47,22 @@ class OperationBudget internal constructor(private val operation: MediaHttpOpera
         bytes += count
         if (image) imageBytes += count
     }
-    /** Same 2 MiB image inspection budget, shared across every carousel body (including failed bodies). */
+    /** Image inspection bytes shared across bodies, including failed reads: TikTok 4 MiB, others 2 MiB. */
     @Synchronized internal fun imageLimit(thumbnail: Boolean = false): Int {
         val remaining = if (operation.isCarousel)
-            (2 * 1024 * 1024 - imageBytes).coerceAtLeast(0).toInt() else 2 * 1024 * 1024
-        return minOf(remaining, if (thumbnail) 192 * 1024 else 2 * 1024 * 1024)
+            (imageBudget - imageBytes).coerceAtLeast(0).toInt() else 2 * 1024 * 1024
+        return minOf(remaining, if (thumbnail) thumbnailLimit else 2 * 1024 * 1024)
     }
     /**
-     * Parallel carousel bodies reserve their cap up front, so together they never pass the shared 2 MiB.
+     * Parallel carousel bodies reserve their cap up front, so together they never pass the shared image budget.
      * While siblings are in flight a body waits for its full cap; alone it gets [imageLimit], as a serial loop would.
      * A positive result must be returned with [releaseImage].
      */
     @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
     @Synchronized internal fun reserveImage(thumbnail: Boolean, isActive: () -> Boolean): Int {
-        val want = if (thumbnail) 192 * 1024 else 2 * 1024 * 1024
+        val want = if (thumbnail) thumbnailLimit else 2 * 1024 * 1024
         while (true) {
-            val free = (2 * 1024 * 1024 - imageBytes - reserved).coerceAtLeast(0)
+            val free = (imageBudget - imageBytes - reserved).coerceAtLeast(0)
             if (free >= want || reservations == 0) {
                 val cap = minOf(free, want.toLong()).toInt()
                 if (cap > 0) { reserved += cap; reservations++ }
@@ -130,14 +133,16 @@ class OperationToken internal constructor(val operation: MediaHttpOperation, int
                 val pages = when (operation) {
                     MediaHttpOperation.DIRECT_IMAGE -> 0
                     MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL,
-                    MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL -> 1
+                    MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL, MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL -> 1
                     MediaHttpOperation.PAGES_AND_IMAGE, MediaHttpOperation.PAGES_AND_CAROUSEL -> 2
                 }
                 if (pageClaims >= pages || imageClaims > 0) throw MediaHttpException(MediaHttpFailure.RESOURCE_LIMIT)
                 pageClaims++
             }
             MediaHttpPurpose.IMAGE -> {
-                if (imageClaims >= operation.maxImages)
+                // A refused resize may use one original request for the same tile.
+                val claims = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 80 else operation.maxImages
+                if (imageClaims >= claims)
                     throw MediaHttpException(MediaHttpFailure.RESOURCE_LIMIT)
                 imageClaims++
             }

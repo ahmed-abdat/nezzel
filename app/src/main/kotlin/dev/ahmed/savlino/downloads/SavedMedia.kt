@@ -39,6 +39,8 @@ data class SavedMedia(
     val relativePath: String? = null,
     /** MediaStore volume ("external_primary", an SD card id); null for folder documents. */
     val volumeName: String? = null,
+    val postPosition: SavedPostPosition? = null,
+    val postAddedSeconds: Long? = null,
 ) {
     val searchKey: String by lazy { SearchText.fold("$title $filename") }
     val kind: SavedMediaKind? get() = when {
@@ -62,8 +64,46 @@ data class SavedMedia(
         "audio/mp4", "audio/x-m4a" -> "M4A"
         else -> mimeType
     }
-    val date: LocalDate get() = Instant.ofEpochSecond(addedSeconds).atZone(ZoneId.systemDefault()).toLocalDate()
+    val date: LocalDate get() = Instant.ofEpochSecond(postAddedSeconds ?: addedSeconds).atZone(ZoneId.systemDefault()).toLocalDate()
 }
+/** Ordinal among saved siblings, not a claim about unsaved attachments on the source post. */
+data class SavedPostPosition(val index: Int, val total: Int)
+
+/** Display-only groups with at most 120 seconds between siblings; actions still address each original URI. */
+fun groupDownloads(items: List<SavedMedia>): List<SavedMedia> {
+    data class Key(val stem: String, val collision: String, val volume: String?, val width: Int)
+    data class Candidate(val item: SavedMedia, val position: Int)
+    val suffix = Regex("^(.+)_([0-9]{2,6})( \\([0-9]+\\))?$")
+    val candidates = linkedMapOf<Key, MutableList<Candidate>>()
+    val blocks = mutableListOf<List<SavedMedia>>()
+    for (item in items) {
+        val match = suffix.matchEntire(item.filename.substringBeforeLast('.', item.filename))
+        val position = match?.groupValues?.get(2)?.toIntOrNull()?.takeIf { it > 0 }
+        if (item.relativePath?.trimEnd('/') != "Download/Nezzel" || match == null || position == null ||
+            item.kind !in setOf(SavedMediaKind.IMAGE, SavedMediaKind.VIDEO)) {
+            blocks += listOf(item.copy(postPosition = null, postAddedSeconds = null)); continue
+        }
+        val key = Key(match.groupValues[1], match.groupValues[3], item.volumeName, match.groupValues[2].length)
+        candidates.getOrPut(key) { mutableListOf() } += Candidate(item, position)
+    }
+    for (siblings in candidates.values) {
+        val ordered = siblings.sortedBy { it.item.addedSeconds }
+        var start = 0
+        while (start < ordered.size) {
+            var end = start + 1
+            while (end < ordered.size && ordered[end].item.addedSeconds - ordered[end - 1].item.addedSeconds <= 120) end++
+            val batch = ordered.subList(start, end)
+            if (batch.size < 2 || batch.map { it.position }.distinct().size != batch.size)
+                blocks.addAll(batch.map { listOf(it.item.copy(postPosition = null, postAddedSeconds = null)) })
+            else blocks += batch.sortedBy { it.position }.mapIndexed { index, entry ->
+                entry.item.copy(postPosition = SavedPostPosition(index + 1, batch.size), postAddedSeconds = batch.maxOf { it.item.addedSeconds })
+            }
+            start = end
+        }
+    }
+    return blocks.sortedByDescending { block -> block.maxOf { it.addedSeconds } }.flatten()
+}
+
 enum class SavedMediaKind { IMAGE, VIDEO, AUDIO }
 enum class MediaFilter { ALL, VIDEO, AUDIO, IMAGE }
 fun filterMedia(items: List<SavedMedia>, filter: MediaFilter, query: String = "") = items.filter {
