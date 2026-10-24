@@ -109,6 +109,8 @@ class SavedMediaRenameTest {
     }
 
     class RenameProvider : SavedMediaRepositoryTest.Provider() {
+        /** Holds background queries (never the main thread's) until released, so a test decides when an off-main result lands. */
+        @Volatile var queryGate: java.util.concurrent.CountDownLatch? = null
         var denyUpdate = false
         var denyQuery = false
         var skipUpdate = false
@@ -119,6 +121,7 @@ class SavedMediaRenameTest {
             .use { it.moveToFirst(); it.getString(0) }
         override fun query(uri: Uri, columns: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor {
             if (denyQuery) throw SecurityException()
+            if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) queryGate?.await(5, java.util.concurrent.TimeUnit.SECONDS)
             val id = uri.lastPathSegment?.toLongOrNull()
             val where = listOfNotNull(selection?.let { "($it)" }, id?.let { "_id = $it" },
                 "0".takeIf { hideUpdatedRow && updates > 0 && id != null }).joinToString(" AND ").ifEmpty { null }

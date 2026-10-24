@@ -49,6 +49,25 @@ class LibraryPolishUiTest {
         }
         fail("Condition not met")
     }
+    /**
+     * Opens a file's sheet and waits for its Rename row. The row appears after `canRename` resolves on Dispatchers.IO; the Compose test
+     * dispatcher is unconfined, so that coroutine resumes and writes its state on the IO thread. Written while the main thread is still
+     * composing the sheet, the write is lost and the row never shows. Holding the query until the sheet has settled, then letting the main
+     * thread sit idle while the result lands, makes the order fixed.
+     */
+    private fun openSheetWithRename(a: ComponentActivity, provider: SavedMediaRenameTest.RenameProvider, more: String) {
+        val gate = java.util.concurrent.CountDownLatch(1)
+        provider.queryGate = gate
+        try {
+            click(a, more)
+            until(a) { action(a, app.getString(R.string.share_file)) != null }
+        } finally {
+            provider.queryGate = null
+            gate.countDown()
+        }
+        Thread.sleep(200)
+        until(a) { action(a, app.getString(R.string.saved_rename)) != null }
+    }
     private fun field(a: ComponentActivity) = semanticsNodes(a).single { it.config.getOrNull(SemanticsActions.SetText) != null }
     private fun fixture(check: (SavedMediaRepository, SavedMediaRenameTest.RenameProvider) -> Unit) {
         val provider = SavedMediaRenameTest.RenameProvider().apply { attachInfo(app, ProviderInfo().apply { authority = "media" }) }
@@ -90,8 +109,7 @@ class LibraryPolishUiTest {
     @Test fun ownedFileOffersRenameWithSelectedStemAndImmutableExtensionAndInvalidInputCannotWrite() = fixture { repo, provider ->
         val rows = repo.query()
         screen(rows, repo) { a ->
-            click(a, app.getString(R.string.saved_more, rows.single().displayName))
-            compose.waitUntil(5000) { action(a, app.getString(R.string.saved_rename)) != null }
+            openSheetWithRename(a, provider, app.getString(R.string.saved_more, rows.single().displayName))
             tap(a, app.getString(R.string.saved_rename))
             until(a) { nodes -> nodes.any { it.config.getOrNull(SemanticsActions.SetText) != null } }
             val field = field(a)
@@ -117,8 +135,7 @@ class LibraryPolishUiTest {
         val rows = repo.query()
         screen(rows, repo) { a ->
             val more = app.getString(R.string.saved_more, rows.single().displayName)
-            click(a, more)
-            compose.waitUntil(5000) { action(a, app.getString(R.string.saved_rename)) != null }
+            openSheetWithRename(a, provider, more)
             tap(a, app.getString(R.string.saved_rename))
             until(a) { nodes -> nodes.any { it.config.getOrNull(SemanticsActions.SetText) != null } }
             provider.denyUpdate = true
