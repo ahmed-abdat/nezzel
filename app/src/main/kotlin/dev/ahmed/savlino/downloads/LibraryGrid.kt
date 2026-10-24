@@ -43,18 +43,11 @@ import dev.ahmed.savlino.viewer.ViewerItem
 import dev.ahmed.savlino.viewer.rememberMediaPicture
 import dev.ahmed.savlino.viewer.viewerStart
 
-/** One line of the grid: up to three square tiles, or a full-width row for audio (it has no picture worth a tile). */
-internal sealed interface GridLine {
-    val key: String
-    data class Tiles(val items: List<SavedMedia>) : GridLine { override val key get() = "grid-${items.first().uri}" }
-    data class Row(val item: SavedMedia) : GridLine { override val key get() = item.uri.toString() }
-}
+/** One line of the grid: up to three square tiles. Audio is a tile too (its cover, or a music note), so the grid stays one look. */
+internal data class GridLine(val items: List<SavedMedia>) { val key get() = "grid-${items.first().uri}" }
 
-/** Tiles fill rows of [columns] in list order; audio files follow as full-width rows so they never break the grid. */
-internal fun gridLines(entries: List<SavedMedia>, columns: Int = 3): List<GridLine> {
-    val (tiles, rows) = entries.partition { it.inViewer }
-    return tiles.chunked(columns).map { GridLine.Tiles(it) } + rows.map { GridLine.Row(it) }
-}
+/** Tiles fill rows of [columns] in list order. */
+internal fun gridLines(entries: List<SavedMedia>, columns: Int = 3): List<GridLine> = entries.chunked(columns).map(::GridLine)
 
 /** Images and videos open in Nezzel's viewer; audio and unknown files go to the phone's own player. */
 internal val SavedMedia.inViewer get() = kind == SavedMediaKind.IMAGE || kind == SavedMediaKind.VIDEO
@@ -78,23 +71,21 @@ internal fun LibraryViewToggle(view: LibraryView) = IconButton(onClick = view::t
     else Icon(painterResource(R.drawable.ic_grid), stringResource(R.string.library_show_grid))
 }
 
-/** The saved entries of one date group, as rows or as the grid; [row] draws the list row (also used for audio in the grid). */
+/** The saved entries of one date group, as rows or as the grid; [row] draws the list row. */
 internal fun LazyListScope.savedEntries(entries: List<SavedMedia>, grid: Boolean, language: String,
     selecting: Boolean, selectedUris: Set<String>, onOpen: (SavedMedia) -> Unit, onSelect: (SavedMedia) -> Unit, onToggle: (SavedMedia) -> Unit,
     row: @Composable LazyItemScope.(SavedMedia) -> Unit) {
     if (!grid) { items(entries.size, key = { entries[it].uri.toString() }) { row(entries[it]) }; return }
     val lines = gridLines(entries)
     items(lines.size, key = { lines[it].key }) { index ->
-        when (val line = lines[index]) {
-            is GridLine.Row -> row(line.item)
-            is GridLine.Tiles -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.item)) {
-                line.items.forEach { item ->
-                    val key = item.uri.toString()
-                    GridTile(item, language, selecting, key in selectedUris, Modifier.weight(1f),
-                        onClick = { if (selecting) onToggle(item) else onOpen(item) }, onLongClick = { if (!selecting) onSelect(item) })
-                }
-                repeat(3 - line.items.size) { Spacer(Modifier.weight(1f)) }
+        val line = lines[index]
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.item)) {
+            line.items.forEach { item ->
+                val key = item.uri.toString()
+                GridTile(item, language, selecting, key in selectedUris, Modifier.weight(1f),
+                    onClick = { if (selecting) onToggle(item) else onOpen(item) }, onLongClick = { if (!selecting) onSelect(item) })
             }
+            repeat(3 - line.items.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }
@@ -104,7 +95,9 @@ internal fun LazyListScope.savedEntries(entries: List<SavedMedia>, grid: Boolean
 private fun GridTile(item: SavedMedia, language: String, selecting: Boolean, selected: Boolean, modifier: Modifier,
                      onClick: () -> Unit, onLongClick: () -> Unit) {
     val video = item.kind == SavedMediaKind.VIDEO
-    val picture = rememberMediaPicture(item.uri, if (video) ThumbnailKind.VIDEO else ThumbnailKind.IMAGE, 360)
+    val audio = item.kind == SavedMediaKind.AUDIO
+    val picture = rememberMediaPicture(item.uri, when (item.kind) {
+        SavedMediaKind.VIDEO -> ThumbnailKind.VIDEO; SavedMediaKind.AUDIO -> ThumbnailKind.AUDIO; else -> ThumbnailKind.IMAGE }, 360)
     val description = "${NezzelFormat.firstStrong(item.displayName)}${stringResource(R.string.separator)}${mediaMeta(item, language)}"
     val selectedState = stringResource(if (selected) R.string.saved_selected_state else R.string.saved_unselected_state)
     val shape = MaterialTheme.shapes.small
@@ -121,7 +114,8 @@ private fun GridTile(item: SavedMedia, language: String, selecting: Boolean, sel
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.secondaryContainer) {
             if (picture != null) Image(picture.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else Box(contentAlignment = Alignment.Center) {
-                if (video) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
+                if (video) Icon(Icons.Default.PlayArrow, null)
+                else Icon(painterResource(if (audio) R.drawable.ic_music else R.drawable.ic_image), null)
             }
         }
         if (selecting) Surface(Modifier.align(Alignment.TopEnd).padding(Space.xs).size(22.dp), shape = CircleShape,
@@ -129,11 +123,13 @@ private fun GridTile(item: SavedMedia, language: String, selecting: Boolean, sel
             border = if (selected) null else androidx.compose.foundation.BorderStroke(2.dp, Color.White)) {
             if (selected) Icon(Icons.Default.Check, null, Modifier.padding(3.dp))
         }
-        if (video) item.durationMillis?.let {
-            Surface(Modifier.align(Alignment.BottomStart).padding(Space.xs), color = Color.Black.copy(alpha = .72f), contentColor = Color.White,
-                shape = MaterialTheme.shapes.extraSmall) {
-                Text(NezzelFormat.duration(it / 1000), Modifier.padding(horizontal = Space.xs),
-                    style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+        // Audio tiles carry a small music note beside the duration, so a cover is never mistaken for a video.
+        if (video || audio) Surface(Modifier.align(Alignment.BottomStart).padding(Space.xs), color = Color.Black.copy(alpha = .72f),
+            contentColor = Color.White, shape = MaterialTheme.shapes.extraSmall) {
+            Row(Modifier.padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                if (audio) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(12.dp))
+                item.durationMillis?.let { Text(NezzelFormat.duration(it / 1000), Modifier.padding(start = if (audio) 2.dp else 0.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr)) }
             }
         }
     }

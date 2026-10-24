@@ -37,11 +37,11 @@ class LibraryGridTest {
     private val clip = media(5, "Clip.mp4", "video/mp4")
     private val song = media(6, "Song.m4a", "audio/mp4")
 
-    @Test fun gridKeepsOrderInRowsOfThreeAndAudioFollowsAsWholeRows() {
+    @Test fun gridKeepsOrderInRowsOfThreeWithAudioAsTilesToo() {
         val lines = gridLines(listOf(photos[0], photos[1], song, photos[2], photos[3], clip, photos[0]))
-        assertEquals(listOf(3, 3, -1), lines.map { (it as? GridLine.Tiles)?.items?.size ?: -1 })
-        assertEquals(listOf(photos[0], photos[1], photos[2]), (lines[0] as GridLine.Tiles).items)
-        assertEquals(song, (lines[2] as GridLine.Row).item)
+        assertEquals(listOf(3, 3, 1), lines.map { it.items.size })
+        assertEquals(listOf(photos[0], photos[1], song), lines[0].items)
+        assertEquals(listOf(photos[0]), lines[2].items)
     }
 
     @Test fun viewIsRememberedPerFilterWithGridForImagesAndStatuses() {

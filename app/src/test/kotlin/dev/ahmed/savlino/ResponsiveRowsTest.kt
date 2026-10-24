@@ -149,7 +149,7 @@ class ResponsiveRowsTest {
     private fun metaWidth(): Float {
         var width = 0f
         render({ DownloadsScreen(emptyList(), language, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(listOf(video))) }) { a ->
-            val meta = nodes(a).filter { node -> texts(listOf(node)).any { "720p" in it && "MP4" in it } }
+            val meta = nodes(a).filter { node -> texts(listOf(node)).any { "720p" in it && "MB" in it && "MP4" !in it } }
             assertTrue("Missing meta line", meta.isNotEmpty())
             width = meta.maxOf { it.boundsInRoot.width } / density
         }

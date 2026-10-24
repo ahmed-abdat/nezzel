@@ -206,6 +206,7 @@
     <string name="saved_delete_title">Supprimer ce fichier ?</string>
     <string name="saved_delete_body">Il sera supprimé de votre téléphone, y compris de Galerie et Fichiers</string>
     <string name="saved_select_all">Tout sélectionner</string>
+    <string name="saved_deselect_all">Tout désélectionner</string>
     <string name="saved_select">Sélectionner le fichier</string>
     <string name="saved_selection_close">Fermer la sélection</string>
     <string name="saved_selected_state">Sélectionné</string>

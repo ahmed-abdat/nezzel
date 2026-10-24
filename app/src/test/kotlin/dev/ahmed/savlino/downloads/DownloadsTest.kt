@@ -45,6 +45,11 @@ class DownloadsTest {
                 descendants(it).flatMap { n -> n.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }.any { t -> t.contains(label) }) } ?: error("Missing $label: ${all.map { it.config }}")
         assertEquals(true, n.config.getOrNull(SemanticsActions.OnClick)?.action?.invoke())
     }
+    /** Filter chips: exact label, so the audio row's own "Audio" meta never wins. */
+    private fun chip(a: ComponentActivity, label: String) {
+        val n = nodes(a).first { it.config.getOrNull(SemanticsActions.OnClick) != null && label in texts(descendants(it)) }
+        assertEquals(true, n.config.getOrNull(SemanticsActions.OnClick)?.action?.invoke())
+    }
     private fun screen(media: List<SavedMedia> = listOf(video, audio), jobs: List<DownloadProgress> = emptyList(),
         remove: (String) -> Unit = {}, delete: (SavedMedia) -> Unit = {},
         showFiles: ((SavedMedia) -> Unit)? = null, canShowFiles: (SavedMedia) -> Boolean = { true },
@@ -59,13 +64,13 @@ class DownloadsTest {
         } finally { c.pause().stop().destroy() }
     }
     @Test fun chipsFilterVisibleSavedRows() = screen { a ->
-        click(a, "Audio")
+        chip(a, "Audio")
         assertTrue(texts(nodes(a)).any { it.contains("Song") })
         assertFalse(texts(nodes(a)).any { it.contains("Family") })
-        click(a, "Video")
+        chip(a, "Videos")
         assertTrue(texts(nodes(a)).any { it.contains("Family") })
         assertFalse(texts(nodes(a)).any { it.contains("Song") })
-        click(a, "All")
+        chip(a, "All")
         assertTrue(texts(nodes(a)).any { it.contains("Song") })
     }
     @Test fun deletingLastAudioResetsToAllAndHidesSingleTypeChips() {
@@ -75,7 +80,7 @@ class DownloadsTest {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) {
                 DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(media))
             } }
-            click(c.get(), "Audio")
+            chip(c.get(), "Audio")
             compose.runOnIdle { media = listOf(video) }
             assertFalse(texts(nodes(c.get())).contains("All"))
             assertTrue(texts(nodes(c.get())).any { it.contains("Family") })

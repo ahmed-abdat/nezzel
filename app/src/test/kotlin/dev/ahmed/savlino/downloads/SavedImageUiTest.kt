@@ -123,16 +123,16 @@ class SavedImageUiTest {
     }) { a ->
         val text = texts(nodes(a))
         assertTrue(text.toString(), text.any { it.contains("720p") })
-        assertTrue(text.toString(), text.any { it.contains("128 kbps") })
+        assertTrue(text.toString(), text.any { it.contains("Audio") && !it.contains("kbps") && !it.contains("M4A") })
         assertTrue(text.toString(), text.contains("1:24"))
     }
     @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi")
-    fun savedAudioBitrateUsesArabicResource() = render({ Text(mediaMeta(audio, "ar")) }) { a ->
-        assertTrue(texts(nodes(a)).any { it.contains("128 kbps") })
+    fun savedAudioSaysAudioInArabic() = render({ Text(mediaMeta(audio, "ar")) }) { a ->
+        assertTrue(texts(nodes(a)).any { it.contains("\u2066صوت\u2069") })
     }
     @Test @Config(qualifiers = "fr-w400dp-h1200dp-mdpi")
-    fun savedAudioBitrateUsesFrenchResource() = render({ Text(mediaMeta(audio, "fr")) }) { a ->
-        assertTrue(texts(nodes(a)).any { it.contains("128 kbit/s") })
+    fun savedAudioSaysAudioInFrench() = render({ Text(mediaMeta(audio, "fr")) }) { a ->
+        assertTrue(texts(nodes(a)).any { it.contains("Audio") && !it.contains("kbit/s") })
     }
     private fun fixture(omitWidth: Boolean = false, check: (SavedMediaRepository, SavedMediaRepositoryTest.Provider) -> Unit) {
         val provider = object : SavedMediaRepositoryTest.Provider() {

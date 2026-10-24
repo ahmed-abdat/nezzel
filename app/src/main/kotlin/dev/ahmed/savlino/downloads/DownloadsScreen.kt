@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -286,8 +287,8 @@ fun DownloadsScreen(
     // Results replace the list in place; start them at the top so a filtered list never opens mid-scroll.
     LaunchedEffect(query) { if (search && query.isNotEmpty()) listState.scrollToItem(0) }
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = { Column {
-        if (selecting) SelectionHeader(selected.size, language, selectionBusy, clearSelection,
-            { selectedUris = filtered.map { it.uri.toString() }.toSet() }, { onShareSelected(selected) }, {
+        if (selecting) SelectionHeader(selected.size, language, selectionBusy, clearSelection, selected.size == filtered.size,
+            { selectedUris = if (selected.size == filtered.size) emptySet() else filtered.map { it.uri.toString() }.toSet() }, { onShareSelected(selected) }, {
                 if (Build.VERSION.SDK_INT >= 30) deleteSelected(selected) else deleteSelection = selected.toList()
             })
         else ScreenHeader(stringResource(R.string.downloads)) {
@@ -527,7 +528,7 @@ internal fun SavedRenameDialog(item: SavedMedia, onDismiss: () -> Unit, onRename
 /** The title can wrap at large text; all four actions retain their 48dp touch targets. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectionHeader(count: Int, language: String, busy: Boolean, onClose: () -> Unit,
+private fun SelectionHeader(count: Int, language: String, busy: Boolean, onClose: () -> Unit, allSelected: Boolean,
     onAll: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
         Row(Modifier.fillMaxWidth().windowInsetsPadding(TopAppBarDefaults.windowInsets).heightIn(min = 64.dp).padding(horizontal = Space.xs),
@@ -535,7 +536,11 @@ private fun SelectionHeader(count: Int, language: String, busy: Boolean, onClose
             IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.saved_selection_close)) }
             Text(pluralStringResource(R.plurals.saved_selected, count, NezzelFormat.count(count, language)),
                 Modifier.weight(1f).padding(vertical = Space.s).semantics { heading(); liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = onAll, enabled = !busy, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.CheckCircle, stringResource(R.string.saved_select_all)) }
+            IconButton(onClick = onAll, enabled = !busy, modifier = Modifier.size(48.dp)) {
+                // A toggle: with every visible file selected, the same button clears the selection.
+                Icon(if (allSelected) Icons.Default.CheckCircle else Icons.Outlined.CheckCircle,
+                    stringResource(if (allSelected) R.string.saved_deselect_all else R.string.saved_select_all))
+            }
             IconButton(onClick = onShare, enabled = !busy, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Share, stringResource(R.string.share_file)) }
             IconButton(onClick = onDelete, enabled = !busy, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Delete, stringResource(R.string.saved_delete)) }
         }
@@ -629,7 +634,7 @@ internal fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, on
     val selectLabel = stringResource(R.string.saved_select)
     val selectedState = stringResource(if (selected) R.string.saved_selected_state else R.string.saved_unselected_state)
     val openLabel = stringResource(R.string.open_file)
-    val meta = mediaMeta(item, language, withFormat = true)
+    val meta = mediaMeta(item, language)
     val metaStyle = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -759,12 +764,13 @@ private fun SheetAction(icon: Int, label: String, tint: Color = MaterialTheme.co
 }
 
 @Composable
-fun mediaMeta(item: SavedMedia, language: String, withFormat: Boolean = false): String = listOfNotNull(
-    item.format.takeIf { withFormat && it.isNotBlank() },
+/** Plain words only: audio says «صوت»/"Audio", video its quality; never file types like M4A/MP4 or bitrates. */
+fun mediaMeta(item: SavedMedia, language: String): String = listOfNotNull(
     when (item.kind) {
         SavedMediaKind.IMAGE -> if (item.width != null && item.width > 0 && item.height != null && item.height > 0)
             stringResource(R.string.saved_image_dimensions, NezzelFormat.count(item.width, language), NezzelFormat.count(item.height, language)) else null
-        SavedMediaKind.AUDIO -> item.bitrateKbps?.let { stringResource(R.string.format_kbps, NezzelFormat.count(it, language)) }
+        // Isolated so «صوت» doesn't pull the size digits into an RTL run inside the LTR meta line.
+        SavedMediaKind.AUDIO -> NezzelFormat.isolate(stringResource(R.string.audio_group))
         SavedMediaKind.VIDEO -> VideoQuality.of(item.width, item.height)
             ?.let { stringResource(R.string.video_quality, NezzelFormat.count(it, language)) }
         null -> null
@@ -787,11 +793,15 @@ fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose
             val loaded = bitmap
             if(loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else if (item.kind == SavedMediaKind.VIDEO) Icon(Icons.Default.PlayArrow, null)
-            else Icon(painterResource(when(item.kind) { SavedMediaKind.IMAGE -> R.drawable.ic_image; SavedMediaKind.AUDIO -> R.drawable.ic_music; else -> R.drawable.ic_folder }), null)
+            else Icon(painterResource(when(item.kind) { SavedMediaKind.IMAGE -> R.drawable.ic_image; SavedMediaKind.AUDIO -> R.drawable.ic_music; else -> R.drawable.ic_folder }), null, Modifier.size(24.dp))
             item.durationMillis?.takeIf { item.kind != SavedMediaKind.IMAGE }?.let { duration ->
                 Surface(Modifier.align(Alignment.BottomEnd).padding(Space.xs), color = androidx.compose.ui.graphics.Color.Black.copy(alpha = .72f),
                     contentColor = androidx.compose.ui.graphics.Color.White, shape = MaterialTheme.shapes.extraSmall) {
-                    Text(NezzelFormat.duration(duration / 1000), Modifier.padding(horizontal = Space.xs), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+                    Row(Modifier.padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                        // Only over a cover: without one the centred music icon already says "audio".
+                        if (item.kind == SavedMediaKind.AUDIO && loaded != null) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(12.dp).padding(end = 2.dp))
+                        Text(NezzelFormat.duration(duration / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+                    }
                 }
             }
         }

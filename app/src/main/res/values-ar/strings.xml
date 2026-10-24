@@ -218,6 +218,7 @@
     <string name="saved_delete_title">هل تريد حذف هذا الملف؟</string>
     <string name="saved_delete_body">سيُحذف من هاتفك، بما في ذلك المعرض وتطبيق الملفات</string>
     <string name="saved_select_all">تحديد الكل</string>
+    <string name="saved_deselect_all">إلغاء تحديد الكل</string>
     <string name="saved_select">تحديد الملف</string>
     <string name="saved_selection_close">إنهاء التحديد</string>
     <string name="saved_selected_state">محدّد</string>

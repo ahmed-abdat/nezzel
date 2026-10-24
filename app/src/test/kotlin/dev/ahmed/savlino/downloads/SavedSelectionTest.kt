@@ -38,6 +38,11 @@ class SavedSelectionTest {
         } }
         compose.runOnIdle { assertEquals(true, node.config[SemanticsActions.OnClick].action?.invoke()) }
     }
+    /** Filter chips: exact label, so the audio row's own «Audio» meta never wins. */
+    private fun chip(a: ComponentActivity, label: String) {
+        val node = nodes(a).first { it.config.getOrNull(SemanticsActions.OnClick) != null && label in texts(descendants(it)) }
+        compose.runOnIdle { assertEquals(true, node.config[SemanticsActions.OnClick].action?.invoke()) }
+    }
     private fun longPress(a: ComponentActivity, title: String) {
         val node = row(a, title)
         compose.runOnIdle { assertEquals(true, node.config[SemanticsActions.OnLongClick].action?.invoke()) }
@@ -85,12 +90,22 @@ class SavedSelectionTest {
         click(a, context.getString(R.string.saved_selection_close))
         click(a, "Song"); assertEquals(2, opened())
     }
+    @Test fun selectAllTogglesToDeselectAllWhenEverythingIsSelected() = render { a, opened, _ ->
+        longPress(a, "Family")
+        click(a, context.getString(R.string.saved_select_all))
+        selectedCount(a, "2 selected")
+        assertFalse(nodes(a).any { context.getString(R.string.saved_select_all) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
+        click(a, context.getString(R.string.saved_deselect_all))
+        assertFalse(texts(nodes(a)).any { it.endsWith(" selected") })
+        click(a, "Song"); assertEquals(1, opened())
+    }
     @Test fun filterChangeClearsSelectionAndSelectAllOnlySelectsVisibleFiles() = render { a, _, shared ->
         longPress(a, "Family")
-        click(a, context.getString(R.string.audio_group))
+        chip(a, context.getString(R.string.audio_group))
         assertFalse(texts(nodes(a)).any { it.endsWith(" selected") })
         longPress(a, "Song")
-        click(a, context.getString(R.string.saved_select_all))
+        // Song is the only visible file, so everything visible is already selected: the toggle offers Deselect all.
+        assertTrue(nodes(a).any { context.getString(R.string.saved_deselect_all) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
         click(a, context.getString(R.string.share_file))
         assertEquals(listOf(rows[1]), shared())
     }

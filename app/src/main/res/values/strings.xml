@@ -202,6 +202,7 @@
     <string name="saved_delete_title">Delete this file?</string>
     <string name="saved_delete_body">It will be removed from your phone, including Gallery and Files</string>
     <string name="saved_select_all">Select all</string>
+    <string name="saved_deselect_all">Deselect all</string>
     <string name="saved_select">Select file</string>
     <string name="saved_selection_close">Close selection</string>
     <string name="saved_selected_state">Selected</string>
