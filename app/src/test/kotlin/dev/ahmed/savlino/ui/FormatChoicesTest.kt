@@ -89,4 +89,12 @@ class FormatChoicesTest {
         val opus = Format("opus", "webm", false, true, bitrateKbps = 160)
         assertEquals(listOf("opus"), FormatChoices.simple(listOf(opus)).map { it.id })
     }
+
+    @Test fun mainListMp3IsTheOneNinetyTwoRowWhenAllThreeExist() {
+        val m4a = Format("a128", "m4a", false, true, bitrateKbps = 128, size = Size.Exact(2))
+        fun mp3(c: AudioConversion) = Format("mp3-${c.bitrateKbps}", "mp3", false, true, conversion = c, sourceFormatId = "a128", sourceContainer = "m4a")
+        val rows = listOf(m4a, mp3(AudioConversion.MP3_320), mp3(AudioConversion.MP3_128), mp3(AudioConversion.MP3_192))
+        assertEquals(listOf("a128", "mp3-192"), FormatChoices.simple(rows).map { it.id })
+        assertEquals(listOf("a128", "mp3-192"), FormatChoices.simple(rows.reversed()).map { it.id })
+    }
 }

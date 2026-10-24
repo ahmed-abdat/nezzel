@@ -163,7 +163,7 @@ object YtdlpMetadataMapper {
         playable.minWithOrNull(compareBy<Format> { bytes(it.size) ?: roughSizes[it.id] ?: Long.MAX_VALUE }.then(rank))
             ?.let { presets += PresetChoice(Preset.SMALL, it.id) }
         (aac ?: extractedM4a)?.let { presets += PresetChoice(Preset.AUDIO_M4A, it.id) }
-        rows.firstOrNull { it.conversion == AudioConversion.MP3_128 }
+        rows.firstOrNull { it.conversion == AudioConversion.MAIN }
             ?.let { presets += PresetChoice(Preset.AUDIO_MP3, it.id) }
         return Inspection(source, engineVersion, rows, presets,
             title = (displayText(root.text("title"), 300) ?: displayText(root.text("fulltitle"), 300))

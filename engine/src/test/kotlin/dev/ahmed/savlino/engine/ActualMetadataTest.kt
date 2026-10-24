@@ -32,7 +32,7 @@ class ActualMetadataTest {
             val row = found.formats.single { it.id == choice.formatId }
             "${choice.preset}:${row.id}:${row.audioFormatId ?: "-"}"
         }
-        assertEquals("BEST:v1080high:a128\nBALANCED:muxed720:-\nSMALL:v480:-\nAUDIO_M4A:a128:-\nAUDIO_MP3:nezzel:mp3:128:a128:-", golden)
+        assertEquals("BEST:v1080high:a128\nBALANCED:muxed720:-\nSMALL:v480:-\nAUDIO_M4A:a128:-\nAUDIO_MP3:nezzel:mp3:192:a128:-", golden)
     }
     @Test fun equalBitrateActualAudioAndFirstAcceptedDuplicateIdRemainDistinct() {
         val found = map("""
@@ -61,8 +61,8 @@ class ActualMetadataTest {
             val found = map("""{"format_id":"source","ext":"$ext","vcodec":"${if (ext == "mp4") "h264" else "none"}","acodec":"$codec","abr":96}""")
             assertNotNull(found.formats.singleOrNull { it.id == "source" && it.conversion == null })
             val conversions = found.formats.filter { it.conversion != null }
-            assertEquals(2, conversions.size)
-            assertEquals(setOf(AudioConversion.MP3_128, AudioConversion.MP3_320), conversions.map { it.conversion }.toSet())
+            assertEquals(3, conversions.size)
+            assertEquals(setOf(AudioConversion.MP3_128, AudioConversion.MP3_192, AudioConversion.MP3_320), conversions.map { it.conversion }.toSet())
             for (row in conversions) {
                 assertEquals(ext, row.sourceContainer); assertEquals("source", row.sourceFormatId)
                 assertEquals("mp3", row.audioCodec); assertEquals(Size.Unknown, row.size)
@@ -82,7 +82,7 @@ class ActualMetadataTest {
         // Match complete protocol parts; a containing string is not evidence of the downloader.
         val regular = map("""{"format_id":"source","ext":"mp3","vcodec":"none","acodec":"mp3",
             "protocol":"https+not_websocket_frag"}""")
-        assertEquals(2, regular.formats.count { it.conversion != null })
+        assertEquals(3, regular.formats.count { it.conversion != null })
     }
     @Test fun liveStatusAloneBlocksConversionsOnRootAndSourceButKeepsOriginal() {
         val row = """{"format_id":"source","ext":"mp3","vcodec":"none","acodec":"mp3"%s}"""
@@ -93,7 +93,7 @@ class ActualMetadataTest {
             assertTrue(found.presets.none { it.preset == Preset.AUDIO_MP3 })
         }
         val regular = map(row.format(""), ",\"live_status\":\"not_live\"")
-        assertEquals(2, regular.formats.count { it.conversion != null })
+        assertEquals(3, regular.formats.count { it.conversion != null })
     }
     @Test fun liveDashPeriodsAndWebSocketKeepOriginalButOfferNoMp3Conversions() {
         val base = """{"format_id":"source","ext":"mp3","vcodec":"none","acodec":"mp3"%s}"""

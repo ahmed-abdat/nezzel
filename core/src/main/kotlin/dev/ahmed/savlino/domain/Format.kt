@@ -6,7 +6,13 @@ sealed interface Size {
     data object Unknown : Size
 }
 enum class Preset { BEST, BALANCED, SMALL, AUDIO_M4A, AUDIO_MP3 }
-enum class AudioConversion(val bitrateKbps: Int) { MP3_128(128), MP3_320(320) }
+enum class AudioConversion(val bitrateKbps: Int) {
+    MP3_128(128), MP3_192(192), MP3_320(320);
+    companion object {
+        /** The MP3 in the main list and the MP3 preset; the others stay in Other options. */
+        val MAIN = MP3_192
+    }
+}
 data class PresetChoice(val preset: Preset, val formatId: String)
 data class Format(val id: String, val container: String, val hasVideo: Boolean, val hasAudio: Boolean,
     val videoCodec: String? = null, val audioCodec: String? = null, val width: Int? = null,

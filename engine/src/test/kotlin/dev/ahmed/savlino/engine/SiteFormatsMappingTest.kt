@@ -112,7 +112,7 @@ class SiteFormatsMappingTest {
     }
     @Test fun mixcloudOffersReturnedAacTrack() = audio("mixcloud", "dash-a1-x3", Preset.AUDIO_M4A)
     @Test fun soundcloudOffersReturnedAacTrack() = audio("soundcloud", "hls_aac_96k", Preset.AUDIO_M4A)
-    @Test fun bandcampOffersMp3FromItsActualReturnedTrack() = audio("bandcamp", "nezzel:mp3:128:mp3-128", Preset.AUDIO_MP3)
+    @Test fun bandcampOffersMp3FromItsActualReturnedTrack() = audio("bandcamp", "nezzel:mp3:192:mp3-128", Preset.AUDIO_MP3)
 
     @Test fun mergeContainerKeepsVp9AndOpusInMkv() {
         for (codec in listOf("avc1.64001f", "hvc1.1.6.L120", "av01.0.05M.08", "vp09.00.31.08", "vp8", "other")) {

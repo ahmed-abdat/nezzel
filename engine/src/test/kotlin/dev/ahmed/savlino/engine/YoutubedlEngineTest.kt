@@ -96,6 +96,7 @@ class YoutubedlEngineTest {
         for (container in listOf("mp3", "m4a", "webm", "mp4", null)) {
             for ((conversion, scoped) in listOf(
                 AudioConversion.MP3_128 to "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 128k",
+                AudioConversion.MP3_192 to "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 192k",
                 AudioConversion.MP3_320 to "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 320k -ar 44100")) {
                 val dir = temp.newFolder().canonicalFile
                 val selected = Format("conversion", "mp3", false, true, conversion = conversion,
@@ -110,8 +111,7 @@ class YoutubedlEngineTest {
                 assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, dir) {})
                 val args = runtime.calls.single { "--no-simulate" in it }
                 assertEquals("exact-source", args[args.indexOf("-f") + 1])
-                assertEquals(1, args.count { it == "--postprocessor-args" })
-                assertEquals(scoped, args[args.indexOf("--postprocessor-args") + 1])
+                assertEquals(listOf(scoped, squareCover), args.indices.filter { args[it] == "--postprocessor-args" }.map { args[it + 1] })
                 assertEquals(File(dir, if (container == "mp3") "output" else "output.%(ext)s").path, args[args.indexOf("-o") + 1])
                 assertEquals("converted-job", command.jobId)
             }
@@ -564,6 +564,7 @@ class YoutubedlEngineTest {
             Format("136", "mp4", true, false, audioFormatId = "140", requiresMerge = true),
             Format("derived-m4a", "m4a", false, true, sourceFormatId = "18"),
             Format("derived-mp3-128", "mp3", false, true, conversion = AudioConversion.MP3_128, sourceFormatId = "140"),
+            Format("derived-mp3-192", "mp3", false, true, conversion = AudioConversion.MP3_192, sourceFormatId = "140"),
             Format("derived-mp3-320", "mp3", false, true, conversion = AudioConversion.MP3_320, sourceFormatId = "140"))
         for (format in rows) {
             val dir = temp.newFolder().canonicalFile
@@ -585,6 +586,8 @@ class YoutubedlEngineTest {
                 format.requiresMerge -> listOf("--merge-output-format", "mp4")
                 conversion == AudioConversion.MP3_128 -> listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "128K",
                     "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 128k")
+                conversion == AudioConversion.MP3_192 -> listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K",
+                    "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 192k")
                 conversion == AudioConversion.MP3_320 -> listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "320K",
                     "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 320k -ar 44100")
                 else -> listOf("--extract-audio", "--audio-format", "m4a")

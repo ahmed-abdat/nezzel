@@ -2,6 +2,7 @@ package dev.ahmed.savlino.ui
 
 import androidx.annotation.StringRes
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.domain.AudioConversion
 import dev.ahmed.savlino.domain.Format
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.domain.VideoCodecs
@@ -60,8 +61,9 @@ internal object FormatChoices {
         // One audio choice as the site sent it (the best AAC/M4A), then one MP3.
         val m4a = audio.firstOrNull { it.id in preferred && it.conversion == null } ?: audio.filter { it.conversion == null && it.container == "m4a" }
             .maxWithOrNull(compareBy<Format> { sizeRank(it.size) }.thenBy { it.bitrateKbps ?: 0 })
-        // One MP3: the standard bitrate. A higher one re-encodes the same source and can't sound better.
-        val mp3 = audio.filter { it.conversion != null }.minByOrNull { it.conversion!!.bitrateKbps }
+        // One MP3: 192 kbps, since a 128 re-encode of a 128 AAC source loses audibly; 128 and 320 sit in Other options.
+        val mp3 = audio.firstOrNull { it.conversion == AudioConversion.MAIN }
+            ?: audio.filter { it.conversion != null }.minByOrNull { it.conversion!!.bitrateKbps }
         // A site with no M4A still keeps one audio-only row of whatever it does offer.
         val fallback = if (m4a == null) audio.filter { it.conversion == null }.maxByOrNull { it.bitrateKbps ?: 0 } else null
         return videos + listOfNotNull(m4a ?: fallback, mp3)

@@ -7,7 +7,8 @@ import java.io.File
 /** Arguments passed directly to ProcessBuilder by the wrapper, never a shell. */
 object YtdlpCommand {
     // Bump whenever download argv changes: partials from a different recipe must restart.
-    const val ARGV_VERSION = 2
+    const val ARGV_VERSION = 3
+    internal const val SQUARE_COVER = "ThumbnailsConvertor+ffmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 1 -vf \"crop=min(iw\\,ih):min(iw\\,ih)\""
     const val PROGRESS_TEMPLATE = "download:nezzel-v2:%(info.format_id)s:%(progress.downloaded_bytes)s:%(progress.total_bytes)s:%(progress.total_bytes_estimate)s:%(progress.fragment_index)s:%(progress.fragment_count)s"
     // Pinned yt-dlp grammar treats these names/extensions as selectors, even without operators.
     private val reservedId = Regex("(best|worst|b|w)(video|audio|v|a)?(\\.[1-9][0-9]*)?")
@@ -69,6 +70,8 @@ object YtdlpCommand {
     /** Only real artist metadata is trusted; yt-dlp otherwise falls back to the uploader/channel. */
     private fun audioTagArgs(infoJson: File?): List<String> = buildList {
         addAll(listOf("--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg"))
+        // Square cover (players crop 16:9 art). yt-dlp shlex-splits the value; the escaped commas reach ffmpeg's filter parser.
+        addAll(listOf("--postprocessor-args", SQUARE_COVER))
         val artist = try {
             infoJson?.let { ObjectMapper().readTree(it)?.get("artist") }
                 ?.takeIf { it.isTextual }?.asText()?.takeIf { it.isNotBlank() }
