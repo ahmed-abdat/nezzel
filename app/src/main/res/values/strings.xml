@@ -188,7 +188,7 @@
     <string name="files_location">Current save folder: %1$s — earlier files may be in other folders</string>
     <string name="saved_files">Saved</string>
     <string name="filter_all">All</string>
-    <string name="filter_images">Images</string>
+    <string name="filter_images">Photos</string>
     <string name="saved_image_dimensions">%1$s × %2$s</string>
     <string name="saved_today">Today</string>
     <string name="saved_yesterday">Yesterday</string>
@@ -510,4 +510,15 @@
     <string name="share_notify_line">Allow notifications to follow progress. Downloads work without them.</string>
     <string name="download_again">Download again</string>
     <string name="download_again_size">Download again · %1$s</string>
+    <string name="filter_videos">Videos</string>
+    <string name="saved_sort_accessibility">Sort saved files: %1$s</string>
+    <string name="saved_sort_newest">Newest</string>
+    <string name="saved_sort_largest">Largest</string>
+    <string name="saved_sort_name">A–Z</string>
+    <string name="saved_rename">Rename</string>
+    <string name="saved_rename_name">File name</string>
+    <string name="saved_rename_extension">Extension: %1$s</string>
+    <string name="saved_rename_invalid">Enter 1–200 characters, without / or a null character.</string>
+    <string name="saved_rename_failed">Couldn’t rename this file. Try again.</string>
+    <string name="saved_renamed">Renamed to %1$s</string>
 </resources>

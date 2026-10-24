@@ -266,10 +266,10 @@ class DesignCaptureTest {
         )
         private val now = System.currentTimeMillis() / 1000
         val media = listOf(
-            SavedMedia(Uri.parse("content://media/external/downloads/1"), "a.mp4", "Sunset over the old harbour, filmed from the ferry", "video/mp4", 68 * MB, now - 600, 720, null, 522_000),
-            SavedMedia(Uri.parse("content://media/external/downloads/2"), "b.m4a", "Podcast episode 41: slow mornings", "audio/mp4", 8_100_000, now - 4000, null, 128, 2_710_000),
-            SavedMedia(Uri.parse("content://media/external/downloads/3"), "c.mp4", "Kids football final", "video/mp4", 312 * MB, now - 90_000, 1080, null, 1_262_000),
-            SavedMedia(Uri.parse("content://media/external/downloads/4"), "d.jpg", "Poster from the post", "image/jpeg", 410_000, now - 200_000, null, null, null, width = 1080),
+            SavedMedia(Uri.parse("content://media/external/downloads/1"), "Sunset over the old harbour, filmed from the ferry.mp4", "Sunset over the old harbour, filmed from the ferry", "video/mp4", 68 * MB, now - 600, 720, null, 522_000),
+            SavedMedia(Uri.parse("content://media/external/downloads/2"), "Podcast episode 41 - slow mornings.m4a", "Podcast episode 41: slow mornings", "audio/mp4", 8_100_000, now - 4000, null, 128, 2_710_000),
+            SavedMedia(Uri.parse("content://media/external/downloads/3"), "Kids football final.mp4", "Kids football final", "video/mp4", 312 * MB, now - 90_000, 1080, null, 1_262_000),
+            SavedMedia(Uri.parse("content://media/external/downloads/4"), "Poster from the post.jpg", "Poster from the post", "image/jpeg", 410_000, now - 200_000, null, null, null, width = 1080),
         )
     }
 }

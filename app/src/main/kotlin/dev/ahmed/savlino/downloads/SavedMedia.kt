@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.transformLatest
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import java.text.Collator
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -43,6 +44,8 @@ data class SavedMedia(
     val postPosition: SavedPostPosition? = null,
     val postAddedSeconds: Long? = null,
 ) {
+    /** File labels follow DISPLAY_NAME; provider TITLE remains available to search. */
+    val displayName: String get() = filename.removeSuffix(savedExtension(filename))
     val searchKey: String by lazy { SearchText.fold("$title $filename") }
     val kind: SavedMediaKind? get() = when {
         mimeType.startsWith("image/") -> SavedMediaKind.IMAGE
@@ -107,20 +110,63 @@ fun groupDownloads(items: List<SavedMedia>): List<SavedMedia> {
 
 enum class SavedMediaKind { IMAGE, VIDEO, AUDIO }
 enum class MediaFilter { ALL, VIDEO, AUDIO, IMAGE }
-fun filterMedia(items: List<SavedMedia>, filter: MediaFilter, query: String = "") = items.filter {
-    (when (filter) {
-        MediaFilter.ALL -> true
-        MediaFilter.VIDEO -> it.kind == SavedMediaKind.VIDEO
-        MediaFilter.AUDIO -> it.kind == SavedMediaKind.AUDIO
-        MediaFilter.IMAGE -> it.kind == SavedMediaKind.IMAGE
-    }) &&
-        SearchText.matches(it.searchKey, query)
+enum class SavedSort { NEWEST, LARGEST, NAME }
+
+/** A grouped post is an indivisible display block, including when only one sibling matches. */
+private fun savedBlocks(items: List<SavedMedia>): List<List<SavedMedia>> {
+    val blocks = mutableListOf<MutableList<SavedMedia>>()
+    for (item in items) {
+        if (item.postPosition == null || item.postPosition.index == 1 || blocks.isEmpty()) blocks += mutableListOf(item)
+        else blocks.last() += item
+    }
+    return blocks
 }
+private fun MediaFilter.matches(item: SavedMedia) = when (this) {
+    MediaFilter.ALL -> true
+    MediaFilter.VIDEO -> item.kind == SavedMediaKind.VIDEO
+    MediaFilter.AUDIO -> item.kind == SavedMediaKind.AUDIO
+    MediaFilter.IMAGE -> item.kind == SavedMediaKind.IMAGE
+}
+fun filterMedia(items: List<SavedMedia>, filter: MediaFilter, query: String = ""): List<SavedMedia> =
+    savedBlocks(items).filter { block -> block.any { filter.matches(it) } && block.any { SearchText.matches(it.searchKey, query) } }.flatten()
+
+/** Types come from the complete library, so search and selection cannot make their own chips disappear. */
+fun availableMediaFilters(items: List<SavedMedia>): List<MediaFilter> {
+    val present = MediaFilter.entries.filter { it != MediaFilter.ALL && items.any(it::matches) }
+    return if (present.size > 1) listOf(MediaFilter.ALL) + present else emptyList()
+}
+
+fun savedLibraryItems(items: List<SavedMedia>, filter: MediaFilter = MediaFilter.ALL, query: String = "",
+    sort: SavedSort = SavedSort.NEWEST, locale: Locale = Locale.getDefault()): List<SavedMedia> {
+    val blocks = savedBlocks(filterMedia(groupDownloads(items), filter, query))
+    val newest = compareByDescending<List<SavedMedia>> { block -> block.maxOf { it.addedSeconds } }
+    fun bytes(block: List<SavedMedia>): Long? {
+        if (block.any { it.size == null }) return null
+        // Saturate instead of wrapping if a provider reports implausibly large sizes.
+        return block.fold(0L) { total, item -> total + minOf(item.size!!.coerceAtLeast(0), Long.MAX_VALUE - total) }
+    }
+    val comparator = when (sort) {
+        SavedSort.NEWEST -> newest
+        SavedSort.LARGEST -> compareByDescending<List<SavedMedia>> { bytes(it) }.then(newest)
+        SavedSort.NAME -> {
+            val collator = Collator.getInstance(locale).apply { decomposition = Collator.CANONICAL_DECOMPOSITION }
+            Comparator<List<SavedMedia>> { a, b -> collator.compare(a.first().displayName, b.first().displayName) }.then(newest)
+        }
+    }
+    return blocks.sortedWith(comparator).flatten()
+}
+
+/** Only the stem is editable. Preserve the exact extension, including its original case. */
+fun savedExtension(filename: String): String = filename.lastIndexOf('.').takeIf { it > 0 }?.let(filename::substring).orEmpty()
+fun validSavedName(name: String): Boolean = name.trim().let { it.isNotEmpty() && !it.startsWith('.') && it.length <= 200 } &&
+    name.none { it == '/' || it == '\\' || Character.isISOControl(it) }
+
 fun mediaDate(date: LocalDate, language: String): String = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag(NezzelFormat.numericTag(language))))
 
 /** Only published media in Nezzel's output directory. No broad storage permission or filesystem paths. */
 class SavedMediaRepository(private val resolver: ContentResolver, private val ownerPackageName: String,
     private val destinations: SaveDestinations? = null) {
+    private val renameDenied = java.util.concurrent.ConcurrentHashMap.newKeySet<Uri>()
     private val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<Uri>()
 
     fun query(): List<SavedMedia> = (queryMediaStore() + destinations?.savedFiles().orEmpty()).sortedByDescending { it.addedSeconds }
@@ -194,6 +240,34 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
                 finally { onFinished() }
             }
         }
+
+    /** Recovered rows and folder documents never gain a rename or a storage-permission prompt. */
+    fun canRename(uri: Uri): Boolean = try { ownedFilename(uri) != null } catch (_: Exception) { false }
+
+    private fun ownedFilename(uri: Uri): String? {
+        if (uri in renameDenied) return null
+        requireMediaUri(uri)
+        return resolver.query(uri, arrayOf(MediaStore.MediaColumns.OWNER_PACKAGE_NAME, MediaStore.MediaColumns.DISPLAY_NAME),
+            null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val owner = cursor.getColumnIndex(MediaStore.MediaColumns.OWNER_PACKAGE_NAME)
+            val name = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+            if (owner < 0 || name < 0 || cursor.getString(owner) != ownerPackageName || cursor.isNull(name)) null
+            else cursor.getString(name)
+        }
+    }
+
+    /** No TITLE/job mutation: MediaStore owns collision handling and returns the actual final filename. */
+    fun rename(uri: Uri, name: String): String? {
+        require(validSavedName(name))
+        return try {
+            val before = ownedFilename(uri) ?: return null
+            val requestedName = name.trim() + savedExtension(before)
+            val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, requestedName) }
+            if (resolver.update(uri, values, "owner_package_name = ?", arrayOf(ownerPackageName)) != 1) return null
+            ownedFilename(uri) ?: requestedName
+        } catch (_: SecurityException) { renameDenied += uri; null }
+    }
 
     /** Own files delete directly; Android may require consent for a recovered/foreign URI. */
     fun delete(uri: Uri): Boolean {

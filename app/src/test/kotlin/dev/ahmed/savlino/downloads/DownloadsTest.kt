@@ -68,7 +68,7 @@ class DownloadsTest {
         click(a, "All")
         assertTrue(texts(nodes(a)).any { it.contains("Song") })
     }
-    @Test fun deletingLastAudioKeepsAllFilterReachable() {
+    @Test fun deletingLastAudioResetsToAllAndHidesSingleTypeChips() {
         val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         var media by mutableStateOf(listOf(video, audio))
         try {
@@ -77,7 +77,7 @@ class DownloadsTest {
             } }
             click(c.get(), "Audio")
             compose.runOnIdle { media = listOf(video) }
-            click(c.get(), "All")
+            assertFalse(texts(nodes(c.get())).contains("All"))
             assertTrue(texts(nodes(c.get())).any { it.contains("Family") })
         } finally { c.pause().stop().destroy() }
     }
@@ -156,7 +156,7 @@ class DownloadsTest {
         val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         var seeAll = false
         var opened: SavedMedia? = null
-        val media = (1..6).map { video.copy(uri = Uri.parse("content://media/external/downloads/$it"), title = "File $it") }
+        val media = (1..6).map { video.copy(uri = Uri.parse("content://media/external/downloads/$it"), title = "File $it", filename = "File $it.mp4") }
         try {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) { RecentFiles(media, "en", { opened = it }) { seeAll = true } } }
             val labels = texts(nodes(c.get()))

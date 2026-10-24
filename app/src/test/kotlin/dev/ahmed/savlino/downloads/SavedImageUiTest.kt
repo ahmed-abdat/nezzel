@@ -71,7 +71,7 @@ class SavedImageUiTest {
         assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
         assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Movie")))
         assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Song")))
-        click(a, context.getString(R.string.video_group))
+        click(a, context.getString(R.string.filter_videos))
         assertTrue(texts(nodes(a)).contains(NezzelFormat.firstStrong("Movie")))
         assertFalse(texts(nodes(a)).contains(NezzelFormat.firstStrong("Photo")))
         click(a, context.getString(R.string.audio_group))
@@ -83,16 +83,16 @@ class SavedImageUiTest {
     }
     private fun wrappedChips() {
         RuntimeEnvironment.setFontScale(2f)
-        render({ screen(listOf(image)) }) { a ->
+        render({ screen(listOf(image, video, audio)) }) { a ->
             assertEquals(2f, a.resources.configuration.fontScale, 0f)
-            val labels = listOf(context.getString(R.string.filter_all), context.getString(R.string.video_group),
+            val labels = listOf(context.getString(R.string.filter_all), context.getString(R.string.filter_videos),
                 context.getString(R.string.audio_group), string("filter_images"))
             val chips = labels.map { clickNode(a, it) }
             val density = context.resources.displayMetrics.density
             val screenWidth = context.resources.displayMetrics.widthPixels.toFloat()
             chips.forEach { chip ->
                 val bounds = chip.boundsInRoot
-                // 40dp chip visual; M3 reserves the 48dp touch target on the chip's layout node.
+                // Chips reserve at least 48dp for their layout and touch target.
                 assertTrue("48dp touch height: $bounds", maxOf(bounds.height, chip.layoutInfo.height.toFloat()) / density >= 47.9f)
                 assertTrue("48dp touch width: $bounds", maxOf(bounds.width, chip.layoutInfo.width.toFloat()) / density >= 47.9f)
                 assertTrue("chip outside width $screenWidth: $bounds", bounds.left >= 0 && bounds.right <= screenWidth + .5f)

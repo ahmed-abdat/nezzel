@@ -135,7 +135,7 @@ class DownloadsLayoutTest {
     @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi") fun arabicTwoSimilarActiveFilesHaveBoundedContextualCancelAt200Percent() = activeCards()
     private fun recentColumn() {
         RuntimeEnvironment.setFontScale(2f)
-        val rows = (1..2).map { image.copy(uri = Uri.parse("content://media/external/downloads/$it"), title = "Photo $it") }
+        val rows = (1..2).map { image.copy(uri = Uri.parse("content://media/external/downloads/$it"), title = "Photo $it", filename = "Photo $it.jpg") }
         var all = false
         var opened: SavedMedia? = null
         render({ Column(Modifier.fillMaxWidth().padding(16.dp)) { RecentFiles(rows, language, { opened = it }) { all = true } } }) { a ->

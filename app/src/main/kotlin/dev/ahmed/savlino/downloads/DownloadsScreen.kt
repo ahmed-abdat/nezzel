@@ -23,6 +23,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -55,6 +57,8 @@ import dev.ahmed.savlino.domain.VideoQuality
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.locale.NezzelFormat
+import dev.ahmed.savlino.locale.AppPreferences
+import java.util.Locale
 import dev.ahmed.savlino.ui.TintedIcon
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
@@ -218,8 +222,16 @@ fun DownloadsScreen(
     canShowFiles: (SavedMedia) -> Boolean = { true },
     onBatch: (BatchAction) -> Unit = {}, batchBusy: Boolean = false,
     warnings: List<CheckWarning> = emptyList(), onTryAgain: (String) -> Unit = {}, onDismissWarning: (String) -> Unit = {},
+    renameRepository: SavedMediaRepository? = null,
 ) {
+    val context = LocalContext.current
+    val preferences = remember(context) { AppPreferences(context) }
+    val repository = renameRepository ?: remember(context) { SavedMediaRepository(context.contentResolver, context.packageName) }
+    var sort by remember { mutableStateOf(preferences.savedSort) }
     var filterName by rememberSaveable { mutableStateOf(MediaFilter.ALL.name) }
+    var renamingUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -229,7 +241,12 @@ fun DownloadsScreen(
     val started = rememberStartOrder(jobs)
     val active = rememberWithSavedMoment(jobs, remember(jobs, started) { visibleJobs(jobs, started) })
     val reduced = LocalReducedMotion.current
-    val filtered = remember(saved, filterName, query) { filterMedia(groupDownloads(saved), MediaFilter.valueOf(filterName), query) }
+    val filters = remember(saved) { availableMediaFilters(saved) }
+    val effectiveFilter = MediaFilter.valueOf(filterName).takeIf { it in filters } ?: MediaFilter.ALL
+    LaunchedEffect(effectiveFilter) { filterName = effectiveFilter.name }
+    val filtered = remember(saved, effectiveFilter, query, sort, language) {
+        savedLibraryItems(saved, effectiveFilter, query, sort, Locale.forLanguageTag(language))
+    }
     // Changing the filter/search exits selection; hidden files never receive a bulk action.
     var selectedUris by remember(filterName, query) { mutableStateOf(emptySet<String>()) }
     val selected = filtered.filter { it.uri.toString() in selectedUris }
@@ -242,19 +259,23 @@ fun DownloadsScreen(
         onDeleteSelected(items) { cleared -> selectionBusy = false; if (cleared) clearSelection() }
     }
     LaunchedEffect(saved) { selectedUris = selectedUris.intersect(saved.map { it.uri.toString() }.toSet()) }
-    val groups = remember(filtered) { filtered.groupBy { it.date } }
+    // Date sections only make sense in chronological order; regrouping other sorts would scramble their order.
+    val groups = remember(filtered, sort) {
+        if (sort == SavedSort.NEWEST) filtered.groupBy { it.date } else linkedMapOf<LocalDate?, List<SavedMedia>>(null to filtered)
+    }
     val today = LocalDate.now()
     val closeSearch = { search = false; query = "" }
     BackHandler(search, closeSearch)
     BackHandler(selecting) { clearSelection() }
     // Results replace the list in place; start them at the top so a filtered list never opens mid-scroll.
     LaunchedEffect(query) { if (search && query.isNotEmpty()) listState.scrollToItem(0) }
-    Scaffold(topBar = { Column {
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = { Column {
         if (selecting) SelectionHeader(selected.size, language, selectionBusy, clearSelection,
             { selectedUris = filtered.map { it.uri.toString() }.toSet() }, { onShareSelected(selected) }, {
                 if (Build.VERSION.SDK_INT >= 30) deleteSelected(selected) else deleteSelection = selected.toList()
             })
         else ScreenHeader(stringResource(R.string.downloads)) {
+            if (saved.isNotEmpty()) SavedSortMenu(sort) { sort = it; preferences.savedSort = it }
             // One toggle in the same spot: Search opens the field under the bar, Close search shuts and clears it.
             if (search) IconButton(onClick = closeSearch) { Icon(Icons.Default.Close, stringResource(R.string.saved_search_close)) }
             else if (saved.isNotEmpty()) IconButton(onClick = { search = true }) { Icon(Icons.Default.Search, stringResource(R.string.saved_search)) }
@@ -295,14 +316,14 @@ fun DownloadsScreen(
                 }
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }
                 if (saved.isNotEmpty()) {
-                    item(key = "filters") {
+                    if (filters.isNotEmpty()) item(key = "filters") {
                         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                            MediaFilter.entries.forEach { filter ->
-                                FilterChip(filterName == filter.name, { filterName = filter.name }, modifier = Modifier.heightIn(min = 40.dp),
+                            filters.forEach { filter ->
+                                FilterChip(effectiveFilter == filter, { filterName = filter.name }, modifier = Modifier.heightIn(min = 48.dp),
                                     shape = CircleShape, colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                         selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer),
-                                    label = { Text(stringResource(when(filter) { MediaFilter.ALL -> R.string.filter_all; MediaFilter.VIDEO -> R.string.video_group; MediaFilter.AUDIO -> R.string.audio_group; MediaFilter.IMAGE -> R.string.filter_images })) })
+                                    label = { Text(stringResource(when(filter) { MediaFilter.ALL -> R.string.filter_all; MediaFilter.VIDEO -> R.string.filter_videos; MediaFilter.AUDIO -> R.string.audio_group; MediaFilter.IMAGE -> R.string.filter_images })) })
                             }
                         }
                     }
@@ -315,7 +336,7 @@ fun DownloadsScreen(
                         }
                     }
                     groups.forEach { (date, entries) ->
-                        stickyHeader(key = "date-$date") { SectionHeader(when(date) {
+                        if (date != null) stickyHeader(key = "date-$date") { SectionHeader(when(date) {
                             today -> stringResource(R.string.saved_today)
                             today.minusDays(1) -> stringResource(R.string.saved_yesterday)
                             else -> mediaDate(date, language)
@@ -325,6 +346,7 @@ fun DownloadsScreen(
                             // No fade-in: filter switches must not flicker tens of rows; removal fades and neighbours slide.
                             Modifier.animateItem(fadeInSpec = null, placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 100)),
                             selecting = selecting, selected = item.uri.toString() in selectedUris, selectionEnabled = !selectionBusy,
+                            renameRepository = repository, onRename = { renamingUri = item.uri.toString() },
                             onSelect = { selectedUris = selectedUris + item.uri.toString() },
                             onToggle = { selectedUris = if (item.uri.toString() in selectedUris) selectedUris - item.uri.toString() else selectedUris + item.uri.toString() }) }
                     }
@@ -352,6 +374,19 @@ fun DownloadsScreen(
             }
         }
     }
+    saved.find { it.uri.toString() == renamingUri }?.let { item ->
+        SavedRenameDialog(item, onDismiss = { renamingUri = null }, onRename = { name ->
+            val finalName = withContext(Dispatchers.IO) { repository.rename(item.uri, name) }
+            if (finalName == null && !withContext(Dispatchers.IO) { repository.canRename(item.uri) }) {
+                renamingUri = null
+                scope.launch { snackbar.showSnackbar(context.getString(R.string.saved_rename_failed)) }
+            }
+            finalName
+        }, onComplete = { finalName ->
+            renamingUri = null
+            scope.launch { snackbar.showSnackbar(context.getString(R.string.saved_renamed, NezzelFormat.isolate(finalName))) }
+        })
+    }
     deleteSelection?.let { items ->
         AlertDialog(onDismissRequest = { deleteSelection = null },
             title = { Text(stringResource(R.string.saved_delete_selected_title)) }, text = { Text(stringResource(R.string.saved_delete_selected_body)) },
@@ -362,6 +397,80 @@ fun DownloadsScreen(
         title = { Text(stringResource(R.string.saved_delete_title)) }, text = { Text(stringResource(R.string.saved_delete_body)) },
         confirmButton = { TextButton(onClick = { deletingUri = null; onDelete(deleting) }) { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { deletingUri = null }) { Text(stringResource(R.string.cancel)) } })
+}
+
+@Composable
+private fun SavedSortMenu(sort: SavedSort, onSort: (SavedSort) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    fun label(value: SavedSort) = when (value) {
+        SavedSort.NEWEST -> R.string.saved_sort_newest
+        SavedSort.LARGEST -> R.string.saved_sort_largest
+        SavedSort.NAME -> R.string.saved_sort_name
+    }
+    Box {
+        IconButton(onClick = { open = true }, modifier = Modifier.size(48.dp)) {
+            Icon(painterResource(R.drawable.ic_ms_sort), stringResource(R.string.saved_sort_accessibility, stringResource(label(sort))))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            SavedSort.entries.forEach { choice ->
+                DropdownMenuItem(text = { Text(stringResource(label(choice))) },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { selected = choice == sort },
+                    trailingIcon = { if (choice == sort) Icon(Icons.Default.Check, null) },
+                    onClick = { open = false; onSort(choice) })
+            }
+        }
+    }
+}
+
+/** Stem is selected on entry; the provider's extension stays visible and immutable outside the field. */
+@Composable
+internal fun SavedRenameDialog(item: SavedMedia, onDismiss: () -> Unit, onRename: suspend (String) -> String?, onComplete: (String) -> Unit) {
+    var name by rememberSaveable(item.uri.toString(), stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(item.displayName, TextRange(0, item.displayName.length)))
+    }
+    var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    val valid = validSavedName(name.text)
+    val scope = rememberCoroutineScope()
+    val focus = remember { FocusRequester() }
+    fun submit() {
+        if (busy || !valid) return
+        busy = true
+        scope.launch {
+            try {
+                val finalName = onRename(name.text)
+                if (finalName != null) onComplete(finalName) else failed = true
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                failed = true
+            } finally { busy = false }
+        }
+    }
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(R.string.saved_rename)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                OutlinedTextField(value = name, onValueChange = { name = it; failed = false }, enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("saved_rename_name"),
+                    label = { Text(stringResource(R.string.saved_rename_name)) }, singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
+                    isError = !valid || failed,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }))
+                // AlertDialog subcomposes its content; request only after this field is attached.
+                LaunchedEffect(focus) { focus.requestFocus() }
+                val extension = savedExtension(item.filename)
+                if (extension.isNotEmpty()) Text(stringResource(R.string.saved_rename_extension, NezzelFormat.isolate(extension)),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!valid || failed) Text(stringResource(if (!valid) R.string.saved_rename_invalid else R.string.saved_rename_failed),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+        },
+        confirmButton = { TextButton(onClick = { submit() }, enabled = valid && !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.saved_rename))
+        } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.cancel)) } })
 }
 
 /** The title can wrap at large text; all four actions retain their 48dp touch targets. */
@@ -464,6 +573,7 @@ fun LibraryLoadStatus(load: LibraryLoadState, onRetry: () -> Unit) {
 private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit, modifier: Modifier = Modifier,
     selecting: Boolean = false, selected: Boolean = false, selectionEnabled: Boolean = true,
     onSelect: () -> Unit = {}, onToggle: () -> Unit = {},
+    renameRepository: SavedMediaRepository, onRename: () -> Unit,
 ) {
     val selectLabel = stringResource(R.string.saved_select)
     val selectedState = stringResource(if (selected) R.string.saved_selected_state else R.string.saved_unselected_state)
@@ -484,10 +594,10 @@ private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onS
             onLongClickLabel = if (selecting) null else selectLabel, onLongClick = onSelect).padding(vertical = Space.s)
     @Composable fun Action() {
         if (selecting) Checkbox(selected, null, Modifier.size(48.dp).clearAndSetSemantics {})
-        else SavedMenu(item, meta, onShare, onOpenWith, onShowFiles, onDelete)
+        else SavedMenu(item, meta, onShare, onOpenWith, onShowFiles, onDelete, renameRepository, onRename)
     }
     @Composable fun Texts(modifier: Modifier) = Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-        Text(NezzelFormat.firstStrong(item.title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content), maxLines = 2, overflow = TextOverflow.Ellipsis)
         item.postPosition?.let { position ->
             Text(stringResource(R.string.saved_post_position, NezzelFormat.count(position.index, language),
                 NezzelFormat.count(position.total, language)), style = MaterialTheme.typography.bodySmall,
@@ -526,9 +636,15 @@ private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onS
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit) {
+private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit,
+    repository: SavedMediaRepository, onRename: () -> Unit) {
     var open by rememberSaveable(item.uri.toString()) { mutableStateOf(false) }
-    IconButton(onClick = { open = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.saved_more, item.title)) }
+    var canRename by remember(item.uri, repository, item.postPosition) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(open, item.uri, repository, item.postPosition) {
+        canRename = null
+        if (open) canRename = item.postPosition == null && withContext(Dispatchers.IO) { repository.canRename(item.uri) }
+    }
+    IconButton(onClick = { canRename = null; open = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.saved_more, item.displayName)) }
     if (!open) return
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -548,7 +664,7 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
                 MediaThumbnail(item, Modifier.width(96.dp).aspectRatio(16f / 9f))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
-                    Text(NezzelFormat.firstStrong(item.title), style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Content),
+                    Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Content),
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(meta, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -563,6 +679,9 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
             }
             if (canLookForBetter) SheetAction(R.drawable.ic_ms_tune, stringResource(R.string.better_quality_action),
                 supporting = stringResource(R.string.better_quality_support), supportingLtr = false) { act { better?.open?.invoke(item) } }
+            if (canRename == true) SheetAction(R.drawable.ic_ms_edit, stringResource(R.string.saved_rename)) {
+                scope.launch { sheet.hide(); open = false; onRename() }
+            } else if (canRename == null && item.postPosition == null) Spacer(Modifier.height(56.dp))
             SheetAction(R.drawable.ic_ms_open_in_new, stringResource(R.string.saved_open_with)) { act(onOpenWith) }
             if (onShowFiles != null) SheetAction(R.drawable.ic_ms_folder, stringResource(R.string.saved_show_files)) { act { onShowFiles(item) } }
             HorizontalDivider(Modifier.padding(horizontal = Space.xl, vertical = Space.s))
@@ -653,7 +772,7 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                                 verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                                 MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 9f), MaterialTheme.shapes.large)
                                 // Full-width captions on the layout's start edge, whatever the title's own direction.
-                                Text(NezzelFormat.firstStrong(item.title), Modifier.fillMaxWidth(), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                Text(NezzelFormat.firstStrong(item.displayName), Modifier.fillMaxWidth(), maxLines = 2, overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content, textAlign = captionAlign))
                                 Text(mediaMeta(item, language), Modifier.fillMaxWidth(),
                                     style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr, textAlign = captionAlign))

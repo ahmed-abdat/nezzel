@@ -574,4 +574,15 @@
     <string name="share_notify_line">اسمح بالإشعارات لمتابعة التقدّم. التنزيل يعمل بدونها.</string>
     <string name="download_again">تنزيل مرة أخرى</string>
     <string name="download_again_size">تنزيل مرة أخرى · %1$s</string>
+    <string name="filter_videos">فيديوهات</string>
+    <string name="saved_sort_accessibility">ترتيب الملفات المحفوظة: %1$s</string>
+    <string name="saved_sort_newest">الأحدث</string>
+    <string name="saved_sort_largest">الأكبر حجمًا</string>
+    <string name="saved_sort_name">أ–ي</string>
+    <string name="saved_rename">إعادة تسمية</string>
+    <string name="saved_rename_name">اسم الملف</string>
+    <string name="saved_rename_extension">الامتداد: %1$s</string>
+    <string name="saved_rename_invalid">أدخل من 1 إلى 200 حرف، دون / أو المحرف الفارغ.</string>
+    <string name="saved_rename_failed">تعذّرت إعادة تسمية الملف. أعد المحاولة.</string>
+    <string name="saved_renamed">تمت إعادة التسمية إلى %1$s</string>
 </resources>

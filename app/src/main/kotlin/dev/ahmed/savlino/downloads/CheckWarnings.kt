@@ -31,7 +31,7 @@ import dev.ahmed.savlino.ui.theme.isLargeText
  */
 @Composable
 internal fun CheckWarningRow(warning: CheckWarning, media: SavedMedia?, onTryAgain: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    val title = media?.title ?: warning.displayName.substringBeforeLast('.')
+    val title = media?.displayName ?: warning.displayName.substringBeforeLast('.')
     @Composable fun Thumb(m: Modifier) = if (media != null) MediaThumbnail(media, m)
         else Surface(m.clip(MaterialTheme.shapes.medium), color = MaterialTheme.colorScheme.secondaryContainer) {}
     @Composable fun Texts(m: Modifier) = Column(m, verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
