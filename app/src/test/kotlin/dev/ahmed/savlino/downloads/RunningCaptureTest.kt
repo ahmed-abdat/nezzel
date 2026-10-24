@@ -8,7 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.jobs.*
@@ -57,7 +59,7 @@ class RunningCaptureTest {
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
     }
-    private fun shoot(kind: String) {
+    private fun shoot(kind: String, fontScale: Float = 1f) {
         assumeTrue(dir != null)
         for (language in listOf("en", "ar")) for (dark in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers("+$language-${if (dark) "night" else "notnight"}")
@@ -65,7 +67,8 @@ class RunningCaptureTest {
             try {
                 val warnings = listOf(CheckWarning("c1", "Morning by the sea.mp4", library[0].uri, ResultCheck.Problem.NO_SOUND, true))
                 controller.get().setContent {
-                    CompositionLocalProvider(LocalLayoutDirection provides if (language == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                    CompositionLocalProvider(LocalLayoutDirection provides if (language == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr,
+                        LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                         NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                             when (kind) {
                                 "running" -> DownloadsScreen(jobs, language, {}, {}, {}, {}, {}, null, {}, {},
@@ -79,7 +82,7 @@ class RunningCaptureTest {
                     }
                 }
                 idle()
-                save(controller.get(), "downloads-$kind-$language-${if (dark) "dark" else "light"}")
+                save(controller.get(), "downloads-$kind${if (fontScale != 1f) "-font$fontScale" else ""}-$language-${if (dark) "dark" else "light"}")
             } finally { controller.pause().stop().destroy() }
         }
     }
@@ -89,4 +92,6 @@ class RunningCaptureTest {
     @Test fun savedTabWithDot() = shoot("saved")
     /** Nothing in Downloading: no tab row, the library alone. */
     @Test fun libraryAlone() = shoot("library")
+    /** Filter chips stay on one scrolling row at larger text (Arabic Statuses used to wrap alone). */
+    @Test fun libraryLargeText() = shoot("library", 1.1f)
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -37,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -360,7 +362,9 @@ fun DownloadsScreen(
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }
                 if (saved.isNotEmpty()) {
                     if (filters.isNotEmpty()) item(key = "filters") {
-                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                        // One row that scrolls under the list gutter instead of wrapping (Arabic, large text).
+                        Row(Modifier.bleedGutter().horizontalScroll(rememberScrollState()).padding(horizontal = Space.gutter).testTag("filter_row"),
+                            horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
                             filters.forEach { filter ->
                                 FilterChip(effectiveFilter == filter, { filterName = filter.name }, modifier = Modifier.heightIn(min = 48.dp),
                                     shape = CircleShape, colors = FilterChipDefaults.filterChipColors(
@@ -853,4 +857,12 @@ fun ScreenHeader(title: String, actions: @Composable RowScope.() -> Unit = {}) {
 @Composable
 fun ScreenTitle(text: String) {
     Text(text, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+}
+
+/** Widens a list item by the list's gutter on both sides, so a scrolling row runs to the screen edges. */
+private fun Modifier.bleedGutter() = layout { measurable, constraints ->
+    val extra = (Space.gutter * 2).roundToPx()
+    val wide = if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.maxWidth + extra, maxWidth = constraints.maxWidth + extra) else constraints
+    val placeable = measurable.measure(wide)
+    layout(if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width, placeable.height) { placeable.place(-extra / 2, 0) }
 }
