@@ -172,6 +172,21 @@ class DocumentStatusLibraryTest {
         assertEquals(4, ready(library.load()).items.size)
     }
 
+    @Test fun invalidStoredGrantIsReleasedNotLost() = runBlocking {
+        seedPhone(); dir("Download")
+        StatusGrants(app).add(tree("Download"))
+        val library = library()
+        assertTrue(library.load() is StatusAccess.NeedsGrant)
+        assertTrue(app.contentResolver.persistedUriPermissions.isEmpty())
+        assertTrue(StatusGrants(app).active().isEmpty())
+        assertFalse(StatusGrants(app).isLost)
+        // Next to a working grant, the invalid one is dropped and the working one still lists.
+        StatusGrants(app).add(tree("Download"))
+        assertEquals(StatusGrantResult.Granted, library.onPicked(tree("Android/media")))
+        assertEquals(4, ready(library.load()).items.size)
+        assertEquals(listOf(tree("Android/media")), app.contentResolver.persistedUriPermissions.map { it.uri })
+    }
+
     @Test fun movedFolderIsAccessLostAndItsGrantReleased() = runBlocking {
         seedPhone()
         val library = library()

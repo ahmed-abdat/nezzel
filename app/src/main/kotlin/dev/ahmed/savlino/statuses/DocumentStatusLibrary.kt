@@ -54,13 +54,14 @@ class DocumentStatusLibrary(
     override suspend fun load(): StatusAccess = withContext(io) {
         val apps = installedApps()
         if (apps.isEmpty()) return@withContext StatusAccess.NotInstalled
-        val trees = grants.active()
+        // A stored grant that can never hold statuses (bad shape) is released, not reported as lost.
+        val trees = grants.active().filter { tree -> (treeProbes(tree) != null).also { if (!it) grants.discard(tree) } }
         if (trees.isEmpty()) return@withContext if (grants.isLost) StatusAccess.AccessLost(apps) else StatusAccess.NeedsGrant(apps)
         val folders = linkedMapOf<String, Pair<Walk, Found>>()
         var working = 0
         for (tree in trees) {
             currentCoroutineContext().ensureActive()
-            val probes = treeProbes(tree) ?: continue
+            val probes = treeProbes(tree) ?: continue // filtered above
             val walk = Walk(tree)
             val root = DocumentsContract.getTreeDocumentId(tree)
             // The root query is the liveness check: revoked, moved or deleted folders fail here.
