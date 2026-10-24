@@ -229,6 +229,8 @@ fun DownloadsScreen(
     onPlaylistAction: (String, PlaylistBatchAction) -> Unit = { _, _ -> }, playlistBusy: Set<String> = emptySet(),
     warnings: List<CheckWarning> = emptyList(), onTryAgain: (String) -> Unit = {}, onDismissWarning: (String) -> Unit = {},
     renameRepository: SavedMediaRepository? = null,
+    /** Null: the real offer (tests and captures pass their own). */
+    oldDownloads: OldDownloadsOffer? = null,
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -237,6 +239,7 @@ fun DownloadsScreen(
     var filterName by rememberSaveable { mutableStateOf(MediaFilter.ALL.name) }
     var renamingUri by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    val offer = oldDownloads ?: rememberOldDownloadsOffer(snackbar)
     val scope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -361,6 +364,10 @@ fun DownloadsScreen(
                 }
             } else LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }
+                if (offer.card && !selecting && !search) item(key = "old-downloads") {
+                    OldDownloadsCard(offer.show, offer.dismiss, Modifier.animateItem(fadeInSpec = null, placementSpec = easeOut(reduced, 220),
+                        fadeOutSpec = easeOut(reduced, 100)))
+                }
                 if (saved.isNotEmpty()) {
                     if (filters.isNotEmpty()) item(key = "filters") {
                         // One row that scrolls under the list gutter instead of wrapping (Arabic, large text).

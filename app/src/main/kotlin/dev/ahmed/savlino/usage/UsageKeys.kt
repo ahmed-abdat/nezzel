@@ -21,6 +21,8 @@ object UsageKeys {
     const val RETRY = "retry"
     const val STATUSES_OPENED = "statuses.opened"
     const val STATUSES_SAVED = "statuses.saved"
+    /** A Download/Nezzel grant after a reinstall; no count of files or names. */
+    const val OLD_DOWNLOADS_FOUND = "old_downloads.found"
     const val WIDGET_ADDED = "widget.added"
     const val UPDATE_INSTALLED = "update.installed"
     /** Sites past the local cap of distinct sites between sends. */
@@ -43,7 +45,7 @@ object UsageKeys {
     /** Every fixed key; [SITE], [SDK] and [BRAND] are the only patterned ones. */
     val fixed: Set<String> = buildSet {
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
-            STATUSES_OPENED, STATUSES_SAVED, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
+            STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
             FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED))
         for (event in events) for ((kind, names) in tiers) for (tier in names) add("dl.$event.$kind.$tier")
         for (path in Path.entries) for (time in optionTimes) add("options.${path.key}.$time")

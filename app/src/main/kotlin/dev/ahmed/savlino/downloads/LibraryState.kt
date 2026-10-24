@@ -2,6 +2,7 @@ package dev.ahmed.savlino.downloads
 
 import dev.ahmed.savlino.storage.SaveDestinations
 import dev.ahmed.savlino.storage.SaveDestination
+import dev.ahmed.savlino.storage.OldDownloads
 
 import android.app.Activity
 import android.app.RecoverableSecurityException
@@ -70,7 +71,9 @@ fun rememberLibraryState(
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val destinations = remember(context) { SaveDestinations(context) }
-    val repository = remember(context.contentResolver, destinations) { SavedMediaRepository(context.contentResolver, context.packageName, destinations) }
+    val repository = remember(context.contentResolver, destinations) {
+        SavedMediaRepository(context.contentResolver, context.packageName, destinations, OldDownloads(context))
+    }
     val scope = rememberCoroutineScope()
     var load by remember { mutableStateOf<LibraryLoadState>(LibraryLoadState.Loading()) }
     var listedAt by remember { mutableLongStateOf(0L) }

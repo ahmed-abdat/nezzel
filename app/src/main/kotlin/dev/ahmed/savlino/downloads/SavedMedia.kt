@@ -2,6 +2,8 @@ package dev.ahmed.savlino.downloads
 
 import dev.ahmed.savlino.statuses.StatusSaver
 import dev.ahmed.savlino.storage.SaveDestinations
+import dev.ahmed.savlino.storage.OldDownloads
+import dev.ahmed.savlino.storage.FoundFile
 import dev.ahmed.savlino.domain.SearchText
 
 import android.content.*
@@ -171,11 +173,15 @@ fun mediaDate(date: LocalDate, language: String): String = date.format(DateTimeF
 
 /** Only published media in Nezzel's output directory. No broad storage permission or filesystem paths. */
 class SavedMediaRepository(private val resolver: ContentResolver, private val ownerPackageName: String,
-    private val destinations: SaveDestinations? = null) {
+    private val destinations: SaveDestinations? = null, private val oldDownloads: OldDownloads? = null) {
     private val renameDenied = java.util.concurrent.ConcurrentHashMap.newKeySet<Uri>()
     private val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<Uri>()
 
-    fun query(): List<SavedMedia> = (queryMediaStore() + destinations?.savedFiles().orEmpty()).sortedByDescending { it.addedSeconds }
+    fun query(): List<SavedMedia> {
+        val shown = queryMediaStore() + destinations?.savedFiles().orEmpty()
+        val found = oldDownloads?.let { OldDownloads.dedupe(it.list(), shown).map(FoundFile::media) }.orEmpty()
+        return (shown + found).sortedByDescending { it.addedSeconds }
+    }
     private fun queryMediaStore(cancellation: CancellationSignal? = null): List<SavedMedia> {
         val columns = listOf("_id", "_display_name", "title", "mime_type", "_size", "date_added", "height", "width", "duration", MediaStore.MediaColumns.RELATIVE_PATH,
             MediaStore.MediaColumns.VOLUME_NAME) +
@@ -211,17 +217,30 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
         resolver.registerContentObserver(MediaStore.Downloads.EXTERNAL_CONTENT_URI, true, observer)
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }
         destinations?.prefs?.registerOnSharedPreferenceChangeListener(listener)
+        oldDownloads?.prefs?.registerOnSharedPreferenceChangeListener(listener)
         trySend(Unit)
         awaitClose {
             resolver.unregisterContentObserver(observer)
             destinations?.prefs?.unregisterOnSharedPreferenceChangeListener(listener)
+            oldDownloads?.prefs?.unregisterOnSharedPreferenceChangeListener(listener)
         }
     }.conflate().transformLatest {
         try {
             val media = cancellableQuery(query = ::queryMediaStore)
             val files = destinations?.recordedFiles().orEmpty().associateBy { it.uri }.toMutableMap()
-            fun rows() = (media + files.values).sortedByDescending { it.addedSeconds }
+            val found = linkedMapOf<Uri, SavedMedia>()
+            fun rows() = (media + files.values + found.values).sortedByDescending { it.addedSeconds }
             emit(Result.success(rows()))
+            // Old downloads: one listing, then rows at once with cached dimensions; probes fill in below.
+            val listed = oldDownloads?.let { old -> cancellableQuery { signal -> old.list(signal) } }
+                ?.let { OldDownloads.dedupe(it, media + files.values) }.orEmpty()
+            fun FoundFile.withBounds(bounds: SaveDestinations.FileBounds) =
+                this.media.copy(width = bounds.width, height = bounds.height, durationMillis = bounds.durationMillis)
+            listed.forEach { file ->
+                found[file.media.uri] = destinations?.cachedBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType)
+                    ?.let { file.withBounds(it) } ?: file.media
+            }
+            if (listed.isNotEmpty()) emit(Result.success(rows()))
             for (uri in destinations?.publishedUris().orEmpty()) {
                 if (!inFlight.add(uri)) continue
                 val file = cancellableQuery(onFinished = { inFlight.remove(uri) }) { signal -> destinations?.savedFile(uri, signal) }
@@ -229,10 +248,23 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
                 if (file == null) files.remove(uri) else files[uri] = file
                 if (file != previous) emit(Result.success(rows()))
             }
+            val unprobed = listed.filter { file ->
+                file.media.kind != SavedMediaKind.AUDIO &&
+                    destinations?.cachedBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) == null
+            }
+            if (destinations != null) unprobed.chunked(FOUND_PROBE_BATCH).forEach { batch ->
+                batch.forEach { file ->
+                    val bounds = cancellableQuery { destinations.fileBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) }
+                    found[file.media.uri] = file.withBounds(bounds)
+                }
+                emit(Result.success(rows()))
+            }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (cancelled: OperationCanceledException) { throw cancelled }
         catch (_: Exception) { emit(Result.failure<List<SavedMedia>>(IllegalStateException())) }
     }.flowOn(ioDispatcher)
+
+    private companion object { const val FOUND_PROBE_BATCH = 24 }
 
     /** A provider may ignore cancellation: abandon its result without joining its blocking call. */
     private suspend fun <T> cancellableQuery(onFinished: () -> Unit = {}, query: (CancellationSignal) -> T): T =

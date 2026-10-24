@@ -592,4 +592,10 @@
     <string name="multi_link_notification_done">%1$s: %2$s saved, %3$s not saved</string>
     <string name="multi_link_submit_failed">Couldn’t start the downloads. Try again.</string>
     <string name="multi_link_photo_post">Photo post: open this link on its own</string>
+    <!-- Find my old downloads after a reinstall -->
+    <string name="old_downloads_offer">Downloaded with Nezzel before?</string>
+    <string name="old_downloads_show">Show your files</string>
+    <string name="old_downloads_wrong_folder">Choose the Nezzel folder inside Download</string>
+    <string name="old_downloads_setting">Show old downloads</string>
+    <string name="old_downloads_setting_body">Files saved before you reinstalled Nezzel</string>
 </resources>
