@@ -192,7 +192,7 @@
     <string name="files_location">Dossier actuel : %1$s — les anciens fichiers peuvent se trouver dans d’autres dossiers</string>
     <string name="saved_files">Enregistrés</string>
     <string name="filter_all">Tous</string>
-    <string name="filter_images">Images</string>
+    <string name="filter_images">Photos</string>
     <string name="saved_image_dimensions">%1$s × %2$s</string>
     <string name="saved_today">Aujourd’hui</string>
     <string name="saved_yesterday">Hier</string>
@@ -524,4 +524,15 @@
     <string name="playlist_first_video_warning">Ce lien est une playlist. Seule la première vidéo sera enregistrée.</string>
     <string name="playlist_mix_note">Les mix ne s’enregistrent pas en liste. Cette vidéo seulement.</string>
     <string name="playlist_private_message">Cette liste est privée et ne peut pas être ouverte.</string>
+    <string name="filter_videos">Vidéos</string>
+    <string name="saved_sort_accessibility">Trier les fichiers enregistrés : %1$s</string>
+    <string name="saved_sort_newest">Les plus récents</string>
+    <string name="saved_sort_largest">Les plus volumineux</string>
+    <string name="saved_sort_name">A–Z</string>
+    <string name="saved_rename">Renommer</string>
+    <string name="saved_rename_name">Nom du fichier</string>
+    <string name="saved_rename_extension">Extension : %1$s</string>
+    <string name="saved_rename_invalid">Saisissez de 1 à 200 caractères, sans / ni caractère nul.</string>
+    <string name="saved_rename_failed">Le nom n’a pas pu être modifié. Réessayez.</string>
+    <string name="saved_renamed">Renommé en %1$s</string>
 </resources>

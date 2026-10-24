@@ -8,6 +8,10 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.semantics.*
+import dev.ahmed.savlino.R
+import dev.ahmed.savlino.semanticsNodes
+import dev.ahmed.savlino.locale.AppPreferences
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import dev.ahmed.savlino.windowViews
@@ -70,6 +74,24 @@ class PostsCaptureTest {
                 save(controller.get(), "$name-$lang-${if (dark) "dark" else "light"}")
             } finally { controller.pause().stop().destroy() }
         }
+    }
+
+    @Test fun librarySortMenu() {
+        assumeTrue(dir != null)
+        AppPreferences(RuntimeEnvironment.getApplication()).savedSort = SavedSort.NEWEST
+        shoot("library-sort", steps = { a ->
+            val label = a.getString(R.string.saved_sort_accessibility, a.getString(R.string.saved_sort_newest))
+            val button = semanticsNodes(a).single { label in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
+            check(button.config[SemanticsActions.OnClick].action?.invoke() == true)
+            idle(); semanticsNodes(a)
+        }) { lang ->
+            DownloadsScreen(emptyList(), lang, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(items))
+        }
+    }
+
+    @Test fun libraryRenameDialog() = shoot("library-rename", steps = { a -> idle(); semanticsNodes(a) }) { lang ->
+        DownloadsScreen(emptyList(), lang, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(items))
+        SavedRenameDialog(items.first(), onDismiss = {}, onRename = { null }, onComplete = {})
     }
 
     @Test fun groupedPost() {

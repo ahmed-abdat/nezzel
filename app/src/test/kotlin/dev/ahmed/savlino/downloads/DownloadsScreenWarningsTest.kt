@@ -79,6 +79,15 @@ class DownloadsScreenWarningsTest {
         assertNotNull(clickable(a, context.getString(R.string.try_again)))
     }
 
+    @Test fun warningUsesRenamedFilenameInsteadOfStaleProviderTitle() = renderThemed({ nodes(it) }, {
+        CheckWarningRow(CheckWarning("a", "Movie.mp4", video.uri, ResultCheck.Problem.NO_SOUND, true),
+            video.copy(filename = "Holiday.mp4"), {}, {})
+    }) { a ->
+        val all = texts(nodes(a))
+        assertTrue(all.contains(dev.ahmed.savlino.locale.NezzelFormat.firstStrong("Holiday")))
+        assertFalse(all.contains(dev.ahmed.savlino.locale.NezzelFormat.firstStrong("Movie")))
+    }
+
     @Test fun betterQualityRowOnlyForEligibleVideoAndOpensIt() {
         val opened = mutableListOf<SavedMedia>()
         val better = BetterQualityLink(eligible = { it.uri == video.uri }, open = { opened += it })

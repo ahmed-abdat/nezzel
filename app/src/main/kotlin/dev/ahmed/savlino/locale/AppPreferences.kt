@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.locale
 
+import dev.ahmed.savlino.downloads.SavedSort
 import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +66,9 @@ class AppPreferences(context: Context) {
         require(language == "ar" || language == "en" || language == "fr")
         portable.edit().putString("language", language).apply()
     }
+    var savedSort: SavedSort
+        get() = SavedSort.entries.firstOrNull { it.name == portable.getString("saved_sort", null) } ?: SavedSort.NEWEST
+        set(value) { portable.edit().putString("saved_sort", value.name).apply() }
     var theme: ThemePref
         get() = ThemePref.entries.firstOrNull { it.name == portable.getString("theme", null) } ?: ThemePref.System
         set(value) { portable.edit().putString("theme", value.name).apply() }

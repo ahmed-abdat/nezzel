@@ -197,7 +197,7 @@ class JobCardUxTest {
 
     @Test @Config(qualifiers = "ar-w360dp-h800dp-mdpi")
     fun mixedArabicSavedTitleUsesFirstStrongInRowAndActionSheet() {
-        val item = family.copy(title = "رحلة Android")
+        val item = family.copy(title = "رحلة Android", filename = "رحلة Android.mp4")
         host(content = { DownloadsScreen(emptyList(), language, {}, {}, {}, {}, {}, null, {}, {},
             libraryLoad = LibraryLoadState.Ready(listOf(item))) }) { _ ->
             compose.onNodeWithText("\u2068رحلة Android\u2069", useUnmergedTree = true).assertExists()
