@@ -491,14 +491,9 @@
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">الحالات</string>
     <string name="statuses_intro_title">احفظ الحالات التي شاهدتها</string>
-    <string name="statuses_step_1">افتح الحالة في واتساب</string>
-    <string name="statuses_step_2">ارجع إلى هنا واحفظها</string>
+    <string name="statuses_intro_body">شاهد الحالة في واتساب، ثم احفظها من هنا.</string>
     <string name="statuses_grant">السماح بالوصول</string>
-    <string name="statuses_next_screen">في الشاشة التالية:</string>
-    <string name="statuses_use_folder">استخدام هذا المجلد</string>
-    <string name="statuses_allow">سماح</string>
     <string name="statuses_grant_hint">اضغط «استخدام هذا المجلد» ثم «سماح»</string>
-    <string name="statuses_privacy">يقرأ Nezzel هذه الملفات فقط. احفظ ما يحق لك فقط.</string>
     <string name="statuses_not_installed">واتساب غير مثبّت على هذا الهاتف</string>
     <string name="statuses_wrong_folder">ليس هذا هو المجلد. اضغط «استخدام هذا المجلد» في هذه الشاشة.</string>
     <string name="statuses_access_lost">فقد Nezzel الوصول إلى المجلد. اختره من جديد.</string>

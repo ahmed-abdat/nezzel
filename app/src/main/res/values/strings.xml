@@ -442,14 +442,9 @@
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">Statuses</string>
     <string name="statuses_intro_title">Save statuses you’ve seen</string>
-    <string name="statuses_step_1">Open the status in WhatsApp</string>
-    <string name="statuses_step_2">Come back here and save it</string>
+    <string name="statuses_intro_body">Watch a status in WhatsApp, then save it here.</string>
     <string name="statuses_grant">Allow access</string>
-    <string name="statuses_next_screen">On the next screen:</string>
-    <string name="statuses_use_folder">Use this folder</string>
-    <string name="statuses_allow">Allow</string>
     <string name="statuses_grant_hint">Tap “Use this folder”, then “Allow”</string>
-    <string name="statuses_privacy">Nezzel only reads these files. Save only what you may keep.</string>
     <string name="statuses_not_installed">WhatsApp isn’t on this phone</string>
     <string name="statuses_wrong_folder">That’s not it. Tap “Use this folder” on this screen.</string>
     <string name="statuses_access_lost">Nezzel lost access to the folder. Choose it again.</string>

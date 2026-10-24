@@ -184,81 +184,36 @@ private fun EmptyStatuses(apps: List<StatusApp>) {
     }
 }
 
-/** First visit and lost access: what the tab does, which apps it found, one button, and the two system taps that follow. */
+/** First visit and lost access: what the tab does, the apps it found, one button and the one system tap that matters. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Explainer(apps: List<StatusApp>, media: StatusMedia, onGrant: (() -> Unit)?, error: String? = null) = CenteredColumn {
+    Spacer(Modifier.height(Space.l))
     RingMark()
-    Text(stringResource(R.string.statuses_intro_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge,
-        textAlign = TextAlign.Center)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Step(1, stringResource(R.string.statuses_step_1))
-        Step(2, stringResource(R.string.statuses_step_2))
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Text(stringResource(R.string.statuses_intro_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center)
+        Text(stringResource(R.string.statuses_intro_body), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (apps.isNotEmpty()) Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.padding(vertical = Space.xs)) { apps.forEach { AppRow(it, media) } }
-    }
+    if (apps.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.l, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(Space.s)) { apps.forEach { AppRow(it, media) } }
     if (error != null) Text(error, Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-    if (onGrant != null) {
+        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+    if (onGrant != null) Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Button(onClick = onGrant, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.statuses_grant)) }
-        SystemSteps()
-    }
-    Text(stringResource(R.string.statuses_privacy), Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-}
-
-@Composable
-private fun Step(number: Int, text: String) {
-    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        NumberBadge(number)
-        Text(text, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-@Composable
-private fun NumberBadge(number: Int) {
-    Surface(Modifier.size(28.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
-        Box(contentAlignment = Alignment.Center) {
-            // Step numbers stay Latin like the rest of the app's digits.
-            Text(number.toString(), style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Ltr))
-        }
+        Text(stringResource(R.string.statuses_grant_hint), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun AppRow(app: StatusApp, media: StatusMedia) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Space.l).semantics(mergeDescendants = true) {},
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        AppIcon(app.packageName, media, 36.dp)
+    Row(Modifier.heightIn(min = 48.dp).semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        AppIcon(app.packageName, media, 28.dp)
         // The label is PackageManager's, in whatever script the app uses.
-        Text(app.label, style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))
-    }
-}
-
-/** A drawn hint of the system picker's two buttons, numbered; TalkBack reads the sentence instead. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SystemSteps() {
-    val hint = stringResource(R.string.statuses_grant_hint)
-    Column(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = hint }, verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Text(stringResource(R.string.statuses_next_screen), style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            FakeSystemButton(1, stringResource(R.string.statuses_use_folder))
-            FakeSystemButton(2, stringResource(R.string.statuses_allow))
-        }
-    }
-}
-
-@Composable
-private fun FakeSystemButton(number: Int, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-        NumberBadge(number)
-        Surface(shape = CircleShape, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) {
-            Text(label, Modifier.padding(horizontal = Space.l, vertical = Space.s), style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary)
-        }
+        Text(app.label, style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content))
     }
 }
 

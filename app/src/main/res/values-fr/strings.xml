@@ -449,14 +449,9 @@
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">Statuts</string>
     <string name="statuses_intro_title">Gardez les statuts que vous avez vus</string>
-    <string name="statuses_step_1">Ouvrez le statut dans WhatsApp</string>
-    <string name="statuses_step_2">Revenez ici et enregistrez-le</string>
+    <string name="statuses_intro_body">Regardez un statut dans WhatsApp, puis gardez-le ici.</string>
     <string name="statuses_grant">Autoriser l’accès</string>
-    <string name="statuses_next_screen">À l’écran suivant :</string>
-    <string name="statuses_use_folder">Utiliser ce dossier</string>
-    <string name="statuses_allow">Autoriser</string>
     <string name="statuses_grant_hint">Touchez « Utiliser ce dossier », puis « Autoriser »</string>
-    <string name="statuses_privacy">Nezzel ne fait que lire ces fichiers. Ne gardez que ce qui vous revient.</string>
     <string name="statuses_not_installed">WhatsApp n’est pas sur ce téléphone</string>
     <string name="statuses_wrong_folder">Ce n’est pas le bon dossier. Touchez « Utiliser ce dossier » sur cet écran.</string>
     <string name="statuses_access_lost">Nezzel n’a plus accès au dossier. Choisissez-le à nouveau.</string>
