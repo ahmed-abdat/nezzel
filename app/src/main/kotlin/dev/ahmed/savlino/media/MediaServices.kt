@@ -38,6 +38,11 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
             inspector.inspect(source, operationId, route)
         override fun cancel(operationId: String) { inspector.cancel(operationId) }
     }
+    private val statusSaver = dev.ahmed.savlino.statuses.StatusSaver(context)
+    /** Statuses tab storage: one READ-only folder grant; created on first use. */
+    val statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary by lazy {
+        dev.ahmed.savlino.statuses.DocumentStatusLibrary.create(context, statusSaver)
+    }
     val saver: ImageSaver = run {
         val destinations = SaveDestinations(context)
         val staging = File(context.noBackupFilesDir, "image-save")
@@ -52,7 +57,7 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
             }
         }
         val publisher = DestinationPublisher(context, space, destinations)
-        val statuses = dev.ahmed.savlino.statuses.StatusSaver(context)
+        val statuses = statusSaver
         ImageSaver(TransferFetch { ImageSaveTransfer(http, references) },
             publisher, staging, preflight, scope,
             startupCleanup = { statuses.sweep() },
