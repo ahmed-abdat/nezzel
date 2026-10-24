@@ -94,7 +94,8 @@ class StatusesScreenTest {
         compose.onAllNodes(hasContentDescription(s(R.string.statuses_saved), substring = true)).assertCountEquals(3)
         compose.onAllNodes(hasContentDescription("0:15", substring = true)).onFirst().assertExists()
         listOf(R.string.statuses_filter_all, R.string.statuses_filter_photos, R.string.statuses_filter_videos, R.string.statuses_hide_saved)
-            .forEach { compose.onNodeWithText(s(it)).assertExists() }
+            .forEach { val touch = compose.onNode(hasText(s(it)) and hasClickAction()).fetchSemanticsNode().touchBoundsInRoot
+                assertTrue(touch.height >= 48 * activity.resources.displayMetrics.density - 1) }
         compose.onNodeWithText(s(R.string.statuses_filter_photos)).performClick()
         tiles(R.string.statuses_video).assertCountEquals(0)
     }
