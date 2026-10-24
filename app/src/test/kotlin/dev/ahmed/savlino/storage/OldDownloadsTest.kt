@@ -129,13 +129,25 @@ class OldDownloadsTest {
         assertEquals("No per-file probe while listing", 0, provider.opens)
     }
 
-    @Test fun goneFolderEndsTheGrantQuietly() {
+    @Test fun failedListingShowsNothingAndKeepsTheGrant() {
         val provider = provider()
+        provider.add("Clip.mp4", "video/mp4")
         val old = OldDownloads(context).apply { onPicked(tree) }
         provider.gone = true
         assertTrue(old.list().isEmpty())
-        assertNull(old.active())
-        assertTrue(resolver.persistedUriPermissions.isEmpty())
+        assertEquals("Gone or transient can't be told apart: keep the grant", tree, old.active())
+        provider.gone = false
+        assertEquals(listOf("Clip.mp4"), old.list().map { it.media.filename })
+    }
+
+    @Test fun aNewPickReleasesThePreviousTree() {
+        provider()
+        val old = OldDownloads(context)
+        val sdCard = DocumentsContract.buildTreeDocumentUri(AUTHORITY, "1A2B-3C4D:Download/Nezzel")
+        assertEquals(OldDownloadsPick.GRANTED, old.onPicked(tree))
+        assertEquals(OldDownloadsPick.GRANTED, old.onPicked(sdCard))
+        assertEquals(sdCard, old.active())
+        assertEquals(listOf(sdCard), resolver.persistedUriPermissions.map { it.uri })
     }
 
     @Test fun dedupeHidesWhatTheLibraryAlreadyShows() {
@@ -143,6 +155,7 @@ class OldDownloadsTest {
         provider.add("Same.mp4", "video/mp4", size = 10)
         provider.add("Bigger.mp4", "video/mp4", size = 20)
         provider.add("Receipt.mp4", "video/mp4", size = 30)
+        provider.add("Only.mp4", "video/mp4", size = 40)
         val old = OldDownloads(context).apply { onPicked(tree) }
         fun media(id: Int, name: String, size: Long) = SavedMedia(Uri.parse("content://media/external_primary/downloads/$id"), name,
             name, "video/mp4", size, 1, null, null, null, relativePath = "Download/Nezzel/", volumeName = "external_primary")
@@ -150,7 +163,7 @@ class OldDownloadsTest {
             DocumentsContract.buildTreeDocumentUri(AUTHORITY, "primary:Download/Nezzel"), "primary:Download/Nezzel/Receipt.mp4"),
             "Receipt.mp4", "Receipt", "video/mp4", 30, 1, null, null, null)
         val kept = OldDownloads.dedupe(old.list(), listOf(media(1, "Same.mp4", 10), media(2, "Bigger.mp4", 99), receipt))
-        assertEquals(listOf("Bigger.mp4"), kept.map { it.media.filename })
+        assertEquals("Same folder + name is the same file even when MediaStore's size is stale", listOf("Only.mp4"), kept.map { it.media.filename })
     }
 
     @Test fun repositoryListsFoundFilesAndDeletesThroughTheTreeKeepingTheGrant() {

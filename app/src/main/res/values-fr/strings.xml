@@ -606,8 +606,8 @@
     <string name="multi_link_submit_failed">Impossible de lancer les téléchargements. Réessayez.</string>
     <string name="multi_link_photo_post">Publication photo : ouvrez ce lien seul</string>
     <!-- Find my old downloads after a reinstall -->
-    <string name="old_downloads_offer">Déjà téléchargé avec Nezzel ? Affichez vos fichiers</string>
-    <string name="old_downloads_show">Afficher</string>
+    <string name="old_downloads_offer">Déjà téléchargé avec Nezzel ?</string>
+    <string name="old_downloads_show">Afficher vos fichiers</string>
     <string name="old_downloads_wrong_folder">Choisissez le dossier Nezzel dans Download</string>
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>
     <string name="old_downloads_setting_body">Fichiers enregistrés avant de réinstaller Nezzel</string>

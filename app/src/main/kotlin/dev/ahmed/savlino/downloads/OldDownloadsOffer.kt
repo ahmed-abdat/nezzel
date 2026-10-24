@@ -30,7 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** [card]: the Downloads offer; [canGrant]: the Settings row (no grant yet). */
+/** [card]: the Downloads offer; [canGrant]: the Settings row (fresh install, no grant yet; upgrades never see it). */
 class OldDownloadsOffer(val card: Boolean, val canGrant: Boolean, val show: () -> Unit, val dismiss: () -> Unit)
 
 /** One per screen; every instance follows the same prefs, so a grant from Settings hides the Downloads card too. */
@@ -51,7 +51,7 @@ fun rememberOldDownloadsOffer(snackbar: SnackbarHostState): OldDownloadsOffer {
     // A grant can be removed in system settings while Nezzel is in the background.
     LaunchedEffect(owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { version++ } }
     val state by produceState(false to false, old, version) {
-        value = withContext(Dispatchers.IO) { old.offerVisible() to (old.active() == null) }
+        value = withContext(Dispatchers.IO) { old.offerVisible() to (old.eligible && old.active() == null) }
     }
     lateinit var launch: () -> Unit
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

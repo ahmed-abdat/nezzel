@@ -39,8 +39,11 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
             return OldDownloadsPick.WRONG_FOLDER
         }
         try { resolver.takePersistableUriPermission(tree, FLAGS) } catch (_: SecurityException) { return OldDownloadsPick.WRONG_FOLDER }
-        val first = stored() == null
-        check(prefs.edit().putString(TREE, tree.toString()).commit())
+        val previous = stored()
+        val first = previous == null
+        if (!prefs.edit().putString(TREE, tree.toString()).commit()) { releaseIfUnused(tree); return OldDownloadsPick.WRONG_FOLDER }
+        // A new pick (another volume) replaces the old one; never leave an untracked grant behind.
+        if (previous != null && previous != tree) releaseIfUnused(previous)
         if (first) onFound()
         OldDownloadsPick.GRANTED
     }
@@ -73,8 +76,9 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
     fun holds(tree: Uri): Boolean = stored() == tree
 
     /**
-     * One children query for the folder and one for its Statuses subfolder; no per-file probe here. A folder that no
-     * longer answers (deleted, moved) ends the grant quietly; a revoked grant lists nothing.
+     * One children query for the folder and one for its Statuses subfolder; no per-file probe here. A failed listing
+     * (folder deleted, provider busy or restarting) lists nothing and keeps the grant: a null cursor can't tell "gone"
+     * from "transient". Only the system dropping the permission ends it, see [active].
      */
     @androidx.annotation.WorkerThread
     internal fun list(cancellation: CancellationSignal? = null): List<FoundFile> {
@@ -82,9 +86,8 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
         val root = DocumentsContract.getTreeDocumentId(tree)
         val top = try { children(tree, root, cancellation) }
             catch (cancelled: OperationCanceledException) { throw cancelled }
-            catch (_: SecurityException) { forget(); return emptyList() }
-            catch (_: Exception) { return emptyList() } // May be transient: keep the grant.
-        if (top == null) { forget(); return emptyList() }
+            catch (_: Exception) { return emptyList() }
+            ?: return emptyList()
         val statuses = top.firstOrNull { it.dir && it.name.equals(STATUSES, ignoreCase = true) }
         val nested = statuses?.let {
             try { children(tree, it.id, cancellation) }
@@ -169,13 +172,14 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
 
         /** Hides found files that the MediaStore listing or a save-folder receipt already shows. */
         internal fun dedupe(found: List<FoundFile>, shown: List<SavedMedia>): List<FoundFile> {
-            fun key(path: String?, name: String, size: Long?) = Triple(path?.trimEnd('/')?.lowercase(), name, size)
-            val media = shown.filter { it.uri.authority == "media" }.map { key(it.relativePath, it.filename, it.size) }.toSet()
+            // Folder + name is the identity: one folder can't hold two files of the same name (sizes can be stale).
+            fun key(path: String?, name: String) = path?.trimEnd('/')?.lowercase() to name
+            val media = shown.filter { it.uri.authority == "media" }.map { key(it.relativePath, it.filename) }.toSet()
             val documents = shown.filter { it.uri.authority == AUTHORITY }.mapNotNull {
                 try { DocumentsContract.getDocumentId(it.uri) } catch (_: IllegalArgumentException) { null }
             }.toSet()
             return found.filter { file ->
-                key(file.media.relativePath, file.media.filename, file.media.size) !in media &&
+                key(file.media.relativePath, file.media.filename) !in media &&
                     DocumentsContract.getDocumentId(file.media.uri) !in documents
             }
         }
