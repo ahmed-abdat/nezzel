@@ -42,10 +42,8 @@ internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: 
     Column(Modifier.testTag("failure_content"), verticalArrangement = Arrangement.spacedBy(Space.m)) {
         Row(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             horizontalArrangement = Arrangement.spacedBy(Space.inline), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(56.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.errorContainer),
-                contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            }
+            // A bare glyph in the error colour; the colour is the signal, a tile around it was only decoration.
+            Icon(Icons.Filled.Warning, contentDescription = null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.error)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Text(stringResource(title), style = MaterialTheme.typography.titleMedium)
                 host?.let {

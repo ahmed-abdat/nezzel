@@ -223,7 +223,7 @@ private fun FormatChoiceRow(links: LinkViewModel, format: Format, language: Stri
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FormatRow(label: String, format: Format, roughSizeBytes: Long?, selected: Boolean, enabled: Boolean, language: String,
+internal fun FormatRow(label: String, format: Format, roughSizeBytes: Long?, selected: Boolean, enabled: Boolean, language: String,
     hint: String, details: String? = null, badge: String? = null, onSelect: () -> Unit) {
     val unknownSize = format.size == Size.Unknown && roughSizeBytes == null
     val size = sizeLabel(format, language, roughSizeBytes)
@@ -237,7 +237,8 @@ private fun FormatRow(label: String, format: Format, roughSizeBytes: Long?, sele
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val spokenRow = listOfNotNull(label, badge, hint.ifEmpty { null }, details, sizeSpoken).joinToString(stringResource(R.string.spoken_separator))
-    Surface(color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+    // Only the chosen quality is a container; the rest sit flat on the sheet.
+    Surface(color = if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
             // One spoken line for the row, so TalkBack says the size as a word ("About 4.7 MB, estimated"), never "≈".
