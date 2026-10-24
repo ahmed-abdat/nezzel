@@ -50,9 +50,10 @@ internal class YtdlpBundledRestored : IOException("bundled restored")
 
 /**
  * Local stage of the update, crash-safe. The verified copy is synced beside [dir], the old [dir] is renamed aside,
- * the copy is renamed in, and [record] writes the preferences last. A kill leaves the old install, no binary (the
- * next init copies the bundled one and drops the stale tag) or the new verified binary with a stale tag; never a
- * truncated one. A failure puts the old install back, else restores the bundled one ([YtdlpBundledRestored]).
+ * the copy is renamed in, each rename synced, and [record] writes the preferences last. A kill leaves the old install
+ * (put back by [sweep]) or the new verified binary under the old tag; never a truncated one. The size check at the next
+ * start only guards partial copies, which this order cannot leave. A failure puts the old install back, else restores
+ * the bundled one ([YtdlpBundledRestored]).
  */
 internal class YtdlpStagedInstall(private val dir: File, private val binaryName: String,
     private val update: () -> Unit, private val record: (StagedYtdlp, Long) -> Boolean,
@@ -60,8 +61,23 @@ internal class YtdlpStagedInstall(private val dir: File, private val binaryName:
     private val incoming = File(dir.parentFile, "${dir.name}.incoming")
     private val retired = File(dir.parentFile, "${dir.name}.retired")
 
-    /** Leftovers of an install killed midway. */
-    fun sweep() { incoming.delete(); retired.deleteRecursively() }
+    /** Leftovers of an install killed midway: the old install goes back unless the new binary is already in. */
+    fun sweep() {
+        incoming.delete()
+        if (!retired.exists()) return
+        if (!File(dir, binaryName).exists()) {
+            dir.deleteRecursively()
+            if (retired.renameTo(dir)) { sync(dir.parentFile); return }
+        }
+        retired.deleteRecursively()
+    }
+
+    /** Makes a rename durable: fsync of the directory holding the entry. Best effort where the FS refuses it. */
+    private fun sync(directory: File?) {
+        if (directory == null) return
+        try { java.nio.channels.FileChannel.open(directory.toPath(), java.nio.file.StandardOpenOption.READ).use { it.force(true) } }
+        catch (_: Exception) { }
+    }
 
     fun install(prepared: PreparedUpdate) {
         val staged = prepared as? StagedYtdlp ?: return update()
@@ -73,12 +89,14 @@ internal class YtdlpStagedInstall(private val dir: File, private val binaryName:
             }
             val hadInstall = dir.exists()
             if (hadInstall && !dir.renameTo(retired)) throw ReleaseFetchException("install") // Nothing changed yet.
+            sync(dir.parentFile)
             try {
-                if (!dir.mkdirs() || !incoming.renameTo(File(dir, binaryName)) || !record(staged, size))
-                    throw ReleaseFetchException("install")
+                if (!dir.mkdirs() || !incoming.renameTo(File(dir, binaryName))) throw ReleaseFetchException("install")
+                sync(dir); sync(dir.parentFile) // Both renames are on disk before the preferences name the new tag.
+                if (!record(staged, size)) throw ReleaseFetchException("install")
             } catch (error: Exception) {
                 dir.deleteRecursively()
-                if (hadInstall && retired.renameTo(dir)) throw ReleaseFetchException("install")
+                if (hadInstall && retired.renameTo(dir)) { sync(dir.parentFile); throw ReleaseFetchException("install") }
                 restoreBundled()
                 throw YtdlpBundledRestored()
             }

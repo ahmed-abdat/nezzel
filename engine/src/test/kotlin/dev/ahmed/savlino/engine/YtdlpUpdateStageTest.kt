@@ -284,12 +284,22 @@ class YtdlpUpdateStageTest {
         assertEquals(1, fresh.restores); assertFalse(fresh.staged.exists())
     }
 
-    @Test fun startupSweepDropsAnInstallKilledMidway() {
-        val install = Install()
-        File(install.base, "yt-dlp.incoming").writeBytes(asset.copyOf(3))
-        File(install.base, "yt-dlp.retired").apply { mkdirs(); File(this, "yt-dlp").writeText("older") }
-        install.installer.sweep()
-        assertTrue(install.leftovers().isEmpty()); assertEquals("old", File(install.dir, "yt-dlp").readText())
+    @Test fun startupSweepKeepsTheNewBinaryOrPutsTheOldInstallBack() {
+        // Killed after the new binary was renamed in: keep it, drop the old install.
+        val renamedIn = Install()
+        File(renamedIn.base, "yt-dlp.incoming").writeBytes(asset.copyOf(3))
+        File(renamedIn.base, "yt-dlp.retired").apply { mkdirs(); File(this, "yt-dlp").writeText("older") }
+        renamedIn.installer.sweep()
+        assertTrue(renamedIn.leftovers().isEmpty()); assertEquals("old", File(renamedIn.dir, "yt-dlp").readText())
+        // Killed between moving the old install aside and renaming the new one in (dir missing or empty).
+        for (emptyDir in listOf(false, true)) {
+            val movedAside = Install(hadInstall = false)
+            File(movedAside.base, "yt-dlp.retired").apply { mkdirs(); File(this, "yt-dlp").writeText("old"); File(this, "yt-dlp.zip").writeText("zip") }
+            if (emptyDir) movedAside.dir.mkdirs()
+            movedAside.installer.sweep()
+            assertTrue(movedAside.leftovers().isEmpty())
+            assertEquals("old", File(movedAside.dir, "yt-dlp").readText()); assertEquals("zip", File(movedAside.dir, "yt-dlp.zip").readText())
+        }
     }
 
     @Test fun repairKnowsOurRecordedSizeButKeepsUnknownUpdates() {
