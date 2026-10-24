@@ -69,6 +69,9 @@ class AppPreferences(context: Context) {
     var savedSort: SavedSort
         get() = SavedSort.entries.firstOrNull { it.name == portable.getString("saved_sort", null) } ?: SavedSort.NEWEST
         set(value) { portable.edit().putString("saved_sort", value.name).apply() }
+    /** Saved list shown as a grid for this filter (MediaFilter name): Images and Statuses default to grid, the rest to a list. */
+    fun libraryGrid(filter: String): Boolean = portable.getBoolean("library_grid_$filter", filter == "IMAGE" || filter == "STATUSES")
+    fun setLibraryGrid(filter: String, grid: Boolean) { portable.edit().putBoolean("library_grid_$filter", grid).apply() }
     var theme: ThemePref
         get() = ThemePref.entries.firstOrNull { it.name == portable.getString("theme", null) } ?: ThemePref.System
         set(value) { portable.edit().putString("theme", value.name).apply() }

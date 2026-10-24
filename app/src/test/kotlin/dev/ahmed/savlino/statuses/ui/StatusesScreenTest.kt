@@ -184,10 +184,33 @@ class StatusesScreenTest {
         val library = FakeStatusLibrary(ready())
         show(library)
         tiles(R.string.statuses_photo).onFirst().performClick()
-        compose.onNodeWithContentDescription(s(R.string.statuses_preview_close)).assertExists()
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertExists()
         compose.onAllNodes(hasText(s(R.string.statuses_save)) and hasClickAction()).onLast().performClick()
         compose.waitForIdle()
         assertEquals(1, library.saved.single().size)
         assertFalse(library.saved.single().single().isVideo)
+    }
+
+    @Test fun viewerSwipesWithinTheFilterAndSaveMarksTheStatusSaved() {
+        val library = FakeStatusLibrary(ready())
+        show(library)
+        compose.onNodeWithText(s(R.string.statuses_filter_photos)).performClick()
+        compose.waitForIdle()
+        tiles(R.string.statuses_photo).onFirst().performClick()
+        compose.waitForIdle()
+        // Photos only: 4 of the 9 statuses, and the first photo opens first.
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "1", "4")).assertIsDisplayed()
+            .performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "2", "4")).assertIsDisplayed()
+        // The second photo is already saved: no Save button there, only the mark.
+        compose.onAllNodes(hasText(s(R.string.statuses_save)) and hasClickAction()).assertCountEquals(0)
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "2", "4")).performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNode(hasText(s(R.string.statuses_save)) and hasClickAction()).performClick()
+        compose.waitForIdle()
+        assertEquals("status-7", library.saved.single().single().uri.lastPathSegment)
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertDoesNotExist()
+        compose.onNodeWithText(s(R.string.open_file)).assertExists()
     }
 }

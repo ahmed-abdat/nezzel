@@ -47,6 +47,8 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
     var hideSaved by mutableStateOf(false)
     var selection by mutableStateOf<Set<Uri>>(emptySet()); private set
     var preview by mutableStateOf<StatusItem?>(null)
+    // The viewer's pages, fixed when it opens: saving with Hide saved on must not pull the open page away.
+    private var previewOrder by mutableStateOf<List<Uri>>(emptyList())
     var saving by mutableStateOf(false); private set
     private val channel = Channel<StatusEvent>(Channel.BUFFERED)
     val events = channel.receiveAsFlow()
@@ -77,6 +79,13 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
     val visible: List<StatusItem> get() = accountItems
         .filter { !showFilters || when (filter) { StatusFilter.ALL -> true; StatusFilter.PHOTOS -> !it.isVideo; StatusFilter.VIDEOS -> it.isVideo } }
         .filter { !hideSaved || !showHideSaved || !it.saved }
+    /** What the viewer swipes through, with live saved marks; statuses that expired drop out. */
+    val previewItems: List<StatusItem> get() {
+        val byUri = ready?.items.orEmpty().associateBy { it.uri }
+        return previewOrder.ifEmpty { visible.map { it.uri } }.mapNotNull(byUri::get)
+    }
+    fun openPreview(item: StatusItem) { previewOrder = visible.map { it.uri }; preview = item }
+    fun closePreview() { preview = null; previewOrder = emptyList() }
     val newCount get() = accountItems.count { it.isNew }
     val selecting get() = selection.isNotEmpty()
     val selectedItems get() = ready?.items.orEmpty().filter { it.uri in selection }
@@ -136,7 +145,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
                 if (results.any { it is StatusSaveResult.NoSpace }) channel.send(StatusEvent.NoSpace)
                 else if (results.any { it is StatusSaveResult.Failed }) channel.send(StatusEvent.Failed)
                 clearSelection()
-                preview = null
+                closePreview()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { channel.send(StatusEvent.Failed) }
             finally { saving = false }

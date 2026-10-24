@@ -42,6 +42,8 @@ class SavedImageUiTest {
         filename = "Movie.mp4", title = "Movie", mimeType = "video/mp4")
     private val audio get() = image.copy(uri = Uri.parse("content://media/external/downloads/2"),
         filename = "Song.mp3", title = "Song", mimeType = "audio/mpeg")
+    // These cover list rows; the Images grid has its own tests (LibraryGridTest).
+    @org.junit.Before fun listView() { dev.ahmed.savlino.locale.AppPreferences(context).setLibraryGrid(MediaFilter.IMAGE.name, false) }
     private fun nodes(a: ComponentActivity): List<SemanticsNode> {
         compose.waitForIdle()
         return semanticsNodes(a, rounds = 4, idleMillis = 200)
@@ -176,9 +178,10 @@ class SavedImageUiTest {
             openWith = { openWith = MediaActions.open(it) }, delete = { repo.delete(it.uri) }) }) { a ->
             val openRow = nodes(a).single { it.config.getOrNull(SemanticsActions.OnClick)?.label == context.getString(R.string.open_file) }
             assertTrue(openRow.config.isMergingSemanticsOfDescendants)
+            // Images open in Nezzel's own viewer, not the phone's.
             assertEquals(true, openRow.config[SemanticsActions.OnClick].action?.invoke())
-            assertEquals(item.uri, opened!!.data)
-            assertEquals("image/png", opened!!.type)
+            assertNull(opened)
+            click(a, context.getString(R.string.viewer_close))
             val more = context.getString(R.string.saved_more, item.title)
             click(a, more); click(a, context.getString(R.string.share_file))
             @Suppress("DEPRECATION") val send = shared!!.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!

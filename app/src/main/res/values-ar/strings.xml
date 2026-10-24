@@ -523,7 +523,6 @@
     <string name="statuses_video">فيديو</string>
     <string name="statuses_save_failed">تعذّر الحفظ. حاول مرة أخرى.</string>
     <string name="statuses_select">تحديد</string>
-    <string name="statuses_preview_close">إغلاق</string>
     <plurals name="statuses_save_n">
         <item quantity="zero">حفظ %1$s</item>
         <item quantity="one">حفظ %1$s</item>
@@ -635,4 +634,15 @@
     <string name="dl_waiting_count">في الانتظار: %1$s</string>
     <string name="dl_batch_saved_of">حُفظ %1$s من %2$s</string>
     <string name="dl_batch_saved">تم حفظ %1$s</string>
+    <!-- dl-viewer: gallery grid and swipe viewer -->
+    <string name="viewer_image_n">صورة %1$s من %2$s</string>
+    <string name="viewer_video_n">فيديو %1$s من %2$s</string>
+    <string name="viewer_close">إغلاق</string>
+    <string name="viewer_play">تشغيل</string>
+    <string name="viewer_pause">إيقاف مؤقت</string>
+    <string name="viewer_mute">كتم الصوت</string>
+    <string name="viewer_unmute">تشغيل الصوت</string>
+    <string name="viewer_position">الموضع</string>
+    <string name="library_show_grid">عرض كشبكة</string>
+    <string name="library_show_list">عرض كقائمة</string>
 </resources>

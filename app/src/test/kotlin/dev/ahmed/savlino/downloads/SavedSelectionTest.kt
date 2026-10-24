@@ -80,7 +80,7 @@ class SavedSelectionTest {
         selectedCount(a, "2 selected")
         compose.runOnIdle { a.onBackPressedDispatcher.onBackPressed() }
         assertFalse(texts(nodes(a)).contains("2 selected"))
-        click(a, "Family"); assertEquals(1, opened())
+        click(a, "Song"); assertEquals(1, opened())
         longPress(a, "Song")
         click(a, context.getString(R.string.saved_selection_close))
         click(a, "Song"); assertEquals(2, opened())

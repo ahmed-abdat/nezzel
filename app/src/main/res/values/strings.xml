@@ -471,7 +471,6 @@
     <string name="statuses_video">Video</string>
     <string name="statuses_save_failed">Couldn’t save. Try again.</string>
     <string name="statuses_select">Select</string>
-    <string name="statuses_preview_close">Close</string>
     <plurals name="statuses_save_n">
         <item quantity="one">Save %1$s</item>
         <item quantity="other">Save %1$s</item>
@@ -567,4 +566,15 @@
     <string name="dl_waiting_count">%1$s waiting</string>
     <string name="dl_batch_saved_of">Saved %1$s of %2$s</string>
     <string name="dl_batch_saved">Saved %1$s</string>
+    <!-- dl-viewer: gallery grid and swipe viewer -->
+    <string name="viewer_image_n">Image %1$s of %2$s</string>
+    <string name="viewer_video_n">Video %1$s of %2$s</string>
+    <string name="viewer_close">Close</string>
+    <string name="viewer_play">Play</string>
+    <string name="viewer_pause">Pause</string>
+    <string name="viewer_mute">Mute</string>
+    <string name="viewer_unmute">Sound on</string>
+    <string name="viewer_position">Position</string>
+    <string name="library_show_grid">Show as grid</string>
+    <string name="library_show_list">Show as list</string>
 </resources>

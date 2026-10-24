@@ -3,7 +3,6 @@ package dev.ahmed.savlino.statuses.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
-import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,9 +51,6 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -67,6 +63,12 @@ import dev.ahmed.savlino.statuses.StatusItem
 import dev.ahmed.savlino.statuses.StatusLibrary
 import dev.ahmed.savlino.statuses.StatusSource
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.viewer.LocalMediaPictures
+import dev.ahmed.savlino.viewer.MediaPictures
+import dev.ahmed.savlino.viewer.MediaViewer
+import dev.ahmed.savlino.viewer.ViewerIntents
+import dev.ahmed.savlino.viewer.ViewerItem
+import dev.ahmed.savlino.viewer.viewerStart
 
 @Composable
 fun rememberStatusesState(library: StatusLibrary?): StatusesState {
@@ -144,7 +146,7 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
             }
         }
     }
-    state.preview?.let { item -> StatusPreview(item, media, state.saving, onClose = { state.preview = null }) { state.save(listOf(item)) } }
+    state.preview?.let { opened -> StatusViewer(state, opened, media, language) }
 }
 
 /** Dashed-ring mark of the tab, larger: the same generic glyph, never a messaging app's logo. */
@@ -247,7 +249,7 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
         }
         items(items, key = { it.uri.toString() }) { item ->
             StatusTile(item, media, state.selecting, item.uri in state.selection,
-                onClick = { if (state.selecting) state.toggle(item) else state.preview = item }, onLongClick = { state.toggle(item) })
+                onClick = { if (state.selecting) state.toggle(item) else state.openPreview(item) }, onLongClick = { state.toggle(item) })
         }
     }
 }
@@ -468,45 +470,30 @@ private fun SaveButton(label: String, saving: Boolean, onSave: () -> Unit, modif
     }
 }
 
-/** Full-screen look at one status before saving it. Videos play in place; nothing is copied until Save. */
+/** The shared swipe viewer over the open account's current filter; Save sits in its top bar and copies nothing until tapped. */
 @Composable
-private fun StatusPreview(item: StatusItem, media: StatusMedia, saving: Boolean, onClose: () -> Unit, onSave: () -> Unit) {
-    Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = Color.White) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().padding(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.statuses_preview_close)) }
-                    Spacer(Modifier.weight(1f))
-                    rememberDuration(item, media)?.let {
-                        Text(NezzelFormat.duration(it / 1000), Modifier.padding(horizontal = Space.l),
-                            style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Ltr))
-                    }
-                }
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { PreviewMedia(item, media) }
-                if (item.saved) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = Space.gutter).semantics(mergeDescendants = true) {},
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s, Alignment.CenterHorizontally)) {
-                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primaryContainer)
-                    Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelLarge)
-                }
-                SaveButton(stringResource(R.string.statuses_save), saving, onSave,
-                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l))
+private fun StatusViewer(state: StatusesState, opened: StatusItem, media: StatusMedia, language: String) {
+    val context = LocalContext.current
+    val items = state.previewItems
+    val pages = remember(items) { items.map { ViewerItem(it.uri, it.isVideo, it.mimeType) } }
+    val start = remember(opened.uri) { viewerStart(pages, opened.uri) }
+    val pictures = remember(media, items) {
+        val byUri = items.associateBy { it.uri }
+        MediaPictures { uri, _, size -> byUri[uri]?.let { media.thumbnail(it, size) } }
+    }
+    fun launch(intent: Intent) = try { context.startActivity(intent) } catch (_: ActivityNotFoundException) { } catch (_: SecurityException) { }
+    CompositionLocalProvider(LocalMediaPictures provides pictures) {
+        MediaViewer(pages, start, language, onClose = state::closePreview,
+            onShare = { launch(ViewerIntents.share(it)) }, onOpenWith = { launch(ViewerIntents.openWith(it)) }) { page ->
+            val item = items.firstOrNull { it.uri == page.uri } ?: return@MediaViewer
+            if (item.saved) Row(Modifier.heightIn(min = 48.dp).padding(horizontal = Space.s).semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primaryContainer)
+                Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelLarge)
+            } else TextButton(onClick = { state.save(listOf(item)) }, enabled = !state.saving, modifier = Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
+                Text(stringResource(R.string.statuses_save))
             }
         }
     }
-}
-
-@Composable
-private fun PreviewMedia(item: StatusItem, media: StatusMedia) {
-    val poster by produceState<Bitmap?>(null, item.uri) { value = media.thumbnail(item, 1080) }
-    var playing by remember(item.uri) { mutableStateOf(false) }
-    val description = stringResource(if (item.isVideo) R.string.statuses_video else R.string.statuses_photo)
-    if (item.isVideo) AndroidView({ context ->
-        VideoView(context).apply {
-            setOnPreparedListener { player -> player.isLooping = true; start(); playing = true }
-            setOnErrorListener { _, _, _ -> playing = false; true }
-            setVideoURI(item.uri)
-            setOnClickListener { if (isPlaying) pause() else start() }
-        }
-    }, Modifier.semantics { contentDescription = description }, onRelease = { it.stopPlayback() })
-    if (!playing) poster?.let { Image(it.asImageBitmap(), description, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
 }

@@ -255,6 +255,9 @@ fun DownloadsScreen(
     val filters = remember(saved) { availableMediaFilters(saved) }
     val effectiveFilter = MediaFilter.valueOf(filterName).takeIf { it in filters } ?: MediaFilter.ALL
     LaunchedEffect(effectiveFilter) { filterName = effectiveFilter.name }
+    val view = rememberLibraryView(preferences, effectiveFilter)
+    var viewingUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val open = { item: SavedMedia -> if (item.inViewer) viewingUri = item.uri.toString() else onOpen(item) }
     val filtered = remember(saved, effectiveFilter, query, sort, language) {
         savedLibraryItems(saved, effectiveFilter, query, sort, Locale.forLanguageTag(language))
     }
@@ -287,6 +290,7 @@ fun DownloadsScreen(
             })
         else ScreenHeader(stringResource(R.string.downloads)) {
             if (current == DownloadsTab.SAVED) {
+                if (saved.isNotEmpty()) LibraryViewToggle(view)
                 if (saved.isNotEmpty()) SavedSortMenu(sort) { sort = it; preferences.savedSort = it }
                 // One toggle in the same spot: Search opens the field under the bar, Close search shuts and clears it.
                 if (search) IconButton(onClick = closeSearch) { Icon(Icons.Default.Close, stringResource(R.string.saved_search_close)) }
@@ -381,7 +385,8 @@ fun DownloadsScreen(
                             today.minusDays(1) -> stringResource(R.string.saved_yesterday)
                             else -> mediaDate(date, language)
                         }) }
-                        items(entries, key = { it.uri.toString() }) { item -> SavedRow(item, language, { onOpen(item) }, { onShare(item) },
+                        savedEntries(entries, view.grid, language, selecting, selectedUris, open, { if (!selectionBusy) selectedUris = selectedUris + it.uri.toString() },
+                            { if (!selectionBusy) selectedUris = if (it.uri.toString() in selectedUris) selectedUris - it.uri.toString() else selectedUris + it.uri.toString() }) { item -> SavedRow(item, language, { open(item) }, { onShare(item) },
                             { onOpenWith(item) }, onShowFiles.takeIf { canShowFiles(item) }, { deletingUri = item.uri.toString() },
                             // No fade-in: filter switches must not flicker tens of rows; removal fades and neighbours slide.
                             Modifier.animateItem(fadeInSpec = null, placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 100)),
@@ -415,6 +420,7 @@ fun DownloadsScreen(
             }
         }
     }
+    viewingUri?.let { LibraryViewer(filtered, it, language, { viewingUri = null }, onShare, onOpenWith) }
     saved.find { it.uri.toString() == renamingUri }?.let { item ->
         SavedRenameDialog(item, onDismiss = { renamingUri = null }, onRename = { name ->
             val finalName = withContext(Dispatchers.IO) { repository.rename(item.uri, name) }
@@ -611,7 +617,7 @@ fun LibraryLoadStatus(load: LibraryLoadState, onRetry: () -> Unit) {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit, modifier: Modifier = Modifier,
+internal fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit, modifier: Modifier = Modifier,
     selecting: Boolean = false, selected: Boolean = false, selectionEnabled: Boolean = true,
     onSelect: () -> Unit = {}, onToggle: () -> Unit = {},
     renameRepository: SavedMediaRepository, onRename: () -> Unit,
