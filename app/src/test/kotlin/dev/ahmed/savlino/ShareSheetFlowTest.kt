@@ -131,19 +131,30 @@ class ShareSheetFlowTest {
         waitFor("link marked handled") { prefs.dismissedHashes.isNotEmpty() }
     }
 
-    @Test fun withAccessibilityOnTheStartedSheetStaysUntilClosed() {
+    @Test fun withAScreenReaderTheStartedSheetStaysUntilClosed() {
         val engine = Engine(); install(engine)
-        shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)).setEnabled(true)
+        shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java)).setTouchExplorationEnabled(true)
         val activity = launch(share(url))
         waitFor("options") { activity.links.downloadEnabled }
         activity.links.requestDownload()
         waitFor("job accepted") { activity.links.acceptedJob != null }
         repeat(4) { sheetTexts(activity) }
-        assertFalse("no auto-close while an accessibility service is on", activity.isFinishing)
+        assertFalse("no auto-close while a screen reader is on", activity.isFinishing)
         val close = semanticsNodes(activity, rounds = 1).last { it.config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick) &&
             activity.getString(R.string.nezzel_close) in texts(descendants(it)) }
         assertEquals(true, close.config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action?.invoke())
         waitFor("closed by Close") { activity.isFinishing }
+    }
+
+    @Test fun anAccessibilityServiceWithoutTouchExplorationStillAutoCloses() {
+        val engine = Engine(); install(engine)
+        val manager = shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java))
+        manager.setEnabled(true); manager.setTouchExplorationEnabled(false)
+        val activity = launch(share(url))
+        waitFor("options") { activity.links.downloadEnabled }
+        activity.links.requestDownload()
+        waitFor("job accepted") { activity.links.acceptedJob != null }
+        waitFor("sheet closes after the check") { activity.isFinishing }
     }
 
     @Test fun dismissingTheSheetEnqueuesNothingAndMarksNothing() {
@@ -229,15 +240,51 @@ class ShareSheetFlowTest {
         assertHandsOff(activity, text)
     }
 
-    @Test fun savedBeforeShowsFirstAndDownloadAgainStillEnqueues() {
-        val engine = Engine(); val jobs = install(engine)
+    private val savedUri = Uri.parse("content://media/external/downloads/7")
+
+    private fun saveEarlier(jobs: JobStore) {
         val source = LinkRevision(LinkInput.parse(url)!!, 1)
         val command = (DownloadCommand.confirm("done-720", Inspection(source, "2026.08.19",
             listOf(Format("720", "mp4", true, true, height = 720))), source, "720", "clip") as ConfirmResult.Confirmed).command
-        val uri = Uri.parse("content://media/external/downloads/7")
         assertTrue(jobs.enqueue(command)); assertTrue(jobs.startTransfer("done-720")); assertTrue(jobs.markStaged("done-720"))
-        assertTrue(jobs.recordPending("done-720", PendingPublication(uri, "clip.mp4")))
-        assertTrue(jobs.complete("done-720", PublishedFile(uri, "clip.mp4")))
+        assertTrue(jobs.recordPending("done-720", PendingPublication(savedUri, "clip.mp4")))
+        assertTrue(jobs.complete("done-720", PublishedFile(savedUri, "clip.mp4")))
+    }
+
+    /** MediaStore stand-in: knows the type of the file Nezzel saved. */
+    class MediaTypes : android.content.ContentProvider() {
+        override fun onCreate() = true
+        override fun getType(uri: Uri) = "video/mp4"
+        override fun query(uri: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?) = null
+        override fun insert(uri: Uri, values: android.content.ContentValues?) = null
+        override fun delete(uri: Uri, s: String?, a: Array<out String>?) = 0
+        override fun update(uri: Uri, values: android.content.ContentValues?, s: String?, a: Array<out String>?) = 0
+    }
+
+    @Test fun savedBeforeOpenBeforeAnyFormatIsPickedCarriesTheFileType() {
+        val engine = Engine(); val jobs = install(engine, automatic = false)
+        saveEarlier(jobs)
+        Robolectric.setupContentProvider(MediaTypes::class.java, "media")
+        val activity = launch(share(url))
+        waitFor("saved lookup") { activity.links.savedLink != null }
+        assertNull(activity.links.selectedFormat)
+        val label = activity.getString(R.string.open_file)
+        sheetTexts(activity)
+        val open = semanticsNodes(activity, rounds = 1).filter { it.config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick) &&
+            label in texts(descendants(it)) }.minByOrNull { descendants(it).size }
+        assertNotNull(texts(semanticsNodes(activity, rounds = 1)).toString(), open)
+        assertEquals(true, open!!.config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action?.invoke())
+        val view = shadowOf(activity).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, view.action)
+        assertEquals(savedUri, view.data)
+        assertEquals("video/mp4", view.type)
+        assertTrue(activity.isFinishing)
+        assertTrue(engine.inspected.isEmpty())
+    }
+
+    @Test fun savedBeforeShowsFirstAndDownloadAgainStillEnqueues() {
+        val engine = Engine(); val jobs = install(engine)
+        saveEarlier(jobs)
 
         val activity = launch(share(url))
         waitFor("saved lookup") { activity.links.savedLink != null && activity.links.downloadEnabled }

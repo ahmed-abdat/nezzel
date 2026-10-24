@@ -42,6 +42,9 @@ open class NezzelApplication : Application(), Configuration.Provider {
     val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */
     open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope, usage) }
+    /** What the link screens use from [media]; tests swap in fakes here. */
+    internal open val imageInspect: dev.ahmed.savlino.media.ImageInspect get() = media.inspect
+    internal open val imageSaver: dev.ahmed.savlino.media.ImageSaver get() = media.saver
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(DownloadWorker.Factory(downloads)).build()
     private var startupMaintenance: Job? = null

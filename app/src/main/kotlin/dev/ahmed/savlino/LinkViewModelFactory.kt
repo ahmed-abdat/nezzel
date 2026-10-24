@@ -23,7 +23,7 @@ internal fun linkViewModel(activity: ComponentActivity, preferences: AppPreferen
                 initialPreset = preferences.lastPreset, rememberPreset = { preferences.lastPreset = it },
                 initialHeight = preferences.lastHeight, rememberHeight = { preferences.lastHeight = it },
                 rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
-                images = media.inspect, imageSaver = media.saver, earlyPreview = media::earlyPreview,
+                images = application.imageInspect, imageSaver = application.imageSaver, earlyPreview = media::earlyPreview,
                 resolveShortLink = media::resolveShortLink,
                 usage = application.usage) as T
         }

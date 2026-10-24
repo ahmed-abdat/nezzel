@@ -174,7 +174,9 @@ internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language:
                 Modifier.weight(1f).padding(vertical = Space.m), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
                 try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(saved.uri, container?.let(::mimeTypeFor))
+                    // Before a format is picked only the file knows its type; MediaStore keeps it for our own rows.
+                    val type = container?.let(::mimeTypeFor) ?: context.contentResolver.getType(saved.uri)
+                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(saved.uri, type)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                     onOpened()
                 } catch (_: ActivityNotFoundException) {

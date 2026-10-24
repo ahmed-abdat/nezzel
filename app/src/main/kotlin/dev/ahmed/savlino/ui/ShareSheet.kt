@@ -35,6 +35,8 @@ fun ShareSheet(links: LinkViewModel, language: String, hooks: ShareSheetHooks) {
     // A photo save lives in this sheet's view model: dragging, tapping outside or Back must not end it. Cancel stays.
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true,
         confirmValueChange = { it != SheetValue.Hidden || !links.imageSaving })
+    // The sheet window has its own Back; this one catches a Back that reaches the activity window.
+    BackHandler(enabled = saving) { }
     ModalBottomSheet(onDismissRequest = { if (!links.imageSaving) hooks.onFinish() }, sheetState = state,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !saving)) {
         BackHandler(enabled = saving) { }
@@ -81,7 +83,7 @@ private fun PreviewBody(links: LinkViewModel, language: String, hooks: ShareShee
 @Composable
 private fun OpenInNezzelBelow(hooks: ShareSheetHooks) = Column(Modifier.padding(top = Space.s)) { OpenInNezzel(hooks.onOpenApp) }
 
-/** After the coordinator took the job: a compact check and one line; it closes by itself unless an accessibility service is on. */
+/** After the coordinator took the job: a compact check and one line; it closes by itself unless a screen reader is on. */
 @Composable
 private fun StartedBody(onClose: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.s).testTag("share_started_body"),

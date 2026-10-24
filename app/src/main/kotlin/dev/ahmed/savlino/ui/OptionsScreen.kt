@@ -142,7 +142,8 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
         if (links.optionsState is OptionsState.Ready) ConfirmationScreen(links, language, share)
         if (links.optionsState is OptionsState.ImageReady) ImageSaveBar(links, language)
         if (links.optionsState is OptionsState.Checking) DownloadPlaceholder()
-        share?.let { OpenInNezzel(it.onOpenApp) }
+        // A photo save holds the sheet open; leaving for the app mid-save would lose its result.
+        share?.let { OpenInNezzel(it.onOpenApp, enabled = !links.imageSaving) }
     }
 }
 
@@ -179,8 +180,8 @@ private fun DownloadPlaceholder() {
 
 /** Quiet way out of the share sheet: the same link, in the full app. */
 @Composable
-internal fun OpenInNezzel(onOpenApp: () -> Unit) {
-    TextButton(onClick = onOpenApp, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = Space.l)
+internal fun OpenInNezzel(onOpenApp: () -> Unit, enabled: Boolean = true) {
+    TextButton(onClick = onOpenApp, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = Space.l)
         .navigationBarsPadding().testTag("share_open_app")) {
         Text(stringResource(R.string.share_sheet_open_app))
     }

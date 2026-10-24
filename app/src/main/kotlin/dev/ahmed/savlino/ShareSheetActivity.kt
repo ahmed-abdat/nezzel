@@ -73,9 +73,9 @@ class ShareSheetActivity : AppCompatActivity() {
                 haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             }
             // Close only once the coordinator has the job (enqueue done), after the check was seen. With an
-            // accessibility service on, the sheet stays until dismissed (Close, Back or outside).
+            // screen reader on (touch exploration), the sheet stays until dismissed (Close, Back or outside).
             LaunchedEffect(links.acceptedJob, links.optionsState) {
-                if (links.acceptedJob == null || links.optionsState != OptionsState.Hidden || accessibilityOn()) return@LaunchedEffect
+                if (links.acceptedJob == null || links.optionsState != OptionsState.Hidden || touchExploration()) return@LaunchedEffect
                 val shown = android.os.SystemClock.uptimeMillis() - (sentAt ?: android.os.SystemClock.uptimeMillis())
                 delay((STARTED_MILLIS - shown).coerceAtLeast(0))
                 finishAndRemoveTask()
@@ -83,7 +83,7 @@ class ShareSheetActivity : AppCompatActivity() {
             LaunchedEffect(links.moreFormats) { if (links.moreFormats) openInNezzel() }
             LaunchedEffect(Unit) { links.imageEvents.collect(::onImageEvent) }
             NezzelTheme(preferences.theme, preferences.matchWallpaper) {
-                ShareSheet(links, language, ShareSheetHooks(onOpenApp = ::openInNezzel, onFinish = ::finishAndRemoveTask,
+                ShareSheet(links, language, ShareSheetHooks(onOpenApp = { if (!links.imageSaving) openInNezzel() }, onFinish = ::finishAndRemoveTask,
                     notifyLine = notifyLine, onAllowNotifications = ::askNotifications,
                     sent = sent || (links.acceptedJob != null && links.optionsState == OptionsState.Hidden)))
             }
@@ -134,11 +134,11 @@ class ShareSheetActivity : AppCompatActivity() {
         if (links.optionsState == OptionsState.Hidden) window.decorView.postDelayed({ finishAndRemoveTask() }, dwellMillis())
     }
 
-    private fun accessibilityOn() = getSystemService(AccessibilityManager::class.java)?.isEnabled == true
+    /** TalkBack-style screen readers; other accessibility services (password managers, switches) don't hold the sheet. */
+    private fun touchExploration() = getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
 
     /** After a photo save the toast carries the result; TalkBack gets time to read it. */
-    private fun dwellMillis(): Long =
-        if (getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true) 900 else 450
+    private fun dwellMillis(): Long = if (touchExploration()) 900 else 450
 
     private companion object { const val STARTED_MILLIS = 1_500L }
 
