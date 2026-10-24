@@ -187,13 +187,45 @@ class DocumentStatusLibraryTest {
         assertEquals(listOf(tree("Android/media")), app.contentResolver.persistedUriPermissions.map { it.uri })
     }
 
-    @Test fun movedFolderIsAccessLostAndItsGrantReleased() = runBlocking {
+    @Test fun failingRootQueryKeepsTheGrantAndTheNextLoadWorks() = runBlocking {
         seedPhone()
         val library = library()
         assertEquals(StatusGrantResult.Granted, library.onPicked(tree("Android/media/com.whatsapp")))
-        File(root, "Android/media/com.whatsapp").deleteRecursively()
+        provider.failOnce += "Android/media/com.whatsapp"
         assertTrue(library.load() is StatusAccess.AccessLost)
+        assertEquals(listOf(tree("Android/media/com.whatsapp")), app.contentResolver.persistedUriPermissions.map { it.uri })
+        assertEquals(3, ready(library.load()).items.size)
+    }
+
+    @Test fun wrongPickAfterAccessLostStaysLost() = runBlocking {
+        seedPhone(); dir("Download")
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        app.contentResolver.releasePersistableUriPermission(tree("Android/media"), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        assertTrue(library.load() is StatusAccess.AccessLost)
+        assertEquals(StatusGrantResult.WrongFolder, library.onPicked(tree("Download")))
+        assertEquals(StatusGrantResult.WrongFolder, library.onPicked(tree("$wa/Media/WhatsApp Images")))
+        // Right shape, so the grant is taken for the check, but nothing of the app is there.
+        File(root, "Android/media/com.whatsapp.w4b").deleteRecursively(); dir("Android/media/com.whatsapp.w4b")
+        assertEquals(StatusGrantResult.WrongFolder, library.onPicked(tree("Android/media/com.whatsapp.w4b")))
         assertTrue(app.contentResolver.persistedUriPermissions.isEmpty())
+        assertTrue(library.load() is StatusAccess.AccessLost)
+        assertEquals(StatusGrantResult.Granted, library.onPicked(tree("Android/media")))
+        library.forget()
+        assertTrue(library.load() is StatusAccess.NeedsGrant)
+    }
+
+    @Test fun partialLoadMergesSeenInsteadOfForgettingIt() = runBlocking {
+        seedPhone()
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        library.load()
+        // Business folder fails this time: its status must not count as new on the next clean load.
+        provider.failOnce += "$biz/Media/.Statuses"
+        assertEquals(3, ready(library.load()).items.size)
+        val clean = ready(library.load()).items
+        assertEquals(4, clean.size)
+        assertTrue(clean.none { it.isNew })
     }
 
     @Test fun installStatesAndUninstalledAppIsHidden() = runBlocking {
@@ -255,6 +287,7 @@ class DocumentStatusLibraryTest {
     /** ExternalStorageProvider stand-in over [root]: tree-scoped child queries, read-only; writes are counted and fail. */
     private inner class Provider : ContentProvider() {
         val queried = mutableListOf<String>()
+        val failOnce = mutableSetOf<String>()
         var writes = 0
         override fun onCreate() = true
         private fun fileOf(documentId: String): File {
@@ -278,6 +311,7 @@ class DocumentStatusLibraryTest {
             require(treePath.isEmpty() || docPath == treePath || docPath.startsWith("$treePath/")) { "outside tree" }
             assertEquals("children", uri.lastPathSegment)
             queried += docPath
+            if (failOnce.remove(docPath)) throw IllegalStateException("busy")
             val dir = fileOf(documentId)
             if (!dir.isDirectory) throw IllegalArgumentException(FileNotFoundException())
             val columns = requireNotNull(projection)

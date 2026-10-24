@@ -48,7 +48,7 @@ class DocumentStatusLibrary(
         if (walk.found.isEmpty() && !walk.appFolderSeen) {
             grants.discard(tree)
             StatusGrantResult.WrongFolder
-        } else StatusGrantResult.Granted
+        } else StatusGrantResult.Granted.also { grants.found() }
     }
 
     override suspend fun load(): StatusAccess = withContext(io) {
@@ -58,14 +58,17 @@ class DocumentStatusLibrary(
         val trees = grants.active().filter { tree -> (treeProbes(tree) != null).also { if (!it) grants.discard(tree) } }
         if (trees.isEmpty()) return@withContext if (grants.isLost) StatusAccess.AccessLost(apps) else StatusAccess.NeedsGrant(apps)
         val folders = linkedMapOf<String, Pair<Walk, Found>>()
+        val walks = mutableListOf<Walk>()
         var working = 0
         for (tree in trees) {
             currentCoroutineContext().ensureActive()
             val probes = treeProbes(tree) ?: continue // filtered above
             val walk = Walk(tree)
             val root = DocumentsContract.getTreeDocumentId(tree)
-            // The root query is the liveness check: revoked, moved or deleted folders fail here.
-            if (walk.children(root) == null) { grants.drop(tree); continue }
+            walks += walk
+            // The root query is the liveness check. A failure may be transient (provider busy, volume not ready),
+            // so the grant is only skipped this load; it is released only on forget or once the system drops it.
+            if (walk.children(root) == null) continue
             working++
             walk.find(root, StatusFolders.pathOf(root).orEmpty(), probes, 0)
             // Same folder through two grants: provider document ids are tree-independent, keep the first.
@@ -74,6 +77,8 @@ class DocumentStatusLibrary(
         if (working == 0) return@withContext StatusAccess.AccessLost(apps)
         val installed = apps.map { it.packageName }.toSet()
         val kept = folders.values.filter { it.second.packageName in installed }
+        // Account numbers follow every found folder, not only non-empty ones: labels must not shift when an
+        // account's statuses expire (chips show only with more than one source).
         val indexes = kept.groupBy { it.second.packageName }.mapValues { (_, found) ->
             found.map { StatusFolders.accountOf(it.second.path) }.distinct().sortedWith(StatusFolders.accountOrder)
         }
@@ -83,14 +88,16 @@ class DocumentStatusLibrary(
             walk.children(folder.documentId).orEmpty().filter { it.isStatus }.map { source to (walk to it) }
         }
         val seen = marks.seen()
+        val saved = marks.saved()
         val items = listed.map { (source, entry) ->
             val (walk, child) = entry
             StatusItem(DocumentsContract.buildDocumentUriUsingTree(walk.tree, child.documentId), source,
                 child.mimeType.startsWith("video/"), child.mimeType, child.size, child.modified,
-                saved = marks.isSaved(child.documentId, child.size, child.modified),
+                saved = marks.isSaved(saved, child.documentId, child.size, child.modified),
                 isNew = seen != null && marks.seenKey(child.documentId) !in seen)
         }.sortedWith(compareByDescending<StatusItem, Long?>(nullsFirst<Long>()) { it.lastModifiedMillis })
-        marks.see(listed.map { it.second.second.documentId })
+        // A partial load (a failed query) must not forget what the failed folders showed last time.
+        marks.see(listed.map { it.second.second.documentId }, replace = walks.none { it.failed })
         val sources = items.map { it.source }.distinct()
             .sortedWith(compareBy({ StatusFolders.PACKAGES.indexOf(it.packageName) }, { it.accountIndex }))
         StatusAccess.Ready(apps, sources, items)
@@ -132,9 +139,11 @@ class DocumentStatusLibrary(
     private inner class Walk(val tree: Uri) {
         val found = mutableListOf<Found>()
         var appFolderSeen = false
+        var failed = false
         private val listed = hashMapOf<String, List<Child>?>()
 
-        fun children(documentId: String): List<Child>? = listed.getOrPut(documentId) { query(documentId) }
+        fun children(documentId: String): List<Child>? =
+            listed.getOrPut(documentId) { query(documentId).also { if (it == null) failed = true } }
 
         fun find(documentId: String, path: List<String>, probes: List<StatusFolders.Probe>, depth: Int) {
             if (probes.any { depth >= it.appFolderDepth }) appFolderSeen = true
@@ -181,25 +190,28 @@ class DocumentStatusLibrary(
  * previous load. Prefs, not the job database: no schema migration. No names are stored.
  */
 internal class StatusMarks(private val prefs: SharedPreferences) {
-    fun isSaved(documentId: String, size: Long?, modified: Long?) =
-        savedKey(documentId, size, modified)?.let { it in saved() } == true
+    fun saved(): Set<String> = savedList().toSet()
+
+    fun isSaved(saved: Set<String>, documentId: String, size: Long?, modified: Long?) =
+        savedKey(documentId, size, modified)?.let { it in saved } == true
 
     @Synchronized fun markSaved(documentId: String, size: Long?, modified: Long?) {
         val key = savedKey(documentId, size, modified) ?: return
-        val list = saved().filter { it != key } + key
+        val list = savedList().filter { it != key } + key
         prefs.edit().putString(SAVED, list.takeLast(CAP).joinToString("\n")).apply()
     }
 
     /** Null before the first load: nothing counts as new without a previous visit. */
     fun seen(): Set<String>? = prefs.getString(SEEN, null)?.split('\n')?.filter { it.isNotEmpty() }?.toSet()
 
-    @Synchronized fun see(documentIds: List<String>) {
-        prefs.edit().putString(SEEN, documentIds.map(::seenKey).distinct().takeLast(CAP).joinToString("\n")).apply()
+    @Synchronized fun see(documentIds: List<String>, replace: Boolean) {
+        val keys = (if (replace) emptyList() else seen().orEmpty().toList()) + documentIds.map(::seenKey)
+        prefs.edit().putString(SEEN, keys.distinct().takeLast(CAP).joinToString("\n")).apply()
     }
 
     fun seenKey(documentId: String) = hash("seen\u0000$documentId")
 
-    private fun saved() = prefs.getString(SAVED, null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
+    private fun savedList() = prefs.getString(SAVED, null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
 
     private fun savedKey(documentId: String, size: Long?, modified: Long?): String? {
         if (size == null || size < 0 || modified == null || modified <= 0) return null
