@@ -39,10 +39,12 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
         } catch (_: Exception) { /* Cache failure never prevents a confirmed URL download. */ }
     }
 
-    /** Rebuilt NPE JSON is already trimmed; origin and content become durable in one atomic move. */
-    @Synchronized internal fun store(jobId: String, json: String): File? = try {
-        val target = file(jobId, npe = true)
-        if (target == null || !remove(jobId)) null else write(target, json, now())
+    /** Rebuilt NPE (or checked page) JSON is already trimmed; origin and content become durable in one atomic move. */
+    /** [expiresAt] (signed URLs) ages the file like [remember] does, so a resume never trusts dead URLs. */
+    @Synchronized internal fun store(jobId: String, json: String, npe: Boolean = true, expiresAt: Long? = null): File? = try {
+        val target = file(jobId, npe)
+        val createdAt = now().let { if (expiresAt == null) it else minOf(it, expiresAt - TTL_MS) }
+        if (target == null || !remove(jobId)) null else write(target, json, createdAt)
     } catch (_: Exception) { null }
 
     private fun write(target: File, json: String, createdAt: Long): File? {

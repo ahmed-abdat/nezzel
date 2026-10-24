@@ -283,16 +283,48 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         // The page URL would wait on the same dead network; TRANSPORT lets the coordinator wait for one.
         if (result is FastResult.Unreachable) throw YtdlpExecutionFailure(unreachable(result))
         val json = (result as? FastResult.Json)?.json
-        val trimmed = try { json?.let { cache.trim(it, command) } }
+        // A different row under the same id goes to the checked yt-dlp read instead.
+        if (json == null || !offers(json, command)) return null
+        val trimmed = try { cache.trim(json, command) }
             catch (_: Exception) { null }
         if (trimmed == null) return null
-        val stored = cache.store(command.jobId, trimmed)
+        return keep(current, cache, command.jobId, trimmed)
+    }
+
+    /** Whether [json] still holds the confirmed row with the same recipe (rule 3). */
+    private fun offers(json: String, command: DownloadCommand): Boolean = try {
+        FormatRecipe.same(command.format, YtdlpMetadataMapper.streams(json))
+    } catch (_: Exception) { false }
+
+    /**
+     * No confirmed info JSON is left: read the link again and transfer only the same row, from that JSON.
+     * A missing or changed row fails as FormatExpired before any transfer. Without a cache the checked JSON
+     * could not be the one transferred, so the URL path stays as it was (null).
+     */
+    private suspend fun verifiedInfo(current: Operation, command: DownloadCommand): File? {
+        val cache = infoCache ?: return null
+        synchronized(current) {
+            checkCancelled(current)
+            current.byteWatchdog = false
+            current.expireIn(limits.inspectMs)
+        }
+        val json = execute(current, YtdlpCommand.inspect(command.source))
+        synchronized(current) { current.deadline = NO_DEADLINE }
+        checkCancelled(current)
+        if (!offers(json, command)) throw YtdlpExecutionFailure(DownloadError.FormatExpired, reextractionBlocked = true)
+        val trimmed = try { cache.trim(json, command) } catch (_: Exception) { null }
+        return keep(current, cache, command.jobId, trimmed ?: json, npe = false, signedUntil(json))
+    }
+
+    private suspend fun keep(current: Operation, cache: YtdlpInfoCache, jobId: String, json: String,
+        npe: Boolean = true, expiresAt: Long? = null): File? {
+        val stored = cache.store(jobId, json, npe, expiresAt)
         try {
             currentCoroutineContext().ensureActive()
             checkCancelled(current)
             return stored
         } catch (cancel: Exception) {
-            cache.remove(command.jobId)
+            cache.remove(jobId)
             throw cancel
         }
     }
@@ -325,9 +357,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 restartEpoch++
                 progress(EngineEvent.Restarting(restartEpoch))
             }
+            // True while infoJson is a checked page read, which keeps the page-URL retry rules.
+            var fromPage = false
             if (infoJson == null) {
                 infoJson = rebuildOnce()
-                if (infoJson == null) discardInfo()
+                if (infoJson == null) { discardInfo(); infoJson = verifiedInfo(current, command); fromPage = true }
             }
             var retriedWithoutTags = false
             var preProcessingBytes: Long? = null
@@ -427,11 +461,12 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     val hasBytes = bytes > 0 || directory.listFiles().orEmpty().any {
                         !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name) && it.length() > 0
                     }
-                    val expiry = error.expiredUrl && (infoJson != null || hasBytes)
-                    val rejected = !error.expiredUrl && infoJson?.let { infoCache?.isNpe(it) } == true &&
+                    val inspected = infoJson.takeUnless { fromPage }
+                    val expiry = error.expiredUrl && (inspected != null || hasBytes)
+                    val rejected = !error.expiredUrl && inspected?.let { infoCache?.isNpe(it) } == true &&
                         error.error in NPE_REJECTIONS
                     if (!expiry && !rejected) throw error
-                    if (infoJson == null) {
+                    if (inspected == null) {
                         if (retriedPageExpiry) throw error
                         retriedPageExpiry = true
                     }
@@ -448,8 +483,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     restartEpoch++
                     progress(EngineEvent.Restarting(restartEpoch))
                     // The path only moves forward: once using the page URL, never return to NPE.
-                    infoJson = if (expiry && infoJson != null) rebuildOnce() else null
-                    if (infoJson == null) discardInfo()
+                    infoJson = if (expiry && inspected != null) rebuildOnce() else null
+                    fromPage = false
+                    if (infoJson == null) { discardInfo(); infoJson = verifiedInfo(current, command); fromPage = true }
                 }
             }
             current.deadline = NO_DEADLINE

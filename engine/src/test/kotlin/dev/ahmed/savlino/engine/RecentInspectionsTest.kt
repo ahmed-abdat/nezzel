@@ -135,7 +135,10 @@ class RecentInspectionsTest {
         engine.prepareDownload(confirm(inspection))
         assertNull(cache.freshFile("job"))
         assertIs<TransferResult.Success>(engine.download(confirm(inspection), temp.newFolder()) {})
-        assertEquals(source.link.rawUrl, runtime.transfers.single().last())
+        // The download reads the page again and uses that JSON now, but never keeps it for a later resume.
+        assertEquals(3, runtime.inspections.size)
+        assertTrue("--load-info-json" in runtime.transfers.single())
+        assertNull(cache.freshFile("job"))
     }
 
     @Test fun expiryKeysAreReadFromEveryUrl() {
