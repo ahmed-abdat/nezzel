@@ -38,7 +38,8 @@ internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 1
 class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private val limits: EngineLimits = EngineLimits(), private val infoCache: YtdlpInfoCache? = null,
     private val fastSource: YoutubeFastSource? = null,
-    private val recent: RecentInspections = RecentInspections()) : EngineAdapter {
+    private val recent: RecentInspections = RecentInspections(),
+    private val native: NativeState = NativeState.process) : EngineAdapter {
     constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
         fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime))
     private val unavailable = UnavailableEngine()
@@ -83,7 +84,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override suspend fun installedVersion(): String? {
         runtime.initialization.installedVersion?.let { return it }
         // While an update is unresolved the binary is not readable; report Unknown instead of waiting on it.
-        if (pendingUpdate?.isActive == true) return null
+        if (native.pendingUpdate?.isActive == true) return null
         return operation("version-${UUID.randomUUID()}", { _, _ -> null }) { current ->
             if (initialize()) version(current) else null
         }
@@ -565,9 +566,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override suspend fun installYtdlpUpdate(prepared: PreparedUpdate): EngineUpdateResult {
         if (prepared is PreparedUpdate.Failed) return prepared.failure
         var joined = false
-        val task = synchronized(updateOwner) {
-            pendingUpdate?.takeIf { it.isActive }?.also { joined = true }
-                ?: updateScope.async { runUpdate(prepared) }.also { pendingUpdate = it }
+        val task = synchronized(native) {
+            native.pendingUpdate?.takeIf { it.isActive }?.also { joined = true }
+                ?: updateScope.async { runUpdate(prepared) }.also { native.pendingUpdate = it }
         }
         if (joined) discardYtdlpUpdate(prepared)
         return withTimeoutOrNull(limits.updateMs) { task.await() } ?: EngineUpdateResult.Failure(DownloadError.Network)
@@ -697,7 +698,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
         var permits = 0
         try {
-            val acquire: suspend () -> Unit = { permits = if (exclusive) gate.lockExclusive() else gate.lockShared() }
+            val acquire: suspend () -> Unit = { permits = if (exclusive) native.gate.lockExclusive() else native.gate.lockShared() }
             if (gated) {
                 waitingState.update { it + id }
                 try {
@@ -764,16 +765,10 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // can still hold descriptors or write staging. Cleanup belongs to the caller.
             withContext(NonCancellable) { canceller.join() }
             synchronized(lifecycleLock) { operations.remove(id, current) }
-            gate.unlock(permits)
+            native.gate.unlock(permits)
         }
     }
     private companion object {
-        /**
-         * Process-wide. Executions share it: 0.18.1 `executeImpl` builds a fresh ProcessBuilder, buffers and env
-         * per call, keys processes in a synchronized map by our UUIDs and forces `--no-cache-dir`; its static
-         * paths are written only by the synchronized `init`. Update/rollback rewrite yt-dlp, so they are exclusive.
-         */
-        val gate = NativeGate()
         const val CANCELLATION_WINDOW_MS = 500L
         const val NO_DEADLINE = Long.MIN_VALUE
         val VERSION_ARGS = listOf("--ignore-config", "--version")
@@ -786,11 +781,21 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val fastSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val updateOwner = Any()
-        /** The one updater; a second request joins it instead of starting another. */
-        @Volatile var pendingUpdate: Deferred<EngineUpdateResult>? = null
         val runningArgv = HashSet<List<String>>()
     }
+}
+
+/**
+ * Process-wide by default. Executions share [gate]: 0.18.1 `executeImpl` builds a fresh ProcessBuilder, buffers and
+ * env per call, keys processes in a synchronized map by our UUIDs and forces `--no-cache-dir`; its static paths are
+ * written only by the synchronized `init`. Update/rollback rewrite yt-dlp, so they are exclusive. Tests whose fake
+ * runtime owns no native state pass their own, so an operation stranded by another test cannot hold their gate.
+ */
+internal class NativeState {
+    val gate = NativeGate()
+    /** The one updater; a second request joins it instead of starting another. Guarded by this. */
+    @Volatile var pendingUpdate: Deferred<EngineUpdateResult>? = null
+    companion object { val process = NativeState() }
 }
 
 /** Shared/exclusive gate for suspending callers; the FIFO semaphore keeps a waiting update from starving. */
