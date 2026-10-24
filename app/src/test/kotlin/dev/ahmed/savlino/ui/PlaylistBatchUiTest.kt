@@ -63,6 +63,35 @@ class PlaylistBatchUiTest {
         } finally { vm.dismissOptions(); recomposer.cancel(); scope.cancel(); controller.pause().stop().destroy() }
     }
 
+    @Test fun videosSharedFromPrivateListsStillReachReadyOptions() {
+        for (url in listOf("https://youtube.com/watch?v=abcdefghijk&list=WL",
+            "https://youtube.com/watch?v=abcdefghijk&list=LL",
+            "https://youtu.be/abcdefghijk?list=WL", "https://youtu.be/abcdefghijk?list=LL")) {
+            val engine = object : EngineAdapter by FakeEngine() {
+                override suspend fun inspect(source: LinkRevision, operationId: String) = InspectResult.Success(
+                    Inspection(source, "fixture", listOf(Format("18", "mp4", true, true))))
+            }
+            val vm = LinkViewModel(SavedStateHandle(), engine = engine)
+            try {
+                vm.paste(url)
+                shadowOf(Looper.getMainLooper()).idle()
+                assertTrue(vm.optionsState is OptionsState.Ready)
+            } finally { vm.dismissOptions() }
+        }
+    }
+
+    @Test fun mixWithoutAVideoIsUnsupportedBeforeInspection() {
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult = error("No video to inspect")
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine)
+        try {
+            vm.paste("https://youtube.com/playlist?list=RDabcdefghijk")
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(DownloadError.Unsupported, (vm.optionsState as OptionsState.Error).error)
+        } finally { vm.dismissOptions() }
+    }
+
     @Test fun privateListsNeverReachInspection() {
         val engine = object : EngineAdapter by FakeEngine() {
             override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult = error("Private list must not be fetched")

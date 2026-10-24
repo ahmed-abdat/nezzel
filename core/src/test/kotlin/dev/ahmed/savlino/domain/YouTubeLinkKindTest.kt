@@ -11,7 +11,11 @@ class YouTubeLinkKindTest {
             "https://m.youtube.com/watch?v=abcdefghijk&list=PLabcdefghij" to YouTubeLinkKind.VideoInList,
             "https://www.youtube.com/playlist?list=PLabcdefghij" to YouTubeLinkKind.Playlist,
             "https://youtube.com/playlist?list=WL" to YouTubeLinkKind.PrivateList,
-            "https://youtube.com/watch?v=abcdefghijk&list=LL" to YouTubeLinkKind.PrivateList,
+            "https://youtube.com/watch?v=abcdefghijk&list=LL" to YouTubeLinkKind.Video,
+            "https://youtube.com/watch?v=abcdefghijk&list=WL" to YouTubeLinkKind.Video,
+            "https://youtu.be/abcdefghijk?list=WL" to YouTubeLinkKind.Video,
+            "https://youtu.be/abcdefghijk?list=LL" to YouTubeLinkKind.Video,
+            "https://youtube.com/playlist?list=LL" to YouTubeLinkKind.PrivateList,
             "https://youtube.com/@fixture/videos" to YouTubeLinkKind.ChannelVideos,
             "https://youtube.com/channel/UCfixture/videos" to YouTubeLinkKind.ChannelVideos,
             "https://youtube.com/@fixture/shorts" to YouTubeLinkKind.Other,
@@ -25,9 +29,9 @@ class YouTubeLinkKindTest {
         )
         cases.forEach { (url, expected) -> assertEquals(expected, YouTubeLinkKind.classify(url), url) }
     }
-    @Test fun everyRadioPrefixIsAMixEvenWithAVideo() {
+    @Test fun everyRadioPrefixRequiresAVideoForTheMixNote() {
         for (prefix in listOf("RD", "RDMM", "RDAMVM", "RDCLAK", "RDGMEM")) {
-            assertEquals(YouTubeLinkKind.Mix, YouTubeLinkKind.classify("https://youtube.com/playlist?list=${prefix}abcdefghijk"))
+            assertEquals(YouTubeLinkKind.Other, YouTubeLinkKind.classify("https://youtube.com/playlist?list=${prefix}abcdefghijk"))
             assertEquals(YouTubeLinkKind.Mix, YouTubeLinkKind.classify("https://youtube.com/watch?v=abcdefghijk&list=${prefix}abcdefghijk"))
         }
     }

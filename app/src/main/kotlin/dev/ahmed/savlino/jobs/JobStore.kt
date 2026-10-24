@@ -106,6 +106,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion == 6 && newVersion == 7) {
+            // v6 ignores unknown tables on downgrade; old confirmations must never revive.
+            db.execSQL("DROP TABLE IF EXISTS batch_items")
+            db.execSQL("DROP TABLE IF EXISTS batches")
             BatchStore.createTables(db)
         } else if (oldVersion in 4..5 && newVersion == DATABASE_VERSION) {
             if (oldVersion == 4) {
@@ -228,8 +231,19 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     /** Remove local terminal metadata and its private staging, never a published MediaStore file. */
     fun remove(jobId: String): Boolean = synchronized(terminalLock) {
         val removed = synchronized(this) {
-            writableDatabase.delete("jobs", "job_id = ? AND stage IN ('COMPLETED','FAILED','CANCELLED')",
-                arrayOf(jobId)) == 1
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                db.execSQL("UPDATE batches SET network_failures=0, refused_failures=0, consecutive_failures=0 WHERE batch_id IN " +
+                    "(SELECT batch_id FROM batch_items WHERE job_id=? AND state IN ('WAITING','QUEUED','FAILED') " +
+                    "AND job_id IN (SELECT job_id FROM jobs WHERE stage='COMPLETED'))", arrayOf(jobId))
+                db.execSQL("UPDATE batch_items SET state='DONE', error=NULL, retryable=0, source_url=NULL " +
+                    "WHERE job_id=? AND state IN ('WAITING','QUEUED','FAILED') AND job_id IN " +
+                    "(SELECT job_id FROM jobs WHERE stage='COMPLETED')", arrayOf(jobId))
+                val deleted = db.delete("jobs", "job_id = ? AND stage IN ('COMPLETED','FAILED','CANCELLED')", arrayOf(jobId)) == 1
+                db.setTransactionSuccessful()
+                deleted
+            } finally { db.endTransaction() }
         }
         if (removed) { cleanupJobStaging(jobRoot, jobId); artwork.delete(jobId) }
         removed
@@ -459,6 +473,10 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                     "stage = 'FAILED' AND source_url IS NOT NULL", null)
                 db.update("jobs", ContentValues().apply { putNull("share_link"); putNull("source_key") },
                     "stage IN ('COMPLETED','FAILED','CANCELLED') AND (share_link IS NOT NULL OR source_key IS NOT NULL)", null)
+                // Finished playlists go with the links; a running one keeps the links it still has to read.
+                val ended = "SELECT batch_id FROM batches WHERE state IN ('COMPLETED','STOPPED','EXPIRED')"
+                db.execSQL("DELETE FROM batch_items WHERE batch_id IN ($ended)")
+                db.execSQL("DELETE FROM batches WHERE batch_id IN ($ended)")
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
             for (id in failed) get(id)?.let(onExpired)
@@ -472,12 +490,23 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     @Synchronized fun pruneTerminal() {
         scrubExpiredSources()
-        writableDatabase.execSQL("""
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // Preserve completions before pruning their last evidence, even if the feeder has not run.
+            db.execSQL("UPDATE batches SET network_failures=0, refused_failures=0, consecutive_failures=0 WHERE batch_id IN " +
+                "(SELECT batch_id FROM batch_items WHERE state IN ('WAITING','QUEUED','FAILED') " +
+                "AND job_id IN (SELECT job_id FROM jobs WHERE stage='COMPLETED'))")
+            db.execSQL("UPDATE batch_items SET state='DONE', error=NULL, retryable=0, source_url=NULL " +
+                "WHERE state IN ('WAITING','QUEUED','FAILED') AND job_id IN (SELECT job_id FROM jobs WHERE stage='COMPLETED')")
+            db.execSQL("""
             DELETE FROM jobs WHERE rowid IN (
                 SELECT rowid FROM jobs WHERE stage IN ('COMPLETED','FAILED','CANCELLED')
                 ORDER BY updated_at DESC, rowid DESC LIMIT -1 OFFSET 100
             )
-        """.trimIndent())
+            """.trimIndent())
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
         artwork.retainOnly(all().mapTo(HashSet()) { it.jobId })
     }
 

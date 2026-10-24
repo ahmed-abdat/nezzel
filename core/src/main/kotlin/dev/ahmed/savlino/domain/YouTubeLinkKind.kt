@@ -28,8 +28,9 @@ enum class YouTubeLinkKind {
                     else null
                 val listPath = path == "/playlist" || path == "/watch" || (short && video != null)
                 when {
-                    listPath && list in setOf("WL", "LL") -> PrivateList
-                    listPath && list?.startsWith("RD") == true -> Mix
+                    path == "/playlist" && list in setOf("WL", "LL") -> PrivateList
+                    video != null && list in setOf("WL", "LL") -> Video
+                    listPath && list?.startsWith("RD") == true -> if (video != null) Mix else Other
                     video != null && list != null -> VideoInList
                     video != null -> Video
                     path == "/playlist" && list != null -> Playlist

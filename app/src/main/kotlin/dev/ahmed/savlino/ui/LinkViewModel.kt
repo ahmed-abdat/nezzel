@@ -575,8 +575,14 @@ class LinkViewModel(
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
-        if (YouTubeLinkKind.classify(source.link) == YouTubeLinkKind.PrivateList) {
+        val kind = YouTubeLinkKind.classify(source.link)
+        if (kind == YouTubeLinkKind.PrivateList) {
             optionsState = OptionsState.Error(DownloadError.LoginRequired)
+            return
+        }
+        if (source.link.host == Host.YOUTUBE && kind == YouTubeLinkKind.Other &&
+            URI(source.link.normalizedUrl).path.trimEnd('/') == "/playlist") {
+            optionsState = OptionsState.Error(DownloadError.Unsupported)
             return
         }
         inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }

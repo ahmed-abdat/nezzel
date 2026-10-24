@@ -238,7 +238,7 @@ class BatchFeederTest {
         f.tick()
         jobs.all().filter { !it.stage.terminal }.forEach { jobs.fail(it.jobId, DownloadError.Network) }
         f.tick()
-        assertEquals(BatchState.WAITING_NETWORK, batches.get("batch")!!.state)
+        assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
         f.retry("batch"); f.tick()
         assertEquals(3, active())
         assertEquals(3, batches.items("batch").count { it.state == BatchItemState.WAITING })
@@ -299,6 +299,174 @@ class BatchFeederTest {
         assertEquals(BatchItemState.WAITING, batches.items("batch")[2].state)
     }
 
+    @Test fun pauseAndStopPersistAndCancelWithoutWaitingForInspection() = runBlocking {
+        for (stop in listOf(false, true)) {
+            val id = if (stop) "stop-resolve" else "pause-resolve"
+            assertTrue(batches.create(id, "Fixture", Preset.BALANCED, batchItems(2)))
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val cancelled = CompletableDeferred<Unit>()
+            val item = batches.items(id).first()
+            engine.duringInspect = { entered.complete(Unit); withContext(NonCancellable) { release.await() } }
+            engine.onCancel = { operation ->
+                assertEquals("resolve-${item.jobId}", operation)
+                cancelled.complete(Unit)
+            }
+            val f = feeder()
+            val ticking = launch { f.tick() }
+            try {
+                withTimeout(2_000) { entered.await() }
+                withTimeout(2_000) { if (stop) f.stop(id) else f.pause(id); cancelled.await() }
+                yield() // A cancelled inspector that is slow to exit must not reclaim the controls gate.
+                withTimeout(2_000) { f.networkAvailable() }
+                assertEquals(if (stop) BatchState.STOPPED else BatchState.PAUSED, batches.get(id)!!.state)
+                assertTrue(jobs.all().isEmpty())
+                release.complete(Unit) // Even a late successful result cannot enqueue.
+                withTimeout(2_000) { ticking.join() }
+                assertTrue(jobs.all().isEmpty())
+                assertTrue(batches.items(id).all { it.state == if (stop) BatchItemState.SKIPPED else BatchItemState.WAITING })
+            } finally { release.complete(Unit); ticking.cancelAndJoin() }
+        }
+    }
+
+    @Test fun pauseCancelsTheResolveCoroutineAndKeepsTheItemWaiting() = runBlocking {
+        create(2)
+        val entered = CompletableDeferred<Unit>()
+        val exited = CompletableDeferred<Unit>()
+        engine.duringInspect = {
+            entered.complete(Unit)
+            try { awaitCancellation() } finally { exited.complete(Unit) }
+        }
+        val f = feeder()
+        val ticking = launch { f.tick() }
+        try {
+            withTimeout(2_000) { entered.await(); f.pause("batch"); exited.await(); ticking.join() }
+            assertEquals(BatchState.PAUSED, batches.get("batch")!!.state)
+            assertTrue(batches.items("batch").all { it.state == BatchItemState.WAITING })
+            assertTrue(jobs.all().isEmpty())
+        } finally { ticking.cancelAndJoin() }
+    }
+
+    @Test fun connectivityControlDoesNotWaitBehindAnotherBatchesInspection() = runBlocking {
+        create(2)
+        batches.create("network", "Fixture", Preset.BALANCED, batchItems(2))
+        batches.state("network", BatchState.WAITING_NETWORK)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        engine.duringInspect = { entered.complete(Unit); release.await() }
+        val f = feeder()
+        val ticking = launch { f.tick() }
+        try {
+            withTimeout(2_000) { entered.await(); f.networkAvailable() }
+            assertEquals(BatchState.ACTIVE, batches.get("network")!!.state)
+        } finally { ticking.cancelAndJoin() }
+    }
+
+    @Test fun generalInspectionFailuresPauseAtFiveAndResumeRetriesThoseItems() = runBlocking {
+        for ((index, error) in listOf(DownloadError.EngineUnavailable, DownloadError.Failed, DownloadError.ExecutionRestricted).withIndex()) {
+            val id = "breaker-$index"
+            batches.create(id, "Fixture", Preset.BALANCED, batchItems(10))
+            engine.failure = error
+            if (error == DownloadError.Failed) engine.duringInspect = { throw IllegalStateException() }
+            val f = feeder(); f.tick()
+            assertEquals(BatchState.PAUSED, batches.get(id)!!.state)
+            assertEquals(5, batches.items(id).count { it.state == BatchItemState.FAILED })
+            assertEquals(5, batches.items(id).count { it.state == BatchItemState.WAITING })
+            engine.failure = null
+            engine.duringInspect = {}
+            f.resume(id); f.tick()
+            assertEquals(listOf(0, 1, 2), batches.items(id).filter { it.state == BatchItemState.QUEUED }.map { it.position })
+            assertEquals(2, batches.items(id).count { it.state == BatchItemState.WAITING && it.retryable })
+            f.stop(id)
+        }
+    }
+
+    @Test fun generalEnqueueFailuresAlsoPauseAtFive() = runBlocking {
+        create(10)
+        actions = object : BatchJobActions by actions {
+            override suspend fun enqueue(command: DownloadCommand, preset: Preset) = false
+        }
+        feeder().tick()
+        assertTrue(jobs.all().isEmpty())
+        assertEquals(BatchState.PAUSED, batches.get("batch")!!.state)
+        assertEquals(5, batches.items("batch").count { it.state == BatchItemState.FAILED })
+        assertEquals(5, batches.items("batch").count { it.state == BatchItemState.WAITING })
+    }
+
+    @Test fun expiredUnreconciledJobIsAdoptedAfterStartupScrub() = runBlocking {
+        create(1)
+        val item = batches.items("batch").single()
+        val source = LinkRevision(LinkInput.parse(batches.source(item))!!, 0)
+        val inspection = (engine.inspect(source, "fixture") as InspectResult.Success).inspection
+        val command = (DownloadCommand.confirm(item.jobId, inspection, source, "18", "Fixture") as ConfirmResult.Confirmed).command
+        jobs.enqueue(command, Preset.BALANCED)
+        now += 86_400_001
+        batches.scrubExpired() // Startup runs this before the feeder's first reconcile.
+        feeder().tick()
+        assertEquals(BatchItemState.QUEUED, batches.items("batch").single().state)
+        assertEquals(JobStage.ENQUEUED, jobs.get(item.jobId)!!.stage)
+        assertEquals(BatchState.ACTIVE, batches.get("batch")!!.state)
+    }
+
+    @Test fun removingCompletedJobBeforeReconcileKeepsTheItemDone() = runBlocking {
+        create(1)
+        feeder().tick()
+        val item = batches.items("batch").single()
+        complete(item.jobId)
+        assertTrue(jobs.remove(item.jobId))
+        feeder().tick()
+        assertNull(jobs.get(item.jobId))
+        assertEquals(BatchItemState.DONE, batches.items("batch").single().state)
+        assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
+    }
+
+    @Test fun completionRememberedByRemovalOrPruningResetsTheFailureStreak() = runBlocking {
+        for (remove in listOf(false, true)) {
+            val id = if (remove) "remove-completion" else "prune-completion"
+            batches.create(id, "Fixture", Preset.BALANCED, batchItems(9))
+            val f = feeder(); f.tick()
+            batches.items(id).takeLast(4).forEach { batches.finish(it, BatchItemState.FAILED, DownloadError.Network, true) }
+            val first = batches.items(id).first().jobId
+            complete(first)
+            if (remove) assertTrue(jobs.remove(first)) else jobs.pruneTerminal()
+            jobs.fail(batches.items(id)[1].jobId, DownloadError.Network)
+            f.tick()
+            assertEquals(BatchState.ACTIVE, batches.get(id)!!.state)
+            assertEquals(5, batches.items(id).count { it.state == BatchItemState.FAILED })
+            f.stop(id)
+        }
+    }
+
+    @Test fun pruningCompletedJobBeforeReconcileKeepsTheItemDone() = runBlocking {
+        create(1)
+        feeder().tick()
+        val item = batches.items("batch").single()
+        complete(item.jobId)
+        jobs.writableDatabase.execSQL("UPDATE jobs SET updated_at=0 WHERE job_id=?", arrayOf(item.jobId))
+        val source = LinkRevision(LinkInput.parse("https://youtube.com/watch?v=abcdefghijk")!!, 0)
+        val format = Format("18", "mp4", true, true)
+        repeat(100) { index ->
+            val command = (DownloadCommand.confirm("prune-$index", Inspection(source, "fixture", listOf(format)), source, "18", "Fixture") as ConfirmResult.Confirmed).command
+            jobs.enqueue(command); jobs.cancel(command.jobId)
+        }
+        jobs.pruneTerminal()
+        feeder().tick()
+        assertNull(jobs.get(item.jobId))
+        assertEquals(BatchItemState.DONE, batches.items("batch").single().state)
+    }
+
+    @Test fun individuallyRetriedFailureBecomesDoneWhenItsJobCompletes() = runBlocking {
+        create(1)
+        val f = feeder(); f.tick()
+        val item = batches.items("batch").single()
+        jobs.fail(item.jobId, DownloadError.Network); f.tick()
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertTrue(jobs.retry(item.jobId))
+        complete(item.jobId); f.tick()
+        assertEquals(BatchItemState.DONE, batches.items("batch").single().state)
+        assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
+    }
+
     private fun complete(id: String, uri: Uri = Uri.parse("content://media/external/downloads/$id")) {
         val pending = PendingPublication(uri, "fixture.mp4")
         jobs.startTransfer(id); jobs.markStaged(id); jobs.recordPending(id, pending); jobs.markPublishing(id)
@@ -311,7 +479,8 @@ class BatchFeederTest {
         var failure: DownloadError? = null
         var failAfter: Int? = null
         var calls = 0
-        var duringInspect: () -> Unit = {}
+        var duringInspect: suspend () -> Unit = {}
+        var onCancel: (String) -> Unit = {}
         override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
             duringInspect()
             calls++
@@ -320,6 +489,6 @@ class BatchFeederTest {
                 if (failAfter != null && calls > failAfter!!) emptyList() else presets))
         }
         override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult = error("No transfers in feeder tests")
-        override fun cancel(operationId: String) = Unit
+        override fun cancel(operationId: String) = onCancel(operationId)
     }
 }

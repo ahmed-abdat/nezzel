@@ -42,7 +42,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
             })
             items.forEachIndexed { position, item ->
                 db.insertOrThrow("batch_items", null, ContentValues().apply {
-                    put("batch_id", id); put("position", position); put("item_id", item.id); put("title", item.title)
+                    put("batch_id", id); put("position", position); put("item_id", item.id); put("title", PreviewMetadata.text(item.title, 300).orEmpty())
                     put("source_url", sealed[position]); put("state", BatchItemState.WAITING.name)
                     // Allocate before inspection/enqueue. Crash recovery adopts this exact ID, never a second job.
                     put("job_id", "batch-${UUID.randomUUID()}")
@@ -84,17 +84,20 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         db.beginTransaction()
         try {
             val keep = retryable && get(item.batchId)?.let { now() - it.createdAt < LIFETIME_MS } == true
+            val allowed = if (state == BatchItemState.DONE) "('WAITING','QUEUED','FAILED')" else "('WAITING','QUEUED')"
             val changed = db.update("batch_items", ContentValues().apply {
                 put("state", state.name); put("error", error?.name); put("retryable", if (keep) 1 else 0)
                 if (!keep) putNull("source_url")
-            }, "batch_id=? AND position=? AND state IN ('WAITING','QUEUED')", args(item)) == 1
+            }, "batch_id=? AND position=? AND state IN $allowed", args(item)) == 1
             if (changed) {
                 val network = error in setOf(DownloadError.Network, DownloadError.Offline)
                 val refused = error in setOf(DownloadError.SourceRefused, DownloadError.LoginRequired)
                 db.execSQL("UPDATE batches SET network_failures=" + (if (network) "network_failures+1" else "0") +
-                    ", refused_failures=" + (if (refused) "refused_failures+1" else "0") + " WHERE batch_id=?", arrayOf(item.batchId))
+                    ", refused_failures=" + (if (refused) "refused_failures+1" else "0") +
+                    ", consecutive_failures=" + (if (state == BatchItemState.FAILED) "consecutive_failures+1" else "0") +
+                    " WHERE batch_id=?", arrayOf(item.batchId))
                 db.execSQL("UPDATE batches SET state=CASE WHEN network_failures>=5 THEN 'WAITING_NETWORK' ELSE 'PAUSED' END, error=? " +
-                    "WHERE batch_id=? AND state='ACTIVE' AND (network_failures>=5 OR refused_failures>=3 OR ?='InsufficientSpace')",
+                    "WHERE batch_id=? AND state='ACTIVE' AND (network_failures>=5 OR refused_failures>=3 OR consecutive_failures>=5 OR ?='InsufficientSpace')",
                     arrayOf(error?.name, item.batchId, error?.name))
             }
             db.setTransactionSuccessful()
@@ -108,7 +111,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
             (from == BatchState.COMPLETED && state != BatchState.ACTIVE)) return false
         return db.update("batches", ContentValues().apply {
             put("state", state.name); put("error", error?.name)
-            if (state == BatchState.ACTIVE) { put("network_failures", 0); put("refused_failures", 0) }
+            if (state == BatchState.ACTIVE) { put("network_failures", 0); put("refused_failures", 0); put("consecutive_failures", 0) }
         }, "batch_id=?", arrayOf(id)) == 1
     }
 
@@ -140,7 +143,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
 
     @Synchronized internal fun finishIfIdle(id: String) {
         if (items(id).none { it.state in setOf(BatchItemState.WAITING, BatchItemState.QUEUED) })
-            db.execSQL("UPDATE batches SET state='COMPLETED' WHERE batch_id=? AND state='ACTIVE'", arrayOf(id))
+            db.execSQL("UPDATE batches SET state='COMPLETED' WHERE batch_id=? AND state IN ('ACTIVE','PAUSED','WAITING_NETWORK')", arrayOf(id))
     }
 
     @Synchronized fun scrubExpired() {
@@ -149,10 +152,16 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         try {
             db.execSQL("UPDATE batches SET state='EXPIRED', error='FormatExpired' WHERE created_at<=? " +
                 "AND state IN ('ACTIVE','PAUSED','WAITING_NETWORK') AND EXISTS " +
-                "(SELECT 1 FROM batch_items WHERE batch_items.batch_id=batches.batch_id AND state='WAITING')", arrayOf(cutoff))
+                "(SELECT 1 FROM batch_items WHERE batch_items.batch_id=batches.batch_id AND state='WAITING' " +
+                "AND job_id NOT IN (SELECT job_id FROM jobs))", arrayOf(cutoff))
             db.execSQL("UPDATE batch_items SET state='SKIPPED', error='FormatExpired' WHERE state='WAITING' AND batch_id IN " +
-                "(SELECT batch_id FROM batches WHERE created_at<=?)", arrayOf(cutoff))
+                "(SELECT batch_id FROM batches WHERE created_at<=?) AND job_id NOT IN (SELECT job_id FROM jobs)", arrayOf(cutoff))
             db.execSQL("UPDATE batch_items SET source_url=NULL, retryable=0 WHERE batch_id IN (SELECT batch_id FROM batches WHERE created_at<=?)", arrayOf(cutoff))
+            val expiredHistory = "SELECT batch_id FROM batches WHERE created_at<=? AND state IN ('COMPLETED','STOPPED','EXPIRED')"
+            val retentionCutoff = arrayOf<Any>(now() - RETENTION_MS)
+            // Foreign keys are disabled: explicitly remove children in the same transaction.
+            db.execSQL("DELETE FROM batch_items WHERE batch_id IN ($expiredHistory)", retentionCutoff)
+            db.execSQL("DELETE FROM batches WHERE batch_id IN ($expiredHistory)", retentionCutoff)
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }
@@ -168,12 +177,14 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
 
     companion object {
         internal const val LIFETIME_MS = 86_400_000L
+        internal const val RETENTION_MS = 30L * LIFETIME_MS
         internal fun createTables(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE IF NOT EXISTS batches (
                 batch_id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, preset TEXT NOT NULL,
                 state TEXT NOT NULL CHECK(state IN ('ACTIVE','PAUSED','WAITING_NETWORK','STOPPED','COMPLETED','EXPIRED')),
                 created_at INTEGER NOT NULL, error TEXT,
-                network_failures INTEGER NOT NULL DEFAULT 0, refused_failures INTEGER NOT NULL DEFAULT 0)""")
+                network_failures INTEGER NOT NULL DEFAULT 0, refused_failures INTEGER NOT NULL DEFAULT 0,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0)""")
             db.execSQL("""CREATE TABLE IF NOT EXISTS batch_items (
                 batch_id TEXT NOT NULL REFERENCES batches(batch_id), position INTEGER NOT NULL,
                 item_id TEXT NOT NULL, source_url BLOB, title TEXT NOT NULL,
