@@ -193,8 +193,8 @@
         <item quantity="other">%1$s sélectionnés</item>
     </plurals>
     <string name="saved_deleted">Supprimé</string>
-    <string name="saved_empty_title">Aucun fichier enregistré</string>
-    <string name="saved_empty_body">Collez un lien pour enregistrer votre premier fichier</string>
+    <string name="saved_empty_title">Rien d’enregistré</string>
+    <string name="saved_empty_body">Vos fichiers enregistrés apparaîtront ici</string>
     <string name="saved_no_matches">Aucun fichier correspondant</string>
     <string name="saved_snackbar">Enregistré dans %1$s</string>
     <string name="saved_action_failed">Impossible d’ouvrir ce fichier ou de terminer l’action — essayez l’application Fichiers</string>

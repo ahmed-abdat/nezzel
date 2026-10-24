@@ -320,13 +320,16 @@ fun DownloadsScreen(
                         }
                     }
                 } else if (libraryLoad is LibraryLoadState.Ready) item(key = "empty") {
-                    Column(Modifier.fillMaxWidth().padding(vertical = Space.xxl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
-                        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
-                            Icon(painterResource(R.drawable.ic_folder), null, Modifier.padding(20.dp).size(40.dp))
-                        }
-                        Text(stringResource(R.string.saved_empty_title), style = MaterialTheme.typography.headlineSmall)
-                        Text(stringResource(R.string.saved_empty_body), Modifier.widthIn(max = 320.dp), textAlign = TextAlign.Center)
-                        Button(onClick = onPaste, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.paste_link)) }
+                    // One quiet block on the page surface: a bare glyph (no tile), what this tab will hold, the one action.
+                    Column(Modifier.fillMaxWidth().padding(top = Space.xxl * 2, bottom = Space.xxl), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                        Icon(painterResource(R.drawable.ic_download), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(Space.s))
+                        Text(stringResource(R.string.saved_empty_title), style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.saved_empty_body), Modifier.widthIn(max = 300.dp), textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(Space.s))
+                        FilledTonalButton(onClick = onPaste, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.paste_link)) }
                     }
                 }
             }
