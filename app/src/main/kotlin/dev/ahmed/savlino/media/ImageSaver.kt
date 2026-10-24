@@ -71,6 +71,8 @@ internal fun indexedImageTitle(title: String, index: Int, extension: String): St
 class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher, private val stagingRoot: File,
     private val space: SpaceGate, private val scope: CoroutineScope,
     private val syncStaging: (FileDescriptor) -> Unit = FileDescriptor::sync,
+    private val startupCleanup: suspend () -> Unit = {},
+    private val abandonPending: suspend (Uri) -> RecoveryResult = { publisher.abandon(it) },
     private val pendingImages: () -> List<Uri> = { emptyList() }) {
     private val state = MutableStateFlow<ImageSaveState>(ImageSaveState.Idle)
     val outcome: StateFlow<ImageSaveState> = state
@@ -159,10 +161,12 @@ class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher
         attempts++
         val failure = withContext(Dispatchers.IO) {
             var failed: SweepFailure? = null
+            try { startupCleanup() } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failed = SweepFailure.STAGING }
             try { deleteContents(stagingRoot) } catch (_: Exception) { failed = SweepFailure.STAGING }
             val rows = try { pendingImages() } catch (_: Exception) { failed = failed ?: SweepFailure.QUERY; emptyList() }
             for (uri in rows) {
-                val left = try { publisher.abandon(uri) } catch (_: Exception) { null }
+                val left = try { abandonPending(uri) } catch (_: Exception) { null }
                 if (left == null || left is PendingPublication) failed = failed ?: SweepFailure.ABANDON
             }
             failed
@@ -247,12 +251,14 @@ class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher
     }
 }
 
-/** Own pending image rows in Download/Nezzel. AV never writes image MIME types, so its journalled rows are untouched. */
+/** Own pending images plus status images/videos. Journalled AV rows in the default folder stay untouched. */
 fun ownPendingImages(resolver: ContentResolver, ownerPackage: String): List<Uri> {
     val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-    val selection = "is_pending = ? AND owner_package_name = ? AND relative_path = ? AND mime_type LIKE ?"
-    val args = arrayOf("1", ownerPackage, "Download/Nezzel/", "image/%")
-    val columns = arrayOf(MediaStore.Downloads._ID, MediaStore.Downloads.MIME_TYPE)
+    val selection = "is_pending = ? AND owner_package_name = ? AND " +
+        "((relative_path = ? AND mime_type LIKE ?) OR (relative_path = ? AND (mime_type LIKE ? OR mime_type LIKE ?)))"
+    val args = arrayOf("1", ownerPackage, "Download/Nezzel/", "image/%", "Download/Nezzel/Statuses/", "image/%", "video/%")
+    val columns = arrayOf(MediaStore.Downloads._ID, MediaStore.Downloads.MIME_TYPE,
+        MediaStore.Downloads.RELATIVE_PATH, MediaStore.Downloads.OWNER_PACKAGE_NAME, MediaStore.Downloads.IS_PENDING)
     val cursor = if (Build.VERSION.SDK_INT >= 30) resolver.query(collection, columns, Bundle().apply {
         putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
         putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args)
@@ -261,7 +267,11 @@ fun ownPendingImages(resolver: ContentResolver, ownerPackage: String): List<Uri>
     return cursor?.use { rows ->
         buildList {
             while (rows.moveToNext()) {
-                if (rows.getString(1)?.startsWith("image/") != true) continue
+                val mime = rows.getString(1).orEmpty()
+                val path = rows.getString(2)
+                if (rows.getString(3) != ownerPackage || rows.getInt(4) != 1) continue
+                if (!(path == "Download/Nezzel/" && mime.startsWith("image/")) &&
+                    !(path == "Download/Nezzel/Statuses/" && (mime.startsWith("image/") || mime.startsWith("video/")))) continue
                 add(ContentUris.withAppendedId(collection, rows.getLong(0)))
             }
         }

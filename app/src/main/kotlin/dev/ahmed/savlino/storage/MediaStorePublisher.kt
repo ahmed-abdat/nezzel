@@ -48,10 +48,11 @@ class MediaStorePublisher internal constructor(
     private val resolver: ContentResolver,
     private val space: SpaceGate,
     private val ownerPackage: String,
+    private val relativePath: String = "Download/Nezzel/",
     private val syncOutput: (FileDescriptor) -> Unit,
 ) : Publisher {
-    constructor(resolver: ContentResolver, space: SpaceGate, ownerPackage: String) :
-        this(resolver, space, ownerPackage, FileDescriptor::sync)
+    constructor(resolver: ContentResolver, space: SpaceGate, ownerPackage: String, relativePath: String = "Download/Nezzel/") :
+        this(resolver, space, ownerPackage, relativePath, FileDescriptor::sync)
 
     override fun insertPending(job: JobDirectory.Job, name: String, mimeType: String): PendingPublication {
         job.requireActive()
@@ -60,7 +61,7 @@ class MediaStorePublisher internal constructor(
             val uri = resolver.insert(collection, ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, hint)
                 put(MediaStore.Downloads.MIME_TYPE, mimeType)
-                put(MediaStore.Downloads.RELATIVE_PATH, RELATIVE_PATH)
+                put(MediaStore.Downloads.RELATIVE_PATH, relativePath)
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }) ?: throw StorageException(StorageError.SaveFailed)
             try {
@@ -119,7 +120,7 @@ class MediaStorePublisher internal constructor(
                 put(MediaStore.Downloads.TITLE, current.displayName.substringBeforeLast('.'))
                 put(MediaStore.Downloads.IS_PENDING, 0)
             },
-                OWN_PENDING, arrayOf("1", ownerPackage, RELATIVE_PATH))
+                OWN_PENDING, arrayOf("1", ownerPackage, relativePath))
             if (count == 1) PublishedFile(current.uri, current.displayName) else CommitFailed(current)
         } catch (_: Exception) {
             // Even a failed Binder acknowledgement can follow a successful provider commit.
@@ -134,7 +135,7 @@ class MediaStorePublisher internal constructor(
         val cursor = resolver.query(uri, columns, null, null, null) ?: throw StorageException(StorageError.SaveFailed)
         return cursor.use {
             if (!it.moveToFirst()) return@use MissingPublication
-            if (it.getString(1) != ownerPackage || it.getString(2) != RELATIVE_PATH) {
+            if (it.getString(1) != ownerPackage || it.getString(2) != relativePath) {
                 throw StorageException(StorageError.InvalidPublication)
             }
             val name = it.getString(0) ?: throw StorageException(StorageError.SaveFailed)
@@ -149,7 +150,7 @@ class MediaStorePublisher internal constructor(
     override fun abandon(uri: Uri): RecoveryResult {
         val state = recover(uri)
         if (state !is PendingPublication) return state // Adopt already committed media, never delete it.
-        resolver.delete(uri, OWN_PENDING, arrayOf("1", ownerPackage, RELATIVE_PATH))
+        resolver.delete(uri, OWN_PENDING, arrayOf("1", ownerPackage, relativePath))
         // If commit raced the conditional delete, adopt the published row instead.
         return recover(uri)
     }
@@ -205,7 +206,7 @@ class MediaStorePublisher internal constructor(
         val names = mutableSetOf<String>()
         val path = MediaStore.Downloads.RELATIVE_PATH
         val cursor = resolver.query(collection, arrayOf(MediaStore.Downloads.DISPLAY_NAME),
-            "($path = ? OR $path = ?)", arrayOf(RELATIVE_PATH, RELATIVE_PATH.trimEnd('/')), null)
+            "($path = ? OR $path = ?)", arrayOf(relativePath, relativePath.trimEnd('/')), null)
             ?: throw StorageException(StorageError.SaveFailed)
         cursor.use { while (it.moveToNext()) names += it.getString(0).lowercase(Locale.ROOT) }
         if (base.lowercase(Locale.ROOT) !in names) return base
@@ -232,7 +233,6 @@ class MediaStorePublisher internal constructor(
     }
 
     private companion object {
-        const val RELATIVE_PATH = "Download/Nezzel/"
         const val OWN_PENDING = "is_pending = ? AND owner_package_name = ? AND relative_path = ?"
         val collection: Uri = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val nameLock = Any()

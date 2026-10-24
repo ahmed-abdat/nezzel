@@ -51,8 +51,12 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
                 else privateSpace.beforeTransfer(stagingBytes, outputBytes, unknownSizeUpperBound)
             }
         }
+        val publisher = DestinationPublisher(context, space, destinations)
+        val statuses = dev.ahmed.savlino.statuses.StatusSaver(context)
         ImageSaver(TransferFetch { ImageSaveTransfer(http, references) },
-            DestinationPublisher(context, space, destinations), staging, preflight, scope,
+            publisher, staging, preflight, scope,
+            startupCleanup = { statuses.sweep() },
+            abandonPending = { uri -> statuses.abandonIfStatus(uri) ?: publisher.abandon(uri) },
             pendingImages = { ownPendingImages(context.contentResolver, context.packageName) + destinations.pendingImages() })
     }
 }
