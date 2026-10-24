@@ -50,15 +50,10 @@ internal sealed interface GridLine {
     data class Row(val item: SavedMedia) : GridLine { override val key get() = item.uri.toString() }
 }
 
-/** Keeps list order: tiles fill rows of [columns]; an audio file closes the open row and takes its own. */
-internal fun gridLines(entries: List<SavedMedia>, columns: Int = 3): List<GridLine> = buildList {
-    var open = mutableListOf<SavedMedia>()
-    fun flush() { if (open.isNotEmpty()) add(GridLine.Tiles(open)); open = mutableListOf() }
-    entries.forEach { item ->
-        if (!item.inViewer) { flush(); add(GridLine.Row(item)) }
-        else { open += item; if (open.size == columns) flush() }
-    }
-    flush()
+/** Tiles fill rows of [columns] in list order; audio files follow as full-width rows so they never break the grid. */
+internal fun gridLines(entries: List<SavedMedia>, columns: Int = 3): List<GridLine> {
+    val (tiles, rows) = entries.partition { it.inViewer }
+    return tiles.chunked(columns).map { GridLine.Tiles(it) } + rows.map { GridLine.Row(it) }
 }
 
 /** Images and videos open in Nezzel's viewer; audio and unknown files go to the phone's own player. */
