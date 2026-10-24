@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -403,21 +404,28 @@ private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean,
                 if (item.isVideo) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
             }
         }
-        // Marks: new at top-start, saved or the selection circle at top-end, duration at bottom-start (mockup).
+        // Marks: new at top-start, the selection circle at top-end; along the bottom, duration then "Saved" as a dark
+        // label (an icon and a word, never a check circle, so it can't read as selected).
         if (item.isNew && !selecting) Box(Modifier.align(Alignment.TopStart).padding(Space.s).size(12.dp).clip(CircleShape)
             .background(Color.White).padding(2.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
         if (selecting) SelectCircle(selected, Modifier.align(Alignment.TopEnd).padding(Space.xs))
-        else if (item.saved) Surface(Modifier.align(Alignment.TopEnd).padding(Space.xs).size(22.dp), shape = CircleShape,
-            color = primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
-            Icon(Icons.Default.Check, null, Modifier.padding(3.dp))
-        }
         duration?.let {
-            Surface(Modifier.align(Alignment.BottomStart).padding(Space.xs), color = Color.Black.copy(alpha = .72f), contentColor = Color.White,
-                shape = MaterialTheme.shapes.extraSmall) {
-                Text(NezzelFormat.duration(it / 1000), Modifier.padding(horizontal = Space.xs),
-                    style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+            TileLabel(Modifier.align(Alignment.BottomStart)) {
+                Text(NezzelFormat.duration(it / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
             }
         }
+        if (item.saved) TileLabel(Modifier.align(Alignment.BottomEnd).testTag("status-saved")) {
+            Icon(painterResource(R.drawable.ic_download_done), null, Modifier.size(12.dp))
+            Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        }
+    }
+}
+
+/** The tile's dark corner label: duration, or the saved mark. Silent: the tile's description already says both. */
+@Composable
+private fun TileLabel(modifier: Modifier, content: @Composable RowScope.() -> Unit) {
+    Surface(modifier.padding(Space.xs).clearAndSetSemantics { }, color = Color.Black.copy(alpha = .72f), contentColor = Color.White, shape = MaterialTheme.shapes.extraSmall) {
+        Row(Modifier.padding(horizontal = Space.xs), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically, content = content)
     }
 }
 
