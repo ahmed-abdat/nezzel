@@ -89,7 +89,7 @@ class DesignCaptureTest {
             val paused = running.copy(jobId = "b", phase = DownloadPhase.PREPARING, paused = true, hasPartial = true,
                 bytesPerSecond = null, remainingTransferSeconds = null, stalled = null)
             val waiting = DownloadProgress("c", name, DownloadPhase.PREPARING, waiting = true, hasPartial = true, total = Size.Exact(100_000_000), qualityHeight = 720)
-            val restarting = DownloadProgress("d", name, DownloadPhase.PREPARING, total = Size.Exact(100_000_000), restartEpoch = 1, qualityHeight = 720)
+            val restarting = DownloadProgress("d", name, DownloadPhase.PREPARING, total = Size.Exact(100_000_000), restartEpoch = 2, qualityHeight = 720)
             val failed = DownloadProgress("e", name, DownloadPhase.FAILED, error = DownloadError.Network, retryable = true)
             androidx.compose.runtime.CompositionLocalProvider(dev.ahmed.savlino.downloads.LocalOffline provides true,
                 dev.ahmed.savlino.ui.theme.LocalReducedMotion provides true) {
@@ -120,7 +120,7 @@ class DesignCaptureTest {
             val waiting = DownloadProgress("c", if (ar) "وصفات سريعة.mp4" else "Recipe tips.mp4", DownloadPhase.PREPARING, waiting = true,
                 hasPartial = true, total = Size.Exact(100_000_000), qualityHeight = 720)
             val restarting = DownloadProgress("d", if (ar) "قدر الطبخ.mp4" else "Cooking pot.mp4", DownloadPhase.PREPARING,
-                total = Size.Exact(100_000_000), restartEpoch = 1, qualityHeight = 720)
+                total = Size.Exact(100_000_000), restartEpoch = 2, qualityHeight = 720)
             val failed = DownloadProgress("e", if (ar) "المدينة ليلًا.mp4" else "City at night.mp4", DownloadPhase.FAILED,
                 error = DownloadError.Network, retryable = true)
             val noArt = DownloadProgress("f", if (ar) "مقطع بلا صورة.mp4" else "No picture.mp4", DownloadPhase.DOWNLOADING,

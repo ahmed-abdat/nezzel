@@ -34,7 +34,7 @@ class BatchActionsTest {
     }
 
     @Test fun restartingRowIsNotPausableAsPerRow() {
-        val restarting = DownloadProgress("r", "r.mp4", DownloadPhase.PREPARING, restartEpoch = 1)
+        val restarting = DownloadProgress("r", "r.mp4", DownloadPhase.PREPARING, restartEpoch = 2)
         assertFalse(restarting.batchPausable)
         assertNull(batchAction(listOf(running("a"), restarting)))
     }

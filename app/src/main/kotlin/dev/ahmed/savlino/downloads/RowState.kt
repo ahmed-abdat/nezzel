@@ -3,8 +3,8 @@ package dev.ahmed.savlino.downloads
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
 
-/** A new restart epoch (staging wiped, transfer starts over) before its first byte sample: no percent, no old numbers. */
-internal val DownloadProgress.restarting: Boolean get() = restartEpoch > 0 && !hasPartial && !paused && !terminal &&
+/** A restart (epoch >= 2: staging wiped, transfer starts over) before its first byte sample: no percent, no old numbers. Epoch 1 is a first start. */
+internal val DownloadProgress.restarting: Boolean get() = restartEpoch > 1 && !hasPartial && !paused && !terminal &&
     bytes == null && phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
 
 /** Queued with bytes on disk while the device is offline. Online, such a row is just queued. */

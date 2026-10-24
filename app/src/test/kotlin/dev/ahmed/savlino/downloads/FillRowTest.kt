@@ -36,7 +36,7 @@ class FillRowTest {
     private val paused = running.copy(phase = DownloadPhase.PREPARING, paused = true, hasPartial = true,
         bytesPerSecond = null, remainingTransferSeconds = null, stalled = null)
     private val waiting = DownloadProgress("a", "Holiday clip.mp4", DownloadPhase.PREPARING, waiting = true, hasPartial = true, total = Size.Exact(100_000_000))
-    private val restarting = DownloadProgress("a", "Holiday clip.mp4", DownloadPhase.PREPARING, total = Size.Exact(100_000_000), restartEpoch = 1)
+    private val restarting = DownloadProgress("a", "Holiday clip.mp4", DownloadPhase.PREPARING, total = Size.Exact(100_000_000), restartEpoch = 2)
     private val unknownTotal = DownloadProgress("a", "Holiday clip.mp4", DownloadPhase.DOWNLOADING, bytes = 5_000_000, stalled = false)
     private val failed = DownloadProgress("a", "Holiday clip.mp4", DownloadPhase.FAILED, error = DownloadError.Network, retryable = true)
 

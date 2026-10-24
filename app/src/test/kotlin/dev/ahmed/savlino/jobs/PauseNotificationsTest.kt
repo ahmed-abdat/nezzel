@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.work.Configuration
 import androidx.work.testing.WorkManagerTestInitHelper
 import dev.ahmed.savlino.domain.Size
+import dev.ahmed.savlino.downloads.restarting
 import dev.ahmed.savlino.engine.FakeEngine
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -65,9 +66,12 @@ class PauseNotificationsTest {
         assertEquals("Waiting for network", offline)
         assertEquals("Queued", DownloadNotifications.text(app, waiting, offline = false))
         assertEquals(listOf("Cancel"), titles(DownloadNotifications(app).foreground(waiting).notification))
-        val restarting = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, restartEpoch = 1)
+        val restarting = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, restartEpoch = 2)
         assertEquals("Starting again", DownloadNotifications.text(app, restarting))
         assertEquals(listOf("Cancel"), titles(DownloadNotifications(app).foreground(restarting).notification))
+        val firstStart = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, restartEpoch = 1)
+        assertFalse(firstStart.restarting)
+        assertNotEquals("Starting again", DownloadNotifications.text(app, firstStart))
     }
 
     @Test fun pauseAndResumeReachTheCoordinatorAndClearThePausedNotification() = runBlocking {
