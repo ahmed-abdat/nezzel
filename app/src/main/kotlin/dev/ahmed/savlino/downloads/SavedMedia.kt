@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.downloads
 
 import dev.ahmed.savlino.storage.SaveDestinations
+import dev.ahmed.savlino.domain.SearchText
 
 import android.content.*
 import android.database.ContentObserver
@@ -39,6 +40,7 @@ data class SavedMedia(
     /** MediaStore volume ("external_primary", an SD card id); null for folder documents. */
     val volumeName: String? = null,
 ) {
+    val searchKey: String by lazy { SearchText.fold("$title $filename") }
     val kind: SavedMediaKind? get() = when {
         mimeType.startsWith("image/") -> SavedMediaKind.IMAGE
         mimeType.startsWith("video/") -> SavedMediaKind.VIDEO
@@ -71,7 +73,7 @@ fun filterMedia(items: List<SavedMedia>, filter: MediaFilter, query: String = ""
         MediaFilter.AUDIO -> it.kind == SavedMediaKind.AUDIO
         MediaFilter.IMAGE -> it.kind == SavedMediaKind.IMAGE
     }) &&
-        (query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) || it.filename.contains(query.trim(), ignoreCase = true))
+        SearchText.matches(it.searchKey, query)
 }
 fun mediaDate(date: LocalDate, language: String): String = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag(NezzelFormat.numericTag(language))))
 
