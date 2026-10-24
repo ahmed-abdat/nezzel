@@ -146,6 +146,30 @@
     <string name="downloads_failed_accessibility">Téléchargements, un téléchargement a échoué</string>
     <string name="downloads_running_header">En cours · %1$s</string>
     <string name="downloads_stopped_header">Arrêtés · %1$s</string>
+    <string name="downloads_pause_all">Tout mettre en pause</string>
+    <string name="downloads_resume_all">Tout reprendre</string>
+    <string name="downloads_retry_all">Tout réessayer</string>
+    <string name="downloads_batch_accessibility">%1$s, %2$s</string>
+    <plurals name="downloads_count">
+        <item quantity="one">%1$s téléchargement</item>
+        <item quantity="many">%1$s téléchargements</item>
+        <item quantity="other">%1$s téléchargements</item>
+    </plurals>
+    <plurals name="downloads_paused_n">
+        <item quantity="one">%1$s téléchargement en pause</item>
+        <item quantity="many">%1$s téléchargements en pause</item>
+        <item quantity="other">%1$s téléchargements en pause</item>
+    </plurals>
+    <plurals name="downloads_resumed_n">
+        <item quantity="one">%1$s téléchargement repris</item>
+        <item quantity="many">%1$s téléchargements repris</item>
+        <item quantity="other">%1$s téléchargements repris</item>
+    </plurals>
+    <plurals name="downloads_retried_n">
+        <item quantity="one">Nouvel essai pour %1$s téléchargement</item>
+        <item quantity="many">Nouvel essai pour %1$s téléchargements</item>
+        <item quantity="other">Nouvel essai pour %1$s téléchargements</item>
+    </plurals>
     <string name="download_waiting">En attente</string>
     <string name="download_waiting_hot">Téléphone chaud, en attente</string>
     <string name="downloads_heat_note">Votre téléphone chauffe : un seul téléchargement pour l’instant. Les autres démarrent seuls quand il refroidit.</string>

@@ -146,6 +146,42 @@
     <string name="downloads_failed_accessibility">التنزيلات، تعذّر تنزيل ملف</string>
     <string name="downloads_running_header">قيد التنزيل · %1$s</string>
     <string name="downloads_stopped_header">متوقفة · %1$s</string>
+    <string name="downloads_pause_all">إيقاف الكل مؤقتًا</string>
+    <string name="downloads_resume_all">استئناف الكل</string>
+    <string name="downloads_retry_all">إعادة المحاولة للكل</string>
+    <string name="downloads_batch_accessibility">%1$s، %2$s</string>
+    <plurals name="downloads_count">
+        <item quantity="zero">لا توجد تنزيلات</item>
+        <item quantity="one">تنزيل واحد</item>
+        <item quantity="two">تنزيلان</item>
+        <item quantity="few">%1$s تنزيلات</item>
+        <item quantity="many">%1$s تنزيلًا</item>
+        <item quantity="other">%1$s تنزيل</item>
+    </plurals>
+    <plurals name="downloads_paused_n">
+        <item quantity="zero">لم يُوقَف أي تنزيل</item>
+        <item quantity="one">تم إيقاف تنزيل واحد مؤقتًا</item>
+        <item quantity="two">تم إيقاف تنزيلين مؤقتًا</item>
+        <item quantity="few">تم إيقاف %1$s تنزيلات مؤقتًا</item>
+        <item quantity="many">تم إيقاف %1$s تنزيلًا مؤقتًا</item>
+        <item quantity="other">تم إيقاف %1$s تنزيل مؤقتًا</item>
+    </plurals>
+    <plurals name="downloads_resumed_n">
+        <item quantity="zero">لم يُستأنف أي تنزيل</item>
+        <item quantity="one">تم استئناف تنزيل واحد</item>
+        <item quantity="two">تم استئناف تنزيلين</item>
+        <item quantity="few">تم استئناف %1$s تنزيلات</item>
+        <item quantity="many">تم استئناف %1$s تنزيلًا</item>
+        <item quantity="other">تم استئناف %1$s تنزيل</item>
+    </plurals>
+    <plurals name="downloads_retried_n">
+        <item quantity="zero">لا إعادة محاولة لأي تنزيل</item>
+        <item quantity="one">إعادة المحاولة لتنزيل واحد</item>
+        <item quantity="two">إعادة المحاولة لتنزيلين</item>
+        <item quantity="few">إعادة المحاولة لـ %1$s تنزيلات</item>
+        <item quantity="many">إعادة المحاولة لـ %1$s تنزيلًا</item>
+        <item quantity="other">إعادة المحاولة لـ %1$s تنزيل</item>
+    </plurals>
     <string name="download_waiting">في قائمة الانتظار</string>
     <string name="download_waiting_hot">الهاتف ساخن، في الانتظار</string>
     <string name="downloads_heat_note">الهاتف ساخن، لذا يعمل تنزيل واحد الآن. البقية تبدأ وحدها عندما يبرد.</string>

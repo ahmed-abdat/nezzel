@@ -27,4 +27,19 @@ class LocalePauseStringsTest {
             assertTrue(text(language, R.string.download_resume_accessibility).contains("X"))
         }
     }
+
+    @Test fun batchCountsUseEveryArabicPluralForm() {
+        val base = ApplicationProvider.getApplicationContext<android.app.Application>()
+        for (language in listOf("en", "ar", "fr")) {
+            val cfg = android.content.res.Configuration(base.resources.configuration).apply { setLocale(java.util.Locale(language)) }
+            val res = base.createConfigurationContext(cfg).resources
+            for (id in listOf(R.plurals.downloads_paused_n, R.plurals.downloads_resumed_n, R.plurals.downloads_retried_n, R.plurals.downloads_count)) {
+                // ar: zero, one, two, few (3), many (11), other (100) are six different sentences.
+                val forms = listOf(0, 1, 2, 3, 11, 100).map { res.getQuantityString(id, it, it.toString()) }
+                assertTrue("$language $id", forms.all { it.isNotBlank() })
+                if (language == "ar") assertEquals("$id: $forms", 6, forms.toSet().size)
+                else assertTrue("$language $id: $forms", forms[3].contains("3"))
+            }
+        }
+    }
 }

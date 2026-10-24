@@ -204,6 +204,55 @@ class DownloadCoordinatorTest {
         }
     }
 
+    @Test fun pauseAllPausesRunningAndQueuedAndCountsOnlyRowsThatChanged() = runBlocking {
+        heldTransfer().use { f ->
+            assertTrue(f.coordinator.enqueue(command("running")))
+            val running = async(Dispatchers.IO) { f.coordinator.execute("running", {}, {}) }
+            try {
+                withTimeout(5000) { f.entered.await() }
+                for (id in listOf("queued", "failed")) assertTrue(f.coordinator.enqueue(command(id)))
+                f.store.fail("failed", DownloadError.Network)
+                // Snapshot taken at tap time: a failed row and a vanished ID are refused, not counted.
+                assertEquals(2, f.coordinator.pauseAll(listOf("running", "queued", "failed", "gone")))
+                assertEquals(JobStage.PAUSED, f.store.get("running")!!.stage)
+                assertEquals(JobStage.PAUSED, f.store.get("queued")!!.stage)
+                assertEquals(JobStage.FAILED, f.store.get("failed")!!.stage)
+                assertEquals(0, f.coordinator.pauseAll(listOf("running", "queued")))
+            } finally { f.release.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun resumeAllQueuesEveryPausedRowAndHeatStillAdmitsOneAtATime() = runBlocking {
+        heldTransfer(limit = 2, hot = true).use { f ->
+            val ids = listOf("one", "two", "three")
+            for (id in ids) assertTrue(f.coordinator.enqueue(command(id)))
+            assertEquals(3, f.coordinator.pauseAll(ids))
+            assertEquals(3, f.coordinator.resumeAll(ids + "gone"))
+            for (id in ids) assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+            val runs = ids.map { id -> async(Dispatchers.IO) { f.coordinator.execute(id, {}, {}) } }
+            try {
+                withTimeout(5000) { f.entered.await() }
+                delay(300)
+                assertEquals("hot: one transfer at a time", 1, f.transferred.size)
+                f.release.complete(Unit)
+                runs.forEach { withTimeout(5000) { it.await() } }
+                assertEquals(ids.toSet(), f.transferred.toSet())
+            } finally { f.release.complete(Unit); runs.forEach { it.cancelAndJoin() } }
+        }
+    }
+
+    @Test fun retryAllRequeuesOnlyRetryableFailures() = runBlocking {
+        heldTransfer().use { f ->
+            for (id in listOf("net-1", "net-2", "gone")) f.store.enqueue(command(id))
+            f.store.fail("net-1", DownloadError.Network); f.store.fail("net-2", DownloadError.Network)
+            f.store.fail("gone", DownloadError.Network, retryable = false)
+            assertEquals(2, f.coordinator.retryAll(listOf("net-1", "gone", "net-2")))
+            assertEquals(JobStage.ENQUEUED, f.store.get("net-1")!!.stage)
+            assertEquals(JobStage.ENQUEUED, f.store.get("net-2")!!.stage)
+            assertEquals(JobStage.FAILED, f.store.get("gone")!!.stage)
+        }
+    }
+
     @Test fun resumePublishesExpiredPausedRowAndDeletesItsPartial() = runBlocking {
         heldTransfer().use { f ->
             assertTrue(f.coordinator.enqueue(command("expired-pause")))
@@ -348,15 +397,15 @@ class DownloadCoordinatorTest {
         }
     }
 
-    private fun heldTransfer(limit: Int = 2, freeBytes: Long = Long.MAX_VALUE): HeldTransfer {
+    private fun heldTransfer(limit: Int = 2, freeBytes: Long = Long.MAX_VALUE, hot: Boolean = false): HeldTransfer {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(context: Context, name: String, params: WorkerParameters) =
                     object : Worker(context, params) { override fun doWork() = Result.success() }
             }).build())
-        return HeldTransfer(limit, freeBytes)
+        return HeldTransfer(limit, freeBytes, hot)
     }
-    private inner class HeldTransfer(limit: Int, freeBytes: Long) : AutoCloseable {
+    private inner class HeldTransfer(limit: Int, freeBytes: Long, hot: Boolean = false) : AutoCloseable {
         val store = JobStore(app)
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
@@ -380,6 +429,8 @@ class DownloadCoordinatorTest {
         }
         val coordinator = DownloadCoordinator(app, engine, store,
             parallelDownloads = kotlinx.coroutines.flow.MutableStateFlow(limit),
+            thermalStatus = kotlinx.coroutines.flow.MutableStateFlow(
+                if (hot) android.os.PowerManager.THERMAL_STATUS_SEVERE else android.os.PowerManager.THERMAL_STATUS_NONE),
             space = dev.ahmed.savlino.storage.SpaceBudget(app.filesDir, app.cacheDir,
                 dev.ahmed.savlino.storage.FreeSpace { freeBytes }), workManager = {
             beforeSchedule(); WorkManager.getInstance(app)

@@ -146,6 +146,26 @@
     <string name="downloads_failed_accessibility">Downloads, a download failed</string>
     <string name="downloads_running_header">In progress · %1$s</string>
     <string name="downloads_stopped_header">Stopped · %1$s</string>
+    <string name="downloads_pause_all">Pause all</string>
+    <string name="downloads_resume_all">Resume all</string>
+    <string name="downloads_retry_all">Retry all</string>
+    <string name="downloads_batch_accessibility">%1$s, %2$s</string>
+    <plurals name="downloads_count">
+        <item quantity="one">%1$s download</item>
+        <item quantity="other">%1$s downloads</item>
+    </plurals>
+    <plurals name="downloads_paused_n">
+        <item quantity="one">Paused %1$s download</item>
+        <item quantity="other">Paused %1$s downloads</item>
+    </plurals>
+    <plurals name="downloads_resumed_n">
+        <item quantity="one">Resumed %1$s download</item>
+        <item quantity="other">Resumed %1$s downloads</item>
+    </plurals>
+    <plurals name="downloads_retried_n">
+        <item quantity="one">Retrying %1$s download</item>
+        <item quantity="other">Retrying %1$s downloads</item>
+    </plurals>
     <string name="download_waiting">Queued</string>
     <string name="download_waiting_hot">Phone is hot, waiting</string>
     <string name="downloads_heat_note">Your phone is hot, so one download runs for now. The rest start by themselves when it cools down.</string>

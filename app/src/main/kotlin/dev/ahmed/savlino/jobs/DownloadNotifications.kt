@@ -313,4 +313,17 @@ object DownloadControls {
         DownloadNotifications(context).dismissPaused(id)
         return resumed
     }
+    /** One paused notification per job that actually paused, grouped like a per-row pause. */
+    suspend fun pauseAll(context: Context, app: NezzelApplication, ids: List<String>): Int {
+        val count = app.downloads.pauseAll(ids)
+        val notifications = DownloadNotifications(context)
+        app.downloads.progress.value.filter { it.jobId in ids && it.paused }.forEach { notifications.paused(it) }
+        return count
+    }
+    suspend fun resumeAll(context: Context, app: NezzelApplication, ids: List<String>): Int {
+        val count = app.downloads.resumeAll(ids)
+        val notifications = DownloadNotifications(context)
+        ids.forEach { notifications.dismissPaused(it) }
+        return count
+    }
 }
