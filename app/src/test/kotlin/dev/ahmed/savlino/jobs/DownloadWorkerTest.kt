@@ -1622,7 +1622,8 @@ class DownloadWorkerTest {
                 return script?.invoke(command, directory, progress) ?: engine.download(command, directory, progress)
             }
         }
-        val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick)
+        val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick,
+            probe = { null }) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
         (app as IsolatedTestApplication).coordinatorOverride = coordinator
         return Fixture(engine, provider, store, coordinator, engineStopped, attempts)
     }
@@ -1677,7 +1678,9 @@ internal class TestDownloadsProvider(val file: File, private val owner: String) 
     }
     override fun delete(uri: Uri, selection: String?, args: Array<out String>?): Int =
         if (rows.remove(ContentUris.parseId(uri)) != null) { file.delete(); 1 } else 0
+    // Honors the mode like MediaStore: a read ("r", the result check) never truncates and is not a publish open.
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+        if (mode == "r") return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
         onOpen()
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_CREATE or
             ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_TRUNCATE)
