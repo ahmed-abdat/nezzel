@@ -19,6 +19,11 @@ import kotlinx.coroutines.launch
 
 enum class StatusFilter { ALL, PHOTOS, VIDEOS }
 
+/** One account card: [preview] holds at most [PREVIEW_COUNT] items, newest first. */
+data class AccountSummary(val source: StatusSource, val total: Int, val newCount: Int, val preview: List<StatusItem>)
+
+const val PREVIEW_COUNT = 4
+
 /** One-shot messages for the screen's snackbar or picker; never carries names or URIs into logs. */
 sealed interface StatusEvent {
     data class Saved(val uri: Uri, val isVideo: Boolean) : StatusEvent
@@ -33,12 +38,12 @@ sealed interface StatusEvent {
  * Screen state over a [StatusLibrary]. A null library (not wired yet) never loads and shows the explainer only.
  * Filter, account and hide-saved apply to what is shown; selection holds URIs so a reload keeps it where items survive.
  */
-class StatusesState(private val library: StatusLibrary?, private val scope: CoroutineScope) {
+class StatusesState(private val library: StatusLibrary?, private val scope: CoroutineScope, opened: StatusSource? = null) {
     /** Null until the first load ends (or forever without a library). */
     var access by mutableStateOf<StatusAccess?>(null); private set
     var wrongFolder by mutableStateOf(false); private set
     var filter by mutableStateOf(StatusFilter.ALL)
-    var account by mutableStateOf<StatusSource?>(null)
+    var account by mutableStateOf(opened); private set
     var hideSaved by mutableStateOf(false)
     var selection by mutableStateOf<Set<Uri>>(emptySet()); private set
     var preview by mutableStateOf<StatusItem?>(null)
@@ -49,13 +54,23 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
     private var loading: Job? = null
 
     private val ready get() = access as? StatusAccess.Ready
-    /** With several account folders one is always chosen (the first until the person picks); there is no mixed view. */
-    val selectedAccount: StatusSource? get() = ready?.sources?.takeIf { it.size > 1 }?.let { sources -> account?.takeIf { it in sources } ?: sources.first() }
+    /**
+     * With several account folders the tab opens on one card per account and the grid shows only the opened one;
+     * there is no mixed view. A single account skips the cards. An opened account that vanished falls back to the cards.
+     */
+    val selectedAccount: StatusSource? get() = ready?.sources?.takeIf { it.size > 1 }?.let { sources -> account?.takeIf { it in sources } }
+    val showAccountList get() = (ready?.sources?.size ?: 0) > 1 && selectedAccount == null
+    /** One card per non-empty account folder, in folder order; [preview] is the newest few, as the grid orders them. */
+    val accounts: List<AccountSummary> get() = ready?.let { ready ->
+        ready.sources.map { source ->
+            val items = ready.items.filter { it.source == source }
+            AccountSummary(source, items.size, items.count { it.isNew }, items.take(PREVIEW_COUNT))
+        }
+    }.orEmpty()
     private val accountItems get() = ready?.items.orEmpty().let { items ->
         val chosen = selectedAccount
         if (chosen == null) items else items.filter { it.source == chosen }
     }
-    val showAccounts get() = (ready?.sources?.size ?: 0) > 1
     /** Filters only when both kinds exist; otherwise every chip but All would be empty. */
     val showFilters get() = accountItems.let { items -> items.any { it.isVideo } && items.any { !it.isVideo } }
     val showHideSaved get() = accountItems.any { it.saved }
@@ -72,6 +87,8 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
         loading = scope.launch {
             val loaded = library.load()
             access = loaded
+            // Lost access or a vanished folder closes the account, so a later grant never reopens it untapped
+            if (loaded !is StatusAccess.Ready || account !in loaded.sources) account = null
             // Items can vanish at any time (statuses expire after about a day): drop selections that went with them.
             val items = (loaded as? StatusAccess.Ready)?.items.orEmpty()
             val present = items.mapTo(HashSet()) { it.uri }
@@ -89,6 +106,16 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
                 StatusGrantResult.Cancelled -> Unit
             }
         }
+    }
+
+    fun open(source: StatusSource) {
+        account = source
+        filter = StatusFilter.ALL
+    }
+    /** Back from one account to the cards; a selection never crosses accounts. */
+    fun closeAccount() {
+        account = null
+        clearSelection()
     }
 
     fun toggle(item: StatusItem) {

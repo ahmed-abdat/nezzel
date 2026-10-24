@@ -349,6 +349,9 @@
     <string name="onboarding_copy_illustration">Copiez ou partagez un lien pour l’ouvrir dans Nezzel</string>
     <string name="onboarding_quality_illustration">Exemple : choisir une qualité vidéo ou des photos à enregistrer</string>
     <string name="onboarding_saved_illustration">Exemple : un fichier enregistré apparaît dans Téléchargements</string>
+    <string name="onboarding_statuses_title">Les statuts WhatsApp aussi</string>
+    <string name="onboarding_statuses_body">Ouvrez l’onglet Statuts, autorisez l’accès une fois, puis enregistrez photos et vidéos de tous vos comptes WhatsApp</string>
+    <string name="onboarding_statuses_illustration">Exemple : des statuts WhatsApp prêts à enregistrer, dont un déjà enregistré</string>
     <string name="onboarding_page">Page %1$s sur %2$s</string>
     <string name="onboarding_anywhere_title">Gardez ce que vous aimez</string>
     <string name="onboarding_anywhere_body">Vidéos, audio et photos de liens publics. Simple, sans publicité ni compte</string>
@@ -467,6 +470,12 @@
     <string name="statuses_hide_saved">Masquer les enregistrés</string>
     <string name="statuses_new">Nouveau</string>
     <string name="statuses_account_n">Compte %1$s</string>
+    <string name="statuses_open">Ouvrir</string>
+    <plurals name="statuses_count">
+        <item quantity="one">%1$s statut</item>
+        <item quantity="many">%1$s statuts</item>
+        <item quantity="other">%1$s statuts</item>
+    </plurals>
     <string name="statuses_photo">Photo</string>
     <string name="statuses_video">Vidéo</string>
     <string name="statuses_save_failed">Échec de l’enregistrement. Réessayez.</string>

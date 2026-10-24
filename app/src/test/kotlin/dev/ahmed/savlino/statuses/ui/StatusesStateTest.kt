@@ -51,15 +51,60 @@ class StatusesStateTest {
         assertEquals(3, state.newCount)
     }
 
-    @Test fun oneAccountHasNoChipsAndSeveralDefaultToTheFirst() = runTest {
-        assertFalse(loaded(FakeStatusLibrary(ready())).showAccounts)
-        val state = loaded(FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10))))
-        assertTrue(state.showAccounts)
-        assertEquals(MAIN, state.selectedAccount)
-        assertTrue(state.visible.all { it.source == MAIN })
-        state.account = SECOND
-        assertEquals(9, state.visible.size)
+    @Test fun oneAccountSkipsTheCardsAndSeveralOpenOnCards() = runTest {
+        assertFalse(loaded(FakeStatusLibrary(ready())).showAccountList)
+        val state = loaded(FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10).take(5))))
+        assertTrue(state.showAccountList)
+        assertNull(state.selectedAccount)
+        assertEquals(listOf(MAIN, SECOND), state.accounts.map { it.source })
+        assertEquals(listOf(9, 5), state.accounts.map { it.total })
+        assertEquals(listOf(3, 3), state.accounts.map { it.newCount })
+        assertEquals(PREVIEW_COUNT, state.accounts[0].preview.size)
+        assertTrue(state.accounts[1].preview.all { it.source == SECOND })
+        state.open(SECOND)
+        assertFalse(state.showAccountList)
+        assertEquals(5, state.visible.size)
         assertTrue(state.visible.all { it.source == SECOND })
+    }
+
+    @Test fun backToCardsDropsTheSelectionAndAVanishedAccountFallsBack() = runTest {
+        val library = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10)))
+        val state = loaded(library)
+        state.open(SECOND)
+        state.filter = StatusFilter.VIDEOS
+        state.toggle(state.visible.first())
+        state.closeAccount()
+        assertTrue(state.showAccountList)
+        assertTrue(state.selection.isEmpty())
+        state.open(MAIN)
+        assertEquals(StatusFilter.ALL, state.filter)
+        // The opened account's statuses all expired: the cards come back.
+        library.access = ready(mixed(SECOND, offset = 10) + mixed(FakeStatusLibrary.THIRD, offset = 20))
+        state.refresh(); advanceUntilIdle()
+        assertTrue(state.showAccountList)
+    }
+
+    @Test fun lostAccessClosesTheAccountSoARegrantOpensOnTheCards() = runTest {
+        val library = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10)))
+        val state = loaded(library)
+        state.open(SECOND)
+        library.access = StatusAccess.NeedsGrant(listOf(FakeStatusLibrary.APP))
+        state.refresh(); advanceUntilIdle()
+        assertNull(state.account)
+        library.access = ready(mixed(MAIN) + mixed(SECOND, offset = 10))
+        state.refresh(); advanceUntilIdle()
+        assertTrue(state.showAccountList)
+    }
+
+    @Test fun aRestoredAccountStaysOpenWhileItsFolderExists() = runTest {
+        val library = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10)))
+        val state = StatusesState(library, this, SECOND).also { it.refresh(); advanceUntilIdle() }
+        assertEquals(SECOND, state.selectedAccount)
+        assertTrue(state.visible.all { it.source == SECOND })
+        val gone = StatusesState(FakeStatusLibrary(ready(mixed(MAIN) + mixed(FakeStatusLibrary.THIRD, offset = 20))), this, SECOND)
+            .also { it.refresh(); advanceUntilIdle() }
+        assertNull(gone.account)
+        assertTrue(gone.showAccountList)
     }
 
     @Test fun savingReportsSavedAndGoneThenReloadsMarks() = runTest {

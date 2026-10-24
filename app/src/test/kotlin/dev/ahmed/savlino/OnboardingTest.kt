@@ -70,10 +70,11 @@ class OnboardingTest {
         withActivity { compose.onNodeWithTag("onboarding").assertDoesNotExist() }
     }
 
-    @Test fun startPersistsAfterAllFourPages() = withActivity { controller ->
+    @Test fun startPersistsAfterAllFivePages() = withActivity { controller ->
         next(); compose.onNodeWithText("Just share the link").assertIsDisplayed()
         next(); compose.onNodeWithText("Pick your quality").assertIsDisplayed()
         next(); compose.onNodeWithText("Saved in one tap").assertIsDisplayed()
+        next(); compose.onNodeWithText("WhatsApp statuses too").assertIsDisplayed()
         compose.onNodeWithText("Skip").assertDoesNotExist()
         compose.onNodeWithText("Get started").assertHeightIsAtLeast(48.dp).performClick()
         assertTrue(AppPreferences(controller.get()).onboardingSeen)
@@ -185,13 +186,13 @@ class OnboardingTest {
         compose.onNodeWithText("احتفظ بما تحب").assertIsDisplayed()
         compose.onNodeWithTag("onboarding_pager").performTouchInput { swipeRight() }
         compose.onNodeWithText("فقط شارك الرابط").assertIsDisplayed()
-        compose.onNodeWithContentDescription("الصفحة 2 من 4، فقط شارك الرابط").assertExists()
+        compose.onNodeWithContentDescription("الصفحة 2 من 5، فقط شارك الرابط").assertExists()
     }
 
     @Test fun pagePositionAnnouncesSettledHeadingAndBackReturns() = screen {
         fun assertPosition(page: Int, title: String) {
             compose.onNodeWithTag("onboarding_position")
-                .assertContentDescriptionEquals("Page $page of 4, $title")
+                .assertContentDescriptionEquals("Page $page of 5, $title")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion,
                     androidx.compose.ui.semantics.LiveRegionMode.Polite))
         }
@@ -230,10 +231,10 @@ class OnboardingTest {
         compose.mainClock.autoAdvance = false
         try {
             screen {
-                for (page in 0..3) {
+                for (page in 0..4) {
                     val description = app.getString(listOf(R.string.onboarding_anywhere_illustration,
                         R.string.onboarding_copy_illustration, R.string.onboarding_quality_illustration,
-                        R.string.onboarding_saved_illustration)[page])
+                        R.string.onboarding_saved_illustration, R.string.onboarding_statuses_illustration)[page])
                     compose.onNodeWithContentDescription(description).assertIsDisplayed()
                     if (page == 1) compose.onNodeWithText(app.getString(R.string.onboarding_example_url),
                         useUnmergedTree = true).assertIsDisplayed()
@@ -244,11 +245,16 @@ class OnboardingTest {
                         compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo),
                             useUnmergedTree = true).assertCountEquals(0)
                     }
+                    if (page == 4) {
+                        compose.onNodeWithTag("tour_whatsapp", useUnmergedTree = true).assertIsDisplayed()
+                        compose.onNodeWithTag("tour_status_saved", useUnmergedTree = true).assertIsDisplayed()
+                        compose.onNodeWithTag("tour_statuses", useUnmergedTree = true).assertIsDisplayed()
+                    }
                     compose.mainClock.advanceTimeBy(1000)
                     val before = tourPixels()
                     compose.mainClock.advanceTimeBy(6000)
                     assertArrayEquals("Page $page must stay complete", before, tourPixels())
-                    if (page < 3) {
+                    if (page < 4) {
                         compose.onNodeWithText("Next").performClick()
                         compose.mainClock.advanceTimeBy(1000)
                     }
@@ -321,7 +327,7 @@ class OnboardingTest {
         } finally { image.recycle() }
     }
 
-    @Test fun portraitDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages(false) }
+    @Test fun portraitDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
     @Test @Config(qualifiers = "en-w800dp-h360dp-land-mdpi")
     fun landscapeIllustrationCardsFitPagerAtLargeText() = screen(fontScale = 1.3f) {
         next(); next()
@@ -337,9 +343,14 @@ class OnboardingTest {
         }
     }
     @Test @Config(qualifiers = "en-w800dp-h360dp-mdpi")
-    fun landscapeDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages(false) }
+    fun landscapeDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
     @Test @Config(qualifiers = "ar-w800dp-h360dp-mdpi")
-    fun arabicDarkLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(rtl = true, fontScale = 2f) { checkPages(true) }
+    fun arabicDarkLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(rtl = true, fontScale = 2f) { checkPages() }
+    // French runs longest: every page, the statuses page included, must still wrap and keep its actions
+    @Test @Config(qualifiers = "fr-w360dp-h800dp-mdpi")
+    fun frenchPortraitDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
+    @Test @Config(qualifiers = "fr-w800dp-h360dp-mdpi")
+    fun frenchLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
 
     @Test fun allLanguagesHaveMatchingOnboardingKeysAndShortCopy() {
         val res = java.io.File("src/main/res").takeIf { it.isDirectory } ?: java.io.File("app/src/main/res")
@@ -366,6 +377,9 @@ class OnboardingTest {
             "onboarding_saved_title" to "Saved in one tap",
             "onboarding_saved_body" to "Your files wait in Downloads, ready to watch or share. Change the folder anytime in Settings",
             "onboarding_saved_illustration" to "Example: a saved file appears in Downloads",
+            "onboarding_statuses_title" to "WhatsApp statuses too",
+            "onboarding_statuses_body" to "Open the Statuses tab, allow access once, then save photos and videos from every WhatsApp account",
+            "onboarding_statuses_illustration" to "Example: WhatsApp statuses ready to save, one already saved",
             "onboarding_skip" to "Skip",
             "onboarding_next" to "Next",
             "onboarding_back" to "Back",
@@ -384,6 +398,9 @@ class OnboardingTest {
             "onboarding_saved_title" to "يُحفظ بلمسة واحدة",
             "onboarding_saved_body" to "ستجد ملفاتك في «التنزيلات» جاهزة للمشاهدة أو المشاركة، ويمكنك تغيير المجلد متى شئت من الإعدادات",
             "onboarding_saved_illustration" to "مثال: ظهور ملف محفوظ في التنزيلات",
+            "onboarding_statuses_title" to "حالات واتساب أيضًا",
+            "onboarding_statuses_body" to "افتح تبويب «الحالات» واسمح بالوصول مرة واحدة، ثم احفظ الصور والفيديو من كل حسابات واتساب",
+            "onboarding_statuses_illustration" to "مثال: حالات واتساب جاهزة للحفظ، وإحداها محفوظة",
             "onboarding_skip" to "تخطّي",
             "onboarding_next" to "التالي",
             "onboarding_back" to "السابق",
@@ -403,16 +420,16 @@ class OnboardingTest {
         }
     }
 
-    private fun checkPages(arabic: Boolean) {
+    private fun checkPages() {
         val app = RuntimeEnvironment.getApplication()
-        for ((index, body) in listOf(R.string.onboarding_anywhere_body, R.string.onboarding_copy_body, R.string.onboarding_quality_body, R.string.onboarding_saved_body).withIndex()) {
+        for ((index, body) in listOf(R.string.onboarding_anywhere_body, R.string.onboarding_copy_body, R.string.onboarding_quality_body, R.string.onboarding_saved_body, R.string.onboarding_statuses_body).withIndex()) {
             val text = compose.onNodeWithText(app.getString(body)).performScrollTo().assertIsDisplayed()
             val layouts = mutableListOf<TextLayoutResult>()
             text.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertFalse("Body must wrap without clipping", layouts.single().hasVisualOverflow)
-            compose.onNodeWithText(app.getString(if (index == 3) R.string.onboarding_start else R.string.onboarding_next))
+            compose.onNodeWithText(app.getString(if (index == 4) R.string.onboarding_start else R.string.onboarding_next))
                 .assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-            if (index < 3) compose.onNodeWithText(if (arabic) "التالي" else "Next").performClick()
+            if (index < 4) compose.onNodeWithText(app.getString(R.string.onboarding_next)).performClick()
         }
     }
     private fun next() {

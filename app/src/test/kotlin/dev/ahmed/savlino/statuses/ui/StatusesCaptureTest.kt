@@ -116,7 +116,10 @@ class StatusesCaptureTest {
     @Test fun accessLost() = shoot("4-access-lost", { FakeStatusLibrary(StatusAccess.AccessLost(listOf(APP))) })
     @Test fun empty() = shoot("5-empty", { FakeStatusLibrary(ready(emptyList(), emptyList())) })
     @Test fun grid() = shoot("6-grid", { FakeStatusLibrary(ready()) }, fonts = true)
-    @Test fun gridAccounts() = shoot("7-grid-accounts", { FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 9))) })
+    private fun threeAccounts() = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 9).take(5) +
+        mixed(FakeStatusLibrary.THIRD, offset = 18).drop(2).take(3), apps = listOf(APP, BUSINESS)))
+    @Test fun accounts() = shoot("7-accounts", ::threeAccounts, fonts = true)
+    @Test fun accountOpen() = shoot("7-account-open", ::threeAccounts, fonts = true, setup = { open(MAIN) })
     @Test fun selecting() = shoot("8-selecting", { FakeStatusLibrary(ready()) }, fonts = true) { first(this, 3).forEach(::toggle) }
     @Test fun saving() = shoot("9-saving", { FakeStatusLibrary(ready()).apply { hold = kotlinx.coroutines.CompletableDeferred() } }) {
         first(this, 3).forEach(::toggle)
