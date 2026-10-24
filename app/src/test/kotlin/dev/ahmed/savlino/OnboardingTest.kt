@@ -327,7 +327,7 @@ class OnboardingTest {
         } finally { image.recycle() }
     }
 
-    @Test fun portraitDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages(false) }
+    @Test fun portraitDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
     @Test @Config(qualifiers = "en-w800dp-h360dp-land-mdpi")
     fun landscapeIllustrationCardsFitPagerAtLargeText() = screen(fontScale = 1.3f) {
         next(); next()
@@ -343,9 +343,14 @@ class OnboardingTest {
         }
     }
     @Test @Config(qualifiers = "en-w800dp-h360dp-mdpi")
-    fun landscapeDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages(false) }
+    fun landscapeDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
     @Test @Config(qualifiers = "ar-w800dp-h360dp-mdpi")
-    fun arabicDarkLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(rtl = true, fontScale = 2f) { checkPages(true) }
+    fun arabicDarkLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(rtl = true, fontScale = 2f) { checkPages() }
+    // French runs longest: every page, the statuses page included, must still wrap and keep its actions
+    @Test @Config(qualifiers = "fr-w360dp-h800dp-mdpi")
+    fun frenchPortraitDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
+    @Test @Config(qualifiers = "fr-w800dp-h360dp-mdpi")
+    fun frenchLandscapeDoubleTextKeepsCopyAndActionsReachable() = screen(fontScale = 2f) { checkPages() }
 
     @Test fun allLanguagesHaveMatchingOnboardingKeysAndShortCopy() {
         val res = java.io.File("src/main/res").takeIf { it.isDirectory } ?: java.io.File("app/src/main/res")
@@ -415,7 +420,7 @@ class OnboardingTest {
         }
     }
 
-    private fun checkPages(arabic: Boolean) {
+    private fun checkPages() {
         val app = RuntimeEnvironment.getApplication()
         for ((index, body) in listOf(R.string.onboarding_anywhere_body, R.string.onboarding_copy_body, R.string.onboarding_quality_body, R.string.onboarding_saved_body, R.string.onboarding_statuses_body).withIndex()) {
             val text = compose.onNodeWithText(app.getString(body)).performScrollTo().assertIsDisplayed()
@@ -424,7 +429,7 @@ class OnboardingTest {
             assertFalse("Body must wrap without clipping", layouts.single().hasVisualOverflow)
             compose.onNodeWithText(app.getString(if (index == 4) R.string.onboarding_start else R.string.onboarding_next))
                 .assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-            if (index < 4) compose.onNodeWithText(if (arabic) "التالي" else "Next").performClick()
+            if (index < 4) compose.onNodeWithText(app.getString(R.string.onboarding_next)).performClick()
         }
     }
     private fun next() {

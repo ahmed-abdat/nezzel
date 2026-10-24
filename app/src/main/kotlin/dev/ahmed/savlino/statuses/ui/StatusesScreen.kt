@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,7 +70,12 @@ import dev.ahmed.savlino.ui.theme.Space
 @Composable
 fun rememberStatusesState(library: StatusLibrary?): StatusesState {
     val scope = rememberCoroutineScope()
-    return remember(library) { StatusesState(library, scope) }
+    // The opened account survives rotation and process death; the first load drops it if its folder is gone
+    val saver = Saver<StatusesState, String>(
+        save = { state -> state.account?.let { "${it.accountIndex}/${it.packageName}" } },
+        restore = { key -> StatusesState(library, scope, key.split('/', limit = 2).let { (index, pkg) -> index.toIntOrNull()?.let { StatusSource(pkg, it) } }) },
+    )
+    return rememberSaveable(library, saver = saver) { StatusesState(library, scope) }
 }
 
 /**
@@ -289,10 +296,10 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
     }
 }
 
-/** "Account 2" when the app has several account folders, else null: the app's own label already names it. */
+/** "Account 2" when the app has several account folders or this is not its first, else null: the app's own label names it. */
 @Composable
 private fun accountNumber(source: StatusSource, access: StatusAccess.Ready, language: String): String? =
-    if (access.sources.count { it.packageName == source.packageName } > 1)
+    if (source.accountIndex != 1 || access.sources.count { it.packageName == source.packageName } > 1)
         stringResource(R.string.statuses_account_n, NezzelFormat.count(source.accountIndex, language)) else null
 
 /** PackageManager's label, in whatever script the app uses; the account number stands in when the app is unknown. */

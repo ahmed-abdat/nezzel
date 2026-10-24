@@ -84,6 +84,29 @@ class StatusesStateTest {
         assertTrue(state.showAccountList)
     }
 
+    @Test fun lostAccessClosesTheAccountSoARegrantOpensOnTheCards() = runTest {
+        val library = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10)))
+        val state = loaded(library)
+        state.open(SECOND)
+        library.access = StatusAccess.NeedsGrant(listOf(FakeStatusLibrary.APP))
+        state.refresh(); advanceUntilIdle()
+        assertNull(state.account)
+        library.access = ready(mixed(MAIN) + mixed(SECOND, offset = 10))
+        state.refresh(); advanceUntilIdle()
+        assertTrue(state.showAccountList)
+    }
+
+    @Test fun aRestoredAccountStaysOpenWhileItsFolderExists() = runTest {
+        val library = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10)))
+        val state = StatusesState(library, this, SECOND).also { it.refresh(); advanceUntilIdle() }
+        assertEquals(SECOND, state.selectedAccount)
+        assertTrue(state.visible.all { it.source == SECOND })
+        val gone = StatusesState(FakeStatusLibrary(ready(mixed(MAIN) + mixed(FakeStatusLibrary.THIRD, offset = 20))), this, SECOND)
+            .also { it.refresh(); advanceUntilIdle() }
+        assertNull(gone.account)
+        assertTrue(gone.showAccountList)
+    }
+
     @Test fun savingReportsSavedAndGoneThenReloadsMarks() = runTest {
         val items = mixed()
         val library = FakeStatusLibrary(ready(items))

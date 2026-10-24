@@ -38,12 +38,12 @@ sealed interface StatusEvent {
  * Screen state over a [StatusLibrary]. A null library (not wired yet) never loads and shows the explainer only.
  * Filter, account and hide-saved apply to what is shown; selection holds URIs so a reload keeps it where items survive.
  */
-class StatusesState(private val library: StatusLibrary?, private val scope: CoroutineScope) {
+class StatusesState(private val library: StatusLibrary?, private val scope: CoroutineScope, opened: StatusSource? = null) {
     /** Null until the first load ends (or forever without a library). */
     var access by mutableStateOf<StatusAccess?>(null); private set
     var wrongFolder by mutableStateOf(false); private set
     var filter by mutableStateOf(StatusFilter.ALL)
-    var account by mutableStateOf<StatusSource?>(null); private set
+    var account by mutableStateOf(opened); private set
     var hideSaved by mutableStateOf(false)
     var selection by mutableStateOf<Set<Uri>>(emptySet()); private set
     var preview by mutableStateOf<StatusItem?>(null)
@@ -87,6 +87,8 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
         loading = scope.launch {
             val loaded = library.load()
             access = loaded
+            // Lost access or a vanished folder closes the account, so a later grant never reopens it untapped
+            if (loaded !is StatusAccess.Ready || account !in loaded.sources) account = null
             // Items can vanish at any time (statuses expire after about a day): drop selections that went with them.
             val items = (loaded as? StatusAccess.Ready)?.items.orEmpty()
             val present = items.mapTo(HashSet()) { it.uri }
