@@ -39,10 +39,11 @@ class StatusesScreenTest {
     private fun s(id: Int) = activity.getString(id)
     @After fun close() { controller.pause().stop().destroy() }
 
+    private val media = FakeStatusMedia()
     private fun show(library: StatusLibrary?) {
         activity.setContent {
             NezzelTheme(ThemePref.Light, false) {
-                CompositionLocalProvider(LocalStatusMedia provides FakeStatusMedia()) { StatusesScreen(library, "en") }
+                CompositionLocalProvider(LocalStatusMedia provides media) { StatusesScreen(library, "en") }
             }
         }
         compose.waitForIdle()
@@ -106,12 +107,29 @@ class StatusesScreenTest {
         compose.onNodeWithText(activity.getString(R.string.statuses_account_n, "1")).assertDoesNotExist()
     }
 
-    @Test fun twoAccountsShowChipsAndSwitchTheGrid() {
+    @Test fun twoAccountsShowCardsThatOpenTheirGridAndBackReturns() {
         show(FakeStatusLibrary(ready(listOf(item(1, false, source = MAIN), item(2, true, source = SECOND), item(3, true, source = SECOND)))))
-        tiles(R.string.statuses_photo).assertCountEquals(1)
-        compose.onNodeWithText(activity.getString(R.string.statuses_account_n, "2")).performClick()
+        tiles(R.string.statuses_photo).assertCountEquals(0)
+        val second = compose.onNode(hasContentDescription(activity.getString(R.string.statuses_account_n, "2"), substring = true) and hasClickAction())
+        assertTrue(second.fetchSemanticsNode().touchBoundsInRoot.height >= 48 * activity.resources.displayMetrics.density - 1)
+        media.thumbnails.clear()
+        second.performClick()
+        compose.waitForIdle()
+        assertTrue("the opened account's tiles load their thumbnails", media.thumbnails.any { it.source == SECOND })
+        // A loaded value lands in the lazy tiles too: the duration joins the tile's description.
+        compose.onAllNodes(hasContentDescription("0:30", substring = true)).onFirst().assertExists()
         tiles(R.string.statuses_photo).assertCountEquals(0)
         tiles(R.string.statuses_video).assertCountEquals(2)
+        compose.onNodeWithContentDescription(s(R.string.back)).performClick()
+        tiles(R.string.statuses_video).assertCountEquals(0)
+        compose.onNode(hasContentDescription(activity.getString(R.string.statuses_account_n, "1"), substring = true) and hasClickAction()).performClick()
+        tiles(R.string.statuses_photo).assertCountEquals(1)
+    }
+
+    @Test fun twoAppsNameTheCardsByTheAppLabel() {
+        show(FakeStatusLibrary(ready(listOf(item(1, false, source = MAIN), item(2, true, source = FakeStatusLibrary.THIRD)), apps = listOf(APP, BUSINESS))))
+        compose.onNode(hasContentDescription(BUSINESS.label, substring = true) and hasClickAction()).assertExists()
+        compose.onNode(hasContentDescription(activity.getString(R.string.statuses_account_n, "1"), substring = true)).assertDoesNotExist()
     }
 
     @Test fun longPressSelectsAndSaveNSavesTheSelection() {

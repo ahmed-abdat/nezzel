@@ -460,6 +460,12 @@
     <string name="statuses_hide_saved">Hide saved</string>
     <string name="statuses_new">New</string>
     <string name="statuses_account_n">Account %1$s</string>
+    <string name="statuses_open">Open</string>
+    <plurals name="statuses_count">
+        <item quantity="one">%1$s status</item>
+        <item quantity="other">%1$s statuses</item>
+    </plurals>
+    <string name="statuses_more_n" translatable="false">+%1$s</string>
     <string name="statuses_photo">Photo</string>
     <string name="statuses_video">Video</string>
     <string name="statuses_save_failed">Couldn’t save. Try again.</string>

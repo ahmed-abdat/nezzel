@@ -15,14 +15,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
@@ -42,6 +45,8 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -103,9 +108,13 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
         }
     }
     BackHandler(state.selecting) { state.clearSelection() }
+    BackHandler(!state.selecting && state.selectedAccount != null) { state.closeAccount() }
     Scaffold(
         topBar = {
+            val ready = state.access as? StatusAccess.Ready
+            val opened = state.selectedAccount
             if (state.selecting) SelectionBar(state.selection.size, language, state::clearSelection)
+            else if (ready != null && opened != null) AccountBar(state, ready, opened, media, language)
             else ScreenHeader(stringResource(R.string.statuses_tab))
         },
         bottomBar = { if (state.selecting) SaveBar(state.selection.size, language, state.saving) { state.save(state.selectedItems) } },
@@ -121,7 +130,8 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
                 is StatusAccess.AccessLost -> Explainer(access.apps, media, onGrant = openPicker,
                     error = stringResource(if (state.wrongFolder) R.string.statuses_wrong_folder else R.string.statuses_access_lost))
                 is StatusAccess.Ready -> if (access.items.isEmpty()) EmptyStatuses(access.apps)
-                    else StatusGrid(state, access, media, language)
+                    else if (state.showAccountList) AccountList(state, access, media, language)
+                    else StatusGrid(state, media, language)
             }
         }
     }
@@ -210,12 +220,9 @@ private fun NumberBadge(number: Int) {
 
 @Composable
 private fun AppRow(app: StatusApp, media: StatusMedia) {
-    val icon by produceState<Bitmap?>(null, app.packageName) { value = media.appIcon(app.packageName) }
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Space.l).semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        val loaded = icon
-        if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.size(36.dp))
-        else Surface(Modifier.size(36.dp), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {}
+        AppIcon(app.packageName, media, 36.dp)
         // The label is PackageManager's, in whatever script the app uses.
         Text(app.label, style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))
     }
@@ -249,17 +256,14 @@ private fun FakeSystemButton(number: Int, label: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusGrid(state: StatusesState, access: StatusAccess.Ready, media: StatusMedia, language: String) {
+private fun StatusGrid(state: StatusesState, media: StatusMedia, language: String) {
     val items = state.visible
     LazyVerticalGrid(GridCells.Fixed(3), Modifier.widthIn(max = 720.dp).fillMaxSize(),
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.l),
         horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        if (state.showAccounts || state.showFilters || state.showHideSaved) item(key = "chips", span = { GridItemSpan(maxLineSpan) }) {
+        if (state.showFilters || state.showHideSaved) item(key = "chips", span = { GridItemSpan(maxLineSpan) }) {
             FlowRow(Modifier.fillMaxWidth().padding(bottom = Space.xs), horizontalArrangement = Arrangement.spacedBy(Space.s),
                 verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                if (state.showAccounts) access.sources.forEach { source ->
-                    Chip(state.selectedAccount == source, accountLabel(source, access, language)) { state.account = source }
-                }
                 if (state.showFilters) StatusFilter.entries.forEach { filter ->
                     Chip(state.filter == filter, stringResource(when (filter) {
                         StatusFilter.ALL -> R.string.statuses_filter_all
@@ -270,7 +274,7 @@ private fun StatusGrid(state: StatusesState, access: StatusAccess.Ready, media: 
                 if (state.showHideSaved) Chip(state.hideSaved, stringResource(R.string.statuses_hide_saved)) { state.hideSaved = !state.hideSaved }
             }
         }
-        state.newCount.takeIf { it > 0 && !state.selecting }?.let { count ->
+        state.newCount.takeIf { it > 0 && !state.selecting && state.selectedAccount == null }?.let { count ->
             item(key = "new", span = { GridItemSpan(maxLineSpan) }) {
                 Text(pluralStringResource(R.plurals.statuses_new_n, count, NezzelFormat.count(count, language)),
                     Modifier.padding(vertical = Space.xs), color = MaterialTheme.colorScheme.primary,
@@ -284,13 +288,122 @@ private fun StatusGrid(state: StatusesState, access: StatusAccess.Ready, media: 
     }
 }
 
-/** "Account 2"; with two apps the app's own label leads ("WhatsApp Business · Account 2", or just the label for a single account). */
+/** "Account 2" when the app has several account folders, else null: the app's own label already names it. */
 @Composable
-private fun accountLabel(source: StatusSource, access: StatusAccess.Ready, language: String): String {
-    val account = stringResource(R.string.statuses_account_n, NezzelFormat.count(source.accountIndex, language))
-    if (access.sources.all { it.packageName == source.packageName }) return account
-    val app = access.apps.firstOrNull { it.packageName == source.packageName }?.label ?: return account
-    return if (access.sources.count { it.packageName == source.packageName } > 1) app + stringResource(R.string.separator) + account else app
+private fun accountNumber(source: StatusSource, access: StatusAccess.Ready, language: String): String? =
+    if (access.sources.count { it.packageName == source.packageName } > 1)
+        stringResource(R.string.statuses_account_n, NezzelFormat.count(source.accountIndex, language)) else null
+
+/** PackageManager's label, in whatever script the app uses; the account number stands in when the app is unknown. */
+@Composable
+private fun appLabel(source: StatusSource, access: StatusAccess.Ready, language: String): String =
+    access.apps.firstOrNull { it.packageName == source.packageName }?.label
+        ?: stringResource(R.string.statuses_account_n, NezzelFormat.count(source.accountIndex, language))
+
+@Composable
+private fun AppIcon(packageName: String, media: StatusMedia, size: Dp) {
+    val icon by produceState<Bitmap?>(null, packageName) { value = media.appIcon(packageName) }
+    val loaded = icon
+    if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.size(size))
+    else Surface(Modifier.size(size), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {}
+}
+
+/** The tab's first screen with several accounts: one card each, the app's icon, counts and the newest few statuses. */
+@Composable
+private fun AccountList(state: StatusesState, access: StatusAccess.Ready, media: StatusMedia, language: String) {
+    LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(),
+        contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.l),
+        verticalArrangement = Arrangement.spacedBy(Space.m)) {
+        items(state.accounts, key = { "${it.source.packageName}/${it.source.accountIndex}" }) { summary ->
+            AccountCard(summary, access, media, language) { state.open(summary.source) }
+        }
+    }
+}
+
+@Composable
+private fun AccountCard(summary: AccountSummary, access: StatusAccess.Ready, media: StatusMedia, language: String, onOpen: () -> Unit) {
+    val title = appLabel(summary.source, access, language)
+    val count = pluralStringResource(R.plurals.statuses_count, summary.total, NezzelFormat.count(summary.total, language))
+    val subtitle = listOfNotNull(accountNumber(summary.source, access, language), count).joinToString(stringResource(R.string.separator))
+    val newText = if (summary.newCount > 0)
+        pluralStringResource(R.plurals.statuses_new_n, summary.newCount, NezzelFormat.count(summary.newCount, language)) else null
+    val description = listOfNotNull(title, subtitle, newText).joinToString(stringResource(R.string.separator))
+    val shape = MaterialTheme.shapes.extraLarge
+    // One TalkBack stop per card: the click stays on the outer node, the parts read as one sentence.
+    Surface(Modifier.fillMaxWidth().clip(shape).clickable(onClickLabel = stringResource(R.string.statuses_open), role = Role.Button, onClick = onOpen)
+        .clearAndSetSemantics { contentDescription = description }, shape = shape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                Surface(Modifier.size(56.dp), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
+                    Box(contentAlignment = Alignment.Center) { AppIcon(summary.source.packageName, media, 40.dp) }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                newText?.let {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
+                        Text(it, Modifier.padding(horizontal = Space.m, vertical = Space.xs),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                val more = summary.total - (PREVIEW_COUNT - 1)
+                repeat(PREVIEW_COUNT) { index ->
+                    val item = summary.preview.getOrNull(index)
+                    Box(Modifier.weight(1f).aspectRatio(1f)) {
+                        if (item != null) PreviewThumb(item, media, if (index == PREVIEW_COUNT - 1 && more > 1) more else null, language)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A small square of the newest statuses; the last one carries "+N" when more wait inside. */
+@Composable
+private fun PreviewThumb(item: StatusItem, media: StatusMedia, more: Int?, language: String) {
+    val thumb by produceState<Bitmap?>(null, item.uri) { value = media.thumbnail(item, 240) }
+    Surface(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
+        Box(contentAlignment = Alignment.Center) {
+            val loaded = thumb
+            if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else if (item.isVideo) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
+            if (more != null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.statuses_more_n, NezzelFormat.count(more, language)), color = Color.White,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, textDirection = TextDirection.Ltr))
+            } else if (item.isVideo && loaded != null) Icon(Icons.Default.PlayArrow, null, Modifier.align(Alignment.BottomStart)
+                .padding(Space.xs).size(18.dp), tint = Color.White)
+        }
+    }
+}
+
+/** Inside one account: back to the cards, the app's icon and name, and how many statuses (and new ones) it holds. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AccountBar(state: StatusesState, access: StatusAccess.Ready, source: StatusSource, media: StatusMedia, language: String) {
+    val title = listOfNotNull(appLabel(source, access, language), accountNumber(source, access, language))
+        .joinToString(stringResource(R.string.separator))
+    val summary = state.accounts.firstOrNull { it.source == source }
+    val subtitle = summary?.let { listOfNotNull(
+        pluralStringResource(R.plurals.statuses_count, it.total, NezzelFormat.count(it.total, language)),
+        if (it.newCount > 0) pluralStringResource(R.plurals.statuses_new_n, it.newCount, NezzelFormat.count(it.newCount, language)) else null,
+    ).joinToString(stringResource(R.string.separator)) }
+    Row(Modifier.fillMaxWidth().windowInsetsPadding(TopAppBarDefaults.windowInsets).heightIn(min = 64.dp).padding(horizontal = Space.xs),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        IconButton(onClick = state::closeAccount, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+        }
+        AppIcon(source.packageName, media, 36.dp)
+        Column(Modifier.weight(1f).padding(vertical = Space.s).semantics(mergeDescendants = true) { heading() }) {
+            Text(title, style = MaterialTheme.typography.titleLarge,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
 }
 
 @Composable

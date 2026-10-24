@@ -13,7 +13,11 @@ class FakeStatusMedia(private val durations: Boolean = true) : StatusMedia {
         0xFF6A1B9A to 0xFFF8BBD0, 0xFF33691E to 0xFFDCE775, 0xFF37474F to 0xFFB0BEC5, 0xFFBF360C to 0xFFFFE0B2,
         0xFF004D40 to 0xFF80CBC4, 0xFF4E342E to 0xFFD7CCC8)
 
+    /** Every item a thumbnail was asked for, in order. */
+    val thumbnails = mutableListOf<StatusItem>()
+
     override suspend fun thumbnail(item: StatusItem, size: Int): Bitmap {
+        thumbnails += item
         val n = item.uri.lastPathSegment!!.substringAfterLast('-').toInt()
         val (from, to) = palettes[(n - 1).mod(palettes.size)]
         val bitmap = Bitmap.createBitmap(180, 280, Bitmap.Config.ARGB_8888)

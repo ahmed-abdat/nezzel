@@ -509,6 +509,15 @@
     <string name="statuses_hide_saved">إخفاء المحفوظة</string>
     <string name="statuses_new">جديدة</string>
     <string name="statuses_account_n">الحساب %1$s</string>
+    <string name="statuses_open">فتح</string>
+    <plurals name="statuses_count">
+        <item quantity="zero">لا حالات</item>
+        <item quantity="one">حالة واحدة</item>
+        <item quantity="two">حالتان</item>
+        <item quantity="few">%1$s حالات</item>
+        <item quantity="many">%1$s حالة</item>
+        <item quantity="other">%1$s حالة</item>
+    </plurals>
     <string name="statuses_photo">صورة</string>
     <string name="statuses_video">فيديو</string>
     <string name="statuses_save_failed">تعذّر الحفظ. حاول مرة أخرى.</string>

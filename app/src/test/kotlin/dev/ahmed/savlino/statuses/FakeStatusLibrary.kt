@@ -41,6 +41,7 @@ class FakeStatusLibrary(var access: StatusAccess = StatusAccess.NeedsGrant(listO
         val BUSINESS = StatusApp("com.whatsapp.w4b", "WhatsApp Business")
         val MAIN = StatusSource(APP.packageName, 1)
         val SECOND = StatusSource(APP.packageName, 2)
+        val THIRD = StatusSource(BUSINESS.packageName, 1)
 
         fun item(n: Int, video: Boolean, saved: Boolean = false, new: Boolean = false, source: StatusSource = MAIN) = StatusItem(
             Uri.parse("content://fake.statuses/document/status-$n"), source, video, if (video) "video/mp4" else "image/jpeg",

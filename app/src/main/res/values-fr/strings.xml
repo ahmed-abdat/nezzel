@@ -467,6 +467,12 @@
     <string name="statuses_hide_saved">Masquer les enregistrés</string>
     <string name="statuses_new">Nouveau</string>
     <string name="statuses_account_n">Compte %1$s</string>
+    <string name="statuses_open">Ouvrir</string>
+    <plurals name="statuses_count">
+        <item quantity="one">%1$s statut</item>
+        <item quantity="many">%1$s statuts</item>
+        <item quantity="other">%1$s statuts</item>
+    </plurals>
     <string name="statuses_photo">Photo</string>
     <string name="statuses_video">Vidéo</string>
     <string name="statuses_save_failed">Échec de l’enregistrement. Réessayez.</string>
