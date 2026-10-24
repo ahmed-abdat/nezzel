@@ -8,8 +8,8 @@ enum class BatchKind { PAUSE, RESUME, RETRY }
 /** The one header action and the job IDs it acts on, snapshotted in display order at render time. */
 data class BatchAction(val kind: BatchKind, val ids: List<String>)
 
-/** Running or queued, before joining/saving (the coordinator refuses a pause from there on). */
-internal val DownloadProgress.batchPausable: Boolean get() = !terminal && !awaitingSchedule && !paused &&
+/** Running or queued, before joining/saving (the coordinator refuses a pause from there on); a restart is not paused, as per row. */
+internal val DownloadProgress.batchPausable: Boolean get() = !terminal && !awaitingSchedule && !paused && !restarting &&
     phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
 
 internal val DownloadProgress.batchResumable: Boolean get() = paused && !terminal

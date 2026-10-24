@@ -34,11 +34,11 @@ class BatchHeaderUiTest {
     private fun label(action: Int, count: Int) = context.getString(R.string.downloads_batch_accessibility, context.getString(action),
         context.resources.getQuantityString(R.plurals.downloads_count, count, NezzelFormat.count(count, language)))
 
-    private fun render(jobs: List<DownloadProgress>, onBatch: (BatchAction) -> Unit = {}, check: () -> Unit) {
+    private fun render(jobs: List<DownloadProgress>, onBatch: (BatchAction) -> Unit = {}, busy: Boolean = false, check: () -> Unit) {
         val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                DownloadsScreen(jobs, language, {}, {}, {}, {}, {}, null, {}, {}, onBatch = onBatch)
+                DownloadsScreen(jobs, language, {}, {}, {}, {}, {}, null, {}, {}, onBatch = onBatch, batchBusy = busy)
             } }
             compose.waitForIdle(); check()
         } finally { c.pause().stop().destroy() }
@@ -64,6 +64,14 @@ class BatchHeaderUiTest {
     @Test fun pauseAllAtLargeText() {
         RuntimeEnvironment.setFontScale(2f)
         pauseAllNamesTheCountAndSendsDisplayOrder()
+    }
+
+    @Test fun busyBatchDisablesTheButton() {
+        var sent = 0
+        render(listOf(running("a"), running("b")), { sent++ }, busy = true) {
+            compose.onNodeWithContentDescription(label(R.string.downloads_pause_all, 2)).assertIsNotEnabled().performClick()
+            assertEquals(0, sent)
+        }
     }
 
     @Test fun oneCandidateShowsNoBatchButton() = render(listOf(running("a"), paused("p"), failed("f"))) {

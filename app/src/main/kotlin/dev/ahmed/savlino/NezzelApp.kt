@@ -108,8 +108,13 @@ fun NezzelApp(
         scope.launch { if (links.downloads?.retry(id) != true) snackbar.showSnackbar(context.getString(R.string.download_retry_hint)) }
     }
     // One snackbar with the count of rows that actually changed; refused rows (finished meanwhile) are not counted.
-    val batch: (BatchAction) -> Unit = { action -> scope.launch {
-        val downloads = links.downloads ?: return@launch
+    // One batch at a time: the button is disabled until it ends, so a double tap or a Pause all turning into Resume all never overlaps.
+    var batchBusy by remember { mutableStateOf(false) }
+    val batch: (BatchAction) -> Unit = batch@{ action ->
+        if (batchBusy) return@batch
+        val downloads = links.downloads ?: return@batch
+        batchBusy = true
+        scope.launch { try {
         val count = when (action.kind) {
             BatchKind.PAUSE -> app?.let { DownloadControls.pauseAll(context, it, action.ids) } ?: 0
             BatchKind.RESUME -> app?.let { DownloadControls.resumeAll(context, it, action.ids) } ?: 0
@@ -121,11 +126,15 @@ fun NezzelApp(
                 BatchKind.RESUME -> R.plurals.downloads_resumed_n
                 BatchKind.RETRY -> R.plurals.downloads_retried_n
             }, count, NezzelFormat.count(count, language))
+            // Refused by the coordinator (engine update, WorkManager): say so here too, not only on Home.
+            downloads.error.value != null -> context.getString(R.string.download_coordinator_error)
             action.kind == BatchKind.RETRY -> context.getString(R.string.download_retry_hint)
             else -> null
         }
+        batchBusy = false
         if (message != null) { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(message) }
-    } }
+        } finally { batchBusy = false } }
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(links.downloads, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -217,7 +226,7 @@ fun NezzelApp(
                             library.showFiles, library.delete, { links.navigate("Home"); onPaste() },
                             retry, pause, resume, libraryLoad = library.load, onLibraryRetry = library.onRetry,
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
-                            canShowFiles = library.canShowFiles, onBatch = batch)
+                            canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy)
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
                             onRemove = removeFailed, onRetry = retry,
                             onCancel = cancel, onPause = pause, onResume = resume)

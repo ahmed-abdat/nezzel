@@ -33,6 +33,12 @@ class BatchActionsTest {
         assertFalse(unscheduled.batchPausable)
     }
 
+    @Test fun restartingRowIsNotPausableAsPerRow() {
+        val restarting = DownloadProgress("r", "r.mp4", DownloadPhase.PREPARING, restartEpoch = 1)
+        assertFalse(restarting.batchPausable)
+        assertNull(batchAction(listOf(running("a"), restarting)))
+    }
+
     @Test fun pauseWinsOverResumeWhenBothApply() {
         val mixed = listOf(running("a"), paused("p1"), queued("q"), paused("p2"))
         assertEquals(BatchAction(BatchKind.PAUSE, listOf("a", "q")), batchAction(mixed))
