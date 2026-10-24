@@ -127,6 +127,8 @@ class DownloadsTest {
         coordinator.initialize()
         val staging = java.io.File(context.filesDir, "downloads/failed/partial").apply { parentFile!!.mkdirs(); writeText("old staging") }
         screen(media = emptyList(), jobs = coordinator.progress.value, remove = { runBlocking { coordinator.removeFailed(it) } }) { a ->
+            // Failures alone keep the tabs but open Saved.
+            click(a, "Downloading")
             assertTrue(texts(nodes(a)).contains("No internet connection"))
             click(a, "Remove")
             assertNull(store.get("failed"))
@@ -189,6 +191,7 @@ class DownloadsTest {
                     error = DownloadError.Network, retryable = true)), "en",
                     {}, { removed = it }, {}, {}, {}, null, {}, {}, { retried = it })
             } }
+            click(c.get(), "Downloading")
             click(c.get(), "Try again"); assertEquals("original-confirmation", retried)
             click(c.get(), "Remove"); assertEquals("original-confirmation", removed)
         } finally { c.pause().stop().destroy() }

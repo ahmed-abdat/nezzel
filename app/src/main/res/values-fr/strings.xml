@@ -564,8 +564,6 @@
     <string name="playlist_slowed">YouTube nous demande de ralentir. En pause.</string>
     <string name="playlist_stop">Arrêter</string>
     <string name="playlist_stop_confirm">Arrêter cette playlist ? Les vidéos enregistrées restent.</string>
-    <string name="playlist_show_videos">Afficher les vidéos</string>
-    <string name="playlist_hide_videos">Masquer les vidéos</string>
     <string name="playlist_done">Terminé : %1$s enregistrées, %2$s n’ont pas pu être enregistrées</string>
     <string name="playlist_see_why">Voir pourquoi</string>
     <string name="playlist_notification_progress">Playlist : %1$s sur %2$s enregistrées</string>
@@ -574,4 +572,10 @@
     <string name="playlist_load_failed">Impossible de charger la playlist.</string>
     <string name="playlist_submit_failed">L’enregistrement de la playlist n’a pas pu démarrer. Réessayez.</string>
     <string name="playlist_done_saved">Terminé : %1$s enregistrées</string>
+    <!-- dl-running: Downloads tabs -->
+    <string name="dl_tab_running">En cours</string>
+    <string name="dl_tab_saved">Enregistrés</string>
+    <string name="dl_waiting_count">%1$s en attente</string>
+    <string name="dl_batch_saved_of">%1$s sur %2$s enregistrés</string>
+    <string name="dl_batch_saved">%1$s enregistrés</string>
 </resources>

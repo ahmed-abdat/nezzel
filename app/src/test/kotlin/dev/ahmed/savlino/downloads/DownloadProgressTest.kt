@@ -46,7 +46,8 @@ class DownloadProgressTest {
             check { next -> compose.runOnIdle { progress = next }; compose.waitForIdle() }
         } finally { c.pause().stop().destroy() }
     }
-    private fun text(value: String) = compose.onNodeWithText(value, substring = true, useUnmergedTree = true)
+    // The Downloading tab label is not a row's phase word.
+    private fun text(value: String) = compose.onNode(hasText(value, substring = true) and !hasAnyAncestor(hasTestTag("tab_running")), useUnmergedTree = true)
     private fun bars() = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo), useUnmergedTree = true).fetchSemanticsNodes()
     /** Speed never reaches the row (lead 2026-10-19: it stays in the notification). */
     private fun noSpeed() {
@@ -145,7 +146,7 @@ class DownloadProgressTest {
     private fun truthfulStallPhase() = render(active.copy(stalled = true)) { update ->
         val stalledLabel = if (language == "ar") "في انتظار البيانات…" else "Waiting for data…"
         text(stalledLabel).assertExists()
-        compose.onNodeWithText(context.getString(R.string.download_transferring), useUnmergedTree = true).assertDoesNotExist()
+        text(context.getString(R.string.download_transferring)).assertDoesNotExist()
         noTransferMetrics()
         update(active.copy(stalled = false))
         text(stalledLabel).assertDoesNotExist()

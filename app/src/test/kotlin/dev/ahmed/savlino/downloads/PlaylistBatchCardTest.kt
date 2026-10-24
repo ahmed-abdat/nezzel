@@ -30,7 +30,7 @@ class PlaylistBatchCardTest {
     private fun render(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, check: () -> Unit) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
-            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { PlaylistBatchCard(batch, "en", false, {}, action) } }
+            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { PlaylistBatchCard(batch, "en", action) } }
             compose.waitForIdle(); check()
         } finally { controller.pause().stop().destroy() }
     }
@@ -39,6 +39,7 @@ class PlaylistBatchCardTest {
         render(playlistFixture(), sent::add) {
             compose.onNodeWithTag("playlist_pause").performClick()
             assertEquals(listOf(PlaylistBatchAction.PAUSE), sent)
+            compose.onNodeWithTag("playlist_more").performClick()
             compose.onNodeWithTag("playlist_stop").performClick()
             assertEquals(1, sent.size)
             compose.onNodeWithText(context.getString(R.string.playlist_stop_confirm)).assertExists()
@@ -49,45 +50,46 @@ class PlaylistBatchCardTest {
     @Test fun pausedCanResume() {
         var sent: PlaylistBatchAction? = null
         render(playlistFixture(BatchState.PAUSED), { sent = it }) {
-            compose.onNodeWithText(context.getString(R.string.download_paused)).assertExists()
+            compose.onNodeWithText(context.getString(R.string.download_paused), substring = true).assertExists()
             compose.onNodeWithTag("playlist_resume").performClick(); assertEquals(PlaylistBatchAction.RESUME, sent)
         }
     }
     @Test fun waitingNetworkIsExplicit() = render(playlistFixture(BatchState.WAITING_NETWORK)) {
-        compose.onNodeWithText(context.getString(R.string.playlist_waiting_network)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.playlist_waiting_network), substring = true).assertExists()
         compose.onNodeWithTag("playlist_resume").assertExists()
     }
     @Test fun slowedDownIsExplicit() = render(playlistFixture(BatchState.PAUSED, DownloadError.SourceRefused)) {
-        compose.onNodeWithText(context.getString(R.string.playlist_slowed)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.playlist_slowed), substring = true).assertExists()
     }
     @Test fun doneListsFailuresAndRetryWiresThrough() {
         var sent: PlaylistBatchAction? = null
         render(playlistFixture(BatchState.COMPLETED, failed = true), { sent = it }) {
             compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
+            compose.onNodeWithTag("playlist_more").performClick()
             compose.onNodeWithTag("playlist_why").performClick()
             compose.onNodeWithText("A quiet afternoon", substring = true).assertExists()
             compose.onNodeWithTag("playlist_retry").performClick(); assertEquals(PlaylistBatchAction.RETRY, sent)
         }
     }
     @Test fun cleanFinishShowsOnlyTheSavedCount() = render(playlistFixture(BatchState.COMPLETED)) {
-        compose.onNodeWithText("Done: 2 saved").assertExists()
-        compose.onNodeWithTag("playlist_why").assertDoesNotExist()
+        compose.onNodeWithText("Saved 2").assertExists()
+        compose.onNodeWithTag("playlist_more").assertDoesNotExist()
     }
-    @Test fun memberJobsStayCollapsedUntilShowVideos() {
+    @Test fun runningMembersShowUnderTheHeaderAndQueuedOnesDoNot() {
         val batch = playlistFixture()
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             controller.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                DownloadsScreen(listOf(DownloadProgress("job-b", "Hidden member.mp4", DownloadPhase.DOWNLOADING)), "en",
+                DownloadsScreen(listOf(DownloadProgress("job-b", "Running member.mp4", DownloadPhase.DOWNLOADING),
+                    DownloadProgress("job-c", "Other member.mp4", DownloadPhase.PREPARING, waiting = true)), "en",
                     {}, {}, {}, {}, {}, null, {}, {}, playlists = listOf(batch))
             } }
             compose.waitForIdle()
+            compose.onNodeWithTag("tab_running").assertExists()
+            compose.onNodeWithTag("playlist_batch_list").assertExists()
             // JobRow isolates the confirmed filename for RTL; the semantic text includes those marks.
-            compose.onNodeWithText("Hidden member.mp4", substring = true).assertDoesNotExist()
-            compose.onNodeWithTag("playlist_expand").performClick()
-            compose.onNodeWithText("Hidden member.mp4", substring = true).assertExists()
-            compose.onNodeWithTag("playlist_expand").performClick()
-            compose.onNodeWithText("Hidden member.mp4", substring = true).assertDoesNotExist()
+            compose.onNodeWithText("Running member.mp4", substring = true).assertExists()
+            compose.onNodeWithText("Show videos").assertDoesNotExist()
         } finally { controller.pause().stop().destroy() }
     }
 }

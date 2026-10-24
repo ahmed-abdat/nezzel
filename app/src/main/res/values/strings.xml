@@ -553,8 +553,6 @@
     <string name="playlist_slowed">YouTube asked us to slow down. Paused.</string>
     <string name="playlist_stop">Stop</string>
     <string name="playlist_stop_confirm">Stop this playlist? Saved videos stay.</string>
-    <string name="playlist_show_videos">Show videos</string>
-    <string name="playlist_hide_videos">Hide videos</string>
     <string name="playlist_done">Done: %1$s saved, %2$s couldn\'t be saved</string>
     <string name="playlist_see_why">See why</string>
     <string name="playlist_notification_progress">Playlist: %1$s of %2$s saved</string>
@@ -563,4 +561,10 @@
     <string name="playlist_load_failed">Couldn’t load the playlist.</string>
     <string name="playlist_submit_failed">Couldn’t start saving the playlist. Try again.</string>
     <string name="playlist_done_saved">Done: %1$s saved</string>
+    <!-- dl-running: Downloads tabs -->
+    <string name="dl_tab_running">Downloading</string>
+    <string name="dl_tab_saved">Saved</string>
+    <string name="dl_waiting_count">%1$s waiting</string>
+    <string name="dl_batch_saved_of">Saved %1$s of %2$s</string>
+    <string name="dl_batch_saved">Saved %1$s</string>
 </resources>

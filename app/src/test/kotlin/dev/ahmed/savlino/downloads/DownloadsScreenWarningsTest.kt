@@ -50,6 +50,11 @@ class DownloadsScreenWarningsTest {
             DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(listOf(video)),
                 warnings = warnings.value, onTryAgain = { tried += it }, onDismissWarning = { id -> warnings.value = warnings.value.filterNot { it.jobId == id } })
         }) { a ->
+            // Warnings alone keep the tabs with a dot on Downloading, but entry opens Saved.
+            assertFalse(texts(nodes(a)).contains(context.getString(R.string.check_needs_look)))
+            val tab = clickable(a, context.getString(R.string.dl_tab_running)) ?: error("Missing Downloading tab")
+            assertEquals(context.getString(R.string.check_needs_look), tab.config.getOrNull(SemanticsProperties.StateDescription))
+            click(a, context.getString(R.string.dl_tab_running))
             val all = texts(nodes(a))
             assertTrue(all.contains(context.getString(R.string.check_needs_look)))
             assertTrue(all.contains(context.getString(R.string.check_problem_no_sound)))
@@ -66,7 +71,11 @@ class DownloadsScreenWarningsTest {
             val dismiss = nodes(a).filter { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(context.getString(R.string.dismiss)) == true }
             assertEquals(2, dismiss.size)
             dismiss.forEach { it.config[SemanticsActions.OnClick].action?.invoke(); compose.waitForIdle() }
-            assertFalse(texts(nodes(a)).contains(context.getString(R.string.check_needs_look)))
+            val after = texts(nodes(a))
+            assertFalse(after.contains(context.getString(R.string.check_needs_look)))
+            // Nothing left in Downloading: the tab row folds away and the library shows alone.
+            assertFalse(after.contains(context.getString(R.string.dl_tab_running)))
+            assertTrue(after.contains(dev.ahmed.savlino.locale.NezzelFormat.firstStrong("Movie")))
         }
     }
 
@@ -75,6 +84,7 @@ class DownloadsScreenWarningsTest {
         DownloadsScreen(emptyList(), "ar", {}, {}, {}, {}, {}, null, {}, {},
             warnings = listOf(CheckWarning("a", "Movie.mp4", null, ResultCheck.Problem.NO_PICTURE, true)))
     }) { a ->
+        click(a, context.getString(R.string.dl_tab_running))
         assertTrue(texts(nodes(a)).contains(context.getString(R.string.check_problem_no_picture)))
         assertNotNull(clickable(a, context.getString(R.string.try_again)))
     }

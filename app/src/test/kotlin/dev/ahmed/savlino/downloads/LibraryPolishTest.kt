@@ -54,6 +54,18 @@ class LibraryPolishTest {
         assertTrue(availableMediaFilters(mixed.take(1)).isEmpty())
         assertTrue(availableMediaFilters(emptyList()).isEmpty())
     }
+    @Test fun statusesChipEndsTheRowAndShowsOnlyStatusSaves() {
+        val status = file(9, "Status_01.jpg", "image/jpeg", 110).copy(relativePath = "Download/Nezzel/Statuses/")
+        val statusNoSlash = file(10, "Status_02.mp4", time = 111).copy(relativePath = "Download/Nezzel/Statuses")
+        assertEquals(listOf(MediaFilter.ALL, MediaFilter.VIDEO, MediaFilter.AUDIO, MediaFilter.IMAGE, MediaFilter.STATUSES),
+            availableMediaFilters(mixed + status))
+        // One kind plus status saves still offers the Statuses chip.
+        assertEquals(listOf(MediaFilter.ALL, MediaFilter.VIDEO, MediaFilter.STATUSES), availableMediaFilters(listOf(mixed[1], statusNoSlash)))
+        assertEquals(listOf("10", "9"), ids(savedLibraryItems(mixed + status + statusNoSlash, MediaFilter.STATUSES)))
+        // Status files stay in All and in their kind's chip.
+        assertTrue("9" in ids(savedLibraryItems(mixed + status, MediaFilter.IMAGE)))
+        assertFalse(file(11, "Statuses.mp4").copy(relativePath = "Download/Nezzel/").fromStatuses)
+    }
     @Test fun sortDefaultsToNewestAndSurvivesNewPreferenceInstance() {
         val app = RuntimeEnvironment.getApplication()
         val prefs = app.getSharedPreferences("nezzel-portable", Context.MODE_PRIVATE)

@@ -109,7 +109,11 @@ fun groupDownloads(items: List<SavedMedia>): List<SavedMedia> {
 }
 
 enum class SavedMediaKind { IMAGE, VIDEO, AUDIO }
-enum class MediaFilter { ALL, VIDEO, AUDIO, IMAGE }
+/** STATUSES stays last: its chip ends the row. */
+enum class MediaFilter { ALL, VIDEO, AUDIO, IMAGE, STATUSES }
+
+/** Saved from the Statuses tab: StatusSaver always publishes into its own MediaStore folder, which marks the file for good. */
+val SavedMedia.fromStatuses: Boolean get() = relativePath?.trimEnd('/') == StatusSaver.RELATIVE_PATH.trimEnd('/')
 enum class SavedSort { NEWEST, LARGEST, NAME }
 
 /** A grouped post is an indivisible display block, including when only one sibling matches. */
@@ -126,14 +130,16 @@ private fun MediaFilter.matches(item: SavedMedia) = when (this) {
     MediaFilter.VIDEO -> item.kind == SavedMediaKind.VIDEO
     MediaFilter.AUDIO -> item.kind == SavedMediaKind.AUDIO
     MediaFilter.IMAGE -> item.kind == SavedMediaKind.IMAGE
+    MediaFilter.STATUSES -> item.fromStatuses
 }
 fun filterMedia(items: List<SavedMedia>, filter: MediaFilter, query: String = ""): List<SavedMedia> =
     savedBlocks(items).filter { block -> block.any { filter.matches(it) } && block.any { SearchText.matches(it.searchKey, query) } }.flatten()
 
 /** Types come from the complete library, so search and selection cannot make their own chips disappear. */
 fun availableMediaFilters(items: List<SavedMedia>): List<MediaFilter> {
-    val present = MediaFilter.entries.filter { it != MediaFilter.ALL && items.any(it::matches) }
-    return if (present.size > 1) listOf(MediaFilter.ALL) + present else emptyList()
+    val kinds = MediaFilter.entries.filter { it != MediaFilter.ALL && it != MediaFilter.STATUSES && items.any(it::matches) }
+    val statuses = items.any { it.fromStatuses }
+    return if (kinds.size > 1 || statuses) listOf(MediaFilter.ALL) + kinds + listOfNotNull(MediaFilter.STATUSES.takeIf { statuses }) else emptyList()
 }
 
 fun savedLibraryItems(items: List<SavedMedia>, filter: MediaFilter = MediaFilter.ALL, query: String = "",

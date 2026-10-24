@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
@@ -240,12 +241,17 @@ fun DownloadsScreen(
     var deletingUri by rememberSaveable { mutableStateOf<String?>(null) }
     val saved = libraryLoad.lastSuccessfulRows.orEmpty()
     val deleting = saved.find { it.uri.toString() == deletingUri }
-    var expandedPlaylists by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val memberIds = playlists.flatMap { batch -> batch.items.map { it.jobId } }.toSet()
     val standalone = jobs.filter { it.jobId !in memberIds }
     val started = rememberStartOrder(standalone)
     val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) })
     val reduced = LocalReducedMotion.current
+    val batches = rememberVisibleBatches(playlists)
+    val tabs = showDownloadsTabs(active, batches, warnings.size)
+    var tab by rememberDownloadsTab(jobs, playlists, tabs)
+    val current = if (tabs) tab else DownloadsTab.SAVED
+    val runningState = rememberLazyListState()
+    var waitingOpen by rememberSaveable { mutableStateOf(false) }
     val filters = remember(saved) { availableMediaFilters(saved) }
     val effectiveFilter = MediaFilter.valueOf(filterName).takeIf { it in filters } ?: MediaFilter.ALL
     LaunchedEffect(effectiveFilter) { filterName = effectiveFilter.name }
@@ -280,35 +286,37 @@ fun DownloadsScreen(
                 if (Build.VERSION.SDK_INT >= 30) deleteSelected(selected) else deleteSelection = selected.toList()
             })
         else ScreenHeader(stringResource(R.string.downloads)) {
-            if (saved.isNotEmpty()) SavedSortMenu(sort) { sort = it; preferences.savedSort = it }
-            // One toggle in the same spot: Search opens the field under the bar, Close search shuts and clears it.
-            if (search) IconButton(onClick = closeSearch) { Icon(Icons.Default.Close, stringResource(R.string.saved_search_close)) }
-            else if (saved.isNotEmpty()) IconButton(onClick = { search = true }) { Icon(Icons.Default.Search, stringResource(R.string.saved_search)) }
+            if (current == DownloadsTab.SAVED) {
+                if (saved.isNotEmpty()) SavedSortMenu(sort) { sort = it; preferences.savedSort = it }
+                // One toggle in the same spot: Search opens the field under the bar, Close search shuts and clears it.
+                if (search) IconButton(onClick = closeSearch) { Icon(Icons.Default.Close, stringResource(R.string.saved_search_close)) }
+                else if (saved.isNotEmpty()) IconButton(onClick = { search = true }) { Icon(Icons.Default.Search, stringResource(R.string.saved_search)) }
+            }
+        }
+        // Only while Downloading has rows; when the last one leaves, the row folds away and the library stays.
+        AnimatedVisibility(tabs && !selecting, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
+            exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.TAB))) {
+            DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language) { tab = it }
         }
         // Pinned under the app bar, outside the list: always in view, and free to grow at 200% text.
-        AnimatedVisibility(search && saved.isNotEmpty(), enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
+        AnimatedVisibility(search && saved.isNotEmpty() && current == DownloadsTab.SAVED, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
             exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.FADE_OUT))) {
             SearchField(query, { query = it }, closeSearch)
         }
     } }) { padding ->
         val hot = LocalHot.current
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
-                playlists.forEach { batch ->
-                    item(key = "playlist-${batch.id}") {
-                        PlaylistBatchCard(batch, language, batch.id in expandedPlaylists,
-                            { expandedPlaylists = if (batch.id in expandedPlaylists) expandedPlaylists - batch.id else expandedPlaylists + batch.id },
-                            { onPlaylistAction(batch.id, it) }, busy = batch.id in playlistBusy)
-                    }
-                    if (batch.id in expandedPlaylists) {
-                        val members = batch.items.mapNotNull { item -> jobs.find { it.jobId == item.jobId } }
-                        items(members, key = { "playlist-job-${it.jobId}" }) { job ->
-                            JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
-                                onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
-                        }
-                    }
-                }
-                if(active.isNotEmpty()) {
+            Crossfade(current, animationSpec = easeOut(reduced, Motion.TAB), label = "downloads-tab") { shown ->
+            if (shown == DownloadsTab.RUNNING) LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize().testTag("running_list"), state = runningState,
+                contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
+                fun LazyItemScope.rowMotion() = Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120))
+                @Composable fun LazyItemScope.JobItem(job: DownloadProgress) =
+                    JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) }, rowMotion(),
+                        onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
+                // Two or more queued rows fold into one "N waiting" line; one stays a row of its own.
+                val waiting = active.filter { it.queuedOnly }.takeIf { it.size >= 2 }.orEmpty()
+                val (failed, moving) = (active - waiting.toSet()).partition { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
+                if (active.isNotEmpty()) {
                     stickyHeader(key = "jobs-header") {
                         val batch = batchAction(active)
                         SectionHeader(stringResource(if (runningCount(jobs) == 0) R.string.downloads_stopped_header else R.string.downloads_running_header,
@@ -318,21 +326,33 @@ fun DownloadsScreen(
                     // Severe heat holds downloads to one; say so once, above the rows that wait for it.
                     if (hot && active.any { it.waiting && !it.awaitingSchedule && !it.paused && !it.terminal })
                         item(key = "heat-note") { HeatNote(Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) }
-                    items(active, key = { "job-${it.jobId}" }) { job ->
-                        JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
-                            Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)),
-                            onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
-                    }
+                    items(moving, key = { "job-${it.jobId}" }) { job -> JobItem(job) }
                 }
-                // Result check: saved files that need a look, above the Saved list (in memory only).
+                batches.forEach { batch ->
+                    item(key = "playlist-${batch.id}") {
+                        PlaylistBatchCard(batch, language, { onPlaylistAction(batch.id, it) }, busy = batch.id in playlistBusy,
+                            modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)))
+                    }
+                    items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }) { job -> JobItem(job) }
+                }
+                items(failed, key = { "job-${it.jobId}" }) { job -> JobItem(job) }
+                if (waiting.isNotEmpty()) {
+                    item(key = "waiting-line") {
+                        WaitingLine(waiting.size, waitingOpen, language, Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) {
+                            waitingOpen = !waitingOpen
+                        }
+                    }
+                    if (waitingOpen) items(waiting, key = { "job-${it.jobId}" }) { job -> JobItem(job) }
+                }
+                // Result check: saved files that need a look (in memory only).
                 if (warnings.isNotEmpty()) {
                     item(key = "warnings-header") { SectionHeader(stringResource(R.string.check_needs_look), error = true) }
                     items(warnings, key = { "warning-${it.jobId}" }) { warning ->
                         CheckWarningRow(warning, (libraryLoad as? LibraryLoadState.Ready)?.rows?.firstOrNull { it.uri == warning.uri },
-                            { onTryAgain(warning.jobId) }, { onDismissWarning(warning.jobId) },
-                            Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120)))
+                            { onTryAgain(warning.jobId) }, { onDismissWarning(warning.jobId) }, rowMotion())
                     }
                 }
+            } else LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }
                 if (saved.isNotEmpty()) {
                     if (filters.isNotEmpty()) item(key = "filters") {
@@ -342,7 +362,8 @@ fun DownloadsScreen(
                                     shape = CircleShape, colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                         selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer),
-                                    label = { Text(stringResource(when(filter) { MediaFilter.ALL -> R.string.filter_all; MediaFilter.VIDEO -> R.string.filter_videos; MediaFilter.AUDIO -> R.string.audio_group; MediaFilter.IMAGE -> R.string.filter_images })) })
+                                    leadingIcon = if (filter == MediaFilter.STATUSES) { { Icon(painterResource(R.drawable.ic_status_ring), null, Modifier.size(18.dp)) } } else null,
+                                    label = { Text(stringResource(when(filter) { MediaFilter.ALL -> R.string.filter_all; MediaFilter.VIDEO -> R.string.filter_videos; MediaFilter.AUDIO -> R.string.audio_group; MediaFilter.IMAGE -> R.string.filter_images; MediaFilter.STATUSES -> R.string.statuses_tab })) })
                             }
                         }
                     }
@@ -377,7 +398,7 @@ fun DownloadsScreen(
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                } else if (libraryLoad is LibraryLoadState.Ready && playlists.isEmpty()) item(key = "empty") {
+                } else if (libraryLoad is LibraryLoadState.Ready) item(key = "empty") {
                     // One quiet block on the page surface: a bare glyph (no tile), what this tab will hold, the one action.
                     Column(Modifier.fillMaxWidth().padding(top = Space.xxl * 2, bottom = Space.xxl), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -390,6 +411,7 @@ fun DownloadsScreen(
                         FilledTonalButton(onClick = onPaste, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.paste_link)) }
                     }
                 }
+            }
             }
         }
     }
