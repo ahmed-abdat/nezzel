@@ -550,4 +550,10 @@
         <item quantity="many">%1$s حالة جديدة</item>
         <item quantity="other">%1$s حالة جديدة</item>
     </plurals>
+    <string name="share_sheet_open_app">فتح في Nezzel</string>
+    <string name="share_sheet_started">بدأ التنزيل</string>
+    <string name="share_sheet_pane">Nezzel، خيارات التنزيل</string>
+    <string name="share_notify_line">اسمح بالإشعارات لمتابعة التقدّم. التنزيل يعمل بدونها.</string>
+    <string name="download_again">تنزيل مرة أخرى</string>
+    <string name="download_again_size">تنزيل مرة أخرى · %1$s</string>
 </resources>

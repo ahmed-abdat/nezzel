@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -47,13 +48,18 @@ fun OptionsScreen(links: LinkViewModel, language: String, onDismiss: () -> Unit,
     }
 }
 
-/** Sheet body, separate from the popup window so it can be rendered and tested in place. */
+/** Sheet body, separate from the popup window so it can be rendered and tested in place. [share]: hosted by the share sheet. */
 @Composable
-internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismiss: () -> Unit) {
+internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismiss: () -> Unit) =
+    OptionsSheetBody(links, language, onDismiss, share = null)
+
+@Composable
+internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss: () -> Unit, share: ShareSheetHooks?) {
     androidx.compose.runtime.SideEffect { links.optionsShown() }
     Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)) {
         // A footer (Download or Save bar) brings its own 16dp top padding; the body doesn't add a second one.
-        val footer = links.optionsState is OptionsState.Ready || links.optionsState is OptionsState.ImageReady
+        val footer = links.optionsState is OptionsState.Ready || links.optionsState is OptionsState.ImageReady ||
+            links.optionsState is OptionsState.Checking
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
             .padding(start = Space.l, end = Space.l, top = Space.l, bottom = if (footer) 0.dp else Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -68,14 +74,20 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                 // A new link starts a fresh header, so a kept preview never carries over to another video.
                 key(links.text) {
                     InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking,
-                        (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown)
+                        (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown,
+                        hint = links.shareHint)
                 }
+            }
+            // The share sheet says "saved before" first, from intake on; the app keeps it at the end of the choices.
+            if (share != null && !failed && !links.confirmed) (links.savedBefore ?: links.savedLink)?.let { saved ->
+                SavedBeforeNotice(saved, links.selectedFormat?.container?.takeIf { links.savedBefore != null }, language,
+                    onOpened = share.onFinish)
             }
             if (links.photosUnavailable) Text(stringResource(R.string.image_photos_unavailable),
                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
             when (val state = links.optionsState) {
                 is OptionsState.Checking -> {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    SkeletonRows()
                     Text(stringResource(when {
                         links.engineWaiting -> R.string.engine_getting_ready
                         state.image -> R.string.checking_link
@@ -116,7 +128,7 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                             outside?.takeUnless { it.hasVideo }?.let { FormatChoiceRow(links, it, language, tiers, technical = false) }
                         }
                     }
-                    ConfirmationDetails(links, language)
+                    ConfirmationDetails(links, language, savedNotice = share == null)
                 }
                 is OptionsState.ImageReady -> {
                     ImageOptions(state, host.orEmpty(), language, links.selectedImageRefs, !links.imageSaving,
@@ -127,8 +139,50 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                 OptionsState.Hidden -> Unit
             }
         }
-        if (links.optionsState is OptionsState.Ready) ConfirmationScreen(links, language)
+        if (links.optionsState is OptionsState.Ready) ConfirmationScreen(links, language, share)
         if (links.optionsState is OptionsState.ImageReady) ImageSaveBar(links, language)
+        if (links.optionsState is OptionsState.Checking) DownloadPlaceholder()
+        share?.let { OpenInNezzel(it.onOpenApp) }
+    }
+}
+
+/**
+ * Three still rows where the qualities will appear: same height as a quality row, no shimmer (nothing moves under
+ * reduced motion) and silent for TalkBack, which reads the status line under them instead.
+ */
+@Composable
+private fun SkeletonRows() {
+    val block = MaterialTheme.colorScheme.surfaceContainerHighest
+    Column(Modifier.fillMaxWidth().testTag("options_skeleton").clearAndSetSemantics { }) {
+        repeat(3) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Space.l, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                Box(Modifier.size(20.dp).clip(CircleShape).background(block))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Box(Modifier.fillMaxWidth(.45f).height(16.dp).clip(MaterialTheme.shapes.small).background(block))
+                    Box(Modifier.fillMaxWidth(.25f).height(12.dp).clip(MaterialTheme.shapes.small).background(block))
+                }
+                Box(Modifier.width(48.dp).height(14.dp).clip(MaterialTheme.shapes.small).background(block))
+            }
+        }
+    }
+}
+
+/** Holds the Download button's place while qualities load, so the sheet does not jump when they arrive. */
+@Composable
+private fun DownloadPlaceholder() {
+    Box(Modifier.fillMaxWidth().padding(Space.l).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .testTag("download_placeholder").clearAndSetSemantics { })
+    }
+}
+
+/** Quiet way out of the share sheet: the same link, in the full app. */
+@Composable
+internal fun OpenInNezzel(onOpenApp: () -> Unit) {
+    TextButton(onClick = onOpenApp, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = Space.l)
+        .navigationBarsPadding().testTag("share_open_app")) {
+        Text(stringResource(R.string.share_sheet_open_app))
     }
 }
 

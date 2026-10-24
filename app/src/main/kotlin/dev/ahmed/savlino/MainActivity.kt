@@ -8,10 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.*
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.createSavedStateHandle
-import androidx.lifecycle.viewmodel.CreationExtras
+import dev.ahmed.savlino.entry.NotificationAsk
 import dev.ahmed.savlino.entry.ShareInput
 import dev.ahmed.savlino.entry.plainText
 import dev.ahmed.savlino.entry.ClipboardEntryEffect
@@ -28,24 +25,19 @@ class MainActivity : AppCompatActivity() {
         if (::links.isInitialized) links.finishNotificationRequest()
     }
     private fun beforeConfirmedDownload() {
-        if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(this,
-                android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            !getPreferences(MODE_PRIVATE).getBoolean("notificationAsked", false)) {
-            showNotificationRationale = true
-        } else links.finishNotificationRequest()
+        if (NotificationAsk.shouldAsk(this)) showNotificationRationale = true
+        else links.finishNotificationRequest()
     }
     private fun notificationRationaleDecision(request: Boolean) {
         showNotificationRationale = false
-        getPreferences(MODE_PRIVATE).edit().putBoolean("notificationAsked", true).apply()
+        NotificationAsk.markAsked(this)
         if (request && android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         else links.finishNotificationRequest()
     }
     private fun allowNotifications() {
-        if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(this,
-            android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            (!getPreferences(MODE_PRIVATE).getBoolean("notificationAsked", false) ||
+        if (!NotificationAsk.granted(this) && (!NotificationAsk.asked(this) ||
                 shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS))) {
-            getPreferences(MODE_PRIVATE).edit().putBoolean("notificationAsked", true).apply()
+            NotificationAsk.markAsked(this)
             notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         } else try {
             startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -79,22 +71,8 @@ class MainActivity : AppCompatActivity() {
             // Once-per-install upgrade check, only while onboarding_seen is false.
             dev.ahmed.savlino.jobs.JobStore(this).use { it.all().isNotEmpty() }
         }
-        val downloads = (application as NezzelApplication).downloads
         val media = (application as NezzelApplication).media
-        val clipboard = dev.ahmed.savlino.storage.ClipboardPreferences(preferences)
-        links = ViewModelProvider(this, object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-                @Suppress("UNCHECKED_CAST")
-                return LinkViewModel(extras.createSavedStateHandle(),
-                    engine = downloads.engine, downloads = downloads, coordinatorScope = (application as NezzelApplication).scope,
-                    initialPreset = preferences.lastPreset, rememberPreset = { preferences.lastPreset = it },
-                    initialHeight = preferences.lastHeight, rememberHeight = { preferences.lastHeight = it },
-                    rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
-                    images = media.inspect, imageSaver = media.saver, earlyPreview = media::earlyPreview,
-                    resolveShortLink = media::resolveShortLink,
-                    usage = (application as NezzelApplication).usage) as T
-            }
-        })[LinkViewModel::class.java]
+        links = linkViewModel(this, preferences)
         val appUpdates = (application as NezzelApplication).appUpdates
         if (savedInstanceState == null && openUpdate && appUpdates.available) links.navigate("AppUpdate")
         links.notificationPrompt = ::beforeConfirmedDownload

@@ -57,6 +57,11 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <!-- Links from other apps open as a sheet over that app: own task, never in recents, no overlay permission. -->
+        <activity android:name=".ShareSheetActivity" android:exported="true" android:excludeFromRecents="true"
+            android:taskAffinity="dev.ahmed.savlino.share" android:launchMode="singleTask"
+            android:theme="@style/Theme.Nezzel.Sheet" android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -70,7 +75,7 @@
         </activity>
         <activity-alias android:name=".PasteEntry" android:exported="false" android:targetActivity=".MainActivity" />
         <!-- Android 10/11 must never offer Nezzel as a handler for tapped links. -->
-        <activity-alias android:name=".OpenWithLinks" android:targetActivity=".MainActivity"
+        <activity-alias android:name=".OpenWithLinks" android:targetActivity=".ShareSheetActivity"
             android:enabled="@bool/open_with_links" android:exported="true" android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

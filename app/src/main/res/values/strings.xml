@@ -486,4 +486,10 @@
         <item quantity="one">%1$s new</item>
         <item quantity="other">%1$s new</item>
     </plurals>
+    <string name="share_sheet_open_app">Open in Nezzel</string>
+    <string name="share_sheet_started">Download started</string>
+    <string name="share_sheet_pane">Nezzel, download options</string>
+    <string name="share_notify_line">Allow notifications to follow progress. Downloads work without them.</string>
+    <string name="download_again">Download again</string>
+    <string name="download_again_size">Download again · %1$s</string>
 </resources>

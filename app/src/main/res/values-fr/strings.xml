@@ -496,4 +496,10 @@
         <item quantity="many">%1$s nouveaux</item>
         <item quantity="other">%1$s nouveaux</item>
     </plurals>
+    <string name="share_sheet_open_app">Ouvrir dans Nezzel</string>
+    <string name="share_sheet_started">Téléchargement lancé</string>
+    <string name="share_sheet_pane">Nezzel, options de téléchargement</string>
+    <string name="share_notify_line">Autorisez les notifications pour suivre la progression. Le téléchargement marche sans.</string>
+    <string name="download_again">Télécharger à nouveau</string>
+    <string name="download_again_size">Télécharger à nouveau · %1$s</string>
 </resources>
