@@ -47,6 +47,10 @@ class JobRecord internal constructor(
 /** A saved file that still holds a Copy link or artwork; [published] is the URI the job wrote. */
 class LinkedFile(val jobId: String, val published: Uri, val updatedAt: Long)
 
+/** A finished job's kept link and what it saved: for "Look for better quality" and Try again. No toString (link). */
+class Reopen internal constructor(val link: String, val format: Format, val preset: Preset?, val engineVersion: String,
+    val filename: String)
+
 /** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
@@ -419,6 +423,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             LinkCipher.Opened.Unavailable -> null
             LinkCipher.Opened.Gone -> { dropShareLink(jobId); null }
         }
+    }
+
+    /** A COMPLETED row whose sealed link still opens, with its confirmed format; null otherwise. Never throws on a bad blob. */
+    fun reopen(jobId: String): Reopen? {
+        val row = get(jobId)?.takeIf { it.stage == JobStage.COMPLETED } ?: return null
+        val link = shareLink(jobId) ?: return null
+        return Reopen(link, row.format, row.preset, row.engineVersion, row.filename)
     }
 
     @Synchronized fun dropShareLink(jobId: String) {

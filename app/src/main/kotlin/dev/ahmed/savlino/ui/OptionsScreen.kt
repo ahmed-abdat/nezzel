@@ -97,6 +97,7 @@ internal fun OptionsSheetContent(links: LinkViewModel, language: String, onDismi
                         })
                 }
                 is OptionsState.Ready -> {
+                    links.betterThan?.let { BetterQualityNote(it, language) }
                     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
                         val rows = links.presetRows
                         val outside = links.selectedFormat?.takeIf { selected -> rows.none { it.format.id == selected.id } }
@@ -386,3 +387,11 @@ private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> 
 
 private val RETRYABLE_INSPECTION = setOf(DownloadError.EngineUnavailable, DownloadError.Offline, DownloadError.Network, DownloadError.FormatExpired,
     DownloadError.Failed, DownloadError.ExecutionRestricted)
+
+/** "You saved 480p. Higher qualities are listed first.": a plain line over the options, no box. */
+@Composable
+internal fun BetterQualityNote(savedTier: Int, language: String) {
+    Text(stringResource(R.string.better_quality_note, NezzelFormat.isolate(stringResource(R.string.video_quality, NezzelFormat.count(savedTier, language)))),
+        Modifier.fillMaxWidth().testTag("better_quality_note").semantics { liveRegion = LiveRegionMode.Polite },
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}

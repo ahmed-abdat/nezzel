@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import dev.ahmed.savlino.jobs.JobStore
+import dev.ahmed.savlino.jobs.Reopen
 import dev.ahmed.savlino.storage.SaveDestinations
 import java.io.FileNotFoundException
 import kotlinx.coroutines.CancellationException
@@ -27,6 +28,13 @@ class ShareLinks internal constructor(
     /** The reviewed link of [item], or null. Never throws: a failure only hides Copy link. */
     suspend fun link(item: SavedMedia): String? = withContext(io) {
         try { store.linkedFiles().firstOrNull { matches(it.published, item) }?.let { store.shareLink(it.jobId) } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { null }
+    }
+
+    /** The job behind [item] when its link is still kept (same lookup as [link]), or null. Never throws. */
+    suspend fun reopen(item: SavedMedia): Pair<String, Reopen>? = withContext(io) {
+        try { store.linkedFiles().firstOrNull { matches(it.published, item) }?.let { file -> store.reopen(file.jobId)?.let { file.jobId to it } } }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null }
     }

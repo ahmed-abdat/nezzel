@@ -80,6 +80,20 @@ fun NezzelApp(
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) snackbar.showSnackbar(context.getString(R.string.link_copied))
         } } }
     }
+    val warnings by (links.downloads?.warnings ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<dev.ahmed.savlino.jobs.CheckWarning>()) }).collectAsState()
+    val tryAgain: (String) -> Unit = { id ->
+        scope.launch { if (links.downloads?.tryAgain(id) == null) snackbar.showSnackbar(context.getString(R.string.download_retry_hint)) }
+    }
+    // Look for better quality: a video saved below BEST with a kept link; the tap goes Home and reads the link again.
+    val betterQuality = remember(shareLinks) {
+        shareLinks?.let { share -> dev.ahmed.savlino.downloads.BetterQualityLink(
+            eligible = { item -> share.reopen(item)?.second?.let { it.format.hasVideo && it.preset != dev.ahmed.savlino.domain.Preset.BEST } == true },
+            open = { item -> scope.launch {
+                val reopen = share.reopen(item)?.second ?: return@launch
+                links.navigate("Home")
+                links.lookForBetter(reopen.link, reopen.format)
+            } }) }
+    }
     // Same scope: a clear started in Settings outlives the screen.
     val clearLinks = remember(links.downloads) {
         links.downloads?.let { downloads -> { scope.launch {
@@ -144,6 +158,10 @@ fun NezzelApp(
                 snackbar.currentSnackbarData?.dismiss()
                 snackbar.showSnackbar(context.resources.getQuantityString(R.plurals.multiple_links, count, formattedCount), duration = SnackbarDuration.Short)
             } }
+            launch { links.betterNoneEvents.collect {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(context.getString(R.string.better_quality_none))
+            } }
             launch { links.downloads?.cancelled?.collect {
                 snackbar.showSnackbar(context.getString(R.string.download_cancelled))
             } }
@@ -171,8 +189,21 @@ fun NezzelApp(
             links.downloads?.completed?.collect { job ->
                 launch {
                     snackbar.currentSnackbarData?.dismiss()
+                    val problem = job.check as? dev.ahmed.savlino.domain.ResultCheck.Problem
+                    if (problem != null) {
+                        // A problem stays until handled: Try again (kept link) or dismiss.
+                        val downloads = links.downloads
+                        val canRetry = downloads?.warnings?.value?.any { it.jobId == job.jobId && it.canRetry } == true
+                        val action = snackbar.showSnackbar(context.getString(DownloadNotifications.checkProblem(problem)),
+                            if (canRetry) context.getString(R.string.try_again) else null, withDismissAction = true,
+                            duration = SnackbarDuration.Indefinite)
+                        if (action == SnackbarResult.ActionPerformed && downloads?.tryAgain(job.jobId) == null)
+                            snackbar.showSnackbar(context.getString(R.string.download_retry_hint))
+                        return@launch
+                    }
+                    val saved = context.getString(R.string.saved_snackbar, NezzelFormat.isolate(destinations.publishedFolderName(job.publishedUri)))
                     val action = snackbar.showSnackbar(
-                        context.getString(R.string.saved_snackbar, NezzelFormat.isolate(destinations.publishedFolderName(job.publishedUri))),
+                        DownloadNotifications.checkLine(job.check)?.let { saved + "\n" + context.getString(it) } ?: saved,
                         context.getString(R.string.open_file), duration = SnackbarDuration.Long)
                     if(action == SnackbarResult.ActionPerformed) {
                         try { context.startActivity(DownloadNotifications.openIntent(job)) }
@@ -218,7 +249,7 @@ fun NezzelApp(
                         scaleIn(tween(Motion.TAB - 30, 70, Motion.EaseOut), initialScale = .98f)) togetherWith
                         fadeOut(tween(70, easing = Motion.EaseOut))
                 }, label = "destination") { route ->
-                    CompositionLocalProvider(LocalLinkCopy provides linkCopy) { when (route) {
+                    CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(statusLibrary, language)
@@ -228,7 +259,8 @@ fun NezzelApp(
                             library.showFiles, library.delete, { links.navigate("Home"); onPaste() },
                             retry, pause, resume, libraryLoad = library.load, onLibraryRetry = library.onRetry,
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
-                            canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy)
+                            canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy,
+                            warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) })
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
                             onRemove = removeFailed, onRetry = retry,
                             onCancel = cancel, onPause = pause, onResume = resume)

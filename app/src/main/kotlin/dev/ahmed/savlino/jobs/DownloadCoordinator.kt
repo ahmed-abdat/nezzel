@@ -37,6 +37,8 @@ class DownloadCoordinator(
     parallelDownloads: StateFlow<Int> = MutableStateFlow(2),
     thermalStatus: StateFlow<Int> = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE),
     private val usage: UsageEvents = UsageEvents.None,
+    private val probe: dev.ahmed.savlino.media.MediaProbe = dev.ahmed.savlino.media.AndroidMediaProbe(context),
+    private val checkTimeoutMs: Long = CHECK_TIMEOUT_MS,
 ) {
     val maintenance = EngineMaintenance(context, engine, {
         active.isNotEmpty() || store.all().any { !it.stage.terminal }
@@ -66,6 +68,9 @@ class DownloadCoordinator(
     val completed: kotlinx.coroutines.flow.SharedFlow<DownloadProgress> = finishedEvents
     private val cancellationEvents = kotlinx.coroutines.flow.MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 100)
     val cancelled: kotlinx.coroutines.flow.SharedFlow<DownloadProgress> = cancellationEvents
+    private val mutableWarnings = MutableStateFlow<List<CheckWarning>>(emptyList())
+    /** "Needs a look": saved files whose check found a problem, newest first. */
+    val warnings: StateFlow<List<CheckWarning>> = mutableWarnings.asStateFlow()
     private val mutableError = MutableStateFlow<DownloadError?>(null)
     val error: StateFlow<DownloadError?> = mutableError.asStateFlow()
 
@@ -534,8 +539,9 @@ class DownloadCoordinator(
                         store.get(id)?.let { row ->
                             val result = fromRecord(row)
                             val savedBytes = outputBytes
-                            val final = if (row.stage == JobStage.COMPLETED && savedBytes != null)
+                            val sized = if (row.stage == JobStage.COMPLETED && savedBytes != null)
                                 result.copy(bytes = savedBytes, total = Size.Exact(savedBytes)) else result
+                            val final = if (row.stage == JobStage.COMPLETED) sized.copy(check = checkSaved(row, savedBytes)) else sized
                             update(final)
                             // The worker's event consumer is already cancelled on a system stop.
                             // Deliver the result directly while this context is NonCancellable.
@@ -731,6 +737,45 @@ class DownloadCoordinator(
         engine.clearRecentLinks()
         store.clearShareLinks()
     }
+    /**
+     * Opens the file just published and judges it (R2). Never throws, never touches the row: the job is COMPLETED
+     * whatever this says. The platform readers cannot be interrupted, so they run on their own thread and a late
+     * answer is ignored after [checkTimeoutMs]. Unchecked is returned as null (claims nothing).
+     */
+    private suspend fun checkSaved(row: JobRecord, stagedBytes: Long?): ResultCheck? {
+        val uri = row.pendingUri ?: return null
+        val answer = CompletableDeferred<ProbeFacts?>()
+        try {
+            Thread({ answer.complete(try { probe.probe(uri) } catch (_: Throwable) { null }) }, "nezzel-check").apply { isDaemon = true }.start()
+        } catch (_: Throwable) { return null }
+        val facts = withTimeoutOrNull(checkTimeoutMs) { answer.await() }
+        val verdict = ResultJudge.judge(row.format, stagedBytes, facts)
+        if (verdict is ResultCheck.Problem) {
+            val canRetry = try { store.reopen(row.jobId) != null } catch (_: Exception) { false }
+            val warning = CheckWarning(row.jobId, row.displayName ?: row.filename, uri, verdict, canRetry)
+            mutableWarnings.update { old -> listOf(warning) + old.filterNot { it.jobId == row.jobId } }
+        }
+        return verdict.takeUnless { it == ResultCheck.Unchecked }
+    }
+
+    fun dismissWarning(jobId: String) { mutableWarnings.update { old -> old.filterNot { it.jobId == jobId } } }
+
+    /**
+     * Try again (R5): an explicit tap on a format the person confirmed before, so a NEW job from the kept link.
+     * The old file and its row stay as they are. Returns the new job id, or null when the link is gone.
+     */
+    suspend fun tryAgain(jobId: String): String? = withContext(Dispatchers.IO) {
+        val reopen = try { store.reopen(jobId) } catch (_: Exception) { null } ?: return@withContext null
+        val link = LinkInput.parse(reopen.link) ?: return@withContext null
+        val source = LinkRevision(link, 0)
+        val command = (DownloadCommand.confirm(java.util.UUID.randomUUID().toString(),
+            Inspection(source, reopen.engineVersion, listOf(reopen.format)), source, reopen.format.id,
+            reopen.filename.substringBeforeLast('.')) as? ConfirmResult.Confirmed)?.command ?: return@withContext null
+        if (!enqueue(command, reopen.preset)) return@withContext null
+        dismissWarning(jobId)
+        command.jobId
+    }
+
     fun dismiss(id: String) { mutableProgress.update { it.filterNot { event -> event.jobId == id && event.terminal && !event.awaitingSchedule } } }
     private fun fromRecord(row: JobRecord) = DownloadProgress(row.jobId, row.displayName ?: row.filename,
         when (row.stage) {
@@ -761,3 +806,6 @@ internal fun mimeTypeFor(container: String) = when (container) {
     "mov" -> "video/quicktime"
     else -> "video/mp4"
 }
+
+/** Result check watchdog: past this the saved file is simply "Saved". */
+internal const val CHECK_TIMEOUT_MS = 4000L

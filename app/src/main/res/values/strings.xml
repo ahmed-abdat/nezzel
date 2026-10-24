@@ -486,4 +486,20 @@
         <item quantity="one">%1$s new</item>
         <item quantity="other">%1$s new</item>
     </plurals>
+    <!-- Result check (R3/R4) -->
+    <string name="check_saved_video">Saved · has video and sound</string>
+    <string name="check_saved_audio">Saved · has sound</string>
+    <string name="check_saved_silent">Saved · this video has no sound</string>
+    <string name="check_line_video">Has video and sound</string>
+    <string name="check_line_audio">Has sound</string>
+    <string name="check_line_silent">This video has no sound</string>
+    <string name="check_problem_no_sound">Saved, but it has no sound</string>
+    <string name="check_problem_no_picture">Saved, but the picture is missing</string>
+    <string name="check_problem_damaged">Saved, but the file looks damaged</string>
+    <string name="check_needs_look">Needs a look</string>
+    <!-- Look for better quality (B2/B3) -->
+    <string name="better_quality_action">Look for better quality</string>
+    <string name="better_quality_support">Checks this link again</string>
+    <string name="better_quality_note">You saved %1$s. Higher qualities are listed first.</string>
+    <string name="better_quality_none">Nothing better found for this link</string>
 </resources>

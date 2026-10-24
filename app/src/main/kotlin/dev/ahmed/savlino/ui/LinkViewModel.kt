@@ -248,6 +248,12 @@ class LinkViewModel(
     private val multipleLinkChannel = Channel<Int>(Channel.CONFLATED)
     /** Intake notices carry no link data and wait for the foreground UI. */
     val multipleLinkEvents: Flow<Int> = multipleLinkChannel.receiveAsFlow()
+    /** "Look for better quality": the saved picture tier these options answer (note + preselect); null otherwise. */
+    var betterThan by mutableStateOf<Int?>(null); private set
+    private var betterFrom: Format? = null
+    private val betterNoneChannel = Channel<Unit>(Channel.CONFLATED)
+    /** The re-read returned nothing above the saved tier; the options stay open. */
+    val betterNoneEvents: Flow<Unit> = betterNoneChannel.receiveAsFlow()
     // Never put the remainder (including pending replacement shares) in SavedStateHandle.
     private var linkQueue by mutableStateOf<LinkQueue?>(null)
     private var nextLinkReady by mutableStateOf(false)
@@ -503,7 +509,23 @@ class LinkViewModel(
     private fun hasOptionsFor(link: ValidatedLink?): Boolean = link != null &&
         (optionsState is OptionsState.Checking || optionsState is OptionsState.Ready || optionsState is OptionsState.ImageReady) &&
         currentSource()?.link?.normalizedUrl == link.normalizedUrl
+    /**
+     * A saved file's sheet: read its kept link again, explicitly (allowed with automatic options off, like View options).
+     * Only selection and a note change; Download still needs its own tap.
+     */
+    fun lookForBetter(link: String, saved: Format) {
+        val parsed = LinkInput.parse(link) ?: return
+        dismissShare()
+        suggestion = null
+        edit(parsed.rawUrl)
+        setTyped(false)
+        betterFrom = saved
+        betterThan = VideoQuality.of(saved.width, saved.height)
+        checkLink()
+    }
+    private fun clearBetter() { betterFrom = null; betterThan = null }
     private fun updateText(value: String, persist: Boolean = true) {
+        clearBetter()
         automaticClipboardDraft = false
         setTyped(false)
         revision++
@@ -829,6 +851,14 @@ class LinkViewModel(
             selectedId = only.id
             selectedPreset = options.firstOrNull { it.second.id == only.id }?.first
         }
+        betterFrom?.let { from ->
+            // The next tier up from the saved file, as the main list shows it; nothing above → say so, keep the options.
+            val above = BetterQuality.above(formatOptions, from)
+            val tier = above.lastOrNull()?.let { VideoQuality.of(it.width, it.height) }
+            val next = primaryFormats.firstOrNull { it in above && VideoQuality.of(it.width, it.height) == tier } ?: above.lastOrNull()
+            if (next == null) betterNoneChannel.trySend(Unit)
+            else { selectedId = next.id; selectedPreset = options.firstOrNull { it.second.id == next.id }?.first }
+        }
     }
     private fun currentSource() = LinkInput.parse(text)?.let { LinkRevision(it, revision) }
 
@@ -868,6 +898,7 @@ class LinkViewModel(
     fun showMoreFormats() { if (optionsState is OptionsState.Ready && !submitted) moreFormats = true }
     fun hideMoreFormats() { moreFormats = false }
     fun dismissOptions() {
+        clearBetter()
         if (optionsState != OptionsState.Hidden && !hasPendingShare && linkQueue != null) nextLinkReady = true
         LinkInput.parse(text)?.let { link ->
             gate.dismiss(link)

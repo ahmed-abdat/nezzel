@@ -550,4 +550,20 @@
         <item quantity="many">%1$s حالة جديدة</item>
         <item quantity="other">%1$s حالة جديدة</item>
     </plurals>
+    <!-- Result check (R3/R4) -->
+    <string name="check_saved_video">تم الحفظ · الصورة والصوت موجودان</string>
+    <string name="check_saved_audio">تم الحفظ · الصوت موجود</string>
+    <string name="check_saved_silent">تم الحفظ · هذا الفيديو بلا صوت</string>
+    <string name="check_line_video">الصورة والصوت موجودان</string>
+    <string name="check_line_audio">الصوت موجود</string>
+    <string name="check_line_silent">هذا الفيديو بلا صوت</string>
+    <string name="check_problem_no_sound">تم الحفظ، لكن بلا صوت</string>
+    <string name="check_problem_no_picture">تم الحفظ، لكن الصورة غير موجودة</string>
+    <string name="check_problem_damaged">تم الحفظ، لكن الملف يبدو تالفًا</string>
+    <string name="check_needs_look">يحتاج نظرة</string>
+    <!-- Look for better quality (B2/B3) -->
+    <string name="better_quality_action">ابحث عن جودة أفضل</string>
+    <string name="better_quality_support">يفحص الرابط مرة أخرى</string>
+    <string name="better_quality_note">حفظتَ بجودة %1$s. الجودات الأعلى في الأعلى.</string>
+    <string name="better_quality_none">لم نجد جودة أفضل لهذا الرابط</string>
 </resources>
