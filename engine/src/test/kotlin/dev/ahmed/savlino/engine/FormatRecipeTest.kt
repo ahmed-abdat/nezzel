@@ -20,13 +20,15 @@ class FormatRecipeTest {
         override val initialization = EngineInitialization()
         val transfers = mutableListOf<List<String>>()
         var action: (List<String>, (String) -> Unit) -> Unit = { args, _ -> output(args) }
+        @Volatile var read: ((String) -> Unit) -> String = { page }
+        val destroyed = java.util.concurrent.CountDownLatch(1)
         override fun initialize() = Unit
         override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
             if ("--version" in args) return "version"
-            if ("--dump-json" in args) return page
+            if ("--dump-json" in args) return read(line)
             transfers += args; action(args, line); return ""
         }
-        override fun destroy(processId: String) = true
+        override fun destroy(processId: String): Boolean { destroyed.countDown(); return true }
         override fun update() = Unit
         companion object {
             fun output(args: List<String>) {
@@ -38,15 +40,17 @@ class FormatRecipeTest {
     }
 
     /** Inspect [inspected], confirm "18", let its info JSON pass the TTL, then download against [fresh]. */
-    private fun staleDownload(inspected: String, fresh: String): Pair<TransferResult, Runtime> = runBlocking {
+    private fun staleDownload(inspected: String, fresh: String, limits: EngineLimits = EngineLimits(),
+        read: ((Runtime) -> ((String) -> Unit) -> String)? = null): Pair<TransferResult, Runtime> = runBlocking {
         var now = 10_000_000L
         val runtime = Runtime(inspected)
-        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()) { now })
+        val engine = YoutubedlEngine(runtime, limits, infoCache = YtdlpInfoCache(temp.newFolder()) { now })
         val inspection = assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection
         val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, "18", "t")).command
         engine.prepareDownload(command)
         now += YtdlpInfoCache.TTL_MS
         runtime.page = fresh
+        read?.let { runtime.read = it(runtime) }
         engine.download(command, temp.newFolder()) {} to runtime
     }
     private fun loaded(args: List<String>) = File(args[args.indexOf("--load-info-json") + 1]).readText()
@@ -63,6 +67,30 @@ class FormatRecipeTest {
     @Test fun missingRowFailsAsFormatExpiredWithoutATransfer() {
         val (result, runtime) = staleDownload(page(row()), page(row("22", height = 720)))
         assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(result).error)
+        assertTrue(runtime.transfers.isEmpty())
+    }
+
+    @Test fun droppedConnectionDuringThePageReadWaitsForTheNetwork() {
+        val reads = listOf<(Runtime) -> ((String) -> Unit) -> String>(
+            { _ -> { line -> line("ERROR: connection reset"); "" } },
+            { _ -> { line -> line("ERROR: [youtube] clip: Connection reset by peer"); error("ERROR: Connection reset by peer") } },
+            { _ -> { _ -> error("ERROR: [youtube] clip: Connection reset by peer") } })
+        for ((index, read) in reads.withIndex()) {
+            val (result, runtime) = staleDownload(page(row()), page(row()), read = read)
+            val failure = assertIs<TransferResult.Failure>(result, "read $index")
+            assertEquals(DownloadError.Network, failure.error, "read $index")
+            assertEquals(DownloadFailureCause.TRANSPORT, failure.cause, "read $index")
+            assertTrue(runtime.transfers.isEmpty())
+        }
+    }
+
+    @Test fun pageReadTimeoutWaitsForTheNetwork() {
+        val (result, runtime) = staleDownload(page(row()), page(row()), EngineLimits(inspectMs = 300)) { runtime ->
+            { _ -> check(runtime.destroyed.await(5, java.util.concurrent.TimeUnit.SECONDS)); error("process destroyed") }
+        }
+        val failure = assertIs<TransferResult.Failure>(result)
+        assertEquals(DownloadError.Network, failure.error)
+        assertEquals(DownloadFailureCause.TRANSPORT, failure.cause)
         assertTrue(runtime.transfers.isEmpty())
     }
 

@@ -309,11 +309,23 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.byteWatchdog = false
             current.expireIn(limits.inspectMs)
         }
-        val json = execute(current, YtdlpCommand.inspect(command.source))
+        val diagnostics = YtdlpDiagnostics()
+        val json = try { execute(current, YtdlpCommand.inspect(command.source), diagnostics::accept) }
+        catch (error: Exception) {
+            // A timeout stays the operation's TRANSPORT wait; any other failure keeps its read's diagnostics.
+            if (error is CancellationException || error is YtdlpExecutionFailure || current.cancelled.get()) throw error
+            throw diagnostics.failure(error)
+        }
         synchronized(current) { current.deadline = NO_DEADLINE }
         checkCancelled(current)
-        if (!offers(json, command)) throw YtdlpExecutionFailure(DownloadError.FormatExpired, reextractionBlocked = true)
+        // Only a page that parses can lack the row. A blank or broken read fails as the read did, so a
+        // dropped connection waits for the network instead of failing the job as FormatExpired.
+        val streams = try { YtdlpMetadataMapper.streams(json) } catch (_: Exception) { null }
+            ?: throw diagnostics.failure()
+        if (!FormatRecipe.same(command.format, streams))
+            throw YtdlpExecutionFailure(DownloadError.FormatExpired, reextractionBlocked = true)
         val trimmed = try { cache.trim(json, command) } catch (_: Exception) { null }
+        // A failed cache write returns null: the URL path is kept, since failing the download would be worse.
         return keep(current, cache, command.jobId, trimmed ?: json, npe = false, signedUntil(json))
     }
 
