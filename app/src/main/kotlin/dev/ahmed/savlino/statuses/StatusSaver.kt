@@ -184,14 +184,14 @@ class StatusSaver(context: Context,
         it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.let { duration -> duration > 0 } == true
     }
 
-    private companion object {
+    companion object {
         const val RELATIVE_PATH = "Download/Nezzel/Statuses/"
         // Status files are almost always these; the platform table is only the fallback.
-        val KNOWN_EXTENSIONS = mapOf("image/jpeg" to "jpg", "image/jpg" to "jpg", "image/png" to "png",
+        private val KNOWN_EXTENSIONS = mapOf("image/jpeg" to "jpg", "image/jpg" to "jpg", "image/png" to "png",
             "image/webp" to "webp", "image/gif" to "gif", "video/mp4" to "mp4", "video/3gpp" to "3gp", "video/webm" to "webm")
         // Enforced only for providers with unknown size; a safety budget, never a displayed estimate.
         const val UNKNOWN_SIZE_BOUND = 256L * 1024 * 1024
-        val nextId = AtomicLong(System.currentTimeMillis())
-        val lock = Mutex()
+        private val nextId = AtomicLong(System.currentTimeMillis())
+        private val lock = Mutex()
     }
 }
