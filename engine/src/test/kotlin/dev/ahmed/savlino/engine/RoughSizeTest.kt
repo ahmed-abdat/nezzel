@@ -20,10 +20,12 @@ class RoughSizeTest {
             video("\"tbr\":8000", "mp3"))) {
             val found = map(rows)
             val low = found.formats.single { it.conversion == AudioConversion.MP3_128 }
+            val mid = found.formats.single { it.conversion == AudioConversion.MP3_192 }
             val high = found.formats.single { it.conversion == AudioConversion.MP3_320 }
             assertEquals(168000L, found.roughSizeBytes[low.id])
+            assertEquals(252000L, found.roughSizeBytes[mid.id])
             assertEquals(420000L, found.roughSizeBytes[high.id])
-            assertEquals(Size.Unknown, low.size); assertEquals(Size.Unknown, high.size)
+            assertEquals(Size.Unknown, low.size); assertEquals(Size.Unknown, mid.size); assertEquals(Size.Unknown, high.size)
         }
     }
     @Test fun convertedSizeWithoutValidDurationStaysUnknownWhileNativeSizeSurvives() {
@@ -31,7 +33,7 @@ class RoughSizeTest {
             val found = map(audio("\"filesize\":123456", "mp3", "mp3"), "\"duration\":$duration")
             assertEquals(Size.Exact(123456), found.formats.single { it.id == "a1" }.size)
             val converted = found.formats.filter { it.conversion != null }
-            assertEquals(2, converted.size)
+            assertEquals(3, converted.size)
             for (row in converted) {
                 assertEquals(Size.Unknown, row.size)
                 assertFalse(found.roughSizeBytes.containsKey(row.id))

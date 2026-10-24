@@ -7,8 +7,12 @@ import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import kotlin.test.*
 
+// Square album art: crop to min(width,height); the comma is escaped for ffmpeg's filter parser (one backslash in the value).
+internal const val squareCover = "ThumbnailsConvertor+ffmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 1 -vf \"crop=min(iw\\,ih):min(iw\\,ih)\""
+
 internal val audioTagsWithoutArtist = listOf(
     "--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg",
+    "--postprocessor-args", squareCover,
     "--parse-metadata", ":(?P<meta_comment>)", "--parse-metadata", ":(?P<meta_purl>)",
     "--parse-metadata", ":(?P<meta_description>)", "--parse-metadata", ":(?P<meta_synopsis>)",
     "--parse-metadata", ":(?P<meta_genre>)", "--parse-metadata", ":(?P<meta_date>)",
@@ -25,6 +29,7 @@ class YtdlpAudioTagsTest {
         Format("140", "m4a", false, true),
         Format("extracted", "m4a", false, true, sourceFormatId = "18"),
         Format("mp3-128", "mp3", false, true, sourceFormatId = "140", conversion = AudioConversion.MP3_128),
+        Format("mp3-192", "mp3", false, true, sourceFormatId = "140", conversion = AudioConversion.MP3_192),
         Format("mp3-320", "mp3", false, true, sourceFormatId = "140", conversion = AudioConversion.MP3_320),
         Format("native-mp3", "mp3", false, true))
 
@@ -35,6 +40,9 @@ class YtdlpAudioTagsTest {
             val args = YtdlpCommand.download(command(format), dir, info)
             assertEquals(audioTagsWithoutArtist, args.subList(args.indexOf("--embed-metadata"), args.indexOf("--load-info-json")))
             assertEquals(format.sourceFormatId, args[args.indexOf("-f") + 1])
+            assertEquals(squareCover, args[args.indexOf("--convert-thumbnails") + 3])
+            assertEquals("""ThumbnailsConvertor+ffmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 1 -vf "crop=min(iw\,ih):min(iw\,ih)"""", YtdlpCommand.SQUARE_COVER)
+            assertEquals(YtdlpCommand.SQUARE_COVER, squareCover)
             assertEquals(File(dir, "output.%(ext)s").path, args[args.indexOf("-o") + 1])
             assertFalse(args.any { source.link.rawUrl in it })
             assertFalse(args.any { "عنوان" in it || "Channel" in it })
