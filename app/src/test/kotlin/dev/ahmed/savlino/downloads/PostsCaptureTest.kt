@@ -81,7 +81,9 @@ class PostsCaptureTest {
         AppPreferences(RuntimeEnvironment.getApplication()).savedSort = SavedSort.NEWEST
         shoot("library-sort", steps = { a ->
             val label = a.getString(R.string.saved_sort_accessibility, a.getString(R.string.saved_sort_newest))
-            val button = semanticsNodes(a).single { label in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
+            var button = semanticsNodes(a).single { label in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
+            // The label sits on the icon; the click belongs to its button.
+            while (button.config.getOrNull(SemanticsActions.OnClick) == null) button = button.parent!!
             check(button.config[SemanticsActions.OnClick].action?.invoke() == true)
             idle(); semanticsNodes(a)
         }) { lang ->
