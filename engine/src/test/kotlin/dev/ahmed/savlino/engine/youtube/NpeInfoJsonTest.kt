@@ -112,6 +112,15 @@ class NpeInfoJsonTest {
         assertNull(NpeInfoJson.build(NpeFixtures.info().apply { setContentAvailability(ContentAvailability.UPCOMING) }))
     }
 
+    // Made-for-kids shape seen live: StreamInfo holds one muxed 360p row and no adaptive or audio rows.
+    @Test fun muxedOnlyLowQualityInfoIsAMissWhileAdaptiveInfoStillUsesNpe() {
+        assertNull(NpeInfoJson.build(NpeFixtures.info(videos = listOf(NpeFixtures.video(18, 360, only = false)),
+            audios = emptyList())))
+        assertNull(NpeInfoJson.build(NpeFixtures.info(videos = listOf(NpeFixtures.video(18, 360, only = false)))))
+        assertNotNull(NpeInfoJson.build(NpeFixtures.info(videos = listOf(NpeFixtures.video(18, 360, only = false),
+            NpeFixtures.video(137, 1080)))))
+    }
+
     @Test fun noProgressiveVideoOnlyReturnsNullEvenWithMuxedVideo() {
         assertNull(NpeInfoJson.build(NpeFixtures.info(videos = listOf(NpeFixtures.video(18, only = false)))))
         assertNull(NpeInfoJson.build(NpeFixtures.info(videos = listOf(NpeFixtures.video(method = DeliveryMethod.DASH)))))
