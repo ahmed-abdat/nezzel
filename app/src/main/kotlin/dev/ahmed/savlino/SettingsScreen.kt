@@ -19,6 +19,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.downloads.ScreenHeader
+import dev.ahmed.savlino.downloads.OldDownloadsOffer
+import dev.ahmed.savlino.downloads.rememberOldDownloadsOffer
 import dev.ahmed.savlino.jobs.EngineMaintenanceState
 import dev.ahmed.savlino.jobs.EngineUpdateStatus
 import dev.ahmed.savlino.jobs.NezzelApplication
@@ -52,6 +54,8 @@ internal fun SettingsScreen(
     onClearLinks: (() -> Unit)? = null,
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
+    val advancedSnackbar = remember { SnackbarHostState() }
+    val oldDownloads = rememberOldDownloadsOffer(advancedSnackbar)
     val app = LocalContext.current.applicationContext as? NezzelApplication
     var helpImprove by remember(app) { mutableStateOf(app?.preferences?.helpImprove ?: true) }
     BackHandler(advanced) { advanced = false }
@@ -63,7 +67,8 @@ internal fun SettingsScreen(
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
             links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks,
             app?.preferences?.parallelDownloadsFlow?.collectAsState()?.value, { app?.preferences?.chooseParallelDownloads(it) },
-            language, helpImprove.takeIf { app != null }, { on -> helpImprove = on; app?.chooseHelpImprove(on) }) { advanced = false }
+            language, helpImprove.takeIf { app != null }, { on -> helpImprove = on; app?.chooseHelpImprove(on) },
+            oldDownloads, advancedSnackbar) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
             onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
     }
@@ -155,13 +160,14 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
     automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
     confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, onClearLinks: (() -> Unit)? = null,
     parallel: Int? = null, onParallel: (Int) -> Unit = {}, language: String = "en",
-    helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {}, back: () -> Unit) {
+    helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {},
+    oldDownloads: OldDownloadsOffer? = null, snackbar: SnackbarHostState? = null, back: () -> Unit) {
     if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
         title = { Text(stringResource(R.string.engine_update_paused_title)) },
         text = { Text(stringResource(R.string.engine_update_paused_body)) },
         confirmButton = { TextButton(onClick = { onPausedUpdate(true) }) { Text(stringResource(R.string.engine_update_paused_confirm)) } },
         dismissButton = { TextButton(onClick = { onPausedUpdate(false) }) { Text(stringResource(R.string.cancel)) } })
-    Scaffold(topBar = {
+    Scaffold(snackbarHost = { snackbar?.let { SnackbarHost(it) } }, topBar = {
         TopAppBar(title = { Text(stringResource(R.string.settings_advanced)) }, navigationIcon = {
             IconButton(onClick = back, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
@@ -177,8 +183,12 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                         on, R.drawable.ic_ms_bolt, onAutomaticOptions)
                 }
             }
-            parallel?.let { count ->
-                SettingsGroup(stringResource(R.string.downloads)) { ParallelSetting(count, language, onParallel) }
+            val findOld = oldDownloads?.takeIf { it.canGrant }
+            if (parallel != null || findOld != null) SettingsGroup(stringResource(R.string.downloads)) {
+                parallel?.let { ParallelSetting(it, language, onParallel) }
+                // Gone once the folder is granted; back if the grant is removed.
+                findOld?.let { SettingsNavRow(stringResource(R.string.old_downloads_setting), R.drawable.ic_folder,
+                    body = stringResource(R.string.old_downloads_setting_body), onClick = it.show) }
             }
             PrivacySettings(onClearLinks, helpImprove, onHelpImprove)
             engine?.let { engine ->

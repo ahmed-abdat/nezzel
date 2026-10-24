@@ -64,6 +64,8 @@ open class NezzelApplication : Application(), Configuration.Provider {
     }
     override fun onCreate() {
         super.onCreate()
+        // Before anything writes settings: the first start of an install decides the old-downloads offer.
+        dev.ahmed.savlino.storage.OldDownloads.markFirstStart(this)
         // The heat guard is optional: a missing thermal service ("Listener failed to set") must not stop startup.
         runCatching {
             getSystemService(android.os.PowerManager::class.java)?.let { power ->

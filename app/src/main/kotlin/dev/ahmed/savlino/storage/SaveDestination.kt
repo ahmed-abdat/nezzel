@@ -23,9 +23,10 @@ sealed interface SaveDestination {
 class SaveDestinations(private val context: Context) {
     internal val prefs: SharedPreferences = context.getSharedPreferences("nezzel-destinations", Context.MODE_PRIVATE)
     private val resolver get() = context.contentResolver
-    private data class FileBounds(val size: Long?, val modified: Long?, val mime: String,
+    internal data class FileBounds(val size: Long?, val modified: Long?, val mime: String,
         val width: Int? = null, val height: Int? = null, val durationMillis: Long? = null)
-    private val boundsCache = LruCache<Uri, FileBounds>(512)
+    // Found old downloads share these probes, so the cache holds more than the receipts alone.
+    private val boundsCache = LruCache<Uri, FileBounds>(2048)
     private class FileSnapshot(val media: SavedMedia?)
     private val fileCache = LruCache<Uri, FileSnapshot>(512)
     val destination: SaveDestination get() = prefs.getString("tree", null)?.let { SaveDestination.Tree(Uri.parse(it)) }
@@ -71,8 +72,14 @@ class SaveDestinations(private val context: Context) {
             it.getString(0) ?: throw StorageException(StorageError.FolderUnavailable)
         } ?: throw StorageException(StorageError.FolderUnavailable)
     }
+    /** The save folder or a receipt still needs this tree's grant. */
+    internal fun holds(tree: Uri): Boolean = synchronized(lock) {
+        (destination as? SaveDestination.Tree)?.uri == tree || receipts().any { treeOf(it.first) == tree }
+    }
     private fun releaseIfUnused(uri: Uri) {
         if ((destination as? SaveDestination.Tree)?.uri == uri || receipts().any { treeOf(it.first) == uri }) return
+        // Old downloads may hold the same Download/Nezzel tree.
+        if (OldDownloads(context).holds(uri)) return
         try { resolver.releasePersistableUriPermission(uri, FLAGS) } catch (_: SecurityException) { /* Already revoked. */ }
     }
 
@@ -159,8 +166,12 @@ class SaveDestinations(private val context: Context) {
         fileCache.put(uri, FileSnapshot(media))
         return media
     }
-    private fun fileBounds(uri: Uri, size: Long?, modified: Long?, mime: String): FileBounds {
-        boundsCache.get(uri)?.takeIf { it.size == size && it.modified == modified && it.mime == mime }?.let { return it }
+    /** Cache only, no IO: found files fill in from earlier probes on the first emission. */
+    internal fun cachedBounds(uri: Uri, size: Long?, modified: Long?, mime: String): FileBounds? =
+        boundsCache.get(uri)?.takeIf { it.size == size && it.modified == modified && it.mime == mime }
+
+    internal fun fileBounds(uri: Uri, size: Long?, modified: Long?, mime: String): FileBounds {
+        cachedBounds(uri, size, modified, mime)?.let { return it }
         var bounds = FileBounds(size, modified, mime)
         try {
             if (mime.startsWith("image/")) {
