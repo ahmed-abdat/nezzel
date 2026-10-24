@@ -31,13 +31,12 @@ import dev.ahmed.savlino.ui.theme.Space
  * One failure layout for video and image sheets: an error tile in place of the preview skeleton (nothing
  * is loading any more), the truthful title/body for the failure type, then the next step. Try again only
  * when trying again can help; "Paste another link" whenever the link itself is the problem; [secondary] (an engine
- * update) and the optional report action sit beside Close.
+ * update) sits beside Close.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: String?, onRetry: (() -> Unit)?,
-    onPasteAnother: ((String?) -> Unit)?, onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null,
-    onReport: ReportAction? = null) {
+    onPasteAnother: ((String?) -> Unit)?, onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null) {
     val context = LocalContext.current
     Column(Modifier.testTag("failure_content"), verticalArrangement = Arrangement.spacedBy(Space.m)) {
         Row(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
@@ -88,14 +87,6 @@ internal fun FailureContent(@StringRes title: Int, @StringRes body: Int?, host: 
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             secondary?.invoke()
-            if (onReport != null) TextButton(onClick = onReport.onClick, enabled = !onReport.sent && !onReport.busy,
-                modifier = Modifier.heightIn(min = 48.dp)) {
-                // One report per failure: the button stays as a quiet "Sent" receipt.
-                if (onReport.sent) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                else Icon(painterResource(R.drawable.ic_ms_bug_report), contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(Space.xs))
-                Text(stringResource(if (onReport.sent) R.string.report_sent else R.string.report_link))
-            }
             TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nezzel_close)) }
         }
     }

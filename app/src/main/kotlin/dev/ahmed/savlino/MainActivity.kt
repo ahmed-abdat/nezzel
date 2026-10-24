@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
                     rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
                     images = media.inspect, imageSaver = media.saver, earlyPreview = media::earlyPreview,
                     resolveShortLink = media::resolveShortLink,
-                    sendReport = (application as NezzelApplication).reports::send) as T
+                    usage = (application as NezzelApplication).usage) as T
             }
         })[LinkViewModel::class.java]
         val appUpdates = (application as NezzelApplication).appUpdates

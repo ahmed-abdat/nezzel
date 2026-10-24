@@ -267,7 +267,7 @@ class ImageOptionsUiTest {
             assertTrue(labels.toString(), body in labels)
             for (shown in listOf(R.string.paste_another_link, R.string.nezzel_close))
                 assertTrue(labels.toString(), context.getString(shown) in labels)
-            for (hidden in listOf(R.string.try_again, R.string.report_link, R.string.engine_update_retry))
+            for (hidden in listOf(R.string.try_again, R.string.engine_update_retry))
                 assertFalse(labels.toString(), context.getString(hidden) in labels)
         }
     }

@@ -14,7 +14,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * The private inbox on the site: one POST per explicit Send (reports) or daily ping (usage), no retries,
+ * The private inbox on the site: one POST per report or daily usage ping, no retries,
  * cookies or redirects. Bodies and responses are never logged.
  */
 class InboxClient(private val calls: Call.Factory? = null, private val version: String = BuildConfig.VERSION_NAME) {
@@ -42,7 +42,8 @@ class InboxClient(private val calls: Call.Factory? = null, private val version: 
     companion object {
         const val BASE = "https://nezzel.hululsoft.mr"
         const val REPORT = "/api/report"
-        private val PATHS = setOf(REPORT)
+        const val USAGE = "/api/usage"
+        private val PATHS = setOf(REPORT, USAGE)
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

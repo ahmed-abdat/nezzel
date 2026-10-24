@@ -24,9 +24,11 @@ class InspectionTiming internal constructor(
     private val start = if (enabled) now() else 0L
     private val recorded = mutableSetOf<InspectionPhase>()
     fun context() = current.asContextElement(this)
+    /** Phases are kept even when the journal is silent: the usage count reads which reader ran. */
     @Synchronized fun record(phase: InspectionPhase) {
-        if (enabled && recorded.add(phase)) log("${phase.label} ${now() - start}ms")
+        if (recorded.add(phase) && enabled) log("${phase.label} ${now() - start}ms")
     }
+    @Synchronized fun has(phase: InspectionPhase) = phase in recorded
     companion object {
         private const val TAG = "NezzelTiming"
         private val current = ThreadLocal<InspectionTiming?>()

@@ -32,6 +32,7 @@ class AppUpdatesTest {
     }
     @After fun teardown() { scope.cancel(); WorkManagerTestInitHelper.closeWorkDatabase() }
     @Test fun switchPersistsAndCancelsPeriodicWork() {
+        AppPreferences(context).helpImprove = false
         val updates = AppUpdates(production, scope)
         updates.setAutomatic(true)
         assertTrue(AppPreferences(context).appUpdates)
@@ -39,6 +40,12 @@ class AppUpdatesTest {
         updates.setAutomatic(false)
         assertFalse(AppPreferences(context).appUpdates)
         assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork(AppUpdates.WORK).get().all { it.state.isFinished })
+    }
+    @Test fun dailyWorkStaysForTheUsageSendWhileHelpImproveIsOn() {
+        val updates = AppUpdates(production, scope)
+        updates.setAutomatic(false)
+        assertTrue(AppPreferences(context).helpImprove)
+        assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork(AppUpdates.WORK).get().any { !it.state.isFinished })
     }
     @Test fun schedulingKeepsExistingWorkAndItsJitter() {
         val updates = AppUpdates(production, scope)
@@ -181,6 +188,7 @@ class AppUpdatesTest {
 
     @Test fun startSchedulesInTheBackgroundAndATogglePendingMeanwhileWins() = runBlocking {
         context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().putLong("success", System.currentTimeMillis()).commit()
+        AppPreferences(context).helpImprove = false
         val work = WorkManager.getInstance(context)
         fun scheduled() = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().any { !it.state.isFinished }
         val queued = java.util.concurrent.LinkedBlockingQueue<Runnable>()

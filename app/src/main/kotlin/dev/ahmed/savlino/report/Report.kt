@@ -4,7 +4,7 @@ import java.net.URI
 import org.json.JSONObject
 
 /**
- * Exactly what one report sends; the preview renders these same fields. Never log a report or its JSON.
+ * Exactly what one report sends. Never log a report or its JSON.
  * Built only through [failure] and [crash], so every field has passed its sanitizer.
  */
 class Report private constructor(
@@ -16,6 +16,8 @@ class Report private constructor(
     val code: String?,
     val link: String?,
     val trace: String?,
+    /** Where a failure happened: [OPTIONS] (reading the link) or [DOWNLOAD]. */
+    val stage: String? = null,
 ) {
     fun json(): String = JSONObject().apply {
         put("kind", kind); put("app_version", appVersion); put("android_sdk", androidSdk)
@@ -24,6 +26,7 @@ class Report private constructor(
         code?.let { put("code", it) }
         link?.let { put("link", it) }
         trace?.let { put("trace", it) }
+        stage?.let { put("stage", it) }
     }.toString()
 
     companion object {
@@ -35,10 +38,13 @@ class Report private constructor(
         /** Second-level labels under which the registrable name takes one more label (bbc.co.uk, site.com.mr). */
         private val secondLevel = setOf("co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "go")
 
-        /** The exact link (the preview shows it) plus the site as its registrable name. */
-        fun failure(link: String, code: String, appVersion: String, engineVersion: String?, androidSdk: Int) =
+        const val OPTIONS = "options"
+        const val DOWNLOAD = "download"
+
+        /** The exact link plus the site as its registrable name. */
+        fun failure(link: String, code: String, appVersion: String, engineVersion: String?, androidSdk: Int, stage: String? = null) =
             Report("failure", version(appVersion) ?: "?", engineVersion?.let(::version), androidSdk, site(link),
-                code.takeIf(codeName::matches), link(link), null)
+                code.takeIf(codeName::matches), link(link), null, stage?.takeIf { it == OPTIONS || it == DOWNLOAD })
 
         /** [link] is the job's link when the crash happened during one. */
         fun crash(stored: String, appVersion: String, engineVersion: String?, androidSdk: Int, link: String? = null) =

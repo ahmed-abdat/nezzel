@@ -6,7 +6,10 @@ import android.os.Environment
 import androidx.work.*
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
+import dev.ahmed.savlino.report.Report
 import dev.ahmed.savlino.storage.*
+import dev.ahmed.savlino.usage.UsageEvents
+import dev.ahmed.savlino.usage.UsageKeys
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.*
@@ -33,6 +36,7 @@ class DownloadCoordinator(
     private val savedFileExists: (android.net.Uri) -> Boolean = { uri -> publishedFileExists(context, uri) },
     parallelDownloads: StateFlow<Int> = MutableStateFlow(2),
     thermalStatus: StateFlow<Int> = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE),
+    private val usage: UsageEvents = UsageEvents.None,
 ) {
     val maintenance = EngineMaintenance(context, engine, {
         active.isNotEmpty() || store.all().any { !it.stage.terminal }
@@ -118,6 +122,7 @@ class DownloadCoordinator(
             if (inserted) SheetArtwork.take(command.inspectionId)?.let { store.artwork.save(command.jobId, it) }
             // A scheduling failure leaves a durable ENQUEUED row for startup to retry.
             if (inserted) {
+                usage.count(UsageKeys.download(UsageKeys.Download.STARTED, command.format))
                 store.prepareInfoJson(command.jobId) { engine.prepareDownload(command) }
                 val row = store.get(command.jobId)!!
                 updateQueue(fromRecord(row))
@@ -203,7 +208,8 @@ class DownloadCoordinator(
         catch (_: Exception) { mutableError.value = DownloadError.ExecutionRestricted }
     }
 
-    suspend fun pause(id: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun pause(id: String): Boolean = pauseOne(id).also { if (it) usage.count(UsageKeys.PAUSE) }
+    private suspend fun pauseOne(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
         val paused = synchronized(userCancellation) {
             if (id in userCancellation || id in postProcessing || !store.pause(id)) false
@@ -218,7 +224,8 @@ class DownloadCoordinator(
         true
     }
 
-    suspend fun resume(id: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun resume(id: String): Boolean = resumeOne(id).also { if (it) usage.count(UsageKeys.RESUME) }
+    private suspend fun resumeOne(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
         val row = store.get(id) ?: return@withContext false
         if (row.stage != JobStage.PAUSED) {
@@ -249,7 +256,8 @@ class DownloadCoordinator(
     }
 
     /** Batch forms of the per-row calls, over a snapshot of IDs in display order; each returns how many rows changed. */
-    suspend fun pauseAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { pause(it) } }
+    suspend fun pauseAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { pauseOne(it) } }
+        .also { if (it > 0) usage.count(UsageKeys.PAUSE_ALL) }
     suspend fun resumeAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { resume(it) } }
     suspend fun retryAll(ids: List<String>): Int = withContext(Dispatchers.IO) { ids.count { retry(it) } }
 
@@ -618,6 +626,7 @@ class DownloadCoordinator(
         if (newlyTerminal) {
             if (event.phase == DownloadPhase.COMPLETED) finishedEvents.tryEmit(event)
             if (event.phase == DownloadPhase.CANCELLED) cancellationEvents.tryEmit(event)
+            if (!event.awaitingSchedule) countTerminal(event, previous?.bytesPerSecond)
         }
         mutableProgress.update { old ->
             // An expiry callback can win after the journal check above; never resurrect that confirmation.
@@ -628,8 +637,24 @@ class DownloadCoordinator(
             else old + event
         }
     }
+    /** One count per job end; a failure also goes out as a report with its exact link (only while Help improve is on). */
+    private fun countTerminal(event: DownloadProgress, lastSpeed: Double?) {
+        val row = store.get(event.jobId) ?: return
+        val outcome = when (event.phase) {
+            DownloadPhase.COMPLETED -> UsageKeys.Download.FINISHED
+            DownloadPhase.FAILED -> UsageKeys.Download.FAILED
+            else -> UsageKeys.Download.CANCELLED
+        }
+        usage.count(UsageKeys.download(outcome, row.format))
+        if (outcome == UsageKeys.Download.CANCELLED) return
+        usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
+        usage.site(row.sourceUrl)
+        if (outcome == UsageKeys.Download.FINISHED) lastSpeed?.takeIf { it > 0 }?.let { usage.count(UsageKeys.speed(it)) }
+        else usage.failed(Report.DOWNLOAD, (event.error ?: row.error ?: DownloadError.Failed).name, row.sourceUrl, row.engineVersion)
+    }
     /** Explicit retry of the original confirmation only; scheduling never substitutes the editor URL. */
-    suspend fun retry(id: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun retry(id: String): Boolean = retryOne(id).also { if (it) usage.count(UsageKeys.RETRY) }
+    private suspend fun retryOne(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
         val row = store.get(id) ?: return@withContext false
         if (row.stage == JobStage.ENQUEUED) return@withContext maintenance.withDownload {

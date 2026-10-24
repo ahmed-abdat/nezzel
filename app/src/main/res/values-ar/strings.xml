@@ -290,7 +290,6 @@
     <string name="quality_very_low">منخفضة جدًا</string>
     <string name="quality_very_low_hint">تستهلك بيانات أقل</string>
     <string name="paste_another_link">لصق رابط آخر</string>
-    <string name="report_link">أبلغ عن هذا الرابط</string>
     <string name="contact_whatsapp">راسلنا على واتساب</string>
     <string name="contact_whatsapp_intro">مرحبًا 👋 شكرًا على Nezzel!</string>
     <string name="nezzel_close">إغلاق</string>
@@ -411,6 +410,7 @@
     <string name="settings_privacy">الخصوصية</string>
     <string name="clear_link_history">مسح سجل الروابط</string>
     <string name="clear_link_history_help">انسَ مصدر تنزيلاتك. تبقى ملفاتك.</string>
+    <string name="help_improve">ساعد في تحسين Nezzel</string>
     <string name="clear_link_history_title">مسح سجل الروابط؟</string>
     <string name="clear_link_history_body">سينسى Nezzel روابط كل تنزيلاتك. تبقى ملفاتك على هاتفك.</string>
     <string name="clear_link_history_failed">تعذّر مسح سجل الروابط. حاول مرة أخرى.</string>
@@ -538,17 +538,4 @@
         <item quantity="many">%1$s حالة جديدة</item>
         <item quantity="other">%1$s حالة جديدة</item>
     </plurals>
-    <string name="report_sheet_title">إرسال تقرير؟</string>
-    <string name="report_sheet_body">يُرسل هذا فقط. بلا اسم ولا معرّف.</string>
-    <string name="report_field_site">الموقع</string>
-    <string name="report_field_error">الخطأ</string>
-    <string name="report_field_app">Nezzel</string>
-    <string name="report_field_engine">المحرّك</string>
-    <string name="report_field_android">أندرويد</string>
-    <string name="report_field_link">الرابط</string>
-    <string name="report_field_details">التفاصيل</string>
-    <string name="report_send">إرسال</string>
-    <string name="report_sent">أُرسل</string>
-    <string name="report_sent_snackbar">أُرسل التقرير. شكرًا</string>
-    <string name="report_failed_snackbar">تعذّر الإرسال. حاول لاحقًا</string>
 </resources>

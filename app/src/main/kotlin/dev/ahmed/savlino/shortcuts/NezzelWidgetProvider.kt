@@ -17,6 +17,11 @@ class NezzelWidgetProvider : AppWidgetProvider() {
         render(context, ids, (context.applicationContext as NezzelApplication).widgets.currentState)
     }
 
+    /** The first widget on the home screen. */
+    override fun onEnabled(context: Context) {
+        (context.applicationContext as NezzelApplication).usage.count(dev.ahmed.savlino.usage.UsageKeys.WIDGET_ADDED)
+    }
+
     override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
         val state = (context.applicationContext as NezzelApplication).widgets.currentState
         manager.updateAppWidget(id, views(AppLocale.localized(context), state, narrow(options)))

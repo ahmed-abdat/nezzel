@@ -111,13 +111,15 @@ class AppUpdates internal constructor(private val context: Context, private val 
     // Reads the switch under the lock, so a toggle during start-up's background schedule still ends in the switch's state.
     private fun schedule(): Unit = synchronized(scheduleLock) {
         val work = WorkManager.getInstance(context)
-        if (!available || !appPrefs.appUpdates) { work.cancelUniqueWork(WORK); return }
+        // The same daily work carries the usage send, so it stays while either switch is on.
+        if (!available || !appPrefs.appUpdates && !appPrefs.helpImprove) { work.cancelUniqueWork(WORK); return }
         work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<AppUpdateWorker>(24, TimeUnit.HOURS)
                 .setInitialDelay(DAY + updateCheckJitterMillis(), TimeUnit.MILLISECONDS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
                 .build())
     }
+    fun reschedule() { if (available) scope.launch { schedule() } }
     fun checkNow() { scope.launch { check(manual = true) } }
     suspend fun check(manual: Boolean, notify: Boolean = false) = checkGate.withLock {
         if (!available || (!manual && !appPrefs.appUpdates)) return@withLock
@@ -302,7 +304,8 @@ class AppUpdates internal constructor(private val context: Context, private val 
     fun consumeUpdated(): Boolean {
         if (!available || state.value.whatsNew != null || prefs.getLong("install-code", -1) != BuildConfig.VERSION_CODE.toLong()) return false
         cleanFiles()
-        return clearInstall()
+        return clearInstall().also { if (it) (context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication)
+            ?.usage?.count(dev.ahmed.savlino.usage.UsageKeys.UPDATE_INSTALLED) }
     }
     private fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.take(10).any {
         it is android.system.ErrnoException && it.errno == android.system.OsConstants.ENOSPC || it.message?.contains("ENOSPC") == true
@@ -313,8 +316,9 @@ class AppUpdates internal constructor(private val context: Context, private val 
 class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         if (!UpdatePolicy.enabled(applicationContext.packageName)) return Result.success()
-        val updates = (applicationContext as dev.ahmed.savlino.jobs.NezzelApplication).appUpdates
-        updates.check(manual = false, notify = true)
+        val app = applicationContext as dev.ahmed.savlino.jobs.NezzelApplication
+        app.appUpdates.check(manual = false, notify = true)
+        app.usageStore.sendDaily()
         return Result.success()
     }
 }

@@ -12,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.EngineAdapter
 import dev.ahmed.savlino.report.Report
+import dev.ahmed.savlino.usage.UsageEvents
+import dev.ahmed.savlino.usage.UsageKeys
 import dev.ahmed.savlino.engine.InspectResult
 import dev.ahmed.savlino.engine.InspectionPhase
 import dev.ahmed.savlino.engine.InspectionTiming
@@ -125,8 +127,8 @@ class LinkViewModel(
     private val now: () -> Long = System::currentTimeMillis,
     /** A known shortener's destination from its redirect alone; Unresolved keeps the short link (today's path). */
     private val resolveShortLink: suspend (ValidatedLink) -> ShortLinkOutcome = { ShortLinkOutcome.Unresolved },
-    /** Posts one report to the inbox; true only when it was accepted. */
-    private val sendReport: suspend (Report) -> Boolean = { false },
+    /** Daily usage counts and automatic failure reports; both no-ops while Help improve Nezzel is off. */
+    private val usage: UsageEvents = UsageEvents.None,
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -208,38 +210,10 @@ class LinkViewModel(
         else maintenanceState?.version ?: inspectedEngineVersion.takeIf {
             inspectedMaintenanceGeneration == maintenanceState?.generation
         }
-    private fun reportCode(): String? = when (val state = optionsState) {
+    private fun reportCode(state: OptionsState): String? = when (state) {
         is OptionsState.Error -> state.error.takeIf { it in ReportLink.downloadErrors }?.name
         is OptionsState.ImageError -> state.failure.takeIf { it in ReportLink.imageFailures }?.name
         else -> null
-    }
-    internal val canReportLink get() = reportCode() != null && currentSource() != null
-    /** The report the preview shows and Send posts, with the reviewed link. */
-    internal fun failureReport(versionName: String, sdk: Int): Report? {
-        val code = reportCode() ?: return null
-        val source = currentSource() ?: return null
-        return Report.failure(source.link.rawUrl, code, versionName, engineVersion(), sdk)
-    }
-    internal fun reportEngineVersion() = engineVersion()
-    /** One report per failure card: the failed state it was sent for. */
-    private var reportedFailure by mutableStateOf<OptionsState?>(null)
-    internal val reportSent get() = reportedFailure != null && reportedFailure === optionsState
-    internal var reportSending by mutableStateOf(false)
-        private set
-    /** Sent (true) or failed (false) outcome for the snackbar; the screen consumes it. */
-    internal var reportOutcome by mutableStateOf<Boolean?>(null)
-        private set
-    internal fun consumeReportOutcome() { reportOutcome = null }
-    internal fun sendFailureReport(versionName: String, sdk: Int): Job? {
-        if (reportSending || reportSent) return null
-        val report = failureReport(versionName, sdk) ?: return null
-        val failed = optionsState
-        reportSending = true
-        return viewModelScope.launch {
-            val sent = try { sendReport(report) } finally { reportSending = false }
-            if (sent) reportedFailure = failed
-            reportOutcome = sent
-        }
     }
     private var gate = SuggestionGate(dismissed, linkKeyer)
     private var clipboardReady by mutableStateOf(initializeClipboard == null)
@@ -307,7 +281,11 @@ class LinkViewModel(
     private var options by mutableStateOf<OptionsState>(OptionsState.Hidden)
     var optionsState: OptionsState
         get() = options
-        private set(value) { options = value; publishPendingLink() }
+        private set(value) {
+            val fresh = value !== options
+            options = value; publishPendingLink()
+            if (fresh) reportCode(value)?.let { usage.failed(Report.OPTIONS, it, currentSource()?.link?.rawUrl, engineVersion()) }
+        }
     private fun hasPendingLink() = pendingShare != null || suggestion != null || linkQueue != null ||
         optionsState is OptionsState.Checking || optionsState is OptionsState.Ready || (optionsState == OptionsState.Hidden && LinkInput.parse(text) != null)
     private fun publishPendingLink() {
@@ -329,11 +307,22 @@ class LinkViewModel(
     private var inspectionJob: Job? = null
     private var earlyPreviewJob: Job? = null
     private var inspectionTiming: InspectionTiming? = null
+    private var inspectionStartedAt = 0L
     /** The options sheet drew the preview image (timing journal only). */
     fun thumbnailShown() { inspectionTiming?.record(InspectionPhase.THUMBNAIL_SHOWN) }
     internal fun optionsShown() {
-        if (optionsState is OptionsState.Ready || optionsState is OptionsState.ImageReady)
-            inspectionTiming?.record(InspectionPhase.OPTIONS_SHOWN)
+        val timing = inspectionTiming
+        if (optionsState !is OptionsState.Ready && optionsState !is OptionsState.ImageReady || timing == null) return
+        if (timing.has(InspectionPhase.OPTIONS_SHOWN)) return
+        timing.record(InspectionPhase.OPTIONS_SHOWN)
+        // Which reader produced the options: yt-dlp ran, else the app's own reader, else YouTube's fast path.
+        val path = when {
+            timing.has(InspectionPhase.YTDLP_SPAWNED) -> UsageKeys.Path.YTDLP
+            optionsState is OptionsState.ImageReady || timing.has(InspectionPhase.NATIVE_READER_DONE) -> UsageKeys.Path.OWN
+            else -> UsageKeys.Path.NPE
+        }
+        usage.count(UsageKeys.FUNNEL_OPTIONS)
+        usage.count(UsageKeys.options(path, now() - inspectionStartedAt))
     }
     private var operationId: String? = null
     /** Speculative yt-dlp read beside a handoff reader; owned here, so a photo verdict or dismissal ends it with its id. */
@@ -440,6 +429,7 @@ class LinkViewModel(
 
     fun navigate(destination: String) {
         if (destination != "Home") { dismissSuggestion(); dismissOptions() }
+        if (destination == "Statuses" && this.destination != destination) usage.count(UsageKeys.STATUSES_OPENED)
         editorFocused = false
         this.destination = destination; saved["destination"] = destination
     }
@@ -460,6 +450,7 @@ class LinkViewModel(
         navigate("Home")
         invalidShare = link == null
         if (link == null) return
+        usage.count(UsageKeys.SHARE)
         warmUp()
         // Only a link being typed is protected. A shared, pasted or suggested link (or the one just
         // downloaded, which is cleared anyway) is simply replaced: no "replace?" step on the daily path.
@@ -498,6 +489,7 @@ class LinkViewModel(
         val link = candidates.firstOrNull()
         dismissShare()
         if (hasOptionsFor(link)) { replaceLinkQueue(candidates); return }
+        if (link != null) usage.count(UsageKeys.PASTE)
         suggestion = null
         edit(link?.rawUrl ?: value)
         replaceLinkQueue(candidates)
@@ -534,6 +526,8 @@ class LinkViewModel(
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
         inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }
+        inspectionStartedAt = now()
+        usage.count(UsageKeys.FUNNEL_LINK)
         if (ShortLinks.isShortLink(source.link)) startShortLink(source) else route(source, source)
     }
     /** Resolve a shortener's redirect first, so its destination takes its own fast route (YouTube, readers). */
@@ -701,6 +695,7 @@ class LinkViewModel(
         val timing = inspectionTiming ?: InspectionTiming().also {
             it.record(InspectionPhase.INTAKE_ACCEPTED)
             inspectionTiming = it
+            inspectionStartedAt = now()
         }
         // Reels/TV bypass the image reader, so canonicalize Instagram at the shared legacy entry too.
         val source = legacyReaderSource(input, MediaSourceRoute.INSTAGRAM)
@@ -941,6 +936,7 @@ class LinkViewModel(
         val jobSource = if ((optionsState as? OptionsState.Ready)?.resolvedFrom != null) inspected.source else current
         when (val result = DownloadCommand.confirm(UUID.randomUUID().toString(), inspected, jobSource, row.id, "Nezzel")) {
             is ConfirmResult.Confirmed -> {
+                usage.count(UsageKeys.FUNNEL_TAPPED)
                 submitted = true
                 command = result.command
                 EngineTiming.startDownload(result.command.jobId)
@@ -1077,9 +1073,11 @@ class LinkViewModel(
             java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", java.util.Locale.ROOT))
         val selection = ready.inspection.selection(first.ref) ?: return
         // Preserve single-image outcomes/API. Carousel suffixes use original returned item positions, not tap order.
+        usage.count(UsageKeys.FUNNEL_TAPPED)
         if (!ready.isCarousel) {
             if (imageSaver?.save(selection, first.image, title) == true) {
                 pendingImageSave = selection; imageSaveProgress = 1 to 1
+                usage.count(UsageKeys.photo(UsageKeys.Download.STARTED))
             }
         } else {
             val requests = chosen.map { photo ->
@@ -1089,6 +1087,7 @@ class LinkViewModel(
             }
             if (imageSaver?.saveBatch(requests) == true) {
                 pendingImageSave = selection; imageSaveProgress = 1 to requests.size
+                repeat(requests.size) { usage.count(UsageKeys.photo(UsageKeys.Download.STARTED)) }
             }
         }
     }
@@ -1116,6 +1115,7 @@ class LinkViewModel(
         imageSaveProgress = null
         val ready = optionsState as? OptionsState.ImageReady
         val showing = ready?.photos?.any { it.ref == selection.renditionRef } == true
+        countPhotos(outcome, currentSource()?.link?.rawUrl)
         when {
             outcome is ImageSaveState.BatchFinished -> {
                 if (showing && outcome.saved.size == outcome.total) { dismissOptions(); clearField() }
@@ -1128,6 +1128,19 @@ class LinkViewModel(
                 ready?.directImage == true)
             else -> imageEventChannel.trySend(outcome)
         }
+    }
+    private fun countPhotos(outcome: ImageSaveState, link: String?) {
+        val (saved, failed) = when (outcome) {
+            is ImageSaveState.BatchFinished -> outcome.saved.size to outcome.total - outcome.saved.size
+            is ImageSaveState.Saved -> 1 to 0
+            is ImageSaveState.Failed -> if (outcome.image == ImageFailure.CANCELLED) {
+                usage.count(UsageKeys.photo(UsageKeys.Download.CANCELLED)); return
+            } else 0 to 1
+            else -> return
+        }
+        repeat(saved) { usage.count(UsageKeys.photo(UsageKeys.Download.FINISHED)); usage.count(UsageKeys.FUNNEL_FINISHED) }
+        repeat(failed) { usage.count(UsageKeys.photo(UsageKeys.Download.FAILED)); usage.count(UsageKeys.FUNNEL_FAILED) }
+        if (saved + failed > 0) usage.site(link)
     }
     private fun failConfirmation(error: DownloadError) {
         selectedId = null; selectedPreset = null; moreFormats = false
@@ -1146,6 +1159,7 @@ class LinkViewModel(
             val value = read()
             suggestion = gate.offer(value, focused, resumed, foreground, text.isEmpty(), shareActive)
             if (suggestion != null) {
+                usage.count(UsageKeys.CLIP_SHOWN)
                 replaceLinkQueue(LinkInput.candidates(value))
                 warmUp()
                 if (automaticOptions) inspectSuggestion(automatically = true)
@@ -1159,6 +1173,7 @@ class LinkViewModel(
         }
     }
     init {
+        usage.count(UsageKeys.OPEN)
         publishPendingLink()
         initializeClipboard?.let { load ->
             viewModelScope.launch {
@@ -1202,6 +1217,7 @@ class LinkViewModel(
         }
     }
     private fun acceptSuggestion(offered: ValidatedLink, automatically: Boolean) {
+        usage.count(UsageKeys.CLIP_ACCEPTED)
         suggestion = null
         updateText(offered.rawUrl, persist = !automatically)
         automaticClipboardDraft = automatically
