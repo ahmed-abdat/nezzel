@@ -117,10 +117,14 @@ class WidgetUpdater(
      */
     private suspend fun loadArtwork() = coroutineScope {
         val loading = mutableMapOf<String, Job>()
-        progress.map { jobs -> WidgetUiState.from(jobs).jobs.map { it.id }.toSet() }.distinctUntilChanged().collect { shown ->
+        combine(progress, refreshes) { jobs, _ ->
+            WidgetUiState.from(jobs).jobs.map { it.id }.toSet() to widgetIds().isNotEmpty()
+        }.distinctUntilChanged().collect { (shown, installed) ->
             (loading.keys - shown).forEach { loading.remove(it)?.cancel() }
             arts.update { it.filterKeys(shown::contains) }
-            for (id in shown - loading.keys) loading[id] = launch {
+            // A widget placed after the retries ran out (none was on screen then) looks again.
+            val missing = shown.filter { id -> id !in arts.value && loading[id]?.isActive != true }
+            if (installed) for (id in missing) loading[id] = launch {
                 for (wait in ARTWORK_RETRY_MS) {
                     delay(wait)
                     if (widgetIds().isEmpty()) continue

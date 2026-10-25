@@ -393,6 +393,24 @@ class WidgetTest {
         collection.cancel()
     }
 
+    @Test fun aWidgetPlacedAfterTheRetriesRanOutStillGetsThePicture() = runTest {
+        val progress = MutableStateFlow(listOf(job()))
+        var ids = intArrayOf()
+        var loads = 0
+        val picture = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        val calls = mutableListOf<WidgetUiState>()
+        val updater = WidgetUpdater(app, progress, widgetIds = { ids },
+            render = { state, _ -> calls += state }, renderProgress = { state, _ -> calls += state },
+            savedMedia = { flowOf(emptyList()) }, thumbnail = { null }, artwork = { loads++; picture })
+        val collection = updater.start(backgroundScope)
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(0, loads)
+        ids = intArrayOf(1); updater.refresh(); runCurrent()
+        assertEquals(1, loads)
+        assertSame(picture, checkNotNull(calls.last().jobs.single().art).bitmap)
+        collection.cancel()
+    }
+
     @Test fun titleDropsOnlyAnExtensionLikeSuffix() {
         assertEquals("clip", WidgetUiState.title("clip.mp4"))
         assertEquals("Part 1. Intro", WidgetUiState.title("Part 1. Intro"))
