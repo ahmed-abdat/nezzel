@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import dev.ahmed.savlino.ui.nav.LocalTabActive
 import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.Size
@@ -187,7 +188,8 @@ private fun JobFill(fraction: Float, paused: Boolean, light: Boolean, modifier: 
 @Composable
 private fun JobPulse(still: Boolean, modifier: Modifier) {
     val tint = MaterialTheme.colorScheme.primary
-    if (still) return
+    // A kept-but-hidden tab must not keep asking for frames.
+    if (still || !LocalTabActive.current.value) return
     val t = rememberInfiniteTransition(label = "pulse")
     val alpha by t.animateFloat(.02f, .08f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse), label = "pulse alpha")
     Box(modifier.background(tint.copy(alpha = alpha)))
