@@ -815,7 +815,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     val earlier = remember(entries) { entries.drop(RECENT_ROW).take(EARLIER_ROWS) }
     // Bookkeeping outside state, updated inside the derivation like rememberStartOrder: the phase each job last had here,
     // running ids in start order, and jobs that finished here whose file is not listed yet.
-    val seen = remember { HashMap<String, DownloadPhase>() }
+    val seen = remember { HashMap<String, DownloadProgress>() }
     val started = remember { mutableListOf<String>() }
     val landing = remember { LinkedHashSet<String>() }
     val fileJobs = remember { HashMap<String, String>() }
@@ -825,8 +825,12 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
         derivedStateOf {
             expiry.intValue
             val all = jobs()
+            // The coordinator drops a job from the list the moment it completes: one that leaves after its transfer
+            // finished is landing, and keeps its slot until its file lists. Leaving mid-transfer is a cancel: the slot goes.
+            val ids = all.mapTo(HashSet()) { it.jobId }
+            seen.entries.removeAll { (id, last) -> (id !in ids).also { gone -> if (gone && last.transferDone) landing += id } }
             all.forEach { job ->
-                val before = seen.put(job.jobId, job.phase)
+                val before = seen.put(job.jobId, job)?.phase
                 if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
                     before != DownloadPhase.CANCELLED) landing += job.jobId
                 if (!job.saved) landing -= job.jobId
@@ -927,6 +931,9 @@ private fun JobSlotCard(jobId: String, jobs: () -> List<DownloadProgress>, onCli
 }
 
 private const val RECENT_ROW = 8
+private val DownloadProgress.transferDone get() = !terminal && (phase in setOf(DownloadPhase.JOINING, DownloadPhase.CONVERTING,
+    DownloadPhase.SAVING) || percent == 100)
+
 /** How long a finished job waits for its file to list before it gives its slot up. */
 private const val LANDING_MS = 10_000L
 private const val EARLIER_ROWS = 3

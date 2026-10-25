@@ -71,12 +71,13 @@ internal fun homeSlots(jobs: List<DownloadProgress>, recent: List<SavedMedia>, l
     val live = shownJobs.map { JobSlot(it.jobId) }
     // Listed before its job reports saved: the job's card already stands for the file, so it is not shown twice.
     val writing = shownJobs.mapNotNullTo(HashSet()) { job -> job.targetUri?.takeIf { !job.saved }?.let(::fileKey) }
-    val landed = jobs.filter { it.jobId in landing && it.saved && it.publishedUri?.let { uri -> fileKey(uri) in listed } != true }
-        .map { JobSlot(it.jobId, landing = true) }
-    // Remembered past the job's own life: when the finished job leaves the list, its file keeps the job's key, so the
-    // card never swaps keys (a remove plus an insert that slides the row).
-    jobs.forEach { job -> if (job.saved) job.publishedUri?.let { fileJobs[fileKey(it)] = job.jobId } }
+    // Remembered past the job's own life (the row a job writes to is known before it completes): when the finished job
+    // leaves the list, its file keeps the job's key, so the card never swaps keys (a remove plus an insert that slides the row).
+    jobs.forEach { job -> (job.publishedUri ?: job.targetUri)?.let { fileJobs[fileKey(it)] = job.jobId } }
     val byFile = fileJobs
+    val fileOf = byFile.entries.associate { (file, id) -> id to file }
+    val liveIds = shownJobs.mapTo(HashSet()) { it.jobId }
+    val landed = landing.filter { it !in liveIds && fileOf[it]?.let { file -> file in listed } != true }.map { JobSlot(it, landing = true) }
     val used = HashSet<String>()
     return live + landed + recent.filter { fileKey(it.uri) !in writing }.map { item ->
         FileSlot(item, byFile[fileKey(item.uri)]?.let(::jobKey)?.takeIf(used::add) ?: item.uri.toString())

@@ -184,6 +184,35 @@ class HomeInPlaceTest {
         }
     }
 
+    // The coordinator drops a completed job from its list at once; Home never sees it saved.
+    @Test fun aJobThatLeavesTheListWhileSavingKeepsItsSlotUntilItsFileLists() {
+        val saving = running.copy(phase = DownloadPhase.SAVING, targetUri = finished.publishedUri)
+        var jobs by mutableStateOf(listOf(saving))
+        var media by mutableStateOf(library)
+        val caminandes = hasText("Caminandes", substring = true) and hasClickAction()
+        show { NezzelTheme(ThemePref.Light, false) { HomeRecents(media, "en", {}, { jobs }) {} } }.use {
+            val slot = card("Caminandes")
+            compose.runOnIdle { jobs = emptyList() }
+            compose.waitForIdle()
+            assertEquals("the slot waits for its file", slot, card("Caminandes"))
+            compose.runOnIdle { media = listOf(landed) + library }
+            compose.waitUntil(5_000) { compose.onAllNodes(caminandes and hasText("1080p", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+            compose.waitForIdle()
+            assertEquals(1, compose.onAllNodes(caminandes).fetchSemanticsNodes().size)
+            assertEquals(slot.left, card("Caminandes").left, .5f)
+        }
+    }
+
+    @Test fun aCancelledDownloadGivesItsSlotUp() {
+        var jobs by mutableStateOf(listOf(running))
+        show { NezzelTheme(ThemePref.Light, false) { HomeRecents(library, "en", {}, { jobs }) {} } }.use {
+            compose.onNode(hasText("Caminandes", substring = true) and hasClickAction()).assertExists()
+            compose.runOnIdle { jobs = emptyList() }
+            compose.waitForIdle()
+            compose.onAllNodes(hasText("Caminandes", substring = true) and hasClickAction()).assertCountEquals(0)
+        }
+    }
+
     @Test fun aJobCardIsAsTallAsAFileCardAtLargeText() {
         for (scale in listOf(1f, 2f)) {
             show { CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, scale)) {
