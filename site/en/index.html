@@ -92,7 +92,7 @@ html[dir=ltr] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto S
 ::selection{background:var(--primary-c);color:var(--on-primary-c)}
 a{color:var(--primary);text-underline-offset:.22em;text-decoration-thickness:1.5px}
 :focus-visible{outline:3px solid var(--primary);outline-offset:3px;border-radius:12px}
-.open :focus-visible{outline-color:var(--inverse-primary)}
+.end :focus-visible,.trust :focus-visible,.t-dk :focus-visible{outline-color:#82D5C5}
 button{font:inherit;color:inherit}
 img{max-width:100%;display:block}
 [dir=rtl] .flip{transform:scaleX(-1)}
@@ -109,8 +109,10 @@ main{overflow-x:clip}
 /* one quiet entrance for sections; the phone story is the authored moment */
 [data-r]{opacity:0;transform:translateY(10px);transition:opacity .3s var(--ease),transform .3s var(--ease);transition-delay:calc(var(--d,0) * 50ms)}
 [data-r].in{opacity:1;transform:none}
-.w{display:inline-block;opacity:0;transform:translateY(.35em);filter:blur(8px);animation:word .9s var(--ease) forwards;animation-delay:calc(120ms + var(--k) * 90ms)}
-@keyframes word{to{opacity:1;transform:none;filter:none}}
+/* the headline rises word by word through a mask, once */
+.wm{display:inline-block;clip-path:inset(-.5em -.3em -.14em -.3em)}
+.w{display:inline-block;transform:translateY(118%);animation:word 1s var(--ease) forwards;animation-delay:calc(100ms + var(--k) * 80ms)}
+@keyframes word{to{transform:none}}
 
 /* header: glass pill that solidifies */
 .top{position:sticky;top:12px;z-index:30;margin-top:12px}
@@ -175,11 +177,10 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 .story{display:grid;grid-template-columns:minmax(0,1fr)}
 .hero{display:grid;align-items:center;padding:48px 0 0}
 @media (min-width:960px){
-  .story{grid-template-columns:1.05fr .95fr;column-gap:40px;grid-template-areas:"hero stage" "flow stage" "more stage"}
+  .story{grid-template-columns:1.05fr .95fr;column-gap:40px;grid-template-areas:"hero stage" "flow stage"}
   .hero{grid-area:hero;padding-top:56px;min-height:min(820px,calc(100svh - 80px))}
   .stage{grid-area:stage}
   .flow{grid-area:flow}
-  .more{grid-area:more}
 }
 .copy{text-align:center}
 @media (min-width:960px){.copy{text-align:start}}
@@ -196,23 +197,20 @@ html[lang=fr] h1{font-size:clamp(34px,10.4vw,64px)}
 .meta a{font-weight:600;white-space:nowrap}
 
 /* stage: dot grid, halo, chips that fall into the phone */
-.stage{position:relative;z-index:4;display:grid;justify-items:center;align-content:start;align-self:start;padding:24px 0 0}
+.stage{position:relative;z-index:4;perspective:1400px;display:grid;justify-items:center;align-content:start;align-self:start;padding:24px 0 0}
 .fall{transition:opacity .4s var(--ease)}
 .stage[data-k]:not([data-k="0"]) .fall{opacity:0}
 .stage[data-k]:not([data-k="0"]) .chip{animation-play-state:paused}
 /* sticky only with JS and motion allowed; otherwise the steps sit stacked under a still phone */
 @media (prefers-reduced-motion:no-preference){
-  .js .stage{position:sticky;top:max(88px,calc(50svh - 310px))}
+  .js .stage{position:sticky;top:max(92px,calc(50svh - 310px))}
   .js .phone{transform:scale(var(--sc,1));transform-origin:50% 0}
   @media (max-width:959px){
     /* the band covers from the very top, so steps slide under it, not under the header */
-    .js .stage{top:0;padding-top:84px;height:var(--band,auto);margin-inline:-16px;background:var(--bg)}
+    .js .stage{top:0;padding-top:92px;height:var(--band,auto);margin-inline:-16px;background:var(--bg)}
     .js .stage::after{content:"";position:absolute;inset-inline:0;top:100%;height:20px;background:linear-gradient(var(--bg),transparent);pointer-events:none}
-    .js .stage .dots{inset:84px 0 0}
   }
 }
-.dots{position:absolute;inset:-40px -10%;background-image:radial-gradient(var(--dot) 1.3px,transparent 1.6px);background-size:20px 20px;-webkit-mask:radial-gradient(closest-side,#000 40%,transparent);mask:radial-gradient(closest-side,#000 40%,transparent);pointer-events:none}
-.halo{position:absolute;width:min(520px,110%);aspect-ratio:1;top:6%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in oklab,var(--primary-c) 75%,transparent),transparent);filter:blur(10px);opacity:.75;pointer-events:none}
 .fall{position:absolute;inset:-30px max(0px,calc(50% - 230px)) 30%;overflow:hidden;pointer-events:none;-webkit-mask:linear-gradient(#000 70%,transparent);mask:linear-gradient(#000 70%,transparent)}
 .chip{position:absolute;top:0;display:inline-flex;align-items:center;gap:6px;padding:6px 11px 6px 9px;border-radius:12px;background:var(--c-lowest);color:var(--on-bg);font:700 12.5px/1 system-ui,sans-serif;direction:ltr;box-shadow:0 8px 20px -10px rgb(var(--ink-sh)/.45),0 0 0 1px color-mix(in oklab,var(--outline-v) 60%,transparent);animation:drop var(--t,7s) linear infinite;animation-delay:var(--dl,0s);opacity:0}
 .chip .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
@@ -221,8 +219,11 @@ html[lang=fr] h1{font-size:clamp(34px,10.4vw,64px)}
 @keyframes drop{0%{transform:translateY(-40px) rotate(var(--r0,-8deg));opacity:0}12%{opacity:1}70%{opacity:1}100%{transform:translateY(420px) rotate(var(--r1,6deg)) scale(.8);opacity:0}}
 
 /* the live phone */
-.phone{--W:290px;position:relative;z-index:2;width:var(--W);height:calc(var(--W) * 2.07);padding:9px;border-radius:46px;background:#0c100f;box-shadow:0 50px 90px -40px rgb(0 32 27/.7),0 0 0 1.5px #29302e inset,0 0 0 1px rgb(255 255 255/.05);font-size:12.5px;line-height:1.45}
+.phone{--W:290px;position:relative;z-index:2;width:var(--W);height:calc(var(--W) * 2.07);padding:9px;border-radius:46px;background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1.5px #29302e inset,0 0 0 1px rgb(255 255 255/.05);font-size:12.5px;line-height:1.45}
 @media (max-width:380px){.phone{--W:262px}}
+/* as the page moves, the phone tips up from lying back and settles flat */
+@media (prefers-reduced-motion:no-preference){@supports (animation-timeline:scroll()){.js .phone{animation:settle linear both;animation-timeline:scroll(root);animation-range:0 55vh}}}
+@keyframes settle{from{scale:.92;rotate:x 16deg}}
 .screen{position:relative;height:100%;border-radius:37px;overflow:hidden;background:var(--bg);color:var(--on-bg);font-family:"Noto Sans Arabic",system-ui,sans-serif}
 html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .cam{position:absolute;z-index:9;top:12px;left:50%;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#0c100f}
@@ -234,7 +235,7 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 /* the signature moment: the copied clip zooms toward you and Nezzel settles in behind it */
 #demo .s0.out{transform:scale(1.14);transition-duration:.3s,.4s}
 #demo:not([data-s="1"]) .s1:not(.out){transform:scale(.94)}
-.phone[data-s="0"] .s0,.phone[data-s="1"] .s1,.phone[data-s="2"] .s2,.phone[data-s="3"] .s3,#demo[data-s="4"] .s4,#demo[data-s="5"] .s5,#demo[data-s="6"] .s6,#demo[data-s="7"] .s7,#demo[data-s="8"] .s8{opacity:1;transform:none}
+.phone[data-s="0"] .s0,.phone[data-s="1"] .s1,.phone[data-s="2"] .s2,.phone[data-s="3"] .s3{opacity:1;transform:none}
 .ab{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
 .ab b{font-size:15px}
 .ab .i{width:20px;height:20px}
@@ -334,7 +335,6 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .done .ring .pr{stroke-dashoffset:0!important;opacity:.35}
 
 /* sections */
-section{padding:128px 0 0}
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
 html[dir=ltr] h2{letter-spacing:-.04em;line-height:1.08}
 .sub{color:var(--muted);font-size:18px;max-width:46ch;margin:14px 0 0;text-wrap:pretty}
@@ -356,161 +356,220 @@ html[dir=ltr] .step h3{letter-spacing:-.03em;line-height:1.1}
 .note{margin:8px 0 0;font-size:14px;color:var(--muted);max-width:52ch}
 .step .note{grid-column:2;margin-top:18px}
 
-/* also in Nezzel: the story keeps going, one phone screen per feature */
-.more{padding-top:56px}
-.more h2{font-size:clamp(24px,3vw,32px);max-width:none}
-.more .step .n .i{width:22px;height:22px}
 /* promo video slot (not shipped): poster + tap to play, between the hero and the steps */
 .promo img,.promo video{display:block;width:100%;aspect-ratio:16/9;border-radius:var(--r-xl);background:var(--c)}
-/* feature screens */
-.chips{display:flex;gap:6px;padding:0 14px 8px}
-.chips>span{padding:4px 11px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--outline);font-size:11px}
-.chips>.on{background:var(--secondary-c);color:var(--on-secondary-c);box-shadow:none}
-.nn{padding:0 14px 6px;color:var(--primary);font-weight:700;font-size:11.5px}
-.sg{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(3,1fr);align-content:start;gap:4px;padding:0 10px}
-.tl{position:relative;aspect-ratio:9/14;border-radius:9px;background:var(--g);opacity:0;transform:scale(.94);transition:opacity .35s var(--ease),transform .4s var(--ease)}
-#demo[data-s="4"] .tl{opacity:1;transform:none;transition-delay:calc(var(--q) * 45ms + 380ms)}
-.tl .nw{position:absolute;top:6px;inset-inline-start:6px;width:10px;height:10px;border-radius:50%;background:#7A5520;box-shadow:0 0 0 2px #fff}
-.tl small{position:absolute;bottom:5px;display:inline-flex;align-items:center;gap:2px;padding:1px 4px;border-radius:5px;background:rgb(20 26 25/.85);color:#fff;font-size:8.5px;line-height:1.5}
-.tl .du{inset-inline-start:5px;direction:ltr;font-family:system-ui,sans-serif;font-weight:600}
-.tl .sv{inset-inline-end:5px}
-.tl .sv .i{width:9px;height:9px;stroke-width:3}
-#stt .sv{opacity:0;transform:scale(.7);transition:opacity .3s var(--ease),transform .45s var(--spring)}
-.e-st #stt .sv{opacity:1;transform:none}
-.pls{flex:1;margin-top:10px;padding:8px 16px;border-radius:24px 24px 0 0;background:var(--c-low);display:flex;flex-direction:column}
-.pls .h{width:32px;height:4px;border-radius:2px;background:var(--outline);opacity:.5;margin:0 auto 12px}
-.plt{font-size:16px;font-weight:800}
-.plm{opacity:.7;font-size:11px}
-.pbar,.wbar{display:block;height:4px;border-radius:2px;background:color-mix(in oklab,var(--on-bg) 14%,transparent);overflow:hidden;margin:8px 0 10px}
-.pbar i,.wbar i{display:block;height:100%;background:var(--primary);border-radius:2px;transform:scaleX(var(--p,.3));transform-origin:var(--o,left)}
-[dir=rtl] .s5,[dir=rtl] .s8{--o:right}
-.pa{align-self:flex-start;padding:6px 12px;border-radius:999px;background:var(--secondary-c);color:var(--on-secondary-c);font-weight:700;font-size:11px;margin-bottom:8px}
-.pli{display:flex;align-items:center;gap:10px;padding:7px 0}
-.pli .g{width:24px;height:24px;display:grid;place-items:center;flex:none;color:var(--primary)}
-.pli .g>.i{width:20px;height:20px;stroke-width:2.6}
-.pli .g>i{width:8px;height:8px;border-radius:50%;background:var(--outline)}
-.pli .ring{--rs:24px}
-.pli .ring circle{stroke-width:5}
-.pli .t{flex:1;min-width:0;line-height:1.3}
-.pli .t b{display:block;font-size:12.5px}
-.pli .t small{font-size:10.5px;opacity:.7}
-.pli.wt{opacity:.6}
-.ms .mlt{display:block;font-size:15px;font-weight:800;margin-bottom:4px}
-.rr{display:flex;align-items:center;gap:10px;padding:5px 2px;font-size:12px}
-.rr.sel .rd{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 3px var(--c-low)}
-.ml{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;font:500 11.5px/1.3 system-ui,sans-serif;opacity:0;transform:translateY(6px);transition:opacity .35s var(--ease),transform .4s var(--ease)}
-.ml .i{width:14px;height:14px;flex:none}
-.e-ms .ml{opacity:1;transform:none;transition-delay:calc(var(--q) * 90ms + 350ms)}
-.e-ms .s6 .sheet{transform:none}
-.e-press3 .s6 .pbtn{transform:scale(.95);filter:brightness(1.1)}
-.au .cv{width:40px;height:40px;flex:none;border-radius:11px;display:grid;place-items:center;background:var(--tertiary-c);color:var(--on-tertiary-c)}
-.au .cv .i{width:20px;height:20px}
-.hs{flex:1;display:flex;flex-direction:column;padding:6px 14px 16px;background:linear-gradient(180deg,#B4CBC6,#DDE6E3);color:#171D1B}
-:root[data-mode=dark] .hs{background:linear-gradient(180deg,#1E3430,#0E1513);color:#DEE4E1}
-.clock{align-self:center;margin:26px 0 22px;font:300 46px/1 system-ui,sans-serif;letter-spacing:-.02em}
-.wg{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:24px;background:var(--c-low);color:var(--on-bg);box-shadow:0 8px 24px -14px rgb(0 0 0/.4)}
-.wg img{width:26px;height:26px;flex:none}
-.wg .t{flex:1;min-width:0}
-.wr{display:flex;justify-content:space-between;gap:8px}
-.wr b{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wr small{font-size:11px;opacity:.75}
-.wbar{margin:6px 0 0}
-.apps,.dock{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 14px;padding:22px 8px 0}
-.apps>i,.dock>i{aspect-ratio:1;border-radius:14px;background:rgb(255 255 255/.55)}
-:root[data-mode=dark] :is(.apps,.dock)>i{background:rgb(255 255 255/.12)}
-.dock{margin-top:auto;padding:12px 8px;border-radius:22px;background:rgb(255 255 255/.25)}
-:root[data-mode=dark] .dock{background:rgb(255 255 255/.06)}
 
-/* each feature screen builds itself once on arrival: parts rise in order, then hold */
-#demo .e{opacity:0;transform:translateY(var(--ty,10px)) scale(var(--z,1));transition:opacity .35s var(--ease),transform .5s var(--ease)}
-#demo[data-s="4"] .s4 .e,#demo[data-s="5"] .s5 .e,#demo[data-s="6"] .s6 .e,#demo[data-s="7"] .s7 .e,#demo[data-s="8"] .s8 .e{opacity:1;transform:none;transition-delay:calc(var(--e,0) * 90ms + 120ms)}
-.pls.e{--ty:40%}
-.wg.e{--z:.92;--ty:16px}
-#jau.e{--ty:-14px;--z:.96}
-.apps>i{opacity:0;transform:scale(.8);transition:opacity .3s var(--ease),transform .45s var(--spring)}
-#demo[data-s="8"] .apps>i{opacity:1;transform:none;transition-delay:calc(var(--q) * 35ms + 160ms)}
-.pli .ring .ok .i{stroke-width:3.4}
-.e-paste .s6 .field .sw>:first-child{opacity:0;transform:translateY(-8px)}
-.e-paste .s6 .field .sw>:last-child{opacity:1;transform:none;color:var(--on-bg)}
-.field .sw{min-width:0}
-.field .sw>:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* features: full-width panels that stack; the next one slides over and the last steps back */
+.stack{padding:104px 0 32px;--top:92px}
+.stack>h2{max-width:none;margin-bottom:40px}
+.card{position:relative;width:min(1240px,100% - 16px);margin:0 auto 24px;min-height:min(640px,calc(100svh - var(--top) - 88px));padding:clamp(28px,5vw,64px);border-radius:clamp(24px,3vw,36px);display:grid;gap:32px;align-content:space-between;overflow:hidden;transform-origin:50% 0;background:var(--pb);color:var(--pf);--pm:color-mix(in oklab,var(--pf) 66%,transparent);--pl:color-mix(in oklab,var(--pf) 14%,transparent)}
+@media (min-width:960px){.card{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);align-content:center;align-items:center;gap:56px}}
+.t-lt{--pb:var(--c-low);--pf:var(--on-bg);--pc:var(--c-lowest)}
+:root[data-mode=dark] .t-lt{--pb:var(--c-high)}
+.t-tl{--pb:var(--primary-c);--pf:var(--on-primary-c);--pc:color-mix(in oklab,var(--c-lowest) 72%,transparent)}
+.t-dk{--pb:#030807;--pf:#E6EEEB;--pc:#101816;color-scheme:dark}
+:root[data-mode=dark] .t-dk{--pb:#000;box-shadow:inset 0 0 0 1px rgb(255 255 255/.09)}
+.cx h3{margin:0;font-size:clamp(30px,4.4vw,56px);line-height:1.22;font-weight:800;text-wrap:balance}
+html[dir=ltr] .cx h3{letter-spacing:-.04em;line-height:1.04}
+.cx p{margin:14px 0 0;color:var(--pm);font-size:clamp(17px,1.6vw,20px);max-width:32ch;text-wrap:pretty}
+.card::after{content:"";position:absolute;inset:0;border-radius:inherit;background:#000;opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
+.card.under{transform:scale(.94)}
+.card.under::after{opacity:.32}
+@media (prefers-reduced-motion:no-preference){
+  .js .card{position:sticky;top:calc(var(--top) + var(--i) * 14px);transition:transform .5s var(--ease)}
+  @supports (animation-timeline:view()){
+    .stack{timeline-scope:--k1,--k2,--k3,--k4}
+    .card:nth-of-type(2){view-timeline:--k1}.card:nth-of-type(3){view-timeline:--k2}.card:nth-of-type(4){view-timeline:--k3}.card:nth-of-type(5){view-timeline:--k4}
+    .card:nth-of-type(-n+4),.card:nth-of-type(-n+4)::after{animation:under linear both;animation-range:entry 0% entry 100%}
+    .card:nth-of-type(1),.card:nth-of-type(1)::after{animation-timeline:--k1}
+    .card:nth-of-type(2),.card:nth-of-type(2)::after{animation-timeline:--k2}
+    .card:nth-of-type(3),.card:nth-of-type(3)::after{animation-timeline:--k3}
+    .card:nth-of-type(4),.card:nth-of-type(4)::after{animation-timeline:--k4}
+    .card:nth-of-type(-n+4)::after{animation-name:dim}
+    .card.under{transform:none}.card.under::after{opacity:0}
+  }
+}
+@keyframes under{to{transform:scale(.94)}}
+@keyframes dim{to{opacity:.32}}
 
-/* inset panels: a quieter surface, inset from the edges, with one static grain */
-.pn{width:auto;margin:96px 8px 0;padding:88px max(16px,calc((100% - 1160px) / 2 - 16px));border-radius:16px;background-color:var(--c-low)}
-@media (min-width:600px){.pn{margin-inline:16px;padding-block:112px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");background-blend-mode:overlay}}
-.pn+section{padding-top:112px}
-.pn .how button:hover{background:var(--c)}
-.pn .how button[aria-pressed=true]{background:var(--c-high)}
-.pn details{background:var(--c-lowest);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--outline-v) 60%,transparent);transition:background .3s,box-shadow .3s}
-.pn details[open]{background:var(--c-lowest);box-shadow:inset 0 0 0 1px var(--outline-v)}
-@media (hover:hover) and (pointer:fine){.pn details:hover{box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--primary) 45%,transparent)}}
+/* statuses: one ring fills, then the saved tick */
+.rings{display:flex;justify-content:center;align-items:center;gap:clamp(12px,2.4vw,30px);padding:12px 0 52px}
+.sr1{position:relative;flex:none;width:clamp(46px,11vw,104px);aspect-ratio:1;border-radius:50%;box-shadow:0 0 0 3px var(--pb),0 0 0 6px var(--primary)}
+.sr1.seen{box-shadow:0 0 0 3px var(--pb),0 0 0 5px var(--pl)}
+.sr1>i{position:absolute;inset:0;border-radius:50%;background:var(--g)}
+.sr1.hot{width:clamp(88px,22vw,176px);box-shadow:none}
+.hot>svg{position:absolute;inset:-12px;width:calc(100% + 24px);height:calc(100% + 24px);transform:rotate(-90deg)}
+.hot circle{fill:none;stroke-width:3}
+.hot .tr{stroke:var(--pl)}
+.hot .pr{stroke:var(--primary);stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:0;transition:stroke-dashoffset 1.6s var(--ease) .4s}
+.hot .ok{position:absolute;bottom:-2px;inset-inline-end:-2px;width:34%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:var(--on-primary);box-shadow:0 0 0 4px var(--pb);transition:transform .6s var(--spring) 2s}
+.hot .ok .i{width:58%;height:58%;stroke-width:3}
+.hot .sv{position:absolute;top:calc(100% + 18px);inset-inline:-40px;text-align:center;font-weight:700;font-size:15px;white-space:nowrap;transition:opacity .4s var(--ease) 2.2s,transform .5s var(--ease) 2.2s}
+@media (max-width:479px){.sr1:nth-child(5){display:none}}
 
-/* install walkthrough */
-.install{display:grid;gap:40px}
-@media (min-width:960px){.install{grid-template-columns:1fr 1fr;align-items:center}}
-.how{list-style:none;margin:28px 0 0;padding:0;display:grid;gap:6px}
-.how button{width:100%;display:grid;grid-template-columns:40px 1fr;gap:14px;align-items:start;text-align:start;padding:14px;border:0;border-radius:20px;background:transparent;cursor:pointer;transition:background .35s var(--ease)}
-.how button:hover{background:var(--c-low)}
-.how button[aria-pressed=true]{background:var(--c)}
-.how .k{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--c-high);font:800 16px/1 system-ui,sans-serif;transition:background .35s,color .35s}
-.how button[aria-pressed=true] .k{background:var(--primary);color:var(--on-primary)}
-.how b{display:block;font-size:18px;line-height:1.4;margin-top:6px}
-.how .d{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .5s var(--ease),opacity .4s}
-.how .d>span{overflow:hidden;color:var(--muted);font-size:15.5px}
-.how button[aria-pressed=true] .d{grid-template-rows:1fr;opacity:1}
-.sys-wrap{position:relative;display:grid;place-items:center;padding:30px 0}
-.sys-wrap .dots{inset:0}
-.sys{z-index:1;font-size:13.5px}
-.sys .sb{position:relative;z-index:3}
-.sb .i{width:12px;height:12px;stroke-width:2.4;vertical-align:-1px}
-.sys .sc{padding:46px 18px 18px}
-.sys[data-s="0"] .s0,.sys[data-s="1"] .s1,.sys[data-s="2"] .s2,.sys[data-s="3"] .s3{opacity:1;transform:none}
-.noti{margin-top:34px;padding:14px;border-radius:18px;background:var(--c-high);display:flex;gap:12px;align-items:center}
-.sys[data-s="0"] .noti{animation:slideIn .7s var(--ease) both .15s}
-@keyframes slideIn{from{opacity:0;transform:translateY(-24px)}}
-.fic{width:40px;height:40px;border-radius:12px;background:var(--primary-c);color:var(--on-primary-c);display:grid;place-items:center;flex:none}
-.noti b{display:block;font:700 14px/1.3 system-ui,sans-serif;direction:ltr;text-align:start}
-.noti small{color:var(--muted)}
-.noti .go{margin-inline-start:auto;font-weight:700;color:var(--primary)}
-.setrow{margin-top:20px;padding:16px;border-radius:18px;background:var(--c-high);display:flex;align-items:center;gap:12px;font-weight:700}
-.tg{margin-inline-start:auto;width:52px;height:32px;border-radius:999px;background:var(--c-highest);border:2px solid var(--outline);position:relative;transition:background .4s var(--ease),border-color .4s;flex:none}
-.tg::after{content:"";position:absolute;top:50%;inset-inline-start:6px;width:16px;height:16px;margin-top:-8px;border-radius:50%;background:var(--outline);transition:all .45s var(--spring)}
-.sys.on1 .tg{background:var(--primary);border-color:var(--primary)}
-.sys.on1 .tg::after{inset-inline-start:24px;width:24px;height:24px;margin-top:-12px;background:var(--on-primary)}
-.sys h4{margin:6px 0 0;font-size:19px}
-.sys .mut{color:var(--muted);font-size:13.5px;margin:4px 0 0}
-.dlg{margin:auto 0 0;padding:20px;border-radius:24px;background:var(--c-high);text-align:center}
-.dlg img{width:56px;height:56px;border-radius:16px;margin:0 auto 8px}
-.dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-.dlg .acts span{padding:8px 14px;border-radius:999px;font-weight:700;color:var(--primary);transition:background .3s,transform .2s}
-.sys.on2 .dlg .acts span:last-child{background:var(--primary-c);transform:scale(.95)}
-.scan{position:relative;margin-top:14px;height:6px;border-radius:3px;background:var(--c-highest);overflow:hidden}
-.scan::after{content:"";position:absolute;inset:0;background:var(--primary);transform:scaleX(0);transform-origin:left}
-[dir=rtl] .scan::after{transform-origin:right}
-.sys.on2 .scan::after{transform:scaleX(1);transition:transform 1.4s var(--ease) .3s}
-.home{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px 10px;margin-top:40px;justify-items:center}
-.home>i{width:100%;max-width:52px;height:auto;aspect-ratio:1;border-radius:16px;background:var(--c-high)}
-.home .nz{width:100%;min-width:0;display:grid;justify-items:center;gap:4px;font-size:12px;font-weight:700}
-.home .nz img{width:100%;max-width:52px;height:auto;aspect-ratio:1;border-radius:16px;opacity:0;transform:scale(.3)}
-.sys[data-s="3"] .home .nz img{animation:pop .7s var(--spring) .2s forwards}
-@keyframes pop{to{opacity:1;transform:none}}
+/* playlist: the count rolls from 3 to 4 as lesson 4 lands */
+.pl{display:grid;gap:24px;align-items:center}
+@media (min-width:600px){.pl{grid-template-columns:auto minmax(0,1fr);gap:40px}}
+.cnt{display:grid;gap:6px}
+.cnt>.ltr{display:flex;align-items:flex-end;font:800 clamp(92px,15vw,184px)/1 system-ui,-apple-system,sans-serif;letter-spacing:-.05em}
+.dg{display:inline-block;height:1em;overflow:hidden}
+.dg>span{display:block;height:1em;transform:translateY(-100%);transition:transform .7s var(--spring) 2.4s}
+.of{font-size:.42em;line-height:1.6;opacity:.45;letter-spacing:-.02em}
+.cnt small{font-size:16px;font-weight:700;color:var(--pm)}
+.pll{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.pll li{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:18px;background:var(--pc)}
+.pll .g{position:relative;width:32px;height:32px;flex:none;display:grid;place-items:center;color:var(--primary)}
+.pll .g>.i{width:24px;height:24px;stroke-width:2.6}
+.pll .g>i{width:10px;height:10px;border-radius:50%;background:var(--pm);opacity:.6}
+.pll .rg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);transition:opacity .4s 2.3s}
+.pll .rg circle{fill:none;stroke-width:5}
+.pll .rg .tr{stroke:var(--pl)}
+.pll .rg .pr{stroke:var(--primary);stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:0;transition:stroke-dashoffset 1.8s var(--ease) .5s}
+.now .rg{opacity:0}
+.now .ck{transition:opacity .3s 2.3s,transform .5s var(--spring) 2.3s}
+.pll .t{flex:1;min-width:0;display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+.pll b{font-size:17px}
+.pll small{font-size:14px;color:var(--pm)}
+.pll .wt{opacity:.6}
+.sw2{display:inline-grid}
+.sw2>*{grid-area:1/1;transition:opacity .3s 2.3s,transform .4s var(--ease) 2.3s}
+.sw2>:first-child{opacity:0}
 
-/* promises */
-.promises{display:grid;margin-top:40px;border-top:1px solid var(--outline-v)}
+/* several links: each one lands in the same sheet */
+.ms{display:grid;place-items:center}
+.sh{width:min(460px,100%);padding:22px;border-radius:28px;background:var(--pc);box-shadow:inset 0 0 0 1px rgb(255 255 255/.07);display:grid;gap:10px}
+.sh>b{font-size:22px;font-weight:800;margin:0 4px 6px}
+.ml{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:rgb(255 255 255/.06);font:600 15.5px/1.2 ui-monospace,"SF Mono",Menlo,monospace;transition:opacity .4s var(--ease),transform .7s cubic-bezier(.34,1.35,.64,1);transition-delay:calc(var(--q) * .3s + .2s)}
+.ml .i{width:18px;height:18px;color:#82D5C5}
+.ml .ltr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh .pbtn{min-height:54px;margin-top:8px;font-size:16px;background:#82D5C5;color:#00201B;transition:opacity .4s 1.3s,transform .2s var(--ease)}
+.sh .pbtn .i{width:20px;height:20px}
+.card.go .sh .pbtn{animation:press .45s var(--ease) 1.9s}
+@keyframes press{40%{transform:scale(.95)}}
+
+/* audio: tap a quality, the preview and the size follow */
+.au{display:grid;gap:22px}
+.pk{display:flex;flex-wrap:wrap;gap:8px}
+.pk button{min-height:48px;padding:0 22px;border:0;border-radius:999px;background:transparent;box-shadow:inset 0 0 0 1.5px var(--pl);font-weight:700;font-size:16px;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s,transform .15s var(--ease)}
+.pk button:hover{box-shadow:inset 0 0 0 1.5px var(--pf)}
+.pk button:active{transform:scale(.96)}
+.pk [aria-pressed=true]{background:var(--pf);color:var(--pb);box-shadow:none}
+.pv{position:relative;height:clamp(120px,17vw,190px)}
+.th{position:absolute;inset:0;margin:auto;height:100%;aspect-ratio:16/9;border-radius:18px;overflow:hidden;opacity:0;transform:scale(.9);transition:opacity .35s var(--ease),transform .5s var(--ease)}
+.th svg{display:block;width:100%;height:100%}
+.au[data-v="0"] .th{opacity:1;transform:none}
+.au[data-v="1"] .th{opacity:1;transform:scale(.82)}
+.wave{position:absolute;inset:0;display:flex;align-items:center;gap:clamp(3px,.5vw,6px)}
+.wave i{flex:1;height:100%;border-radius:99px;background:var(--primary);transform:scaleY(var(--h));transition:transform .6s var(--ease) calc(var(--k) * 14ms),opacity .3s}
+.au:not([data-v="2"]) .wave i{transform:scaleY(.04);opacity:0;transition-delay:0s}
+.out{display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;padding-top:18px;border-top:1px solid var(--pl)}
+.fmt,.szs{display:inline-grid}
+.fmt>*,.szs>*{grid-area:1/1;opacity:0;visibility:hidden;transform:translateY(12px);transition:opacity .3s var(--ease),transform .4s var(--ease),visibility .3s}
+.fmt{font:800 clamp(52px,8vw,100px)/1 system-ui,-apple-system,sans-serif;letter-spacing:-.05em}
+.szs{font:600 clamp(20px,2.4vw,28px)/1 system-ui,sans-serif;color:var(--pm)}
+.au[data-v="0"] :is(.fmt,.szs)>:nth-child(1),.au[data-v="1"] :is(.fmt,.szs)>:nth-child(2),.au[data-v="2"] :is(.fmt,.szs)>:nth-child(3){opacity:1;visibility:visible;transform:none}
+
+/* the widget, alone and large; its bar keeps running */
+@property --n{syntax:"<integer>";inherits:false;initial-value:64}
+.wgt{display:grid;place-items:center}
+.wg2{width:min(560px,100%);display:flex;align-items:center;gap:clamp(14px,2vw,22px);padding:clamp(18px,2.6vw,28px);border-radius:clamp(26px,3.4vw,40px);background:var(--c-lowest);color:var(--on-bg);box-shadow:0 18px 40px -26px rgb(0 32 27/.5);transition:opacity .5s var(--ease),transform .7s var(--spring)}
+.wg2 img{width:clamp(44px,6vw,64px);flex:none}
+.wg2 .t{flex:1;min-width:0}
+.wg2 b{display:block;font-size:clamp(15px,1.6vw,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wg2 .bar{display:block;height:8px;margin-top:12px;border-radius:4px;background:color-mix(in oklab,var(--on-bg) 12%,transparent);overflow:hidden}
+.wg2 .bar i{display:block;height:100%;border-radius:4px;background:var(--primary);transform:scaleX(.64);transform-origin:left;transition:transform 2.8s var(--ease) .8s}
+[dir=rtl] .wg2 .bar i{transform-origin:right}
+.pc{--n:64;counter-reset:n var(--n);direction:ltr;font:800 clamp(34px,5vw,58px)/1 system-ui,-apple-system,sans-serif;letter-spacing:-.04em;transition:--n 2.8s var(--ease) .8s}
+.pc::after{content:counter(n) "%"}
+html[lang=fr] .pc::after{content:counter(n) "\a0%"}
+
+/* start states: only with JS and motion; .go plays them once, then they hold */
+@media (prefers-reduced-motion:no-preference){
+  .js .card:not(.go) .hot .pr{stroke-dashoffset:1}
+  .js .card:not(.go) .hot .ok{transform:scale(0)}
+  .js .card:not(.go) .hot .sv{opacity:0;transform:translateY(-6px)}
+  .js .card:not(.go) .dg>span{transform:none}
+  .js .card:not(.go) .pll .rg{opacity:1}
+  .js .card:not(.go) .pll .rg .pr{stroke-dashoffset:1}
+  .js .card:not(.go) .now .ck{opacity:0;transform:scale(.4)}
+  .js .card:not(.go) .sw2>:first-child{opacity:1}
+  .js .card:not(.go) .sw2>:last-child{opacity:0}
+  .js .card:not(.go) .ml{opacity:0;transform:translate(calc(var(--x) * -110px),-34px) rotate(calc(var(--x) * -7deg)) scale(.9)}
+  .js .card:not(.go) .sh .pbtn{opacity:.35}
+  .js .card:not(.go) .wave i{transform:scaleY(.04)}
+  .js .card:not(.go) .wg2{opacity:0;transform:translateY(24px) scale(.9)}
+  .js .card:not(.go) .wg2 .bar i{transform:scaleX(.38)}
+  .js .card:not(.go) .pc{--n:38}
+}
+
+/* trust: one dark world, the sentence lights up word by word */
+.trust{position:relative;z-index:1;padding:clamp(104px,15vw,190px) 0;background:#030807;color:#E6EEEB;color-scheme:dark}
+:root[data-mode=dark] .trust{background:#000}
+.lit{font-size:clamp(36px,6.4vw,84px);line-height:1.32;max-width:19ch;font-weight:800}
+html[dir=ltr] .lit{line-height:1.06;letter-spacing:-.045em}
+.lw{display:inline-block}
+@media (prefers-reduced-motion:no-preference){
+  @supports (animation-timeline:view()){
+    .js .lit{view-timeline:--lit}
+    .js .lw{animation:lw linear both;animation-timeline:--lit;animation-range:cover var(--a) cover var(--b)}
+  }
+  @supports not (animation-timeline:view()){
+    .js .lw{transition:opacity .5s var(--ease) calc(var(--k) * 70ms)}
+    .js .lit:not(.in) .lw{opacity:.15}
+  }
+}
+@keyframes lw{from{opacity:.15}to{opacity:1}}
+.promises{list-style:none;padding:0;display:grid;margin:clamp(56px,8vw,96px) 0 0;border-top:1px solid rgb(255 255 255/.14)}
 @media (min-width:960px){.promises{grid-template-columns:repeat(3,1fr)}}
-.pi{display:flex;align-items:center;gap:18px;padding:24px 0;border-bottom:1px solid var(--outline-v)}
-@media (min-width:960px){.pi{padding-inline:32px}.pi:first-child{padding-inline-start:0}.pi+.pi{border-inline-start:1px solid var(--outline-v)}}
-.pi .ic{flex:none;width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--primary-c);color:var(--on-primary-c);transition:transform .5s var(--spring)}
-@media (hover:hover) and (pointer:fine){.pi:hover .ic{transform:rotate(calc(var(--x) * -6deg)) scale(1.06)}}
+.pi{display:flex;align-items:center;gap:18px;padding:24px 0;border-bottom:1px solid rgb(255 255 255/.14)}
+@media (min-width:960px){.pi{padding-inline:32px;border-bottom:0}.pi:first-child{padding-inline-start:0}.pi+.pi{border-inline-start:1px solid rgb(255 255 255/.14)}}
+.pi .ic{flex:none;width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:rgb(130 213 197/.12);color:#82D5C5}
 .pi .ic .i{width:26px;height:26px}
-.pi .ic .dw{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.1s var(--ease) .3s}
-.pi.in .ic .dw{stroke-dashoffset:0}
+.pi .ic .dw{stroke-dasharray:1;transition:stroke-dashoffset 1.1s var(--ease) .3s}
+.js .promises:not(.in) .dw{stroke-dashoffset:1}
 .pi b{font-size:19px;line-height:1.4}
+
+/* install: four numbered steps in a row, one Android switch */
+.ins{padding-top:clamp(104px,12vw,150px)}
+.ih{display:grid;gap:32px;align-items:end}
+@media (min-width:960px){.ih{grid-template-columns:1fr auto}}
+.adlg{width:min(340px,100%);padding:20px;border-radius:24px;background:var(--c-low);box-shadow:inset 0 0 0 1px var(--outline-v);display:grid;gap:2px}
+.adlg b{font-size:17px}
+.adlg small{color:var(--muted);font-size:14px}
+.setrow{margin-top:14px;padding:14px 16px;border-radius:18px;background:var(--c-high);display:flex;align-items:center;gap:12px;font-weight:700;font-size:15px}
+.tg{margin-inline-start:auto;width:52px;height:32px;border-radius:999px;background:var(--primary);border:2px solid var(--primary);position:relative;flex:none;transition:background .4s var(--ease) .7s,border-color .4s .7s}
+.tg::after{content:"";position:absolute;top:50%;inset-inline-start:24px;width:24px;height:24px;margin-top:-12px;border-radius:50%;background:var(--on-primary);transition:all .45s var(--spring) .7s}
+.js .adlg:not(.in) .tg{background:var(--c-highest);border-color:var(--outline)}
+.js .adlg:not(.in) .tg::after{inset-inline-start:6px;width:16px;height:16px;margin-top:-8px;background:var(--outline)}
+.strip{list-style:none;margin:56px 0 0;padding:0;display:grid;gap:40px;position:relative}
+@media (min-width:900px){.strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding-top:32px}.strip::before{content:"";position:absolute;top:0;inset-inline:0;height:2px;border-radius:1px;background:var(--primary);transform-origin:left}[dir=rtl] .strip::before{transform-origin:right}}
+.strip li{padding-top:20px;border-top:1px solid var(--outline-v)}
+@media (min-width:900px){.strip li{padding-top:0;border:0}}
+.big{display:block;font:800 clamp(72px,8vw,120px)/.9 system-ui,-apple-system,sans-serif;letter-spacing:-.05em;color:var(--primary)}
+.strip b{display:block;font-size:20px;line-height:1.4;margin-top:16px}
+.strip p{margin:8px 0 0;color:var(--muted);font-size:15.5px;text-wrap:pretty}
+@media (prefers-reduced-motion:no-preference){
+  @supports (animation-timeline:view()){
+    .js .strip{view-timeline:--st}
+    .js .strip::before{animation:grow linear both;animation-timeline:--st;animation-range:entry 60% cover 45%}
+    .js .strip li{animation:slide linear both;animation-timeline:view();animation-range:entry 10% cover 35%}
+    @media (min-width:900px){.js .strip li{animation-timeline:--st;animation-range:entry calc(60% + var(--k) * 10%) cover calc(30% + var(--k) * 5%)}}
+  }
+  @supports not (animation-timeline:view()){
+    .js .strip li{transition:opacity .5s var(--ease) calc(var(--k) * 90ms),transform .6s var(--ease) calc(var(--k) * 90ms)}
+    .js .strip:not(.in) li{opacity:0;transform:translateX(calc(var(--x) * -40px))}
+  }
+}
+@keyframes grow{from{transform:scaleX(0)}}
+@keyframes slide{from{opacity:0;transform:translateX(calc(var(--x) * -48px))}}
+
 /* faq */
+.faqs{padding-top:clamp(104px,12vw,150px)}
 .faq{margin-top:34px;display:grid;gap:10px}
 @media (min-width:960px){.faqs{display:grid;grid-template-columns:1fr 1.8fr;gap:48px;align-items:start}.faqs h2{position:sticky;top:110px}.faqs .faq{margin-top:0}}
-details{border-radius:var(--r-l);background:var(--c-low);transition:background .3s}
+details{border-radius:var(--r-l);background:var(--c-low);transition:background .3s,box-shadow .3s}
 details[open]{background:var(--c)}
+@media (hover:hover) and (pointer:fine){details:hover{box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--primary) 45%,transparent)}}
 details::details-content{height:0;overflow:clip;transition:height .45s var(--ease),content-visibility .45s allow-discrete}
 details[open]::details-content{height:auto}
 summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;min-height:64px;padding:0 22px;font-weight:700;font-size:18px;border-radius:var(--r-l)}
@@ -518,40 +577,44 @@ summary::-webkit-details-marker{display:none}
 summary::after{content:"";margin-inline-start:auto;width:9px;height:9px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-3px) rotate(45deg);transition:transform .4s var(--ease);flex:none}
 details[open] summary::after{transform:translateY(2px) rotate(-135deg)}
 details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
-
-/* trust */
-#trust h2{max-width:none}
-.tr-p{margin:14px 0 0;color:var(--muted);font-size:18px;max-width:46ch;text-wrap:pretty}
-.src{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:18px;font-weight:700}
 .wa{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:8px;font-weight:700;justify-self:start}
 .wa .i{fill:#25D366;stroke:none}
 
-/* open source */
-.open{margin-top:128px;position:relative;overflow:hidden;border-radius:var(--r-xl);background:var(--inverse);color:var(--on-inverse);padding:clamp(28px,6vw,64px);display:grid;gap:28px}
-@media (min-width:960px){.open{grid-template-columns:1.2fr 1fr;align-items:end}}
-.open::before{content:"";position:absolute;inset:0;background-image:radial-gradient(color-mix(in oklab,var(--on-inverse) 12%,transparent) 1.2px,transparent 1.5px);background-size:22px 22px;-webkit-mask:linear-gradient(to left,#000,transparent 60%);mask:linear-gradient(to left,#000,transparent 60%)}
-[dir=rtl] .open::before{-webkit-mask:linear-gradient(to right,#000,transparent 60%);mask:linear-gradient(to right,#000,transparent 60%)}
-.open>*{position:relative;min-width:0}
-.open p{margin:14px 0 0;opacity:.85;max-width:44ch}
-/* the full fingerprint in groups of 8, so it can actually be compared */
-.links{display:grid;gap:14px;font-size:15.5px}
-.links a{color:var(--inverse-primary)}
-.gh{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:0 22px;border-radius:999px;box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--on-inverse) 40%,transparent);color:inherit!important;text-decoration:none;font-weight:700;justify-self:start;transition:background .3s}
-.gh:hover{background:color-mix(in oklab,var(--on-inverse) 10%,transparent)}
-
-/* final: the icon drops in, the word sits behind */
-.final{text-align:center;padding:140px 0 40px;position:relative;overflow:hidden}
-.final h2{margin-inline:auto;position:relative}
-.drop{width:120px;height:132px;margin:0 auto 26px;position:relative}
-.drop img{width:96px;height:96px;margin:0 auto;border-radius:26px;box-shadow:0 20px 40px -18px color-mix(in oklab,var(--primary) 80%,transparent)}
-.drop::after{content:"";position:absolute;bottom:0;left:50%;width:72px;height:8px;margin-left:-36px;border-radius:50%;background:rgb(var(--ink-sh)/.18);filter:blur(3px)}
-.final.in .drop img{animation:bob 2.6s var(--ease) 3}
-.final.in .drop::after{animation:shadow 2.6s var(--ease) 3}
-@keyframes bob{0%,100%{transform:translateY(0)}45%{transform:translateY(14px)}60%{transform:translateY(10px)}}
-@keyframes shadow{0%,100%{transform:scaleX(.8);opacity:.6}45%{transform:scaleX(1.1);opacity:1}}
-.final .cta{margin-top:30px;position:relative}
-footer{padding:36px 0 48px;color:var(--muted);font-size:14.5px;display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between;border-top:1px solid var(--outline-v);margin-top:64px}
-footer a{color:inherit}
+/* the end: one dark closing section, a huge call, links, the wordmark over a teal glow */
+.end{position:relative;z-index:1;margin-top:clamp(104px,12vw,150px);min-height:100svh;display:flex;flex-direction:column;overflow:hidden;padding-top:clamp(88px,12vw,150px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
+.end a{color:inherit}
+.end h2{font-size:clamp(18px,2vw,22px);font-weight:600;line-height:1.5;opacity:.7;max-width:none}
+.end .go{display:flex;flex-wrap:wrap;align-items:center;gap:0 .25em;margin-top:10px;text-decoration:none;font-weight:800;font-size:clamp(42px,11vw,168px);line-height:1.15;transition:color .3s}
+html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
+.end .go .i{width:.7em;height:.7em;stroke-width:1.5;transform:scaleX(var(--x));transition:transform .5s var(--spring)}
+@media (hover:hover) and (pointer:fine){.end .go:hover{color:#9EF2E1}.end .go:hover .i{transform:translateX(calc(var(--x) * 16px)) scaleX(var(--x))}}
+.end .go:active{opacity:.8}
+.gm{margin:14px 0 0;font-size:15px;opacity:.6}
+.sep{height:1px;margin:clamp(44px,6vw,80px) 0 28px;border:0;background:rgb(255 255 255/.18);transform-origin:left;transition:transform 1.2s var(--ease) .3s}
+[dir=rtl] .sep{transform-origin:right}
+.frow{display:grid;gap:20px}
+@media (min-width:960px){.frow{grid-template-columns:1fr auto;align-items:start}}
+.fl{display:flex;flex-wrap:wrap;gap:0 24px}
+.fl a{display:inline-flex;align-items:center;gap:6px;min-height:44px;text-decoration:none;font-size:15px;font-weight:600;opacity:.85;transition:opacity .2s}
+html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em}
+.fl a:hover{opacity:1}
+.fl .ne{width:14px;height:14px;transform:scaleX(var(--x));transition:transform .3s var(--ease)}
+.fl a:hover .ne{transform:translate(calc(var(--x) * 2px),-2px) scaleX(var(--x))}
+.fm{display:grid;gap:4px;font-size:14px;opacity:.7}
+.langs{display:flex;gap:18px}
+.langs a{display:inline-flex;align-items:center;min-height:44px;text-decoration:none}
+.langs a:hover{text-decoration:underline}
+.mark{display:flex;align-items:flex-end;gap:2.4%;width:min(1400px,100% - 16px);margin:auto auto 0;padding-top:clamp(56px,8vw,96px);direction:ltr;transform:translateY(9%);transition:transform 1.2s var(--ease),opacity 1.2s var(--ease)}
+.mark img{width:19%;flex:none;margin-bottom:2.6%;border-radius:22%}
+.mark svg{flex:1;display:block;overflow:visible}
+.mark text{font:800 150px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:#F2F7F5}
+.fe{transition:opacity .7s var(--ease),transform .7s var(--ease),filter .7s var(--ease);transition-delay:calc(var(--f,0) * .15s)}
+@media (prefers-reduced-motion:no-preference){
+  .js .end:not(.in) .fe{opacity:0;transform:translateY(16px)}
+  @media (min-width:600px){.js .end:not(.in) .fe{filter:blur(8px)}}
+  .js .end:not(.in) .sep{transform:scaleX(0)}
+  .js .end:not(.in) .mark{opacity:0;transform:translateY(calc(9% + 40px))}
+}
 
 @media (max-width:520px){
   body{font-size:16.5px}
@@ -561,7 +624,6 @@ footer a{color:inherit}
   .lang{min-width:70px;padding:0 9px}
   .bar .mini span{display:none}
   .mini{padding:0 14px}
-  section{padding-top:96px}
   .flow{padding-top:72px}
 }
 @media (max-width:370px){body.past .brand .bn{display:none}}
@@ -570,7 +632,7 @@ footer a{color:inherit}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
-  [data-r],.w{opacity:1!important;transform:none!important;filter:none!important}
+  [data-r],.w,.fe,.mark{opacity:1!important;transform:none!important;filter:none!important}
   .fall{display:none}
 }
 </style>
@@ -596,6 +658,8 @@ footer a{color:inherit}
   <symbol id="list" viewBox="0 0 24 24"><path d="M4 6.5h11M4 11.5h11M4 16.5h6"/><path d="M14.5 14.5v5.5l4.5-2.75z"/></symbol>
   <symbol id="stack" viewBox="0 0 24 24"><rect x="4" y="9" width="12" height="11" rx="2.5"/><path d="M8 5.5h9.5A2.5 2.5 0 0 1 20 8v9"/></symbol>
   <symbol id="widget" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></symbol>
+  <symbol id="arr" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="ne" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
   <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.8 2.8 5.8 3.1 5.8 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
   <symbol id="wa" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z"/></symbol>
@@ -640,8 +704,6 @@ footer a{color:inherit}
 </header>
 
   <div class="stage" data-r style="--d:4">
-    <div class="dots" aria-hidden="true"></div>
-    <div class="halo" aria-hidden="true"></div>
     <div class="fall" aria-hidden="true">
       <span class="chip" style="left:6%;--t:7.5s;--dl:0s"><svg class="i"><use href="#video"/></svg>1080p</span>
       <span class="chip a" style="left:72%;--t:8.5s;--dl:1.6s;--r0:10deg;--r1:-4deg"><svg class="i"><use href="#music"/></svg>M4A</span>
@@ -651,7 +713,7 @@ footer a{color:inherit}
       <span class="chip" style="left:66%;--t:9.5s;--dl:7.2s"><svg class="i"><use href="#image"/></svg>GIF</span>
     </div>
 
-    <div class="phone" id="demo" data-s="0" role="img" data-i-aria="demo-aria" aria-label="Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved. Then WhatsApp statuses, playlists, several links, audio only and the home-screen widget">
+    <div class="phone" id="demo" data-s="0" role="img" data-i-aria="demo-aria" aria-label="Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved">
       <div class="screen" aria-hidden="true">
         <span class="cam"></span>
         <span class="tap" id="tap"></span>
@@ -706,58 +768,6 @@ footer a{color:inherit}
           <div class="body"><div class="toast"><svg class="i"><use href="#check"/></svg><span data-i="saved-to">Saved to <span class="ltr">Download/Nezzel</span></span></div></div>
           <div class="nav"><span><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Home</span></span><span class="on"><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Downloads</span></span><span><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuses</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Settings</span></span></div>
         </div>
-        <div class="sc s4">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="dh e" data-i="n-st">Statuses</div>
-          <div class="chips e" style="--e:1"><span class="on" data-i="st-all">All</span><span data-i="st-ph">Photos</span><span data-i="st-vid">Videos</span></div>
-          <div class="nn e" style="--e:2" data-i="st-new">3 new</div>
-          <div class="sg"><span class="tl" style="--g:linear-gradient(160deg,#2E3E9A,#7FB0EA);--q:0"><i class="nw"></i><small class="du">0:30</small></span><span class="tl" id="stt" style="--g:linear-gradient(160deg,#5E4636,#F2BE7A);--q:1"><i class="nw"></i><small class="sv"><svg class="i"><use href="#check"/></svg><span data-i="saved">Saved</span></small></span><span class="tl" style="--g:linear-gradient(160deg,#2F7F76,#A8DAD3);--q:2"><i class="nw"></i><small class="du">0:29</small></span><span class="tl" style="--g:linear-gradient(160deg,#3D4B52,#9AA9AE);--q:3"><small class="du">0:29</small><small class="sv"><svg class="i"><use href="#check"/></svg><span data-i="saved">Saved</span></small></span><span class="tl" style="--g:linear-gradient(160deg,#3C6E22,#C9DC6A);--q:4"><small class="du">0:15</small></span><span class="tl" style="--g:linear-gradient(160deg,#6E2296,#F0B3CE);--q:5"><small class="sv"><svg class="i"><use href="#check"/></svg><span data-i="saved">Saved</span></small></span><span class="tl" style="--g:linear-gradient(160deg,#5A3E38,#CDB9B3);--q:6"><small class="sv"><svg class="i"><use href="#check"/></svg><span data-i="saved">Saved</span></small></span><span class="tl" style="--g:linear-gradient(160deg,#0D5A4C,#6FC0B4);--q:7"><small class="du">0:30</small></span><span class="tl" style="--g:linear-gradient(160deg,#C0441A,#FAD3A0);--q:8"></span></div>
-          <div class="nav"><span><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Home</span></span><span><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Downloads</span></span><span class="on"><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuses</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Settings</span></span></div>
-        </div>
-        <div class="sc s5">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="pls e">
-            <div class="h"></div>
-            <b class="plt e" style="--e:2" data-i="pl-t">Cooking basics</b>
-            <small class="plm e" id="plm" style="--e:2" data-i="pl-of">Saved 3 of 10</small>
-            <div class="pbar e" style="--e:3"><i id="plbar"></i></div>
-            <span class="pa e" style="--e:3" data-i="pl-pause">Pause all</span>
-            <div class="pli e" style="--e:4"><span class="g"><svg class="i"><use href="#check"/></svg></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">3</span></b><small data-i="saved">Saved</small></span></div><div class="pli now e" style="--e:5"><span class="g"><span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="ok"><svg class="i"><use href="#check"/></svg></span></span></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">4</span></b><small class="pl-line"></small></span></div><div class="pli wt e" style="--e:6"><span class="g"><i></i></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">5</span></b><small data-i="pl-wait">Waiting</small></span></div><div class="pli wt e" style="--e:7"><span class="g"><i></i></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">6</span></b><small data-i="pl-wait">Waiting</small></span></div>
-          </div>
-        </div>
-        <div class="sc s6">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="nzb e"><img src="/img/icon.svg" alt="">Nezzel</div>
-          <div class="field e" id="mlf" style="--e:1"><svg class="i"><use href="#link"/></svg><span class="sw"><span data-i="field">Paste a public link</span><span class="ltr">youtu.be/aqz-KE-bpKQ</span></span></div>
-          <div class="ghost e" style="--e:2"><i></i><i></i></div>
-          <div class="nav"><span class="on"><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Home</span></span><span><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Downloads</span></span><span><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuses</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Settings</span></span></div>
-          <div class="sheet ms"><div class="h"></div><b class="mlt" data-i="ml-t">3 links</b>
-            <div class="rr"><span class="rd"></span><span data-i="best">Highest available</span></div><div class="rr sel"><span class="rd"></span><span data-i="bal">Balanced</span></div><div class="rr"><span class="rd"></span><span data-i="small">Small</span></div><div class="rr"><span class="rd"></span><span data-i="audio">Audio only</span></div>
-            <div class="ml" style="--q:0"><span class="ltr">youtu.be/aqz-KE-bpKQ</span><svg class="i"><use href="#x"/></svg></div><div class="ml" style="--q:1"><span class="ltr">vimeo.com/1084537</span><svg class="i"><use href="#x"/></svg></div><div class="ml" style="--q:2"><span class="ltr">youtu.be/eRsGyueVLvQ</span><svg class="i"><use href="#x"/></svg></div>
-            <div class="pbtn" id="mlb"><span data-i="ml-dl">Download 3 videos</span></div>
-          </div>
-        </div>
-        <div class="sc s7">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="dh e" data-i="n-dl">Downloads</div>
-          <div class="jobm au e" style="--e:1" id="jau">
-            <span class="cv"><svg class="i"><use href="#music"/></svg></span>
-            <span class="t"><b data-i="au-t">Podcast episode</b><small class="pl-line"></small></span>
-            <span class="open-a" data-i="open">Open</span>
-          </div>
-          <div class="old e" style="--e:2"><i></i><span><em></em><em></em></span></div>
-          <div class="old e" style="--e:3"><i></i><span><em></em><em></em></span></div>
-          <div class="nav"><span><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Home</span></span><span class="on"><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Downloads</span></span><span><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuses</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Settings</span></span></div>
-        </div>
-        <div class="sc s8">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="hs">
-            <span class="clock ltr num e">9:41</span>
-            <div class="wg e" style="--e:4"><img src="/img/icon.svg" alt=""><span class="t"><span class="wr"><b data-i="vt">Summer trip highlights</b><small class="ltr num" id="wgp">38%</small></span><span class="wbar"><i id="wgbar"></i></span></span></div>
-            <div class="apps"><i style="--q:0"></i><i style="--q:1"></i><i style="--q:2"></i><i style="--q:3"></i><i style="--q:4"></i><i style="--q:5"></i><i style="--q:6"></i><i style="--q:7"></i></div>
-            <div class="dock e" style="--e:3"><i></i><i></i><i></i><i></i></div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -772,68 +782,90 @@ footer a{color:inherit}
     <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">Tap Download</h3><p data-i="s3p">Nothing starts until you tap</p><p class="note" data-i="note">Demo only. Each site sets its own qualities, and ≈ is an estimate</p></li>
   </ol>
 </section>
-<section class="flow more" aria-labelledby="more-h">
-  <h2 id="more-h" data-i="more-h" data-r>There’s more</h2>
-  <ul class="steps">
-    <li class="step" data-step="3"><span class="n"><svg class="i"><use href="#status"/></svg></span><h3 data-i="x1">Keep WhatsApp statuses</h3><p data-i="x1p">Yours to keep, even after they vanish</p></li>
-    <li class="step" data-step="4"><span class="n"><svg class="i"><use href="#list"/></svg></span><h3 data-i="x2">Whole playlists</h3><p data-i="x2p">Paste its link and Nezzel saves them one by one</p></li>
-    <li class="step" data-step="5"><span class="n"><svg class="i"><use href="#stack"/></svg></span><h3 data-i="x3">Several links at once</h3><p data-i="x3p">Paste them together, tap once</p></li>
-    <li class="step" data-step="6"><span class="n"><svg class="i"><use href="#music"/></svg></span><h3 data-i="x4">Just the audio</h3><p data-i="x4p">For songs and podcasts, in a smaller file</p></li>
-    <li class="step" data-step="7"><span class="n"><svg class="i"><use href="#widget"/></svg></span><h3 data-i="x5">Nezzel on your home screen</h3><p data-i="x5p">Follow your downloads without opening the app</p></li>
-  </ul>
-</section>
 </div>
 
-<section class="pn" id="install" aria-labelledby="ins-h">
-  <div class="install">
-    <div>
-      <h2 id="ins-h" data-i="ins-h" data-r>How to install</h2>
-      <p class="sub" data-i="ins-sub" data-r style="--d:1">It’s not on the Play Store, so Android checks with you first. That’s normal</p>
-      <ol class="how" id="steps" data-r style="--d:2">
-        <li><button type="button" aria-pressed="true"><span class="k">1</span><span><b data-i="i1">Get the file and open it</b><span class="d"><span data-i="i1p">Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type</span></span></span></button></li>
-        <li><button type="button" aria-pressed="false"><span class="k">2</span><span><b data-i="i2">Allow the install</b><span class="d"><span data-i="i2p">If Android asks, switch on “Allow from this source”, then go back</span></span></span></button></li>
-        <li><button type="button" aria-pressed="false"><span class="k">3</span><span><b data-i="i3">Tap Install</b><span class="d"><span data-i="i3p">Play Protect may offer to scan the app. Let it, and go with what it says</span></span></span></button></li>
-        <li><button type="button" aria-pressed="false"><span class="k">4</span><span><b data-i="i4">Open Nezzel and try it</b><span class="d"><span data-i="i4p">Copy any link, then open the app, or paste the link in</span></span></span></button></li>
+<section class="stack" id="more" aria-labelledby="more-h">
+  <h2 class="wrap" id="more-h" data-i="more-h">There’s more</h2>
+  <article class="card t-lt" style="--i:0">
+    <div class="cx"><h3 data-i="x1">Keep WhatsApp statuses</h3><p data-i="x1p">Yours to keep, even after they vanish</p></div>
+    <div class="viz rings" aria-hidden="true">
+      <span class="sr1 seen" style="--g:linear-gradient(160deg,#2E3E9A,#7FB0EA)"><i></i></span>
+      <span class="sr1" style="--g:linear-gradient(160deg,#5E4636,#F2BE7A)"><i></i></span>
+      <span class="sr1 hot" style="--g:linear-gradient(160deg,#2F7F76,#A8DAD3)"><svg viewBox="0 0 100 100"><circle class="tr" cx="50" cy="50" r="47"/><circle class="pr" cx="50" cy="50" r="47" pathLength="1"/></svg><i></i><b class="ok"><svg class="i"><use href="#check"/></svg></b><small class="sv" data-i="saved">Saved</small></span>
+      <span class="sr1" style="--g:linear-gradient(160deg,#6E2296,#F0B3CE)"><i></i></span>
+      <span class="sr1 seen" style="--g:linear-gradient(160deg,#3C6E22,#C9DC6A)"><i></i></span>
+    </div>
+  </article>
+  <article class="card t-tl" style="--i:1">
+    <div class="cx"><h3 data-i="x2">Whole playlists</h3><p data-i="x2p">Paste its link and Nezzel saves them one by one</p></div>
+    <div class="viz pl" aria-hidden="true">
+      <div class="cnt"><span class="ltr num"><span class="dg"><span>3</span><span>4</span></span><span class="of">/10</span></span><small data-i="pl-t">Cooking basics</small></div>
+      <ol class="pll">
+        <li class="ok"><span class="g"><svg class="i"><use href="#check"/></svg></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">3</span></b><small data-i="saved">Saved</small></span></li>
+        <li class="now"><span class="g"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><svg class="i ck"><use href="#check"/></svg></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">4</span></b><small class="sw2"><span data-i="pl-now">Saving now</span><span data-i="saved">Saved</span></small></span></li>
+        <li class="wt"><span class="g"><i></i></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">5</span></b><small data-i="pl-wait">Waiting</small></span></li>
+        <li class="wt"><span class="g"><i></i></span><span class="t"><b><span data-i="pl-i">Lesson</span> <span class="ltr num">6</span></b><small data-i="pl-wait">Waiting</small></span></li>
       </ol>
     </div>
-    <div class="sys-wrap" data-r style="--d:2" aria-hidden="true">
-      <div class="dots"></div>
-      <div class="phone sys" id="sys" data-s="0"><div class="screen">
-        <span class="cam"></span>
-        <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-        <div class="sc s0">
-          <div class="noti"><span class="fic"><svg class="i"><use href="#file"/></svg></span><span><b>nezzel-<span class="vtxt">0.5.0</span>.apk</b><small><span data-i="sys-done">Download complete</span> · <span class="ltr size" data-mb="61.5">61.5 MB</span></small></span><span class="go" data-i="open">Open</span></div>
-        </div>
-        <div class="sc s1">
-          <h4 data-i="sys-t2">Install unknown apps</h4>
-          <p class="mut" data-i="sys-browser">Browser</p>
-          <div class="setrow"><span data-i="sys-allow">Allow from this source</span><span class="tg"></span></div>
-        </div>
-        <div class="sc s2">
-          <div class="dlg"><img src="/img/icon.svg" alt=""><b>Nezzel</b><p class="mut" data-i="sys-q">Do you want to install this app?</p><div class="scan"></div><div class="acts"><span data-i="sys-cancel">Cancel</span><span data-i="sys-install">Install</span></div></div>
-        </div>
-        <div class="sc s3">
-          <div class="home"><i></i><i></i><i></i><i></i><i></i><span class="nz"><img src="/img/icon.svg" alt="">Nezzel</span><i></i><i></i></div>
-        </div>
-      </div></div>
+  </article>
+  <article class="card t-dk" style="--i:2">
+    <div class="cx"><h3 data-i="x3">Several links at once</h3><p data-i="x3p">Paste them together, tap once</p></div>
+    <div class="viz ms" aria-hidden="true">
+      <div class="sh"><b data-i="ml-t">3 links</b>
+        <span class="ml" style="--q:0"><svg class="i"><use href="#link"/></svg><span class="ltr">youtu.be/aqz-KE-bpKQ</span></span>
+        <span class="ml" style="--q:1"><svg class="i"><use href="#link"/></svg><span class="ltr">vimeo.com/1084537</span></span>
+        <span class="ml" style="--q:2"><svg class="i"><use href="#link"/></svg><span class="ltr">youtu.be/eRsGyueVLvQ</span></span>
+        <span class="pbtn"><svg class="i"><use href="#dl"/></svg><span data-i="ml-dl">Download 3 videos</span></span>
+      </div>
     </div>
+  </article>
+  <article class="card t-lt" style="--i:3">
+    <div class="cx"><h3 data-i="x4">Just the audio</h3><p data-i="x4p">For songs and podcasts, in a smaller file</p></div>
+    <div class="viz au" data-v="2">
+      <div class="pk" role="group" data-i-aria="pick-aria" aria-label="Try a quality">
+        <button type="button" data-v="0" aria-pressed="false"><span class="ltr">1080p</span></button>
+        <button type="button" data-v="1" aria-pressed="false"><span class="ltr">720p</span></button>
+        <button type="button" data-v="2" aria-pressed="true"><span data-i="audio">Audio only</span></button>
+      </div>
+      <div class="pv" aria-hidden="true"><div class="th"><svg viewBox="0 0 160 90"><use href="#scene"/></svg></div><div class="wave"></div></div>
+      <div class="out" aria-live="polite"><b class="fmt ltr"><span>1080p</span><span>720p</span><span>M4A</span></b><span class="szs ltr num"><span data-mb="61.8" data-est>≈ 61.8 MB</span><span data-mb="32.4" data-est>≈ 32.4 MB</span><span data-mb="2.7">2.7 MB</span></span></div>
+    </div>
+  </article>
+  <article class="card t-tl" style="--i:4">
+    <div class="cx"><h3 data-i="x5">Nezzel on your home screen</h3><p data-i="x5p">Follow your downloads without opening the app</p></div>
+    <div class="viz wgt" aria-hidden="true">
+      <div class="wg2"><img src="/img/icon.svg" alt=""><span class="t"><b data-i="vt">Summer trip highlights</b><span class="bar"><i></i></span></span><span class="pc"></span></div>
+    </div>
+  </article>
+</section>
+
+<section class="trust" id="trust" aria-labelledby="tr-h">
+  <div class="wrap">
+    <h2 id="tr-h" class="lit" data-i="tr-p">No ads before or after a download. No sign-up</h2>
+    <ul class="promises">
+      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">Files come straight to your phone</b></li>
+      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">Real sizes, ≈ when estimated</b></li>
+      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z" pathLength="1"/><path class="dw" d="m9 12 2.2 2.2L15.5 10" pathLength="1"/></svg></span><b data-i="p5">Never asks for your location or contacts</b></li>
+    </ul>
   </div>
 </section>
 
-<section class="wrap" id="trust" aria-labelledby="tr-h">
-  <h2 id="tr-h" data-i="tr-h" data-r>No ads, no account</h2>
-  <p class="tr-p" data-i="tr-p" data-r style="--d:1">No ads before or after a download. No sign-up</p>
-  <div class="promises">
-    <div class="pi" data-r style="--d:1"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">Files come straight to your phone</b></div>
-    <div class="pi" data-r style="--d:2"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">Real sizes, ≈ when estimated</b></div>
-    <div class="pi" data-r style="--d:3"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z" pathLength="1"/><path class="dw" d="m9 12 2.2 2.2L15.5 10" pathLength="1"/></svg></span><b data-i="p5">Never asks for your location or contacts</b></div>
+<section class="wrap ins" id="install" aria-labelledby="ins-h">
+  <div class="ih">
+    <div><h2 id="ins-h" data-i="ins-h">How to install</h2><p class="sub" data-i="ins-sub">It’s not on the Play Store, so Android checks with you first. That’s normal</p></div>
+    <div class="adlg" aria-hidden="true"><b data-i="sys-t2">Install unknown apps</b><small data-i="sys-browser">Browser</small><span class="setrow"><span data-i="sys-allow">Allow from this source</span><span class="tg"></span></span></div>
   </div>
-  <a class="src" href="https://github.com/ahmed-abdat/nezzel"><svg class="i"><use href="#gh"/></svg><span data-i="tr-src">Source code</span></a>
+  <ol class="strip">
+    <li style="--k:0"><span class="big num">1</span><b data-i="i1">Get the file and open it</b><p data-i="i1p">Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type</p></li>
+    <li style="--k:1"><span class="big num">2</span><b data-i="i2">Allow the install</b><p data-i="i2p">If Android asks, switch on “Allow from this source”, then go back</p></li>
+    <li style="--k:2"><span class="big num">3</span><b data-i="i3">Tap Install</b><p data-i="i3p">Play Protect may offer to scan the app. Let it, and go with what it says</p></li>
+    <li style="--k:3"><span class="big num">4</span><b data-i="i4">Open Nezzel and try it</b><p data-i="i4p">Copy any link, then open the app, or paste the link in</p></li>
+  </ol>
 </section>
 
-<section class="pn faqs" aria-labelledby="faq-h">
-  <h2 id="faq-h" data-i="faq-h" data-r>Quick answers</h2>
-  <div class="faq" data-r style="--d:1">
+<section class="wrap faqs" aria-labelledby="faq-h">
+  <h2 id="faq-h" data-i="faq-h">Quick answers</h2>
+  <div class="faq">
     <details><summary data-i="f1">Is it free?</summary><p data-i="f1a">Yes, completely. No ads, no subscription</p></details>
     <details><summary data-i="f2">Which sites work?</summary><p data-i="f2a">Popular video and photo sites, as long as the link is public. Some links won’t work, and private, protected or sign-in-only content isn’t supported. <a href="https://github.com/ahmed-abdat/nezzel#tested-sites">Sites we’ve tested</a></p></details>
     <details><summary data-i="f8">How do I keep WhatsApp statuses?</summary><p data-i="f8a">Watch the status in WhatsApp, then open the Statuses tab in Nezzel. The first time, you allow access to one folder. That’s all</p></details>
@@ -845,30 +877,27 @@ footer a{color:inherit}
     <a class="wa" data-i-href="wa-href" href="https://wa.me/22237928327?text=Hi%20%F0%9F%91%8B%20Thanks%20for%20Nezzel%21"><svg class="i" aria-hidden="true"><use href="#wa"/></svg><span data-i="wa">Message us on WhatsApp</span></a>
   </div>
 </section>
-
-<div class="wrap">
-  <div class="open" data-r>
-    <div>
-      <h2 data-i="os-h">Open source</h2>
-      <p data-i="os-p">Every line is on GitHub for anyone to read</p>
-    </div>
-    <div class="links">
-      <a class="gh" href="https://github.com/ahmed-abdat/nezzel"><svg class="i"><use href="#gh"/></svg><span data-i="gh">Code on GitHub</span></a>
-      <a href="https://github.com/ahmed-abdat/nezzel/releases" data-i="rel">All releases and notes</a>
-    </div>
-  </div>
-</div>
-
-<section class="wrap final" id="final" aria-labelledby="fin-h">
-  <div class="drop" aria-hidden="true"><img src="/img/icon.svg" alt=""></div>
-  <h2 id="fin-h" data-i="fin-h" data-r>Copy the link. We’ll take it from there</h2>
-  <div class="cta" data-r style="--d:1">
-    <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/download/v0.5.0/nezzel-0.5.0.apk"><svg class="i"><use href="#dl"/></svg><span class="roll"><span data-i="cta">Download the app</span></span> <span class="sz ltr num size" data-mb="61.5">61.5 MB</span></a>
-  </div>
-</section>
 </main>
 
-<div class="wrap"><footer><span data-i="foot">Made by <a href="https://hululsoft.mr">Hululsoft</a></span><span><a href="https://github.com/ahmed-abdat/nezzel/blob/main/THIRD_PARTY_NOTICES.md" data-i="lic">Licences</a> · <a href="https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md" data-i="sec">Report a security issue</a></span></footer></div>
+<footer class="end" id="final" aria-labelledby="fin-h">
+  <div class="wrap">
+    <h2 id="fin-h" class="fe" data-i="fin-h">Copy the link. We’ll take it from there</h2>
+    <a class="go dl-link fe" style="--f:1" href="https://github.com/ahmed-abdat/nezzel/releases/download/v0.5.0/nezzel-0.5.0.apk"><span data-i="get-big">Get Nezzel</span><svg class="i"><use href="#arr"/></svg></a>
+    <p class="gm fe" style="--f:2"><span data-i="meta">Android 10 or newer · version</span> <span class="ltr num vtxt">0.5.0</span> · <span class="ltr num size" data-mb="61.5">61.5 MB</span></p>
+    <hr class="sep">
+    <div class="frow fe" style="--f:3">
+      <nav class="fl" aria-label="Nezzel">
+        <a href="https://github.com/ahmed-abdat/nezzel"><span data-i="gh">Code on GitHub</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/releases"><span data-i="rel">All releases and notes</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md"><span data-i="priv">Privacy</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/THIRD_PARTY_NOTICES.md"><span data-i="lic">Licences</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md"><span data-i="sec">Report a security issue</span><svg class="i ne"><use href="#ne"/></svg></a>
+      </nav>
+      <div class="fm"><span class="langs"><a href="/" hreflang="ar" lang="ar" dir="rtl">العربية</a><a href="/fr/" hreflang="fr" lang="fr" dir="ltr">Français</a><a href="/en/" hreflang="en" lang="en" dir="ltr">English</a></span><span data-i="foot">Made by <a href="https://hululsoft.mr">Hululsoft</a></span></div>
+    </div>
+  </div>
+  <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
+</footer>
 
 <script>
 (() => {
@@ -879,7 +908,7 @@ footer a{color:inherit}
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"Save videos <em>straight from a link</em>",
     lede:"Audio and photos too. Free, and it all happens on your phone",
     cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
-    "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved. Then WhatsApp statuses, playlists, several links, audio only and the home-screen widget",
+    "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved",
     av:"F", chat:"Family", msg:"Look at this clip", vt:"Summer trip highlights",
     "m-reply":"Reply", "m-share":"Share", "m-copy":"Copy link", copied:"Link copied",
     field:"Paste a public link", "n-home":"Home", "n-dl":"Downloads", "n-set":"Settings",
@@ -933,7 +962,11 @@ footer a{color:inherit}
     "pl-pause": "Pause all",
     "ml-t": "3 links",
     "ml-dl": "Download 3 videos",
-    "au-t": "Podcast episode"
+    "au-t": "Podcast episode",
+    "pl-now": "Saving now",
+    "pick-aria": "Try a quality",
+    "get-big": "Get Nezzel",
+    "priv": "Privacy"
   };
   const AR = {
       "skip": "تخطَّ إلى المحتوى",
@@ -945,7 +978,7 @@ footer a{color:inherit}
       "meta": "لأندرويد 10 أو أحدث · الإصدار",
       "howto": "كيف أثبّته؟",
       "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون · الإصدار",
-      "demo-aria": "عرض: تنسخ رابط فيديو فيقترحه Nezzel، تختار الجودة ويُحفظ الملف، ثم حالات واتساب وقوائم التشغيل وعدة روابط والصوت وحده وأداة الشاشة الرئيسية",
+      "demo-aria": "عرض: تنسخ رابط فيديو فيقترحه Nezzel، تختار الجودة ويُحفظ الملف",
       "av": "ع",
       "chat": "العائلة",
       "msg": "شوفوا هذا المقطع",
@@ -1055,14 +1088,18 @@ footer a{color:inherit}
     "pl-pause": "إيقاف الكل مؤقتًا",
     "ml-t": "3 روابط",
     "ml-dl": "تنزيل 3 فيديوهات",
-    "au-t": "حلقة البودكاست"
+    "au-t": "حلقة البودكاست",
+    "pl-now": "يُحفظ الآن",
+    "pick-aria": "جرّب جودة",
+    "get-big": "حمّل Nezzel",
+    "priv": "الخصوصية"
   };
   const FR = {
     language:"Langue", "og-alt":"Nezzel : la vidéo, il suffit du lien. Un téléphone affiche les qualités proposées",
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"La vidéo, <em>il suffit du lien</em>",
     lede:"Le son et les photos aussi. Gratuit, et tout se passe sur votre téléphone",
     cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
-    "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré. Puis statuts WhatsApp, playlists, plusieurs liens, le son seul et le widget d’accueil",
+    "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré",
     av:"F", chat:"Famille", msg:"Regardez cette vidéo", vt:"Souvenirs de vacances",
     "m-reply":"Répondre", "m-share":"Partager", "m-copy":"Copier le lien", copied:"Lien copié",
     field:"Collez un lien public", "n-home":"Accueil", "n-dl":"Téléchargements", "n-set":"Paramètres",
@@ -1116,7 +1153,11 @@ footer a{color:inherit}
     "pl-pause": "Tout mettre en pause",
     "ml-t": "3 liens",
     "ml-dl": "Télécharger 3 vidéos",
-    "au-t": "Épisode de podcast"
+    "au-t": "Épisode de podcast",
+    "pl-now": "En cours",
+    "pick-aria": "Essayez une qualité",
+    "get-big": "Télécharger Nezzel",
+    "priv": "Confidentialité"
   };
   const META = {
     ar: ["Nezzel · حمّل الفيديو من رابطه", "تطبيق أندرويد مجاني يحفظ لك الفيديو والصوت والصور من روابطها، بلا إعلانات ولا حساب"],
@@ -1132,26 +1173,27 @@ footer a{color:inherit}
 
   // shared state, declared before anything can render
   let rel = null, done3 = false;
-  const demo = $("#demo"), tap = $("#tap"), jobm = $("#jobm"), jau = $("#jau"), plnow = $(".s5 .now"), plm = $("#plm"), plbar = $("#plbar"), wgbar = $("#wgbar"), wgp = $("#wgp");
+  const demo = $("#demo"), tap = $("#tap"), jobm = $("#jobm");
   const stage = $(".stage"), story = $(".story"), steps = $$(".step");
-  const sys = $("#sys"), tabs = $$("#steps button");
 
   // ---------- language ----------
-  function splitWords(el) {
-    // Word-level reveal: never split Arabic letters, joining would break.
+  function splitWords(el, cls, mask) {
+    // Word-level only: never split Arabic letters, joining would break.
     const walk = n => [...n.childNodes].forEach(c => {
       if (c.nodeType === 3) {
         const f = document.createDocumentFragment();
         c.textContent.split(/(\s+)/).forEach(p => {
           if (!p) return;
           if (/^\s+$/.test(p)) { f.append(p); return; }
-          const s = document.createElement("span"); s.className = "w"; s.textContent = p; f.append(s);
+          const s = document.createElement("span"); s.className = cls; s.textContent = p;
+          if (mask) { const m = document.createElement("span"); m.className = "wm"; m.append(s); f.append(m); } else f.append(s);
         });
         c.replaceWith(f);
       } else if (c.nodeType === 1) walk(c);
     });
     walk(el);
-    $$(".w", el).forEach((w, k) => w.style.setProperty("--k", k));
+    const ws = $$("." + cls, el), n = ws.length;
+    ws.forEach((w, k) => { w.style.setProperty("--k", k); w.style.setProperty("--a", (12 + k * 34 / n).toFixed(1) + "%"); w.style.setProperty("--b", (12 + (k + 1.6) * 34 / n).toFixed(1) + "%"); });
   }
   const localeSwitch = $("#locale-switch"), langButton = $("#lang"), localeLinks = $$(".lang-menu a");
   localeLinks.forEach(a => { a.tabIndex = -1; });
@@ -1227,7 +1269,7 @@ footer a{color:inherit}
   const io = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }), { threshold: .15, rootMargin: "0px 0px -6% 0px" });
-  $$("[data-r], .final").forEach(el => io.observe(el));
+  $$("[data-r], .lit, .promises, .adlg, .strip, .end").forEach(el => io.observe(el));
   new IntersectionObserver(([e]) => {
     const past = !e.isIntersecting && e.boundingClientRect.top < 0;
     document.body.classList.toggle("past", past); $(".mini").tabIndex = past ? 0 : -1;
@@ -1245,23 +1287,8 @@ footer a{color:inherit}
     { s: 0, ev: [[700, "e-menu"]] },
     { s: 0, ev: [[0, "e-menu"], [450, "tap:cp"], [600, "e-copy"], [900, "e-toast"]] },
     { s: 1, ev: [[200, "e-sheet"], [1100, "tap:pb1"], [1200, "e-press1"], [1500, "go:2"], [2300, "tap:q1080"], [2400, "e-pick"]] },
-    { s: 2, ev: [[0, "e-pick"], [500, "tap:pb2"], [600, "e-press2"], [900, "go:3"], [3400, "e-done"], [3600, "e-snack"]] },
-    // the features: one screen each, one small thing happens on it
-    // each plays once on arrival and then holds its last state
-    { s: 4, ev: [[1300, "tap:stt"], [1400, "e-st"]] },
-    { s: 5, ev: [[900, "m:pl"]] },
-    { s: 6, ev: [[450, "tap:mlf"], [550, "e-paste"], [1000, "e-ms"], [2300, "tap:mlb"], [2400, "e-press3"], [2650, "-e-press3"]] },
-    { s: 7, ev: [[700, "m:au"]] },
-    { s: 8, ev: [[1100, "m:wg"]] }
+    { s: 2, ev: [[0, "e-pick"], [500, "tap:pb2"], [600, "e-press2"], [900, "go:3"], [3400, "e-done"], [3600, "e-snack"]] }
   ];
-  // Progress that runs on a feature screen: [duration ms, draw(0..1)]
-  const METERS = {
-    // lesson 4 finishes, the count moves to 4 of 10
-    pl: [2400, p => { const v = Math.round(12 + p * 88), d = p >= 1; plbar.style.transform = "scaleX(" + (.3 + p * .1) + ")"; ring(plnow, v); plnow.classList.toggle("done", d); $(".pl-line", plnow).innerHTML = d ? t("saved") : line(48.2, v); plm.textContent = d ? t("pl-of").replace("3", "4") : t("pl-of"); }],
-    au: [2000, p => { $(".pl-line", jau).innerHTML = p < 1 ? line(4.2, Math.round(p * 100)) : t("audio-h") + " · <span class=\"ltr num\">" + mb(4.2, 1) + "</span>"; jau.classList.toggle("done", p >= 1); }],
-    wg: [2800, p => { const v = Math.round(38 + p * 26); wgbar.style.transform = "scaleX(" + v / 100 + ")"; wgp.textContent = number(v, 0) + (lang() === "fr" ? "\u00a0%" : "%"); }]
-  };
-  let meter = null;
   let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1;
   function tapAt(id) {
     const scr = $(".screen", demo), a = $("#" + id).getBoundingClientRect(), b = scr.getBoundingClientRect(), k = b.width / scr.offsetWidth;
@@ -1281,11 +1308,9 @@ footer a{color:inherit}
     demo.className = "phone"; slideTo(demo, i);
     $("#q1080").classList.remove("sel"); $("#q720").classList.add("sel");
     jobm.classList.remove("done"); done3 = false; t3 = -1; renderDemo3(0);
-    meter = null; for (const k in METERS) METERS[k][1](0);
   }
   function fire(ev) {
     if (ev.startsWith("tap:")) { if (!still) tapAt(ev.slice(4)); return; }
-    if (ev.startsWith("m:")) { meter = [METERS[ev.slice(2)], el]; return; }
     if (ev[0] === "-") { demo.classList.remove(ev.slice(1)); return; }
     if (ev.startsWith("go:")) { const i = +ev.slice(3); slideTo(demo, i); if (i === 3) t3 = el; return; }
     demo.classList.add(ev);
@@ -1299,10 +1324,9 @@ footer a{color:inherit}
     const ev = BEATS[beat].ev;
     while (fired < ev.length && el >= ev[fired][0]) fire(ev[fired++][1]);
     if (t3 >= 0 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, (el - t3) / 2500), 2)))));
-    if (meter) { const [[dur, draw], t0] = meter, p = Math.min(1, (el - t0) / dur); draw(1 - Math.pow(1 - p, 2)); if (p >= 1) meter = null; }
-    if (fired < ev.length || meter) raf = requestAnimationFrame(frame);
+    if (fired < ev.length || (t3 >= 0 && !done3)) raf = requestAnimationFrame(frame);
   }
-  const resume = () => { if (!raf && beat >= 0 && (fired < BEATS[beat].ev.length || meter)) raf = requestAnimationFrame(frame); };
+  const resume = () => { if (!raf && beat >= 0 && (fired < BEATS[beat].ev.length || (t3 >= 0 && !done3))) raf = requestAnimationFrame(frame); };
   document.addEventListener("visibilitychange", resume);
   function play(k) {
     if (k === beat) return;
@@ -1315,7 +1339,7 @@ footer a{color:inherit}
   let band = 0, pending = 0;
   function layout() {
     const h = demo.offsetHeight, sc = Math.min(1, (desk.matches ? innerHeight - 112 : innerHeight * .44) / h);
-    band = desk.matches ? 84 : Math.round(84 + h * sc + 18);
+    band = desk.matches ? 92 : Math.round(92 + h * sc + 18);
     stage.style.setProperty("--sc", sc.toFixed(3));
     stage.style.setProperty("--band", desk.matches ? "auto" : band + "px"); story.style.setProperty("--band", band + "px");
     pickStep();
@@ -1334,24 +1358,25 @@ footer a{color:inherit}
     if (k >= 0) play(k + 1);
   }
 
-  // ---------- install walkthrough ----------
-  let si = 0, auto = true, sysVisible = false, sysTimer = 0;
-  function sysGo(i) {
-    si = i; slideTo(sys, i); sys.classList.remove("on1", "on2");
-    tabs.forEach((b, k) => { b.setAttribute("aria-pressed", String(k === i)); });
-    clearTimeout(sysTimer);
-    if (i === 1 || i === 2) sysTimer = setTimeout(() => sys.classList.add(i === 1 ? "on1" : "on2"), still ? 0 : 900);
+  // ---------- features: each panel plays once when it arrives, the one below steps back ----------
+  const cards = $$(".card");
+  const cio = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("go"); cio.unobserve(e.target); }
+  }), { threshold: .55 });
+  cards.forEach(c => cio.observe(c));
+  if (!CSS.supports("animation-timeline: view()")) {
+    const uio = new IntersectionObserver(es => es.forEach(e => {
+      const k = cards.indexOf(e.target); if (k > 0) cards[k - 1].classList.toggle("under", e.intersectionRatio > .6);
+    }), { threshold: [0, .6] });
+    cards.forEach(c => uio.observe(c));
   }
-  tabs.forEach((b, k) => {
-    b.addEventListener("click", () => { auto = false; sysGo(k); });
-    b.addEventListener("keydown", e => {
-      const d = { ArrowDown: 1, ArrowUp: -1 }[e.key]; if (!d) return;
-      e.preventDefault(); const n = (k + d + tabs.length) % tabs.length; auto = false; tabs[n].focus(); sysGo(n);
-    });
-  });
-  $("#steps").addEventListener("focusin", () => { auto = false; });
-  new IntersectionObserver(([e]) => { sysVisible = e.isIntersecting; }, { threshold: .4 }).observe(sys);
-  setInterval(() => { if (auto && sysVisible && !still && !document.hidden) sysGo((si + 1) % 4); }, 3600);
+  // the waveform: fixed bar heights, no randomness, so every visit looks the same
+  const wave = $(".wave");
+  for (let k = 0; k < 44; k++) { const b = document.createElement("i"); b.style.cssText = "--k:" + k + ";--h:" + (.18 + .82 * Math.abs(Math.sin(k * 1.7) * Math.cos(k * .43))).toFixed(2); wave.append(b); }
+  const au = $(".au");
+  $$(".pk button", au).forEach(b => b.addEventListener("click", () => {
+    au.dataset.v = b.dataset.v; $$(".pk button", au).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  }));
 
   // ---------- theme: system by default, a tap overrides it ----------
   const root = document.documentElement, themeBtn = $("#theme"), sysDark = matchMedia("(prefers-color-scheme: dark)");
@@ -1384,13 +1409,12 @@ footer a{color:inherit}
   syncTheme();
 
   // ---------- start ----------
-  sysGo(0);
   if (still) { enter(2); fire("e-pick"); }
   else {
     story.classList.add("live"); layout();
     addEventListener("scroll", () => { if (!pending) pending = requestAnimationFrame(pickStep); }, { passive: true });
     let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
-    splitWords($("#h1"));
+    splitWords($("#h1"), "w", true); splitWords($(".lit"), "lw");
   }
 })();
 </script>
