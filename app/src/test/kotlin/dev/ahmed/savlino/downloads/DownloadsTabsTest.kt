@@ -75,30 +75,42 @@ class DownloadsTabsTest {
     }
     private val savedTab get() = compose.onNodeWithTag("tab_saved").assertIsSelected()
 
-    @Test fun lastJobFinishingKeepsTheTabRowAndListPosition() = finishingLayout()
+    @Test fun lastJobFinishingFoldsTheTabsAwayAndShowsSaved() = finishingLayout()
 
     @Test @Config(qualifiers = "ar-w360dp-h800dp-mdpi", fontScale = 2f)
-    fun lastJobFinishingKeepsTheViewportInArabicAtLargeText() = finishingLayout()
+    fun lastJobFinishingFoldsTheTabsAwayInArabicAtLargeText() = finishingLayout()
 
     private fun finishingLayout() {
         val jobs = mutableStateOf(listOf(job("a")))
         render({ DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
             compose.onNodeWithTag("tab_running").assertIsSelected()
             compose.onNodeWithTag("running_list").assertExists()
-            val top = compose.onNodeWithTag("running_list").fetchSemanticsNode().boundsInRoot.top
-            val tabTop = compose.onNodeWithTag("tab_running").fetchSemanticsNode().boundsInRoot.top
             jobs.value = listOf(job("a", DownloadPhase.COMPLETED))
             compose.waitForIdle()
             // The "Saved" moment shows in Downloading first.
             compose.onNodeWithTag("tab_running").assertIsSelected()
             compose.onNodeWithText("a.mp4", substring = true).assertExists()
             pass(Motion.SAVED_DWELL + 1000)
+            // Nothing left to download: no tabs, the saved files are the screen.
+            compose.onNodeWithTag("tab_running").assertDoesNotExist()
+            compose.onNodeWithTag("saved_list").assertExists()
+            // A new job brings the tabs back on Downloading.
+            jobs.value = listOf(job("a", DownloadPhase.COMPLETED), job("b"))
+            compose.waitForIdle()
             compose.onNodeWithTag("tab_running").assertIsSelected()
-            assertEquals(top, compose.onNodeWithTag("running_list").fetchSemanticsNode().boundsInRoot.top, 1f)
-            assertEquals(tabTop, compose.onNodeWithTag("tab_running").fetchSemanticsNode().boundsInRoot.top, 1f)
-            compose.onNodeWithText(context.getString(R.string.downloads_running_empty)).assertExists()
+            compose.onNodeWithTag("running_list").assertExists()
         }
     }
+
+    @Test fun noJobOpensTheSavedFilesWithoutTabs() = render({ DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
+        compose.onNodeWithTag("tab_running").assertDoesNotExist()
+        compose.onNodeWithTag("tab_saved").assertDoesNotExist()
+        compose.onNodeWithTag("saved_list").assertExists()
+    }
+
+    @Test fun aStoppedJobKeepsTheTabsButOpensSaved() = render({
+        DownloadsScreen(listOf(job("a", DownloadPhase.FAILED, retryable = true)), "en", {}, {}, {}, {}, {}, null, {}, {})
+    }) { savedTab; compose.onNodeWithTag("tab_running").assertExists() }
 
     @Test fun aJobStartingWhileOnSavedMovesToDownloading() {
         val jobs = mutableStateOf(listOf(job("a", DownloadPhase.FAILED, retryable = true)))
@@ -133,7 +145,7 @@ class DownloadsTabsTest {
 
     @Test fun cleanBatchAlreadyFinishedOnEntryIsNotShown() = render({
         DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, playlists = listOf(playlistFixture(BatchState.COMPLETED)))
-    }) { savedTab; compose.onNodeWithTag("playlist_batch_list").assertDoesNotExist() }
+    }) { compose.onNodeWithTag("tab_saved").assertDoesNotExist(); compose.onNodeWithTag("playlist_batch_list").assertDoesNotExist() }
 
     @Test fun twoOrMoreWaitingRowsFoldIntoOneLine() = render({
         DownloadsScreen(listOf(job("run"), job("w1", waiting = true), job("w2", waiting = true)), "en", {}, {}, {}, {}, {}, null, {}, {})

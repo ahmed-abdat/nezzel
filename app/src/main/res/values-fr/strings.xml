@@ -610,7 +610,6 @@
     <string name="old_downloads_wrong_folder">Choisissez le dossier Nezzel dans Download</string>
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>
     <string name="old_downloads_setting_body">Fichiers enregistrés avant de réinstaller Nezzel</string>
-    <string name="downloads_running_empty">Aucun téléchargement en cours</string>
     <string name="paste">Coller</string>
     <string name="home_hero_title">Enregistrez des vidéos sur votre téléphone</string>
     <string name="home_hero_line">Copiez le lien d\'une vidéo dans n\'importe quelle appli, puis touchez Coller.</string>

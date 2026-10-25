@@ -59,6 +59,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.ahmed.savlino.ui.nav.LocalTabActive
 import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
 import dev.ahmed.savlino.ui.nav.rememberTabResource
+import dev.ahmed.savlino.ui.ThumbnailCache
+import dev.ahmed.savlino.ui.rememberCachedThumbnail
 import kotlinx.coroutines.flow.collectLatest
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.downloads.ScreenHeader
@@ -347,7 +349,7 @@ private fun AccountSection(summary: AccountSummary, access: StatusAccess.Ready, 
 /** A small square of the newest statuses; the last one carries "+N" when more wait inside. */
 @Composable
 private fun PreviewThumb(item: StatusItem, media: StatusMedia, more: Int?, language: String) {
-    val thumb by rememberTabResource<Bitmap?>(null, item.uri) { media.thumbnail(item, 240) }
+    val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 240)) { media.thumbnail(item, 240) }
     Surface(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
             val loaded = thumb
@@ -410,7 +412,7 @@ private fun describe(item: StatusItem, duration: Long?): String = listOfNotNull(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val thumb by rememberTabResource<Bitmap?>(null, item.uri) { media.thumbnail(item, 320) }
+    val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 320)) { media.thumbnail(item, 320) }
     val duration = rememberDuration(item, media)
     val description = describe(item, duration)
     val shape = MaterialTheme.shapes.small

@@ -673,7 +673,6 @@
     <string name="old_downloads_wrong_folder">اختر مجلد Nezzel داخل Download</string>
     <string name="old_downloads_setting">اعرض تنزيلاتك القديمة</string>
     <string name="old_downloads_setting_body">ملفات حفظتها قبل إعادة تثبيت Nezzel</string>
-    <string name="downloads_running_empty">لا تنزيلات جارية</string>
     <string name="paste">لصق</string>
     <string name="home_hero_title">احفظ الفيديوهات على هاتفك</string>
     <string name="home_hero_line">انسخ رابط فيديو من أي تطبيق، ثم اضغط «لصق».</string>

@@ -64,7 +64,9 @@ import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.AppPreferences
 import java.util.Locale
 import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
-import dev.ahmed.savlino.ui.nav.rememberTabResource
+import dev.ahmed.savlino.ui.ThumbnailCache
+import dev.ahmed.savlino.ui.rememberCachedThumbnail
+import dev.ahmed.savlino.viewer.LocalMediaPictures
 import dev.ahmed.savlino.ui.TintedIcon
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
@@ -209,7 +211,11 @@ fun DownloadsScreen(
     val reduced = LocalReducedMotion.current
     val batches = rememberVisibleBatches(playlists)
     var tab by rememberDownloadsTab(jobs, playlists)
-    val current = tab
+    // Downloading exists only while it holds something: a job (moving, waiting, paused, failed or in its Saved moment),
+    // a playlist or a check to look at. Otherwise there are no tabs and the saved files are the screen.
+    val showTabs = active.isNotEmpty() || batches.isNotEmpty() || warnings.isNotEmpty()
+    if (!showTabs && tab != DownloadsTab.SAVED) SideEffect { tab = DownloadsTab.SAVED }
+    val current = if (showTabs) tab else DownloadsTab.SAVED
     val runningState = rememberLazyListState()
     ScrollOnTabReselect { if (current == DownloadsTab.RUNNING) runningState.scrollToItem(0) else listState.scrollToItem(0) }
     var waitingOpen by rememberSaveable { mutableStateOf(false) }
@@ -271,8 +277,11 @@ fun DownloadsScreen(
                 else if (saved.isNotEmpty()) IconButton(onClick = { search = true }) { Icon(Icons.Default.Search, stringResource(R.string.saved_search)) }
             }
         }
-        // A permanent peer row keeps the list viewport fixed when the last job or warning leaves.
-        DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language) { tab = it }
+        // The row folds away (and comes back) in place of a jump; reduced motion snaps.
+        AnimatedVisibility(showTabs, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced, Motion.TAB)),
+            exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.TAB))) {
+            DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language) { tab = it }
+        }
         // Pinned under the app bar, outside the list: always in view, and free to grow at 200% text.
         AnimatedVisibility(search && saved.isNotEmpty() && current == DownloadsTab.SAVED, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
             exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.FADE_OUT))) {
@@ -288,11 +297,6 @@ fun DownloadsScreen(
                 @Composable fun LazyItemScope.JobItem(job: DownloadProgress) =
                     JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) }, rowMotion(),
                         onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
-                if (active.isEmpty() && batches.isEmpty() && warnings.isEmpty()) {
-                    item(key = "running-empty", contentType = "empty") {
-                        Text(stringResource(R.string.downloads_running_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
                 // Two or more queued rows fold into one "N waiting" line; one stays a row of its own.
                 val waiting = active.filter { it.queuedOnly }.takeIf { it.size >= 2 }.orEmpty()
                 val (failed, moving) = (active - waiting.toSet()).partition { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
@@ -590,7 +594,9 @@ fun LibraryLoadStatus(load: LibraryLoadState, onRetry: () -> Unit) {
     when (load) {
         is LibraryLoadState.Loading -> Column(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             Text(stringResource(R.string.saved_loading), style = MaterialTheme.typography.bodyMedium)
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            // A kept-but-hidden tab must not keep asking for frames.
+            if (dev.ahmed.savlino.ui.nav.LocalTabActive.current.value) LinearProgressIndicator(Modifier.fillMaxWidth())
+            else LinearProgressIndicator({ 0f }, Modifier.fillMaxWidth())
         }
         is LibraryLoadState.Error -> Column(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             Text(stringResource(R.string.saved_load_failed), color = MaterialTheme.colorScheme.error,
@@ -755,15 +761,22 @@ fun mediaMeta(item: SavedMedia, language: String): String = listOfNotNull(
     item.size?.let { NezzelFormat.size(it, language) } ?: stringResource(R.string.saved_size_unknown)
 ).joinToString(stringResource(R.string.separator)).let(NezzelFormat::isolate)
 
-private fun loadThumbnail(context: android.content.Context, item: SavedMedia): Bitmap? = dev.ahmed.savlino.ui.loadMediaThumbnail(context, item.uri,
-    when (item.kind) { SavedMediaKind.VIDEO -> ThumbnailKind.VIDEO; SavedMediaKind.AUDIO -> ThumbnailKind.AUDIO; else -> ThumbnailKind.IMAGE })
+private val SavedMedia.thumbnailKind get() = when (kind) { SavedMediaKind.VIDEO -> ThumbnailKind.VIDEO; SavedMediaKind.AUDIO -> ThumbnailKind.AUDIO; else -> ThumbnailKind.IMAGE }
+
+/** Row and card artwork edge in pixels; Home recents and the Downloads list share these cache entries. */
+private const val THUMB_PX = 320
 
 @Composable
 fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
     val context = LocalContext.current
-    val bitmap by rememberTabResource<Bitmap?>(null, item.uri) {
+    val pictures = LocalMediaPictures.current
+    val bitmap = rememberCachedThumbnail(ThumbnailCache.key(item.uri, THUMB_PX)) {
         // Audio shows its embedded cover; the music icon stays only when the file has none.
-        if(item.kind != null) withContext(Dispatchers.IO) { loadThumbnail(context, item) } else null
+        when {
+            item.kind == null -> null
+            pictures != null -> pictures.load(item.uri, item.thumbnailKind, THUMB_PX)
+            else -> withContext(Dispatchers.IO) { dev.ahmed.savlino.ui.loadMediaThumbnail(context, item.uri, item.thumbnailKind, THUMB_PX, 180) }
+        }
     }
     Surface(modifier.clip(shape), color = if (item.kind == SavedMediaKind.AUDIO) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
@@ -853,9 +866,12 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                 Column(Modifier.width(196.dp).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
                     .clickable(onClickLabel = openLabel) { onOpen(item) }, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                     MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f).padding(bottom = Space.xs), MaterialTheme.shapes.large)
-                    Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    // Inset from the card's rounded clip: at the corners it cut the meta's first and last letters.
+                    Column(Modifier.padding(start = Space.xs, end = Space.xs, bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }

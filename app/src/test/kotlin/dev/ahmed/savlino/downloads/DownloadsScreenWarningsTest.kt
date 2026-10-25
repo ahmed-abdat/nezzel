@@ -73,9 +73,8 @@ class DownloadsScreenWarningsTest {
             dismiss.forEach { it.config[SemanticsActions.OnClick].action?.invoke(); compose.waitForIdle() }
             val after = texts(nodes(a))
             assertFalse(after.contains(context.getString(R.string.check_needs_look)))
-            // Empty Downloading keeps its position; Saved stays a deliberate choice.
-            assertTrue(after.contains(context.getString(R.string.dl_tab_running)))
-            click(a, context.getString(R.string.dl_tab_saved))
+            // Nothing left in Downloading: the tabs fold away and the saved files are the screen.
+            assertFalse(after.contains(context.getString(R.string.dl_tab_running)))
             val libraryTexts = texts(nodes(a))
             assertTrue(libraryTexts.contains(dev.ahmed.savlino.locale.NezzelFormat.firstStrong("Movie")))
         }
