@@ -300,8 +300,10 @@ fun DownloadsScreen(
                 // Two or more queued rows fold into one "N waiting" line; one stays a row of its own.
                 val waiting = active.filter { it.queuedOnly }.takeIf { it.size >= 2 }.orEmpty()
                 val (failed, moving) = (active - waiting.toSet()).partition { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
+                // One download alone: the tab's badge already says "1", so no header repeats it.
+                val lone = active.size == 1 && runningCount(jobs) == 1 && batches.isEmpty() && warnings.isEmpty()
                 if (active.isNotEmpty()) {
-                    stickyHeader(key = "jobs-header") {
+                    if (!lone) stickyHeader(key = "jobs-header") {
                         val batch = batchAction(active)
                         SectionHeader(stringResource(if (runningCount(jobs) == 0) R.string.downloads_stopped_header else R.string.downloads_running_header,
                             NezzelFormat.count(if(runningCount(jobs) == 0) active.size else runningCount(jobs), language)), runningCount(jobs) == 0,

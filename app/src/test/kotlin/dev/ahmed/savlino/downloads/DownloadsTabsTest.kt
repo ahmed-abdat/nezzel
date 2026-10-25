@@ -112,6 +112,16 @@ class DownloadsTabsTest {
         DownloadsScreen(listOf(job("a", DownloadPhase.FAILED, retryable = true)), "en", {}, {}, {}, {}, {}, null, {}, {})
     }) { savedTab; compose.onNodeWithTag("tab_running").assertExists() }
 
+    @Test fun oneDownloadAloneHasNoHeaderButTwoDo() {
+        render({ DownloadsScreen(listOf(job("a")), "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
+            compose.onNodeWithText("In progress", substring = true).assertDoesNotExist()
+            compose.onAllNodesWithText("a.mp4", substring = true, useUnmergedTree = true).onFirst().assertExists()
+        }
+        render({ DownloadsScreen(listOf(job("a"), job("b")), "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
+            compose.onNodeWithText("In progress", substring = true).assertExists()
+        }
+    }
+
     @Test fun aJobStartingWhileOnSavedMovesToDownloading() {
         val jobs = mutableStateOf(listOf(job("a", DownloadPhase.FAILED, retryable = true)))
         render({ DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
