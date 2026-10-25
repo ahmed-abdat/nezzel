@@ -118,6 +118,7 @@ main{overflow-x:clip}
 .top{position:sticky;top:12px;z-index:30;margin-top:12px}
 .bar{display:flex;align-items:center;gap:10px;padding:8px;padding-inline-start:12px;border-radius:999px;border:1px solid transparent;transition:background .4s,box-shadow .4s,border-color .4s}
 body.scrolled .bar{background:color-mix(in oklab,var(--c-lowest) 85%,transparent);backdrop-filter:saturate(1.5) blur(12px);-webkit-backdrop-filter:saturate(1.5) blur(12px);box-shadow:0 10px 30px -14px rgb(var(--ink-sh)/.3);border-color:color-mix(in oklab,var(--outline-v) 55%,transparent)}
+body.ondark .bar{--on-bg:#DEE4E1;--c-high:#252B2A;--c-lowest:#090F0E;--outline-v:#3F4946;--outline:#899390;color:#E6EEEB;background:rgb(9 15 14/.82);border-color:rgb(255 255 255/.08);box-shadow:none}
 .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-weight:800;font-size:19px}
 .brand img{width:34px;height:34px;border-radius:10px}
 .bar .sp{flex:1}
@@ -235,7 +236,7 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 /* the signature moment: the copied clip zooms toward you and Nezzel settles in behind it */
 #demo .s0.out{transform:scale(1.14);transition-duration:.3s,.4s}
 #demo:not([data-s="1"]) .s1:not(.out){transform:scale(.94)}
-.phone[data-s="0"] .s0,.phone[data-s="1"] .s1,.phone[data-s="2"] .s2,.phone[data-s="3"] .s3{opacity:1;transform:none}
+.phone[data-s="0"] .s0,.phone[data-s="1"] .s1{opacity:1;transform:none}
 .ab{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
 .ab b{font-size:15px}
 .ab .i{width:20px;height:20px}
@@ -254,75 +255,118 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .pmenu .i{width:16px;height:16px}
 .e-menu .pmenu{opacity:1;transform:none}
 [dir=ltr] .pmenu{transform-origin:top left}
-:root[data-mode=dark] .screen :is(.msg,.vcard,.pmenu,.sug){background:var(--c-high)}
+:root[data-mode=dark] .screen :is(.msg,.vcard,.pmenu){background:var(--c-high)}
 .vcard,.msg{transition:transform .45s var(--spring),box-shadow .45s var(--ease),opacity .3s}
 .e-menu .vcard{transform:scale(1.03);box-shadow:0 14px 30px -12px rgb(var(--ink-sh)/.4)}
 .e-menu .msg{opacity:.45}
 .e-copy .pmenu .cp{background:var(--primary-c);color:var(--on-primary-c);font-weight:700}
-.toast{position:absolute;bottom:22px;inset-inline:14px;padding:10px 14px;border-radius:12px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;gap:8px;opacity:0;transform:translateY(14px);transition:opacity .35s var(--ease),transform .5s var(--ease)}
-.toast .i{width:16px;height:16px;color:var(--inverse-primary);stroke-width:2.4}
-.e-toast .s0 .toast,.e-snack .s3 .toast{opacity:1;transform:none}
 .tap{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:color-mix(in oklab,var(--primary) 30%,transparent);border:2px solid color-mix(in oklab,var(--primary) 55%,transparent);opacity:0;transform:scale(.4);pointer-events:none;z-index:8}
 .tap.go{animation:tap .7s var(--ease)}
 @keyframes tap{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(.8)}100%{opacity:0;transform:scale(1.5)}}
-.nzb{display:flex;align-items:center;gap:8px;padding:14px 16px 8px;font-weight:800;font-size:16px}
-.nzb img{width:24px;height:24px;border-radius:7px}
-.field{margin:6px 14px;padding:11px 14px;border-radius:999px;background:var(--c-high);display:flex;align-items:center;gap:8px;color:var(--muted)}
-.field .i{width:16px;height:16px}
-.ghost{margin:14px 14px 0;display:grid;gap:8px;opacity:.55}
-.ghost i{display:block;height:46px;border-radius:14px;background:var(--c)}
-.nav{margin-top:auto;display:flex;justify-content:space-around;padding:8px 6px 14px;background:var(--c);font-size:10.5px}
-.nav>span{display:grid;justify-items:center;gap:2px;opacity:.75}
-.nav>span>i{display:grid;place-items:center;width:40px;height:26px;border-radius:999px}
-.nav .i{width:17px;height:17px}
-.nav>span.on{opacity:1;font-weight:700}
-.nav>span.on>i{background:var(--secondary-c);color:var(--on-secondary-c)}
-.sheet{position:absolute;inset:auto 0 0 0;padding:8px 14px 16px;border-radius:24px 24px 0 0;background:var(--c-low);box-shadow:0 -12px 40px -16px rgb(var(--ink-sh)/.5);transform:translateY(105%);transition:transform .6s var(--ease)}
-.sheet .h{width:32px;height:4px;border-radius:2px;background:var(--outline);opacity:.5;margin:2px auto 10px}
-.e-sheet .s1 .sheet{transform:none}
-.sheet .lbl{font-weight:700;font-size:13px;margin-bottom:8px}
-.sug,.qh{display:flex;gap:10px;align-items:center}
-.sug{padding:8px;border-radius:14px;background:var(--c-lowest)}
-.sug .art{width:84px;flex:none}
-.qh{padding-bottom:6px}
-.qh .art{width:76px;flex:none}
-.sug b,.qh b{font-size:12.5px;display:block;line-height:1.35}
-.sug small,.qh small{opacity:.65;font-size:11px}
 .pbtn{margin-top:10px;min-height:40px;border-radius:999px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;transition:transform .2s var(--ease),filter .2s}
 .pbtn .i{width:16px;height:16px}
-.e-press1 .s1 .pbtn,.e-press2 .s2 .pbtn{transform:scale(.95);filter:brightness(1.1)}
-.qs{padding:16px 14px 0;display:flex;flex-direction:column;gap:7px;flex:1}
 .ql{font-size:11.5px;font-weight:700;opacity:.7;margin-top:2px}
-.qr{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:13px;background:var(--c-low);box-shadow:inset 0 0 0 1px var(--outline-v)}
-.qr .t{flex:1;min-width:0;line-height:1.3}
-.qr .t b{display:block;font-size:12.5px}
-.qr .t small{font-size:10.5px;opacity:.7}
-.qr .s{font:600 11.5px/1 system-ui,sans-serif;direction:ltr}
-.rd{width:17px;height:17px;border-radius:50%;border:2px solid var(--outline);flex:none;transition:border-color .3s var(--ease),background .3s var(--ease),box-shadow .3s var(--ease)}
-.qr.sel{background:var(--secondary-c);box-shadow:none;color:var(--on-secondary-c)}
-.qr.sel .rd{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 3px var(--secondary-c)}
-.bdg{display:inline-block;font-size:9.5px;font-weight:700;padding:0 6px;border-radius:999px;background:var(--tertiary-c);color:var(--on-tertiary-c);margin-inline-start:4px;vertical-align:1px}
-.s2 .qr{opacity:0;transform:translateY(8px);transition:opacity .5s var(--ease),transform .6s var(--ease),background .35s,box-shadow .35s;transition-delay:0s}
-.phone[data-s="2"] .s2 .qr{opacity:1;transform:none;transition-delay:calc(var(--q) * 70ms + 150ms),calc(var(--q) * 70ms + 150ms),0s,0s}
-.s2 .foot{padding:8px 14px 16px;margin-top:auto}
-.s2 .pbtn{margin:0}
 .sw{display:inline-grid}
 .sw>*{grid-area:1/1;transition:opacity .3s,transform .4s var(--ease)}
 .sw>:last-child{opacity:0;transform:translateY(8px)}
 .e-pick .sw>:first-child{opacity:0;transform:translateY(-8px)}
 .e-pick .sw>:last-child{opacity:1;transform:none}
-.dh{padding:16px 16px 8px;font-weight:800;font-size:16px}
-.jobm{margin:4px 12px;display:flex;align-items:center;gap:10px;padding:10px;border-radius:16px;background:var(--c-low);--rs:38px}
-.jobm .t{flex:1;min-width:0;line-height:1.35}
-.jobm .t b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.jobm .t small{font-size:11px;opacity:.8}
-.open-a{font-weight:700;color:var(--primary);padding:6px 10px;border-radius:999px;opacity:0;transform:scale(.8);transition:opacity .4s,transform .4s var(--spring)}
-.done .open-a{opacity:1;transform:none}
-.old{margin:4px 12px;display:flex;align-items:center;gap:10px;padding:10px;border-radius:16px;background:var(--c-low);opacity:.7}
-.old>i{width:52px;height:30px;border-radius:8px;background:var(--c-highest)}
-.old>span{flex:1;display:grid;gap:5px}
-.old em{display:block;height:7px;border-radius:4px;background:var(--c-highest);width:70%}
-.old em+em{width:40%}
+/* Nezzel itself, drawn from the app: home, the quality sheet that rises half-way while it loads and then opens, the file landing in Recent */
+.nzb{display:flex;align-items:center;gap:7px;padding:12px 16px 6px;font-weight:700;font-size:16px;font-family:system-ui,sans-serif}
+.nzb img{width:22px;height:22px;border-radius:50%}
+.home{flex:1;position:relative}
+.h0,.rec{position:absolute;inset:0;padding:0 16px}
+.h0{display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:10px;transition:opacity .35s var(--ease),transform .5s var(--ease)}
+.h0>b{font-size:17px;line-height:1.35;font-weight:800;margin-top:auto}
+.h0>small{font-size:10.5px;opacity:.72;margin-top:4px}
+.wall{position:relative;height:160px;margin-inline:-16px}
+.wall::before{content:"";position:absolute;inset:8% 14%;background:radial-gradient(closest-side,color-mix(in oklab,var(--primary-c) 70%,transparent),transparent);opacity:.8}
+.lt{position:absolute;inset-inline-start:var(--x);top:var(--y);width:var(--z);height:var(--z);border-radius:30%;background:var(--c);display:grid;place-items:center;rotate:var(--r);box-shadow:0 6px 14px -6px rgb(0 0 0/.35);color:#fff}
+.lt svg{width:56%;height:56%;fill:currentColor}
+.lt.sn{color:#111}
+.nm{position:absolute;left:50%;top:44px;width:68px;height:68px;margin-left:-34px;border-radius:50%;background:var(--primary-c);display:grid;place-items:center;box-shadow:0 0 0 12px color-mix(in oklab,var(--primary-c) 45%,transparent)}
+.nm img{width:46px;height:46px;border-radius:50%}
+.nm i{position:absolute;bottom:-6px;inset-inline-start:-4px;width:24px;height:24px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;box-shadow:0 0 0 3px var(--bg)}
+.nm i .i{width:14px;height:14px}
+.rec{padding-top:6px;opacity:0;pointer-events:none}
+.rh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.rh b{font-size:13px}
+.rh span{font-size:10.5px;color:var(--primary);font-weight:600}
+.rf{width:56%;transition:transform .7s var(--spring),opacity .3s}
+.rf .art{border-radius:12px}
+.rf>b{display:block;font-size:11px;margin-top:5px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rf>small{display:block;text-align:center;font-size:9.5px;color:var(--primary);min-height:1.4em}
+.rf .ring{position:absolute;inset:0;margin:auto;--rs:42px;background:rgb(255 255 255/.92);border-radius:50%;color:#004D43;transition:opacity .4s,transform .4s var(--ease)}
+.rf .ring .pc{position:absolute;inset:0;display:grid;place-items:center;font:700 10px/1 system-ui,sans-serif}
+.rf .ring circle{stroke-width:3.5}
+.rf .du{opacity:0;transition:opacity .4s}
+.rf.done .ring{opacity:0;transform:scale(.6)}
+.rf.done .du{opacity:1}
+.rf.done>small{color:var(--muted)}
+.e-recent .h0{opacity:0;transform:scale(.96)}
+.e-recent .rec{opacity:1}
+.e-recent .rf{animation:land .8s var(--spring) both}
+@keyframes land{from{transform:translateY(150px) scale(.55);opacity:0}}
+.field{margin:6px 12px 8px;padding:6px 6px 6px 12px;border-radius:999px;background:var(--c-high);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
+[dir=rtl] .field{padding:6px 12px 6px 6px}
+.field>.i{width:15px;height:15px}
+.field>span:first-of-type{flex:1}
+.pst{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;background:var(--primary);color:var(--on-primary);font-weight:700}
+.pst .i{width:13px;height:13px}
+.nav{display:flex;justify-content:space-around;margin:0 10px 14px;padding:6px 4px;border-radius:999px;background:var(--c);font-size:9.5px;box-shadow:0 4px 14px -8px rgb(var(--ink-sh)/.4)}
+.nav>span{display:grid;justify-items:center;gap:1px;opacity:.75}
+.nav>span>i{display:grid;place-items:center;width:38px;height:24px;border-radius:999px}
+.nav .i{width:16px;height:16px}
+.nav>span.on{opacity:1;font-weight:700}
+.nav>span.on>i{background:var(--secondary-c);color:var(--on-secondary-c)}
+.scrim{position:absolute;inset:0;background:rgb(0 0 0/.32);opacity:0;transition:opacity .5s var(--ease);pointer-events:none}
+.sheet{position:absolute;inset:13% 0 0 0;padding:8px 14px 14px;border-radius:24px 24px 0 0;background:var(--c-low);box-shadow:0 -10px 30px -14px rgb(0 0 0/.35);display:flex;flex-direction:column;transform:translateY(102%);transition:transform .55s cubic-bezier(.2,0,0,1)}
+.sheet .h{width:32px;height:4px;border-radius:2px;background:var(--outline);opacity:.6;margin:2px auto 12px;flex:none}
+.sheet .lbl{font-weight:700;font-size:11.5px;margin-bottom:6px}
+.e-sheet .scrim{opacity:1}
+.e-sheet .sheet{transform:translateY(27%)}
+.e-full .sheet{transform:none}
+.qh{display:flex;gap:10px;align-items:center;flex-direction:row-reverse;justify-content:flex-end;padding-bottom:8px}
+.qh .art{width:64px;flex:none;border-radius:8px}
+.qh b{font-size:12px;display:block;line-height:1.35}
+.qh small{opacity:.65;font-size:10px}
+.sbody{flex:1;display:grid;min-height:0}
+.ld,.opts{grid-area:1/1;display:flex;flex-direction:column;transition:opacity .35s var(--ease)}
+.ld{gap:12px;padding-top:12px}
+.ld>span{display:flex;justify-content:space-between;align-items:center}
+.ld i{display:block;height:9px;border-radius:5px;background:var(--c-highest);width:24%;animation:shim 1.4s ease-in-out infinite}
+.ld i+i{width:46%}
+.ld small{font-size:11px;font-weight:600;margin-top:4px}
+@keyframes shim{50%{opacity:.45}}
+.e-full .ld{opacity:0}
+.opts{opacity:0;gap:5px}
+.e-full .opts{opacity:1}
+.ql{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;font-weight:700;margin-top:2px}
+.allq{display:inline-flex;align-items:center;gap:2px;color:var(--primary);font-weight:600}
+.allq .i{width:12px;height:12px}
+.qr{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;transition:background .35s var(--ease)}
+.qr .t{flex:1;min-width:0;line-height:1.3}
+.qr .t b{display:block;font-size:11.5px;font-weight:600}
+.qr .t small{font-size:9.5px;opacity:.7}
+.qr .s{font:500 10.5px/1 system-ui,sans-serif;direction:ltr;opacity:.85}
+.rd{width:15px;height:15px;border-radius:50%;border:2px solid var(--outline);flex:none;transition:border-color .3s var(--ease),box-shadow .3s var(--ease)}
+.qr.sel{background:var(--secondary-c);color:var(--on-secondary-c)}
+.qr.sel .rd{border-color:var(--primary);box-shadow:inset 0 0 0 2.5px var(--secondary-c),inset 0 0 0 8px var(--primary)}
+.bdg{display:inline-block;font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--tertiary-c);color:var(--on-tertiary-c);margin-inline-start:6px;vertical-align:1px}
+.opts>.qr,.opts>.ql{opacity:0;transform:translateY(8px);transition:opacity .4s var(--ease),transform .5s var(--ease),background .35s}
+.e-full .opts>.qr,.e-full .opts>.ql{opacity:1;transform:none;transition-delay:calc(var(--q,0) * 60ms + 120ms),calc(var(--q,0) * 60ms + 120ms),0s}
+.to{font-size:9.5px;opacity:.7;margin-top:auto;padding-bottom:6px}
+.opts .pbtn{margin:0}
+.pbtn{min-height:38px;border-radius:999px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;gap:5px;font-weight:700;font-size:12px;transition:transform .2s var(--ease),filter .2s}
+.pbtn .i{width:16px;height:16px}
+.e-press2 .pbtn{transform:scale(.95);filter:brightness(1.1)}
+.toast{position:absolute;bottom:22px;inset-inline:14px;padding:10px 14px;border-radius:12px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;gap:8px;opacity:0;transform:translateY(14px);transition:opacity .35s var(--ease),transform .5s var(--ease);z-index:3}
+.toast .i{width:16px;height:16px;color:var(--inverse-primary);stroke-width:2.4}
+.snack{bottom:112px;inset-inline:10px;border-radius:8px;justify-content:space-between;font-size:10.5px}
+.snack .st{display:grid;line-height:1.35}
+.snack small{opacity:.8}
+.snack b{color:var(--inverse-primary)}
+.e-toast .s0 .toast,.e-snack .snack{opacity:1;transform:none}
 /* progress ring: only the ring svg rotates, never the check inside; clockwise in both directions, like the app */
 .ring{position:relative;width:var(--rs,40px);height:var(--rs,40px);flex:none}
 .ring>.rg{width:100%;height:100%;transform:rotate(-90deg)}
@@ -581,7 +625,7 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 .wa .i{fill:#25D366;stroke:none}
 
 /* the end: one dark closing section, a huge call, links, the wordmark over a teal glow */
-.end{position:relative;z-index:1;margin-top:clamp(104px,12vw,150px);min-height:100svh;display:flex;flex-direction:column;overflow:hidden;padding-top:clamp(88px,12vw,150px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
+.end{position:relative;z-index:1;margin-top:clamp(104px,12vw,150px);overflow:hidden;padding:clamp(120px,14vw,170px) 0 clamp(24px,4vw,48px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
 .end a{color:inherit}
 .end h2{font-size:clamp(18px,2vw,22px);font-weight:600;line-height:1.5;opacity:.7;max-width:none}
 .end .go{display:flex;flex-wrap:wrap;align-items:center;gap:0 .25em;margin-top:10px;text-decoration:none;font-weight:800;font-size:clamp(42px,11vw,168px);line-height:1.15;transition:color .3s}
@@ -589,31 +633,29 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 .end .go .i{width:.7em;height:.7em;stroke-width:1.5;transform:scaleX(var(--x));transition:transform .5s var(--spring)}
 @media (hover:hover) and (pointer:fine){.end .go:hover{color:#9EF2E1}.end .go:hover .i{transform:translateX(calc(var(--x) * 16px)) scaleX(var(--x))}}
 .end .go:active{opacity:.8}
-.gm{margin:14px 0 0;font-size:15px;opacity:.6}
+.gm{margin:8px 0 0;font-size:14px;opacity:.6}
 .sep{height:1px;margin:clamp(44px,6vw,80px) 0 28px;border:0;background:rgb(255 255 255/.18);transform-origin:left;transition:transform 1.2s var(--ease) .3s}
 [dir=rtl] .sep{transform-origin:right}
-.frow{display:grid;gap:20px}
-@media (min-width:960px){.frow{grid-template-columns:1fr auto;align-items:start}}
-.fl{display:flex;flex-wrap:wrap;gap:0 24px}
+.frow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 32px}
+.fl{display:flex;flex-wrap:wrap;gap:0 22px}
 .fl a{display:inline-flex;align-items:center;gap:6px;min-height:44px;text-decoration:none;font-size:15px;font-weight:600;opacity:.85;transition:opacity .2s}
-html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em}
 .fl a:hover{opacity:1}
 .fl .ne{width:14px;height:14px;transform:scaleX(var(--x));transition:transform .3s var(--ease)}
 .fl a:hover .ne{transform:translate(calc(var(--x) * 2px),-2px) scaleX(var(--x))}
-.fm{display:grid;gap:4px;font-size:14px;opacity:.7}
+.fm{display:flex;flex-wrap:wrap;align-items:center;gap:0 22px;font-size:15px;opacity:.7}
 .langs{display:flex;gap:18px}
 .langs a{display:inline-flex;align-items:center;min-height:44px;text-decoration:none}
 .langs a:hover{text-decoration:underline}
-.mark{display:flex;align-items:flex-end;gap:2.4%;width:min(1400px,100% - 16px);margin:auto auto 0;padding-top:clamp(56px,8vw,96px);direction:ltr;transform:translateY(9%);transition:transform 1.2s var(--ease),opacity 1.2s var(--ease)}
-.mark img{width:19%;flex:none;margin-bottom:2.6%;border-radius:22%}
-.mark svg{flex:1;display:block;overflow:visible}
+.mark{display:flex;align-items:flex-end;gap:3%;margin-top:clamp(28px,4vw,56px);direction:ltr;transition:transform 1.2s var(--ease),opacity 1.2s var(--ease)}
+.mark img{width:17%;flex:none;border-radius:22%}
+.mark svg{flex:1;min-width:0;display:block}
 .mark text{font:800 150px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:#F2F7F5}
 .fe{transition:opacity .7s var(--ease),transform .7s var(--ease),filter .7s var(--ease);transition-delay:calc(var(--f,0) * .15s)}
 @media (prefers-reduced-motion:no-preference){
   .js .end:not(.in) .fe{opacity:0;transform:translateY(16px)}
   @media (min-width:600px){.js .end:not(.in) .fe{filter:blur(8px)}}
   .js .end:not(.in) .sep{transform:scaleX(0)}
-  .js .end:not(.in) .mark{opacity:0;transform:translateY(calc(9% + 40px))}
+  .js .end:not(.in) .mark{opacity:0;transform:translateY(40px)}
 }
 
 @media (max-width:520px){
@@ -664,7 +706,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
   <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.8 2.8 5.8 3.1 5.8 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
   <symbol id="wa" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z"/></symbol>
   <!-- sample thumbnail: an illustrated summer coast (no real footage, no real people) -->
-  <symbol id="scene" viewBox="0 0 160 90"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC98A"/><stop offset=".6" stop-color="#F7A26B"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F8A7B"/><stop offset="1" stop-color="#0B5248"/></linearGradient></defs><rect width="160" height="90" fill="url(#sky)"/><circle cx="104" cy="44" r="15" fill="#FFF1D6"/><path d="M0 54h160v36H0z" fill="url(#sea)"/><path d="M0 58c20-3 38 3 58 0s40-4 62 0 30 2 40 0" stroke="#9EF2E1" stroke-opacity=".45" stroke-width="1.6" fill="none"/><path d="M0 90V68c18-10 40-14 64-6 14 5 22 12 32 22H0Z" fill="#E8C48E"/><path d="M28 70c0-10 2-18 6-24m0 0c-6 0-10 3-13 6m13-6c5-2 10-1 13 2m-13-2c2-4 6-6 10-6" stroke="#2A1800" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="lg-whatsapp" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></symbol><symbol id="lg-youtube" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></symbol><symbol id="lg-tiktok" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></symbol><symbol id="lg-instagram" viewBox="0 0 24 24"><path d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></symbol><symbol id="lg-facebook" viewBox="0 0 24 24"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></symbol><symbol id="lg-x" viewBox="0 0 24 24"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></symbol><symbol id="lg-snapchat" viewBox="0 0 24 24"><path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301.165-.088.344-.104.464-.104.182 0 .359.029.509.09.45.149.734.479.734.838.015.449-.39.839-1.213 1.168-.089.029-.209.075-.344.119-.45.135-1.139.36-1.333.81-.09.224-.061.524.12.868l.015.015c.06.136 1.526 3.475 4.791 4.014.255.044.435.27.42.509 0 .075-.015.149-.045.225-.24.569-1.273.988-3.146 1.271-.059.091-.12.375-.164.57-.029.179-.074.36-.134.553-.076.271-.27.405-.555.405h-.03c-.135 0-.313-.031-.538-.074-.36-.075-.765-.135-1.273-.135-.3 0-.599.015-.913.074-.6.104-1.123.464-1.723.884-.853.599-1.826 1.288-3.294 1.288-.06 0-.119-.015-.18-.015h-.149c-1.468 0-2.427-.675-3.279-1.288-.599-.42-1.107-.779-1.707-.884-.314-.045-.629-.074-.928-.074-.54 0-.958.089-1.272.149-.211.043-.391.074-.54.074-.374 0-.523-.224-.583-.42-.061-.192-.09-.389-.135-.567-.046-.181-.105-.494-.166-.57-1.918-.222-2.95-.642-3.189-1.226-.031-.063-.052-.15-.055-.225-.015-.243.165-.465.42-.509 3.264-.54 4.73-3.879 4.791-4.02l.016-.029c.18-.345.224-.645.119-.869-.195-.434-.884-.658-1.332-.809-.121-.029-.24-.074-.346-.119-1.107-.435-1.257-.93-1.197-1.273.09-.479.674-.793 1.168-.793.146 0 .27.029.383.074.42.194.789.3 1.104.3.234 0 .384-.06.465-.105l-.046-.569c-.098-1.626-.225-3.651.307-4.837C7.392 1.077 10.739.807 11.727.807l.419-.015h.06z"/></symbol><symbol id="clip" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9 4.5V3.5h6v1"/></symbol><symbol id="scene" viewBox="0 0 160 90"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC98A"/><stop offset=".6" stop-color="#F7A26B"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F8A7B"/><stop offset="1" stop-color="#0B5248"/></linearGradient></defs><rect width="160" height="90" fill="url(#sky)"/><circle cx="104" cy="44" r="15" fill="#FFF1D6"/><path d="M0 54h160v36H0z" fill="url(#sea)"/><path d="M0 58c20-3 38 3 58 0s40-4 62 0 30 2 40 0" stroke="#9EF2E1" stroke-opacity=".45" stroke-width="1.6" fill="none"/><path d="M0 90V68c18-10 40-14 64-6 14 5 22 12 32 22H0Z" fill="#E8C48E"/><path d="M28 70c0-10 2-18 6-24m0 0c-6 0-10 3-13 6m13-6c5-2 10-1 13 2m-13-2c2-4 6-6 10-6" stroke="#2A1800" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
 </svg>
 
 <a class="sr" href="#main" data-i="skip">Aller au contenu</a>
@@ -734,39 +776,39 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
         <div class="sc s1">
           <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
-          <div class="field"><svg class="i"><use href="#link"/></svg><span data-i="field">Collez un lien public</span></div>
-          <div class="ghost"><i></i><i></i></div>
+          <div class="home">
+            <div class="h0">
+              <div class="wall"><span class="lt" style="--x:6%;--y:40px;--z:30px;--r:-8deg;--c:#0866FF"><svg><use href="#lg-facebook"/></svg></span><span class="lt" style="--x:27%;--y:6px;--z:38px;--r:-10deg;--c:#25D366"><svg><use href="#lg-whatsapp"/></svg></span><span class="lt sn" style="--x:79%;--y:14px;--z:34px;--r:12deg;--c:#FFFC00"><svg><use href="#lg-snapchat"/></svg></span><span class="lt" style="--x:80%;--y:62px;--z:30px;--r:14deg;--c:#FF0000"><svg><use href="#lg-youtube"/></svg></span><span class="lt" style="--x:10%;--y:94px;--z:38px;--r:-12deg;--c:#111"><svg><use href="#lg-tiktok"/></svg></span><span class="lt" style="--x:79%;--y:104px;--z:38px;--r:-10deg;--c:linear-gradient(45deg,#F9A92B,#E1306C 55%,#833AB4)"><svg><use href="#lg-instagram"/></svg></span><span class="lt" style="--x:52%;--y:124px;--z:32px;--r:18deg;--c:#111"><svg><use href="#lg-x"/></svg></span><span class="nm"><img src="/img/icon.svg" alt=""><i><svg class="i"><use href="#dl"/></svg></i></span></div>
+              <b data-i="h-title">Enregistrez des vidéos sur votre téléphone</b>
+              <small data-i="h-line">Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.</small>
+            </div>
+            <div class="rec">
+              <div class="rh"><b data-i="recent">Récents</b><span data-i="see-all">Tout voir</span></div>
+              <div class="rf" id="jobm"><div class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="pc ltr num"></span></span><span class="du">2:48</span></div><b data-i="vt">Souvenirs de vacances</b><small class="pl-line"></small></div>
+            </div>
+          </div>
+          <div class="field"><svg class="i"><use href="#link"/></svg><span data-i="field">Collez un lien public</span><span class="pst"><svg class="i"><use href="#clip"/></svg><span data-i="paste">Coller</span></span></div>
           <div class="nav"><span class="on"><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Accueil</span></span><span><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Téléchargements</span></span><span><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuts</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Paramètres</span></span></div>
-          <div class="sheet"><div class="h"></div><div class="lbl" data-i="clip">Le lien que vous avez copié</div>
-            <div class="sug"><div class="art"><svg><use href="#scene"/></svg></div><div><b data-i="vt">Souvenirs de vacances</b><small class="ltr">2:48</small></div></div>
-            <div class="pbtn" id="pb1"><span data-i="view">Voir les options</span></div>
+          <div class="scrim"></div>
+          <div class="sheet">
+            <div class="h"></div>
+            <div class="lbl" data-i="clip">Le lien que vous avez copié</div>
+            <div class="qh"><div class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></div><div><b data-i="vt">Souvenirs de vacances</b><small class="ltr">youtu.be · 2:48</small></div></div>
+            <div class="sbody">
+              <div class="ld"><span><i></i><i></i></span><span><i></i><i></i></span><span><i></i><i></i></span><small data-i="fetching">Recherche des qualités…</small></div>
+              <div class="opts">
+                <div class="ql"><span data-i="video">Vidéo</span><span class="allq"><span data-i="all-q">Toutes les qualités</span><svg class="i flip"><use href="#back"/></svg></span></div>
+                <div class="qr" id="q1080" style="--q:0"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">Meilleure qualité</small></span><span class="s" data-mb="40">40 Mo</span></div>
+                <div class="qr sel" id="q720" style="--q:1"><span class="rd"></span><span class="t"><b><span class="ltr">720p · HD</span><span class="bdg" data-i="last">Dernier choix</span></b><small data-i="bal">Équilibrée</small></span><span class="s" data-mb="14">14 Mo</span></div>
+                <div class="qr" style="--q:2"><span class="rd"></span><span class="t"><b><span data-i="lowest">Minimale</span> · <span class="ltr">144p</span></b><small data-i="small">Petit fichier</small></span><span class="s" data-mb="3.5">3,5 Mo</span></div>
+                <div class="ql" style="--q:3" data-i="audio-h">Audio</div>
+                <div class="qr" style="--q:4"><span class="rd"></span><span class="t"><b><span data-i="audio">Audio seul</span> · <span class="ltr">M4A</span></b></span><span class="s" data-mb="2.4">2,4 Mo</span></div>
+                <small class="to"><span data-i="saves-to">Enregistré dans</span> <span class="ltr">Downloads/Nezzel</span></small>
+                <div class="pbtn" id="pb2"><span data-i="dl">Télécharger</span> · <span class="sw ltr num"><span data-mb="14">14 Mo</span><span data-mb="40">40 Mo</span></span></div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="sc s2">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="qs">
-            <div class="qh"><div class="art"><svg><use href="#scene"/></svg></div><div><b data-i="vt">Souvenirs de vacances</b><small class="ltr">2:48</small></div></div>
-            <div class="ql" data-i="video">Vidéo</div>
-            <div class="qr" id="q1080" style="--q:0"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">Meilleure qualité</small></span><span class="s" data-mb="61.8" data-est>≈ 61,8 Mo</span></div>
-            <div class="qr sel" id="q720" style="--q:1"><span class="rd"></span><span class="t"><b><span class="ltr">720p · HD</span><span class="bdg" data-i="last">Dernier choix</span></b><small data-i="bal">Équilibrée</small></span><span class="s" data-mb="32.4" data-est>≈ 32,4 Mo</span></div>
-            <div class="qr" style="--q:2"><span class="rd"></span><span class="t"><b class="ltr">480p</b><small data-i="small">Petit fichier</small></span><span class="s" data-mb="16.9" data-est>≈ 16,9 Mo</span></div>
-            <div class="ql" data-i="audio-h">Audio</div>
-            <div class="qr" style="--q:3"><span class="rd"></span><span class="t"><b><span data-i="audio">Audio seul</span> · <span class="ltr">M4A</span></b></span><span class="s" data-mb="2.7">2,7 Mo</span></div>
-          </div>
-          <div class="foot"><div class="pbtn" id="pb2"><svg class="i"><use href="#dl"/></svg><span data-i="dl">Télécharger</span> · <span class="sw ltr num"><span data-mb="32.4" data-est>≈ 32,4 Mo</span><span data-mb="61.8" data-est>≈ 61,8 Mo</span></span></div></div>
-        </div>
-        <div class="sc s3">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="dh" data-i="n-dl">Téléchargements</div>
-          <div class="jobm" id="jobm">
-            <span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="ok"><svg class="i"><use href="#check"/></svg></span></span>
-            <span class="t"><b data-i="vt">Souvenirs de vacances</b><small class="pl-line"></small></span>
-            <span class="open-a" data-i="open">Ouvrir</span>
-          </div>
-          <div class="old"><i></i><span><em></em><em></em></span></div>
-          <div class="old"><i></i><span><em></em><em></em></span></div>
-          <div class="body"><div class="toast"><svg class="i"><use href="#check"/></svg><span data-i="saved-to">Enregistré dans <span class="ltr">Download/Nezzel</span></span></div></div>
-          <div class="nav"><span><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Accueil</span></span><span class="on"><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Téléchargements</span></span><span><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuts</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Paramètres</span></span></div>
+          <div class="toast snack"><span class="st"><span><span data-i="saved-in">Enregistré dans</span> <span class="ltr">Downloads/Nezzel</span></span><small data-i="av-line">Avec image et son</small></span><b data-i="open">Ouvrir</b></div>
         </div>
       </div>
     </div>
@@ -779,7 +821,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
   <ol class="steps">
     <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">Copiez le lien</h3><p data-i="s1p">Ou partagez-le directement avec Nezzel</p></li>
     <li class="step" data-step="1"><span class="n">2</span><h3 data-i="s2">Choisissez la qualité</h3><p data-i="s2p">Ouvrez Nezzel : le lien vous attend</p></li>
-    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">Appuyez sur Télécharger</h3><p data-i="s3p">Rien ne démarre sans vous</p><p class="note" data-i="note">Simple démo. Chaque site fixe ses qualités, et ≈ indique une estimation</p></li>
+    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">Appuyez sur Télécharger</h3><p data-i="s3p">Rien ne démarre sans vous</p><p class="note" data-i="note">Simple démo. Chaque site fixe ses qualités</p></li>
   </ol>
 </section>
 </div>
@@ -828,7 +870,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
         <button type="button" data-v="2" aria-pressed="true"><span data-i="audio">Audio seul</span></button>
       </div>
       <div class="pv" aria-hidden="true"><div class="th"><svg viewBox="0 0 160 90"><use href="#scene"/></svg></div><div class="wave"></div></div>
-      <div class="out" aria-live="polite"><b class="fmt ltr"><span>1080p</span><span>720p</span><span>M4A</span></b><span class="szs ltr num"><span data-mb="61.8" data-est>≈ 61,8 Mo</span><span data-mb="32.4" data-est>≈ 32,4 Mo</span><span data-mb="2.7">2,7 Mo</span></span></div>
+      <div class="out" aria-live="polite"><b class="fmt ltr"><span>1080p</span><span>720p</span><span>M4A</span></b><span class="szs ltr num"><span data-mb="40">40 Mo</span><span data-mb="14">14 Mo</span><span data-mb="2.4">2,4 Mo</span></span></div>
     </div>
   </article>
   <article class="card t-tl" style="--i:4">
@@ -844,7 +886,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     <h2 id="tr-h" class="lit" data-i="tr-p">Aucune pub, avant comme après. Aucune inscription</h2>
     <ul class="promises">
       <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">Le fichier arrive directement sur votre téléphone</b></li>
-      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">La vraie taille, ≈ si elle est estimée</b></li>
+      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">La taille du fichier avant de télécharger</b></li>
       <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z" pathLength="1"/><path class="dw" d="m9 12 2.2 2.2L15.5 10" pathLength="1"/></svg></span><b data-i="p5">Ni votre position, ni vos contacts</b></li>
     </ul>
   </div>
@@ -887,16 +929,16 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     <hr class="sep">
     <div class="frow fe" style="--f:3">
       <nav class="fl" aria-label="Nezzel">
-        <a href="https://github.com/ahmed-abdat/nezzel"><span data-i="gh">Le code sur GitHub</span><svg class="i ne"><use href="#ne"/></svg></a>
-        <a href="https://github.com/ahmed-abdat/nezzel/releases"><span data-i="rel">Versions et nouveautés</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel"><span data-i="gh">GitHub</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/releases"><span data-i="rel">Versions</span><svg class="i ne"><use href="#ne"/></svg></a>
         <a href="https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md"><span data-i="priv">Confidentialité</span><svg class="i ne"><use href="#ne"/></svg></a>
         <a href="https://github.com/ahmed-abdat/nezzel/blob/main/THIRD_PARTY_NOTICES.md"><span data-i="lic">Licences</span><svg class="i ne"><use href="#ne"/></svg></a>
-        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md"><span data-i="sec">Signaler un problème de sécurité</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md"><span data-i="sec">Sécurité</span><svg class="i ne"><use href="#ne"/></svg></a>
       </nav>
       <div class="fm"><span class="langs"><a href="/" hreflang="ar" lang="ar" dir="rtl">العربية</a><a href="/fr/" hreflang="fr" lang="fr" dir="ltr">Français</a><a href="/en/" hreflang="en" lang="en" dir="ltr">English</a></span><span data-i="foot">Développé par <a href="https://hululsoft.mr">Hululsoft</a></span></div>
     </div>
+    <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
   </div>
-  <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
 </footer>
 
 <script>
@@ -914,12 +956,13 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     field:"Paste a public link", "n-home":"Home", "n-dl":"Downloads", "n-set":"Settings",
     clip:"Link you copied", view:"View download options",
     video:"Video", "audio-h":"Audio", best:"Highest available", last:"Last used", bal:"Balanced", small:"Small", audio:"Audio only",
+    "h-title":"Save videos to your phone", "h-line":"Copy a video link in any app, then tap Paste.", recent:"Recent", "see-all":"See all", paste:"Paste", fetching:"Getting qualities…", "all-q":"All quality options", lowest:"Lowest", "saves-to":"Saves to", "saved-in":"Saved to", "av-line":"Has video and sound", prep:"Preparing…", dling:"Downloading", join:"Joining audio and video…",
     dl:"Download", open:"Open", saved:"Saved", "saved-to":"Saved to <span class=\"ltr\">Download/Nezzel</span>",
     "how-h":"Three steps, and it’s on your phone", 
     s1:"Copy the link", s1p:"Or share it straight to Nezzel",
     s2:"Pick a quality", s2p:"Open Nezzel and the link is waiting",
     s3:"Tap Download", s3p:"Nothing starts until you tap",
-    note:"Demo only. Each site sets its own qualities, and ≈ is an estimate", "more-h":"There’s more", x1:"Keep WhatsApp statuses", x2:"Whole playlists", x3:"Several links at once", x4:"Just the audio", x5:"Nezzel on your home screen",
+    note:"Demo only. Each site sets its own qualities", "more-h":"There’s more", x1:"Keep WhatsApp statuses", x2:"Whole playlists", x3:"Several links at once", x4:"Just the audio", x5:"Nezzel on your home screen",
     "ins-h":"How to install",
     "ins-sub":"It’s not on the Play Store, so Android checks with you first. That’s normal",
     i1:"Get the file and open it", i1p:"Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type",
@@ -929,7 +972,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     "sys-done":"Download complete", "sys-t2":"Install unknown apps", "sys-browser":"Browser", "sys-allow":"Allow from this source",
     "sys-q":"Do you want to install this app?", "sys-cancel":"Cancel", "sys-install":"Install",
     p3:"Files come straight to your phone",
-    p4:"Real sizes, ≈ when estimated", p5:"Never asks for your location or contacts",
+    p4:"See the file size before you download", p5:"Never asks for your location or contacts",
     "faq-h":"Quick answers",
     f1:"Is it free?", f1a:"Yes, completely. No ads, no subscription",
     f2:"Which sites work?", f2a:"Popular video and photo sites, as long as the link is public. Some links won’t work, and private, protected or sign-in-only content isn’t supported. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites we’ve tested</a>", f8:"How do I keep WhatsApp statuses?", f8a:"Watch the status in WhatsApp, then open the Statuses tab in Nezzel. The first time, you allow access to one folder. That’s all",
@@ -942,9 +985,9 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     "os-h":"Open source", "os-p":"Every line is on GitHub for anyone to read",
     "tr-h":"No ads, no account", "tr-p":"No ads before or after a download. No sign-up",
     "tr-src":"Source code",
-    gh:"Code on GitHub", rel:"All releases and notes",
+    gh:"GitHub", rel:"Releases",
     "fin-h":"Copy the link. We’ll take it from there",
-    foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Report a security issue",
+    foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
     "x1p": "Yours to keep, even after they vanish",
     "x2p": "Paste its link and Nezzel saves them one by one",
     "x3p": "Paste them together, tap once",
@@ -1002,6 +1045,20 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
       "audio": "صوت فقط",
       "dl": "تنزيل",
       "open": "فتح",
+      "h-title": "احفظ الفيديوهات على هاتفك",
+      "h-line": "انسخ رابط فيديو من أي تطبيق، ثم اضغط «لصق».",
+      "recent": "الملفات الأخيرة",
+      "see-all": "عرض الكل",
+      "paste": "لصق",
+      "fetching": "جارٍ جلب خيارات الجودة…",
+      "all-q": "كل خيارات الجودة",
+      "lowest": "الأدنى",
+      "saves-to": "يُحفظ في",
+      "saved-in": "تم الحفظ في",
+      "av-line": "بالصوت والصورة",
+      "prep": "جارٍ التحضير…",
+      "dling": "جارٍ التنزيل",
+      "join": "جارٍ دمج الصوت والفيديو…",
       "saved-to": "تم الحفظ في <span class=\"ltr\">Download/Nezzel</span>",
       "how-h": "ثلاث خطوات، والفيديو عندك",
       "s1": "انسخ الرابط",
@@ -1010,7 +1067,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
       "s2p": "افتح Nezzel، تجد الرابط في انتظارك",
       "s3": "اضغط تنزيل",
       "s3p": "لا يبدأ التحميل قبل ضغطتك",
-      "note": "عرض توضيحي: كل موقع يحدد جوداته، و≈ تعني حجمًا تقريبيًا",
+      "note": "عرض توضيحي، وكل موقع يحدد جوداته",
       "more-h": "وفي Nezzel أيضًا",
       "x1": "احتفظ بحالات واتساب",
       "x2": "قائمة تشغيل كاملة",
@@ -1035,7 +1092,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
       "sys-cancel": "إلغاء",
       "sys-install": "تثبيت",
       "p3": "الملف يصل إلى هاتفك مباشرة",
-      "p4": "الحجم الحقيقي، و≈ للتقريبي",
+      "p4": "ترى حجم الملف قبل التحميل",
       "p5": "لا يطلب موقعك ولا جهات اتصالك",
       "faq-h": "أسئلة سريعة",
       "f1": "هل هو مجاني؟",
@@ -1061,12 +1118,12 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
       "tr-h": "بلا إعلانات، بلا حساب",
       "tr-p": "لا إعلان قبل التحميل ولا بعده، ولا تسجيل",
       "tr-src": "الشيفرة المصدرية",
-      "gh": "الشيفرة على GitHub",
-      "rel": "كل الإصدارات وملاحظاتها",
+      "gh": "GitHub",
+      "rel": "الإصدارات",
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
       "lic": "التراخيص",
-      "sec": "الإبلاغ عن مشكلة أمنية",
+      "sec": "الأمان",
       "to-light": "الوضع الفاتح",
       "saved": "تم الحفظ",
       "language": "اللغة",
@@ -1105,12 +1162,13 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     field:"Collez un lien public", "n-home":"Accueil", "n-dl":"Téléchargements", "n-set":"Paramètres",
     clip:"Le lien que vous avez copié", view:"Voir les options",
     video:"Vidéo", "audio-h":"Audio", best:"Meilleure qualité", last:"Dernier choix", bal:"Équilibrée", small:"Petit fichier", audio:"Audio seul",
+    "h-title":"Enregistrez des vidéos sur votre téléphone", "h-line":"Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.", recent:"Récents", "see-all":"Tout voir", paste:"Coller", fetching:"Recherche des qualités…", "all-q":"Toutes les qualités", lowest:"Minimale", "saves-to":"Enregistré dans", "saved-in":"Enregistré dans", "av-line":"Avec image et son", prep:"Préparation…", dling:"Téléchargement", join:"Fusion de l’audio et de la vidéo…",
     dl:"Télécharger", open:"Ouvrir", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
     "how-h":"Trois gestes, et c’est sur votre téléphone", 
     s1:"Copiez le lien", s1p:"Ou partagez-le directement avec Nezzel",
     s2:"Choisissez la qualité", s2p:"Ouvrez Nezzel : le lien vous attend",
     s3:"Appuyez sur Télécharger", s3p:"Rien ne démarre sans vous",
-    note:"Simple démo. Chaque site fixe ses qualités, et ≈ indique une estimation", "more-h":"Et ce n’est pas tout", x1:"Gardez les statuts WhatsApp", x2:"Des playlists entières", x3:"Plusieurs liens d’un coup", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil",
+    note:"Simple démo. Chaque site fixe ses qualités", "more-h":"Et ce n’est pas tout", x1:"Gardez les statuts WhatsApp", x2:"Des playlists entières", x3:"Plusieurs liens d’un coup", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil",
     "ins-h":"Installer Nezzel, pas à pas",
     "ins-sub":"Nezzel n’est pas sur le Play Store : Android vous demandera d’abord votre accord. C’est normal",
     i1:"Téléchargez le fichier, puis ouvrez-le", i1p:"Appuyez sur « Télécharger l’application », puis ouvrez le fichier. Si GitHub s’ouvre, prenez le fichier APK. Votre navigateur peut vous mettre en garde sur ce type de fichier",
@@ -1120,7 +1178,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
     "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
     p3:"Le fichier arrive directement sur votre téléphone",
-    p4:"La vraie taille, ≈ si elle est estimée", p5:"Ni votre position, ni vos contacts",
+    p4:"La taille du fichier avant de télécharger", p5:"Ni votre position, ni vos contacts",
     "faq-h":"Vos questions",
     f1:"C’est gratuit ?", f1a:"Oui, entièrement. Ni pub, ni abonnement",
     f2:"Ça marche avec quels sites ?", f2a:"Les grands sites de vidéos et de photos, tant que le lien est public. Certains liens peuvent ne pas passer, et les contenus privés, protégés ou réservés aux membres connectés ne sont pas pris en charge. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Les sites testés</a>", f8:"Comment garder les statuts WhatsApp ?", f8a:"Regardez le statut dans WhatsApp, puis ouvrez l’onglet Statuts de Nezzel. La première fois, vous autorisez l’accès à un dossier, et c’est tout",
@@ -1133,9 +1191,9 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     "os-h":"Un code ouvert à tous", "os-p":"Tout le code est sur GitHub, lisible par tous",
     "tr-h":"Sans pub, sans compte", "tr-p":"Aucune pub, avant comme après. Aucune inscription",
     "tr-src":"Code source",
-    gh:"Le code sur GitHub", rel:"Versions et nouveautés",
+    gh:"GitHub", rel:"Versions",
     "fin-h":"Copiez le lien, on s’occupe du reste",
-    foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Signaler un problème de sécurité",
+    foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
     "x1p": "Ils restent, même une fois disparus",
     "x2p": "Collez son lien, Nezzel enregistre les vidéos une à une",
     "x3p": "Collez-les ensemble, un seul geste suffit",
@@ -1286,8 +1344,8 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
   const BEATS = [
     { s: 0, ev: [[700, "e-menu"]] },
     { s: 0, ev: [[0, "e-menu"], [450, "tap:cp"], [600, "e-copy"], [900, "e-toast"]] },
-    { s: 1, ev: [[200, "e-sheet"], [1100, "tap:pb1"], [1200, "e-press1"], [1500, "go:2"], [2300, "tap:q1080"], [2400, "e-pick"]] },
-    { s: 2, ev: [[0, "e-pick"], [500, "tap:pb2"], [600, "e-press2"], [900, "go:3"], [3400, "e-done"], [3600, "e-snack"]] }
+    { s: 1, ev: [[250, "e-sheet"], [1500, "e-full"], [2300, "tap:q1080"], [2400, "e-pick"]] },
+    { s: 1, c: "e-sheet e-full e-pick", ev: [[500, "tap:pb2"], [600, "e-press2"], [900, "drop"], [3700, "e-done"], [3900, "e-snack"]] }
   ];
   let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1;
   function tapAt(id) {
@@ -1295,9 +1353,11 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     tap.style.left = (a.left - b.left + a.width / 2) / k + "px"; tap.style.top = (a.top - b.top + a.height / 2) / k + "px";
     tap.classList.remove("go"); void tap.offsetWidth; tap.classList.add("go");
   }
+  // The app's own status lines, in order: preparing, downloading with a percent, joining, then quality and size.
   function renderDemo3(p) {
     ring(jobm, p);
-    $(".pl-line", jobm).innerHTML = p >= 100 ? t("saved") : line(61.8, p);
+    $(".pc", jobm).textContent = p > 6 && p < 90 ? number(p, 0) + "%" : "";
+    $(".pl-line", jobm).innerHTML = p >= 100 ? "<span class=\"ltr num\">1080p · " + mb(40.6, 1) + "</span>" : t(p <= 6 ? "prep" : p < 90 ? "dling" : "join");
   }
   function slideTo(box, i) {
     const prev = +box.dataset.s;
@@ -1305,14 +1365,14 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     box.dataset.s = i;
   }
   function enter(i) {
-    demo.className = "phone"; slideTo(demo, i);
-    $("#q1080").classList.remove("sel"); $("#q720").classList.add("sel");
+    demo.className = "phone " + (BEATS[beat].c || ""); slideTo(demo, i);
+    const p = demo.classList.contains("e-pick"); $("#q1080").classList.toggle("sel", p); $("#q720").classList.toggle("sel", !p);
     jobm.classList.remove("done"); done3 = false; t3 = -1; renderDemo3(0);
   }
   function fire(ev) {
     if (ev.startsWith("tap:")) { if (!still) tapAt(ev.slice(4)); return; }
     if (ev[0] === "-") { demo.classList.remove(ev.slice(1)); return; }
-    if (ev.startsWith("go:")) { const i = +ev.slice(3); slideTo(demo, i); if (i === 3) t3 = el; return; }
+    if (ev === "drop") { demo.classList.remove("e-sheet", "e-full", "e-press2"); demo.classList.add("e-recent"); t3 = el; return; }
     demo.classList.add(ev);
     if (ev === "e-pick") { $("#q720").classList.remove("sel"); $("#q1080").classList.add("sel"); }
     if (ev === "e-done") { jobm.classList.add("done"); done3 = true; renderDemo3(100); }
@@ -1323,7 +1383,7 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
     el += last ? Math.min(64, now - last) : 0; last = now;
     const ev = BEATS[beat].ev;
     while (fired < ev.length && el >= ev[fired][0]) fire(ev[fired++][1]);
-    if (t3 >= 0 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, (el - t3) / 2500), 2)))));
+    if (t3 >= 0 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, (el - t3) / 2800), 2)))));
     if (fired < ev.length || (t3 >= 0 && !done3)) raf = requestAnimationFrame(frame);
   }
   const resume = () => { if (!raf && beat >= 0 && (fired < BEATS[beat].ev.length || (t3 >= 0 && !done3))) raf = requestAnimationFrame(frame); };
@@ -1377,6 +1437,23 @@ html[dir=ltr] .fl a{font-size:12.5px;text-transform:uppercase;letter-spacing:.1e
   $$(".pk button", au).forEach(b => b.addEventListener("click", () => {
     au.dataset.v = b.dataset.v; $$(".pk button", au).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
   }));
+
+  // ---------- footer wordmark + dark header ----------
+  // Fit the wordmark's viewBox to its real glyph box, so it spans the gutter and never clips, whatever font draws it.
+  function fitMark() {
+    const tx = $(".mark text"); if (!tx) return;
+    tx.removeAttribute("textLength"); tx.removeAttribute("lengthAdjust");
+    const b = tx.getBBox(); if (!b.width) return;
+    tx.ownerSVGElement.setAttribute("viewBox", [b.x, b.y, b.width, 128 - b.y + 1].map(v => v.toFixed(1)).join(" "));
+  }
+  fitMark(); if (document.fonts) document.fonts.ready.then(fitMark);
+  // The header goes dark while a dark section sits under it.
+  const under = new Set();
+  const hio = new IntersectionObserver(es => {
+    es.forEach(e => e.isIntersecting ? under.add(e.target) : under.delete(e.target));
+    document.body.classList.toggle("ondark", under.size > 0);
+  }, { rootMargin: "0px 0px -92% 0px" });
+  $$(".trust, .end, .t-dk").forEach(x => hio.observe(x));
 
   // ---------- theme: system by default, a tap overrides it ----------
   const root = document.documentElement, themeBtn = $("#theme"), sysDark = matchMedia("(prefers-color-scheme: dark)");
