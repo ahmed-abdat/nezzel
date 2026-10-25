@@ -822,7 +822,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     val seen = remember { HashMap<String, DownloadProgress>() }
     val started = remember { mutableListOf<String>() }
     val landing = remember { LinkedHashSet<String>() }
-    val fileJobs = remember { HashMap<String, String>() }
+    val fileJobs = remember { LinkedHashMap<String, String>() }
     val expiry = remember { mutableIntStateOf(0) }
     val slots by remember(media) {
         val listed = media.mapTo(HashSet()) { fileKey(it.uri) }
@@ -841,7 +841,12 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             }
             val running = all.filter { it.running }.map { it.jobId }
             started.retainAll(running.toSet()); running.forEach { if (it !in started) started += it }
-            homeSlots(all, recent, listed, started, landing, fileJobs)
+            // A landed job whose file listed is done landing: if that file is deleted later, no empty job card comes back.
+            landing.removeAll { id -> fileJobs.any { (file, job) -> job == id && file in listed } }
+            homeSlots(all, recent, listed, started, landing, fileJobs).also {
+                // Only the newest mappings can still hold a slot; the rest would grow with every download.
+                fileJobs.keys.iterator().let { keys -> while (fileJobs.size > FILE_JOBS && keys.hasNext()) { keys.next(); keys.remove() } }
+            }
         }
     }
     // A file that never lists (deleted at once, a failed query) gives its slot up after a while.
@@ -936,6 +941,7 @@ private fun JobSlotCard(jobId: String, jobs: () -> List<DownloadProgress>, onCli
 }
 
 private const val RECENT_ROW = 8
+private const val FILE_JOBS = 64
 private val DownloadProgress.transferDone get() = !terminal && (phase in setOf(DownloadPhase.JOINING, DownloadPhase.CONVERTING,
     DownloadPhase.SAVING) || percent == 100)
 

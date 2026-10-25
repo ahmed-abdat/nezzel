@@ -233,7 +233,8 @@ fun NezzelApp(
                     }
                     // Mid-batch, each file posting its own snackbar kept one up for the whole batch over the paste bar;
                     // the cards and the batch header already say saved, so only the last file of a run speaks.
-                    if (links.downloads?.progress?.value.orEmpty().any { it.jobId != job.jobId && (!it.terminal || it.awaitingSchedule) }) return@launch
+                    // A paused download is not part of the run: it may never finish, and this file would never speak.
+                    if (links.downloads?.progress?.value.orEmpty().any { it.jobId != job.jobId && ((!it.terminal && !it.paused) || it.awaitingSchedule) }) return@launch
                     // A playlist feeds its videos a few at a time, so between two of them no other job may be listed yet.
                     val unfed = setOf(dev.ahmed.savlino.jobs.BatchItemState.WAITING, dev.ahmed.savlino.jobs.BatchItemState.QUEUED)
                     if (playlists.any { batch -> !batch.terminal && batch.items.any { it.jobId != job.jobId && it.state in unfed } }) return@launch

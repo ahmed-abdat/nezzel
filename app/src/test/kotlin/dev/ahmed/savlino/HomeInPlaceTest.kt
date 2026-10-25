@@ -200,6 +200,11 @@ class HomeInPlaceTest {
             compose.waitForIdle()
             assertEquals(1, compose.onAllNodes(caminandes).fetchSemanticsNodes().size)
             assertEquals(slot.left, card("Caminandes").left, .5f)
+            // Deleted after it landed: the job does not come back as a card.
+            compose.runOnIdle { media = library }
+            compose.waitForIdle()
+            compose.onAllNodes(caminandes).assertCountEquals(0)
+            assertEquals("no empty slot before the first file", slot.left, card("Big Buck Bunny").left, .5f)
         }
     }
 
