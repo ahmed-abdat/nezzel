@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private var resumed = false
     private var clipboardReadThisEntry = false
     private var pasteRequested = false
+    private var openSavedUri by mutableStateOf<String?>(null)
     private var theme by mutableStateOf(ThemePref.System)
     private var wallpaper by mutableStateOf(false)
     private var suggestions by mutableStateOf(true)
@@ -79,7 +80,8 @@ class MainActivity : AppCompatActivity() {
         showNotificationRationale = savedInstanceState?.getBoolean("notificationRationale") == true && links.hasPendingNotificationChoice
         refreshPreferences()
         pasteRequested = !onboarding && (savedInstanceState?.getBoolean("pasteRequested") ?: ShortcutActions.isPasteEntry(intent))
-        if (savedInstanceState == null && intent.action == ShortcutActions.OPEN_DOWNLOADS) links.navigate("Downloads")
+        openSavedUri = if (savedInstanceState != null) savedInstanceState.getString("openSavedUri") else ShortcutActions.savedUri(intent)
+        if (savedInstanceState == null && intent.action in setOf(ShortcutActions.OPEN_DOWNLOADS, ShortcutActions.OPEN_SAVED)) links.navigate("Downloads")
         enableEdgeToEdge()
         if (!onboarding) {
             links.onCreateShare(launchShare)
@@ -96,6 +98,7 @@ class MainActivity : AppCompatActivity() {
                 if (onboarding) dev.ahmed.savlino.ui.OnboardingScreen(::finishOnboarding)
                 else NezzelApp(links, language, theme, wallpaper, suggestions,
                     statusLibrary = media.statusLibrary,
+                    openSavedUri = openSavedUri, onSavedOpened = { openSavedUri = null },
                     onPaste = ::pasteClipboard,
                     onDismissSuggestion = links::dismissSuggestion,
                     onAcceptSuggestion = { links.inspectSuggestion() },
@@ -128,6 +131,7 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean("notificationRationale", showNotificationRationale)
         outState.putBoolean("onboardingReplay", replayingOnboarding)
         outState.putBoolean("pasteRequested", pasteRequested)
+        outState.putString("openSavedUri", openSavedUri)
         super.onSaveInstanceState(outState)
     }
     private fun refreshPreferences() {
@@ -138,7 +142,15 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == ShortcutActions.OPEN_SAVED) {
+            pasteRequested = false
+            openSavedUri = ShortcutActions.savedUri(intent)
+            links.navigate("Downloads")
+            setIntent(Intent(this, MainActivity::class.java))
+            return
+        }
         if (ShortcutActions.isPasteEntry(intent) || intent.action == ShortcutActions.OPEN_DOWNLOADS) {
+            openSavedUri = null
             pasteRequested = ShortcutActions.isPasteEntry(intent) && !onboarding
             if (intent.action == ShortcutActions.OPEN_DOWNLOADS) links.navigate("Downloads")
             setIntent(Intent(this, MainActivity::class.java))

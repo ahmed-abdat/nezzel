@@ -438,7 +438,7 @@
         <item quantity="one">%1$s more running</item>
         <item quantity="other">%1$s more running</item>
     </plurals>
-    <string name="widget_description">\u2066Nezzel\u2069: follow your download progress</string>
+    <string name="widget_description">Paste a link, follow downloads and open saved files</string>
     <string name="shortcut_downloads_short">Downloads</string>
     <string name="download_battery_error">Android stopped this download to save battery</string>
     <string name="battery_settings">Battery settings</string>

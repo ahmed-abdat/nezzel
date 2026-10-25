@@ -3,41 +3,56 @@ package dev.ahmed.savlino.shortcuts
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Bitmap
+import dev.ahmed.savlino.downloads.SavedMedia
+import dev.ahmed.savlino.downloads.SavedMediaRepository
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
-import dev.ahmed.savlino.jobs.LiveLeader
 import dev.ahmed.savlino.jobs.running
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import dev.ahmed.savlino.storage.OldDownloads
+import dev.ahmed.savlino.storage.SaveDestinations
+import dev.ahmed.savlino.ui.ThumbnailKind
+import dev.ahmed.savlino.ui.loadMediaThumbnail
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 
-/**
- * Only fields visible in RemoteViews participate in equality; 37% floors to the 35% bucket.
- * [more] counts the other running jobs behind the shown one ("+1"); queued ones are not counted.
- * No [title] means idle: the widget shows progress only, never a finished or failed job.
- */
-data class WidgetUiState(val title: String? = null, val phase: DownloadPhase? = null,
-    val percent: Int? = null, val paused: Boolean = false, val waiting: Boolean = false, val more: Int = 0) {
+/** Only display fields: progress is bucketed so each byte event does not redraw every widget. */
+data class WidgetJob(val id: String, val title: String, val phase: DownloadPhase, val percent: Int?,
+    val paused: Boolean, val waiting: Boolean, val remainingSeconds: Long?) {
+    val controllable get() = paused || phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
+}
+
+data class WidgetRecent(val media: SavedMedia, val thumbnail: Bitmap? = null)
+
+data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int = 0,
+    val savedCount: Int = 0, val recents: List<WidgetRecent> = emptyList()) {
     companion object {
-        fun from(job: DownloadProgress?, more: Int = 0): WidgetUiState = if (job == null || job.terminal) WidgetUiState() else WidgetUiState(
-            title(job.filename), job.phase, (if (job.paused) job.percent else job.visiblePercent)?.let { it / 5 * 5 }, job.paused,
-            job.waiting || job.awaitingSchedule, more)
+        fun from(job: DownloadProgress?): WidgetUiState = from(listOfNotNull(job))
 
-        /** The newest running job, then the newest live one (queued or paused); idle otherwise. */
-        fun from(jobs: List<DownloadProgress>): WidgetUiState {
-            // Same leader as the Live Update notification.
-            return LiveLeader.pick(jobs)?.let { from(it, jobs.count { job -> job.running } - 1) } ?: from(jobs.lastOrNull { !it.terminal })
+        /** Running first, then paused/queued, then failed. Completed/cancelled files belong to the shelf. */
+        fun from(jobs: List<DownloadProgress>, saved: List<SavedMedia> = emptyList()): WidgetUiState {
+            val visible = jobs.asReversed().filter { !it.terminal || it.phase == DownloadPhase.FAILED }
+                .sortedBy { if (it.running) 0 else if (!it.terminal) 1 else 2 }
+            return WidgetUiState(visible.take(2).map { job ->
+                val exact = job.exactTransferTotal
+                val measured = job.phase == DownloadPhase.DOWNLOADING && !job.paused && !job.waiting &&
+                    !job.awaitingSchedule && job.stalled != true && exact != null &&
+                    job.bytes?.let { it in 0 until exact } == true &&
+                    job.bytesPerSecond?.let { it.isFinite() && it > 0 && it <= Long.MAX_VALUE.toDouble() } == true
+                WidgetJob(job.jobId, title(job.filename), job.phase,
+                    (if (job.paused) job.percent else job.visiblePercent)?.let { it / 5 * 5 },
+                    job.paused, job.waiting || job.awaitingSchedule,
+                    job.remainingTransferSeconds?.takeIf { measured && it > 0 })
+            }, (visible.size - 2).coerceAtLeast(0), saved.size,
+                saved.sortedByDescending { it.addedSeconds }.take(4).map { WidgetRecent(it) })
         }
 
-        // A trailing ".mp4"-like suffix only: "Part 1. Intro" and "v1.2" keep their dots.
         private val extension = Regex("""\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,5}$""")
         internal fun title(filename: String): String = filename.trim().replace(extension, "").trim().ifBlank { filename.trim() }
     }
 }
 
-/** Process-owned observer. No timer, worker, network or clipboard work when the app is absent. */
+/** Process-owned local observer. No worker, network, clipboard access or polling timer. */
 class WidgetUpdater(
     private val context: Context,
     private val progress: StateFlow<List<DownloadProgress>>,
@@ -45,22 +60,55 @@ class WidgetUpdater(
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, NezzelWidgetProvider::class.java))
     },
     private val render: (WidgetUiState, IntArray) -> Unit = { state, ids -> NezzelWidgetProvider.render(context, ids, state) },
+    private val savedMedia: () -> Flow<List<SavedMedia>> = {
+        SavedMediaRepository(context.contentResolver, context.packageName, SaveDestinations(context), OldDownloads(context))
+            .observe().mapNotNull { it.getOrNull() }.catch { emit(emptyList()) }
+    },
+    private val thumbnail: suspend (SavedMedia) -> Bitmap? = { media ->
+        withContext(Dispatchers.IO) {
+            // Four <=192px software bitmaps: <=576 KiB, shared by all responsive layouts.
+            val edge = (96 * context.resources.displayMetrics.density).toInt().coerceIn(1, 192)
+            val kind = when { media.audio -> ThumbnailKind.AUDIO
+                media.mimeType.startsWith("image/") -> ThumbnailKind.IMAGE
+                else -> ThumbnailKind.VIDEO }
+            loadMediaThumbnail(context, media.uri, kind, edge, edge)?.let { original ->
+                val ratio = minOf(1f, edge.toFloat() / maxOf(original.width, original.height))
+                val scaled = Bitmap.createScaledBitmap(original, (original.width * ratio).toInt().coerceAtLeast(1),
+                    (original.height * ratio).toInt().coerceAtLeast(1), true)
+                if (scaled.config == Bitmap.Config.HARDWARE) scaled.copy(Bitmap.Config.ARGB_8888, false) else scaled
+            }
+        }
+    },
 ) {
     @Volatile private var cached: WidgetUiState? = null
+    private val refreshes = MutableStateFlow(0L)
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value)
 
+    /** Widget add/remove/resize must start/stop the library observer even when progress is unchanged. */
+    fun refresh() { refreshes.value += 1 }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun start(scope: CoroutineScope): Job = scope.launch {
-        progress.map { WidgetUiState.from(it) }
-            .distinctUntilChanged()
-            .onEach { cached = it }
-            .conflate()
-            .collect { state ->
-                val ids = widgetIds()
-                if (ids.isNotEmpty()) {
-                    render(state, ids)
-                    // Conflate during the cooldown, then deliver the latest state, including the return to idle.
-                    delay(2_000)
-                }
+        var pictures = emptyMap<SavedMedia, Bitmap?>()
+        val saved = combine(progress, refreshes) { _, _ -> widgetIds().isNotEmpty() }
+            .distinctUntilChanged().flatMapLatest { installed ->
+                if (installed) savedMedia().onStart { emit(emptyList()) } else flowOf(emptyList())
+            }.map { rows ->
+                val latest = rows.sortedByDescending { it.addedSeconds }.take(4)
+                pictures = latest.associateWith { pictures[it] ?: thumbnail(it) }
+                rows
             }
+        combine(progress, saved) { jobs, files ->
+            WidgetUiState.from(jobs, files).let { state ->
+                state.copy(recents = state.recents.map { it.copy(thumbnail = pictures[it.media]) })
+            }
+        }.distinctUntilChanged().onEach { cached = it }.conflate().collect { state ->
+            val ids = widgetIds()
+            if (ids.isNotEmpty()) {
+                render(state, ids)
+                // Deliver the latest during the cooldown, including completion and saved-file changes.
+                delay(2_000)
+            }
+        }
     }
 }

@@ -487,7 +487,7 @@
         <item quantity="many">%1$s تنزيلًا آخر جاريًا</item>
         <item quantity="other">%1$s تنزيل آخر جارٍ</item>
     </plurals>
-    <string name="widget_description">\u2066Nezzel\u2069: تابع تقدّم التنزيل</string>
+    <string name="widget_description">الصق رابطًا وتابع التنزيلات وافتح الملفات المحفوظة</string>
     <string name="shortcut_downloads_short">التنزيلات</string>
     <string name="download_battery_error">أوقف \u2066Android\u2069 التنزيل لتوفير البطارية</string>
     <string name="battery_settings">إعدادات البطارية</string>

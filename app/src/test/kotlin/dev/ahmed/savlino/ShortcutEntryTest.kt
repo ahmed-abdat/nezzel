@@ -199,4 +199,33 @@ class ShortcutEntryTest {
             assertEquals(0, reads)
         } finally { c.pause().stop().destroy() }
     }
+    @Test fun savedWidgetActionNavigatesOnColdAndWarmEntryWithoutReadingClipboard() {
+        val uri = android.net.Uri.parse("content://media/external/downloads/19")
+        val intent = ShortcutActions.intent(app, ShortcutActions.OPEN_SAVED).setData(uri)
+            .putExtra(ShortcutActions.SAVED_URI, uri.toString())
+        val c = Robolectric.buildActivity(MainActivity::class.java, Intent(intent)).setup()
+        try {
+            c.windowFocusChanged(true)
+            assertEquals("Downloads", c.get().links.destination)
+            c.get().links.navigate("Settings")
+            c.newIntent(Intent(intent))
+            assertEquals("Downloads", c.get().links.destination)
+            assertNull(c.get().intent.action)
+            assertEquals(0, reads)
+        } finally { c.pause().stop().destroy() }
+    }
+
+    @Test fun invalidSavedWidgetUriStillOpensDownloadsAndDoesNotBecomeAShare() {
+        val intent = ShortcutActions.intent(app, ShortcutActions.OPEN_SAVED)
+            .putExtra(ShortcutActions.SAVED_URI, "https://example.invalid/file")
+        assertNull(ShortcutActions.savedUri(intent))
+        val c = Robolectric.buildActivity(MainActivity::class.java, intent).setup()
+        try {
+            c.windowFocusChanged(true)
+            assertEquals("Downloads", c.get().links.destination)
+            assertEquals("", c.get().links.text)
+            assertEquals(0, reads)
+        } finally { c.pause().stop().destroy() }
+    }
+
 }

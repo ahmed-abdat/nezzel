@@ -1,13 +1,24 @@
 package dev.ahmed.savlino.shortcuts
 
+import android.appwidget.AppWidgetManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import dev.ahmed.savlino.domain.Size
+import dev.ahmed.savlino.downloads.SavedMedia
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,59 +27,100 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.util.Locale
 
-/** Design review captures of the progress widget. Runs only with NEZZEL_CAPTURE_DIR; synthetic jobs. */
+/**
+ * Test-only fixtures on a launcher wallpaper, never production data or network/provider IO.
+ * Run with NEZZEL_CAPTURE_DIR pointing to ~/Downloads/Nezzel/widget-w1; skipped in an ordinary gate.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w384dp-h832dp-xxhdpi")
 class WidgetCaptureTest {
     private val dir = System.getenv("NEZZEL_CAPTURE_DIR")?.let(::File)
-    private fun job(id: String, name: String, bytes: Long, phase: DownloadPhase = DownloadPhase.DOWNLOADING) =
-        DownloadProgress(id, name, phase, bytes, Size.Exact(100))
-    private val arabic = job("a", "رحلة إلى جبال الأطلس في الشتاء مع العائلة.mp4", 45)
-    private val english = job("e", "Sunset timelapse over the old harbour.mp4", 45)
+    private data class Cell(val name: String, val width: Int, val height: Int, val size: WidgetSize)
 
     @Test fun widget() {
         assumeTrue(dir != null)
-        val shots = listOf(
-            Shot("active-ar", "ar", WidgetUiState.from(listOf(arabic))),
-            Shot("active-en", "en", WidgetUiState.from(listOf(english))),
-            Shot("paused-ar", "ar", WidgetUiState.from(listOf(arabic.copy(paused = true)))),
-            Shot("three-running-ar", "ar", WidgetUiState.from(listOf(job("1", "مقطع.mp4", 20), job("2", "حلقة.mp4", 70), arabic))),
-            Shot("preparing-ar", "ar", WidgetUiState.from(listOf(arabic.copy(phase = DownloadPhase.PREPARING)))),
-            Shot("idle-ar", "ar", WidgetUiState()),
-            Shot("idle-en", "en", WidgetUiState()),
-            Shot("idle-fr", "fr", WidgetUiState()),
-            Shot("narrow-ar", "ar", WidgetUiState.from(listOf(arabic)), width = 170),
-            Shot("narrow-idle-ar", "ar", WidgetUiState(), width = 170),
-            Shot("font130-ar", "ar", WidgetUiState.from(listOf(job("2", "حلقة.mp4", 70), arabic)), scale = 1.3f),
-            Shot("font130-idle-fr", "fr", WidgetUiState(), scale = 1.3f),
+        val cells = listOf(
+            Cell("wide-250x110", 250, 110, WidgetSize.WIDE),
+            Cell("wide-300x150", 300, 150, WidgetSize.WIDE),
+            Cell("square-110x110", 110, 110, WidgetSize.SQUARE),
+            Cell("square-150x150", 150, 150, WidgetSize.SQUARE),
+            Cell("slim-110x48", 110, 48, WidgetSize.SLIM),
         )
-        for (shot in shots) for (dark in listOf(false, true)) {
-            val app = RuntimeEnvironment.getApplication()
-            val config = Configuration(app.resources.configuration).apply {
-                setLocale(java.util.Locale.forLanguageTag(shot.lang)); setLayoutDirection(java.util.Locale.forLanguageTag(shot.lang))
-                fontScale = shot.scale
-                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-                    (if (dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO)
+        val pictures = listOf(samplePicture(0xFF307B70.toInt(), 0xFFA8D5C8.toInt()),
+            samplePicture(0xFF6A76A9.toInt(), 0xFFC2B7D9.toInt()))
+        try {
+            for (language in listOf("ar", "en")) {
+                val saved = (1..4).map { index ->
+                    val mime = when (index) { 3 -> "audio/mp4"; 4 -> "image/jpeg"; else -> "video/mp4" }
+                    val name = if (language == "ar") "ملف محفوظ $index" else "Saved file $index"
+                    SavedMedia(Uri.parse("content://media/external/downloads/$index"), name, name, mime,
+                        100, index.toLong(), null, null, null)
+                }
+                fun state(jobs: List<DownloadProgress>) = WidgetUiState.from(jobs, saved).let { ui ->
+                    ui.copy(recents = ui.recents.mapIndexed { index, recent -> recent.copy(thumbnail = pictures.getOrNull(index)) })
+                }
+                val title = if (language == "ar") "رحلة إلى جبال الأطلس في الشتاء.mp4" else "Sunset timelapse over the old harbour.mp4"
+                val first = DownloadProgress("first", title, DownloadPhase.DOWNLOADING, 45, Size.Exact(100),
+                    bytesPerSecond = 55.0 / 21, remainingTransferSeconds = 21)
+                val second = DownloadProgress("second", if (language == "ar") "رحلة أخرى.mp4" else "Another journey.mp4",
+                    DownloadPhase.DOWNLOADING, 80, Size.Exact(100))
+                val states = listOf("idle-recents" to state(emptyList()), "one-running" to state(listOf(first)),
+                    // Newest first: primary gets the supplied ETA; recents remain in the shared snapshot.
+                    "two-running-recents" to state(listOf(second, first)))
+                for (cell in cells) for ((name, ui) in states) for (dark in listOf(false, true)) {
+                    capture(cell, name, language, dark, ui)
+                }
             }
-            val context = app.createConfigurationContext(config)
-            val density = context.resources.displayMetrics.density
-            // One home-screen cell row (72dp tall) on a plain wallpaper tone.
-            val host = FrameLayout(context).apply { setBackgroundColor(if (dark) 0xFF3B4442.toInt() else 0xFFC9D3CF.toInt()) }
-            val pad = (16 * density).toInt()
-            host.setPadding(pad, pad, pad, pad)
-            host.addView(NezzelWidgetProvider.views(context, shot.state, shot.width < 200).apply(context, host))
-            val width = (shot.width * density).toInt() + 2 * pad; val height = (72 * density).toInt() + 2 * pad
-            host.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
-            host.layout(0, 0, width, height)
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            host.draw(Canvas(bitmap))
-            dir!!.mkdirs()
-            File(dir, "widget-${shot.name}-${if (dark) "dark" else "light"}.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        }
+        } finally { pictures.forEach(Bitmap::recycle) }
     }
 
-    private data class Shot(val name: String, val lang: String, val state: WidgetUiState, val width: Int = 328, val scale: Float = 1f)
+    private fun capture(cell: Cell, name: String, language: String, dark: Boolean, state: WidgetUiState) {
+        val app = RuntimeEnvironment.getApplication()
+        val config = Configuration(app.resources.configuration).apply {
+            val locale = Locale.forLanguageTag(language)
+            setLocale(locale); setLayoutDirection(locale)
+            fontScale = 1f
+            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                (if (dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO)
+        }
+        val context = app.createConfigurationContext(config)
+        val density = context.resources.displayMetrics.density
+        val options = Bundle().apply {
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, cell.width)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, cell.height)
+        }
+        val size = WidgetSize.from(options)
+        assertEquals(cell.name, cell.size, size)
+        val screen = FrameLayout(context).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                if (dark) intArrayOf(0xFF1F2B2A.toInt(), 0xFF3B4442.toInt())
+                else intArrayOf(0xFFB7C9C4.toInt(), 0xFFDCE5E1.toInt()))
+        }
+        val widget = NezzelWidgetProvider.views(context, state, size, cell.width, cell.height).apply(context, screen)
+        screen.addView(widget, FrameLayout.LayoutParams((cell.width * density).toInt(), (cell.height * density).toInt(),
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = (300 * density).toInt() })
+        val width = (384 * density).toInt(); val height = (832 * density).toInt()
+        screen.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        screen.layout(0, 0, width, height)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        try {
+            screen.draw(Canvas(bitmap))
+            val target = checkNotNull(dir)
+            assertTrue(target.isDirectory || target.mkdirs())
+            File(target, "W1-${cell.name}-$name-$language-${if (dark) "dark" else "light"}.png").outputStream().use {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        } finally { bitmap.recycle() }
+    }
+
+    /** Synthetic thumbnail swatches exercise bitmap rendering alongside the two missing-thumbnail type tiles. */
+    private fun samplePicture(start: Int, end: Int): Bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888).also {
+        Canvas(it).drawRect(0f, 0f, 96f, 96f, Paint().apply {
+            shader = LinearGradient(0f, 0f, 96f, 96f, start, end, Shader.TileMode.CLAMP)
+        })
+    }
 }

@@ -14,9 +14,11 @@ class LiveLeaderTest {
             job("paused").copy(paused = true), job("done", phase = DownloadPhase.COMPLETED))
         assertEquals("three", LiveLeader.pick(jobs)?.jobId)
         val widget = WidgetUiState.from(jobs)
-        assertEquals("three", widget.title)
-        assertEquals(80, widget.percent)
-        assertEquals(2, widget.more)
+        assertEquals(listOf("three", "two"), widget.jobs.map { it.id })
+        assertEquals("three", widget.jobs.first().title)
+        assertEquals(80, widget.jobs.first().percent)
+        // Two rows shown; the other running job, queue and paused job remain reachable in Downloads.
+        assertEquals(3, widget.more)
     }
 
     @Test fun noRunningJobMeansNoLeader() {

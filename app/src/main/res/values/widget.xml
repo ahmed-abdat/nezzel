@@ -7,4 +7,5 @@
     <color name="widget_track">#333F4946</color>
     <dimen name="widget_radius">16dp</dimen>
     <bool name="open_with_links">false</bool>
+    <color name="widget_on_primary">#FFFFFF</color>
 </resources>
