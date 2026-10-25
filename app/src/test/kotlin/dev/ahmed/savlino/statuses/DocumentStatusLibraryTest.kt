@@ -1,7 +1,9 @@
 package dev.ahmed.savlino.statuses
 
 import android.content.ContentProvider
+import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
@@ -12,6 +14,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
+import android.provider.MediaStore
 import java.io.File
 import java.io.FileNotFoundException
 import kotlinx.coroutines.runBlocking
@@ -35,14 +38,21 @@ class DocumentStatusLibraryTest {
     private val biz = "Android/media/com.whatsapp.w4b/WhatsApp Business"
     private lateinit var root: File
     private lateinit var provider: Provider
+    private lateinit var media: SavedMediaProvider
+    private val savedCollection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    private fun savedUri(id: Long = 1) = ContentUris.withAppendedId(savedCollection, id)
+    private val marksPrefs get() = app.getSharedPreferences("nezzel-status-marks", Context.MODE_PRIVATE)
     private val saveCalls = mutableListOf<StatusSaveSource>()
-    private var saveAnswer: (StatusSaveSource) -> StatusSaveResult = { StatusSaveResult.Saved(Uri.parse("content://media/1")) }
+    private var saveAnswer: (StatusSaveSource) -> StatusSaveResult = { StatusSaveResult.Saved(savedUri()) }
 
     @Before fun setUp() {
         root = File(app.cacheDir, "volume").apply { deleteRecursively(); mkdirs() }
         provider = Provider()
         provider.attachInfo(app, ProviderInfo().apply { authority = auth; exported = true })
         ShadowContentResolver.registerProviderInternal(auth, provider)
+        media = SavedMediaProvider()
+        media.attachInfo(app, ProviderInfo().apply { authority = "media"; exported = true })
+        ShadowContentResolver.registerProviderInternal("media", media)
         install("com.whatsapp", "WhatsApp"); install("com.whatsapp.w4b", "WhatsApp Business")
     }
 
@@ -246,11 +256,11 @@ class DocumentStatusLibraryTest {
         val library = library()
         library.onPicked(tree("Android/media"))
         val items = ready(library.load()).items
-        saveAnswer = { if (it.uri == items[1].uri) StatusSaveResult.Gone else StatusSaveResult.Saved(Uri.parse("content://media/1")) }
+        saveAnswer = { if (it.uri == items[1].uri) StatusSaveResult.Gone else StatusSaveResult.Saved(savedUri()) }
         val unknown = items[2].copy(sizeBytes = null)
         val results = library.save(listOf(items[0], items[1], unknown))
-        assertEquals(listOf(StatusSaveResult.Saved(Uri.parse("content://media/1")), StatusSaveResult.Gone,
-            StatusSaveResult.Saved(Uri.parse("content://media/1"))), results)
+        assertEquals(listOf(StatusSaveResult.Saved(savedUri()), StatusSaveResult.Gone,
+            StatusSaveResult.Saved(savedUri())), results)
         assertEquals(StatusSaveSource(items[0].uri, "video/mp4", 10L, 9_000L), saveCalls.first())
 
         val reloaded = ready(library().load()).items
@@ -258,6 +268,84 @@ class DocumentStatusLibraryTest {
         // Same name, new content: a different status, not saved.
         File(root, "$wa/accounts/1001/Media/.Statuses/b.mp4").setLastModified(9_100)
         assertFalse(ready(library().load()).items.first().saved)
+    }
+
+    @Test fun deletedSavedFileClearsBadgeAndPrunesMarkOnNextLoad() = runBlocking {
+        seedPhone()
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        val item = ready(library.load()).items.first()
+        library.save(listOf(item))
+        assertTrue(ready(library.load()).items.first().saved)
+
+        assertEquals(1, app.contentResolver.delete(savedUri(), null, null))
+        assertFalse(ready(library.load()).items.first().saved)
+        assertEquals("", marksPrefs.getString("saved", null))
+        // Even if the id is reused, the removed mark must not return after rebuilding the library.
+        media.ids += 1L
+        assertFalse(ready(library().load()).items.first().saved)
+    }
+
+    @Test fun savedFilesAreCheckedInOneBatchAndSurviveLibraryRecreation() = runBlocking {
+        seedPhone()
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        val items = ready(library.load()).items
+        var nextId = 0L
+        saveAnswer = { StatusSaveResult.Saved(savedUri(++nextId)) }
+        media.ids += 2L
+        library.save(items.take(2))
+        media.queries = 0
+
+        assertEquals(listOf(true, true, false, false), ready(library().load()).items.map { it.saved })
+        assertEquals(1, media.queries)
+        app.contentResolver.delete(savedUri(2), null, null)
+        media.queries = 0
+        assertEquals(listOf(true, false, false, false), ready(library.load()).items.map { it.saved })
+        assertEquals(1, media.queries)
+    }
+
+    @Test fun legacyMarkWithoutSavedUriStillCountsAsSaved() = runBlocking {
+        seedPhone()
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        // Old on-disk format: hash of the source document id, size (10) and modified time (9000).
+        val legacyKey = "0a8ecb2caf4eec01be9c0ea0ec9796b7"
+        marksPrefs.edit().putString("saved", legacyKey).commit()
+
+        assertEquals(listOf(true, false, false, false), ready(library.load()).items.map { it.saved })
+        assertEquals(legacyKey, marksPrefs.getString("saved", null))
+        assertEquals(0, media.queries)
+    }
+
+    @Test fun securityExceptionKeepsSavedMarkUntilExistenceCanBeChecked() = runBlocking {
+        seedPhone()
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        library.save(ready(library.load()).items.take(1))
+        val stored = marksPrefs.getString("saved", null)
+        media.ids.clear()
+        media.denyQuery = true
+
+        assertTrue(ready(library.load()).items.first().saved)
+        assertEquals(stored, marksPrefs.getString("saved", null))
+        media.denyQuery = false
+        assertFalse(ready(library.load()).items.first().saved)
+    }
+
+    @Test fun nullCursorKeepsSavedMarkUntilExistenceCanBeChecked() = runBlocking {
+        seedPhone()
+        val library = library()
+        library.onPicked(tree("Android/media"))
+        library.save(ready(library.load()).items.take(1))
+        val stored = marksPrefs.getString("saved", null)
+        media.ids.clear()
+        media.nullCursor = true
+
+        assertTrue(ready(library.load()).items.first().saved)
+        assertEquals(stored, marksPrefs.getString("saved", null))
+        media.nullCursor = false
+        assertFalse(ready(library.load()).items.first().saved)
     }
 
     @Test fun newMeansNotSeenOnThePreviousLoad() = runBlocking {
@@ -282,6 +370,29 @@ class DocumentStatusLibraryTest {
         assertTrue(library.load() is StatusAccess.NeedsGrant)
         assertEquals(before, root.walkTopDown().filter { it.isFile }.associate { it.path to (it.readBytes().toList() to it.lastModified()) })
         assertEquals(0, provider.writes)
+    }
+
+    private inner class SavedMediaProvider : ContentProvider() {
+        val ids = mutableSetOf(1L)
+        var queries = 0
+        var denyQuery = false
+        var nullCursor = false
+        override fun onCreate() = true
+        override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor? {
+            assertEquals(savedCollection, uri) // No per-item queries.
+            queries++
+            if (denyQuery) throw SecurityException()
+            if (nullCursor) return null
+            assertArrayEquals(arrayOf(MediaStore.MediaColumns._ID), projection)
+            return MatrixCursor(requireNotNull(projection)).apply {
+                ids.forEach { addRow(arrayOf<Any>(it)) }
+            }
+        }
+        override fun delete(uri: Uri, selection: String?, args: Array<out String>?) =
+            if (ids.remove(ContentUris.parseId(uri))) 1 else 0
+        override fun getType(uri: Uri) = "image/jpeg"
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = error("unexpected insert")
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?): Int = error("unexpected update")
     }
 
     /** ExternalStorageProvider stand-in over [root]: tree-scoped child queries, read-only; writes are counted and fail. */
