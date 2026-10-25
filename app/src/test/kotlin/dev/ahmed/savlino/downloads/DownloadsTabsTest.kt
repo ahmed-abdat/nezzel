@@ -138,6 +138,17 @@ class DownloadsTabsTest {
         }
     }
 
+    @Test fun aPlaylistStartingWithNoJobYetOpensDownloading() {
+        val batches = mutableStateOf(emptyList<PlaylistBatch>())
+        render({ DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, playlists = batches.value) }) {
+            compose.onNodeWithTag("tab_saved").assertDoesNotExist()
+            batches.value = listOf(playlistFixture())
+            compose.waitForIdle()
+            compose.onNodeWithTag("tab_running").assertIsSelected()
+            compose.onNodeWithTag("playlist_batch_list").assertExists()
+        }
+    }
+
     @Test fun cleanBatchSaysSavedThenLeavesButOneWithFailuresStays() {
         val batches = mutableStateOf(listOf(playlistFixture(), renamed(playlistFixture())))
         render({ DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, playlists = batches.value) }) {

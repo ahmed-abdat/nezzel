@@ -92,8 +92,10 @@ internal fun rememberVisibleBatches(playlists: List<PlaylistBatch>): List<Playli
 @Composable
 internal fun rememberDownloadsTab(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): MutableState<DownloadsTab> {
     val tab = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(entryTab(jobs, playlists)) }
-    // A job that becomes active while the screen watches (new, or the same id on a new attempt) counts as started.
+    // A job or playlist that becomes active while the screen watches (new, or the same id on a new attempt) counts as
+    // started: a playlist still resolving has no job yet but already lives on Downloading.
     val activeNow = jobs.filter { !it.terminal || it.awaitingSchedule }.mapTo(HashSet()) { it.jobId }
+    playlists.filter { !it.terminal }.mapTo(activeNow) { "playlist:${it.id}" }
     val before = remember { HashSet(activeNow) }
     val started = (activeNow - before).isNotEmpty()
     before.clear(); before += activeNow
