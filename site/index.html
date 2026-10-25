@@ -197,7 +197,7 @@ h1 bdi{color:var(--primary)}
 /* paper: every object on the desk shares one soft shadow and a hairline edge */
 .pp{background:var(--paper);box-shadow:0 0 0 1px var(--edge);filter:var(--shf)}
 
-/* the machine: the real flow performed on a desk; chat slip, cable, phone, cable, tray */
+/* the machine: the real flow performed on a desk; sources, cable, phone, cable, a group */
 .flow{position:relative;padding-top:clamp(88px,11vw,140px)}
 .flow>h2{margin-inline:auto;text-align:center}
 .desk{position:relative;padding-top:20px;overflow-x:clip}
@@ -222,31 +222,42 @@ h1 bdi{color:var(--primary)}
 .wires .cn.a{stroke:var(--primary);animation:flow 1.4s linear infinite}
 @keyframes flow{to{stroke-dashoffset:-28}}
 
-/* the chat slip: the message the link came from, generic, no app name */
-.slip{inset-inline-start:0;top:118px;width:320px;padding:14px;border-radius:22px;rotate:calc(var(--x) * -4deg);display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.45;transition:opacity .5s var(--ease),translate .6s var(--ease)}
-.slip .msg,.slip .vcard{box-shadow:0 0 0 1px var(--edge)}
-.slip .vcard{width:86%}
-.slip .toast{position:static;margin-top:2px;opacity:0;transform:translateY(6px)}
+/* the sources: where people meet the video; labels only, no copied app UIs or logos */
+.slip{inset-inline-start:0;top:96px;width:300px;padding:14px;border-radius:22px;rotate:calc(var(--x) * -4deg);display:flex;flex-direction:column;gap:10px;transition:opacity .5s var(--ease),translate .6s var(--ease)}
+.apps{display:grid;gap:8px}
+.ap{position:relative;display:flex;align-items:center;gap:12px;padding:7px;padding-inline-end:12px;border-radius:14px;background:var(--app);box-shadow:0 0 0 1px var(--edge);font:700 14px/1 system-ui,sans-serif;color:var(--on-bg);rotate:calc(var(--x) * (var(--i) - 1.5) * 1.2deg);transition:transform .5s var(--spring),box-shadow .4s var(--ease),opacity .4s var(--ease),rotate .5s var(--ease)}
+.ap .apt{width:64px;flex:none;aspect-ratio:16/9;border-radius:8px;overflow:hidden;filter:hue-rotate(calc(var(--i) * 70deg))}
+.ap .apt svg{display:block;width:100%;height:100%}
+.ap .cl{margin-inline-start:auto;display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:999px;font:600 11.5px/1 system-ui,sans-serif;opacity:0;transform:scale(.85);transition:opacity .3s var(--ease),transform .3s var(--spring),background .25s,color .25s}
+.ap .cl .i{width:14px;height:14px}
+html[dir=rtl] .ap .cl{font-family:"Noto Sans Arabic",system-ui,sans-serif}
+.e-menu .ap:not(.cp){opacity:.55}
+.e-menu .ap.cp{rotate:0deg;transform:scale(1.04);box-shadow:0 0 0 1px var(--edge),0 14px 28px -14px rgb(var(--ink-sh)/.45)}
+.e-menu .cp .cl{opacity:1;transform:none;background:var(--c-high)}
+.e-copy .cp .cl{background:var(--primary-c);color:var(--on-primary-c)}
+.slip .toast{position:static;opacity:0;transform:translateY(6px)}
 .e-toast .slip .toast{opacity:1;transform:none}
 .lchip{left:0;top:0;display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 9px;border-radius:12px;font:600 13px/1 system-ui,sans-serif;direction:ltr;color:var(--on-bg);opacity:0;transition:opacity .25s;will-change:transform}
 .lchip .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
 .lchip.on{opacity:1}
 
-/* the tray: Downloads/Nezzel, where the file lands */
+/* the end of the trip: the saved file goes out to a group */
 .tray{inset-inline-start:850px;top:250px;width:300px;padding:14px;border-radius:22px;rotate:calc(var(--x) * 3deg);transition:opacity .5s var(--ease),translate .6s var(--ease)}
 .tray .trh{display:flex;align-items:center;gap:8px;font:600 13px/1 system-ui,sans-serif;color:var(--muted);padding:2px 2px 12px}
+html[dir=rtl] .tray .trh{font-family:"Noto Sans Arabic",system-ui,sans-serif}
 .tray .trh .i{width:18px;height:18px;color:var(--primary)}
-.trg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.trt{position:relative;aspect-ratio:16/10;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:var(--c);color:var(--muted);font:700 11px/1 system-ui,sans-serif;direction:ltr}
-.trt .i{width:22px;height:22px}
-.trt>b{position:absolute;bottom:6px;inset-inline-start:7px;font-weight:700}
-.trt svg.sc2{position:absolute;inset:0;width:100%;height:100%}
-.trt.v>b,.trt.nw small{color:#fff;text-shadow:0 1px 2px rgb(0 0 0/.5)}
-.trt.nw{background:transparent;box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--on-bg) 22%,transparent)}
-.trt.nw>*{opacity:0;transform:scale(.9);transition:opacity .4s var(--ease),transform .5s var(--spring)}
-.trt.nw small{position:absolute;bottom:6px;inset-inline:7px;font:700 10.5px/1.2 system-ui,sans-serif;text-align:start}
-.landed .trt.nw{box-shadow:0 0 0 2px var(--primary)}
-.landed .trt.nw>*{opacity:1;transform:none}
+[dir=rtl] .tray .trh .i{transform:scaleX(-1)}
+.grp{display:grid;gap:6px}
+.gr{position:relative;display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 8px;border-radius:14px;font-size:14px;transition:background .4s var(--ease)}
+.gr>i{width:36px;height:36px;flex:none;border-radius:50%;display:grid;place-items:center;background:oklch(.9 .05 var(--h));color:oklch(.38 .08 var(--h))}
+:root[data-mode=dark] .gr>i{background:oklch(.36 .06 var(--h));color:oklch(.9 .05 var(--h))}
+.gr>i .i{width:19px;height:19px}
+.gr .sent{margin-inline-start:auto;position:relative;width:62px;aspect-ratio:16/10;border-radius:9px;overflow:hidden;opacity:0;transform:scale(.8);transition:opacity .4s var(--ease),transform .5s var(--spring)}
+.gr .sent>svg:first-child{display:block;width:100%;height:100%}
+.gr .sent .i{position:absolute;bottom:3px;inset-inline-end:3px;width:16px;height:16px;padding:2px;border-radius:50%;background:var(--primary);color:var(--on-primary);stroke-width:3}
+.gr.nw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--on-bg) 16%,transparent)}
+.landed .gr.nw{background:var(--primary-c);box-shadow:none}
+.landed .gr.nw .sent{opacity:1;transform:none}
 .fcard{left:0;top:0;width:118px;padding:5px;border-radius:12px;opacity:0;transition:opacity .25s;will-change:transform}
 .fcard .art{border-radius:8px}
 .fcard.on{opacity:1}
@@ -272,8 +283,8 @@ html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
   .wires.d{display:none}
   .wires.m{display:block}
   .mach>.phone{inset-inline-start:70px;top:40px}
-  .slip{top:0;width:230px;padding:10px;font-size:11.5px;rotate:calc(var(--x) * -5deg);z-index:3}
-  .slip .msg{display:none}
+  .slip{top:0;width:250px;padding:10px;rotate:calc(var(--x) * -5deg);z-index:3}
+  .apps{gap:6px}.ap{padding:5px;font-size:13px}.ap .apt{width:48px}
   .tray{inset-inline-start:0;top:466px;width:220px;padding:10px;z-index:3}
   .step{top:680px;inset-inline-start:0!important;width:360px}
   .step h3{font-size:28px}
@@ -298,29 +309,11 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .sc.out{transform:translateX(calc(var(--x) * -24px)) scale(.985)}
 /* the signature moment: the copied clip zooms toward you and Nezzel settles in behind it */
 #demo .s1{opacity:1;transform:none}
-.ab{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
-.ab b{font-size:15px}
-.ab .i{width:20px;height:20px}
-.av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#ECBF83,#7A5520);display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
-.body{flex:1;padding:6px 14px;display:flex;flex-direction:column;gap:8px;position:relative}
-.msg{align-self:flex-start;max-width:78%;padding:8px 12px;border-radius:16px;border-start-start-radius:5px;background:var(--c-lowest);box-shadow:0 1px 2px rgb(var(--ink-sh)/.12)}
-.vcard{align-self:flex-start;width:80%;padding:6px;border-radius:16px;border-start-start-radius:5px;background:var(--c-lowest);color:var(--on-bg);box-shadow:0 1px 2px rgb(var(--ink-sh)/.12)}
-.vcard b{display:block;margin:6px 4px 2px;font-size:12.5px}
 .art{position:relative;aspect-ratio:16/9;border-radius:11px;overflow:hidden}
 .art svg{width:100%;height:100%;display:block}
 .art .pl{position:absolute;inset:0;margin:auto;width:34px;height:34px;border-radius:50%;background:rgb(0 0 0/.45);display:grid;place-items:center;color:#fff}
 .art .pl .i{width:16px;height:16px;fill:#fff;stroke:none}
 .art .du{position:absolute;bottom:5px;inset-inline-end:6px;font:700 10px/1 system-ui;color:#fff;background:rgb(0 0 0/.65);padding:3px 5px;border-radius:5px;direction:ltr}
-.pmenu{position:relative;z-index:2;align-self:flex-start;min-width:150px;padding:5px;border-radius:14px;background:var(--c-lowest);box-shadow:0 18px 40px -14px rgb(var(--ink-sh)/.55);transform-origin:top right;opacity:0;transform:scale(.85) translateY(-6px);transition:opacity .3s var(--ease),transform .45s var(--spring)}
-.pmenu>span{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;transition:background .25s,color .25s}
-.pmenu .i{width:16px;height:16px}
-.e-menu .pmenu{opacity:1;transform:none}
-[dir=ltr] .pmenu{transform-origin:top left}
-:root[data-mode=dark] .slip :is(.msg,.vcard,.pmenu){background:var(--c-high)}
-.vcard,.msg{transition:transform .45s var(--spring),box-shadow .45s var(--ease),opacity .3s}
-.e-menu .vcard{transform:scale(1.03);box-shadow:0 14px 30px -12px rgb(var(--ink-sh)/.4)}
-.e-menu .msg{opacity:.45}
-.e-copy .pmenu .cp{background:var(--primary-c);color:var(--on-primary-c);font-weight:700}
 .tap{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:color-mix(in oklab,var(--primary) 30%,transparent);border:2px solid color-mix(in oklab,var(--primary) 55%,transparent);opacity:0;transform:scale(.4);pointer-events:none;z-index:8}
 .tap.go{animation:tap .7s var(--ease)}
 @keyframes tap{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(.8)}100%{opacity:0;transform:scale(1.5)}}
@@ -727,7 +720,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   <symbol id="wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.6a9 9 0 0 1 12 0M9.4 16.1a4 4 0 0 1 5.2 0"/><circle cx="12" cy="19.4" r=".6"/></symbol>
   <symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
   <symbol id="link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
-  <symbol id="share" viewBox="0 0 24 24"><path d="M15 5l4 4-4 4M19 9H9a5 5 0 0 0 0 10h1"/></symbol>
+  <symbol id="grp" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14a5 5 0 0 1 3 5"/></symbol><symbol id="share" viewBox="0 0 24 24"><path d="M15 5l4 4-4 4M19 9H9a5 5 0 0 0 0 10h1"/></symbol>
   <symbol id="reply" viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 5 5v1"/></symbol>
   <symbol id="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5Z"/></symbol>
@@ -805,13 +798,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     </svg>
     <div class="slip pp" aria-hidden="true">
       <span class="tap"></span>
-      <div class="msg" data-i="msg">شوفوا هذا المقطع</div>
-      <div class="vcard"><div class="art"><svg><use href="#scene"/></svg><span class="pl"><svg class="i"><use href="#play"/></svg></span><span class="du">2:48</span></div><b data-i="vt">لقطات من رحلة الصيف</b></div>
-      <div class="pmenu">
-              <span><svg class="i flip"><use href="#reply"/></svg><span data-i="m-reply">رد</span></span>
-              <span><svg class="i flip"><use href="#share"/></svg><span data-i="m-share">مشاركة</span></span>
-              <span class="cp" id="cp"><svg class="i"><use href="#link"/></svg><span data-i="m-copy">نسخ الرابط</span></span>
-            </div>
+      <div class="apps">
+        <span class="ap" style="--i:0"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>WhatsApp</bdi></span>
+        <span class="ap cp" id="cp" style="--i:1"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>YouTube</bdi><span class="cl"><svg class="i"><use href="#link"/></svg><span data-i="m-copy">نسخ الرابط</span></span></span>
+        <span class="ap" style="--i:2"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>Facebook</bdi></span>
+        <span class="ap" style="--i:3"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>TikTok</bdi></span>
+      </div>
       <div class="toast"><svg class="i"><use href="#check"/></svg><span data-i="copied">تم نسخ الرابط</span></div>
     </div>
     <div class="phone" id="demo" role="img" data-i-aria="demo-aria" aria-label="عرض: تنسخ رابط فيديو فيقترحه Nezzel، تختار الجودة ويُحفظ الملف">
@@ -859,20 +851,19 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     </div>
 
     <div class="tray pp" aria-hidden="true">
-      <div class="trh"><svg class="i"><use href="#file"/></svg><span class="ltr">Downloads/Nezzel</span></div>
-      <div class="trg">
-        <span class="trt a"><svg class="i"><use href="#music"/></svg><b>MP3</b></span>
-        <span class="trt"><svg class="i"><use href="#image"/></svg><b>JPG</b></span>
-        <span class="trt v"><svg class="sc2" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><b>720p</b></span>
-        <span class="trt nw"><svg class="sc2" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><small class="num">1080p · <span data-mb="40.6">40.6 MB</span></small></span>
+      <div class="trh"><svg class="i"><use href="#share"/></svg><span data-i="sh-h">شاركه مع</span></div>
+      <div class="grp">
+        <span class="gr nw" style="--h:168"><i><svg class="i"><use href="#grp"/></svg></i><b data-i="g1">العائلة</b><span class="sent"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><svg class="i"><use href="#check"/></svg></span></span>
+        <span class="gr" style="--h:28"><i><svg class="i"><use href="#grp"/></svg></i><b data-i="g2">الأصدقاء</b></span>
+        <span class="gr" style="--h:258"><i><svg class="i"><use href="#grp"/></svg></i><b data-i="g3">زملاء العمل</b></span>
       </div>
     </div>
     <span class="lchip pp" aria-hidden="true"><svg class="i"><use href="#link"/></svg>youtu.be/…</span>
     <span class="fcard pp" aria-hidden="true"><span class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span></span>
   <ol class="steps">
-    <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">انسخ الرابط</h3><p data-i="s1p">أو شاركه مع Nezzel مباشرة</p></li>
+    <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">انسخ الرابط</h3><p data-i="s1p">من واتساب أو يوتيوب أو فيسبوك أو تيك توك</p></li>
     <li class="step" data-step="1"><span class="n">2</span><h3 data-i="s2">اختر الجودة</h3><p data-i="s2p">افتح Nezzel، تجد الرابط في انتظارك</p></li>
-    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">اضغط تنزيل</h3><p data-i="s3p">لا يبدأ التحميل قبل ضغطتك</p><p class="note" data-i="note">عرض توضيحي، وكل موقع يحدد جوداته</p></li>
+    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">حمّل وشارك</h3><p data-i="s3p">ثم أرسله إلى مجموعاتك</p><p class="note" data-i="note">عرض توضيحي، وكل موقع يحدد جوداته</p></li>
   </ol>
 
   </div>
@@ -1004,17 +995,17 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"<span class=\"ln\"><span>Copy the link</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> does the rest</span></span>",
     cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved",
-    av:"F", chat:"Family", msg:"Look at this clip", vt:"Summer trip highlights",
-    "m-reply":"Reply", "m-share":"Share", "m-copy":"Copy link", copied:"Link copied",
+    vt:"Summer trip highlights",
+    "m-copy":"Copy link", copied:"Link copied", "sh-h":"Share with", g1:"Family", g2:"Friends", g3:"Work team",
     field:"Paste a public link", "n-home":"Home", "n-dl":"Downloads", "n-set":"Settings",
     clip:"Link you copied", view:"View download options",
     video:"Video", "audio-h":"Audio", best:"Highest available", last:"Last used", bal:"Balanced", small:"Small", audio:"Audio only",
     "h-title":"Save videos to your phone", "h-line":"Copy a video link in any app, then tap Paste.", recent:"Recent", "see-all":"See all", paste:"Paste", fetching:"Getting qualities…", "all-q":"All quality options", lowest:"Lowest", "saves-to":"Saves to", "saved-in":"Saved to", "av-line":"Has video and sound", prep:"Preparing…", dling:"Downloading", join:"Joining audio and video…",
     dl:"Download", open:"Open", saved:"Saved", "saved-to":"Saved to <span class=\"ltr\">Download/Nezzel</span>",
     "how-h":"Three steps, and it’s on your phone", 
-    s1:"Copy the link", s1p:"Or share it straight to Nezzel",
+    s1:"Copy the link", s1p:"From WhatsApp, YouTube, Facebook or TikTok",
     s2:"Pick a quality", s2p:"Open Nezzel and the link is waiting",
-    s3:"Tap Download", s3p:"Nothing starts until you tap",
+    s3:"Download and share", s3p:"Then send it to your groups",
     note:"Demo only. Each site sets its own qualities", "more-h":"There’s more", x1:"Keep WhatsApp statuses", x2:"Whole playlists", x3:"Several links at once", x4:"Just the audio", x5:"Nezzel on your home screen",
     "ins-h":"How to install",
     "ins-sub":"It’s not on the Play Store, so Android checks with you first. That’s normal",
@@ -1074,14 +1065,13 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "howto": "كيف أثبّته؟",
       "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون · الإصدار",
       "demo-aria": "عرض: تنسخ رابط فيديو فيقترحه Nezzel، تختار الجودة ويُحفظ الملف",
-      "av": "ع",
-      "chat": "العائلة",
-      "msg": "شوفوا هذا المقطع",
       "vt": "لقطات من رحلة الصيف",
-      "m-reply": "رد",
-      "m-share": "مشاركة",
       "m-copy": "نسخ الرابط",
       "copied": "تم نسخ الرابط",
+      "sh-h": "شاركه مع",
+      "g1": "العائلة",
+      "g2": "الأصدقاء",
+      "g3": "زملاء العمل",
       "field": "الصق رابطًا عامًا",
       "n-home": "الرئيسية",
       "n-dl": "التنزيلات",
@@ -1114,11 +1104,11 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "saved-to": "تم الحفظ في <span class=\"ltr\">Download/Nezzel</span>",
       "how-h": "ثلاث خطوات، والفيديو عندك",
       "s1": "انسخ الرابط",
-      "s1p": "أو شاركه مع Nezzel مباشرة",
+      "s1p": "من واتساب أو يوتيوب أو فيسبوك أو تيك توك",
       "s2": "اختر الجودة",
       "s2p": "افتح Nezzel، تجد الرابط في انتظارك",
-      "s3": "اضغط تنزيل",
-      "s3p": "لا يبدأ التحميل قبل ضغطتك",
+      "s3": "حمّل وشارك",
+      "s3p": "ثم أرسله إلى مجموعاتك",
       "note": "عرض توضيحي، وكل موقع يحدد جوداته",
       "more-h": "وفي Nezzel أيضًا",
       "x1": "احتفظ بحالات واتساب",
@@ -1208,17 +1198,17 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"<span class=\"ln\"><span>Copiez le lien</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span>",
     cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré",
-    av:"F", chat:"Famille", msg:"Regardez cette vidéo", vt:"Souvenirs de vacances",
-    "m-reply":"Répondre", "m-share":"Partager", "m-copy":"Copier le lien", copied:"Lien copié",
+    vt:"Souvenirs de vacances",
+    "m-copy":"Copier le lien", copied:"Lien copié", "sh-h":"Partager avec", g1:"Famille", g2:"Amis", g3:"Collègues",
     field:"Collez un lien public", "n-home":"Accueil", "n-dl":"Téléchargements", "n-set":"Paramètres",
     clip:"Le lien que vous avez copié", view:"Voir les options",
     video:"Vidéo", "audio-h":"Audio", best:"Meilleure qualité", last:"Dernier choix", bal:"Équilibrée", small:"Petit fichier", audio:"Audio seul",
     "h-title":"Enregistrez des vidéos sur votre téléphone", "h-line":"Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.", recent:"Récents", "see-all":"Tout voir", paste:"Coller", fetching:"Recherche des qualités…", "all-q":"Toutes les qualités", lowest:"Minimale", "saves-to":"Enregistré dans", "saved-in":"Enregistré dans", "av-line":"Avec image et son", prep:"Préparation…", dling:"Téléchargement", join:"Fusion de l’audio et de la vidéo…",
     dl:"Télécharger", open:"Ouvrir", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
     "how-h":"Trois gestes, et c’est sur votre téléphone", 
-    s1:"Copiez le lien", s1p:"Ou partagez-le directement avec Nezzel",
+    s1:"Copiez le lien", s1p:"Depuis WhatsApp, YouTube, Facebook ou TikTok",
     s2:"Choisissez la qualité", s2p:"Ouvrez Nezzel : le lien vous attend",
-    s3:"Appuyez sur Télécharger", s3p:"Rien ne démarre sans vous",
+    s3:"Téléchargez et partagez", s3p:"Puis envoyez-la à vos groupes",
     note:"Simple démo. Chaque site fixe ses qualités", "more-h":"Et ce n’est pas tout", x1:"Gardez les statuts WhatsApp", x2:"Des playlists entières", x3:"Plusieurs liens d’un coup", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil",
     "ins-h":"Installer Nezzel, pas à pas",
     "ins-sub":"Nezzel n’est pas sur le Play Store : Android vous demandera d’abord votre accord. C’est normal",
