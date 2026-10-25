@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -822,6 +823,54 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
         }
     }
 }
+
+/**
+ * Home's library: the newest files as a sideways row of fixed-size cards (the cut-off card at the end says there is
+ * more), then an «Earlier» list. Real saved files only; thumbnails come from the tab-gated loader.
+ */
+@Composable
+fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit, onSeeAll: () -> Unit) {
+    if (media.isEmpty()) return
+    val openLabel = stringResource(R.string.open_file)
+    val recent = remember(media) { media.take(RECENT_ROW) }
+    val earlier = remember(media) { media.drop(RECENT_ROW).take(EARLIER_ROWS) }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        Row(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.xs).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.recent_files), Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = onSeeAll, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.see_all)) }
+        }
+        LazyRow(contentPadding = PaddingValues(horizontal = Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            items(recent, key = { it.uri.toString() }) { item ->
+                Column(Modifier.width(196.dp).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
+                    .clickable(onClickLabel = openLabel) { onOpen(item) }, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f).padding(bottom = Space.xs), MaterialTheme.shapes.large)
+                    Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+        }
+        if (earlier.isNotEmpty()) Column(Modifier.padding(horizontal = Space.l).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            Text(stringResource(R.string.home_earlier), Modifier.heightIn(min = 48.dp).wrapContentHeight().semantics { heading() },
+                style = MaterialTheme.typography.titleMedium)
+            earlier.forEach { item ->
+                Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).semantics(mergeDescendants = true) {}
+                    .clickable(onClickLabel = openLabel) { onOpen(item) }.heightIn(min = 72.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
+                    MediaThumbnail(item, Modifier.width(112.dp).aspectRatio(16f / 9f), MaterialTheme.shapes.medium)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
+                        Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val RECENT_ROW = 8
+private const val EARLIER_ROWS = 3
 
 /**
  * A small top app bar that grows with its title: the fixed 64dp TopAppBar clips an Arabic headline

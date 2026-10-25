@@ -237,7 +237,6 @@
         <item quantity="many">%1$s téléchargements en cours</item>
         <item quantity="other">%1$s téléchargements en cours</item>
     </plurals>
-    <string name="home_subtitle">Partagez un lien avec Nezzel ou collez-le ici</string>
     <string name="automatic_options">Afficher les options automatiquement</string>
     <string name="automatic_options_help">L’enregistrement attend toujours votre appui</string>
     <string name="not_now">Plus tard</string>
@@ -612,4 +611,9 @@
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>
     <string name="old_downloads_setting_body">Fichiers enregistrés avant de réinstaller Nezzel</string>
     <string name="downloads_running_empty">Aucun téléchargement en cours</string>
+    <string name="paste">Coller</string>
+    <string name="home_hero_title">Enregistrez des vidéos sur votre téléphone</string>
+    <string name="home_hero_line">Copiez le lien d\'une vidéo dans n\'importe quelle appli, puis touchez Coller.</string>
+    <string name="home_hero_sites">Fonctionne avec YouTube, TikTok, Instagram, Facebook et d\'autres.</string>
+    <string name="home_earlier">Plus tôt</string>
 </resources>

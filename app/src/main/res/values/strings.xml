@@ -231,7 +231,6 @@
         <item quantity="one">%1$s download running</item>
         <item quantity="other">%1$s downloads running</item>
     </plurals>
-    <string name="home_subtitle">Share a link to Nezzel, or paste it here</string>
     <string name="automatic_options">Show options automatically</string>
     <string name="automatic_options_help">Saving still waits for your tap</string>
     <string name="not_now">Not now</string>
@@ -599,4 +598,9 @@
     <string name="old_downloads_setting">Show old downloads</string>
     <string name="old_downloads_setting_body">Files saved before you reinstalled Nezzel</string>
     <string name="downloads_running_empty">No downloads running</string>
+    <string name="paste">Paste</string>
+    <string name="home_hero_title">Save videos to your phone</string>
+    <string name="home_hero_line">Copy a video link in any app, then tap Paste.</string>
+    <string name="home_hero_sites">Works with YouTube, TikTok, Instagram, Facebook and more.</string>
+    <string name="home_earlier">Earlier</string>
 </resources>
