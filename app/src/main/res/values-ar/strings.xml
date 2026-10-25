@@ -301,7 +301,7 @@
     <string name="crash_delete">حذف تقارير التعطّل</string>
     <string name="about_version">الإصدار %1$s</string>
     <string name="about_body">Nezzel مجاني، وينزّل الملفات على هاتفك بلا إعلانات، ويضم برمجيات مفتوحة المصدر: \u2066yt-dlp (Unlicense)\u2069، و\u2066youtubedl-android (GPL-3.0)\u2069، و\u2066FFmpeg (GPL)\u2069، و\u2066Python (PSF)\u2069، والشيفرة المصدرية: \u2066github.com/ahmed-abdat/nezzel\u2069</string>
-    <string name="company_made_by">من صنع %1$s</string>
+    <string name="company_made_by">من تطوير %1$s</string>
     <string name="company_open_site">فتح موقع \u2066%1$s\u2069</string>
     <string name="company_facebook">Facebook</string>
     <string name="company_open_facebook">فتح صفحة \u2066%1$s\u2069 على Facebook</string>
