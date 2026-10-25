@@ -1,0 +1,8 @@
+0.5.0
+• New look: a floating tab bar, and your downloads and recent files right on Home
+• Save WhatsApp statuses from the new Statuses tab
+• Download a YouTube playlist or many links at once, then retry any that failed
+• TikTok photo posts: keep the photos, the sound, or both
+• Downloads: grid view, swipe between files, rename, sort and search
+• A Home screen widget, and your old downloads come back after a reinstall
+• Long downloads and playlists run more smoothly
