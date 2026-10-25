@@ -22,6 +22,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class NotificationPermissionFlowTest {
+    // Installs the test frame policy, so a Popup's every-frame position poll (Compose 1.12) can't spin the looper forever.
+    @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     private fun nodes(activity: MainActivity): List<SemanticsNode> = semanticsNodes(activity, rounds = 4, idleMillis = 150)
     private fun click(nodes: List<SemanticsNode>, label: String) {
         nodes.first { node -> node.config.getOrNull(SemanticsActions.OnClick) != null &&
@@ -95,9 +97,7 @@ class NotificationPermissionFlowTest {
                         intArrayOf(PackageManager.PERMISSION_DENIED))
                 }
             }
-            runBlocking { withTimeout(5000) {
-                while (store.all().isEmpty()) { shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(5) }
-            } }
+            waitWhile({ shadowOf(Looper.getMainLooper()).idle() }) { store.all().isEmpty() }
             assertEquals("Real title.mp4", store.all().single().filename)
             assertEquals(JobStage.ENQUEUED, store.all().single().stage)
             // Further confirmed downloads bypass the first-run explanation even after denial/skip.

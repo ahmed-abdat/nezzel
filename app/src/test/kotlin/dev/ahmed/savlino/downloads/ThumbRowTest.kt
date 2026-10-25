@@ -70,7 +70,8 @@ class ThumbRowTest {
         render(video, { saved }) {
             assertTrue(tagged("job-art").isEmpty())
             saved = picture
-            // The retry waits in real time, a second after the first look.
+            // The retry looks again a second after the first look; effects may run on the test clock, so move it past.
+            compose.mainClock.advanceTimeBy(1_100)
             compose.waitUntil(5_000) { tagged("job-art").isNotEmpty() }
         }
     }

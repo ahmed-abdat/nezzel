@@ -7,6 +7,7 @@ import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.jobs.DownloadCoordinator
 import dev.ahmed.savlino.jobs.JobStore
+import dev.ahmed.savlino.waitWhile
 import kotlinx.coroutines.*
 import org.junit.After
 import org.junit.Assert.*
@@ -53,8 +54,8 @@ class LinkedInVideoHandoffTest {
 
     private fun pump() = shadowOf(Looper.getMainLooper()).idle()
     private fun check(url: String) { vm.edit(url); vm.checkLink(); pump() }
-    private fun awaitRows() = runBlocking {
-        withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }
+    private fun awaitRows() = run {
+        waitWhile({ pump() }) { store.all().isEmpty() }
         pump()
         store.all()
     }

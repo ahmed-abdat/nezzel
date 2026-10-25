@@ -7,6 +7,7 @@ import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.jobs.DownloadCoordinator
 import dev.ahmed.savlino.jobs.JobStore
+import dev.ahmed.savlino.waitWhile
 import kotlinx.coroutines.*
 import org.junit.After
 import org.junit.Assert.*
@@ -73,7 +74,7 @@ class InstagramPostFlowTest {
         assertEquals(listOf("http"), vm.formatOptions.map { it.id })
         vm.selectFormat("http")
         vm.confirmDownload()
-        val row = runBlocking { withTimeout(5000) { while (store.all().isEmpty()) { pump(); Thread.sleep(5) } }; pump(); store.all().single() }
+        val row = run { waitWhile({ pump() }) { store.all().isEmpty() }; pump(); store.all().single() }
         assertEquals(canonicalPost, row.sourceUrl)
     }
 

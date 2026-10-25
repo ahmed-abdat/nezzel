@@ -61,3 +61,15 @@ fun renderThemed(settle: (ComponentActivity) -> Unit, content: @Composable () ->
         settle(c.get()); check(c.get())
     } finally { c.pause().stop().destroy() }
 }
+
+/**
+ * Waits in real time while [busy] holds, running [pump] between looks (worker threads need real time to take the store
+ * lock). `withTimeout` can't stop a loop that never suspends, so a stuck condition used to hang the whole test run.
+ */
+internal fun waitWhile(pump: () -> Unit, timeoutMs: Long = 5_000, busy: () -> Boolean) {
+    val end = System.nanoTime() + timeoutMs * 1_000_000
+    while (busy()) {
+        if (System.nanoTime() > end) throw AssertionError("Still waiting after $timeoutMs ms")
+        pump(); Thread.sleep(5)
+    }
+}
