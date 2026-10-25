@@ -47,9 +47,9 @@
 })();
 </script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Nezzel","description":"Appli Android gratuite qui enregistre vidéos, sons et photos depuis leur lien. Sans publicité ni compte","url":"https://nezzel.hululsoft.mr/fr/","image":"https://nezzel.hululsoft.mr/img/og.jpg?v=2","operatingSystem":"Android 10+","applicationCategory":"MultimediaApplication","inLanguage":"fr","license":"https://www.gnu.org/licenses/gpl-3.0.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/ahmed-abdat/nezzel/releases/latest","publisher":{"@type":"Organization","name":"Hululsoft","url":"https://hululsoft.mr"}}</script>
-<script>try{const t=localStorage.getItem("nezzel-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>document.documentElement.classList.add("js");try{const t=localStorage.getItem("nezzel-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
-<noscript><style>[data-r]{opacity:1;transform:none;filter:none}.theme,.steps-nav{display:none}.mini{display:none}</style></noscript>
+<noscript><style>[data-r]{opacity:1;transform:none;filter:none}.theme{display:none}.mini{display:none}</style></noscript>
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
 <link rel="preload" href="/fonts/noto-sans-arabic.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -92,7 +92,7 @@ html[dir=ltr] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto S
 ::selection{background:var(--primary-c);color:var(--on-primary-c)}
 a{color:var(--primary);text-underline-offset:.22em;text-decoration-thickness:1.5px}
 :focus-visible{outline:3px solid var(--primary);outline-offset:3px;border-radius:12px}
-.open :focus-visible,.panel:nth-child(3) :focus-visible{outline-color:var(--inverse-primary)}
+.open :focus-visible{outline-color:var(--inverse-primary)}
 button{font:inherit;color:inherit}
 img{max-width:100%;display:block}
 [dir=rtl] .flip{transform:scaleX(-1)}
@@ -106,9 +106,9 @@ main{overflow-x:clip}
 .sr:focus{position:fixed;top:12px;inset-inline-start:12px;width:auto;height:auto;clip:auto;z-index:99;padding:10px 16px;border-radius:12px;background:var(--primary);color:var(--on-primary)}
 .i{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-/* one entrance language for the whole page */
-[data-r]{opacity:0;transform:translateY(18px);filter:blur(6px);transition:opacity .8s var(--ease),transform .9s var(--ease),filter .8s var(--ease);transition-delay:calc(var(--d,0) * 70ms)}
-[data-r].in{opacity:1;transform:none;filter:none}
+/* one quiet entrance for sections; the phone story is the authored moment */
+[data-r]{opacity:0;transform:translateY(14px);transition:opacity .55s var(--ease),transform .65s var(--ease);transition-delay:calc(var(--d,0) * 60ms)}
+[data-r].in{opacity:1;transform:none}
 .w{display:inline-block;opacity:0;transform:translateY(.35em);filter:blur(8px);animation:word .9s var(--ease) forwards;animation-delay:calc(120ms + var(--k) * 90ms)}
 @keyframes word{to{opacity:1;transform:none;filter:none}}
 
@@ -157,17 +157,25 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 /* buttons */
 .btn{position:relative;isolation:isolate;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:60px;padding:0 30px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:19px;box-shadow:0 6px 16px -8px color-mix(in oklab,var(--primary) 45%,transparent),inset 0 1px 0 rgb(255 255 255/.2);transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
 .btn::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 35%,rgb(255 255 255/.28) 50%,transparent 65%);transform:translateX(calc(var(--x) * -120%));transition:transform .9s var(--ease)}
-.btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px -10px color-mix(in oklab,var(--primary) 55%,transparent),inset 0 1px 0 rgb(255 255 255/.2)}
-.btn:hover::after{transform:translateX(calc(var(--x) * 120%))}
-.btn:active{transform:scale(.98);transition-duration:.1s}
+@media (hover:hover) and (pointer:fine){
+  .btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px -10px color-mix(in oklab,var(--primary) 55%,transparent),inset 0 1px 0 rgb(255 255 255/.2)}
+  .btn:hover::after{transform:translateX(calc(var(--x) * 120%))}
+  .btn:hover .i{transform:translateY(3px)}
+}
+.btn:active{transform:scale(.97);transition-duration:.12s}
 .btn .sz{font-weight:500;opacity:.82}
 .btn>span{white-space:nowrap}
 .btn .i{transition:transform .5s var(--spring)}
-.btn:hover .i{transform:translateY(3px)}
 
-/* hero */
-.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:center;padding:48px 0 0}
-@media (min-width:960px){.hero{grid-template-columns:1.05fr .95fr;gap:40px;padding-top:56px;min-height:min(820px,calc(100svh - 80px))}}
+/* story: the hero phone is the one object; it stays while the three steps pass */
+.story{display:grid;grid-template-columns:minmax(0,1fr)}
+.hero{display:grid;align-items:center;padding:48px 0 0}
+@media (min-width:960px){
+  .story{grid-template-columns:1.05fr .95fr;column-gap:40px;grid-template-areas:"hero stage" "flow stage"}
+  .hero{grid-area:hero;padding-top:56px;min-height:min(820px,calc(100svh - 80px))}
+  .stage{grid-area:stage}
+  .flow{grid-area:flow}
+}
 .copy{text-align:center}
 @media (min-width:960px){.copy{text-align:start}}
 h1{font-size:clamp(42px,7.2vw,88px);line-height:1.12;font-weight:800;margin:0;letter-spacing:0;font-stretch:92%}
@@ -187,7 +195,20 @@ html[lang=fr] h1{font-size:clamp(34px,10.4vw,64px)}
 .trust .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
 
 /* stage: dot grid, halo, chips that fall into the phone */
-.stage{position:relative;display:grid;justify-items:center;padding:20px 0 0}
+.stage{position:relative;z-index:4;display:grid;justify-items:center;align-content:start;align-self:start;padding:24px 0 0}
+.fall{transition:opacity .4s var(--ease)}
+.stage[data-k]:not([data-k="0"]) .fall{opacity:0}
+/* sticky only with JS and motion allowed; otherwise the steps sit stacked under a still phone */
+@media (prefers-reduced-motion:no-preference){
+  .js .stage{position:sticky;top:max(88px,calc(50svh - 310px))}
+  .js .phone{transform:scale(var(--sc,1));transform-origin:50% 0}
+  @media (max-width:959px){
+    /* the band covers from the very top, so steps slide under it, not under the header */
+    .js .stage{top:0;padding-top:84px;height:var(--band,auto);margin-inline:-16px;background:var(--bg)}
+    .js .stage::after{content:"";position:absolute;inset-inline:0;top:100%;height:36px;background:linear-gradient(var(--bg),transparent);pointer-events:none}
+    .js .stage .dots{inset:84px 0 0}
+  }
+}
 .dots{position:absolute;inset:-40px -10%;background-image:radial-gradient(var(--dot) 1.3px,transparent 1.6px);background-size:20px 20px;-webkit-mask:radial-gradient(closest-side,#000 40%,transparent);mask:radial-gradient(closest-side,#000 40%,transparent);pointer-events:none}
 .halo{position:absolute;width:min(520px,110%);aspect-ratio:1;top:6%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in oklab,var(--primary-c) 75%,transparent),transparent);filter:blur(10px);opacity:.75;pointer-events:none}
 .fall{position:absolute;inset:-30px 0 30% 0;overflow:hidden;pointer-events:none;-webkit-mask:linear-gradient(#000 70%,transparent);mask:linear-gradient(#000 70%,transparent)}
@@ -205,8 +226,11 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .sb{display:flex;justify-content:space-between;padding:12px 22px 0;font:600 11px/1 system-ui,sans-serif;opacity:.85}
 .sb>span{direction:ltr;unicode-bidi:isolate}
 /* scenes wait at the end edge and leave toward the start, so the flow reads forward in both directions */
-.sc{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transform:translateX(calc(var(--x) * 24px)) scale(.985);transition:opacity .5s var(--ease),transform .6s var(--ease);pointer-events:none}
+.sc{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transform:translateX(calc(var(--x) * 24px)) scale(.985);transition:opacity .35s var(--ease),transform .4s var(--ease);pointer-events:none}
 .sc.out{transform:translateX(calc(var(--x) * -24px)) scale(.985)}
+/* the signature moment: the copied clip zooms toward you and Nezzel settles in behind it */
+#demo .s0.out{transform:scale(1.14);transition-duration:.3s,.4s}
+#demo:not([data-s="1"]) .s1:not(.out){transform:scale(.94)}
 .phone[data-s="0"] .s0,.phone[data-s="1"] .s1,.phone[data-s="2"] .s2,.phone[data-s="3"] .s3{opacity:1;transform:none}
 .ab{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
 .ab b{font-size:15px}
@@ -270,7 +294,7 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .qr .t b{display:block;font-size:12.5px}
 .qr .t small{font-size:10.5px;opacity:.7}
 .qr .s{font:600 11.5px/1 system-ui,sans-serif;direction:ltr}
-.rd{width:17px;height:17px;border-radius:50%;border:2px solid var(--outline);flex:none;transition:all .35s var(--ease)}
+.rd{width:17px;height:17px;border-radius:50%;border:2px solid var(--outline);flex:none;transition:border-color .3s var(--ease),background .3s var(--ease),box-shadow .3s var(--ease)}
 .qr.sel{background:var(--secondary-c);box-shadow:none;color:var(--on-secondary-c)}
 .qr.sel .rd{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 3px var(--secondary-c)}
 .bdg{display:inline-block;font-size:9.5px;font-weight:700;padding:0 6px;border-radius:999px;background:var(--tertiary-c);color:var(--on-tertiary-c);margin-inline-start:4px;vertical-align:1px}
@@ -306,67 +330,37 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .done .ring .ok{opacity:1;transform:none}
 .done .ring .pr{stroke-dashoffset:0!important;opacity:.35}
 
-/* scene chips under the phone */
-.steps-nav{position:relative;z-index:3;display:flex;gap:6px;margin-top:18px;padding:5px;border-radius:999px;background:color-mix(in oklab,var(--c-lowest) 80%,transparent);box-shadow:inset 0 0 0 1px var(--outline-v);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.steps-nav button{position:relative;overflow:hidden;min-height:48px;padding:0 14px;border:0;border-radius:999px;background:transparent;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--muted);transition:color .3s,background .3s}
-.steps-nav button.on{color:var(--on-secondary-c);background:var(--secondary-c)}
-.steps-nav button>i{position:absolute;inset:auto 14px 6px;height:2px;border-radius:2px;background:color-mix(in oklab,var(--primary) 70%,transparent);transform-origin:left;transform:scaleX(var(--p,0))}
-[dir=rtl] .steps-nav button>i{transform-origin:right}
-.steps-nav .pause{width:44px;padding:0;display:grid;place-items:center}
-.steps-nav button:not(.on):hover{background:var(--c-high)}
-.pause .i{width:16px;height:16px}
-
 /* sections */
 section{padding:128px 0 0}
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
 html[dir=ltr] h2{letter-spacing:-.035em;line-height:1.08}
 .sub{color:var(--muted);font-size:18px;max-width:46ch;margin:14px 0 0;text-wrap:pretty}
 
-/* try-it panels */
-.panels{display:grid;gap:16px;margin-top:44px}
-@media (min-width:960px){.panels{grid-template-columns:repeat(3,1fr)}}
-.panel{position:relative;border-radius:var(--r-xl);padding:28px 24px 24px;display:flex;flex-direction:column;min-height:470px;overflow:hidden}
-.panel:nth-child(1){background:var(--c-high)}
-.panel:nth-child(2){background:var(--secondary-c);color:var(--on-secondary-c)}
-.panel:nth-child(3){background:var(--inverse);color:var(--on-inverse)}
-.panel .n{font:700 14px/1 system-ui,sans-serif;opacity:.8}
-.panel h3{font-size:26px;line-height:1.3;margin:8px 0 6px;font-weight:800}
-.panel p{margin:0;font-size:16px;opacity:.86;max-width:30ch}
-.demo{margin-top:auto;padding-top:28px;display:grid;gap:10px;position:relative}
-.panel .vcard{width:100%;max-width:280px;font-size:14px}
-.panel .vcard b{font-size:14.5px}
-.cp{width:100%;max-width:280px}
-.copybtn{justify-self:end;display:flex;align-items:center;gap:10px;min-height:48px;padding:0 18px;border-radius:14px;border:0;background:var(--c-lowest);color:var(--on-bg);font-weight:700;cursor:pointer;box-shadow:0 14px 30px -14px rgb(var(--ink-sh)/.5);transition:transform .2s var(--ease),background .3s,color .3s}
-.copybtn:active{transform:scale(.96)}
-.copybtn.ok{background:var(--primary);color:var(--on-primary)}
-.copybtn .i{width:20px;height:20px}
-.pq{gap:8px}
-.pq button{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;border-radius:16px;border:0;box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--on-secondary-c) 14%,transparent);background:color-mix(in oklab,var(--c-lowest) 65%,transparent);color:var(--on-bg);text-align:start;cursor:pointer;transition:background .3s var(--ease),box-shadow .3s,transform .2s var(--ease)}
-.pq button:hover{background:var(--c-lowest)}
-.pq button:active{transform:scale(.985)}
-.pq button[aria-checked=true]{background:var(--c-lowest);box-shadow:inset 0 0 0 2px var(--primary)}
-.pq .t{flex:1;line-height:1.35}
-.pq .t b{display:block;font-size:15.5px}
-.pq .t small{font-size:13px;opacity:.75}
-.pq .s{font:600 14.5px/1 system-ui,sans-serif;direction:ltr}
-.pq .rd{width:22px;height:22px}
-.pq button[aria-checked=true] .rd{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 4px var(--c-lowest)}
-.dlrun{display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;border:0;border-radius:999px;background:var(--inverse-primary);color:var(--inverse);font-weight:800;font-size:16.5px;cursor:pointer;transition:transform .2s var(--ease),opacity .3s}
-.dlrun:active{transform:scale(.97)}
-.dlrun[disabled]{opacity:.5;cursor:default}
-.dlrun .i{width:20px;height:20px}
-.jobp{display:flex;align-items:center;gap:14px;padding:14px;border-radius:20px;background:color-mix(in oklab,var(--on-inverse) 9%,transparent);--rs:48px;--rc:var(--inverse-primary)}
-.jobp .t{flex:1;min-width:0;line-height:1.4}
-.jobp .t b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.jobp .t small{font-size:13.5px;opacity:.8}
-.note{margin:18px 0 0;font-size:14px;color:var(--muted)}
-/* one column: text beside the demo on tablets, no forced height */
-@media (max-width:959px){.panel{min-height:0}}
-@media (min-width:600px) and (max-width:959px){
-  .panel{display:grid;grid-template-columns:1fr minmax(0,300px);column-gap:32px;align-content:start}
-  .panel>.n,.panel>h3,.panel>p{grid-column:1}
-  .panel>.demo{grid-column:2;grid-row:1/span 4;margin:0;padding-top:44px;align-self:center}
+/* the three steps: plain text beside (desktop) or under (phone) the sticky phone */
+.flow{padding-top:112px}
+.steps{list-style:none;margin:36px 0 0;padding:0;counter-reset:st}
+.step{display:grid;grid-template-columns:auto 1fr;column-gap:18px;align-content:center;padding:28px 0;transition:opacity .35s var(--ease)}
+.step .n{grid-row:span 2;width:44px;height:44px;margin-top:4px;border-radius:50%;display:grid;place-items:center;background:var(--primary-c);color:var(--on-primary-c);font:800 17px/1 system-ui,sans-serif;transition:background .35s var(--ease),color .35s var(--ease),transform .4s var(--spring)}
+.step h3{margin:0;font-size:clamp(26px,3.4vw,40px);line-height:1.25;font-weight:800;text-wrap:balance}
+html[dir=ltr] .step h3{letter-spacing:-.03em;line-height:1.1}
+.step p{margin:10px 0 0;color:var(--muted);font-size:clamp(17px,1.6vw,19px);max-width:34ch;text-wrap:pretty}
+@media (prefers-reduced-motion:no-preference){
+  .story.live .step{min-height:max(240px,calc(100svh - var(--band,0px) - 40px))}
+  @media (min-width:960px){.story.live .step{min-height:68svh}}
+  .story.live .step:not(.on){opacity:.32}
+  .story.live .step.on .n{background:var(--primary);color:var(--on-primary);transform:scale(1.08)}
 }
+.note{margin:8px 0 0;font-size:14px;color:var(--muted);max-width:52ch}
+
+/* also in Nezzel: one row of plain icon + words, no cards */
+.more h2{font-size:clamp(24px,3vw,32px);max-width:none}
+.feats{list-style:none;margin:24px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 16px;border-block:1px solid var(--outline-v);padding-block:26px}
+@media (min-width:760px){.feats{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.feats li{display:flex;align-items:center;gap:12px;font-weight:700;font-size:16px;line-height:1.35}
+@media (min-width:760px){.feats li{flex-direction:column;align-items:flex-start;gap:12px}}
+.feats .i{width:44px;height:44px;padding:10px;border-radius:14px;background:var(--secondary-c);color:var(--on-secondary-c)}
+/* slot for the promo video (not shipped yet): <section class="wrap promo"><video …></video></section> after .more */
+.promo video{display:block;width:100%;aspect-ratio:16/9;border-radius:var(--r-xl);background:var(--c)}
 
 /* install walkthrough */
 .install{display:grid;gap:40px}
@@ -422,18 +416,17 @@ html[dir=ltr] h2{letter-spacing:-.035em;line-height:1.08}
 @keyframes pop{to{opacity:1;transform:none}}
 
 /* promises */
-.promises{display:grid;margin-top:44px;border-top:1px solid var(--outline-v)}
-@media (min-width:760px){.promises{grid-template-columns:1fr 1fr}}
+.promises{display:grid;margin-top:40px;border-top:1px solid var(--outline-v)}
+@media (min-width:960px){.promises{grid-template-columns:repeat(3,1fr)}}
 .pi{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;padding:28px 0;border-bottom:1px solid var(--outline-v)}
-@media (min-width:760px){.pi:nth-child(odd){padding-inline-end:36px}.pi:nth-child(even){padding-inline-start:36px;border-inline-start:1px solid var(--outline-v)}}
+@media (min-width:960px){.pi{padding-inline:32px}.pi:first-child{padding-inline-start:0}.pi+.pi{border-inline-start:1px solid var(--outline-v)}}
 .pi .ic{grid-row:span 2;width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--primary-c);color:var(--on-primary-c);transition:transform .5s var(--spring)}
-.pi:hover .ic{transform:rotate(calc(var(--x) * -6deg)) scale(1.06)}
+@media (hover:hover) and (pointer:fine){.pi:hover .ic{transform:rotate(calc(var(--x) * -6deg)) scale(1.06)}}
 .pi .ic .i{width:26px;height:26px}
 .pi .ic .dw{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.1s var(--ease) .3s}
 .pi.in .ic .dw{stroke-dashoffset:0}
 .pi b{font-size:20px}
 .pi p{margin:0;color:var(--muted);font-size:16px}
-
 /* faq */
 .faq{margin-top:34px;display:grid;gap:10px}
 @media (min-width:960px){.faqs{display:grid;grid-template-columns:1fr 1.8fr;gap:48px;align-items:start}.faqs h2{position:sticky;top:110px}.faqs .faq{margin-top:0}}
@@ -448,10 +441,9 @@ details[open] summary::after{transform:translateY(2px) rotate(-135deg)}
 details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 
 /* trust */
-.tr-head h2{max-width:none}
-.tr-head p{margin:14px 0 0;color:var(--muted);max-width:52ch}
-.never{margin:14px 0 0;color:var(--muted);font-size:16px;max-width:52ch}
-.src{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:14px;font-weight:700}
+#trust h2{max-width:none}
+.tr-p{margin:14px 0 0;color:var(--muted);font-size:18px;max-width:46ch;text-wrap:pretty}
+.src{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:18px;font-weight:700}
 .wa{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:8px;font-weight:700;justify-self:start}
 .wa .i{fill:#25D366;stroke:none}
 
@@ -471,7 +463,6 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 /* final: the icon drops in, the word sits behind */
 .final{text-align:center;padding:140px 0 40px;position:relative;overflow:hidden}
 .final h2{margin-inline:auto;position:relative}
-.word{position:absolute;inset:40px 0 auto;font-size:clamp(120px,30vw,360px);line-height:1;font-weight:900;letter-spacing:0;background:linear-gradient(180deg,color-mix(in oklab,var(--primary) 16%,transparent),transparent 80%);-webkit-background-clip:text;background-clip:text;color:transparent;pointer-events:none;user-select:none}
 .drop{width:120px;height:132px;margin:0 auto 26px;position:relative}
 .drop img{width:96px;height:96px;margin:0 auto;border-radius:26px;box-shadow:0 20px 40px -18px color-mix(in oklab,var(--primary) 80%,transparent)}
 .drop::after{content:"";position:absolute;bottom:0;left:50%;width:72px;height:8px;margin-left:-36px;border-radius:50%;background:rgb(var(--ink-sh)/.18);filter:blur(3px)}
@@ -492,12 +483,11 @@ footer a{color:inherit}
   .bar .mini span{display:none}
   .mini{padding:0 14px}
   section{padding-top:96px}
-  .panel{min-height:0}
-  .steps-nav button{padding:0 11px;font-size:13px}
+  .flow{padding-top:72px}
 }
 @media (max-width:370px){body.past .brand .bn{display:none}}
-@media (max-width:400px){.steps-nav{gap:2px}.steps-nav button{padding:0 8px;font-size:12.5px}.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
-@media (max-width:340px){.lang{min-width:0;padding:0 8px}.steps-nav button{padding:0 5px;font-size:12px}}
+@media (max-width:400px){.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
+@media (max-width:340px){.lang{min-width:0;padding:0 8px}}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
@@ -523,8 +513,10 @@ footer a{color:inherit}
   <symbol id="image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 2.5-2.5L20 18"/></symbol>
   <symbol id="file" viewBox="0 0 24 24"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8Z"/><path d="M14 3.5V8h4.5M12 11v5m0 0-2-2m2 2 2-2"/></symbol>
   <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
-  <symbol id="pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></symbol>
-  <symbol id="playo" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
+  <symbol id="status" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 1 9 9M21 12a9 9 0 0 1-9 9M12 21a9 9 0 0 1-9-9M3 12a9 9 0 0 1 9-9" stroke-dasharray="11 3.1"/><path d="M10 8.8v6.4l5.2-3.2z"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="M4 6.5h11M4 11.5h11M4 16.5h6"/><path d="M14.5 14.5v5.5l4.5-2.75z"/></symbol>
+  <symbol id="stack" viewBox="0 0 24 24"><rect x="4" y="9" width="12" height="11" rx="2.5"/><path d="M8 5.5h9.5A2.5 2.5 0 0 1 20 8v9"/></symbol>
+  <symbol id="widget" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></symbol>
   <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.8 2.8 5.8 3.1 5.8 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
   <symbol id="wa" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z"/></symbol>
   <!-- sample thumbnail: an illustrated summer coast (no real footage, no real people) -->
@@ -552,7 +544,8 @@ footer a{color:inherit}
 </div>
 
 <main id="main">
-<header class="wrap hero" id="top">
+<div class="wrap story">
+<header class="hero" id="top">
   <div class="copy">
     <h1 id="h1" data-i="h1">Enregistrez la vidéo <em>depuis son lien</em></h1>
     <p class="lede" data-i="lede" data-r style="--d:6">Le son et les photos aussi, gratuitement sur votre téléphone</p>
@@ -569,6 +562,7 @@ footer a{color:inherit}
       <li><svg class="i"><use href="#check"/></svg><span data-i="t3">Code ouvert</span></li>
     </ul>
   </div>
+</header>
 
   <div class="stage" data-r style="--d:4">
     <div class="dots" aria-hidden="true"></div>
@@ -640,54 +634,30 @@ footer a{color:inherit}
       </div>
     </div>
 
-    <div class="steps-nav" role="group" data-i-aria="demo-ctl" aria-label="Étapes de la démo">
-      <button type="button" data-go="0"><span data-i="c1">Copier</span><i></i></button>
-      <button type="button" data-go="1"><span data-i="c2">Ouvrir</span><i></i></button>
-      <button type="button" data-go="2"><span data-i="c3">Choisir</span><i></i></button>
-      <button type="button" data-go="3"><span data-i="c4">Enregistrer</span><i></i></button>
-      <button type="button" class="pause" id="demo-pause" data-i-aria="pause" aria-label="Mettre la démo en pause"><svg class="i"><use href="#pause"/></svg></button>
-    </div>
   </div>
-</header>
 
-<section class="wrap" id="how" aria-labelledby="how-h">
+<section class="flow" id="how" aria-labelledby="how-h">
   <h2 id="how-h" data-i="how-h" data-r>Du lien au téléphone en trois étapes</h2>
-  <p class="sub" data-i="how-sub" data-r style="--d:1">Essayez ici avant d’installer</p>
-  <div class="panels">
-    <article class="panel" data-r style="--d:2">
-      <span class="n">1</span>
-      <h3 data-i="s1">Copiez le lien</h3>
-      <p data-i="s1p">Copiez le lien de la vidéo dans son application, ou partagez-le directement avec Nezzel</p>
-      <div class="demo cp">
-        <div class="vcard"><div class="art"><svg><use href="#scene"/></svg><span class="pl"><svg class="i"><use href="#play"/></svg></span><span class="du">2:48</span></div><b data-i="vt">Souvenirs de vacances</b></div>
-        <button class="copybtn" id="copybtn" type="button"><svg class="i"><use href="#link"/></svg><span data-i="m-copy">Copier le lien</span></button>
-      </div>
-    </article>
-    <article class="panel" data-r style="--d:3">
-      <span class="n">2</span>
-      <h3 data-i="s2">Choisissez la qualité</h3>
-      <p data-i="s2p">Ouvrez Nezzel : le lien copié s’affiche. Choisissez ensuite parmi les qualités disponibles</p>
-      <div class="demo pq" role="radiogroup" data-i-aria="s2" aria-label="Choisissez la qualité">
-        <button type="button" role="radio" aria-checked="true" data-size="61.8" data-est="1"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">Meilleure qualité</small></span><span class="s" data-mb="61.8" data-est>≈ 61,8 Mo</span></button>
-        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-size="32.4" data-est="1"><span class="rd"></span><span class="t"><b class="ltr">720p · HD</b><small data-i="bal">Équilibrée</small></span><span class="s" data-mb="32.4" data-est>≈ 32,4 Mo</span></button>
-        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-size="2.7"><span class="rd"></span><span class="t"><b><span data-i="audio">Audio seul</span> · <span class="ltr">M4A</span></b></span><span class="s" data-mb="2.7">2,7 Mo</span></button>
-      </div>
-    </article>
-    <article class="panel" data-r style="--d:4">
-      <span class="n">3</span>
-      <h3 data-i="s3">Appuyez sur Télécharger</h3>
-      <p data-i="s3p">Le téléchargement ne démarre que quand vous appuyez, et le fichier va dans le dossier Nezzel des Téléchargements</p>
-      <div class="demo">
-        <button class="dlrun" id="dlrun" type="button"><svg class="i"><use href="#dl"/></svg><span data-i="dl">Télécharger</span> · <span class="ltr num" id="dlsize" data-mb="61.8" data-est>≈ 61,8 Mo</span></button>
-        <div class="jobp" id="jobp">
-          <span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="ok"><svg class="i"><use href="#check"/></svg></span></span>
-          <span class="t"><b data-i="vt">Souvenirs de vacances</b><small class="pl-line"></small><span class="sr" id="job-status" role="status"></span></span>
-        </div>
-      </div>
-    </article>
-  </div>
+  <ol class="steps">
+    <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">Copiez le lien</h3><p data-i="s1p">Copiez le lien de la vidéo dans son application, ou partagez-le directement avec Nezzel</p></li>
+    <li class="step" data-step="1"><span class="n">2</span><h3 data-i="s2">Choisissez la qualité</h3><p data-i="s2p">Ouvrez Nezzel : le lien copié s’affiche. Choisissez ensuite parmi les qualités disponibles</p></li>
+    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">Appuyez sur Télécharger</h3><p data-i="s3p">Le téléchargement ne démarre que quand vous appuyez, et le fichier va dans le dossier Nezzel des Téléchargements</p></li>
+  </ol>
   <p class="note" data-i="note" data-r>Ceci est une démo. Chaque site détermine les qualités et les tailles réelles. Le signe ≈ indique une taille estimée</p>
 </section>
+</div>
+
+<section class="wrap more" aria-labelledby="more-h">
+  <h2 id="more-h" data-i="more-h" data-r>Aussi dans Nezzel</h2>
+  <ul class="feats" data-r style="--d:1">
+    <li><svg class="i"><use href="#status"/></svg><span data-i="x1">Statuts WhatsApp</span></li>
+    <li><svg class="i"><use href="#list"/></svg><span data-i="x2">Playlists</span></li>
+    <li><svg class="i"><use href="#stack"/></svg><span data-i="x3">Plusieurs liens d’un coup</span></li>
+    <li><svg class="i"><use href="#music"/></svg><span data-i="x4">Le son seul</span></li>
+    <li><svg class="i"><use href="#widget"/></svg><span data-i="x5">Widget d’accueil</span></li>
+  </ul>
+</section>
+<!-- promo video slot: <section class="wrap promo"><video controls preload="none" poster="…" src="…"></video></section> -->
 
 <section class="wrap" id="install" aria-labelledby="ins-h">
   <div class="install">
@@ -700,7 +670,7 @@ footer a{color:inherit}
         <li><button type="button" aria-pressed="false"><span class="k">3</span><span><b data-i="i3">Appuyez sur Installer</b><span class="d"><span data-i="i3p">Play Protect peut proposer d’analyser l’application. Acceptez l’analyse et suivez le résultat</span></span></span></button></li>
         <li><button type="button" aria-pressed="false"><span class="k">4</span><span><b data-i="i4">Ouvrez Nezzel et essayez</b><span class="d"><span data-i="i4p">Copiez un lien, puis ouvrez l’application, ou collez le lien dedans</span></span></span></button></li>
       </ol>
-      <div class="why" data-r style="--d:3"><svg class="i"><use href="#shield"/></svg><span data-i="why"><strong>Est-ce sûr ?</strong> L’application ne demande ni vos contacts ni votre position et ne sait pas qui vous êtes. Son code est ouvert sur GitHub, chacun peut le vérifier</span></div>
+      <div class="why" data-r style="--d:3"><svg class="i"><use href="#shield"/></svg><span data-i="why"><strong>Est-ce sûr ?</strong> Il ne demande ni vos contacts ni votre position et n’a pas besoin de compte. Son code est ouvert sur GitHub, chacun peut le vérifier</span></div>
     </div>
     <div class="sys-wrap" data-r style="--d:2" aria-hidden="true">
       <div class="dots"></div>
@@ -726,22 +696,14 @@ footer a{color:inherit}
   </div>
 </section>
 
-<section class="wrap" aria-labelledby="pr-h">
-  <h2 id="pr-h" data-i="pr-h" data-r>Les engagements de Nezzel</h2>
+<section class="wrap" id="trust" aria-labelledby="tr-h">
+  <h2 id="tr-h" data-i="tr-h" data-r>Sans pub, sans compte</h2>
+  <p class="tr-p" data-i="tr-p" data-r style="--d:1">Aucune pub, ni avant ni après le téléchargement. Pas d’inscription, pas d’identifiant</p>
   <div class="promises">
-    <div class="pi" data-r style="--d:1"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle class="dw" cx="12" cy="12" r="8.5" pathLength="1"/><path class="dw" d="M6 6l12 12" pathLength="1"/></svg></span><b data-i="p1">Sans publicité</b><p data-i="p1p">Aucune publicité, ni avant ni après le téléchargement</p></div>
-    <div class="pi" data-r style="--d:2"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle class="dw" cx="12" cy="8.5" r="3.5" pathLength="1"/><path class="dw" d="M5 19.5c1.2-3.2 3.8-5 7-5s5.8 1.8 7 5" pathLength="1"/></svg></span><b data-i="p2">Sans compte</b><p data-i="p2p">Aucune inscription, rien qui vous identifie</p></div>
-    <div class="pi" data-r style="--d:3"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">Tout sur votre téléphone</b><p data-i="p3p">Nezzel télécharge directement du site vers votre téléphone, sans passer par nos serveurs</p></div>
-    <div class="pi" data-r style="--d:4"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">Des chiffres honnêtes</b><p data-i="p4p">Vous voyez seulement ce que le site propose. La taille réelle quand elle est connue, et ≈ pour une estimation</p></div>
+    <div class="pi" data-r style="--d:1"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">Tout sur votre téléphone</b><p data-i="p3p">Nezzel télécharge directement du site vers votre téléphone, sans passer par nos serveurs</p></div>
+    <div class="pi" data-r style="--d:2"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">Des chiffres honnêtes</b><p data-i="p4p">Vous voyez seulement ce que le site propose. La taille réelle quand elle est connue, et ≈ pour une estimation</p></div>
+    <div class="pi" data-r style="--d:3"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z" pathLength="1"/><path class="dw" d="m9 12 2.2 2.2L15.5 10" pathLength="1"/></svg></span><b data-i="p5">Le strict nécessaire</b><p data-i="tr-ask">Il ne demande jamais votre position ni vos contacts</p></div>
   </div>
-</section>
-
-<section class="wrap tw" id="trust" aria-labelledby="tr-h">
-  <div class="tr-head">
-    <h2 id="tr-h" data-i="tr-h" data-r>Sans pub, sans traceurs, sans compte</h2>
-    <p data-i="tr-p" data-r style="--d:1">Rien qui vous identifie ne quitte votre téléphone. Nezzel contacte le site choisi, et son serveur pour chercher les mises à jour</p>
-  </div>
-  <p class="never" data-i="tr-ask" data-r style="--d:2">Il ne demande jamais votre position, vos contacts ni vos fichiers. Seulement Internet et les notifications</p>
   <a class="src" href="https://github.com/ahmed-abdat/nezzel"><svg class="i"><use href="#gh"/></svg><span data-i="tr-src">Code source</span></a>
 </section>
 
@@ -750,8 +712,9 @@ footer a{color:inherit}
   <div class="faq" data-r style="--d:1">
     <details><summary data-i="f1">C’est gratuit ?</summary><p data-i="f1a">Oui, entièrement gratuit, sans publicité ni abonnement</p></details>
     <details><summary data-i="f2">Quels sites sont compatibles ?</summary><p data-i="f2a">Les sites connus de vidéos et de photos, si le lien est public. Certains liens peuvent ne pas fonctionner. Les contenus privés, protégés ou réservés aux comptes connectés ne sont pas pris en charge. <a href="https://github.com/ahmed-abdat/nezzel#tested-sites">Sites testés</a></p></details>
+    <details><summary data-i="f8">Comment enregistrer les statuts WhatsApp ?</summary><p data-i="f8a">Regardez le statut dans WhatsApp, puis ouvrez l’onglet Statuts dans Nezzel. La première fois, autorisez l’accès à un dossier. C’est tout</p></details>
     <details><summary data-i="f3">Pourquoi pas sur le Play Store ?</summary><p data-i="f3a">Les règles du Play Store limitent les applications de téléchargement vidéo. Nous la publions donc gratuitement sur GitHub, et Android demande votre accord avant l’installation</p></details>
-    <details><summary data-i="f4">Comment mettre à jour ?</summary><p data-i="f4a">Nezzel vous prévient quand une nouvelle version est disponible. Vous la téléchargez et confirmez l’installation. Vos fichiers et paramètres sont conservés</p></details>
+    <details><summary data-i="f4">Comment mettre à jour ?</summary><p data-i="f4a">Nezzel se met à jour tout seul quand il le peut. Sinon, il vous prévient et vous appuyez sur Installer. Vos fichiers et paramètres sont conservés</p></details>
     <details><summary data-i="f5">Où sont mes fichiers ?</summary><p data-i="f5a">Dans le dossier Nezzel de Téléchargements, ou dans le dossier choisi dans les paramètres. Retrouvez-les dans votre application de fichiers</p></details>
     <details><summary data-i="f6">Et sur iPhone ?</summary><p data-i="f6a">Nezzel fonctionne uniquement sur Android 10 ou plus récent, sur les téléphones avec un processeur <bdi>64 bits</bdi></p></details>
     <details><summary data-i="f7">Et si la connexion coupe ?</summary><p data-i="f7a">Le téléchargement attend, puis reprend là où il s’est arrêté quand la connexion revient. Vous pouvez aussi le mettre en pause et le reprendre plus tard</p></details>
@@ -773,7 +736,6 @@ footer a{color:inherit}
 </div>
 
 <section class="wrap final" id="final" aria-labelledby="fin-h">
-  <div class="word" aria-hidden="true" data-i="word">Nezzel</div>
   <div class="drop" aria-hidden="true"><img src="/img/icon.svg" alt=""></div>
   <h2 id="fin-h" data-i="fin-h" data-r>Copiez le lien, on s’occupe du reste</h2>
   <div class="cta" data-r style="--d:1">
@@ -790,51 +752,45 @@ footer a{color:inherit}
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const EN = {
     language:"Language", "og-alt":"Nezzel: save a video from its link. A phone showing available video qualities",
-    word:"Nezzel",
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"Save the video <em>from its link</em>",
     lede:"Audio and photos too, free on your phone",
     cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
     t1:"No ads", t2:"No account", t3:"Open source",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality, and the file is saved",
-    "demo-ctl":"Demo steps", pause:"Pause the demo", play:"Play the demo",
     av:"F", chat:"Family", msg:"Look at this clip", vt:"Summer trip highlights",
     "m-reply":"Reply", "m-share":"Share", "m-copy":"Copy link", copied:"Link copied",
     field:"Paste a public link", "n-home":"Home", "n-dl":"Downloads", "n-set":"Settings",
     clip:"Link you copied", view:"View download options",
     video:"Video", "audio-h":"Audio", best:"Highest available", last:"Last used", bal:"Balanced", small:"Small", audio:"Audio only",
     dl:"Download", open:"Open", saved:"Saved", "saved-to":"Saved to <span class=\"ltr\">Download/Nezzel</span>",
-    c1:"Copy", c2:"Open", c3:"Pick", c4:"Save",
-    "how-h":"From link to phone in three steps", "how-sub":"Try it here before you install",
+    "how-h":"From link to phone in three steps", 
     s1:"Copy the link", s1p:"Copy the video’s link in its app, or share it straight to Nezzel",
     s2:"Pick a quality", s2p:"Open Nezzel and it shows the link you copied. Then pick from the qualities on offer",
     s3:"Tap Download", s3p:"The download starts only when you tap, and saves to the Nezzel folder in Downloads",
-    note:"Demo only. Each site decides the real qualities and sizes, and ≈ marks an estimated size",
+    note:"Demo only. Each site decides the real qualities and sizes, and ≈ marks an estimated size", "more-h":"Also in Nezzel", x1:"WhatsApp statuses", x2:"Playlists", x3:"Several links at once", x4:"Audio only", x5:"Home-screen widget",
     "ins-h":"Installing, step by step",
     "ins-sub":"Nezzel isn’t on the Play Store, so Android may ask your permission to install it from your browser. That’s normal",
     i1:"Download the file and open it", i1p:"Tap “Download the app”, then open the file. If a GitHub page opens, pick the APK file. Your browser may warn about the file type",
     i2:"Allow the install", i2p:"If Android asks, turn on “Allow from this source”, then go back",
     i3:"Tap Install", i3p:"Play Protect may offer to scan the app. Let it scan and follow the result",
     i4:"Open Nezzel and try it", i4p:"Copy a link, then open the app, or paste the link into it",
-    why:"<strong>Is it safe?</strong> It doesn’t ask for your contacts or location, and doesn’t know who you are. Its code is open on GitHub for anyone to review",
+    why:"<strong>Is it safe?</strong> It doesn’t ask for your contacts or location, and needs no account. Its code is open on GitHub for anyone to review",
     "sys-done":"Download complete", "sys-t2":"Install unknown apps", "sys-browser":"Browser", "sys-allow":"Allow from this source",
     "sys-q":"Do you want to install this app?", "sys-cancel":"Cancel", "sys-install":"Install",
-    "pr-h":"What Nezzel promises",
-    p1:"No ads", p1p:"No ads before the download, or after",
-    p2:"No account", p2p:"No sign-up, and nothing that identifies you",
     p3:"Works on your phone", p3p:"Nezzel downloads the file from the site straight to your phone, never through servers of ours",
-    p4:"Honest numbers", p4p:"Only what the site offers. The real size when it’s known, and ≈ marks an estimate",
+    p4:"Honest numbers", p4p:"Only what the site offers. The real size when it’s known, and ≈ marks an estimate", p5:"Only what it needs",
     "faq-h":"Quick questions",
     f1:"Is it free?", f1a:"Yes, completely free, with no ads and no subscriptions",
-    f2:"Which sites does it save from?", f2a:"Well-known video and photo sites, when the link is public. Some links may not work, and private, protected or sign-in-only content isn’t supported. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites we’ve tested</a>",
+    f2:"Which sites does it save from?", f2a:"Well-known video and photo sites, when the link is public. Some links may not work, and private, protected or sign-in-only content isn’t supported. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites we’ve tested</a>", f8:"How do I save WhatsApp statuses?", f8a:"Watch the status in WhatsApp, then open the Statuses tab in Nezzel. The first time, allow access to one folder. That’s it",
     f3:"Why isn’t it on the Play Store?", f3a:"Play Store rules restrict video-saving apps. So we publish it free on GitHub, and Android asks before installing it",
-    f4:"How do I update it?", f4a:"Nezzel tells you when a new version is out. You download it and confirm the install. Your files and settings stay",
+    f4:"How do I update it?", f4a:"Nezzel updates itself when it can. Otherwise it tells you, and you tap Install. Your files and settings stay",
     f5:"Where are files saved?", f5a:"In the Nezzel folder in Downloads, or a folder you choose in Settings. You’ll find them in your Files app",
     f6:"Does it work on iPhone?", f6a:"No, Nezzel is Android only: Android 10 or newer, on phones with a <bdi>64-bit</bdi> processor",
     f7:"What if my connection drops?", f7a:"The download waits, then picks up where it stopped when you’re back online. You can also pause it and finish it later",
     wa:"Message us on WhatsApp", "wa-href":"https://wa.me/22237928327?text=Hi%20%F0%9F%91%8B%20Thanks%20for%20Nezzel%21",
     "os-h":"Open source", "os-p":"Nezzel’s full code is on GitHub under <bdi>GPL-3.0-or-later</bdi>, open for anyone to review",
-    "tr-h":"No ads, no trackers, no account", "tr-p":"Nothing that identifies you leaves your phone. Nezzel talks to the site you chose, and to its own server to look for updates",
-    "tr-ask":"It never asks for your location, contacts or files. Only internet and notifications",
+    "tr-h":"No ads, no account", "tr-p":"No ads before or after a download. No sign-up, no ID",
+    "tr-ask":"It never asks for your location or contacts",
     "tr-src":"Source code",
     gh:"Code on GitHub", rel:"All releases and notes",
     "fin-h":"Copy the link, we’ll do the rest",
@@ -878,13 +834,7 @@ footer a{color:inherit}
       "dl": "تنزيل",
       "open": "فتح",
       "saved-to": "تم الحفظ في <span class=\"ltr\">Download/Nezzel</span>",
-      "demo-ctl": "خطوات العرض",
-      "c1": "انسخ",
-      "c2": "افتح",
-      "c3": "اختر",
-      "c4": "احفظ",
       "how-h": "من الرابط إلى هاتفك، في ثلاث خطوات",
-      "how-sub": "جرّبها هنا قبل أن تثبّته",
       "s1": "انسخ الرابط",
       "s1p": "انسخ رابط الفيديو من التطبيق الذي تشاهده فيه، أو شاركه مع Nezzel مباشرة",
       "s2": "اختر الجودة",
@@ -892,6 +842,12 @@ footer a{color:inherit}
       "s3": "اضغط تنزيل",
       "s3p": "يبدأ التنزيل حين تضغط فقط، ويُحفظ في مجلد Nezzel داخل التنزيلات",
       "note": "عرض توضيحي. الجودات والأحجام الحقيقية يحددها كل موقع، والعلامة ≈ تعني حجمًا تقديريًا",
+      "more-h": "وفي Nezzel أيضًا",
+      "x1": "حالات واتساب",
+      "x2": "قوائم التشغيل",
+      "x3": "عدة روابط معًا",
+      "x4": "الصوت وحده",
+      "x5": "أداة للشاشة الرئيسية",
       "ins-h": "التثبيت خطوة بخطوة",
       "ins-sub": "Nezzel ليس في متجر Play، لذلك قد يطلب أندرويد إذنك لتثبيته من المتصفح. هذا طبيعي",
       "i1": "حمّل الملف وافتحه",
@@ -902,7 +858,7 @@ footer a{color:inherit}
       "i3p": "قد يعرض <bdi>Play Protect</bdi> فحص التطبيق. اقبل الفحص واتبع نتيجته",
       "i4": "افتح Nezzel وجرّب",
       "i4p": "انسخ رابطًا ثم افتح التطبيق، أو الصق الرابط فيه",
-      "why": "<strong>هل هو آمن؟</strong> لا يطلب جهات اتصالك ولا موقعك، ولا يعرف من أنت. وشيفرته مفتوحة على GitHub يستطيع أي أحد مراجعتها",
+      "why": "<strong>هل هو آمن؟</strong> لا يطلب جهات اتصالك ولا موقعك، ولا يحتاج حسابًا. وشيفرته مفتوحة على GitHub يستطيع أي أحد مراجعتها",
       "sys-done": "اكتمل التنزيل",
       "sys-t2": "تثبيت التطبيقات غير المعروفة",
       "sys-browser": "المتصفح",
@@ -910,24 +866,22 @@ footer a{color:inherit}
       "sys-q": "هل تريد تثبيت هذا التطبيق؟",
       "sys-cancel": "إلغاء",
       "sys-install": "تثبيت",
-      "pr-h": "ما يعدك به Nezzel",
-      "p1": "بلا إعلانات",
-      "p1p": "لا إعلانات قبل التنزيل ولا بعده",
-      "p2": "بلا حساب",
-      "p2p": "لا تسجيل، ولا شيء يدلّ على هويتك",
       "p3": "يعمل على هاتفك",
       "p3p": "يحمّل Nezzel الملف من الموقع إلى هاتفك مباشرة، دون المرور بخوادم لنا",
       "p4": "أرقام صادقة",
       "p4p": "ترى ما يتيحه الموقع فقط. الحجم الحقيقي إن عُرف، والعلامة ≈ تعني تقديرًا",
+      "p5": "فقط ما يحتاجه",
       "faq-h": "أسئلة سريعة",
       "f1": "هل هو مجاني؟",
       "f1a": "نعم، مجاني بالكامل، بلا إعلانات ولا اشتراكات",
       "f2": "من أي مواقع يحفظ؟",
       "f2a": "من مواقع الفيديو والصور المعروفة، إن كان الرابط عامًا. بعض الروابط قد لا تعمل، والمحتوى الخاص أو المحمي أو الذي يحتاج تسجيل الدخول غير مدعوم. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">المواقع التي جرّبناها</a>",
+      "f8": "كيف أحفظ حالات واتساب؟",
+      "f8a": "شاهد الحالة في واتساب، ثم افتح تبويب «الحالات» في Nezzel. في المرة الأولى، اسمح بالوصول إلى مجلد واحد، وهذا كل شيء",
       "f3": "لماذا ليس في متجر Play؟",
       "f3a": "قواعد متجر Play تقيّد تطبيقات حفظ الفيديو. لذلك ننشره مجانًا على GitHub، ويسألك أندرويد قبل تثبيته",
       "f4": "كيف أحدّثه؟",
-      "f4a": "يخبرك Nezzel عند توفر إصدار جديد، فتحمّله وتؤكد تثبيته. تبقى ملفاتك وإعداداتك كما هي",
+      "f4a": "يحدّث Nezzel نفسه حين يستطيع، وإلا فسيخبرك لتضغط «تثبيت». تبقى ملفاتك وإعداداتك كما هي",
       "f5": "أين تُحفظ الملفات؟",
       "f5a": "في مجلد Nezzel داخل التنزيلات، أو في مجلد تختاره من الإعدادات. وتجدها في تطبيق الملفات",
       "f6": "هل يعمل على الآيفون؟",
@@ -938,71 +892,62 @@ footer a{color:inherit}
       "wa-href": "https://wa.me/22237928327?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%20%F0%9F%91%8B%20%D8%B4%D9%83%D8%B1%D9%8B%D8%A7%20%D8%B9%D9%84%D9%89%20Nezzel%21",
       "os-h": "مفتوح المصدر",
       "os-p": "شيفرة Nezzel كاملة على GitHub برخصة <bdi>GPL-3.0-or-later</bdi>، ويستطيع أي أحد مراجعتها",
-      "tr-h": "بلا إعلانات، بلا تتبّع، بلا حساب",
-      "tr-p": "لا يخرج من هاتفك ما يدلّ على هويتك. يتصل Nezzel بالموقع الذي اخترته، وبخادم Nezzel ليبحث عن تحديث",
-      "tr-ask": "لا يطلب موقعك ولا جهات اتصالك ولا ملفاتك، فقط الإنترنت والإشعارات",
+      "tr-h": "بلا إعلانات، بلا حساب",
+      "tr-p": "لا إعلانات قبل التنزيل ولا بعده. بلا تسجيل وبلا معرّف",
+      "tr-ask": "لا يطلب موقعك ولا جهات اتصالك",
       "tr-src": "الشيفرة المصدرية",
       "gh": "الشيفرة على GitHub",
       "rel": "كل الإصدارات وملاحظاتها",
-      "word": "نزّل",
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
       "lic": "التراخيص",
       "sec": "الإبلاغ عن مشكلة أمنية",
       "to-light": "الوضع الفاتح",
-      "pause": "إيقاف العرض مؤقتًا",
-      "play": "تشغيل العرض",
       "saved": "تم الحفظ",
       "language": "اللغة",
       "og-alt": "Nezzel: حمّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة لفيديو"
   };
   const FR = {
     language:"Langue", "og-alt":"Nezzel : enregistrez une vidéo depuis son lien. Un téléphone affiche les qualités disponibles",
-    word:"Nezzel",
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"Enregistrez la vidéo <em>depuis son lien</em>",
     lede:"Le son et les photos aussi, gratuitement sur votre téléphone",
     cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
     t1:"Sans publicité", t2:"Sans compte", t3:"Code ouvert",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, vous choisissez la qualité et le fichier est enregistré",
-    "demo-ctl":"Étapes de la démo", pause:"Mettre la démo en pause", play:"Lancer la démo",
     av:"F", chat:"Famille", msg:"Regardez cette vidéo", vt:"Souvenirs de vacances",
     "m-reply":"Répondre", "m-share":"Partager", "m-copy":"Copier le lien", copied:"Lien copié",
     field:"Collez un lien public", "n-home":"Accueil", "n-dl":"Téléchargements", "n-set":"Paramètres",
     clip:"Le lien que vous avez copié", view:"Voir les options",
     video:"Vidéo", "audio-h":"Audio", best:"Meilleure qualité", last:"Dernier choix", bal:"Équilibrée", small:"Petit fichier", audio:"Audio seul",
     dl:"Télécharger", open:"Ouvrir", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
-    c1:"Copier", c2:"Ouvrir", c3:"Choisir", c4:"Enregistrer",
-    "how-h":"Du lien au téléphone en trois étapes", "how-sub":"Essayez ici avant d’installer",
+    "how-h":"Du lien au téléphone en trois étapes", 
     s1:"Copiez le lien", s1p:"Copiez le lien de la vidéo dans son application, ou partagez-le directement avec Nezzel",
     s2:"Choisissez la qualité", s2p:"Ouvrez Nezzel : le lien copié s’affiche. Choisissez ensuite parmi les qualités disponibles",
     s3:"Appuyez sur Télécharger", s3p:"Le téléchargement ne démarre que quand vous appuyez, et le fichier va dans le dossier Nezzel des Téléchargements",
-    note:"Ceci est une démo. Chaque site détermine les qualités et les tailles réelles. Le signe ≈ indique une taille estimée",
+    note:"Ceci est une démo. Chaque site détermine les qualités et les tailles réelles. Le signe ≈ indique une taille estimée", "more-h":"Aussi dans Nezzel", x1:"Statuts WhatsApp", x2:"Playlists", x3:"Plusieurs liens d’un coup", x4:"Le son seul", x5:"Widget d’accueil",
     "ins-h":"L’installation, pas à pas",
     "ins-sub":"Nezzel n’est pas sur le Play Store. Android peut donc vous demander d’autoriser l’installation depuis votre navigateur. C’est normal",
     i1:"Téléchargez le fichier et ouvrez-le", i1p:"Appuyez sur « Télécharger l’application », puis ouvrez le fichier. Si GitHub s’ouvre, choisissez le fichier APK. Votre navigateur peut afficher un avertissement sur ce type de fichier",
     i2:"Autorisez l’installation", i2p:"Si Android le demande, activez « Autoriser cette source », puis revenez en arrière",
     i3:"Appuyez sur Installer", i3p:"Play Protect peut proposer d’analyser l’application. Acceptez l’analyse et suivez le résultat",
     i4:"Ouvrez Nezzel et essayez", i4p:"Copiez un lien, puis ouvrez l’application, ou collez le lien dedans",
-    why:"<strong>Est-ce sûr ?</strong> L’application ne demande ni vos contacts ni votre position et ne sait pas qui vous êtes. Son code est ouvert sur GitHub, chacun peut le vérifier",
+    why:"<strong>Est-ce sûr ?</strong> Il ne demande ni vos contacts ni votre position et n’a pas besoin de compte. Son code est ouvert sur GitHub, chacun peut le vérifier",
     "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
     "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
-    "pr-h":"Les engagements de Nezzel",
-    p1:"Sans publicité", p1p:"Aucune publicité, ni avant ni après le téléchargement",
-    p2:"Sans compte", p2p:"Aucune inscription, rien qui vous identifie",
     p3:"Tout sur votre téléphone", p3p:"Nezzel télécharge directement du site vers votre téléphone, sans passer par nos serveurs",
-    p4:"Des chiffres honnêtes", p4p:"Vous voyez seulement ce que le site propose. La taille réelle quand elle est connue, et ≈ pour une estimation",
+    p4:"Des chiffres honnêtes", p4p:"Vous voyez seulement ce que le site propose. La taille réelle quand elle est connue, et ≈ pour une estimation", p5:"Le strict nécessaire",
     "faq-h":"Questions fréquentes",
     f1:"C’est gratuit ?", f1a:"Oui, entièrement gratuit, sans publicité ni abonnement",
-    f2:"Quels sites sont compatibles ?", f2a:"Les sites connus de vidéos et de photos, si le lien est public. Certains liens peuvent ne pas fonctionner. Les contenus privés, protégés ou réservés aux comptes connectés ne sont pas pris en charge. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites testés</a>",
+    f2:"Quels sites sont compatibles ?", f2a:"Les sites connus de vidéos et de photos, si le lien est public. Certains liens peuvent ne pas fonctionner. Les contenus privés, protégés ou réservés aux comptes connectés ne sont pas pris en charge. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites testés</a>", f8:"Comment enregistrer les statuts WhatsApp ?", f8a:"Regardez le statut dans WhatsApp, puis ouvrez l’onglet Statuts dans Nezzel. La première fois, autorisez l’accès à un dossier. C’est tout",
     f3:"Pourquoi pas sur le Play Store ?", f3a:"Les règles du Play Store limitent les applications de téléchargement vidéo. Nous la publions donc gratuitement sur GitHub, et Android demande votre accord avant l’installation",
-    f4:"Comment mettre à jour ?", f4a:"Nezzel vous prévient quand une nouvelle version est disponible. Vous la téléchargez et confirmez l’installation. Vos fichiers et paramètres sont conservés",
+    f4:"Comment mettre à jour ?", f4a:"Nezzel se met à jour tout seul quand il le peut. Sinon, il vous prévient et vous appuyez sur Installer. Vos fichiers et paramètres sont conservés",
     f5:"Où sont mes fichiers ?", f5a:"Dans le dossier Nezzel de Téléchargements, ou dans le dossier choisi dans les paramètres. Retrouvez-les dans votre application de fichiers",
     f6:"Et sur iPhone ?", f6a:"Nezzel fonctionne uniquement sur Android 10 ou plus récent, sur les téléphones avec un processeur <bdi>64 bits</bdi>",
     f7:"Et si la connexion coupe ?", f7a:"Le téléchargement attend, puis reprend là où il s’est arrêté quand la connexion revient. Vous pouvez aussi le mettre en pause et le reprendre plus tard",
     wa:"Écrivez-nous sur WhatsApp", "wa-href":"https://wa.me/22237928327?text=Bonjour%20%F0%9F%91%8B%20Merci%20pour%20Nezzel%C2%A0%21",
     "os-h":"Un code ouvert à tous", "os-p":"Tout le code de Nezzel est sur GitHub sous licence <bdi>GPL-3.0-or-later</bdi>. Chacun peut le consulter",
-    "tr-h":"Sans pub, sans traceurs, sans compte", "tr-p":"Rien qui vous identifie ne quitte votre téléphone. Nezzel contacte le site choisi, et son serveur pour chercher les mises à jour",
-    "tr-ask":"Il ne demande jamais votre position, vos contacts ni vos fichiers. Seulement Internet et les notifications",
+    "tr-h":"Sans pub, sans compte", "tr-p":"Aucune pub, ni avant ni après le téléchargement. Pas d’inscription, pas d’identifiant",
+    "tr-ask":"Il ne demande jamais votre position ni vos contacts",
     "tr-src":"Code source",
     gh:"Le code sur GitHub", rel:"Versions et nouveautés",
     "fin-h":"Copiez le lien, on s’occupe du reste",
@@ -1021,9 +966,9 @@ footer a{color:inherit}
   const mb = (value, decimals = 0) => number(value, decimals) + (lang() === "fr" ? "\u00a0Mo" : " MB");
 
   // shared state, declared before anything can render
-  let jobFrame = 0, rel = null, pick = { size: 61.8, est: true }, jp = 0, running = false, done3 = false;
-  const demo = $("#demo"), tap = $("#tap"), chips = $$(".steps-nav [data-go]"), pauseBtn = $("#demo-pause");
-  const jobm = $("#jobm"), jobp = $("#jobp"), dlrun = $("#dlrun"), copyBtn = $("#copybtn");
+  let rel = null, done3 = false;
+  const demo = $("#demo"), tap = $("#tap"), jobm = $("#jobm");
+  const stage = $(".stage"), story = $(".story"), steps = $$(".step");
   const sys = $("#sys"), tabs = $$("#steps button");
 
   // ---------- language ----------
@@ -1129,17 +1074,18 @@ footer a{color:inherit}
   const ring = (root, p) => { $(".pr", root).style.strokeDashoffset = String(1 - p / 100); };
   const line = (total, p) => "<span class=\"ltr num\">" + number(p, 0) + (lang() === "fr" ? "\u00a0% · " : "% · ") + number(total * p / 100) + " / " + mb(total, 1) + "</span>";
 
-  // ---------- hero demo: a clock that can pause ----------
-  const SCENES = [
-    { dur: 3600, ev: [[900, "e-menu"], [1700, "tap:cp"], [1850, "e-copy"], [2400, "e-toast"]] },
-    { dur: 3000, ev: [[350, "e-sheet"], [1900, "tap:pb1"], [2000, "e-press1"]] },
-    { dur: 3600, ev: [[1300, "tap:q1080"], [1400, "e-pick"], [2700, "tap:pb2"], [2800, "e-press2"]] },
-    { dur: 4400, ev: [[3000, "e-done"], [3200, "e-snack"]] }
+  // ---------- the story: the phone stays, the three steps scroll past it ----------
+  // Beat 0 is the hero; beats 1-3 play when their step crosses a line on the screen.
+  const BEATS = [
+    { s: 0, ev: [[700, "e-menu"]] },
+    { s: 0, ev: [[0, "e-menu"], [450, "tap:cp"], [600, "e-copy"], [900, "e-toast"]] },
+    { s: 1, ev: [[200, "e-sheet"], [1100, "tap:pb1"], [1200, "e-press1"], [1500, "go:2"], [2300, "tap:q1080"], [2400, "e-pick"]] },
+    { s: 2, ev: [[0, "e-pick"], [500, "tap:pb2"], [600, "e-press2"], [900, "go:3"], [3400, "e-done"], [3600, "e-snack"]] }
   ];
-  let s = 0, el = 0, fired = 0, playing = !still, visible = true, last = 0;
+  let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1;
   function tapAt(id) {
-    const a = $("#" + id).getBoundingClientRect(), b = $(".screen", demo).getBoundingClientRect();
-    tap.style.left = (a.left - b.left + a.width / 2) + "px"; tap.style.top = (a.top - b.top + a.height / 2) + "px";
+    const scr = $(".screen", demo), a = $("#" + id).getBoundingClientRect(), b = scr.getBoundingClientRect(), k = b.width / scr.offsetWidth;
+    tap.style.left = (a.left - b.left + a.width / 2) / k + "px"; tap.style.top = (a.top - b.top + a.height / 2) / k + "px";
     tap.classList.remove("go"); void tap.offsetWidth; tap.classList.add("go");
   }
   function renderDemo3(p) {
@@ -1152,87 +1098,50 @@ footer a{color:inherit}
     box.dataset.s = i;
   }
   function enter(i) {
-    s = i; el = 0; fired = 0; done3 = false;
     demo.className = "phone"; slideTo(demo, i);
     $("#q1080").classList.remove("sel"); $("#q720").classList.add("sel");
-    jobm.classList.remove("done"); renderDemo3(0);
-    chips.forEach((c, k) => { c.classList.toggle("on", k === i); c.setAttribute("aria-pressed", String(k === i)); c.style.setProperty("--p", k < i ? 1 : 0); });
+    jobm.classList.remove("done"); done3 = false; t3 = -1; renderDemo3(0);
   }
   function fire(ev) {
-    if (ev.startsWith("tap:")) { tapAt(ev.slice(4)); return; }
+    if (ev.startsWith("tap:")) { if (!still) tapAt(ev.slice(4)); return; }
+    if (ev.startsWith("go:")) { const i = +ev.slice(3); slideTo(demo, i); if (i === 3) t3 = el; return; }
     demo.classList.add(ev);
     if (ev === "e-pick") { $("#q720").classList.remove("sel"); $("#q1080").classList.add("sel"); }
     if (ev === "e-done") { jobm.classList.add("done"); done3 = true; renderDemo3(100); }
   }
-  function step(now) {
-    const dt = last ? Math.min(64, now - last) : 0; last = now;
-    if (playing && visible && !document.hidden) {
-      el += dt;
-      const sc = SCENES[s];
-      while (fired < sc.ev.length && el >= sc.ev[fired][0]) fire(sc.ev[fired++][1]);
-      if (s === 3 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, el / 2900), 2)))));
-      chips[s].style.setProperty("--p", Math.min(1, el / sc.dur));
-      if (el >= sc.dur) enter((s + 1) % SCENES.length);
-    }
-    requestAnimationFrame(step);
+  function frame(now) {
+    raf = 0;
+    if (document.hidden) { last = 0; return; }
+    el += last ? Math.min(64, now - last) : 0; last = now;
+    const ev = BEATS[beat].ev;
+    while (fired < ev.length && el >= ev[fired][0]) fire(ev[fired++][1]);
+    if (t3 >= 0 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, (el - t3) / 2500), 2)))));
+    if (fired < ev.length) raf = requestAnimationFrame(frame);
   }
-  function showEnd(i) {
-    // A scene's end state, for paused or reduced-motion viewers.
-    enter(i); SCENES[i].ev.forEach(([, ev]) => { if (!ev.startsWith("tap:")) fire(ev); });
-    fired = SCENES[i].ev.length; el = SCENES[i].dur * .999; chips[i].style.setProperty("--p", 1);
+  const resume = () => { if (!raf && beat >= 0 && fired < BEATS[beat].ev.length) raf = requestAnimationFrame(frame); };
+  document.addEventListener("visibilitychange", resume);
+  function play(k) {
+    if (k === beat) return;
+    beat = k; el = 0; fired = 0; last = 0; stage.dataset.k = k;
+    steps.forEach((x, i) => x.classList.toggle("on", i === k - 1));
+    enter(BEATS[k].s); resume();
   }
-  chips.forEach((c, k) => c.addEventListener("click", () => { if (playing) enter(k); else showEnd(k); }));
-  function setPlaying(p) {
-    playing = p;
-    $("use", pauseBtn).setAttribute("href", p ? "#pause" : "#playo");
-    pauseBtn.setAttribute("aria-label", t(p ? "pause" : "play"));
-  }
-  pauseBtn.addEventListener("click", () => setPlaying(!playing));
-  new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: .25 }).observe(demo);
-
-  // ---------- try-it panels ----------
-  copyBtn.addEventListener("click", () => {
-    copyBtn.closest(".panel").classList.add("used");
-    copyBtn.classList.add("ok");
-    $("span", copyBtn).textContent = t("copied");
-    clearTimeout(copyBtn._t);
-    copyBtn._t = setTimeout(() => { copyBtn.classList.remove("ok"); $("span", copyBtn).textContent = t("m-copy"); }, 1800);
-  });
-  const radios = $$(".pq [role=radio]");
-  radios.forEach((r, k) => {
-    r.addEventListener("click", () => {
-      radios.forEach(o => { o.setAttribute("aria-checked", String(o === r)); o.tabIndex = o === r ? 0 : -1; });
-      r.closest(".panel").classList.add("used");
-      pick = { size: +r.dataset.size, est: !!r.dataset.est }; resetJob(); renderAll();
-    });
-    r.addEventListener("keydown", e => {
-      const fwd = document.documentElement.dir === "rtl" ? -1 : 1;
-      const d = { ArrowDown: 1, ArrowUp: -1, ArrowRight: fwd, ArrowLeft: -fwd }[e.key]; if (!d) return;
-      e.preventDefault(); const n = radios[(k + d + radios.length) % radios.length]; n.focus(); n.click();
-    });
-  });
-  function renderJob() {
-    ring(jobp, jp);
-    $(".pl-line", jobp).innerHTML = jp >= 100 ? t("saved-to") : line(pick.size, jp);
-  }
-  function resetJob() { cancelAnimationFrame(jobFrame); running = false; jp = 0; jobp.classList.remove("done"); dlrun.disabled = false; }
-  function runJob() {
-    if (running) return;
-    resetJob(); running = true; dlrun.disabled = true; dlrun.closest(".panel").classList.add("used");
-    const finish = () => { jp = 100; jobp.classList.add("done"); running = false; dlrun.disabled = false; renderJob(); $("#job-status").textContent = t("saved"); };
-    if (still) { finish(); return; }
-    const t0 = performance.now(), dur = 2200 + pick.size * 20;
-    (function tick(now) {
-      if (!running) return;
-      const x = Math.min(1, (now - t0) / dur);
-      jp = Math.round(100 * (1 - Math.pow(1 - x, 2.2))); renderJob();
-      if (x < 1) jobFrame = requestAnimationFrame(tick); else finish();
-    })(t0);
-  }
-  dlrun.addEventListener("click", runJob);
-  function renderAll() {
-    $("#dlsize").textContent = (pick.est ? "≈ " : "") + mb(pick.size, 1);
-    renderJob(); renderDemo3(done3 ? 100 : 0);
+  // Phone scale and the sticky band height on narrow screens; the line that picks the step.
+  const desk = matchMedia("(min-width: 960px)");
+  let lineIO = null;
+  function layout() {
+    const h = demo.offsetHeight, sc = Math.min(1, (desk.matches ? innerHeight - 112 : innerHeight * .5) / h);
+    const band = desk.matches ? 0 : Math.round(84 + h * sc + 18);
+    stage.style.setProperty("--sc", sc.toFixed(3));
+    stage.style.setProperty("--band", band ? band + "px" : "auto"); story.style.setProperty("--band", band + "px");
+    const y = Math.round(desk.matches ? innerHeight * .5 : band + (innerHeight - band) * .3);
+    lineIO?.disconnect();
+    lineIO = new IntersectionObserver(es => es.forEach(e => {
+      const k = +e.target.dataset.step;
+      if (e.isIntersecting) play(k + 1);
+      else if (k === 0 && e.boundingClientRect.top > y) play(0);
+    }), { rootMargin: -y + "px 0px " + -(innerHeight - y - 1) + "px 0px" });
+    steps.forEach(x => lineIO.observe(x));
   }
 
   // ---------- install walkthrough ----------
@@ -1286,10 +1195,12 @@ footer a{color:inherit}
 
   // ---------- start ----------
   sysGo(0);
-  if (still) { setPlaying(false); showEnd(2); } else enter(0);
-  requestAnimationFrame(step);
-  if (!still) splitWords($("#h1"));
-  renderAll();
+  if (still) { enter(2); fire("e-pick"); }
+  else {
+    story.classList.add("live"); layout();
+    let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
+    splitWords($("#h1"));
+  }
 })();
 </script>
 </body>
