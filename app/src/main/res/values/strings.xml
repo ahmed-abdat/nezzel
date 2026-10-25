@@ -597,7 +597,6 @@
     <string name="old_downloads_wrong_folder">Choose the Nezzel folder inside Download</string>
     <string name="old_downloads_setting">Show old downloads</string>
     <string name="old_downloads_setting_body">Files saved before you reinstalled Nezzel</string>
-    <string name="downloads_running_empty">No downloads running</string>
     <string name="paste">Paste</string>
     <string name="home_hero_title">Save videos to your phone</string>
     <string name="home_hero_line">Copy a video link in any app, then tap Paste.</string>

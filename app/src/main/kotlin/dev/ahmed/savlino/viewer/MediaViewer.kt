@@ -42,7 +42,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
-import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.ThumbnailKind
@@ -121,7 +120,7 @@ fun rememberMediaPicture(uri: android.net.Uri, kind: ThumbnailKind, size: Int): 
 fun rememberMediaThumbnail(uri: android.net.Uri, kind: ThumbnailKind, size: Int): Bitmap? {
     val context = LocalContext.current
     val pictures = LocalMediaPictures.current ?: remember(context) { systemPictures(context) }
-    return rememberTabResource<Bitmap?>(null, uri, size, pictures) { pictures.load(uri, kind, size) }.value
+    return dev.ahmed.savlino.ui.rememberCachedThumbnail(dev.ahmed.savlino.ui.ThumbnailCache.key(uri, size)) { pictures.load(uri, kind, size) }
 }
 
 @Composable

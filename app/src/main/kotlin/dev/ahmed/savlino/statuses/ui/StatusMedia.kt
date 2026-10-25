@@ -7,6 +7,7 @@ import android.util.LruCache
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.graphics.drawable.toBitmap
 import dev.ahmed.savlino.statuses.StatusItem
+import dev.ahmed.savlino.ui.ThumbnailCache
 import dev.ahmed.savlino.ui.ThumbnailKind
 import dev.ahmed.savlino.ui.loadMediaDuration
 import dev.ahmed.savlino.ui.loadMediaThumbnail
@@ -26,13 +27,14 @@ val LocalStatusMedia = staticCompositionLocalOf<StatusMedia?> { null }
 /** Decodes off the main thread; memory caches only, so nothing about the statuses is written anywhere. */
 class SystemStatusMedia(context: Context) : StatusMedia {
     private val context = context.applicationContext
-    private val thumbs = LruCache<Pair<Uri, Int>, Bitmap>(48)
+    private val thumbs = ThumbnailCache.shared(this.context)
     private val durations = LruCache<Uri, Long>(256)
 
-    override suspend fun thumbnail(item: StatusItem, size: Int): Bitmap? = thumbs.get(item.uri to size)
-        ?: withContext(Dispatchers.IO) {
+    override suspend fun thumbnail(item: StatusItem, size: Int): Bitmap? = thumbs.getOrLoad(ThumbnailCache.key(item.uri, size)) {
+        withContext(Dispatchers.IO) {
             loadMediaThumbnail(context, item.uri, if (item.isVideo) ThumbnailKind.VIDEO else ThumbnailKind.IMAGE, size, size)
-        }?.also { thumbs.put(item.uri to size, it) }
+        }
+    }
 
     override suspend fun durationMillis(item: StatusItem): Long? = if (!item.isVideo) null else durations.get(item.uri)
         ?: withContext(Dispatchers.IO) { loadMediaDuration(context, item.uri) }?.also { durations.put(item.uri, it) }

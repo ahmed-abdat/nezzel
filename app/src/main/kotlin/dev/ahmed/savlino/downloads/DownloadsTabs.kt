@@ -10,6 +10,17 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.ui.semantics.collapse
 import androidx.compose.ui.semantics.expand
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import dev.ahmed.savlino.ui.theme.LocalReducedMotion
+import dev.ahmed.savlino.ui.theme.Motion
+import dev.ahmed.savlino.ui.theme.easeOut
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -81,8 +92,10 @@ internal fun rememberVisibleBatches(playlists: List<PlaylistBatch>): List<Playli
 @Composable
 internal fun rememberDownloadsTab(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): MutableState<DownloadsTab> {
     val tab = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(entryTab(jobs, playlists)) }
-    // A job that becomes active while the screen watches (new, or the same id on a new attempt) counts as started.
+    // A job or playlist that becomes active while the screen watches (new, or the same id on a new attempt) counts as
+    // started: a playlist still resolving has no job yet but already lives on Downloading.
     val activeNow = jobs.filter { !it.terminal || it.awaitingSchedule }.mapTo(HashSet()) { it.jobId }
+    playlists.filter { !it.terminal }.mapTo(activeNow) { "playlist:${it.id}" }
     val before = remember { HashSet(activeNow) }
     val started = (activeNow - before).isNotEmpty()
     before.clear(); before += activeNow
@@ -91,31 +104,66 @@ internal fun rememberDownloadsTab(jobs: List<DownloadProgress>, playlists: List<
     return tab
 }
 
-/** Downloading · Saved. A count on Downloading; a dot (and TalkBack "Needs a look") while a check warning is open. */
+/**
+ * Downloading · Saved. A count on Downloading; a dot (and TalkBack "Needs a look") while a check warning is open.
+ * The underline sits under the selected word itself, not under the count and dot slots kept beside it, so it is measured
+ * from the label in the row's own left-to-right pixels: the same code lands under the word in Arabic.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, attention: Boolean, language: String, onSelect: (DownloadsTab) -> Unit) {
-    PrimaryTabRow(selectedTabIndex = selected.ordinal, containerColor = MaterialTheme.colorScheme.surface, divider = {}) {
-        val needsLook = stringResource(R.string.check_needs_look)
-        Tab(selected == DownloadsTab.RUNNING, { onSelect(DownloadsTab.RUNNING) },
-            Modifier.heightIn(min = 48.dp).testTag("tab_running").then(if (attention) Modifier.semantics { stateDescription = needsLook } else Modifier),
-            selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
-            Row(Modifier.padding(vertical = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                Text(stringResource(R.string.dl_tab_running), style = MaterialTheme.typography.titleSmall)
-                Text(NezzelFormat.count(count.coerceAtLeast(1), language), style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.graphicsLayer { alpha = if (count > 0) 1f else 0f }
-                        .then(if (count == 0) Modifier.clearAndSetSemantics {} else Modifier)
-                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
-                        .padding(horizontal = Space.s, vertical = 2.dp))
-                // Keep the count and warning slots: removing either must not unwrap the label at large text.
-                Box(Modifier.size(8.dp).graphicsLayer { alpha = if (attention) 1f else 0f }
-                    .background(MaterialTheme.colorScheme.error, CircleShape).then(if (attention) Modifier.testTag("tab_attention") else Modifier))
-            }
+    val reduced = LocalReducedMotion.current
+    val row = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val labels = remember { mutableStateMapOf<DownloadsTab, Pair<Float, Float>>() }
+    fun Modifier.label(tab: DownloadsTab) = onGloballyPositioned { coordinates ->
+        val box = row[0]?.takeIf { it.isAttached }?.localBoundingBoxOf(coordinates) ?: return@onGloballyPositioned
+        val span = box.left to box.width
+        if (labels[tab] != span) labels[tab] = span
+    }
+    val left = remember { Animatable(0f) }
+    val width = remember { Animatable(0f) }
+    val target = labels[selected]
+    LaunchedEffect(target, reduced) {
+        val (x, w) = target ?: return@LaunchedEffect
+        // First placement snaps; a switch slides like the platform indicator; reduced motion moves in one frame.
+        if (reduced || width.value == 0f) { left.snapTo(x); width.snapTo(w) }
+        else { launch { left.animateTo(x, easeOut(false, Motion.TAB)) }; width.animateTo(w, easeOut(false, Motion.TAB)) }
+    }
+    val indicator = MaterialTheme.colorScheme.primary
+    Box(Modifier.onGloballyPositioned { row[0] = it }.drawWithContent {
+        drawContent()
+        val w = width.value
+        if (w <= 0f) return@drawWithContent
+        // M3 primary indicator: 3dp, rounded top corners only.
+        val h = 3.dp.toPx()
+        clipRect(top = size.height - h) {
+            drawRoundRect(indicator, Offset(left.value, size.height - h), androidx.compose.ui.geometry.Size(w, h * 2), CornerRadius(h, h))
         }
-        Tab(selected == DownloadsTab.SAVED, { onSelect(DownloadsTab.SAVED) }, Modifier.heightIn(min = 48.dp).testTag("tab_saved"),
-            selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
-            Text(stringResource(R.string.dl_tab_saved), Modifier.padding(vertical = Space.m), style = MaterialTheme.typography.titleSmall)
+    }) {
+        PrimaryTabRow(selectedTabIndex = selected.ordinal, containerColor = MaterialTheme.colorScheme.surface, indicator = {}, divider = {}) {
+            val needsLook = stringResource(R.string.check_needs_look)
+            Tab(selected == DownloadsTab.RUNNING, { onSelect(DownloadsTab.RUNNING) },
+                Modifier.heightIn(min = 48.dp).testTag("tab_running").then(if (attention) Modifier.semantics { stateDescription = needsLook } else Modifier),
+                selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
+                Row(Modifier.padding(vertical = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    Text(stringResource(R.string.dl_tab_running), Modifier.label(DownloadsTab.RUNNING).testTag("tab_running_label"),
+                        style = MaterialTheme.typography.titleSmall)
+                    Text(NezzelFormat.count(count.coerceAtLeast(1), language), style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.graphicsLayer { alpha = if (count > 0) 1f else 0f }
+                            .then(if (count == 0) Modifier.clearAndSetSemantics {} else Modifier)
+                            .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                            .padding(horizontal = Space.s, vertical = 2.dp))
+                    // Keep the count and warning slots: removing either must not unwrap the label at large text.
+                    Box(Modifier.size(8.dp).graphicsLayer { alpha = if (attention) 1f else 0f }
+                        .background(MaterialTheme.colorScheme.error, CircleShape).then(if (attention) Modifier.testTag("tab_attention") else Modifier))
+                }
+            }
+            Tab(selected == DownloadsTab.SAVED, { onSelect(DownloadsTab.SAVED) }, Modifier.heightIn(min = 48.dp).testTag("tab_saved"),
+                selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
+                Text(stringResource(R.string.dl_tab_saved), Modifier.padding(vertical = Space.m).label(DownloadsTab.SAVED).testTag("tab_saved_label"),
+                    style = MaterialTheme.typography.titleSmall)
+            }
         }
     }
 }
