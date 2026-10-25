@@ -14,7 +14,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:gravity="center_horizontal">
-            <TextView style="@style/Widget.Nezzel.Text.Label" android:text="@string/paste_link" />
+            <TextView android:id="@+id/widget_paste_label" style="@style/Widget.Nezzel.Text.Label" android:text="@string/paste_link" />
             <TextView android:id="@+id/widget_saved_count" style="@style/Widget.Nezzel.Text.Count" />
         </LinearLayout>
     </LinearLayout>

@@ -163,6 +163,17 @@ class WidgetTest {
         } finally { parcel.recycle() }
     }
 
+    @Test fun pasteWordsFollowTheAppLanguageWhenTheLauncherUsesAnother() {
+        val arabic = app.createConfigurationContext(Configuration(app.resources.configuration).apply { setLocale(java.util.Locale.forLanguageTag("ar")) })
+        for (size in WidgetSize.entries) {
+            // The launcher inflates in the system locale (en here); the app language is Arabic.
+            val rendered = NezzelWidgetProvider.views(arabic, WidgetUiState.from(emptyList(), emptyList()), size).apply(app, FrameLayout(app))
+            val label = arabic.getString(if (size == WidgetSize.WIDE) R.string.paste_link else R.string.widget_paste_short)
+            assertEquals(label, text(rendered, R.id.widget_paste_label))
+            assertEquals(arabic.getString(R.string.paste_link), rendered.findViewById<View>(R.id.widget_paste).contentDescription)
+        }
+    }
+
     @Test fun rtlResolvesForEverySizeWithIsolatedPercentAndArabicTitle() {
         for (size in WidgetSize.entries) {
             val rendered = view(WidgetUiState.from(job().copy(filename = "رحلة إلى الجبل.mp4")), size, "ar")

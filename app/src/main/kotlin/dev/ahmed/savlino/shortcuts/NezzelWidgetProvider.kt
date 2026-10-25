@@ -140,6 +140,11 @@ class NezzelWidgetProvider : AppWidgetProvider() {
                 visible(R.id.widget_live, live)
                 setContentDescription(ROOT, context.getString(R.string.widget_description))
                 setOnClickPendingIntent(ROOT, downloads)
+                // Layout XML text resolves in the launcher's (system) locale; set every visible word in the app's.
+                val paste = context.getString(R.string.paste_link)
+                setTextViewText(R.id.widget_paste_label, if (wide) paste else context.getString(R.string.widget_paste_short))
+                setContentDescription(R.id.widget_paste, paste)
+                setContentDescription(R.id.widget_paste_icon, paste)
                 setTextViewText(R.id.widget_saved_count, context.getString(R.string.widget_saved_count, NezzelFormat.count(state.savedCount, language)))
                 visible(R.id.widget_saved_count, !live && size != WidgetSize.SLIM)
                 visible(R.id.widget_paste, !live)
