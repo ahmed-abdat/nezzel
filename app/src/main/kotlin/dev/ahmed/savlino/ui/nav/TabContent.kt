@@ -1,15 +1,22 @@
 package dev.ahmed.savlino.ui.nav
 
-import androidx.compose.animation.core.updateTransition
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.togetherWith
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.launch
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import kotlinx.coroutines.flow.Flow
@@ -53,7 +60,11 @@ fun <T> rememberTabResource(initial: T, vararg keys: Any?, load: suspend () -> T
     }
 }
 
-/** Peer destinations keep independent saveable state, including lazy and ordinary scroll positions. */
+/**
+ * Peer destinations keep independent saveable state, including lazy and ordinary scroll positions. A visited tab stays
+ * composed while hidden (not measured, not placed, no semantics, no back handling), so switching back to it never
+ * composes a whole screen in one frame. Only draw properties animate.
+ */
 @Composable
 fun TabContent(
     destination: String,
@@ -61,29 +72,64 @@ fun TabContent(
     stateHolder: SaveableStateHolder = rememberSaveableStateHolder(),
     content: @Composable (String) -> Unit,
 ) {
-    if (LocalReducedMotion.current) {
-        // No transition object: disposal and restoration happen in the destination's recomposition.
-        key(destination) {
-            stateHolder.SaveableStateProvider(destination) {
-                CompositionLocalProvider(LocalTabReselections provides reselections.events(destination), LocalTabActive provides AlwaysActive) {
-                    content(destination)
+    val reduced = LocalReducedMotion.current
+    val first = remember { destination }
+    // Not snapshot state: a new destination recomposes this scope anyway.
+    val visited = remember { linkedSetOf<String>() }
+    visited += destination
+    val focus = LocalFocusManager.current
+    var switched by remember { mutableStateOf(false) }
+    LaunchedEffect(destination) { if (switched) focus.clearFocus() else switched = true }
+    val backOwner = LocalOnBackPressedDispatcherOwner.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val detachedBack = remember(lifecycle) {
+        object : OnBackPressedDispatcherOwner {
+            override val onBackPressedDispatcher = OnBackPressedDispatcher()
+            override val lifecycle = lifecycle
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        for (route in visited) key(route) {
+            val shown = route == destination
+            val alpha = remember { Animatable(if (route == first) 1f else 0f) }
+            val scale = remember { Animatable(1f) }
+            LaunchedEffect(shown, reduced) {
+                when {
+                    // Reduced motion never reads these: the tab is placed or not in the same frame.
+                    reduced -> { alpha.snapTo(if (shown) 1f else 0f); scale.snapTo(1f) }
+                    shown -> {
+                        if (alpha.value == 0f) scale.snapTo(.96f)
+                        launch { scale.animateTo(1f, Motion.TabScale) }
+                        alpha.animateTo(1f, Motion.TabFadeIn)
+                    }
+                    else -> alpha.animateTo(0f, Motion.TabFadeOut)
                 }
             }
-        }
-        return
-    }
-    val tabTransition = updateTransition(destination, label = "destination")
-    tabTransition.AnimatedContent(contentAlignment = Alignment.TopStart, transitionSpec = {
-        ((fadeIn(Motion.TabFadeIn) + scaleIn(Motion.TabScale, initialScale = .96f)) togetherWith fadeOut(Motion.TabFadeOut))
-            .using(null) // No animated size: screens fill the same viewport, only draw properties move.
-    }) { route ->
-        val active = remember(route, tabTransition) {
-            derivedStateOf { tabTransition.currentState == route && tabTransition.targetState == route && !tabTransition.isRunning }
-        }
-        stateHolder.SaveableStateProvider(route) {
-            CompositionLocalProvider(LocalTabReselections provides reselections.events(route), LocalTabActive provides active) {
-                content(route)
+            val placed = remember { derivedStateOf { alpha.value > 0f } }
+            // One State per tab for its whole life: effects keyed on it never restart on a switch.
+            val shownNow = rememberUpdatedState(shown)
+            val reducedNow = rememberUpdatedState(reduced)
+            val active = remember {
+                derivedStateOf {
+                    shownNow.value && (reducedNow.value || (alpha.value == 1f && scale.value == 1f && !alpha.isRunning && !scale.isRunning))
+                }
+            }
+            Box(Modifier.zIndex(if (shown) 1f else 0f)
+                // Hidden tabs keep their composition but skip measure and placement; the flag flips only twice per switch.
+                .layout { measurable, constraints ->
+                    if (!shown && (reduced || !placed.value)) layout(0, 0) {}
+                    else measurable.measure(constraints).let { layout(it.width, it.height) { it.place(0, 0) } }
+                }
+                .graphicsLayer { this.alpha = if (reduced) 1f else alpha.value; scaleX = scale.value; scaleY = scale.value }
+                .then(if (shown) Modifier else Modifier.clearAndSetSemantics {})) {
+                stateHolder.SaveableStateProvider(route) {
+                    CompositionLocalProvider(LocalTabReselections provides reselections.events(route), LocalTabActive provides active,
+                        LocalOnBackPressedDispatcherOwner provides if (shown && backOwner != null) backOwner else detachedBack) {
+                        content(route)
+                    }
+                }
             }
         }
     }
 }
+

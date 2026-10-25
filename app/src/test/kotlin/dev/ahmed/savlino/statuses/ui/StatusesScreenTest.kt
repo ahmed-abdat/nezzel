@@ -137,6 +137,29 @@ class StatusesScreenTest {
         compose.onNode(hasContentDescription(activity.getString(R.string.statuses_account_n, "2"), substring = true) and hasClickAction()).assertExists()
     }
 
+    @Test fun aQuickReturnToTheTabNeitherRescansNorReloadsThumbnails() {
+        val library = FakeStatusLibrary(ready(listOf(item(1, false), item(2, true))))
+        var route by mutableStateOf("Statuses")
+        activity.setContent {
+            NezzelTheme(ThemePref.Light, false) {
+                CompositionLocalProvider(LocalStatusMedia provides media) {
+                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Statuses") StatusesScreen(library, "en") else androidx.compose.material3.Text(it) }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.waitUntil(5000) { library.loads == 1 && media.thumbnails.size == 2 }
+        for (away in listOf("Home", "Downloads", "Settings")) {
+            compose.runOnIdle { route = away }
+            compose.waitForIdle()
+            compose.runOnIdle { route = "Statuses" }
+            compose.waitForIdle()
+            tiles(R.string.statuses_photo).assertCountEquals(1)
+        }
+        assertEquals("no rescan on a quick return", 1, library.loads)
+        assertEquals("no thumbnail decoded again", 2, media.thumbnails.size)
+    }
+
     @Test fun anOpenedAccountSurvivesRecreation() {
         val library = FakeStatusLibrary(ready(listOf(item(1, false, source = MAIN), item(2, true, source = SECOND), item(3, true, source = SECOND))))
         // A hand-made saved-state round trip: drop the screen, keep only what it saved, then compose it again
