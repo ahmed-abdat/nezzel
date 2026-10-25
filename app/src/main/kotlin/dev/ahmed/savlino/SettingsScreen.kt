@@ -29,6 +29,7 @@ import dev.ahmed.savlino.locale.ThemePref
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import dev.ahmed.savlino.ui.*
+import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -86,8 +87,10 @@ private fun MainSettings(
         "fr" to stringResource(R.string.language_fr))
     val themes = listOf(ThemePref.System to stringResource(R.string.theme_system), ThemePref.Light to stringResource(R.string.theme_light),
         ThemePref.Dark to stringResource(R.string.theme_dark))
+    val scroll = rememberScrollState()
+    ScrollOnTabReselect { scroll.scrollTo(0) }
     Scaffold(topBar = { ScreenHeader(stringResource(R.string.settings)) }) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxSize().padding(insets).verticalScroll(scroll)
             .padding(top = Space.s, bottom = Space.xl),
             verticalArrangement = Arrangement.spacedBy(Space.xl)) {
             UpdateSettings(updates) { links.navigate("AppUpdate") }
@@ -167,6 +170,8 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
         text = { Text(stringResource(R.string.engine_update_paused_body)) },
         confirmButton = { TextButton(onClick = { onPausedUpdate(true) }) { Text(stringResource(R.string.engine_update_paused_confirm)) } },
         dismissButton = { TextButton(onClick = { onPausedUpdate(false) }) { Text(stringResource(R.string.cancel)) } })
+    val scroll = rememberScrollState()
+    ScrollOnTabReselect { scroll.scrollTo(0) }
     Scaffold(snackbarHost = { snackbar?.let { SnackbarHost(it) } }, topBar = {
         TopAppBar(title = { Text(stringResource(R.string.settings_advanced)) }, navigationIcon = {
             IconButton(onClick = back, modifier = Modifier.size(48.dp)) {
@@ -174,7 +179,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
             }
         })
     }) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxSize().padding(insets).verticalScroll(scroll)
             .padding(top = Space.s, bottom = Space.xl),
             verticalArrangement = Arrangement.spacedBy(Space.xl)) {
             automaticOptions?.let { on ->

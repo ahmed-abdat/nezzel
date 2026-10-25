@@ -79,6 +79,17 @@ class SavedSelectionTest {
         selectedCount(a, "1 selected")
         assertEquals(ToggleableState.Off, row(a, "Family").config.getOrNull(SemanticsProperties.ToggleableState))
     }
+    @Test fun switchingToRunningClearsSavedSelectionAndDoesNotRestoreItOnReturn() = render { a, _, _ ->
+        longPress(a, "Family")
+        selectedCount(a, "1 selected")
+        click(a, context.getString(R.string.dl_tab_running))
+        assertFalse(texts(nodes(a)).contains("1 selected"))
+        assertTrue(texts(nodes(a)).contains(context.getString(R.string.downloads_running_empty)))
+        click(a, context.getString(R.string.dl_tab_saved))
+        assertFalse(texts(nodes(a)).contains("1 selected"))
+        assertEquals(Role.Button, row(a, "Family").config.getOrNull(SemanticsProperties.Role))
+    }
+
     @Test fun selectAllCloseAndBackRestoreOpenBehaviour() = render { a, opened, _ ->
         longPress(a, "Family")
         click(a, context.getString(R.string.saved_select_all))

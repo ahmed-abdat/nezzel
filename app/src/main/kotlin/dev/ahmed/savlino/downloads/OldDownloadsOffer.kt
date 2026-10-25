@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.jobs.NezzelApplication
 import dev.ahmed.savlino.storage.OldDownloads
@@ -50,9 +52,13 @@ fun rememberOldDownloadsOffer(snackbar: SnackbarHostState): OldDownloadsOffer {
     }
     // A grant can be removed in system settings while Nezzel is in the background.
     LaunchedEffect(owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { version++ } }
-    val state by produceState(false to false, old, version) {
-        value = withContext(Dispatchers.IO) { old.offerVisible() to (old.eligible && old.active() == null) }
+    // Restore the known card before the deferred provider check, so returning never inserts it mid-scroll.
+    var lastCard by rememberSaveable { mutableStateOf(false) }
+    var lastCanGrant by rememberSaveable { mutableStateOf(false) }
+    val state by rememberTabResource(lastCard to lastCanGrant, old, version) {
+        withContext(Dispatchers.IO) { old.offerVisible() to (old.eligible && old.active() == null) }
     }
+    SideEffect { lastCard = state.first; lastCanGrant = state.second }
     lateinit var launch: () -> Unit
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         scope.launch {

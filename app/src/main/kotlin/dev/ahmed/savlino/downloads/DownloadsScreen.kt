@@ -41,7 +41,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -63,6 +62,8 @@ import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.AppPreferences
 import java.util.Locale
+import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
+import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.ui.TintedIcon
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
@@ -98,63 +99,15 @@ internal fun rememberStartOrder(jobs: List<DownloadProgress>): List<String> {
 }
 fun runningCount(jobs: List<DownloadProgress>) = jobs.count { !it.terminal || it.awaitingSchedule }
 
+/** Compatibility entry point for existing callers; all drawing lives behind the shared navigation seam. */
 @Composable
 fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: String, updateAvailable: Boolean = false, onNavigate: (String) -> Unit) {
-    val rail = LocalConfiguration.current.screenHeightDp < 480
-    val count = runningCount(jobs)
-    val failed = jobs.any { it.phase == DownloadPhase.FAILED }
-    val settingsLabel = stringResource(R.string.settings_update_accessibility)
-    val label = stringResource(when { count > 0 -> R.string.downloads_running_accessibility; failed -> R.string.downloads_failed_accessibility; else -> R.string.downloads }, NezzelFormat.count(count, language))
-    @Composable fun DestinationIcon(destination: String) {
-        when (destination) {
-            "Home" -> Icon(Icons.Default.Home, null)
-            // A generic dashed ring, never a messaging app's logo or colour (spec 0.5 §5.5).
-            "Statuses" -> Icon(painterResource(R.drawable.ic_status_ring), null)
-            "Settings" -> BadgedBox(badge = {
-                if (updateAvailable) {
-                    val description = stringResource(R.string.update_badge_description)
-                    Badge(Modifier.semantics { contentDescription = description }, containerColor = MaterialTheme.colorScheme.primary)
-                }
-            }) { Icon(Icons.Default.Settings, null) }
-            else -> {
-                // M3 small badge on the icon's top-end corner (BadgedBox mirrors it in RTL): a dot, never a digit pill that
-                // grows with font scale. Primary while downloads run, error after a failure; the item's label carries the count.
-                BadgedBox(badge = {
-                    if (count > 0) Badge(Modifier.offset(x = 4.dp, y = (-2).dp), containerColor = MaterialTheme.colorScheme.primary)
-                    else if (failed) Badge(Modifier.offset(x = 4.dp, y = (-2).dp))
-                }) { Icon(painterResource(R.drawable.ic_download), null) }
-            }
-        }
-    }
-    val destinations = listOf("Home" to R.string.home, "Downloads" to R.string.shortcut_downloads_short, "Statuses" to R.string.statuses_tab, "Settings" to R.string.settings)
-    if (rail) {
-        NavigationRail(modifier = Modifier.testTag("navigation_rail").fillMaxHeight().verticalScroll(rememberScrollState()),
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical)) {
-            destinations.forEach { (destination, text) ->
-                NavigationRailItem(selected = route == destination, onClick = { onNavigate(destination) },
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { if (destination == "Downloads") contentDescription = label else if (destination == "Settings" && updateAvailable) contentDescription = settingsLabel },
-                    icon = { DestinationIcon(destination) }, label = { NavLabel(stringResource(text)) }, alwaysShowLabel = true,
-                    colors = NavigationRailItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer))
-            }
-        }
-    } else {
-        NavigationBar(modifier = Modifier.testTag("navigation_bar"), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-            destinations.forEach { (destination, text) ->
-                NavigationBarItem(selected = route == destination, onClick = { onNavigate(destination) },
-                    modifier = Modifier.semantics { if (destination == "Downloads") contentDescription = label else if (destination == "Settings" && updateAvailable) contentDescription = settingsLabel },
-                    icon = { DestinationIcon(destination) }, label = { NavLabel(stringResource(text)) }, alwaysShowLabel = true,
-                    colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer))
-            }
-        }
-    }
+    dev.ahmed.savlino.ui.nav.NezzelNavigation(
+        dev.ahmed.savlino.ui.nav.TopLevelDestinations, route,
+        dev.ahmed.savlino.ui.nav.NavigationBadges(runningCount(jobs), jobs.any { it.phase == DownloadPhase.FAILED }, updateAvailable, language),
+        onNavigate, {},
+    )
 }
-
-/** Up to two centred lines at large text (the bar's min height lets it grow); only a third line would ellipsize. */
-@Composable
-private fun NavLabel(text: String) = Text(text, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
 
 /** Most rows Home stacks: one per transfer slot. */
 internal const val HOME_STRIP_ROWS = 3
@@ -254,10 +207,10 @@ fun DownloadsScreen(
     val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) })
     val reduced = LocalReducedMotion.current
     val batches = rememberVisibleBatches(playlists)
-    val tabs = showDownloadsTabs(active, batches, warnings.size)
-    var tab by rememberDownloadsTab(jobs, playlists, tabs)
-    val current = if (tabs) tab else DownloadsTab.SAVED
+    var tab by rememberDownloadsTab(jobs, playlists)
+    val current = tab
     val runningState = rememberLazyListState()
+    ScrollOnTabReselect { if (current == DownloadsTab.RUNNING) runningState.scrollToItem(0) else listState.scrollToItem(0) }
     var waitingOpen by rememberSaveable { mutableStateOf(false) }
     val filters = remember(saved) { availableMediaFilters(saved) }
     val effectiveFilter = MediaFilter.valueOf(filterName).takeIf { it in filters } ?: MediaFilter.ALL
@@ -281,8 +234,8 @@ fun DownloadsScreen(
     val filtered = remember(saved, effectiveFilter, query, sort, language) {
         savedLibraryItems(saved, effectiveFilter, query, sort, Locale.forLanguageTag(language))
     }
-    // Changing the filter/search exits selection; hidden files never receive a bulk action.
-    var selectedUris by remember(filterName, query) { mutableStateOf(emptySet<String>()) }
+    // Changing the sub-tab/filter/search exits selection; hidden files never receive a bulk action.
+    var selectedUris by remember(current, filterName, query) { mutableStateOf(emptySet<String>()) }
     val selected = filtered.filter { it.uri.toString() in selectedUris }
     val selecting = selected.isNotEmpty()
     var deleteSelection by remember { mutableStateOf<List<SavedMedia>?>(null) }
@@ -317,11 +270,8 @@ fun DownloadsScreen(
                 else if (saved.isNotEmpty()) IconButton(onClick = { search = true }) { Icon(Icons.Default.Search, stringResource(R.string.saved_search)) }
             }
         }
-        // Only while Downloading has rows; when the last one leaves, the row folds away and the library stays.
-        AnimatedVisibility(tabs && !selecting, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
-            exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.TAB))) {
-            DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language) { tab = it }
-        }
+        // A permanent peer row keeps the list viewport fixed when the last job or warning leaves.
+        DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language) { tab = it }
         // Pinned under the app bar, outside the list: always in view, and free to grow at 200% text.
         AnimatedVisibility(search && saved.isNotEmpty() && current == DownloadsTab.SAVED, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
             exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.FADE_OUT))) {
@@ -337,6 +287,11 @@ fun DownloadsScreen(
                 @Composable fun LazyItemScope.JobItem(job: DownloadProgress) =
                     JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) }, rowMotion(),
                         onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
+                if (active.isEmpty() && batches.isEmpty() && warnings.isEmpty()) {
+                    item(key = "running-empty", contentType = "empty") {
+                        Text(stringResource(R.string.downloads_running_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 // Two or more queued rows fold into one "N waiting" line; one stays a row of its own.
                 val waiting = active.filter { it.queuedOnly }.takeIf { it.size >= 2 }.orEmpty()
                 val (failed, moving) = (active - waiting.toSet()).partition { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
@@ -350,33 +305,33 @@ fun DownloadsScreen(
                     // Severe heat holds downloads to one; say so once, above the rows that wait for it.
                     if (hot && active.any { it.waiting && !it.awaitingSchedule && !it.paused && !it.terminal })
                         item(key = "heat-note") { HeatNote(Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) }
-                    items(moving, key = { "job-${it.jobId}" }) { job -> JobItem(job) }
+                    items(moving, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }
                 batches.forEach { batch ->
                     item(key = "playlist-${batch.id}") {
                         PlaylistBatchCard(batch, language, { onPlaylistAction(batch.id, it) }, busy = batch.id in playlistBusy,
                             modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)))
                     }
-                    items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }) { job -> JobItem(job) }
+                    items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }
-                items(failed, key = { "job-${it.jobId}" }) { job -> JobItem(job) }
+                items(failed, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 if (waiting.isNotEmpty()) {
                     item(key = "waiting-line") {
                         WaitingLine(waiting.size, waitingOpen, language, Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) {
                             waitingOpen = !waitingOpen
                         }
                     }
-                    if (waitingOpen) items(waiting, key = { "job-${it.jobId}" }) { job -> JobItem(job) }
+                    if (waitingOpen) items(waiting, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }
                 // Result check: saved files that need a look (in memory only).
                 if (warnings.isNotEmpty()) {
                     item(key = "warnings-header") { SectionHeader(stringResource(R.string.check_needs_look), error = true) }
-                    items(warnings, key = { "warning-${it.jobId}" }) { warning ->
+                    items(warnings, key = { "warning-${it.jobId}" }, contentType = { "warning" }) { warning ->
                         CheckWarningRow(warning, (libraryLoad as? LibraryLoadState.Ready)?.rows?.firstOrNull { it.uri == warning.uri },
                             { onTryAgain(warning.jobId) }, { onDismissWarning(warning.jobId) }, rowMotion())
                     }
                 }
-            } else LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
+            } else LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize().testTag("saved_list"), state = listState, contentPadding = PaddingValues(Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.item)) {
                 if (libraryLoad !is LibraryLoadState.Ready) item(key = "library-status") { LibraryLoadStatus(libraryLoad, onLibraryRetry) }
                 if (offer.card && !selecting && !search) item(key = "old-downloads") {
                     OldDownloadsCard(offer.show, offer.dismiss, Modifier.animateItem(fadeInSpec = null, placementSpec = easeOut(reduced, 220),
@@ -805,9 +760,9 @@ private fun loadThumbnail(context: android.content.Context, item: SavedMedia): B
 @Composable
 fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
     val context = LocalContext.current
-    val bitmap by produceState<Bitmap?>(null, item.uri) {
+    val bitmap by rememberTabResource<Bitmap?>(null, item.uri) {
         // Audio shows its embedded cover; the music icon stays only when the file has none.
-        if(item.kind != null) value = withContext(Dispatchers.IO) { loadThumbnail(context, item) }
+        if(item.kind != null) withContext(Dispatchers.IO) { loadThumbnail(context, item) } else null
     }
     Surface(modifier.clip(shape), color = if (item.kind == SavedMediaKind.AUDIO) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {

@@ -5,7 +5,8 @@ import dev.ahmed.savlino.update.*
 import dev.ahmed.savlino.storage.SaveDestinations
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import dev.ahmed.savlino.ui.nav.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -37,9 +38,7 @@ import dev.ahmed.savlino.ui.OptionsScreen
 import dev.ahmed.savlino.ui.OptionsState
 import dev.ahmed.savlino.media.ImageSaveState
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
-import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
-import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 
 /** Intake, revision-bound options, and journal-backed progress. */
@@ -62,6 +61,10 @@ fun NezzelApp(
     SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack = links.destination }
     BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack else "Home") }
     val reduced = rememberReducedMotion()
+    val tabStateHolder = rememberSaveableStateHolder()
+    val reselections = remember { TabReselections() }
+    val onReselect = remember(reselections) { { destination: String -> reselections.reselect(destination) } }
+    val onNavigate = remember(links) { { destination: String -> links.navigate(destination) } }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val shareLinks = remember(links.downloads) {
@@ -254,16 +257,10 @@ fun NezzelApp(
         } else if (links.moreFormats && !links.hasPendingShare) {
             OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
         } else {
-            NavigationScaffold(links.destination, jobs, language, links::navigate,
+            NavigationScaffold(links.destination, jobs, language, onNavigate, onReselect = onReselect,
                 snackbarHost = { if (!showOptions) SnackbarHost(snackbar) },
                 updateAvailable = updateState.badge(BuildConfig.VERSION_CODE.toLong())) {
-                // Tabs are peers: fade-through, no travel. The old screen is gone before the new one settles.
-                AnimatedContent(links.destination, contentAlignment = Alignment.TopStart, transitionSpec = {
-                    if (reduced) EnterTransition.None togetherWith ExitTransition.None
-                    else (fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) +
-                        scaleIn(tween(Motion.TAB - 30, 70, Motion.EaseOut), initialScale = .98f)) togetherWith
-                        fadeOut(tween(70, easing = Motion.EaseOut))
-                }, label = "destination") { route ->
+                TabContent(links.destination, reselections, tabStateHolder) { route ->
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks)
@@ -295,15 +292,19 @@ fun NezzelApp(
 @Composable
 internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, language: String,
                                 onNavigate: (String) -> Unit, snackbarHost: @Composable () -> Unit = {},
-                                updateAvailable: Boolean = false, content: @Composable () -> Unit) {
+                                updateAvailable: Boolean = false, onReselect: (String) -> Unit = {},
+                                navigation: @Composable (String, NavigationBadges, (String) -> Unit, (String) -> Unit) -> Unit = { selected, badges, select, reselect ->
+                                    NezzelNavigation(TopLevelDestinations, selected, badges, select, reselect)
+                                }, content: @Composable () -> Unit) {
     val rail = LocalConfiguration.current.screenHeightDp < 480
+    val badges = NavigationBadges(runningCount(jobs), jobs.any { it.phase == DownloadPhase.FAILED }, updateAvailable, language)
     // Protect both physical edges (cutout or three-button navigation, including reverse landscape).
     // Consume once for the row so nested Scaffolds do not apply these horizontal insets again.
     val sideInsets = if (rail) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier
     Row(Modifier.fillMaxSize().then(sideInsets)) {
-        if (rail) DownloadNavigation(route, jobs, language, updateAvailable, onNavigate)
+        if (rail) navigation(route, badges, onNavigate, onReselect)
         Scaffold(modifier = Modifier.weight(1f).fillMaxHeight(), contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = { if (!rail) DownloadNavigation(route, jobs, language, updateAvailable, onNavigate) },
+            bottomBar = { if (!rail) navigation(route, badges, onNavigate, onReselect) },
             snackbarHost = snackbarHost) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { content() }
         }
@@ -316,6 +317,8 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
                        onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit,
                        onRemove: (String) -> Unit, onRetry: (String) -> Unit,
                        onCancel: (String) -> Unit, onPause: (String) -> Unit, onResume: (String) -> Unit) {
+    val scroll = rememberScrollState()
+    ScrollOnTabReselect { scroll.scrollTo(0) }
     // The copied link is offered inline only while nothing else is in front of the person.
     val copiedHost = links.suggestionHost.takeIf {
         links.hasSuggestion && links.destination == "Home" && links.optionsState == dev.ahmed.savlino.ui.OptionsState.Hidden &&
@@ -330,7 +333,7 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
     }) { insets ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(insets).imePadding(), contentAlignment = Alignment.TopCenter) {
             // Short content leaves the privacy line and studio credit at the bottom; long content scrolls them along.
-            Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
+            Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(scroll).heightIn(min = maxHeight)
                 .padding(start = Space.l, end = Space.l, top = Space.l, bottom = Space.xl), verticalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(Space.xl)) {
                 // Title and subtitle are one section child, so the pair sits 4dp apart and 24dp above the field.
