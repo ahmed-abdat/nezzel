@@ -114,7 +114,7 @@ main{overflow-x:clip}
 /* header: glass pill that solidifies */
 .top{position:sticky;top:12px;z-index:30;margin-top:12px}
 .bar{display:flex;align-items:center;gap:10px;padding:8px;padding-inline-start:12px;border-radius:999px;border:1px solid transparent;transition:background .4s,box-shadow .4s,border-color .4s}
-body.scrolled .bar{background:color-mix(in oklab,var(--c-lowest) 80%,transparent);backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);box-shadow:0 10px 30px -14px rgb(var(--ink-sh)/.3);border-color:color-mix(in oklab,var(--outline-v) 55%,transparent)}
+body.scrolled .bar{background:color-mix(in oklab,var(--c-lowest) 95%,transparent);backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);box-shadow:0 10px 30px -14px rgb(var(--ink-sh)/.3);border-color:color-mix(in oklab,var(--outline-v) 55%,transparent)}
 .brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-weight:800;font-size:19px}
 .brand img{width:34px;height:34px;border-radius:10px}
 .bar .sp{flex:1}
@@ -204,16 +204,17 @@ html[lang=fr] h1{font-size:clamp(34px,10.4vw,64px)}
   @media (max-width:959px){
     /* the band covers from the very top, so steps slide under it, not under the header */
     .js .stage{top:0;padding-top:84px;height:var(--band,auto);margin-inline:-16px;background:var(--bg)}
-    .js .stage::after{content:"";position:absolute;inset-inline:0;top:100%;height:36px;background:linear-gradient(var(--bg),transparent);pointer-events:none}
+    .js .stage::after{content:"";position:absolute;inset-inline:0;top:100%;height:20px;background:linear-gradient(var(--bg),transparent);pointer-events:none}
     .js .stage .dots{inset:84px 0 0}
   }
 }
 .dots{position:absolute;inset:-40px -10%;background-image:radial-gradient(var(--dot) 1.3px,transparent 1.6px);background-size:20px 20px;-webkit-mask:radial-gradient(closest-side,#000 40%,transparent);mask:radial-gradient(closest-side,#000 40%,transparent);pointer-events:none}
 .halo{position:absolute;width:min(520px,110%);aspect-ratio:1;top:6%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in oklab,var(--primary-c) 75%,transparent),transparent);filter:blur(10px);opacity:.75;pointer-events:none}
-.fall{position:absolute;inset:-30px 0 30% 0;overflow:hidden;pointer-events:none;-webkit-mask:linear-gradient(#000 70%,transparent);mask:linear-gradient(#000 70%,transparent)}
+.fall{position:absolute;inset:-30px max(0px,calc(50% - 230px)) 30%;overflow:hidden;pointer-events:none;-webkit-mask:linear-gradient(#000 70%,transparent);mask:linear-gradient(#000 70%,transparent)}
 .chip{position:absolute;top:0;display:inline-flex;align-items:center;gap:6px;padding:6px 11px 6px 9px;border-radius:12px;background:var(--c-lowest);color:var(--on-bg);font:700 12.5px/1 system-ui,sans-serif;direction:ltr;box-shadow:0 8px 20px -10px rgb(var(--ink-sh)/.45),0 0 0 1px color-mix(in oklab,var(--outline-v) 60%,transparent);animation:drop var(--t,7s) linear infinite;animation-delay:var(--dl,0s);opacity:0}
 .chip .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
 .chip.a .i{color:var(--tertiary)}
+@media (max-width:599px){.fall{display:none}}
 @keyframes drop{0%{transform:translateY(-40px) rotate(var(--r0,-8deg));opacity:0}12%{opacity:1}70%{opacity:1}100%{transform:translateY(420px) rotate(var(--r1,6deg)) scale(.8);opacity:0}}
 
 /* the live phone */
@@ -344,12 +345,13 @@ html[dir=ltr] h2{letter-spacing:-.035em;line-height:1.08}
 html[dir=ltr] .step h3{letter-spacing:-.03em;line-height:1.1}
 .step p{margin:10px 0 0;color:var(--muted);font-size:clamp(17px,1.6vw,19px);max-width:34ch;text-wrap:pretty}
 @media (prefers-reduced-motion:no-preference){
-  .story.live .step{min-height:max(240px,calc(100svh - var(--band,0px) - 40px))}
-  @media (min-width:960px){.story.live .step{min-height:68svh}}
+  .story.live .step{min-height:max(200px,calc((100svh - var(--band,0px)) * .62));align-content:start}
+  @media (min-width:960px){.story.live .step{min-height:68svh;align-content:center}.story.live .steps{padding-bottom:10svh}}
   .story.live .step:not(.on){opacity:.32}
   .story.live .step.on .n{background:var(--primary);color:var(--on-primary);transform:scale(1.08)}
 }
 .note{margin:8px 0 0;font-size:14px;color:var(--muted);max-width:52ch}
+.step .note{grid-column:2;margin-top:18px}
 
 /* also in Nezzel: one row of plain icon + words, no cards */
 .more h2{font-size:clamp(24px,3vw,32px);max-width:none}
@@ -640,9 +642,8 @@ footer a{color:inherit}
   <ol class="steps">
     <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">انسخ الرابط</h3><p data-i="s1p">انسخ رابط الفيديو من التطبيق الذي تشاهده فيه، أو شاركه مع Nezzel مباشرة</p></li>
     <li class="step" data-step="1"><span class="n">2</span><h3 data-i="s2">اختر الجودة</h3><p data-i="s2p">افتح Nezzel فيعرض الرابط الذي نسخته، ثم اختر من الجودات المتاحة</p></li>
-    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">اضغط تنزيل</h3><p data-i="s3p">يبدأ التنزيل حين تضغط فقط، ويُحفظ في مجلد Nezzel داخل التنزيلات</p></li>
+    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">اضغط تنزيل</h3><p data-i="s3p">يبدأ التنزيل حين تضغط فقط، ويُحفظ في مجلد Nezzel داخل التنزيلات</p><p class="note" data-i="note">عرض توضيحي. الجودات والأحجام الحقيقية يحددها كل موقع، والعلامة ≈ تعني حجمًا تقديريًا</p></li>
   </ol>
-  <p class="note" data-i="note" data-r>عرض توضيحي. الجودات والأحجام الحقيقية يحددها كل موقع، والعلامة ≈ تعني حجمًا تقديريًا</p>
 </section>
 </div>
 
@@ -1125,22 +1126,28 @@ footer a{color:inherit}
     steps.forEach((x, i) => x.classList.toggle("on", i === k - 1));
     enter(BEATS[k].s); resume();
   }
-  // Phone scale and the sticky band height on narrow screens; the line that picks the step.
+  // Phone scale and the sticky band height on narrow screens; then pick the step that is in full view.
   const desk = matchMedia("(min-width: 960px)");
-  let lineIO = null;
+  let band = 0, pending = 0;
   function layout() {
-    const h = demo.offsetHeight, sc = Math.min(1, (desk.matches ? innerHeight - 112 : innerHeight * .5) / h);
-    const band = desk.matches ? 0 : Math.round(84 + h * sc + 18);
+    const h = demo.offsetHeight, sc = Math.min(1, (desk.matches ? innerHeight - 112 : innerHeight * .44) / h);
+    band = desk.matches ? 84 : Math.round(84 + h * sc + 18);
     stage.style.setProperty("--sc", sc.toFixed(3));
-    stage.style.setProperty("--band", band ? band + "px" : "auto"); story.style.setProperty("--band", band + "px");
-    const y = Math.round(desk.matches ? innerHeight * .5 : band + (innerHeight - band) * .3);
-    lineIO?.disconnect();
-    lineIO = new IntersectionObserver(es => es.forEach(e => {
-      const k = +e.target.dataset.step;
-      if (e.isIntersecting) play(k + 1);
-      else if (k === 0 && e.boundingClientRect.top > y) play(0);
-    }), { rootMargin: -y + "px 0px " + -(innerHeight - y - 1) + "px 0px" });
-    steps.forEach(x => lineIO.observe(x));
+    stage.style.setProperty("--band", desk.matches ? "auto" : band + "px"); story.style.setProperty("--band", band + "px");
+    pickStep();
+  }
+  function pickStep() {
+    pending = 0;
+    const vh = innerHeight, zone = vh - band, boxes = steps.map(x => {
+      const r = x.querySelector("h3").getBoundingClientRect(), q = x.querySelector("p:last-child").getBoundingClientRect();
+      return { top: r.top, mid: (r.top + q.bottom) / 2 };
+    });
+    const at = b => desk.matches ? Math.abs(b.mid - vh / 2) : Math.abs(b.top - (band + zone * .22));
+    if (desk.matches ? boxes[0].mid > vh * .8 : boxes[0].top > band + zone * .7) return play(0);
+    if (boxes[2].top < band + 4) return play(3);
+    let k = -1;
+    boxes.forEach((b, i) => { if (b.top >= band + 4 && (k < 0 || at(b) < at(boxes[k]))) k = i; });
+    if (k >= 0) play(k + 1);
   }
 
   // ---------- install walkthrough ----------
@@ -1197,6 +1204,7 @@ footer a{color:inherit}
   if (still) { enter(2); fire("e-pick"); }
   else {
     story.classList.add("live"); layout();
+    addEventListener("scroll", () => { if (!pending) pending = requestAnimationFrame(pickStep); }, { passive: true });
     let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
     splitWords($("#h1"));
   }
