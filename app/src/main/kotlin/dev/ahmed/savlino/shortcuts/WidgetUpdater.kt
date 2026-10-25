@@ -66,7 +66,7 @@ data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int 
                     (if (job.paused) job.percent else job.visiblePercent)?.let { it / 5 * 5 },
                     job.paused, job.waiting || job.awaitingSchedule,
                     job.remainingTransferSeconds?.takeIf { measured && it > 0 }, job.mimeType)
-            }, (visible.size + unfed - 2).coerceAtLeast(0), saved.size,
+            }, (visible.size - 2).coerceAtLeast(0) + unfed, saved.size,
                 saved.sortedByDescending { it.addedSeconds }.take(4).map { WidgetRecent(it) })
         }
 

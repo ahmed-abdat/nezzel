@@ -21,7 +21,7 @@ class PlaylistBatch(val record: BatchRecord, val items: List<BatchItemRecord>) {
     val links get() = items.firstOrNull()?.itemId?.startsWith(BatchStore.LINK_ITEM) == true
     val slowed get() = paused && record.error in setOf(DownloadError.SourceRefused, DownloadError.LoginRequired)
     internal val signature get() = listOf(record.id, record.title, record.state, record.error,
-        items.map { listOf(it.position, it.title, it.state, it.jobId, it.error, it.retryable, it.fallback) })
+        items.map { listOf(it.position, it.title, it.state, it.jobId, it.error, it.retryable, it.hasSource, it.fallback) })
 }
 
 /** SQLite has no invalidation stream. Poll off-main for feeder-only transitions as well as job progress and controls. */

@@ -81,6 +81,17 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     @Synchronized fun containsJob(jobId: String): Boolean = db.query("batch_items", arrayOf("job_id"),
         "job_id=?", arrayOf(jobId), null, null, null, "1").use { it.moveToFirst() }
 
+    /** Whether a retry gave [jobId]'s video a new job id (the automatic fresh one or a person's Retry) and no row still uses it. */
+    @Synchronized fun replaced(jobId: String): Boolean {
+        if (containsJob(jobId)) return false
+        val base = jobId.replace(USER_RETRY, "")
+        return db.query("batch_items", arrayOf("job_id"), "substr(job_id, 1, ?)=?", arrayOf(base.length.toString(), base),
+            null, null, null).use { c ->
+            generateSequence { if (c.moveToNext()) c.getString(0) else null }
+                .any { it == jobId + FRESH_SUFFIX || REPLACEMENT.matches(it.substring(base.length)) }
+        }
+    }
+
     @Synchronized internal fun canRefresh(item: BatchItemRecord): Boolean {
         if (item.itemId.startsWith(LINK_ITEM) || item.jobId.endsWith(FRESH_SUFFIX)) return false
         val batch = get(item.batchId) ?: return false
@@ -211,9 +222,16 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         if (row.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || age >= 2 * LIFETIME_MS) return false
         val eligible = (if (age >= LIFETIME_MS) " AND job_id LIKE '%$FRESH_SUFFIX'" else "") +
             (if (automatic) " AND job_id NOT LIKE '%$FRESH_SUFFIX'" else "")
-        return db.update("batch_items", ContentValues().apply {
-            put("state", BatchItemState.WAITING.name); putNull("error")
-        }, "batch_id=? AND state='FAILED' AND retryable=1 AND source_url IS NOT NULL" + eligible, arrayOf(id)) > 0
+        db.beginTransaction()
+        try {
+            val changed = db.update("batch_items", ContentValues().apply {
+                put("state", BatchItemState.WAITING.name); putNull("error")
+            }, "batch_id=? AND state='FAILED' AND retryable=1 AND source_url IS NOT NULL" + eligible, arrayOf(id)) > 0
+            // Activate with the reservation: death before the caller's own activation must not strand WAITING rows.
+            if (changed) state(id, BatchState.ACTIVE)
+            db.setTransactionSuccessful()
+            return changed
+        } finally { db.endTransaction() }
     }
 
     /**
@@ -240,6 +258,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
                         "(SELECT 1 FROM jobs WHERE job_id=? AND (stage!='FAILED' OR pending_uri IS NOT NULL))",
                         arrayOf(item.batchId, item.position.toString(), item.jobId, item.jobId)) == 1
                 }.map { it.jobId }
+            if (revived || replaced.isNotEmpty()) state(id, BatchState.ACTIVE)
             db.setTransactionSuccessful()
             return (revived || replaced.isNotEmpty()) to replaced
         } finally { db.endTransaction() }
@@ -303,6 +322,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         internal const val LINK_ITEM = "link-"
         internal const val FRESH_SUFFIX = "-fresh"
         private val USER_RETRY = Regex("(-u\\d+)?(-fresh)?$")
+        private val REPLACEMENT = Regex("-u\\d+-fresh")
         internal fun createTables(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE IF NOT EXISTS batches (
                 batch_id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, preset TEXT NOT NULL,

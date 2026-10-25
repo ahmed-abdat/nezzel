@@ -66,6 +66,9 @@ class WidgetTest {
         val state = WidgetUiState.from(listOf(job("a"), job("b")), unfed = 15)
         assertEquals(listOf("b", "a"), state.jobs.map { it.id })
         assertEquals(15, state.more)
+        // One row shown: every unfed video is in the rest, none hides behind the empty second row.
+        assertEquals(15, WidgetUiState.from(listOf(job("a")), unfed = 15).more)
+        assertEquals(1, WidgetUiState.from(listOf(job("a")), unfed = 1).more)
     }
 
     @Test fun runningComesBeforePausedQueuedAndFailedAndFinishedFilesLeaveTheRows() {

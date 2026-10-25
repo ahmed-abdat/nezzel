@@ -270,6 +270,24 @@ class BatchStoreTest {
         assertTrue(batches.create("p", "P", Preset.BEST, batchItems(1)))
         assertFalse(PlaylistBatch(batches.get("p")!!, batches.items("p")).links)
     }
+
+    // Death right after a person's Retry must leave a batch the feeder still feeds, and recovery must know the old job.
+    @Test fun aPersonsRetryActivatesTheBatchWithItsReservationAndRecoveryKnowsTheReplacedJob() {
+        batches.create("r", "R", Preset.BEST, batchItems(1))
+        val failed = batches.items("r").single()
+        assertTrue(batches.finish(failed, BatchItemState.FAILED, DownloadError.Failed, retryable = false))
+        batches.finishIfIdle("r")
+        assertEquals(BatchState.COMPLETED, batches.get("r")!!.state)
+        val (changed, replaced) = batches.requestUserRetries("r")
+        assertTrue(changed)
+        assertEquals(listOf(failed.jobId), replaced)
+        assertEquals(BatchState.ACTIVE, batches.get("r")!!.state)
+        val retried = batches.items("r").single()
+        assertEquals(BatchItemState.WAITING, retried.state)
+        assertTrue(batches.replaced(failed.jobId))
+        assertFalse(batches.replaced(retried.jobId))
+        assertFalse(batches.replaced(failed.jobId + "9"))
+    }
 }
 
 internal fun batchItems(count: Int) = (0 until count).map {

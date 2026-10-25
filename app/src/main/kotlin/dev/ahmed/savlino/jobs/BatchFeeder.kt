@@ -124,6 +124,9 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 batches.scrubExpired()
                 applyControls()
                 if (batches.get(batch.id)?.state != BatchState.ACTIVE || activeCount() >= lookahead()) break
+                // Expiry or a control may have rewritten this row while it was inspected: never enqueue for a stale row.
+                val current = batches.items(batch.id).firstOrNull { it.position == item.position }
+                if (current?.state != BatchItemState.WAITING || current.jobId != item.jobId) continue
                 when (result) {
                     // A link batch says why a photo post is skipped: photos are saved from the single-link sheet only.
                     is InspectResult.Failure -> if (result.error == DownloadError.NoVideo && item.itemId.startsWith(BatchStore.LINK_ITEM))
@@ -157,7 +160,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 }
                 applyControls()
             }
-            batches.finishIfIdle(batch.id)
+            // A paused batch completes in reconcile, which keeps it paused while a fresh attempt waits for Resume.
+            if (batches.get(batch.id)?.state == BatchState.ACTIVE) batches.finishIfIdle(batch.id)
         }
     } }
 

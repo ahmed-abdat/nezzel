@@ -27,7 +27,7 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
         // Finish known work first. A provider/cleanup failure leaves its durable boundary for next time.
         for (row in store.all()) {
             // Death may separate the atomic fresh-id reservation from old-row/progress cleanup.
-            if (row.stage == JobStage.FAILED && BatchStore(store).containsJob(row.jobId + BatchStore.FRESH_SUFFIX)) {
+            if (row.stage == JobStage.FAILED && BatchStore(store).replaced(row.jobId)) {
                 store.remove(row.jobId)
                 continue
             }

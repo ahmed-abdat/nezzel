@@ -126,6 +126,7 @@ fun DownloadsScreen(
     canShowFiles: (SavedMedia) -> Boolean = { true },
     onBatch: (BatchAction) -> Unit = {}, batchBusy: Boolean = false,
     playlists: List<dev.ahmed.savlino.jobs.PlaylistBatch> = emptyList(),
+    playlistsLoaded: Boolean = true,
     onPlaylistAction: (String, PlaylistBatchAction) -> Unit = { _, _ -> }, playlistBusy: Set<String> = emptySet(),
     warnings: List<CheckWarning> = emptyList(), onTryAgain: (String) -> Unit = {}, onDismissWarning: (String) -> Unit = {},
     renameRepository: SavedMediaRepository? = null,
@@ -201,7 +202,7 @@ fun DownloadsScreen(
     }
     val lastSheet = remember(sheetBatchId) { arrayOfNulls<dev.ahmed.savlino.jobs.PlaylistBatch>(1) }
     val sheetBatch = sheetBatchId?.let { id -> playlists.firstOrNull { it.id == id }?.also { lastSheet[0] = it } ?: lastSheet[0] }
-    if (sheetBatchId != null && sheetBatch == null) SideEffect { sheetBatchId = null; sheetFocus = null }
+    if (sheetBatchId != null && sheetBatch == null && playlistsLoaded) SideEffect { sheetBatchId = null; sheetFocus = null }
     sheetBatch?.let { batch ->
         PlaylistVideosSheet(batch, jobs, language, { onPlaylistAction(batch.id, it) }, { sheetBatchId = null; sheetFocus = null },
             busy = batch.id in playlistBusy, focusJob = sheetFocus, onRetryVideo = { onPlaylistVideoRetry(batch.id, it) })

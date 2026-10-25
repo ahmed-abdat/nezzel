@@ -118,9 +118,11 @@ fun NezzelApp(
     val app = context.applicationContext as? NezzelApplication
     val pause: (String) -> Unit = { id -> scope.launch { app?.let { DownloadControls.pause(context, it, id) } } }
     val resume: (String) -> Unit = { id -> scope.launch { app?.let { DownloadControls.resume(context, it, id) } } }
-    val playlists by remember(app) {
+    // Null until the first snapshot: a restored playlist sheet must not close on the not-yet-loaded empty list.
+    val loadedPlaylists by remember(app) {
         app?.playlistBatches ?: kotlinx.coroutines.flow.flowOf(emptyList())
-    }.collectAsState(initial = emptyList())
+    }.collectAsState(initial = null)
+    val playlists = loadedPlaylists.orEmpty()
     var playlistBusy by remember { mutableStateOf(emptySet<String>()) }
     // A Home card of a playlist video opens Downloads at that playlist's sheet (Downloads finds the batch, then clears it).
     var playlistJob by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
@@ -297,7 +299,7 @@ fun NezzelApp(
                             retry, pause, resume, libraryLoad = library.load, onLibraryRetry = library.onRetry,
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
                             canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy,
-                            playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy, onPlaylistVideoRetry = playlistVideoRetry,
+                            playlists = playlists, playlistsLoaded = loadedPlaylists != null, onPlaylistAction = playlistAction, playlistBusy = playlistBusy, onPlaylistVideoRetry = playlistVideoRetry,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
                             openSavedUri = openSavedUri, onSavedOpened = onSavedOpened,
                             openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null })
