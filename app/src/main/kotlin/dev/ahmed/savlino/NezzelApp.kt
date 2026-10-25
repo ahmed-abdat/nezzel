@@ -329,6 +329,15 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
     val firstRun = jobs.isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty()
     // Recents read the jobs in snapshots, so a progress tick redraws one card, not Home.
     val latestJobs = rememberUpdatedState(jobs)
+    // The coordinator drops a job from its list the moment it completes. Home keeps the last few completions, so a job's
+    // card knows the file it became and hands its slot to that file instead of leaving and sliding the row.
+    val completedJobs = remember { mutableStateOf(emptyList<DownloadProgress>()) }
+    LaunchedEffect(links.downloads) {
+        links.downloads?.completed?.collect { job ->
+            completedJobs.value = (completedJobs.value.filterNot { it.jobId == job.jobId } + job).takeLast(dev.ahmed.savlino.downloads.HOME_JOB_CARDS)
+        }
+    }
+    val homeJobs = { latestJobs.value.let { live -> live + completedJobs.value.filter { done -> live.none { it.jobId == done.jobId } } } }
     val reduced = LocalReducedMotion.current
     Scaffold(snackbarHost = {
         if (links.invalidShare) {
@@ -358,7 +367,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                                     Modifier.fillMaxWidth().height(heroHeight))
                             } else {
                                 // A download is the row's first card, where its file will land: nothing above or below moves.
-                                HomeRecents(library.media, language, library.open, { latestJobs.value }, { links.navigate("Downloads") }) {
+                                HomeRecents(library.media, language, library.open, homeJobs, { links.navigate("Downloads") }) {
                                     links.navigate("Downloads")
                                 }
                             }
