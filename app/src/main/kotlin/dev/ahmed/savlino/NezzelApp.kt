@@ -322,8 +322,9 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
         links.hasSuggestion && links.destination == "Home" && links.optionsState == dev.ahmed.savlino.ui.OptionsState.Hidden &&
             !links.hasPendingNotificationChoice
     }
-    // First run: nothing saved or running yet, so the page says what Nezzel is for.
-    val firstRun = jobs.isEmpty() && library.media.isEmpty()
+    // First run: the library loaded and nothing is saved or running yet, so the page says what Nezzel is for.
+    // While loading or after a failed query the saved list is unknown, not empty.
+    val firstRun = jobs.isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty()
     Scaffold(snackbarHost = {
         if (links.invalidShare) {
             Snackbar(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, action = {
@@ -334,7 +335,8 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
         Column(Modifier.fillMaxSize().padding(insets).imePadding(), horizontalAlignment = Alignment.CenterHorizontally) {
             BoxWithConstraints(Modifier.weight(1f).widthIn(max = 720.dp).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 // Short content keeps the first-run words just above the dock; long content scrolls.
-                val heroHeight = (maxHeight * .5f).coerceIn(200.dp, 440.dp)
+                // Large text takes its room from the decorative logos, not from the words.
+                val heroHeight = (maxHeight * .5f / LocalDensity.current.fontScale.coerceAtLeast(1f)).coerceIn(180.dp, 440.dp)
                 Column(Modifier.fillMaxWidth().verticalScroll(scroll).heightIn(min = maxHeight).padding(bottom = Space.l),
                     verticalArrangement = Arrangement.SpaceBetween) {
                     Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {

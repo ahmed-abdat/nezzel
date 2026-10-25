@@ -90,15 +90,18 @@ private object HomeFixtures {
 /** The real Home + T1 bar, as NezzelApp wires them, with fixture rows instead of the journal and MediaStore. */
 @Composable
 private fun HomeShell(lang: String, dark: Boolean, withDownloads: Boolean, copied: Boolean, route: String, onRoute: (String) -> Unit = {},
-                      onPaste: () -> Unit = {}) {
-    val vm = remember { LinkViewModel(SavedStateHandle()).apply {
+                      onPaste: () -> Unit = {}, load: LibraryLoadState? = null, fontScale: Float = 1f) {
+    // The engine is shown as available (the real-world look); automatic options stay off, so nothing is inspected.
+    val vm = remember { LinkViewModel(SavedStateHandle(), engine = dev.ahmed.savlino.engine.FakeEngine()).apply {
         automaticOptions = false
         if (copied) suggest(resumed = true, focused = true, foreground = true) { "https://youtube.com/watch?v=aqz-KE-bpKQ" }
     } }
     val media = if (withDownloads) HomeFixtures.library else emptyList()
     val jobs = if (withDownloads) listOf(HomeFixtures.running) else emptyList()
-    val library = remember(media) { LibraryState(LibraryLoadState.Ready(media), {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
-    CompositionLocalProvider(LocalLayoutDirection provides if (lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
+    val library = remember(media) { LibraryState(load ?: LibraryLoadState.Ready(media), {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    CompositionLocalProvider(LocalLayoutDirection provides if (lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr,
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
         NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
             NavigationScaffold(route, jobs, lang, onRoute, updateAvailable = withDownloads) {
                 TabContent(route) { r ->
@@ -147,6 +150,16 @@ class HomeRedesignTest {
             compose.onNodeWithText(context.getString(R.string.home_hero_title)).assertIsDisplayed()
             compose.onNodeWithText(context.getString(R.string.home_hero_sites)).assertExists()
             compose.onAllNodesWithText(context.getString(R.string.recent_files)).assertCountEquals(0)
+        }
+    }
+
+    @Test fun loadingOrFailedLibraryWithNoJobsIsNotFirstRun() {
+        val context = RuntimeEnvironment.getApplication()
+        for (load in listOf(LibraryLoadState.Loading(), LibraryLoadState.Error())) {
+            show { HomeShell("en", false, withDownloads = false, copied = false, route = "Home", load = load) }.use {
+                compose.onAllNodesWithText(context.getString(R.string.home_hero_title)).assertCountEquals(0)
+                compose.onAllNodesWithText(context.getString(R.string.home_hero_sites)).assertCountEquals(0)
+            }
         }
     }
 
@@ -206,6 +219,14 @@ class HomeRedesignTest {
                 controller.get().capture(File(dir, "$name-$lang-${if (dark) "dark" else "light"}.png"))
             } finally { controller.pause().stop().destroy() }
         }
+        // Large text (1.3x) on a 360dp phone: the hero and its words still fit above the dock.
+        RuntimeEnvironment.setQualifiers("en-w360dp-h780dp-notnight-xxhdpi")
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            controller.get().setContent { HomeShell("en", false, false, false, "Home", fontScale = 1.3f) }
+            repeat(8) { Snapshot.sendApplyNotifications(); compose.mainClock.advanceTimeBy(250); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250)) }
+            controller.get().capture(File(dir, "first-run-en-light-1.3x.png"))
+        } finally { controller.pause().stop().destroy() }
     }
 
     /** Home → Downloads → Settings → Home on a paused clock, one frame every 10 ms (frames/<lang>-<theme>/f-NNNN.png). */
