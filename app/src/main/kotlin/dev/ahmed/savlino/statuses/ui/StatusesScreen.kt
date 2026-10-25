@@ -14,7 +14,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -54,6 +56,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import dev.ahmed.savlino.ui.nav.LocalTabActive
+import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
+import dev.ahmed.savlino.ui.nav.rememberTabResource
+import kotlinx.coroutines.flow.collectLatest
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.downloads.ScreenHeader
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -74,9 +80,14 @@ import dev.ahmed.savlino.viewer.viewerStart
 fun rememberStatusesState(library: StatusLibrary?): StatusesState {
     val scope = rememberCoroutineScope()
     // The opened account survives rotation and process death; the first load drops it if its folder is gone
-    val saver = Saver<StatusesState, String>(
-        save = { state -> state.account?.let { "${it.accountIndex}/${it.packageName}" } },
-        restore = { key -> StatusesState(library, scope, key.split('/', limit = 2).let { (index, pkg) -> index.toIntOrNull()?.let { StatusSource(pkg, it) } }) },
+    val saver = Saver<StatusesState, List<String>>(
+        save = { state -> listOf(state.account?.let { "${it.accountIndex}/${it.packageName}" }.orEmpty(), state.filter.name, state.hideSaved.toString()) },
+        restore = { saved ->
+            val opened = saved[0].takeIf { it.isNotEmpty() }?.split('/', limit = 2)?.let { (index, pkg) ->
+                index.toIntOrNull()?.let { StatusSource(pkg, it) }
+            }
+            StatusesState(library, scope, opened).apply { filter = StatusFilter.valueOf(saved[1]); hideSaved = saved[2].toBoolean() }
+        },
     )
     return rememberSaveable(library, saver = saver) { StatusesState(library, scope) }
 }
@@ -96,7 +107,12 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
         library?.let { try { picker.launch(it.grantIntent()) } catch (_: ActivityNotFoundException) { } }
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(state, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { state.refresh() } }
+    val active = LocalTabActive.current
+    LaunchedEffect(state, lifecycle, active) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            snapshotFlow { active.value }.collectLatest { if (it) state.refresh() }
+        }
+    }
     LaunchedEffect(state) {
         state.events.collect { event ->
             snackbar.currentSnackbarData?.dismiss()
@@ -160,7 +176,9 @@ private fun RingMark() {
 
 @Composable
 private fun CenteredColumn(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+    val scroll = rememberScrollState()
+    ScrollOnTabReselect { scroll.scrollTo(0) }
+    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(scroll)
         .padding(horizontal = Space.gutter, vertical = Space.l), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Space.l), content = content)
 }
@@ -224,7 +242,9 @@ private fun AppRow(app: StatusApp, media: StatusMedia) {
 @Composable
 private fun StatusGrid(state: StatusesState, media: StatusMedia, language: String) {
     val items = state.visible
-    LazyVerticalGrid(GridCells.Fixed(3), Modifier.widthIn(max = 720.dp).fillMaxSize(),
+    val scroll = rememberLazyGridState()
+    ScrollOnTabReselect { scroll.scrollToItem(0) }
+    LazyVerticalGrid(GridCells.Fixed(3), Modifier.widthIn(max = 720.dp).fillMaxSize(), state = scroll,
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.l),
         horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
         if (state.showFilters || state.showHideSaved) item(key = "chips", span = { GridItemSpan(maxLineSpan) }) {
@@ -247,7 +267,7 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
             }
         }
-        items(items, key = { it.uri.toString() }) { item ->
+        items(items, key = { it.uri.toString() }, contentType = { "status" }) { item ->
             StatusTile(item, media, state.selecting, item.uri in state.selection,
                 onClick = { if (state.selecting) state.toggle(item) else state.openPreview(item) }, onLongClick = { state.toggle(item) })
         }
@@ -268,7 +288,7 @@ private fun appLabel(source: StatusSource, access: StatusAccess.Ready, language:
 
 @Composable
 private fun AppIcon(packageName: String, media: StatusMedia, size: Dp) {
-    val icon by produceState<Bitmap?>(null, packageName) { value = media.appIcon(packageName) }
+    val icon by rememberTabResource<Bitmap?>(null, packageName) { media.appIcon(packageName) }
     val loaded = icon
     if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.size(size))
     else Surface(Modifier.size(size), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {}
@@ -277,8 +297,10 @@ private fun AppIcon(packageName: String, media: StatusMedia, size: Dp) {
 /** The tab's first screen with several accounts: one open section each (icon, counts, newest few statuses); space alone separates them. */
 @Composable
 private fun AccountList(state: StatusesState, access: StatusAccess.Ready, media: StatusMedia, language: String) {
-    LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), contentPadding = PaddingValues(bottom = Space.l)) {
-        items(state.accounts, key = { "${it.source.packageName}/${it.source.accountIndex}" }) { summary ->
+    val scroll = rememberLazyListState()
+    ScrollOnTabReselect { scroll.scrollToItem(0) }
+    LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = scroll, contentPadding = PaddingValues(bottom = Space.l)) {
+        items(state.accounts, key = { "${it.source.packageName}/${it.source.accountIndex}" }, contentType = { "account" }) { summary ->
             AccountSection(summary, access, media, language) { state.open(summary.source) }
         }
     }
@@ -323,7 +345,7 @@ private fun AccountSection(summary: AccountSummary, access: StatusAccess.Ready, 
 /** A small square of the newest statuses; the last one carries "+N" when more wait inside. */
 @Composable
 private fun PreviewThumb(item: StatusItem, media: StatusMedia, more: Int?, language: String) {
-    val thumb by produceState<Bitmap?>(null, item.uri) { value = media.thumbnail(item, 240) }
+    val thumb by rememberTabResource<Bitmap?>(null, item.uri) { media.thumbnail(item, 240) }
     Surface(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
             val loaded = thumb
@@ -372,7 +394,7 @@ private fun Chip(selected: Boolean, label: String, onClick: () -> Unit) {
 
 @Composable
 private fun rememberDuration(item: StatusItem, media: StatusMedia): Long? =
-    produceState<Long?>(null, item.uri) { if (item.isVideo) value = media.durationMillis(item) }.value
+    rememberTabResource<Long?>(null, item.uri) { if (item.isVideo) media.durationMillis(item) else null }.value
 
 /** "Video, 0:15, saved": kind, duration when known, then the marks. */
 @Composable
@@ -386,7 +408,7 @@ private fun describe(item: StatusItem, duration: Long?): String = listOfNotNull(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val thumb by produceState<Bitmap?>(null, item.uri) { value = media.thumbnail(item, 320) }
+    val thumb by rememberTabResource<Bitmap?>(null, item.uri) { media.thumbnail(item, 320) }
     val duration = rememberDuration(item, media)
     val description = describe(item, duration)
     val shape = MaterialTheme.shapes.small

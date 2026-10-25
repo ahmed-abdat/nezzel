@@ -123,6 +123,12 @@ class NavigationLayoutTest {
                 if (rail) item.performScrollTo()
                 item.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 item.performClick().assertIsSelected()
+                val semantics = item.fetchSemanticsNode().config
+                assertEquals(Role.Tab, semantics[SemanticsProperties.Role])
+                val position = semantics[SemanticsProperties.CollectionItemInfo]
+                val index = listOf("Home", "Downloads", "Statuses", "Settings").indexOf(destination)
+                assertEquals(if (rail) index else 0, position.rowIndex)
+                assertEquals(if (rail) 0 else index, position.columnIndex)
                 compose.runOnIdle { assertEquals(destination, route) }
             }
             // Four labels, none ellipsized: each keeps its full text on screen (spec T5: icon-only is not allowed).

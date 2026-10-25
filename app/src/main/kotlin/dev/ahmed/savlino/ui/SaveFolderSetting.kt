@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import dev.ahmed.savlino.ui.nav.LocalTabActive
+import kotlinx.coroutines.flow.collectLatest
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.storage.SaveDestination
@@ -53,7 +55,12 @@ internal fun SaveFolderSetting() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) choose(uri)
     }
-    LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { refresh() } }
+    val active = LocalTabActive.current
+    LaunchedEffect(lifecycle, active) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            snapshotFlow { active.value }.collectLatest { if (it) refresh() }
+        }
+    }
     // Emits rows straight into the Settings group: the folder, then a reset row only for a custom folder.
     SettingsNavRow(stringResource(R.string.change_save_folder), R.drawable.ic_ms_folder, body = NezzelFormat.isolate(name),
         note = when {

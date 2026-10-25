@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -53,6 +54,41 @@ class MediaViewerTest {
         page(R.string.viewer_image_n, 3).assertIsDisplayed()
         compose.onNodeWithContentDescription(activity.getString(R.string.share_file)).performClick()
         assertEquals(items[2], shared.single())
+    }
+
+    @Test fun automaticThumbnailWaitsForTheTabToSettle() {
+        val active = mutableStateOf(false)
+        val loaded = mutableListOf<Uri>()
+        val source = MediaPictures { uri, _, _ -> loaded += uri; Bitmap.createBitmap(40, 80, Bitmap.Config.ARGB_8888) }
+        activity.setContent {
+            NezzelTheme(ThemePref.Light, false) {
+                CompositionLocalProvider(dev.ahmed.savlino.ui.nav.LocalTabActive provides active, LocalMediaPictures provides source) {
+                    rememberMediaThumbnail(items.first().uri, dev.ahmed.savlino.ui.ThumbnailKind.IMAGE, 360)
+                }
+            }
+        }
+        compose.waitForIdle()
+        assertTrue(loaded.isEmpty())
+        compose.runOnIdle { active.value = true }
+        compose.waitForIdle()
+        assertEquals(listOf(items.first().uri), loaded)
+    }
+
+    @Test fun explicitViewerLoadsTheFullPictureWhileItsParentTabIsTransitioning() {
+        val loaded = mutableListOf<Uri>()
+        activity.setContent {
+            NezzelTheme(ThemePref.Light, false) {
+                CompositionLocalProvider(
+                    dev.ahmed.savlino.ui.nav.LocalTabActive provides remember { mutableStateOf(false) },
+                    LocalMediaPictures provides MediaPictures { uri, _, _ ->
+                        loaded += uri
+                        Bitmap.createBitmap(40, 80, Bitmap.Config.ARGB_8888)
+                    },
+                ) { MediaViewer(items.take(1), 0, "en", {}, onShare = {}, onOpenWith = {}) }
+            }
+        }
+        compose.waitForIdle()
+        assertTrue("Explicit viewer must load even while automatic tab IO is paused", items.first().uri in loaded)
     }
 
     @Test fun swipeTurnsThePageUnlessTheImageIsZoomed() {

@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.jobs.*
@@ -214,12 +215,13 @@ val LocalJobArtwork = staticCompositionLocalOf<suspend (String) -> Bitmap?> { { 
 private fun rememberJobArtwork(jobId: String, settled: Boolean): ImageBitmap? {
     val load = LocalJobArtwork.current
     // A row can show before its preview is saved (playlist items, a quick confirm): an active job looks again briefly.
-    return produceState<ImageBitmap?>(null, jobId, settled, load) {
+    return rememberTabResource<ImageBitmap?>(null, jobId, settled, load) {
         for (wait in ARTWORK_RETRY_MS) {
             delay(wait)
-            load(jobId)?.let { value = it.asImageBitmap(); return@produceState }
-            if (settled) return@produceState
+            load(jobId)?.let { return@rememberTabResource it.asImageBitmap() }
+            if (settled) break
         }
+        null
     }.value
 }
 

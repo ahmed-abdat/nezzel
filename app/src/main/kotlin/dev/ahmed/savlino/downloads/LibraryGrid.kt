@@ -40,7 +40,7 @@ import dev.ahmed.savlino.ui.ThumbnailKind
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.viewer.MediaViewer
 import dev.ahmed.savlino.viewer.ViewerItem
-import dev.ahmed.savlino.viewer.rememberMediaPicture
+import dev.ahmed.savlino.viewer.rememberMediaThumbnail
 import dev.ahmed.savlino.viewer.viewerStart
 
 /** One line of the grid: up to three square tiles. Audio is a tile too (its cover, or a music note), so the grid stays one look. */
@@ -75,9 +75,9 @@ internal fun LibraryViewToggle(view: LibraryView) = IconButton(onClick = view::t
 internal fun LazyListScope.savedEntries(entries: List<SavedMedia>, grid: Boolean, language: String,
     selecting: Boolean, selectedUris: Set<String>, onOpen: (SavedMedia) -> Unit, onSelect: (SavedMedia) -> Unit, onToggle: (SavedMedia) -> Unit,
     row: @Composable LazyItemScope.(SavedMedia) -> Unit) {
-    if (!grid) { items(entries.size, key = { entries[it].uri.toString() }) { row(entries[it]) }; return }
+    if (!grid) { items(entries.size, key = { entries[it].uri.toString() }, contentType = { "saved-row" }) { row(entries[it]) }; return }
     val lines = gridLines(entries)
-    items(lines.size, key = { lines[it].key }) { index ->
+    items(lines.size, key = { lines[it].key }, contentType = { "saved-grid-line" }) { index ->
         val line = lines[index]
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.item)) {
             line.items.forEach { item ->
@@ -96,7 +96,7 @@ private fun GridTile(item: SavedMedia, language: String, selecting: Boolean, sel
                      onClick: () -> Unit, onLongClick: () -> Unit) {
     val video = item.kind == SavedMediaKind.VIDEO
     val audio = item.kind == SavedMediaKind.AUDIO
-    val picture = rememberMediaPicture(item.uri, when (item.kind) {
+    val picture = rememberMediaThumbnail(item.uri, when (item.kind) {
         SavedMediaKind.VIDEO -> ThumbnailKind.VIDEO; SavedMediaKind.AUDIO -> ThumbnailKind.AUDIO; else -> ThumbnailKind.IMAGE }, 360)
     val description = "${NezzelFormat.firstStrong(item.displayName)}${stringResource(R.string.separator)}${mediaMeta(item, language)}"
     val selectedState = stringResource(if (selected) R.string.saved_selected_state else R.string.saved_unselected_state)
