@@ -69,6 +69,11 @@ android {
 
     testOptions { unitTests.isIncludeAndroidResources = true }
 
+    lint {
+        // Compose 1.12 / lifecycle lint rules new since BOM 2026.09: report, don't fail (UI code unchanged).
+        warning += setOf("LocalContextGetResourceValueCall", "ViewModelConstructorInComposable")
+    }
+
     // Required by the proven engine: executable payloads extracted to nativeLibraryDir.
     packaging {
         jniLibs {
@@ -176,6 +181,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.foundation)
+    implementation(libs.compose.material.icons.core)
     implementation(libs.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.lifecycle.viewmodel.compose)

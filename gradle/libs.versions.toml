@@ -2,7 +2,7 @@
 agp = "9.1.1"
 kotlin = "2.4.21"
 coroutines = "1.10.2"
-compose-bom = "2025.06.01"
+compose-bom = "2026.09.00"
 activity-compose = "1.10.1"
 junit = "4.13.2"
 androidx-test-runner = "1.6.2"
@@ -46,6 +46,7 @@ jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
