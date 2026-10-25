@@ -110,7 +110,9 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
     val active = LocalTabActive.current
     LaunchedEffect(state, lifecycle, active) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            snapshotFlow { active.value }.collectLatest { if (it) state.refresh() }
+            // Every resume rescans; a quick return to the tab keeps what it shows unless the scan is a minute old.
+            var resumed = true
+            snapshotFlow { active.value }.collectLatest { if (it && (resumed || state.stale())) { resumed = false; state.refresh() } }
         }
     }
     LaunchedEffect(state) {

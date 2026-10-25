@@ -834,12 +834,21 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     val openLabel = stringResource(R.string.open_file)
     val recent = remember(media) { media.take(RECENT_ROW) }
     val earlier = remember(media) { media.drop(RECENT_ROW).take(EARLIER_ROWS) }
+    // A finished download lands at index 0, and LazyRow keeps the old first card anchored. If the row was at its
+    // start, show the new one. Scroll state is read only when the first key changes, so scrolling never recomposes.
+    val rowState = rememberLazyListState()
+    val firstKey = recent.first().uri
+    val shownFirst = remember { arrayOf(firstKey) }
+    if (shownFirst[0] != firstKey) {
+        if (rowState.firstVisibleItemIndex == 0 && rowState.firstVisibleItemScrollOffset == 0) rowState.requestScrollToItem(0)
+        shownFirst[0] = firstKey
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
         Row(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.xs).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.recent_files), Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = onSeeAll, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.see_all)) }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
             items(recent, key = { it.uri.toString() }) { item ->
                 Column(Modifier.width(196.dp).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
                     .clickable(onClickLabel = openLabel) { onOpen(item) }, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {

@@ -90,11 +90,16 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
     val selecting get() = selection.isNotEmpty()
     val selectedItems get() = ready?.items.orEmpty().filter { it.uri in selection }
 
+    private var loadedAt = Long.MIN_VALUE
+
+    fun stale(now: Long = android.os.SystemClock.elapsedRealtime()) = loadedAt == Long.MIN_VALUE || now - loadedAt > STALE_MS
+
     fun refresh() {
         val library = library ?: return
         loading?.cancel()
         loading = scope.launch {
             val loaded = library.load()
+            loadedAt = android.os.SystemClock.elapsedRealtime()
             access = loaded
             // Lost access or a vanished folder closes the account, so a later grant never reopens it untapped
             if (loaded !is StatusAccess.Ready || account !in loaded.sources) account = null
@@ -153,3 +158,6 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
         }
     }
 }
+
+/** A quick return to the tab within this window shows the last scan instead of rescanning. */
+private const val STALE_MS = 60_000L

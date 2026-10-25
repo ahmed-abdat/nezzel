@@ -65,7 +65,7 @@ class TabContentTest {
         }
     }
 
-    @Test fun reducedMotionDisposesOldTabWithoutClockAdvance() {
+    @Test fun reducedMotionHidesOldTabWithoutClockAdvance() {
         var route by mutableStateOf("Home")
         val present = mutableSetOf<String>()
         render(reduced = true) {
@@ -78,7 +78,53 @@ class TabContentTest {
             compose.runOnIdle { route = "Settings"; androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
-            compose.runOnIdle { assertEquals(setOf("Settings"), present) }
+            // The old tab stays composed for a cheap return, but is gone from the screen and from TalkBack.
+            compose.runOnIdle { assertEquals(setOf("Home", "Settings"), present) }
+            compose.onNodeWithText("Settings").assertIsDisplayed()
+            compose.onAllNodesWithText("Home").assertCountEquals(0)
+        }
+    }
+
+    @Test fun returningToATabReusesItsCompositionInsteadOfComposingTheScreenAgain() {
+        var route by mutableStateOf("Home")
+        val entered = mutableMapOf<String, Int>()
+        render {
+            TabContent(route) { destination ->
+                DisposableEffect(destination) { entered[destination] = (entered[destination] ?: 0) + 1; onDispose { } }
+                Text(destination)
+            }
+        }.use {
+            for (destination in listOf("Downloads", "Home", "Downloads", "Settings", "Downloads")) {
+                compose.runOnIdle { route = destination }
+                compose.waitForIdle()
+                compose.onNodeWithText(destination).assertIsDisplayed()
+            }
+            compose.runOnIdle { assertEquals(mapOf("Home" to 1, "Downloads" to 1, "Settings" to 1), entered) }
+        }
+    }
+
+    @Test fun hiddenTabsDoNotHandleBack() {
+        var route by mutableStateOf("Downloads")
+        var downloadsBacks = 0
+        render {
+            TabContent(route) { destination ->
+                if (destination == "Downloads") androidx.activity.compose.BackHandler { downloadsBacks++ }
+                Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { activity.onBackPressedDispatcher.onBackPressed() }
+            assertEquals(1, downloadsBacks)
+            compose.runOnIdle { route = "Home" }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertFalse(activity.onBackPressedDispatcher.hasEnabledCallbacks())
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
+            assertEquals(1, downloadsBacks)
+            compose.runOnIdle { route = "Downloads" }
+            compose.waitForIdle()
+            compose.runOnIdle { activity.onBackPressedDispatcher.onBackPressed() }
+            assertEquals(2, downloadsBacks)
         }
     }
 
@@ -195,8 +241,11 @@ class TabContentTest {
         }
     }
 
+    private lateinit var activity: ComponentActivity
+
     private fun render(reduced: Boolean = false, content: @Composable () -> Unit): AutoCloseable {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        activity = controller.get()
         controller.get().setContent {
             NezzelTheme(ThemePref.Light, false) {
                 CompositionLocalProvider(LocalReducedMotion provides reduced, content = content)
