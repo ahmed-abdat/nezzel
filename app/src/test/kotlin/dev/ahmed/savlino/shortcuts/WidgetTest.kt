@@ -238,8 +238,8 @@ class WidgetTest {
             }
             val pill = bounds(R.id.widget_paste)
             val thumb = bounds(R.id.widget_recent_1)
-            val padding = if (height == 110) 6 else 8
-            val gap = if (height == 110) 2 else 8
+            val padding = if (height == 110) 5 else 8
+            val gap = if (height == 110) 4 else 8
             assertEquals((gap * density).toInt(), thumb.top - pill.bottom)
             assertEquals((padding * density).toInt(), heightPx - thumb.bottom)
             assertTrue(thumb.height() >= 48 * density)
@@ -247,8 +247,57 @@ class WidgetTest {
                 assertEquals((8 * density).toInt(), bounds(R.id.widget_recent_2).left - thumb.right)
                 assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_recent_gap_3).visibility)
             }
-            assertTrue(root.findViewById<View>(R.id.widget_recent_1).clipToOutline)
         }
+    }
+
+    @Test @Config(sdk = [33]) fun android12ThumbnailsClipToTheSystemInnerRadius() {
+        val picture = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        val state = WidgetUiState.from(emptyList(), (1..4).map(::saved)).let { ui ->
+            ui.copy(recents = ui.recents.map { it.copy(thumbnail = picture) })
+        }
+        for (size in listOf(WidgetSize.SQUARE, WidgetSize.WIDE)) {
+            val tile = view(state, size).findViewById<android.widget.ImageView>(R.id.widget_recent_1)
+            assertTrue(tile.clipToOutline)
+            val outline = android.graphics.Outline()
+            tile.layout(0, 0, 100, 100)
+            tile.outlineProvider.getOutline(tile, outline)
+            assertEquals(app.resources.getDimension(android.R.dimen.system_app_widget_inner_radius), outline.radius, 0.01f)
+        }
+    }
+
+    @Test fun beforeAndroid12ThumbnailsAreMaskedToTheInnerRadius() {
+        // Pixels need native graphics, which cannot share this JVM with the SDK 35 capture; the mask
+        // path is proven by the parceled bitmap being a new tile-shaped copy, not the square source.
+        val picture = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        val state = WidgetUiState.from(emptyList(), listOf(saved(1))).let { ui ->
+            ui.copy(recents = ui.recents.map { it.copy(thumbnail = picture) })
+        }
+        val tile = view(state, WidgetSize.WIDE).findViewById<android.widget.ImageView>(R.id.widget_recent_1)
+        val bitmap = (tile.drawable as android.graphics.drawable.BitmapDrawable).bitmap
+        assertNotSame(picture, bitmap)
+        // One wide tile at 250x110: (250 - 16) x (110 - 10 - 48 - 4) dp.
+        assertEquals(234f / 48f, bitmap.width.toFloat() / bitmap.height, 0.05f)
+        assertFalse(tile.clipToOutline)
+    }
+
+    @Test fun liveStatesCarryNoThumbnailsAndProgressTicksTouchOnlyTextAndBars() {
+        val picture = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        val idle = WidgetUiState.from(emptyList(), listOf(saved(1)))
+        val live = WidgetUiState.from(listOf(job()), listOf(saved(1))).let { ui ->
+            ui.copy(recents = ui.recents.map { it.copy(thumbnail = picture) })
+        }
+        val tile = view(live).findViewById<android.widget.ImageView>(R.id.widget_recent_1)
+        assertEquals(View.GONE, tile.visibility)
+        assertNull((tile.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.takeIf { it.width == 8 })
+        val later = WidgetUiState.from(listOf(job(bytes = 47)), listOf(saved(1))).copy(recents = live.recents)
+        assertTrue(later.sameLayout(live))
+        assertFalse(later.sameLayout(idle))
+        assertFalse(WidgetUiState.from(listOf(job().copy(paused = true)), listOf(saved(1))).copy(recents = live.recents).sameLayout(live))
+        val root = view(live)
+        NezzelWidgetProvider.progressViews(app, later, WidgetSize.WIDE).reapply(app, root)
+        assertEquals("45%", text(root, R.id.widget_status))
+        assertEquals(45, root.findViewById<android.widget.ProgressBar>(R.id.widget_progress).progress)
+        assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_control).visibility)
     }
 
     @Test fun titleDropsOnlyAnExtensionLikeSuffix() {
@@ -258,22 +307,26 @@ class WidgetTest {
         assertEquals(".mp4", WidgetUiState.title(".mp4"))
     }
 
-    @Test fun updaterCoalescesProgressAndDeliversLatestAfterTwoSeconds() = runTest {
+    @Test fun updaterSendsProgressTicksAsPartialUpdatesAtMostOncePerSecond() = runTest {
         val progress = MutableStateFlow(listOf(job()))
-        val calls = mutableListOf<Pair<Long, WidgetUiState>>()
+        val calls = mutableListOf<Triple<Long, String, WidgetUiState>>()
         val updater = WidgetUpdater(app, progress, widgetIds = { intArrayOf(1) },
-            render = { state, _ -> calls += testScheduler.currentTime to state }, savedMedia = { flowOf(emptyList()) },
-            thumbnail = { null })
+            render = { state, _ -> calls += Triple(testScheduler.currentTime, "full", state) },
+            renderProgress = { state, _ -> calls += Triple(testScheduler.currentTime, "progress", state) },
+            savedMedia = { flowOf(emptyList()) }, thumbnail = { null })
         val collection = updater.start(backgroundScope)
         runCurrent()
         assertEquals(listOf(0L), calls.map { it.first })
         progress.value = listOf(job(bytes = 39)); runCurrent()
-        advanceTimeBy(1999); runCurrent()
+        advanceTimeBy(999); runCurrent()
         assertEquals(1, calls.size)
         progress.value = listOf(job(bytes = 47)); runCurrent()
         advanceTimeBy(1); runCurrent()
-        assertEquals(listOf(0L, 2000L), calls.map { it.first })
-        assertEquals(45, calls.last().second.jobs.single().percent)
+        assertEquals(listOf(0L to "full", 1000L to "progress"), calls.map { it.first to it.second })
+        assertEquals(45, calls.last().third.jobs.single().percent)
+        progress.value = listOf(job(bytes = 52).copy(paused = true)); runCurrent()
+        advanceTimeBy(1000); runCurrent()
+        assertEquals("full", calls.last().second)
         collection.cancel()
     }
 

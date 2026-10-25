@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp"
-    android:viewportWidth="180" android:viewportHeight="160">
-    <group android:translateX="-62" android:translateY="-72">
-        <path android:fillColor="@color/nezzel_brand_mark" android:pathData="M72.722,82.7183 L120.53041,82.7183 L171.81581,146.17311 L171.81581,82.7183 L215.278,82.7183 L215.278,167.90421 L230.05515,167.90421 L187.4622,213.10489 L114.44571,130.52672 L114.44571,205.2817 L72.722,205.2817 Z" />
-    </group>
-</vector>

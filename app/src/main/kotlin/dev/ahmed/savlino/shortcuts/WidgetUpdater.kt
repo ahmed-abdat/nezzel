@@ -26,6 +26,13 @@ data class WidgetRecent(val media: SavedMedia, val thumbnail: Bitmap? = null)
 
 data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int = 0,
     val savedCount: Int = 0, val recents: List<WidgetRecent> = emptyList()) {
+    /** Same views, visibility and click targets: only percent, bars and time left differ. */
+    fun sameLayout(other: WidgetUiState): Boolean = more == other.more && savedCount == other.savedCount &&
+        recents == other.recents && jobs.size == other.jobs.size && jobs.zip(other.jobs).all { (a, b) ->
+            a.copy(percent = b.percent, remainingSeconds = b.remainingSeconds) == b &&
+                (a.percent == null) == (b.percent == null) && (a.remainingSeconds == null) == (b.remainingSeconds == null)
+        }
+
     companion object {
         fun from(job: DownloadProgress?): WidgetUiState = from(listOfNotNull(job))
 
@@ -60,6 +67,7 @@ class WidgetUpdater(
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, NezzelWidgetProvider::class.java))
     },
     private val render: (WidgetUiState, IntArray) -> Unit = { state, ids -> NezzelWidgetProvider.render(context, ids, state) },
+    private val renderProgress: (WidgetUiState, IntArray) -> Unit = { state, ids -> NezzelWidgetProvider.renderProgress(context, ids, state) },
     private val savedMedia: () -> Flow<List<SavedMedia>> = {
         SavedMediaRepository(context.contentResolver, context.packageName, SaveDestinations(context), OldDownloads(context))
             .observe().mapNotNull { it.getOrNull() }.catch { emit(emptyList()) }
@@ -81,6 +89,7 @@ class WidgetUpdater(
     },
 ) {
     @Volatile private var cached: WidgetUiState? = null
+    private var shown: Pair<WidgetUiState, IntArray>? = null
     private val refreshes = MutableStateFlow(0L)
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value)
 
@@ -105,10 +114,13 @@ class WidgetUpdater(
         }.distinctUntilChanged().onEach { cached = it }.conflate().collect { state ->
             val ids = widgetIds()
             if (ids.isNotEmpty()) {
-                render(state, ids)
-                // Deliver the latest during the cooldown, including completion and saved-file changes.
-                delay(2_000)
-            }
+                val previous = shown
+                if (previous != null && previous.second.contentEquals(ids) && state.sameLayout(previous.first))
+                    renderProgress(state, ids) else render(state, ids)
+                shown = state to ids
+                // At most one push per second; the cooldown still delivers the latest, including completion.
+                delay(1_000)
+            } else shown = null
         }
     }
 }
