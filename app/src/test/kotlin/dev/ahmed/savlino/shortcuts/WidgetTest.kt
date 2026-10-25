@@ -298,6 +298,12 @@ class WidgetTest {
         assertEquals("45%", text(root, R.id.widget_status))
         assertEquals(45, root.findViewById<android.widget.ProgressBar>(R.id.widget_progress).progress)
         assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_control).visibility)
+        // Partial views never carry bitmaps; pre-31 squares take a full update instead.
+        val square = view(live, WidgetSize.SQUARE)
+        val ring = square.findViewById<android.widget.ImageView>(R.id.widget_ring).drawable
+        NezzelWidgetProvider.progressViews(app, later, WidgetSize.SQUARE).reapply(app, square)
+        assertSame(ring, square.findViewById<android.widget.ImageView>(R.id.widget_ring).drawable)
+        assertEquals("45%", text(square, R.id.widget_status))
     }
 
     @Test fun titleDropsOnlyAnExtensionLikeSuffix() {

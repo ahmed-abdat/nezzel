@@ -79,7 +79,9 @@ class NezzelWidgetProvider : AppWidgetProvider() {
             for (id in ids) {
                 val options = manager.getAppWidgetOptions(id)
                 val size = WidgetSize.from(options)
-                manager.partiallyUpdateAppWidget(id, progressViews(localized, state, size,
+                // The square's ring is a bitmap: keep bitmaps out of merged partial updates.
+                if (size == WidgetSize.SQUARE) manager.updateAppWidget(id, responsiveViews(localized, state, options))
+                else manager.partiallyUpdateAppWidget(id, progressViews(localized, state, size,
                     options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, size.bounds.height.toInt())))
             }
         }
@@ -89,7 +91,7 @@ class NezzelWidgetProvider : AppWidgetProvider() {
             RemoteViews(context.packageName, size.layout).apply {
                 val language = context.resources.configuration.locales[0].language
                 for ((index, row) in state.jobs.take(if (size == WidgetSize.WIDE) 2 else 1).withIndex())
-                    bindProgress(context, rowIds(index), row, size, heightDp, index, language)
+                    bindProgress(context, rowIds(index), row, size, heightDp, index, language, withRing = false)
             }
 
         internal fun responsiveViews(context: Context, state: WidgetUiState, options: Bundle): RemoteViews {
@@ -210,7 +212,7 @@ class NezzelWidgetProvider : AppWidgetProvider() {
 
         /** Everything a progress tick may change; visibility and click targets stay with the full update. */
         private fun RemoteViews.bindProgress(context: Context, ids: RowIds, row: WidgetJob, size: WidgetSize,
-            heightDp: Int, index: Int, language: String): String? {
+            heightDp: Int, index: Int, language: String, withRing: Boolean = true): String? {
             val title = NezzelFormat.firstStrong(row.title)
             val status = status(context, row, language)
             setTextViewText(ids.status, status)
@@ -221,7 +223,7 @@ class NezzelWidgetProvider : AppWidgetProvider() {
             setProgressBar(if (row.paused) ids.pausedProgress else ids.progress,
                 100, row.percent ?: 0, row.percent == null && !row.paused)
             setContentDescription(ids.root, listOfNotNull(title, status, remaining).joinToString(". "))
-            if (index == 0 && size == WidgetSize.SQUARE) setImageViewBitmap(R.id.widget_ring, ring(context, row))
+            if (withRing && index == 0 && size == WidgetSize.SQUARE) setImageViewBitmap(R.id.widget_ring, ring(context, row))
             return remaining
         }
 
