@@ -632,7 +632,10 @@
     <string name="playlist_stop">إيقاف</string>
     <string name="playlist_stop_confirm">هل تريد إيقاف قائمة التشغيل؟ تبقى الفيديوهات المحفوظة.</string>
     <string name="playlist_done">اكتمل: تم حفظ %1$s، وتعذّر حفظ %2$s</string>
-    <string name="playlist_see_why">عرض السبب</string>
+    <string name="playlist_show_videos">عرض الفيديوهات</string>
+    <string name="playlist_hide_videos">إخفاء الفيديوهات</string>
+    <string name="playlist_item_waiting">في الانتظار</string>
+    <string name="playlist_item_skipped">تم تخطيه</string>
     <string name="playlist_notification_progress">قائمة تشغيل: تم حفظ %1$s من %2$s</string>
     <string name="playlist_notification_done">تم حفظ قائمة التشغيل: %1$s فيديو، وتعذّر حفظ %2$s</string>
     <string name="playlist_stopped">تم الإيقاف: لم يبدأ %1$s</string>

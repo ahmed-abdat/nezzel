@@ -270,7 +270,7 @@ fun DownloadsScreen(
                 batches.forEach { batch ->
                     item(key = "playlist-${batch.id}") {
                         PlaylistBatchCard(batch, language, { onPlaylistAction(batch.id, it) }, busy = batch.id in playlistBusy,
-                            modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)))
+                            modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)), jobs = jobs)
                     }
                     items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }

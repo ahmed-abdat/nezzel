@@ -22,15 +22,31 @@ internal fun playlistFixture(state: BatchState = BatchState.ACTIVE, error: Downl
         BatchItemRecord("list", 1, "b", "A quiet afternoon", if (failed) BatchItemState.FAILED else if (state == BatchState.COMPLETED) BatchItemState.DONE else BatchItemState.QUEUED,
             "job-b", if (failed) DownloadError.Network else null, failed, false)))
 
+/** Every item state, in playlist order; item 2 has a running job, item 3 a queued one. */
+internal fun playlistMixedFixture(state: BatchState = BatchState.ACTIVE) = PlaylistBatch(
+    BatchRecord("mixed", "Coastal walks", Preset.BALANCED, state, 0, null),
+    listOf(BatchItemRecord("mixed", 0, "a", "Morning by the sea", BatchItemState.DONE, "job-a", null, false, false),
+        BatchItemRecord("mixed", 1, "b", "A quiet afternoon · مساء هادئ", BatchItemState.DONE, "job-b", null, false, false),
+        BatchItemRecord("mixed", 2, "c", "Walking the old harbour wall", BatchItemState.QUEUED, "job-c", null, false, false),
+        BatchItemRecord("mixed", 3, "d", "Harbour at dusk", BatchItemState.QUEUED, "job-d", null, false, false),
+        BatchItemRecord("mixed", 4, "e", "طريق الكورنيش عند الغروب", BatchItemState.WAITING, "job-e", null, false, false),
+        BatchItemRecord("mixed", 5, "f", "Night market by the lighthouse, full walk with the long title", BatchItemState.WAITING, "job-f", null, false, false),
+        BatchItemRecord("mixed", 6, "g", "Fishing boats at dawn", BatchItemState.FAILED, "job-g", DownloadError.Network, true, false),
+        BatchItemRecord("mixed", 7, "h", "", BatchItemState.SKIPPED, "job-h", DownloadError.Unavailable, false, false)))
+
+internal val playlistMixedJobs = listOf(DownloadProgress("job-c", "harbour.mp4", DownloadPhase.DOWNLOADING),
+    DownloadProgress("job-d", "dusk.mp4", DownloadPhase.PREPARING, waiting = true))
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], qualifiers = "en-w384dp-h1600dp-mdpi")
 class PlaylistBatchCardTest {
     @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     private val context get() = RuntimeEnvironment.getApplication()
-    private fun render(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, check: () -> Unit) {
+    private fun render(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, language: String = "en",
+        jobs: List<DownloadProgress> = emptyList(), check: () -> Unit) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
-            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { PlaylistBatchCard(batch, "en", action) } }
+            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { PlaylistBatchCard(batch, language, action, jobs = jobs) } }
             compose.waitForIdle(); check()
         } finally { controller.pause().stop().destroy() }
     }
@@ -65,9 +81,11 @@ class PlaylistBatchCardTest {
         var sent: PlaylistBatchAction? = null
         render(playlistFixture(BatchState.COMPLETED, failed = true), { sent = it }) {
             compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
-            compose.onNodeWithTag("playlist_more").performClick()
-            compose.onNodeWithTag("playlist_why").performClick()
+            compose.onNodeWithTag("playlist_more").assertDoesNotExist()
+            compose.onNodeWithText("A quiet afternoon", substring = true).assertDoesNotExist()
+            compose.onNodeWithTag("playlist_header").performClick()
             compose.onNodeWithText("A quiet afternoon", substring = true).assertExists()
+            compose.onNodeWithText(context.getString(R.string.download_network_error)).assertExists()
             compose.onNodeWithTag("playlist_retry").performClick(); assertEquals(PlaylistBatchAction.RETRY, sent)
         }
     }
@@ -75,6 +93,52 @@ class PlaylistBatchCardTest {
         compose.onNodeWithText("Saved 2").assertExists()
         compose.onNodeWithTag("playlist_more").assertDoesNotExist()
     }
+    private fun word(position: Int, text: String) =
+        compose.onNodeWithTag("playlist_item_$position").assert(hasText(text, substring = true))
+
+    @Test fun tappingTheHeaderListsEveryVideoWithItsStateAndTappingAgainHidesThem() =
+        render(playlistMixedFixture(), jobs = playlistMixedJobs) {
+            compose.onNodeWithTag("playlist_items").assertDoesNotExist()
+            compose.onNodeWithTag("playlist_expand").assertContentDescriptionEquals(context.getString(R.string.playlist_show_videos))
+            compose.onNodeWithTag("playlist_header").performClick()
+            compose.onNodeWithTag("playlist_items").assertExists()
+            word(0, context.getString(R.string.download_saved)); word(0, "Morning by the sea")
+            word(2, context.getString(R.string.download_transferring))
+            word(3, context.getString(R.string.download_waiting))
+            word(4, context.getString(R.string.playlist_item_waiting))
+            word(6, context.getString(R.string.download_network_error)); word(6, "Fishing boats at dawn")
+            // A blank title falls back to its real place in the list; the skip says why.
+            word(7, context.getString(R.string.viewer_video_n, "8", "8")); word(7, context.getString(R.string.video_gone_title))
+            compose.onNodeWithTag("playlist_expand").assertContentDescriptionEquals(context.getString(R.string.playlist_hide_videos))
+            compose.onNodeWithTag("playlist_expand").performClick()
+            compose.onNodeWithTag("playlist_items").assertDoesNotExist()
+        }
+
+    @Test fun withoutJobInfoAQueuedVideoSaysQueuedNotDownloading() = render(playlistMixedFixture()) {
+        compose.onNodeWithTag("playlist_header").performClick()
+        word(2, context.getString(R.string.download_waiting))
+        compose.onNodeWithText(context.getString(R.string.download_transferring)).assertDoesNotExist()
+    }
+
+    @Test fun headerButtonsStillActWithoutOpeningTheList() {
+        val sent = mutableListOf<PlaylistBatchAction>()
+        render(playlistMixedFixture(), sent::add) {
+            compose.onNodeWithTag("playlist_pause").performClick()
+            assertEquals(listOf(PlaylistBatchAction.PAUSE), sent)
+            compose.onNodeWithTag("playlist_items").assertDoesNotExist()
+        }
+    }
+
+    @Test @Config(qualifiers = "ar-w384dp-h1600dp-mdpi") fun arabicListUsesArabicWords() =
+        render(playlistMixedFixture(), language = "ar", jobs = playlistMixedJobs) {
+            assertEquals("في الانتظار", context.getString(R.string.playlist_item_waiting))
+            compose.onNodeWithContentDescription(context.getString(R.string.playlist_show_videos)).performClick()
+            word(0, context.getString(R.string.download_saved))
+            word(4, "في الانتظار")
+            word(6, context.getString(R.string.download_network_error))
+            word(7, context.getString(R.string.viewer_video_n, "8", "8"))
+        }
+
     @Test fun runningMembersShowUnderTheHeaderAndQueuedOnesDoNot() {
         val batch = playlistFixture()
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
