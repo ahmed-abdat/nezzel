@@ -54,12 +54,15 @@ class WidgetCaptureTest {
         val cells = listOf(
             Cell("wide-250x110", 250, 110, WidgetSize.WIDE),
             Cell("wide-300x150", 300, 150, WidgetSize.WIDE),
+            // A phone 4x2 cell (about 360x200dp) picks this bucket.
+            Cell("wide-340x190", 340, 190, WidgetSize.WIDE),
             Cell("square-110x110", 110, 110, WidgetSize.SQUARE),
             Cell("square-150x150", 150, 150, WidgetSize.SQUARE),
             Cell("slim-110x48", 110, 48, WidgetSize.SLIM),
         )
         val pictures = listOf(samplePicture(0xFF307B70.toInt(), 0xFFA8D5C8.toInt()),
             samplePicture(0xFF6A76A9.toInt(), 0xFFC2B7D9.toInt()))
+        val jobArt = checkNotNull(WidgetArt.of(jobPicture()))
         try {
             for (language in listOf("ar", "en")) {
                 val saved = (1..4).map { index ->
@@ -68,15 +71,19 @@ class WidgetCaptureTest {
                     SavedMedia(Uri.parse("content://media/external/downloads/$index"), name, name, mime,
                         100, index.toLong(), null, null, null)
                 }
-                fun state(jobs: List<DownloadProgress>) = WidgetUiState.from(jobs, saved).let { ui ->
-                    ui.copy(recents = ui.recents.mapIndexed { index, recent -> recent.copy(thumbnail = pictures.getOrNull(index)) })
+                fun state(jobs: List<DownloadProgress>, art: Boolean = true) = WidgetUiState.from(jobs, saved).let { ui ->
+                    ui.copy(recents = ui.recents.mapIndexed { index, recent -> recent.copy(thumbnail = pictures.getOrNull(index)) },
+                        // The newest job has its picture; the second one is still waiting for it.
+                        jobs = ui.jobs.mapIndexed { index, job -> if (art && index == 0) job.copy(art = jobArt) else job })
                 }
                 val title = if (language == "ar") "رحلة إلى جبال الأطلس في الشتاء.mp4" else "Sunset timelapse over the old harbour.mp4"
                 val first = DownloadProgress("first", title, DownloadPhase.DOWNLOADING, 45, Size.Exact(100),
                     bytesPerSecond = 55.0 / 21, remainingTransferSeconds = 21)
                 val second = DownloadProgress("second", if (language == "ar") "رحلة أخرى.mp4" else "Another journey.mp4",
                     DownloadPhase.DOWNLOADING, 80, Size.Exact(100))
-                val states = listOf("idle-recents" to state(emptyList()), "one-running" to state(listOf(first)),
+                val states = listOf("idle-recents" to state(emptyList()),
+                    "idle-empty" to WidgetUiState.from(emptyList()),
+                    "one-running" to state(listOf(first)), "one-running-no-picture" to state(listOf(first), art = false),
                     // Newest first: primary gets the supplied ETA; recents remain in the shared snapshot.
                     "two-running-recents" to state(listOf(second, first)))
                 for ((name, ui) in states) for (dark in listOf(false, true)) {
@@ -127,7 +134,7 @@ class WidgetCaptureTest {
         controller.pause().stop().destroy()
         val target = checkNotNull(dir)
         assertTrue(target.isDirectory || target.mkdirs())
-        File(target, "W1-${cell.name}-$name-$language-${if (dark) "dark" else "light"}.png").outputStream().use {
+        File(target, "W3-${cell.name}-$name-$language-${if (dark) "dark" else "light"}.png").outputStream().use {
             assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
         val margin = (16 * density).toInt()
@@ -146,6 +153,17 @@ class WidgetCaptureTest {
         assertTrue(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs())
         file.outputStream().use { assertTrue(sheet.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         sheet.recycle()
+    }
+
+    /** A synthetic 160 px job picture (sky, sun, hills): the size and shape JobArtwork keeps, no real media. */
+    private fun jobPicture(): Bitmap = Bitmap.createBitmap(160, 160, Bitmap.Config.ARGB_8888).also {
+        val canvas = Canvas(it)
+        canvas.drawRect(0f, 0f, 160f, 160f, Paint().apply {
+            shader = LinearGradient(0f, 0f, 0f, 160f, 0xFFF2A65A.toInt(), 0xFF7A4E8C.toInt(), Shader.TileMode.CLAMP)
+        })
+        canvas.drawCircle(108f, 70f, 22f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFE3A3.toInt() })
+        canvas.drawOval(-40f, 100f, 120f, 220f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2E4A52.toInt() })
+        canvas.drawOval(60f, 112f, 220f, 230f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1F363D.toInt() })
     }
 
     /** Synthetic thumbnail swatches exercise bitmap rendering alongside the two missing-thumbnail type tiles. */

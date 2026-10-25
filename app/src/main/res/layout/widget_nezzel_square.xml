@@ -29,6 +29,9 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent">
+            <!-- The download's picture fills the tile; the ring sits on a disc so the % stays readable. -->
+            <ImageView android:id="@+id/widget_art" style="@style/Widget.Nezzel.Art"
+                android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" />
             <ImageView
                 android:id="@+id/widget_ring"
                 android:layout_width="48dp"
@@ -58,8 +61,8 @@
         android:orientation="horizontal"
         android:gravity="center"
         android:visibility="gone">
-        <ImageView android:id="@+id/widget_paste_icon" style="@style/Widget.Nezzel.PasteCircle" />
-        <ImageView android:id="@+id/widget_control" style="@style/Widget.Nezzel.Control" />
+        <ImageView android:id="@+id/widget_paste_icon" style="@style/Widget.Nezzel.PasteQuiet" />
+        <ImageView android:id="@+id/widget_control" style="@style/Widget.Nezzel.Control.Tonal" />
     </LinearLayout>
     <LinearLayout android:id="@+id/widget_job_second" style="@style/Widget.Nezzel.Row">
         <LinearLayout

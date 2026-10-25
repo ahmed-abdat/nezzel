@@ -11,10 +11,12 @@ import android.graphics.Matrix
 import android.graphics.Shader
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import dev.ahmed.savlino.R
@@ -70,7 +72,7 @@ class NezzelWidgetProvider : AppWidgetProvider() {
          * Progress tick with an unchanged layout. Before 31 only the text/bar actions are merged into the
          * host's views. From 31 the host keeps sized RemoteViews and RemoteViews.mergeRemoteViews drops
          * actions merged into them, so a full update is sent; the same layout ids are reapplied in place
-         * (no reinflation) and live states carry no thumbnails.
+         * (no reinflation); a job picture travels as its few-KB JPEG, never as a bitmap.
          */
         fun renderProgress(context: Context, ids: IntArray, state: WidgetUiState, language: String = AppLocale.current(context)) {
             if (Build.VERSION.SDK_INT >= 31) return render(context, ids, state, language)
@@ -102,6 +104,7 @@ class NezzelWidgetProvider : AppWidgetProvider() {
                     SizeF(250f, 120f) to WidgetSize.WIDE,
                     SizeF(250f, 150f) to WidgetSize.WIDE,
                     SizeF(300f, 150f) to WidgetSize.WIDE,
+                    SizeF(340f, 190f) to WidgetSize.WIDE,
                 )
                 return RemoteViews(sizes.associate { (bounds, size) -> bounds to views(context, state, size,
                     bounds.width.toInt(), bounds.height.toInt()) })
@@ -193,6 +196,23 @@ class NezzelWidgetProvider : AppWidgetProvider() {
                         setOnClickPendingIntent(id, ShortcutActions.savedPendingIntent(context, recent.media.uri))
                     }
                 }
+                // Paste fills the cell when there is nothing under it (31+ can size views; older keeps the pill).
+                if (!live && !showRecents && size != WidgetSize.SLIM && Build.VERSION.SDK_INT >= 31) {
+                    setViewLayoutHeight(R.id.widget_paste, (heightDp - 2 * verticalDp).toFloat(), TypedValue.COMPLEX_UNIT_DIP)
+                    setTextViewTextSize(R.id.widget_paste_label, TypedValue.COMPLEX_UNIT_SP, 18f)
+                }
+                // Wide: one job gets a big picture, a two-line title and time left, with pause above Paste at the end;
+                // two jobs get a row each with its own pause. The picture is a square sized to the row.
+                val single = wide && shown.size == 1
+                val contentWidth = widthDp - 2 * paddingDp
+                val contentHeight = heightDp - 2 * verticalDp
+                val rowHeight = if (single) contentHeight else (contentHeight - gapDp) / 2
+                val artDp = when {
+                    Build.VERSION.SDK_INT < 31 -> 48
+                    single -> minOf(rowHeight, contentWidth * 3 / 10)
+                    else -> rowHeight.coerceAtMost(72)
+                }
+                val largeText = context.resources.configuration.fontScale > 1.3f
                 for (index in 0..1) {
                     val row = shown.getOrNull(index)
                     val ids = rowIds(index)
@@ -201,17 +221,65 @@ class NezzelWidgetProvider : AppWidgetProvider() {
                     val title = NezzelFormat.firstStrong(row.title)
                     setTextViewText(ids.title, title)
                     visible(ids.title, wide)
+                    setInt(ids.title, "setMaxLines", if (single && !largeText) 2 else 1)
                     val remaining = bindProgress(context, ids, row, size, heightDp, index, language)
-                    visible(ids.remaining, remaining != null && wide && heightDp >= 150 && index == 0 && context.resources.configuration.fontScale <= 1.1f)
+                    visible(ids.remaining, remaining != null && single)
                     val showBar = size != WidgetSize.SQUARE && row.phase != DownloadPhase.FAILED
                     visible(ids.progress, showBar && !row.paused)
                     visible(ids.pausedProgress, showBar && row.paused)
                     setOnClickPendingIntent(ids.root, downloads)
-                    visible(ids.control, row.controllable)
-                    setImageViewResource(ids.control, if (row.paused) R.drawable.ic_widget_resume else R.drawable.ic_pause)
-                    setContentDescription(ids.control, context.getString(if (row.paused) R.string.download_resume_accessibility else R.string.download_pause_accessibility, title))
-                    if (row.controllable) setOnClickPendingIntent(ids.control, control(context, row))
+                    if (index == 1) setViewPadding(ids.root, 0, (gapDp * density).toInt(), 0, 0)
+                    when (size) {
+                        WidgetSize.WIDE -> bindArt(context, ids.art, row, artDp.toFloat(), artDp.toFloat(), density, sized = true)
+                        WidgetSize.SQUARE -> {
+                            // Picture as the tile behind the ring; no picture keeps the plain ring.
+                            visible(R.id.widget_art, row.art != null)
+                            setViewPadding(R.id.widget_job, 0, 0, 0, (gapDp * density).toInt())
+                            if (row.art != null) bindArt(context, R.id.widget_art, row,
+                                (contentWidth - if (more > 0) 24 else 0).toFloat(), (contentHeight - 48 - gapDp).toFloat(), density, sized = false)
+                        }
+                        WidgetSize.SLIM -> Unit
+                    }
+                    val controls = if (single) listOf(R.id.widget_control_end) else listOf(ids.control)
+                    visible(ids.control, row.controllable && !single)
+                    if (index == 0) visible(R.id.widget_control_end, row.controllable && single)
+                    for (control in controls) {
+                        setImageViewResource(control, if (row.paused) R.drawable.ic_widget_resume else R.drawable.ic_pause)
+                        setContentDescription(control, context.getString(if (row.paused) R.string.download_resume_accessibility else R.string.download_pause_accessibility, title))
+                        if (row.controllable) setOnClickPendingIntent(control, control(context, row))
+                    }
                 }
+            }
+        }
+
+        /**
+         * The job's own picture, else its kind icon on the tile (no stand-in picture). [sized] views get their square
+         * size from 31; a fill view only needs the size for the pre-31 mask.
+         */
+        private fun RemoteViews.bindArt(context: Context, id: Int, row: WidgetJob, widthDp: Float, heightDp: Float,
+            density: Float, sized: Boolean) {
+            if (sized && Build.VERSION.SDK_INT >= 31) {
+                setViewLayoutWidth(id, widthDp, TypedValue.COMPLEX_UNIT_DIP)
+                setViewLayoutHeight(id, heightDp, TypedValue.COMPLEX_UNIT_DIP)
+            }
+            val art = row.art
+            if (art != null) {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    setViewOutlinePreferredRadiusDimen(id, R.dimen.widget_inner_radius)
+                    setImageViewIcon(id, Icon.createWithData(art.jpeg, 0, art.jpeg.size))
+                } else setImageViewBitmap(id, roundedThumbnail(art.bitmap, widthDp, heightDp, density,
+                    context.resources.getDimension(R.dimen.widget_inner_radius) / density))
+                setViewPadding(id, 0, 0, 0, 0)
+            } else {
+                setImageViewResource(id, when {
+                    row.mimeType.startsWith("audio/") -> R.drawable.ic_widget_music
+                    row.mimeType.startsWith("image/") -> R.drawable.ic_widget_image
+                    else -> R.drawable.ic_widget_movie
+                })
+                // centerCrop scales the vector to the content box: keep it a 24dp square.
+                val sideX = ((widthDp - 24) / 2 * density).toInt().coerceAtLeast(0)
+                val sideY = ((heightDp - 24) / 2 * density).toInt().coerceAtLeast(0)
+                setViewPadding(id, sideX, sideY, sideX, sideY)
             }
         }
 
@@ -222,20 +290,21 @@ class NezzelWidgetProvider : AppWidgetProvider() {
             val status = status(context, row, language)
             setTextViewText(ids.status, status)
             val remaining = row.remainingSeconds?.let {
-                context.getString(R.string.download_transfer_remaining, NezzelFormat.isolate(NezzelFormat.duration(it)))
+                context.getString(R.string.widget_time_left, NezzelFormat.isolate(NezzelFormat.duration(it)))
             }
             setTextViewText(ids.remaining, remaining.orEmpty())
             setProgressBar(if (row.paused) ids.pausedProgress else ids.progress,
                 100, row.percent ?: 0, row.percent == null && !row.paused)
             setContentDescription(ids.root, listOfNotNull(title, status, remaining).joinToString(". "))
-            if (withRing && index == 0 && size == WidgetSize.SQUARE) setImageViewBitmap(R.id.widget_ring, ring(context, row))
+            if (withRing && index == 0 && size == WidgetSize.SQUARE) setImageViewBitmap(R.id.widget_ring, ring(context, row, disc = row.art != null))
             return remaining
         }
 
         private fun rowIds(index: Int) = if (index == 0) RowIds(R.id.widget_job, R.id.widget_title, R.id.widget_status,
-            R.id.widget_progress, R.id.widget_progress_paused, R.id.widget_remaining, R.id.widget_control)
+            R.id.widget_progress, R.id.widget_progress_paused, R.id.widget_remaining, R.id.widget_control, R.id.widget_art)
         else RowIds(R.id.widget_job_second, R.id.widget_title_second, R.id.widget_status_second,
-            R.id.widget_progress_second, R.id.widget_progress_paused_second, R.id.widget_remaining_second, R.id.widget_control_second)
+            R.id.widget_progress_second, R.id.widget_progress_paused_second, R.id.widget_remaining_second, R.id.widget_control_second,
+            R.id.widget_art_second)
 
         internal fun control(context: Context, job: WidgetJob): PendingIntent {
             val action = if (job.paused) DownloadNotifications.RESUME else DownloadNotifications.PAUSE
@@ -278,10 +347,13 @@ class NezzelWidgetProvider : AppWidgetProvider() {
         }
 
         /** Decorative ring only; the separately labelled text is the source of truth for unknown progress. */
-        private fun ring(context: Context, job: WidgetJob): Bitmap {
+        private fun ring(context: Context, job: WidgetJob, disc: Boolean = false): Bitmap {
             // 48dp at 3x with a 4dp stroke, like the bars.
             val bitmap = Bitmap.createBitmap(144, 144, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
+            // Over a picture the % sits on the surface colour, so it reads on any frame.
+            if (disc) canvas.drawCircle(72f, 72f, 70f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = context.getColor(R.color.widget_surface); alpha = 235 })
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 12f; strokeCap = Paint.Cap.ROUND }
             paint.color = context.getColor(R.color.widget_track)
             canvas.drawCircle(72f, 72f, 66f, paint)
@@ -297,6 +369,6 @@ class NezzelWidgetProvider : AppWidgetProvider() {
         private const val ROOT = android.R.id.background
 
         private fun RemoteViews.visible(id: Int, visible: Boolean) = setViewVisibility(id, if (visible) View.VISIBLE else View.GONE)
-        private data class RowIds(val root: Int, val title: Int, val status: Int, val progress: Int, val pausedProgress: Int, val remaining: Int, val control: Int)
+        private data class RowIds(val root: Int, val title: Int, val status: Int, val progress: Int, val pausedProgress: Int, val remaining: Int, val control: Int, val art: Int)
     }
 }

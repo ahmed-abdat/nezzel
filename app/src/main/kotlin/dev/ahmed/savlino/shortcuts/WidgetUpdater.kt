@@ -18,8 +18,23 @@ import kotlinx.coroutines.flow.*
 
 /** Only display fields: progress is bucketed so each byte event does not redraw every widget. */
 data class WidgetJob(val id: String, val title: String, val phase: DownloadPhase, val percent: Int?,
-    val paused: Boolean, val waiting: Boolean, val remainingSeconds: Long?) {
+    val paused: Boolean, val waiting: Boolean, val remainingSeconds: Long?, val mimeType: String = "video/mp4",
+    val art: WidgetArt? = null) {
     val controllable get() = paused || phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
+}
+
+/**
+ * A running job's picture: the job row artwork (<=160 px square, [JobArtwork]) plus its JPEG bytes, made once per job.
+ * From API 31 the bytes travel (a few KB, decoded by the launcher); older launchers get the masked bitmap.
+ * Identity equality: the same object means no layout change.
+ */
+class WidgetArt(val bitmap: Bitmap, val jpeg: ByteArray) {
+    companion object {
+        fun of(bitmap: Bitmap): WidgetArt? = java.io.ByteArrayOutputStream().use { out ->
+            if (bitmap.isRecycled || !bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) null
+            else WidgetArt(bitmap, out.toByteArray())
+        }
+    }
 }
 
 data class WidgetRecent(val media: SavedMedia, val thumbnail: Bitmap? = null)
@@ -49,7 +64,7 @@ data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int 
                 WidgetJob(job.jobId, title(job.filename), job.phase,
                     (if (job.paused) job.percent else job.visiblePercent)?.let { it / 5 * 5 },
                     job.paused, job.waiting || job.awaitingSchedule,
-                    job.remainingTransferSeconds?.takeIf { measured && it > 0 })
+                    job.remainingTransferSeconds?.takeIf { measured && it > 0 }, job.mimeType)
             }, (visible.size - 2).coerceAtLeast(0), saved.size,
                 saved.sortedByDescending { it.addedSeconds }.take(4).map { WidgetRecent(it) })
         }
@@ -72,6 +87,8 @@ class WidgetUpdater(
         SavedMediaRepository(context.contentResolver, context.packageName, SaveDestinations(context), OldDownloads(context))
             .observe().mapNotNull { it.getOrNull() }.catch { emit(emptyList()) }
     },
+    /** The job row artwork the Downloads card shows (`JobArtwork.load`): disk only, never fetched. */
+    private val artwork: suspend (String) -> Bitmap? = { null },
     private val thumbnail: suspend (SavedMedia) -> Bitmap? = { media ->
         withContext(Dispatchers.IO) {
             // Four <=192px software bitmaps: <=576 KiB, shared by all responsive layouts.
@@ -89,15 +106,42 @@ class WidgetUpdater(
     },
 ) {
     @Volatile private var cached: WidgetUiState? = null
+    private val arts = MutableStateFlow<Map<String, WidgetArt>>(emptyMap())
     private var shown: Pair<WidgetUiState, IntArray>? = null
     private val refreshes = MutableStateFlow(0L)
     val currentState: WidgetUiState get() = cached ?: WidgetUiState.from(progress.value)
+
+    /**
+     * One picture per shown job, loaded when the job first shows and dropped when it leaves. Artwork can land after
+     * the row starts (playlists, a quick confirm), so a missing one is looked for again briefly, like the Downloads card.
+     */
+    private suspend fun loadArtwork() = coroutineScope {
+        val loading = mutableMapOf<String, Job>()
+        combine(progress, refreshes) { jobs, _ ->
+            WidgetUiState.from(jobs).jobs.map { it.id }.toSet() to widgetIds().isNotEmpty()
+        }.distinctUntilChanged().collect { (shown, installed) ->
+            (loading.keys - shown).forEach { loading.remove(it)?.cancel() }
+            arts.update { it.filterKeys(shown::contains) }
+            // A widget placed after the retries ran out (none was on screen then) looks again.
+            val missing = shown.filter { id -> id !in arts.value && loading[id]?.isActive != true }
+            if (installed) for (id in missing) loading[id] = launch {
+                for (wait in ARTWORK_RETRY_MS) {
+                    delay(wait)
+                    if (widgetIds().isEmpty()) continue
+                    val art = artwork(id)?.let(WidgetArt::of) ?: continue
+                    arts.update { it + (id to art) }
+                    return@launch
+                }
+            }
+        }
+    }
 
     /** Widget add/remove/resize must start/stop the library observer even when progress is unchanged. */
     fun refresh() { refreshes.value += 1 }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun start(scope: CoroutineScope): Job = scope.launch {
+        launch { loadArtwork() }
         var pictures = emptyMap<SavedMedia, Bitmap?>()
         val saved = combine(progress, refreshes) { _, _ -> widgetIds().isNotEmpty() }
             .distinctUntilChanged().flatMapLatest { installed ->
@@ -111,6 +155,8 @@ class WidgetUpdater(
             WidgetUiState.from(jobs, files).let { state ->
                 state.copy(recents = state.recents.map { it.copy(thumbnail = pictures[it.media]) })
             }
+        }.combine(arts) { state, pictures ->
+            if (pictures.isEmpty()) state else state.copy(jobs = state.jobs.map { it.copy(art = pictures[it.id]) })
         }.distinctUntilChanged().onEach { cached = it }.conflate().collect { state ->
             val ids = widgetIds()
             if (ids.isNotEmpty()) {
@@ -124,3 +170,5 @@ class WidgetUpdater(
         }
     }
 }
+
+private val ARTWORK_RETRY_MS = longArrayOf(0, 1_000, 3_000, 8_000)

@@ -60,6 +60,30 @@
         <item name="android:tint">@color/widget_primary</item>
         <item name="android:contentDescription">@string/pause</item>
     </style>
+    <!-- Running rows: pause/resume is the one tonal control; Paste stays a quiet icon. -->
+    <style name="Widget.Nezzel.Control.Tonal">
+        <item name="android:background">@drawable/widget_circle_tonal</item>
+    </style>
+    <style name="Widget.Nezzel.PasteQuiet">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:src">@drawable/ic_paste</item>
+        <item name="android:tint">@color/widget_on_surface_variant</item>
+        <item name="android:contentDescription">@string/paste_link</item>
+    </style>
+    <!-- The download's own picture (or its kind icon); sized in code from API 31. -->
+    <style name="Widget.Nezzel.Art">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:background">@drawable/widget_tile</item>
+        <item name="android:scaleType">centerCrop</item>
+        <item name="android:src">@drawable/ic_widget_movie</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="android:clipToOutline" tools:targetApi="31">true</item>
+        <item name="android:outlineProvider">background</item>
+    </style>
     <style name="Widget.Nezzel.Text">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
