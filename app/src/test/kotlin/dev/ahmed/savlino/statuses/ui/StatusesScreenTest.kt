@@ -203,6 +203,30 @@ class StatusesScreenTest {
         compose.onNodeWithText(s(R.string.open_file)).assertExists()
     }
 
+    @Test fun closingOrSavingInTheViewerStaysInTheOpenedAccount() {
+        val library = FakeStatusLibrary(ready(listOf(item(1, false, source = MAIN), item(2, true, source = SECOND), item(3, true, source = SECOND))))
+        show(library)
+        compose.onNode(hasContentDescription(activity.getString(R.string.statuses_account_n, "2"), substring = true) and hasClickAction()).performClick()
+        compose.waitForIdle()
+        tiles(R.string.statuses_video).onFirst().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).performClick()
+        compose.waitForIdle()
+        tiles(R.string.statuses_video).assertCountEquals(2)
+        // System Back goes to the viewer's own window and closes only the viewer as well.
+        tiles(R.string.statuses_video).onFirst().performClick()
+        compose.waitForIdle()
+        (org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.activity.ComponentDialog).onBackPressedDispatcher.onBackPressed()
+        compose.waitForIdle()
+        tiles(R.string.statuses_video).assertCountEquals(2)
+        tiles(R.string.statuses_video).onFirst().performClick()
+        compose.waitForIdle()
+        compose.onAllNodes(hasText(s(R.string.statuses_save)) and hasClickAction()).onLast().performClick()
+        compose.waitForIdle()
+        assertEquals(1, library.saved.single().size)
+        tiles(R.string.statuses_video).assertCountEquals(2)
+    }
+
     @Test fun tapPreviewsAndSaveThereSavesOne() {
         val library = FakeStatusLibrary(ready())
         show(library)
