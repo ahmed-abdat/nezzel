@@ -1,6 +1,6 @@
 Nezzel is an ad-free Android app for saving videos, audio and photos from supported public links — share or paste a link, review the available options, then tap Download or Save
 
-Processing runs on your device, with Arabic and English support and no Nezzel account or tracking — some links won’t work, and private, sign-in-required and protected content aren’t supported
+Processing runs on your device, in Arabic, French and English, with no Nezzel account — some links won’t work, and private, sign-in-required and protected content aren’t supported
 
 Features
 • Video and audio options come from the download engine, with unknown sizes left unknown and estimates labelled
@@ -8,7 +8,7 @@ Features
 • Public photo posts, photo selection for supported carousels, and original GIF image saves, with still GIF previews
 • Download queue, cancellation, manual retry, notifications, and Open, Share and Delete for saved files
 • Save to Download/Nezzel or a folder chosen through Android’s system picker
-• Arabic and English, RTL layout, light and dark themes and font scaling
+• Arabic, French and English, RTL layout, light and dark themes and font scaling
 
 Tested link types
 Completed saves on a real Android phone include public videos from YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat Spotlight, Pinterest, Bluesky, Telegram, Dailymotion and Vimeo, plus direct MP4 links — audio-only M4A and MP3 conversion were also saved from YouTube
@@ -20,7 +20,7 @@ Options were inspected successfully for SoundCloud tracks, Mixcloud mixes, Bandc
 These are examples, with no promise that every URL will work — Rumble blocked requests in testing, and private, sign-in-required and DRM-protected content is outside scope
 
 Privacy
-No ads, account, embedded browser, analytics or telemetry — processing stays on your device, with requests sent directly to source sites/CDNs and upstream engine-update infrastructure — automatic option loading may fetch metadata and previews while the app is in the foreground or accepts a shared/pasted link — turn off Show options automatically for manual inspection — no background clipboard monitoring, and saving media always needs explicit confirmation
+No ads, account or embedded browser — processing stays on your device, with requests sent directly to source sites/CDNs and upstream engine-update infrastructure — automatic option loading may fetch metadata and previews while the app is in the foreground or accepts a shared/pasted link — turn off Show options automatically for manual inspection — no background clipboard monitoring, and saving media always needs explicit confirmation
 
 Requirements and availability
 Android 10+ and arm64-v8a only — native 16 KB page-size compatibility is unresolved, and current device evidence is for 4 KB pages — store metadata does not announce availability on F-Droid or another store — public APK distribution still needs matching corresponding source and complete third-party notices

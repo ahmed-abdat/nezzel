@@ -8,11 +8,11 @@
     <string name="check_link">عرض خيارات التنزيل</string>
     <string name="download">تنزيل</string>
     <string name="unavailable_title">التنزيل غير متاح</string>
-    <string name="unavailable_body">أدوات التنزيل غير جاهزة، أعد المحاولة أو أغلق Nezzel وافتحه مجددًا</string>
+    <string name="unavailable_body">التنزيل غير جاهز بعد، أعد المحاولة أو أغلق Nezzel وافتحه مجددًا</string>
     <string name="invalid_link">هذا ليس رابطًا، انسخ العنوان كاملًا بدءًا من \u2066https://\u2069</string>
     <string name="clipboard_title">الرابط الذي نسخته</string>
     <string name="dismiss">تجاهل</string>
-    <string name="pending_share">استبدال الرابط الذي تكتبه؟</string>
+    <string name="pending_share">هل تستبدل الرابط الذي تكتبه؟</string>
     <string name="replace_link">استخدام الرابط الذي شاركته</string>
     <string name="language">اللغة</string>
     <string name="language_ar">العربية</string>
@@ -25,11 +25,11 @@
     <string name="match_wallpaper">مطابقة ألوان الخلفية</string>
     <string name="copied_suggestions">قراءة الروابط المنسوخة</string>
     <string name="copied_help">أثناء فتح Nezzel فقط</string>
-    <string name="save_location">موقع الحفظ</string>
+    <string name="save_location">مكان الحفظ</string>
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">بلا إعلانات ولا حساب</string>
     <string name="shared_video">رابط شاركته</string>
-    <string name="checking_qualities">جارٍ جلب الجودات…</string>
+    <string name="checking_qualities">جارٍ جلب خيارات الجودة…</string>
     <string name="nothing_downloads">لا يبدأ الحفظ إلا عندما تضغط على «تنزيل» أو «حفظ»</string>
     <string name="cancel">إلغاء</string>
     <string name="video_group">فيديو</string>
@@ -61,16 +61,16 @@
     <string name="quality_sd">عادية</string>
     <string name="quality_sd_hint">جيدة على الهاتف</string>
     <string name="quality_low">منخفضة</string>
-    <string name="quality_low_hint">أقل استهلاكًا للبيانات</string>
+    <string name="quality_low_hint">توفّر البيانات</string>
     <string name="quality_lowest">الأدنى</string>
-    <string name="quality_lowest_hint">أقل وضوحًا</string>
+    <string name="quality_lowest_hint">الأقل وضوحًا</string>
     <string name="video_unknown_quality">فيديو</string>
-    <string name="video_animated_gif">\u2066GIF\u2069 (بدون صوت)</string>
-    <string name="video_animated_gif_hint">صورة \u2066GIF\u2069 متحركة من \u2066X\u2069، تُحفظ كفيديو بلا صوت</string>
+    <string name="video_animated_gif">\u2066GIF\u2069 (بلا صوت)</string>
+    <string name="video_animated_gif_hint">صورة \u2066GIF\u2069 متحركة من \u2066X\u2069، تُحفظ على شكل فيديو بلا صوت</string>
     <string name="video_unknown_quality_hint">لم يذكر الموقع الجودة</string>
     <string name="audio_only">صوت فقط</string>
     <string name="mp3_title">MP3</string>
-    <string name="mp3_hint">يعمل في كل المشغّلات تقريبًا، ويستغرق وقتًا أطول</string>
+    <string name="mp3_hint">يعمل في كل المشغّلات تقريبًا، لكنه يستغرق وقتًا أطول</string>
     <string name="other_versions">صيغ أخرى (%1$s)</string>
     <string name="other_versions_hide">إخفاء الصيغ الأخرى</string>
     <string name="size_estimate_a11y">الحجم التقديري: %1$s</string>
@@ -81,19 +81,19 @@
     <string name="video_gone_title">هذا الفيديو غير متاح</string>
     <string name="video_gone_body">ربما حُذف، أو أنه غير متاح في منطقتك</string>
     <string name="not_a_post_title">هذا الرابط لا يؤدي إلى منشور</string>
-    <string name="not_a_post_body">يفتح الرابط الصفحة الرئيسية للموقع، ربما حُذف المنشور، فانسخ رابطه مجددًا</string>
-    <string name="private_title">يتطلب تسجيل الدخول</string>
-    <string name="private_body">تحتاج إلى تسجيل الدخول لمشاهدة هذا المحتوى، وNezzel يحفظ الفيديوهات والصور العامة فقط</string>
+    <string name="not_a_post_body">يفتح الرابط الصفحة الرئيسية للموقع؛ ربما حُذف المنشور، فانسخ رابطه مجددًا</string>
+    <string name="private_title">يلزم تسجيل الدخول</string>
+    <string name="private_body">هذا المحتوى يتطلب تسجيل الدخول، ويحفظ Nezzel الفيديوهات والصور العامة فقط</string>
     <string name="source_refused_title">الموقع يمنع الوصول</string>
     <string name="source_refused_body">منع الموقع Nezzel من الوصول إلى المحتوى، جرّب رابطًا عامًا آخر</string>
     <string name="protected_title">هذا الفيديو محمي</string>
     <string name="protected_body">لا يستطيع Nezzel حفظ الفيديوهات المحمية، جرّب فيديو عامًا غير محمي</string>
-    <string name="no_formats_title">لا يوجد محتوى للتنزيل هنا</string>
+    <string name="no_formats_title">لا شيء للتنزيل هنا</string>
     <string name="no_formats_body">لم يوفّر الموقع فيديو أو صوتًا أو صورة لهذا الرابط، ربما يكون بثًا مباشرًا أو محتوى محذوفًا</string>
     <string name="offline_title">لا يوجد اتصال بالإنترنت</string>
     <string name="offline_body">اتصل بشبكة Wi-Fi أو استخدم بيانات الهاتف، ثم أعد المحاولة</string>
     <string name="expired_title">تحقق من هذا الرابط مجددًا</string>
-    <string name="expired_body">تغيّرت الصيغ المتاحة، تحقّق مجددًا واختر صيغة</string>
+    <string name="expired_body">تغيّرت الخيارات المتاحة، تحقّق مجددًا واختر من جديد</string>
     <string name="read_failed_title">تعذّرت قراءة هذا الرابط</string>
     <string name="read_failed_body">تأكد من أن الرابط يفتح في التطبيق أو المتصفح، ثم أعد المحاولة</string>
     <string name="try_again">إعادة المحاولة</string>
@@ -129,11 +129,11 @@
     <string name="engine_getting_ready">جارٍ التجهيز…</string>
     <string name="engine_preparing">جارٍ التجهيز (لأول مرة فقط)…</string>
     <string name="engine_update_busy">&#x2066;Nezzel&#x2069; مشغول الآن، أعد المحاولة بعد قليل</string>
-    <string name="engine_update_paused_title">التحديث الآن؟</string>
-    <string name="engine_update_paused_body">التنزيلات المتوقفة مؤقتًا ستبدأ من جديد.</string>
+    <string name="engine_update_paused_title">هل تريد التحديث الآن؟</string>
+    <string name="engine_update_paused_body">ستبدأ التنزيلات المتوقفة مؤقتًا من جديد.</string>
     <string name="engine_update_paused_confirm">تحديث</string>
-    <string name="parallel_downloads">التنزيلات في وقت واحد</string>
-    <string name="parallel_downloads_help">العدد الأقل يُبقي الهاتف أبرد</string>
+    <string name="parallel_downloads">عدد التنزيلات في وقت واحد</string>
+    <string name="parallel_downloads_help">العدد الأقل يخفّف حرارة الهاتف</string>
     <string name="parallel_downloads_option">%1$s في وقت واحد</string>
     <string name="engine_update_help">يتحدّث تلقائيًا كل أسبوع</string>
     <string name="engine_update_retry">تحديث دعم المواقع وإعادة المحاولة</string>
@@ -148,7 +148,7 @@
     <string name="downloads_stopped_header">متوقفة · %1$s</string>
     <string name="downloads_pause_all">إيقاف الكل مؤقتًا</string>
     <string name="downloads_resume_all">استئناف الكل</string>
-    <string name="downloads_retry_all">إعادة المحاولة للكل</string>
+    <string name="downloads_retry_all">إعادة محاولة الكل</string>
     <string name="downloads_batch_accessibility">%1$s، %2$s</string>
     <plurals name="downloads_count">
         <item quantity="zero">لا توجد تنزيلات</item>
@@ -175,26 +175,26 @@
         <item quantity="other">تم استئناف %1$s تنزيل</item>
     </plurals>
     <plurals name="downloads_retried_n">
-        <item quantity="zero">لا إعادة محاولة لأي تنزيل</item>
-        <item quantity="one">إعادة المحاولة لتنزيل واحد</item>
-        <item quantity="two">إعادة المحاولة لتنزيلين</item>
-        <item quantity="few">إعادة المحاولة لـ %1$s تنزيلات</item>
-        <item quantity="many">إعادة المحاولة لـ %1$s تنزيلًا</item>
-        <item quantity="other">إعادة المحاولة لـ %1$s تنزيل</item>
+        <item quantity="zero">لا تنزيلات لإعادة المحاولة</item>
+        <item quantity="one">إعادة محاولة تنزيل واحد</item>
+        <item quantity="two">إعادة محاولة تنزيلين</item>
+        <item quantity="few">إعادة محاولة %1$s تنزيلات</item>
+        <item quantity="many">إعادة محاولة %1$s تنزيلًا</item>
+        <item quantity="other">إعادة محاولة %1$s تنزيل</item>
     </plurals>
     <string name="download_waiting">في قائمة الانتظار</string>
     <string name="download_waiting_hot">الهاتف ساخن، في الانتظار</string>
-    <string name="downloads_heat_note">الهاتف ساخن، لذا يعمل تنزيل واحد الآن. البقية تبدأ وحدها عندما يبرد.</string>
+    <string name="downloads_heat_note">هاتفك ساخن، لذا يعمل تنزيل واحد فقط الآن. وستبدأ البقية وحدها عندما يبرد.</string>
     <string name="download_waiting_for_data">في انتظار البيانات…</string>
     <string name="download_retry_hint">شارك الرابط أو الصقه مجددًا لإعادة المحاولة</string>
     <string name="download_cancel_accessibility">إلغاء التنزيل %1$s</string>
     <string name="pause">إيقاف مؤقت</string>
-    <string name="resume">متابعة</string>
+    <string name="resume">استئناف</string>
     <string name="download_paused">متوقف مؤقتًا</string>
     <string name="download_waiting_network">في انتظار الاتصال</string>
     <string name="download_restarting">نبدأ من جديد</string>
     <string name="download_pause_accessibility">إيقاف تنزيل %1$s مؤقتًا</string>
-    <string name="download_resume_accessibility">متابعة تنزيل %1$s</string>
+    <string name="download_resume_accessibility">استئناف تنزيل %1$s</string>
     <string name="download_speed">%1$s/s</string>
     <string name="download_bytes_per_second">%1$s\u00A0B/s</string>
     <string name="download_transfer_remaining">متبقٍّ للتنزيل ≈ %1$s</string>
@@ -241,7 +241,7 @@
     <string name="saved_snackbar">تم الحفظ في %1$s</string>
     <string name="saved_action_failed">تعذّر فتح الملف أو إتمام الإجراء، جرّب تطبيق الملفات</string>
     <string name="saved_load_failed">تعذّر عرض الملفات المحفوظة، افتح تطبيق الملفات أو أعد المحاولة</string>
-    <string name="saved_loading">جارٍ تحميل الملفات المحفوظة…</string>
+    <string name="saved_loading">جارٍ عرض الملفات المحفوظة…</string>
     <string name="saved_size_unknown">الحجم غير معروف</string>
     <string name="recent_files">الملفات الأخيرة</string>
     <string name="see_all">عرض الكل</string>
@@ -256,7 +256,7 @@
         <item quantity="other">%1$s تنزيل جارٍ</item>
     </plurals>
     <string name="automatic_options">عرض الخيارات تلقائيًا</string>
-    <string name="automatic_options_help">الحفظ يبدأ بضغطتك فقط</string>
+    <string name="automatic_options_help">لا يبدأ الحفظ إلا بضغطة منك</string>
     <string name="not_now">ليس الآن</string>
     <string name="rough_size">≈ %1$s</string>
     <string name="link_field_hint">الصق رابطًا عامًا</string>
@@ -282,18 +282,18 @@
     <string name="image_large_title">الصورة كبيرة جدًا</string>
     <string name="image_private_title">هذا المنشور ليس عامًا</string>
     <string name="facebook_story_title">لا يمكن حفظ قصص فيسبوك</string>
-    <string name="facebook_story_body">القصص تحتاج تسجيل الدخول إلى فيسبوك. يحفظ Nezzel المنشورات والريلز والفيديوهات العامة</string>
+    <string name="facebook_story_body">تتطلب القصص تسجيل الدخول إلى فيسبوك. يحفظ Nezzel المنشورات والريلز والفيديوهات العامة</string>
     <string name="image_changed">تغيّرت الصورة، تحقّق من الرابط مجددًا</string>
     <string name="image_save_failed">تعذّر حفظ الصورة</string>
     <string name="image_preview_quality">جودة المعاينة: يوفّر المنشور نسخة أصغر فقط</string>
     <string name="pending_share_from">رابط جديد من %1$s</string>
     <string name="quality_very_low">منخفضة جدًا</string>
-    <string name="quality_very_low_hint">تستهلك بيانات أقل</string>
+    <string name="quality_very_low_hint">توفّر بيانات أكثر</string>
     <string name="paste_another_link">لصق رابط آخر</string>
     <string name="contact_whatsapp">راسلنا على واتساب</string>
     <string name="contact_whatsapp_intro">مرحبًا 👋 شكرًا على Nezzel!</string>
     <string name="nezzel_close">إغلاق</string>
-    <string name="saved_before">سبق حفظ هذا الملف في %1$s</string>
+    <string name="saved_before">حفظتَ هذا الملف في %1$s</string>
     <string name="network_title">تعذّر الاتصال</string>
     <string name="network_body">تحقق من اتصالك، ثم أعد المحاولة</string>
     <string name="about">حول Nezzel</string>
@@ -312,7 +312,7 @@
     <string name="about_hide_licence">إخفاء نص ترخيص \u2066%1$s\u2069</string>
     <string name="about_view_licence">عرض الترخيص</string>
     <string name="about_hide_licence_short">إخفاء الترخيص</string>
-    <string name="image_linked_elsewhere">يشير هذا المنشور إلى محتوى آخر — افتح رابطه في Nezzel</string>
+    <string name="image_linked_elsewhere">يشير هذا المنشور إلى محتوى آخر، افتح رابطه في Nezzel</string>
     <string name="image_select_all">تحديد الكل</string>
     <string name="image_select_none">إلغاء تحديد الكل</string>
     <string name="image_thumbnail_desc">الصورة %1$s من %2$s</string>
@@ -339,12 +339,12 @@
         <item quantity="other">%1$s صورة متاحة</item>
     </plurals>
     <plurals name="image_unavailable_count">
-        <item quantity="zero">لا صور تعذّر تحميلها</item>
-        <item quantity="one">تعذّر تحميل صورة واحدة</item>
-        <item quantity="two">تعذّر تحميل صورتين</item>
-        <item quantity="few">تعذّر تحميل %1$s صور</item>
-        <item quantity="many">تعذّر تحميل %1$s صورة</item>
-        <item quantity="other">تعذّر تحميل %1$s صورة</item>
+        <item quantity="zero">لا صور تعذّر عرضها</item>
+        <item quantity="one">تعذّر عرض صورة واحدة</item>
+        <item quantity="two">تعذّر عرض صورتين</item>
+        <item quantity="few">تعذّر عرض %1$s صور</item>
+        <item quantity="many">تعذّر عرض %1$s صورة</item>
+        <item quantity="other">تعذّر عرض %1$s صورة</item>
     </plurals>
     <plurals name="image_saved_count">
         <item quantity="zero">لم تُحفظ أي صورة</item>
@@ -362,7 +362,7 @@
         <item quantity="many">لا يمكن عرض %1$s صورة أو حفظها هنا بسبب بلوغ حد المعاينة</item>
         <item quantity="other">لا يمكن عرض %1$s صورة أو حفظها هنا بسبب بلوغ حد المعاينة</item>
     </plurals>
-    <string name="image_photos_unavailable">يحتوي هذا المنشور أيضًا على صور تعذّر تحميلها، نعرض خيارات الفيديو</string>
+    <string name="image_photos_unavailable">في هذا المنشور صور أيضًا، لكن تعذّر عرضها، لذا نعرض خيارات الفيديو</string>
     <string name="image_preview_limit_title">بلغنا حد المعاينة</string>
     <string name="image_preview_limit_body">لم نعرض معاينات الصور لأننا بلغنا الحد المسموح لحجم المعاينة</string>
     <string name="save_to">الحفظ في</string>
@@ -374,21 +374,21 @@
     <string name="onboarding_skip">تخطّي</string>
     <string name="onboarding_next">التالي</string>
     <string name="onboarding_start">ابدأ</string>
-    <string name="onboarding_copy_title">فقط شارك الرابط</string>
-    <string name="onboarding_copy_body">انسخ الرابط وافتح Nezzel، أو شاركه إليه مباشرة\n\nتظهر الخيارات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات</string>
+    <string name="onboarding_copy_title">يكفي أن تشارك الرابط</string>
+    <string name="onboarding_copy_body">انسخ الرابط وافتح Nezzel، أو شاركه معه مباشرة\n\nتظهر الخيارات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات</string>
     <string name="onboarding_quality_title">اختر الجودة التي تناسبك</string>
-    <string name="onboarding_quality_body">من Full HD إلى الصوت فقط، الخيار لك، والصور أيضًا</string>
-    <string name="onboarding_saved_title">يُحفظ بلمسة واحدة</string>
+    <string name="onboarding_quality_body">من Full HD إلى الصوت فقط، والصور أيضًا. الخيار لك</string>
+    <string name="onboarding_saved_title">يُحفظ بضغطة واحدة</string>
     <string name="onboarding_saved_body">ستجد ملفاتك في «التنزيلات» جاهزة للمشاهدة أو المشاركة، ويمكنك تغيير المجلد متى شئت من الإعدادات</string>
     <string name="onboarding_copy_illustration">انسخ رابطًا أو شاركه لفتحه في Nezzel</string>
     <string name="onboarding_quality_illustration">مثال: اختيار جودة فيديو أو صور لحفظها</string>
-    <string name="onboarding_saved_illustration">مثال: ظهور ملف محفوظ في التنزيلات</string>
+    <string name="onboarding_saved_illustration">مثال: ملف محفوظ يظهر في التنزيلات</string>
     <string name="onboarding_statuses_title">حالات واتساب أيضًا</string>
     <string name="onboarding_statuses_body">افتح تبويب «الحالات» واسمح بالوصول مرة واحدة، ثم احفظ الصور والفيديو من كل حسابات واتساب</string>
     <string name="onboarding_statuses_illustration">مثال: حالات واتساب جاهزة للحفظ، وإحداها محفوظة</string>
     <string name="onboarding_page">الصفحة %1$s من %2$s</string>
     <string name="onboarding_anywhere_title">احتفظ بما تحب</string>
-    <string name="onboarding_anywhere_body">فيديو وصوت وصور من الروابط العامة، بتجربة نظيفة بلا إعلانات ولا حساب</string>
+    <string name="onboarding_anywhere_body">فيديو وصوت وصور من الروابط العامة، بلا إعلانات ولا حساب</string>
     <string name="onboarding_anywhere_illustration">Nezzel مع رموز الفيديو والصوت والصور، فوق شعارات مواقع يحفظ منها</string>
     <string name="onboarding_copy_action">نسخ</string>
     <string name="onboarding_example_url">example.com/…</string>
@@ -412,11 +412,11 @@
     <string name="link_copied">تم نسخ الرابط</string>
     <string name="settings_privacy">الخصوصية</string>
     <string name="clear_link_history">مسح سجل الروابط</string>
-    <string name="clear_link_history_help">انسَ مصدر تنزيلاتك. تبقى ملفاتك.</string>
+    <string name="clear_link_history_help">يمحو روابط تنزيلاتك، وتبقى ملفاتك.</string>
     <string name="help_improve">ساعد في تحسين Nezzel</string>
-    <string name="clear_link_history_title">مسح سجل الروابط؟</string>
+    <string name="clear_link_history_title">هل تريد مسح سجل الروابط؟</string>
     <string name="clear_link_history_body">سينسى Nezzel روابط كل تنزيلاتك. تبقى ملفاتك على هاتفك.</string>
-    <string name="clear_link_history_failed">تعذّر مسح سجل الروابط. حاول مرة أخرى.</string>
+    <string name="clear_link_history_failed">تعذّر مسح سجل الروابط. أعد المحاولة.</string>
     <string name="clear">مسح</string>
     <string name="settings_advanced">إعدادات متقدمة</string>
     <string name="settings_advanced_help">الروابط ودعم المواقع والتحديثات</string>
@@ -430,7 +430,7 @@
     <string name="audio_only_type">صوت فقط · %1$s</string>
 
     <!-- App updates: owner-approved GitHub checks, explicit installation. -->
-    <string name="update_available_title">نسخة أفضل من Nezzel جاهزة</string>
+    <string name="update_available_title">إصدار أفضل من Nezzel جاهز</string>
     <string name="update_card_version">⁦Nezzel %1$s⁩</string>
     <string name="update_action">تحديث</string>
     <string name="update_not_now">ليس الآن</string>
@@ -467,11 +467,11 @@
     <string name="update_notification_text">اضغط لمعرفة الجديد وتحديث التطبيق</string>
     <string name="settings_updates_last_checked">آخر تحقق</string>
     <string name="whats_new_title">الجديد في ⁦Nezzel %1$s⁩</string>
-    <string name="whats_new_ok">تمام</string>
+    <string name="whats_new_ok">حسنًا</string>
     <string name="update_full_notes">كل التغييرات على GitHub</string>
     <string name="update_meta">لديك %1$s · %2$s</string>
     <string name="update_trust">يتحقق ⁦Nezzel⁩ من الملف وتوقيعه قبل التثبيت</string>
-    <string name="update_downloading">جارٍ التنزيل %1$s</string>
+    <string name="update_downloading">جارٍ تنزيل %1$s</string>
     <string name="settings_update_accessibility">الإعدادات، يتوفر تحديث</string>
     <string name="shortcut_paste_link">الصق الرابط</string>
     <string name="widget_idle">لا تنزيلات الآن</string>
@@ -505,8 +505,8 @@
     <string name="statuses_save">حفظ</string>
     <string name="statuses_saved">تم الحفظ</string>
     <string name="statuses_filter_all">الكل</string>
-    <string name="statuses_filter_photos">صور</string>
-    <string name="statuses_filter_videos">فيديو</string>
+    <string name="statuses_filter_photos">الصور</string>
+    <string name="statuses_filter_videos">الفيديوهات</string>
     <string name="statuses_hide_saved">إخفاء المحفوظة</string>
     <string name="statuses_new">جديدة</string>
     <string name="statuses_account_n">الحساب %1$s</string>
@@ -521,7 +521,7 @@
     </plurals>
     <string name="statuses_photo">صورة</string>
     <string name="statuses_video">فيديو</string>
-    <string name="statuses_save_failed">تعذّر الحفظ. حاول مرة أخرى.</string>
+    <string name="statuses_save_failed">تعذّر الحفظ. أعد المحاولة.</string>
     <string name="statuses_select">تحديد</string>
     <plurals name="statuses_save_n">
         <item quantity="zero">حفظ %1$s</item>
@@ -562,25 +562,25 @@
     <string name="check_line_audio">الصوت موجود</string>
     <string name="check_line_silent">هذا الفيديو بلا صوت</string>
     <string name="check_problem_no_sound">تم الحفظ، لكن بلا صوت</string>
-    <string name="check_problem_no_picture">تم الحفظ، لكن الصورة غير موجودة</string>
+    <string name="check_problem_no_picture">تم الحفظ، لكن بلا صورة</string>
     <string name="check_problem_damaged">تم الحفظ، لكن الملف يبدو تالفًا</string>
-    <string name="check_needs_look">يحتاج نظرة</string>
+    <string name="check_needs_look">يحتاج إلى مراجعة</string>
     <!-- Look for better quality (B2/B3) -->
     <string name="better_quality_action">ابحث عن جودة أفضل</string>
     <string name="better_quality_support">يفحص الرابط مرة أخرى</string>
-    <string name="better_quality_note">حفظتَ بجودة %1$s. الجودات الأعلى في الأعلى.</string>
+    <string name="better_quality_note">حفظتَ بجودة %1$s. الجودة الأعلى تظهر أولًا.</string>
     <string name="better_quality_none">لم نجد جودة أفضل لهذا الرابط</string>
     <string name="share_sheet_open_app">فتح في Nezzel</string>
     <string name="share_sheet_started">بدأ التنزيل</string>
     <string name="share_sheet_pane">Nezzel، خيارات التنزيل</string>
     <string name="share_notify_line">اسمح بالإشعارات لمتابعة التقدّم. التنزيل يعمل بدونها.</string>
-    <string name="download_again">تنزيل مرة أخرى</string>
-    <string name="download_again_size">تنزيل مرة أخرى · %1$s</string>
+    <string name="download_again">إعادة التنزيل</string>
+    <string name="download_again_size">إعادة التنزيل · %1$s</string>
     <!-- Playlist notices (0.5). -->
     <string name="playlist_first_video_warning">هذا الرابط قائمة تشغيل. سيُحفظ أول فيديو فقط.</string>
-    <string name="playlist_mix_note">قوائم «ميكس» في يوتيوب لا تُحفظ كقائمة. هذا الفيديو فقط.</string>
+    <string name="playlist_mix_note">لا يمكن حفظ قوائم «ميكس» في يوتيوب كاملة. هذا الفيديو فقط.</string>
     <string name="playlist_private_message">هذه القائمة خاصة ولا يمكن فتحها.</string>
-    <string name="filter_videos">فيديوهات</string>
+    <string name="filter_videos">الفيديوهات</string>
     <string name="saved_sort_accessibility">ترتيب الملفات المحفوظة: %1$s</string>
     <string name="saved_sort_newest">الأحدث</string>
     <string name="saved_sort_largest">الأكبر حجمًا</string>
@@ -603,9 +603,9 @@
         <item quantity="other">تنزيل %1$s فيديو</item>
     </plurals>
     <string name="playlist_select_all">تحديد الكل</string>
-    <string name="playlist_select_none">إلغاء التحديد</string>
+    <string name="playlist_select_none">إلغاء تحديد الكل</string>
     <string name="playlist_selected">تم تحديد %1$s</string>
-    <string name="playlist_quality_helper">كل فيديو يأخذ أقرب جودة متوفرة له.</string>
+    <string name="playlist_quality_helper">يُحفظ كل فيديو بأقرب جودة متاحة له.</string>
     <string name="playlist_sizes">تظهر الأحجام عند بدء كل فيديو.</string>
     <string name="playlist_limit">حتى 200 فيديو في المرة.</string>
     <string name="playlist_live">بث مباشر</string>
@@ -616,17 +616,17 @@
     <string name="playlist_progress">قائمة تشغيل %1$s من %2$s</string>
     <string name="playlist_pause_all">إيقاف الكل مؤقتًا</string>
     <string name="playlist_retry">إعادة المحاولة (%1$s)</string>
-    <string name="playlist_waiting_network">في انتظار الشبكة</string>
-    <string name="playlist_slowed">طلب يوتيوب إبطاء الطلبات. تم الإيقاف مؤقتًا.</string>
+    <string name="playlist_waiting_network">في انتظار الاتصال</string>
+    <string name="playlist_slowed">طلب يوتيوب التمهّل، فأوقفنا التنزيل مؤقتًا.</string>
     <string name="playlist_stop">إيقاف</string>
-    <string name="playlist_stop_confirm">إيقاف قائمة التشغيل هذه؟ تبقى الفيديوهات المحفوظة.</string>
+    <string name="playlist_stop_confirm">هل تريد إيقاف قائمة التشغيل؟ تبقى الفيديوهات المحفوظة.</string>
     <string name="playlist_done">اكتمل: تم حفظ %1$s، وتعذّر حفظ %2$s</string>
     <string name="playlist_see_why">عرض السبب</string>
     <string name="playlist_notification_progress">قائمة تشغيل: تم حفظ %1$s من %2$s</string>
     <string name="playlist_notification_done">تم حفظ قائمة التشغيل: %1$s فيديو، وتعذّر حفظ %2$s</string>
     <string name="playlist_stopped">تم الإيقاف: لم يبدأ %1$s</string>
-    <string name="playlist_load_failed">تعذّر تحميل قائمة التشغيل.</string>
-    <string name="playlist_submit_failed">تعذّر بدء حفظ قائمة التشغيل. حاول مجددًا.</string>
+    <string name="playlist_load_failed">تعذّر فتح قائمة التشغيل.</string>
+    <string name="playlist_submit_failed">تعذّر بدء حفظ قائمة التشغيل. أعد المحاولة.</string>
     <string name="playlist_done_saved">اكتمل: تم حفظ %1$s</string>
     <!-- dl-running: Downloads tabs -->
     <string name="dl_tab_running">جارية</string>
@@ -643,8 +643,8 @@
     <string name="viewer_mute">كتم الصوت</string>
     <string name="viewer_unmute">تشغيل الصوت</string>
     <string name="viewer_position">الموضع</string>
-    <string name="library_show_grid">عرض كشبكة</string>
-    <string name="library_show_list">عرض كقائمة</string>
+    <string name="library_show_grid">عرض على شكل شبكة</string>
+    <string name="library_show_list">عرض على شكل قائمة</string>
     <!-- multi-link: Download all for several pasted or shared links -->
     <plurals name="multi_link_title">
         <item quantity="zero">لا روابط</item>
@@ -665,13 +665,13 @@
     <string name="multi_link_remove">إزالة %1$s</string>
     <string name="multi_link_notification_progress">%1$s: تم حفظ %2$s من %3$s</string>
     <string name="multi_link_notification_done">%1$s: تم حفظ %2$s، وتعذّر حفظ %3$s</string>
-    <string name="multi_link_submit_failed">تعذّر بدء التنزيلات. حاول مجددًا.</string>
+    <string name="multi_link_submit_failed">تعذّر بدء التنزيلات. أعد المحاولة.</string>
     <string name="multi_link_photo_post">منشور صور: افتحه وحده</string>
     <!-- Find my old downloads after a reinstall -->
-    <string name="old_downloads_offer">نزّلت بـ Nezzel من قبل؟</string>
+    <string name="old_downloads_offer">هل استخدمت Nezzel للتنزيل من قبل؟</string>
     <string name="old_downloads_show">اعرض ملفاتك</string>
     <string name="old_downloads_wrong_folder">اختر مجلد Nezzel داخل Download</string>
-    <string name="old_downloads_setting">اعرض تنزيلاتك القديمة</string>
+    <string name="old_downloads_setting">عرض التنزيلات القديمة</string>
     <string name="old_downloads_setting_body">ملفات حفظتها قبل إعادة تثبيت Nezzel</string>
     <string name="paste">لصق</string>
     <string name="home_hero_title">احفظ الفيديوهات على هاتفك</string>

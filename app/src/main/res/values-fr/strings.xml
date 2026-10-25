@@ -29,22 +29,22 @@
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">Sans publicité ni compte</string>
     <string name="shared_video">Lien partagé</string>
-    <string name="checking_qualities">Récupération des qualités…</string>
-    <string name="nothing_downloads">L’enregistrement commence seulement si vous appuyez sur Télécharger ou Enregistrer</string>
+    <string name="checking_qualities">Recherche des qualités…</string>
+    <string name="nothing_downloads">L’enregistrement ne démarre que si vous appuyez sur Télécharger ou Enregistrer</string>
     <string name="cancel">Annuler</string>
     <string name="video_group">Vidéo</string>
     <string name="audio_group">Audio</string>
-    <string name="preset_best">Meilleure qualité disponible</string>
+    <string name="preset_best">Meilleure qualité</string>
     <string name="preset_balanced">Équilibrée</string>
     <string name="preset_small">Petit fichier</string>
     <string name="last_used">Dernier choix</string>
     <string name="all_formats">Toutes les qualités</string>
-    <string name="unknown_size">Taille indisponible</string>
+    <string name="unknown_size">Taille inconnue</string>
     <string name="estimated_size">≈ %1$s</string>
     <string name="download_size">Télécharger · %1$s</string>
-    <string name="saves_to">Enregistrement dans %1$s</string>
-    <string name="mobile_data_about">Utilise environ %1$s de vos données mobiles</string>
-    <string name="mobile_data_exact">Utilise %1$s de vos données mobiles</string>
+    <string name="saves_to">Enregistré dans %1$s</string>
+    <string name="mobile_data_about">Consomme environ %1$s de données mobiles</string>
+    <string name="mobile_data_exact">Consomme %1$s de données mobiles</string>
     <string name="choice_confirmed">Choix confirmé</string>
     <string name="checking_again">Nouvelle vérification…</string>
     <string name="options_changed">Les options ont changé. Choisissez à nouveau.</string>
@@ -63,7 +63,7 @@
     <string name="quality_low">Basse</string>
     <string name="quality_low_hint">Économise les données</string>
     <string name="quality_lowest">Minimale</string>
-    <string name="quality_lowest_hint">Moins nette</string>
+    <string name="quality_lowest_hint">La moins nette</string>
     <string name="video_unknown_quality">Vidéo</string>
     <string name="video_animated_gif">GIF (sans son)</string>
     <string name="video_animated_gif_hint">GIF animé de X, enregistré en vidéo sans son</string>
@@ -77,13 +77,13 @@
     <string name="unsupported_title">Aucun fichier à télécharger</string>
     <string name="unsupported_body">Aucun fichier à télécharger pour ce lien — essayez un autre lien public</string>
     <string name="no_video_title">Cette publication n’a pas de vidéo</string>
-    <string name="no_video_body">Nezzel ne peut pas enregistrer de vidéo de cette publication — elle contient peut-être seulement des photos</string>
+    <string name="no_video_body">Nezzel ne peut pas enregistrer de vidéo de cette publication — elle ne contient peut-être que des photos</string>
     <string name="video_gone_title">Cette vidéo est indisponible</string>
     <string name="video_gone_body">Elle a peut-être été supprimée ou n’est pas disponible dans votre région</string>
     <string name="not_a_post_title">Ce lien ne mène pas à une publication</string>
-    <string name="not_a_post_body">Ce lien ouvre l’accueil du site — la publication a peut-être été supprimée, copiez à nouveau son lien</string>
-    <string name="private_title">Connexion au compte requise</string>
-    <string name="private_body">Ce contenu nécessite une connexion au compte — Nezzel enregistre seulement les vidéos et images publiques</string>
+    <string name="not_a_post_body">Ce lien ouvre l’accueil du site — la publication a peut-être été supprimée\u00A0: copiez à nouveau son lien</string>
+    <string name="private_title">Connexion requise</string>
+    <string name="private_body">Ce contenu nécessite une connexion — Nezzel enregistre seulement les vidéos et images publiques</string>
     <string name="source_refused_title">Le site refuse l’accès</string>
     <string name="source_refused_body">Le site a bloqué la demande de Nezzel — essayez un autre lien public</string>
     <string name="protected_title">Cette vidéo est protégée</string>
@@ -100,7 +100,7 @@
     <string name="download_channel">Téléchargements</string>
     <string name="download_preparing">Préparation…</string>
     <string name="download_transferring">Téléchargement</string>
-    <string name="download_joining">Assemblage de l’audio et de la vidéo…</string>
+    <string name="download_joining">Fusion de l’audio et de la vidéo…</string>
     <string name="download_converting">Conversion en MP3…</string>
     <string name="download_saving">Enregistrement…</string>
     <string name="download_finishing">Finalisation…</string>
@@ -121,15 +121,15 @@
     <string name="download_coordinator_error">Téléchargements indisponibles — rouvrez Nezzel pour réessayer</string>
     <string name="completed_channel">Téléchargements terminés</string>
     <string name="engine_version_unknown">Inconnue</string>
-    <string name="engine_update_now">Mettre à jour les sites</string>
-    <string name="engine_updating">Mise à jour des sites…</string>
-    <string name="engine_updated">Les sites sont à jour</string>
-    <string name="engine_update_failed">Échec de la mise à jour des sites — réessayez dans les paramètres</string>
-    <string name="engine_update_rolled_back">Échec de la mise à jour des sites — version intégrée utilisée</string>
+    <string name="engine_update_now">Mettre à jour la compatibilité</string>
+    <string name="engine_updating">Mise à jour de la compatibilité…</string>
+    <string name="engine_updated">Compatibilité des sites à jour</string>
+    <string name="engine_update_failed">Échec de la mise à jour — réessayez dans les Paramètres</string>
+    <string name="engine_update_rolled_back">Échec de la mise à jour — version intégrée utilisée</string>
     <string name="engine_getting_ready">Préparation…</string>
     <string name="engine_preparing">Préparation (la première fois seulement)…</string>
     <string name="engine_update_busy">Nezzel est occupé — réessayez dans un instant</string>
-    <string name="engine_update_paused_title">Mettre à jour maintenant ?</string>
+    <string name="engine_update_paused_title">Mettre à jour maintenant\u00A0?</string>
     <string name="engine_update_paused_body">Les téléchargements en pause recommenceront depuis le début.</string>
     <string name="engine_update_paused_confirm">Mettre à jour</string>
     <string name="parallel_downloads">Téléchargements simultanés</string>
@@ -156,9 +156,9 @@
         <item quantity="other">%1$s téléchargements</item>
     </plurals>
     <plurals name="downloads_paused_n">
-        <item quantity="one">%1$s téléchargement en pause</item>
-        <item quantity="many">%1$s téléchargements en pause</item>
-        <item quantity="other">%1$s téléchargements en pause</item>
+        <item quantity="one">%1$s téléchargement mis en pause</item>
+        <item quantity="many">%1$s téléchargements mis en pause</item>
+        <item quantity="other">%1$s téléchargements mis en pause</item>
     </plurals>
     <plurals name="downloads_resumed_n">
         <item quantity="one">%1$s téléchargement repris</item>
@@ -166,9 +166,9 @@
         <item quantity="other">%1$s téléchargements repris</item>
     </plurals>
     <plurals name="downloads_retried_n">
-        <item quantity="one">Nouvel essai pour %1$s téléchargement</item>
-        <item quantity="many">Nouvel essai pour %1$s téléchargements</item>
-        <item quantity="other">Nouvel essai pour %1$s téléchargements</item>
+        <item quantity="one">%1$s téléchargement relancé</item>
+        <item quantity="many">%1$s téléchargements relancés</item>
+        <item quantity="other">%1$s téléchargements relancés</item>
     </plurals>
     <string name="download_waiting">En attente</string>
     <string name="download_waiting_hot">Téléphone chaud, en attente</string>
@@ -180,7 +180,7 @@
     <string name="resume">Reprendre</string>
     <string name="download_paused">En pause</string>
     <string name="download_waiting_network">En attente du réseau</string>
-    <string name="download_restarting">On repart</string>
+    <string name="download_restarting">Redémarrage</string>
     <string name="download_pause_accessibility">Mettre en pause le téléchargement de %1$s</string>
     <string name="download_resume_accessibility">Reprendre le téléchargement de %1$s</string>
     <string name="download_speed">%1$s/s</string>
@@ -196,7 +196,7 @@
     <string name="saved_image_dimensions">%1$s × %2$s</string>
     <string name="saved_today">Aujourd’hui</string>
     <string name="saved_yesterday">Hier</string>
-    <string name="saved_search">Rechercher des fichiers enregistrés</string>
+    <string name="saved_search">Rechercher dans les fichiers enregistrés</string>
     <string name="saved_search_close">Fermer la recherche</string>
     <string name="saved_search_clear">Effacer la recherche</string>
     <string name="saved_more">Autres actions pour %1$s</string>
@@ -204,15 +204,15 @@
     <string name="saved_show_files">Voir dans Fichiers</string>
     <string name="saved_delete">Supprimer</string>
     <string name="saved_delete_title">Supprimer ce fichier ?</string>
-    <string name="saved_delete_body">Il sera supprimé de votre téléphone, y compris de Galerie et Fichiers</string>
+    <string name="saved_delete_body">Il sera supprimé de votre téléphone, y compris de la Galerie et de Fichiers</string>
     <string name="saved_select_all">Tout sélectionner</string>
     <string name="saved_deselect_all">Tout désélectionner</string>
     <string name="saved_select">Sélectionner le fichier</string>
-    <string name="saved_selection_close">Fermer la sélection</string>
+    <string name="saved_selection_close">Quitter la sélection</string>
     <string name="saved_selected_state">Sélectionné</string>
     <string name="saved_unselected_state">Non sélectionné</string>
     <string name="saved_delete_selected_title">Supprimer les fichiers sélectionnés ?</string>
-    <string name="saved_delete_selected_body">Ces fichiers seront supprimés de votre téléphone, y compris de Galerie et Fichiers</string>
+    <string name="saved_delete_selected_body">Ces fichiers seront supprimés de votre téléphone, y compris de la Galerie et de Fichiers</string>
     <string name="saved_delete_partial">Certains fichiers n’ont pas pu être supprimés — vérifiez les fichiers enregistrés et réessayez</string>
     <plurals name="saved_selected">
         <item quantity="one">%1$s sélectionné</item>
@@ -220,7 +220,7 @@
         <item quantity="other">%1$s sélectionnés</item>
     </plurals>
     <string name="saved_deleted">Supprimé</string>
-    <string name="saved_empty_title">Rien d’enregistré</string>
+    <string name="saved_empty_title">Aucun fichier enregistré</string>
     <string name="saved_empty_body">Vos fichiers enregistrés apparaîtront ici</string>
     <string name="saved_no_matches">Aucun fichier correspondant</string>
     <string name="saved_snackbar">Enregistré dans %1$s</string>
@@ -230,7 +230,7 @@
     <string name="saved_size_unknown">Taille inconnue</string>
     <string name="recent_files">Récents</string>
     <string name="see_all">Tout voir</string>
-    <string name="download_merge_error">Impossible d’assembler l’audio et la vidéo</string>
+    <string name="download_merge_error">Impossible de fusionner l’audio et la vidéo</string>
     <string name="download_restricted_error">Android a arrêté ce téléchargement</string>
     <plurals name="downloads_running">
         <item quantity="one">%1$s téléchargement en cours</item>
@@ -238,7 +238,7 @@
         <item quantity="other">%1$s téléchargements en cours</item>
     </plurals>
     <string name="automatic_options">Afficher les options automatiquement</string>
-    <string name="automatic_options_help">L’enregistrement attend toujours votre appui</string>
+    <string name="automatic_options_help">Rien ne s’enregistre sans votre accord</string>
     <string name="not_now">Plus tard</string>
     <string name="rough_size">≈ %1$s</string>
     <string name="link_field_hint">Collez un lien public</string>
@@ -254,7 +254,7 @@
     <string name="image_save_size">Enregistrer l’image · %1$s</string>
     <string name="image_saving">Enregistrement de l’image…</string>
     <string name="image_none_title">Aucune image trouvée</string>
-    <string name="image_none_body">Cette publication n’a pas d’image publique que Nezzel peut enregistrer</string>
+    <string name="image_none_body">Cette publication n’a pas d’image publique que Nezzel puisse enregistrer</string>
     <string name="image_type_title">Type d’image non pris en charge</string>
     <string name="image_type_body">Nezzel enregistre les images JPEG, PNG, WebP et GIF</string>
     <string name="image_source_refused_title">Impossible de lire cette publication</string>
@@ -267,7 +267,7 @@
     <string name="facebook_story_body">Les stories nécessitent une connexion à Facebook. Nezzel enregistre les publications, reels et vidéos publics</string>
     <string name="image_changed">L’image a changé — vérifiez à nouveau le lien</string>
     <string name="image_save_failed">Impossible d’enregistrer l’image</string>
-    <string name="image_preview_quality">Qualité d’aperçu : la publication propose seulement une copie plus petite</string>
+    <string name="image_preview_quality">Qualité d’aperçu\u00A0: la publication ne propose qu’une version réduite</string>
     <string name="pending_share_from">Nouveau lien de %1$s</string>
     <string name="quality_very_low">Très basse</string>
     <string name="quality_very_low_hint">Économise plus de données</string>
@@ -283,7 +283,7 @@
     <string name="crash_delete">Supprimer les rapports d’erreur</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_body">Nezzel est gratuit et télécharge les fichiers sur votre téléphone sans publicité, grâce à des logiciels libres : yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) et Python (PSF) — source : github.com/ahmed-abdat/nezzel</string>
-    <string name="company_made_by">Créé par %1$s</string>
+    <string name="company_made_by">Développé par %1$s</string>
     <string name="company_open_site">Ouvrir le site de %1$s</string>
     <string name="company_facebook">Facebook</string>
     <string name="company_open_facebook">Ouvrir la page Facebook de %1$s</string>
@@ -335,23 +335,23 @@
     <string name="save_to">Enregistrer dans</string>
     <string name="save_folder_default">Dossier par défaut</string>
     <string name="save_folder_unavailable">Dossier indisponible</string>
-    <string name="save_folder_error">Impossible d’enregistrer dans ce dossier — sélectionnez-le à nouveau dans les paramètres</string>
+    <string name="save_folder_error">Impossible d’enregistrer dans ce dossier — sélectionnez-le à nouveau dans les Paramètres</string>
     <string name="onboarding_how_it_works">Comment ça marche</string>
     <string name="onboarding_skip">Passer</string>
     <string name="onboarding_next">Suivant</string>
     <string name="onboarding_start">Commencer</string>
     <string name="onboarding_copy_title">Partagez simplement le lien</string>
-    <string name="onboarding_copy_body">Copiez un lien et ouvrez Nezzel, ou partagez-le directement avec Nezzel\n\nLes options s’affichent toutes seules. Vous pouvez désactiver cela dans les paramètres</string>
+    <string name="onboarding_copy_body">Copiez un lien et ouvrez Nezzel, ou partagez-le directement avec Nezzel\n\nLes options s’affichent toutes seules. Vous pouvez désactiver cela dans les Paramètres</string>
     <string name="onboarding_quality_title">Choisissez la qualité</string>
     <string name="onboarding_quality_body">De la Full HD à l’audio seul, vous choisissez. Les photos aussi</string>
     <string name="onboarding_saved_title">Enregistré en un appui</string>
-    <string name="onboarding_saved_body">Vos fichiers sont dans Téléchargements, prêts à être lus ou partagés. Changez de dossier à tout moment dans les paramètres</string>
+    <string name="onboarding_saved_body">Vos fichiers sont dans Téléchargements, prêts à être lus ou partagés. Changez de dossier à tout moment dans les Paramètres</string>
     <string name="onboarding_copy_illustration">Copiez ou partagez un lien pour l’ouvrir dans Nezzel</string>
     <string name="onboarding_quality_illustration">Exemple : choisir une qualité vidéo ou des photos à enregistrer</string>
     <string name="onboarding_saved_illustration">Exemple : un fichier enregistré apparaît dans Téléchargements</string>
     <string name="onboarding_statuses_title">Les statuts WhatsApp aussi</string>
     <string name="onboarding_statuses_body">Ouvrez l’onglet Statuts, autorisez l’accès une fois, puis enregistrez photos et vidéos de tous vos comptes WhatsApp</string>
-    <string name="onboarding_statuses_illustration">Exemple : des statuts WhatsApp prêts à enregistrer, dont un déjà enregistré</string>
+    <string name="onboarding_statuses_illustration">Exemple\u00A0: des statuts WhatsApp prêts à enregistrer, dont un déjà enregistré</string>
     <string name="onboarding_page">Page %1$s sur %2$s</string>
     <string name="onboarding_anywhere_title">Gardez ce que vous aimez</string>
     <string name="onboarding_anywhere_body">Vidéos, audio et photos de liens publics. Simple, sans publicité ni compte</string>
@@ -364,7 +364,7 @@
         <item quantity="other">%1$s liens trouvés — on commence par le premier</item>
     </plurals>
     <string name="next_link">Lien suivant (%1$s sur %2$s)</string>
-    <string name="skip_remaining_links">Tout passer</string>
+    <string name="skip_remaining_links">Tout ignorer</string>
     <string name="onboarding_back">Retour</string>
     <string name="onboarding_share_action">Partager</string>
     <string name="onboarding_example">Exemple</string>
@@ -375,18 +375,18 @@
     <string name="link_copied">Lien copié</string>
     <string name="settings_privacy">Confidentialité</string>
     <string name="clear_link_history">Effacer l’historique des liens</string>
-    <string name="clear_link_history_help">Oubliez d’où viennent vos téléchargements. Vos fichiers restent.</string>
+    <string name="clear_link_history_help">Efface l’origine de vos téléchargements. Vos fichiers restent.</string>
     <string name="help_improve">Aider à améliorer Nezzel</string>
     <string name="clear_link_history_title">Effacer l’historique des liens ?</string>
     <string name="clear_link_history_body">Nezzel oubliera les liens de tous vos téléchargements. Vos fichiers restent sur votre téléphone.</string>
     <string name="clear_link_history_failed">Impossible d’effacer l’historique des liens. Réessayez.</string>
     <string name="clear">Effacer</string>
     <string name="settings_advanced">Avancé</string>
-    <string name="settings_advanced_help">Liens, sites et mises à jour</string>
+    <string name="settings_advanced_help">Liens, compatibilité et mises à jour</string>
     <string name="engine_update_body">Utile quand un site ne permet plus de télécharger</string>
     <string name="settings_support_info">Pour l’assistance : moteur %1$s</string>
     <string name="link_handling">Liens</string>
-    <string name="download_tools">Sites compatibles</string>
+    <string name="download_tools">Compatibilité des sites</string>
     <string name="change_save_folder">Dossier d’enregistrement</string>
     <string name="company_link_failed">Impossible d’ouvrir ce lien</string>
     <string name="open_file_failed">Impossible d’ouvrir ce fichier</string>
@@ -409,11 +409,11 @@
     <string name="update_permission_body">Android le demande une seule fois — activez « Autoriser cette source », puis revenez ici</string>
     <string name="update_permission_action">Ouvrir les paramètres</string>
     <string name="update_failed_network">Impossible de télécharger la mise à jour — vérifiez votre connexion, puis réessayez</string>
-    <string name="update_failed_space">Espace libre insuffisant pour la mise à jour (%1$s nécessaires)</string>
+    <string name="update_failed_space">Espace libre insuffisant pour la mise à jour (%1$s requis)</string>
     <string name="update_failed_verify">Cette mise à jour n’a pas pu être vérifiée et n’a donc pas été installée</string>
     <string name="update_not_installed">La mise à jour n’a pas été installée</string>
     <string name="update_open_release">Voir la page de la version</string>
-    <string name="update_done">Mise à jour vers %1$s effectuée</string>
+    <string name="update_done">Mis à jour vers la version %1$s</string>
     <string name="settings_updates_heading">Mises à jour de l’application</string>
     <string name="settings_updates_auto">Rechercher de nouvelles versions</string>
     <string name="settings_updates_auto_body">Vérifie deux fois par jour. Aucune installation sans votre accord</string>
@@ -429,14 +429,14 @@
     <string name="settings_updates_last_checked">Dernière vérification</string>
     <string name="whats_new_title">Nouveautés de Nezzel %1$s</string>
     <string name="whats_new_ok">Compris</string>
-    <string name="update_full_notes">Notes complètes sur GitHub</string>
+    <string name="update_full_notes">Toutes les nouveautés sur GitHub</string>
     <string name="update_meta">Vous avez la version %1$s · %2$s</string>
     <string name="update_trust">Nezzel vérifie le fichier et sa signature avant l’installation</string>
     <string name="update_downloading">Téléchargement de %1$s</string>
     <string name="settings_update_accessibility">Paramètres, mise à jour disponible</string>
     <string name="shortcut_paste_link">Coller un lien</string>
     <string name="widget_idle">Aucun téléchargement en cours</string>
-    <string name="widget_preview_title">Vidéo d\'exemple</string>
+    <string name="widget_preview_title">Vidéo d’exemple</string>
     <string name="widget_paused">En pause</string>
     <string name="widget_more">+%1$s</string>
     <plurals name="widget_more_running">
@@ -447,22 +447,22 @@
     <string name="widget_description">Collez un lien, suivez les téléchargements et ouvrez les fichiers enregistrés</string>
     <string name="shortcut_downloads_short">Fichiers</string>
     <string name="download_battery_error">Android a arrêté ce téléchargement pour économiser la batterie</string>
-    <string name="battery_settings">Réglages batterie</string>
-    <string name="battery_hint_samsung">Samsung : ajoutez Nezzel aux « Applications jamais en veille » dans les réglages batterie</string>
+    <string name="battery_settings">Paramètres de la batterie</string>
+    <string name="battery_hint_samsung">Samsung\u00A0: ajoutez Nezzel aux «\u00A0Applications jamais en veille\u00A0» dans les paramètres de la batterie</string>
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">Statuts</string>
-    <string name="statuses_intro_title">Gardez les statuts que vous avez vus</string>
-    <string name="statuses_intro_body">Regardez un statut dans WhatsApp, puis gardez-le ici.</string>
+    <string name="statuses_intro_title">Enregistrez les statuts que vous avez vus</string>
+    <string name="statuses_intro_body">Regardez un statut dans WhatsApp, puis enregistrez-le ici.</string>
     <string name="statuses_grant">Autoriser l’accès</string>
-    <string name="statuses_grant_hint">Touchez « Utiliser ce dossier », puis « Autoriser »</string>
-    <string name="statuses_not_installed">WhatsApp n’est pas sur ce téléphone</string>
-    <string name="statuses_wrong_folder">Ce n’est pas le bon dossier. Touchez « Utiliser ce dossier » sur cet écran.</string>
+    <string name="statuses_grant_hint">Appuyez sur «\u00A0Utiliser ce dossier\u00A0», puis sur «\u00A0Autoriser\u00A0»</string>
+    <string name="statuses_not_installed">WhatsApp n’est pas installé sur ce téléphone</string>
+    <string name="statuses_wrong_folder">Ce n’est pas le bon dossier. Appuyez sur «\u00A0Utiliser ce dossier\u00A0» sur cet écran.</string>
     <string name="statuses_access_lost">Nezzel n’a plus accès au dossier. Choisissez-le à nouveau.</string>
     <string name="statuses_empty">Aucun statut pour l’instant. Ouvrez-en un dans WhatsApp, puis revenez.</string>
     <string name="statuses_open_whatsapp">Ouvrir WhatsApp</string>
     <string name="statuses_save">Enregistrer</string>
     <string name="statuses_saved">Enregistré</string>
-    <string name="statuses_filter_all">Tout</string>
+    <string name="statuses_filter_all">Tous</string>
     <string name="statuses_filter_photos">Photos</string>
     <string name="statuses_filter_videos">Vidéos</string>
     <string name="statuses_hide_saved">Masquer les enregistrés</string>
@@ -484,9 +484,9 @@
         <item quantity="other">Enregistrer %1$s</item>
     </plurals>
     <plurals name="statuses_gone">
-        <item quantity="one">%1$s statut n’existait plus</item>
-        <item quantity="many">%1$s statuts n’existaient plus</item>
-        <item quantity="other">%1$s statuts n’existaient plus</item>
+        <item quantity="one">%1$s statut a disparu</item>
+        <item quantity="many">%1$s statuts ont disparu</item>
+        <item quantity="other">%1$s statuts ont disparu</item>
     </plurals>
     <plurals name="statuses_new_n">
         <item quantity="one">%1$s nouveau</item>
@@ -501,39 +501,39 @@
     <string name="image_expired_body">Rouvrez le lien pour actualiser les photos.</string>
 
     <!-- Result check (R3/R4) -->
-    <string name="check_saved_video">Enregistré · image et son présents</string>
-    <string name="check_saved_audio">Enregistré · son présent</string>
+    <string name="check_saved_video">Enregistré · avec image et son</string>
+    <string name="check_saved_audio">Enregistré · avec son</string>
     <string name="check_saved_silent">Enregistré · cette vidéo n’a pas de son</string>
-    <string name="check_line_video">Image et son présents</string>
-    <string name="check_line_audio">Son présent</string>
+    <string name="check_line_video">Avec image et son</string>
+    <string name="check_line_audio">Avec son</string>
     <string name="check_line_silent">Cette vidéo n’a pas de son</string>
     <string name="check_problem_no_sound">Enregistré, mais sans son</string>
     <string name="check_problem_no_picture">Enregistré, mais l’image est absente</string>
-    <string name="check_problem_damaged">Enregistré, mais le fichier semble abîmé</string>
+    <string name="check_problem_damaged">Enregistré, mais le fichier semble endommagé</string>
     <string name="check_needs_look">À vérifier</string>
     <!-- Look for better quality (B2/B3) -->
     <string name="better_quality_action">Chercher une meilleure qualité</string>
     <string name="better_quality_support">Revérifie ce lien</string>
-    <string name="better_quality_note">Vous avez enregistré en %1$s. Les qualités supérieures sont en premier.</string>
-    <string name="better_quality_none">Rien de mieux trouvé pour ce lien</string>
+    <string name="better_quality_note">Vous avez enregistré en %1$s. Les qualités supérieures s’affichent en premier.</string>
+    <string name="better_quality_none">Aucune meilleure qualité pour ce lien</string>
     <string name="share_sheet_open_app">Ouvrir dans Nezzel</string>
     <string name="share_sheet_started">Téléchargement lancé</string>
     <string name="share_sheet_pane">Nezzel, options de téléchargement</string>
-    <string name="share_notify_line">Autorisez les notifications pour suivre la progression. Le téléchargement marche sans.</string>
+    <string name="share_notify_line">Autorisez les notifications pour suivre la progression. Le téléchargement fonctionne aussi sans.</string>
     <string name="download_again">Télécharger à nouveau</string>
     <string name="download_again_size">Télécharger à nouveau · %1$s</string>
     <!-- Playlist notices (0.5). -->
     <string name="playlist_first_video_warning">Ce lien est une playlist. Seule la première vidéo sera enregistrée.</string>
-    <string name="playlist_mix_note">Les mix YouTube ne s’enregistrent pas en liste. Cette vidéo seulement.</string>
+    <string name="playlist_mix_note">Les mix YouTube ne s’enregistrent pas en entier. Cette vidéo seulement.</string>
     <string name="playlist_private_message">Cette liste est privée et ne peut pas être ouverte.</string>
     <string name="filter_videos">Vidéos</string>
-    <string name="saved_sort_accessibility">Trier les fichiers enregistrés : %1$s</string>
+    <string name="saved_sort_accessibility">Trier les fichiers enregistrés\u00A0: %1$s</string>
     <string name="saved_sort_newest">Les plus récents</string>
     <string name="saved_sort_largest">Les plus volumineux</string>
     <string name="saved_sort_name">A–Z</string>
     <string name="saved_rename">Renommer</string>
     <string name="saved_rename_name">Nom du fichier</string>
-    <string name="saved_rename_extension">Extension : %1$s</string>
+    <string name="saved_rename_extension">Extension\u00A0: %1$s</string>
     <string name="saved_rename_invalid">Saisissez de 1 à 200 caractères, sans / ni caractère nul.</string>
     <string name="saved_rename_failed">Le nom n’a pas pu être modifié. Réessayez.</string>
     <string name="saved_renamed">Renommé en %1$s</string>
@@ -548,7 +548,7 @@
     <string name="playlist_select_all">Tout sélectionner</string>
     <string name="playlist_select_none">Tout désélectionner</string>
     <string name="playlist_selected">%1$s sélectionnées</string>
-    <string name="playlist_quality_helper">Chaque vidéo reçoit la qualité la plus proche disponible.</string>
+    <string name="playlist_quality_helper">Chaque vidéo est enregistrée dans la qualité disponible la plus proche.</string>
     <string name="playlist_sizes">Les tailles apparaissent au démarrage de chaque vidéo.</string>
     <string name="playlist_limit">Jusqu’à 200 à la fois.</string>
     <string name="playlist_live">En direct</string>
@@ -562,15 +562,15 @@
     <string name="playlist_waiting_network">En attente du réseau</string>
     <string name="playlist_slowed">YouTube nous demande de ralentir. En pause.</string>
     <string name="playlist_stop">Arrêter</string>
-    <string name="playlist_stop_confirm">Arrêter cette playlist ? Les vidéos enregistrées restent.</string>
-    <string name="playlist_done">Terminé : %1$s enregistrées, %2$s n’ont pas pu être enregistrées</string>
+    <string name="playlist_stop_confirm">Arrêter cette playlist\u00A0? Les vidéos enregistrées restent.</string>
+    <string name="playlist_done">Terminé\u00A0: %1$s enregistrées, %2$s n’ont pas pu être enregistrées</string>
     <string name="playlist_see_why">Voir pourquoi</string>
-    <string name="playlist_notification_progress">Playlist : %1$s sur %2$s enregistrées</string>
-    <string name="playlist_notification_done">Playlist enregistrée : %1$s vidéos, %2$s échecs</string>
-    <string name="playlist_stopped">Arrêtée : %1$s non démarrées</string>
+    <string name="playlist_notification_progress">Playlist\u00A0: %1$s sur %2$s enregistrées</string>
+    <string name="playlist_notification_done">Playlist enregistrée\u00A0: %1$s vidéos, %2$s échecs</string>
+    <string name="playlist_stopped">Arrêtée\u00A0: %1$s non démarrées</string>
     <string name="playlist_load_failed">Impossible de charger la playlist.</string>
     <string name="playlist_submit_failed">L’enregistrement de la playlist n’a pas pu démarrer. Réessayez.</string>
-    <string name="playlist_done_saved">Terminé : %1$s enregistrées</string>
+    <string name="playlist_done_saved">Terminé\u00A0: %1$s enregistrées</string>
     <!-- dl-running: Downloads tabs -->
     <string name="dl_tab_running">En cours</string>
     <string name="dl_tab_saved">Enregistrés</string>
@@ -600,19 +600,19 @@
         <item quantity="other">Seulement les %1$s premiers liens</item>
     </plurals>
     <string name="multi_link_remove">Retirer %1$s</string>
-    <string name="multi_link_notification_progress">%1$s : %2$s sur %3$s enregistrés</string>
-    <string name="multi_link_notification_done">%1$s : %2$s enregistrés, %3$s non enregistrés</string>
+    <string name="multi_link_notification_progress">%1$s\u00A0: %2$s sur %3$s enregistrés</string>
+    <string name="multi_link_notification_done">%1$s\u00A0: %2$s enregistrés, %3$s non enregistrés</string>
     <string name="multi_link_submit_failed">Impossible de lancer les téléchargements. Réessayez.</string>
-    <string name="multi_link_photo_post">Publication photo : ouvrez ce lien seul</string>
+    <string name="multi_link_photo_post">Publication photo\u00A0: ouvrez ce lien seul</string>
     <!-- Find my old downloads after a reinstall -->
-    <string name="old_downloads_offer">Déjà téléchargé avec Nezzel ?</string>
+    <string name="old_downloads_offer">Déjà téléchargé avec Nezzel\u00A0?</string>
     <string name="old_downloads_show">Afficher vos fichiers</string>
     <string name="old_downloads_wrong_folder">Choisissez le dossier Nezzel dans Download</string>
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>
     <string name="old_downloads_setting_body">Fichiers enregistrés avant de réinstaller Nezzel</string>
     <string name="paste">Coller</string>
     <string name="home_hero_title">Enregistrez des vidéos sur votre téléphone</string>
-    <string name="home_hero_line">Copiez le lien d\'une vidéo dans n\'importe quelle appli, puis touchez Coller.</string>
-    <string name="home_hero_sites">Fonctionne avec YouTube, TikTok, Instagram, Facebook et d\'autres.</string>
+    <string name="home_hero_line">Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.</string>
+    <string name="home_hero_sites">Fonctionne avec YouTube, TikTok, Instagram, Facebook et bien d’autres.</string>
     <string name="home_earlier">Plus tôt</string>
 </resources>

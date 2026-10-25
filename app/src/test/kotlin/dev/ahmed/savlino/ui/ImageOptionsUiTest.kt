@@ -257,7 +257,7 @@ class ImageOptionsUiTest {
     @Test fun englishStoriesOfferOnlyPasteAnotherAndClose() = assertStoryCopy("en",
         "Facebook stories can’t be saved", "Stories need a Facebook login. Nezzel saves public posts, reels and videos")
     @Test @Config(qualifiers = "ar") fun arabicStoriesOfferOnlyPasteAnotherAndClose() = assertStoryCopy("ar",
-        "لا يمكن حفظ قصص فيسبوك", "القصص تحتاج تسجيل الدخول إلى فيسبوك. يحفظ Nezzel المنشورات والريلز والفيديوهات العامة")
+        "لا يمكن حفظ قصص فيسبوك", "تتطلب القصص تسجيل الدخول إلى فيسبوك. يحفظ Nezzel المنشورات والريلز والفيديوهات العامة")
     private fun assertStoryCopy(language: String, title: String, body: String) {
         for (link in listOf("https://www.facebook.com/stories/123/Synthetic/", "https://www.facebook.com/share/Synthetic/")) {
             val (labels, context) = sheetLabels(language) { activity ->

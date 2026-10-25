@@ -185,8 +185,8 @@ class OnboardingTest {
     fun arabicSwipesForwardInMirroredDirection() = screen(rtl = true) {
         compose.onNodeWithText("احتفظ بما تحب").assertIsDisplayed()
         compose.onNodeWithTag("onboarding_pager").performTouchInput { swipeRight() }
-        compose.onNodeWithText("فقط شارك الرابط").assertIsDisplayed()
-        compose.onNodeWithContentDescription("الصفحة 2 من 5، فقط شارك الرابط").assertExists()
+        compose.onNodeWithText("يكفي أن تشارك الرابط").assertIsDisplayed()
+        compose.onNodeWithContentDescription("الصفحة 2 من 5، يكفي أن تشارك الرابط").assertExists()
     }
 
     @Test fun pagePositionAnnouncesSettledHeadingAndBackReturns() = screen {
@@ -387,17 +387,17 @@ class OnboardingTest {
         )
         val expectedArabic = mapOf(
             "onboarding_anywhere_title" to "احتفظ بما تحب",
-            "onboarding_anywhere_body" to "فيديو وصوت وصور من الروابط العامة، بتجربة نظيفة بلا إعلانات ولا حساب",
+            "onboarding_anywhere_body" to "فيديو وصوت وصور من الروابط العامة، بلا إعلانات ولا حساب",
             "onboarding_anywhere_illustration" to "Nezzel مع رموز الفيديو والصوت والصور، فوق شعارات مواقع يحفظ منها",
-            "onboarding_copy_title" to "فقط شارك الرابط",
-            "onboarding_copy_body" to "انسخ الرابط وافتح Nezzel، أو شاركه إليه مباشرة\\n\\nتظهر الخيارات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات",
+            "onboarding_copy_title" to "يكفي أن تشارك الرابط",
+            "onboarding_copy_body" to "انسخ الرابط وافتح Nezzel، أو شاركه معه مباشرة\\n\\nتظهر الخيارات تلقائيًا، ويمكنك إيقاف ذلك من الإعدادات",
             "onboarding_copy_illustration" to "انسخ رابطًا أو شاركه لفتحه في Nezzel",
             "onboarding_quality_title" to "اختر الجودة التي تناسبك",
-            "onboarding_quality_body" to "من Full HD إلى الصوت فقط، الخيار لك، والصور أيضًا",
+            "onboarding_quality_body" to "من Full HD إلى الصوت فقط، والصور أيضًا. الخيار لك",
             "onboarding_quality_illustration" to "مثال: اختيار جودة فيديو أو صور لحفظها",
-            "onboarding_saved_title" to "يُحفظ بلمسة واحدة",
+            "onboarding_saved_title" to "يُحفظ بضغطة واحدة",
             "onboarding_saved_body" to "ستجد ملفاتك في «التنزيلات» جاهزة للمشاهدة أو المشاركة، ويمكنك تغيير المجلد متى شئت من الإعدادات",
-            "onboarding_saved_illustration" to "مثال: ظهور ملف محفوظ في التنزيلات",
+            "onboarding_saved_illustration" to "مثال: ملف محفوظ يظهر في التنزيلات",
             "onboarding_statuses_title" to "حالات واتساب أيضًا",
             "onboarding_statuses_body" to "افتح تبويب «الحالات» واسمح بالوصول مرة واحدة، ثم احفظ الصور والفيديو من كل حسابات واتساب",
             "onboarding_statuses_illustration" to "مثال: حالات واتساب جاهزة للحفظ، وإحداها محفوظة",

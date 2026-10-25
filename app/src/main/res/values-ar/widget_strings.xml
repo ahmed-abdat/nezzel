@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_saved_count">%1$s محفوظ</string>
-    <string name="widget_empty_saved">0 محفوظ</string>
-    <string name="widget_failed">فشل التنزيل</string>
+    <string name="widget_saved_count">المحفوظ: %1$s</string>
+    <string name="widget_empty_saved">المحفوظ: 0</string>
+    <string name="widget_failed">تعذّر التنزيل</string>
     <string name="widget_open_saved">فتح %1$s</string>
     <string name="widget_paste_short">لصق</string>
     <string name="widget_time_left">متبقٍّ ≈ %1$s</string>
