@@ -76,6 +76,10 @@ class MainActivity : AppCompatActivity() {
         links = linkViewModel(this, preferences)
         val appUpdates = (application as NezzelApplication).appUpdates
         if (savedInstanceState == null && openUpdate && appUpdates.available) links.navigate("AppUpdate")
+        if (savedInstanceState == null && intent.action == dev.ahmed.savlino.tips.Tips.OPEN) {
+            (application as NezzelApplication).tips.onOpen(fromTip = true)
+            links.navigate("Home")
+        }
         links.notificationPrompt = ::beforeConfirmedDownload
         showNotificationRationale = savedInstanceState?.getBoolean("notificationRationale") == true && links.hasPendingNotificationChoice
         refreshPreferences()
@@ -158,6 +162,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
         pasteRequested = false
+        if (intent.action == dev.ahmed.savlino.tips.Tips.OPEN) {
+            (application as NezzelApplication).tips.onOpen(fromTip = true)
+            links.navigate("Home")
+            setIntent(Intent(this, MainActivity::class.java))
+            return
+        }
         if (intent.action == dev.ahmed.savlino.update.UpdateNotifications.OPEN && (application as NezzelApplication).appUpdates.available) {
             links.navigate("AppUpdate")
             setIntent(Intent(this, MainActivity::class.java))

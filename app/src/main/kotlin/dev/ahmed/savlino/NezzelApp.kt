@@ -111,7 +111,7 @@ fun NezzelApp(
     val updateState by (updates?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AppUpdateState()) }).collectAsState()
     LaunchedEffect(updates, language) {
         updates?.refreshWhatsNew()
-        if (updates?.consumeUpdated() == true) snackbar.showSnackbar(context.getString(R.string.update_done, NezzelFormat.isolate(BuildConfig.VERSION_NAME)))
+        if (updates?.consumeUpdated() == true) snackbar.showSnackbar(context.getString(R.string.update_done))
     }
     val destinations = remember(context) { SaveDestinations(context) }
     val removeFailed: (String) -> Unit = { id -> scope.launch { links.downloads?.removeFailed(id) } }

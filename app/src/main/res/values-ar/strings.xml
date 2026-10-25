@@ -300,7 +300,7 @@
     <string name="crash_share">مشاركة تقرير التعطّل</string>
     <string name="crash_delete">حذف تقارير التعطّل</string>
     <string name="about_version">الإصدار %1$s</string>
-    <string name="about_body">Nezzel مجاني، وينزّل الملفات على هاتفك بلا إعلانات، ويضم برمجيات مفتوحة المصدر: \u2066yt-dlp (Unlicense)\u2069، و\u2066youtubedl-android (GPL-3.0)\u2069، و\u2066FFmpeg (GPL)\u2069، و\u2066Python (PSF)\u2069، والشيفرة المصدرية: \u2066github.com/ahmed-abdat/nezzel\u2069</string>
+    <string name="about_body">Nezzel مجاني، وينزّل الملفات على هاتفك بلا إعلانات، ويضم برمجيات مفتوحة المصدر: \u2066yt-dlp (Unlicense)\u2069، و\u2066youtubedl-android (GPL-3.0)\u2069، و\u2066FFmpeg (GPL)\u2069، و\u2066Python (PSF)\u2069، والشيفرة المصدرية: \u2066nezzel.hululsoft.mr\u2069</string>
     <string name="company_made_by">من تطوير %1$s</string>
     <string name="company_open_site">فتح موقع \u2066%1$s\u2069</string>
     <string name="company_facebook">Facebook</string>
@@ -437,17 +437,17 @@
     <string name="open_file_failed">تعذّر فتح هذا الملف</string>
     <string name="audio_only_type">صوت فقط · %1$s</string>
 
-    <!-- App updates: owner-approved GitHub checks, explicit installation. -->
+    <!-- App update presentation. -->
     <string name="update_available_title">إصدار أفضل من Nezzel جاهز</string>
-    <string name="update_card_version">⁦Nezzel %1$s⁩</string>
+    <string name="update_card_version">نسخة جديدة من Nezzel جاهزة</string>
     <string name="update_action">تحديث</string>
     <string name="update_not_now">ليس الآن</string>
     <string name="update_screen_title">تحديث التطبيق</string>
-    <string name="update_current">لديك الإصدار %1$s</string>
+    <string name="update_current">Nezzel محدّث</string>
     <string name="update_whats_new">ما الجديد</string>
     <string name="update_keeps_data">تبقى ملفاتك وإعداداتك كما هي</string>
     <string name="update_download">تنزيل التحديث · %1$s</string>
-    <string name="update_skip">تخطّي هذا الإصدار</string>
+    <string name="update_skip">تخطّ هذا التحديث</string>
     <string name="update_progress">%1$s من %2$s</string>
     <string name="update_verifying">جارٍ التحقق من التحديث…</string>
     <string name="update_installing">جارٍ تثبيت التحديث…</string>
@@ -459,26 +459,24 @@
     <string name="update_failed_space">لا توجد مساحة كافية للتحديث (يلزم %1$s)</string>
     <string name="update_failed_verify">لم نتمكن من التحقق من هذا التحديث، لذا لم نثبّته</string>
     <string name="update_not_installed">لم يُثبَّت التحديث</string>
-    <string name="update_open_release">فتح صفحة الإصدار</string>
-    <string name="update_done">تم التحديث إلى %1$s</string>
+    <string name="update_done">Nezzel محدّث</string>
     <string name="settings_updates_heading">تحديثات التطبيق</string>
-    <string name="settings_updates_auto">البحث عن إصدارات جديدة</string>
-    <string name="settings_updates_auto_body">يتحقق مرتين يوميًا، ولا يُثبّت شيء دون موافقتك</string>
+    <string name="settings_updates_auto">التحديثات التلقائية</string>
+    <string name="settings_updates_auto_body">يبقى Nezzel محدّثًا حين لا تستخدمه</string>
     <string name="settings_updates_check_now">تحقق الآن</string>
-    <string name="update_latest">لديك أحدث إصدار</string>
+    <string name="update_latest">Nezzel محدّث</string>
     <string name="update_check_failed">تعذّر التحقق من التحديثات، أعد المحاولة لاحقًا</string>
     <string name="update_channel">تحديثات التطبيق</string>
-    <string name="update_notification_title">⁦Nezzel %1$s⁩ جاهز</string>
+    <string name="update_notification_title">نسخة جديدة من Nezzel جاهزة</string>
     <string name="update_notification_ready">التحديث جاهز للتثبيت. اضغط للتحديث</string>
     <string name="update_later">لاحقًا</string>
     <string name="update_badge_description">يتوفر تحديث</string>
     <string name="update_notification_text">اضغط لمعرفة الجديد وتحديث التطبيق</string>
     <string name="settings_updates_last_checked">آخر تحقق</string>
-    <string name="whats_new_title">الجديد في ⁦Nezzel %1$s⁩</string>
+    <string name="whats_new_title">الجديد في Nezzel</string>
     <string name="whats_new_ok">حسنًا</string>
-    <string name="update_full_notes">كل التغييرات على GitHub</string>
-    <string name="update_meta">لديك %1$s · %2$s</string>
-    <string name="update_trust">يتحقق ⁦Nezzel⁩ من الملف وتوقيعه قبل التثبيت</string>
+    <string name="update_meta">حجم التنزيل: %1$s</string>
+    <string name="update_trust">يتحقق Nezzel من سلامة التحديث قبل تثبيته</string>
     <string name="update_downloading">جارٍ تنزيل %1$s</string>
     <string name="settings_update_accessibility">الإعدادات، يتوفر تحديث</string>
     <string name="shortcut_paste_link">الصق الرابط</string>
@@ -697,4 +695,20 @@
     <string name="home_hero_sites">يعمل مع يوتيوب وتيك توك وإنستغرام وفيسبوك وغيرها.</string>
     <string name="home_earlier">سابقًا</string>
     <string name="home_job_open">عرض في التنزيلات</string>
+
+    <!-- Local feature reminders. -->
+    <string name="tips_title">نصائح</string>
+    <string name="tips_help">نصيحة مفيدة إن لم تفتح Nezzel منذ أيام</string>
+    <string name="tip_links_title">حمّل حتى 50 رابطًا معًا</string>
+    <string name="tip_links_body">انسخ الروابط معًا، ثم الصقها في Nezzel.</string>
+    <string name="tip_playlist_title">حمّل قائمة تشغيل كاملة</string>
+    <string name="tip_playlist_body">الصق رابط قائمة يوتيوب واختر ما تريد تنزيله.</string>
+    <string name="tip_mp3_title">احتفظ بالموسيقى وغلافها</string>
+    <string name="tip_mp3_body">اختر MP3 لتنزيل الصوت وحده مع صورة الغلاف.</string>
+    <string name="tip_statuses_title">احتفظ بحالة واتساب</string>
+    <string name="tip_statuses_body">افتح «الحالات» في Nezzel لحفظ حالة شاهدتها.</string>
+    <string name="tip_widget_title">Nezzel على شاشتك الرئيسية</string>
+    <string name="tip_widget_body">أضف أداة Nezzel للصق الروابط ومتابعة تنزيلاتك.</string>
+    <string name="tip_pause_title">أوقف التنزيلات بلمسة</string>
+    <string name="tip_pause_body">من التنزيلات، أوقف كل تنزيلاتك مؤقتًا ثم استأنفها معًا.</string>
 </resources>

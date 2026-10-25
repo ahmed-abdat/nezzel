@@ -63,11 +63,24 @@ class DownloadsTabsTest {
         assertEquals(listOf("job-b"), batchMemberRows(batch, listOf(job("job-b", paused = true))).map { it.jobId })
     }
 
-    private fun render(content: @Composable () -> Unit, check: () -> Unit) {
+    private fun render(content: @Composable () -> Unit, capture: Boolean = false, check: () -> Unit) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             controller.get().setContent { NezzelTheme(ThemePref.Light, false) { content() } }
-            compose.waitForIdle(); check()
+            compose.waitForIdle()
+            if (capture) System.getenv("NEZZEL_TABS_RENDER_DIR")?.let { directory ->
+                compose.runOnIdle {
+                    val root = controller.get().window.decorView
+                    val bitmap = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
+                    root.draw(android.graphics.Canvas(bitmap))
+                    java.io.File(directory).mkdirs()
+                    java.io.File(directory, "${context.resources.configuration.locales[0].language}.png").outputStream().use {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    bitmap.recycle()
+                }
+            }
+            check()
         } finally { controller.pause().stop().destroy() }
     }
     private fun renamed(b: PlaylistBatch) = PlaylistBatch(b.record.let { BatchRecord("bad", "Bad list", it.preset, it.state, it.createdAt, it.error) },
@@ -82,6 +95,61 @@ class DownloadsTabsTest {
 
     @Test @Config(qualifiers = "ar-w360dp-h800dp-mdpi", fontScale = 2f)
     fun lastJobFinishingFoldsTheTabsAwayInArabicAtLargeText() = finishingLayout()
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Config(sdk = [35], qualifiers = "en-w360dp-h800dp-xxhdpi")
+    fun downloadingLabelAndCountFitAtDoubleFont() = largeTabs("en")
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Config(sdk = [35], qualifiers = "ar-w360dp-h800dp-xxhdpi")
+    fun arabicDownloadingLabelAndCountFitAtDoubleFont() = largeTabs("ar")
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Config(sdk = [35], qualifiers = "fr-w360dp-h800dp-xxhdpi")
+    fun frenchDownloadingLabelAndCountFitAtDoubleFont() = largeTabs("fr")
+
+    private fun largeTabs(language: String) {
+        val count = mutableIntStateOf(12)
+        render({
+            CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+                    androidx.compose.ui.platform.LocalDensity.current.density, 2f),
+                androidx.compose.ui.platform.LocalLayoutDirection provides if (language == "ar")
+                    androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr,
+            ) { DownloadsTabRow(DownloadsTab.RUNNING, count.intValue, true, language, failed = 1) {} }
+        }, capture = true) {
+            for (value in listOf(12, 0)) {
+                count.intValue = value
+                compose.waitForIdle()
+                val tab = compose.onNodeWithTag("tab_running").fetchSemanticsNode().boundsInRoot
+                val label = compose.onNodeWithTag("tab_running_label", useUnmergedTree = true).fetchSemanticsNode()
+                val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                label.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action!!(layouts)
+                val layout = layouts.single()
+                assertFalse("Full Downloading label must fit: size=${layout.size}, lines=${layout.lineCount}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}", layout.didOverflowHeight)
+                for (offset in layout.layoutInput.text.indices) {
+                    val glyph = layout.getBoundingBox(offset).translate(label.positionInRoot)
+                    assertTrue("Downloading glyph must stay inside its tab: $glyph / $tab",
+                        glyph.left >= tab.left - 1f && glyph.right <= tab.right + 1f && glyph.top >= tab.top - 1f && glyph.bottom <= tab.bottom + 1f)
+                }
+                if (value > 0) {
+                    val badge = compose.onNodeWithText("12", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode()
+                    val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                    badge.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action!!(results)
+                    val countLayout = results.single()
+                    assertFalse("Count must not clip: size=${countLayout.size}, width=${countLayout.didOverflowWidth}, height=${countLayout.didOverflowHeight}", countLayout.didOverflowHeight)
+                    for (offset in countLayout.layoutInput.text.indices) {
+                        val glyph = countLayout.getBoundingBox(offset).translate(badge.positionInRoot)
+                        assertTrue("Count glyph must stay inside its tab: $glyph / $tab",
+                            glyph.left >= tab.left - 1f && glyph.right <= tab.right + 1f && glyph.top >= tab.top - 1f && glyph.bottom <= tab.bottom + 1f)
+                    }
+                    val labelBounds = label.boundsInRoot
+                    val badgeBounds = badge.boundsInRoot
+                    assertTrue("Label and count must not overlap", labelBounds.right <= badgeBounds.left || badgeBounds.right <= labelBounds.left)
+                }
+            }
+        }
+    }
 
     private fun finishingLayout() {
         val jobs = mutableStateOf(listOf(job("a")))

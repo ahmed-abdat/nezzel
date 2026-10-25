@@ -51,11 +51,11 @@ class NpeFastSourceTest {
         .protocol(Protocol.HTTP_1_1).code(code).message("Fixture").body("fixture".toResponseBody()).build()
 
     @Test fun noResponseWithTransportFailuresIsUnreachable() {
-        assertEquals(FastResult.Unreachable(offline = true),
+        assertEquals(FastResult.Unreachable,
             source { _, _ -> throw java.net.UnknownHostException("private fixture") }.infoJson(url, "dns", 1000))
         for (error in listOf(java.net.ConnectException("private"), java.net.NoRouteToHostException("private"),
             java.net.SocketTimeoutException("private"))) {
-            assertEquals(FastResult.Unreachable(offline = false), source { _, _ -> throw error }.infoJson(url, "connect", 1000))
+            assertEquals(FastResult.Unreachable, source { _, _ -> throw error }.infoJson(url, "connect", 1000))
         }
     }
 
@@ -68,7 +68,7 @@ class NpeFastSourceTest {
     }
 
     @Test fun budgetSpentWhileConnectingWithNoResponseIsUnreachable() {
-        assertEquals(FastResult.Unreachable(offline = false), source { _, _ ->
+        assertEquals(FastResult.Unreachable, source { _, _ ->
             Thread.sleep(400); throw java.io.InterruptedIOException("timeout")
         }.infoJson(url, "slow", 300))
     }

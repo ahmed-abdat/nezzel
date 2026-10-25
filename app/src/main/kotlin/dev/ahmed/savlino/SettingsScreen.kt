@@ -212,16 +212,19 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                     if (updating) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = Space.l))
                 }
             }
-            updates?.let { updates ->
-                SettingsGroup(stringResource(R.string.settings_updates_heading)) { UpdateAutoSetting(updates) }
+            SettingsGroup(stringResource(R.string.settings_updates_heading)) {
+                updates?.let { UpdateAutoSetting(it) }
+                val context = LocalContext.current
+                val preferences = remember(context) { dev.ahmed.savlino.locale.AppPreferences(context) }
+                var tips by remember { mutableStateOf(preferences.tips) }
+                SwitchSetting(stringResource(R.string.tips_title), stringResource(R.string.tips_help), tips,
+                    R.drawable.ic_ms_help) { on ->
+                    tips = on
+                    preferences.tips = on
+                    if (!on) context.getSystemService(android.app.NotificationManager::class.java).cancel(dev.ahmed.savlino.tips.Tips.ID)
+                }
             }
-            // Technical identifiers and the legal notices only matter when someone asks, so they sit last and small.
-            Row(Modifier.padding(start = Space.l), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(stringResource(R.string.settings_support_info, engine?.version ?: stringResource(R.string.engine_version_unknown)) + " ·",
-                    Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LicencesLink()
-            }
+            Box(Modifier.padding(start = Space.l)) { LicencesLink() }
         }
     }
 }

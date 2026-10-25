@@ -323,17 +323,15 @@ class NpeDownloadTest {
     }
 
     @Test fun unreachableRebuildFailsAsTransportWithoutPageTransfer() = runBlocking {
-        for ((offline, error) in listOf(true to DownloadError.Offline, false to DownloadError.Network)) {
-            val run = Run(fast = Fast { FastResult.Unreachable(offline) })
-            val failure = assertIs<TransferResult.Failure>(run.download())
-            assertEquals(error, failure.error)
-            assertEquals(DownloadFailureCause.TRANSPORT, failure.cause)
-            assertTrue(run.runtime.transfers.isEmpty())
-            assertNull(run.cache.freshFile("job"))
-        }
+        val unreachable = Run(fast = Fast { FastResult.Unreachable })
+        val failure = assertIs<TransferResult.Failure>(unreachable.download())
+        assertEquals(DownloadError.Network, failure.error)
+        assertEquals(DownloadFailureCause.TRANSPORT, failure.cause)
+        assertTrue(unreachable.runtime.transfers.isEmpty())
+        assertNull(unreachable.cache.freshFile("job"))
         // Expiry recovery: the rebuild sees a dead network, so no page-URL attempt follows.
         val run = Run(); run.inspected()
-        run.fast!!.action = { FastResult.Unreachable(false) }
+        run.fast!!.action = { FastResult.Unreachable }
         run.runtime.action = { _, line -> run.failAttempt(line) }
         assertEquals(DownloadError.Network, assertIs<TransferResult.Failure>(run.download()).error)
         assertEquals(1, run.runtime.transfers.size)

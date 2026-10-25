@@ -57,6 +57,15 @@ class NavigationLayoutTest {
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "fr-w800dp-h360dp-xxhdpi")
     fun frenchLandscapeRailFitsFourLabelsAtLargeText() = navigation(true, checkClip = true)
 
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "en-w360dp-h800dp-xxhdpi")
+    fun englishPortraitLabelsRemainInsideTheirTabsAtDoubleFont() = navigation(false, fontScale = 2f, checkClip = true)
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "ar-w360dp-h800dp-xxhdpi")
+    fun arabicPortraitLabelsRemainInsideTheirTabsAtDoubleFont() = navigation(false, rtl = true, fontScale = 2f, checkClip = true)
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(sdk = [35], qualifiers = "fr-w360dp-h800dp-xxhdpi")
+    fun frenchPortraitLabelsRemainInsideTheirTabsAtDoubleFont() = navigation(false, fontScale = 2f, checkClip = true)
+
     @Test @Config(qualifiers = "en-w800dp-h480dp-mdpi")
     fun height480KeepsBar() = navigation(false)
 
@@ -131,6 +140,19 @@ class NavigationLayoutTest {
                 assertEquals(if (rail) 0 else index, position.columnIndex)
                 compose.runOnIdle { assertEquals(destination, route) }
             }
+            if (checkClip) System.getenv("NEZZEL_NAV_RENDER_DIR")?.let { directory ->
+                compose.runOnIdle {
+                    val root = activity.window.decorView
+                    val bitmap = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
+                    root.draw(android.graphics.Canvas(bitmap))
+                    val locale = activity.resources.configuration.locales[0].language
+                    java.io.File(directory).mkdirs()
+                    java.io.File(directory, "$locale-$fontScale-$rail.png").outputStream().use {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    bitmap.recycle()
+                }
+            }
             // Four labels, none ellipsized: each keeps its full text on screen (spec T5: icon-only is not allowed).
             if (checkClip) for ((_, label) in labels) {
                 val text = compose.onAllNodes(hasText(activity.getString(label)) and
@@ -141,6 +163,13 @@ class NavigationLayoutTest {
                     // Center-aligned labels report width "overflow" against their paragraph box; ellipsis or cut height are the real clips.
                     assertFalse("${activity.getString(label)} must not ellipsize: lines=${it.lineCount}", it.isLineEllipsized(it.lineCount - 1))
                     assertFalse("${activity.getString(label)} must not clip vertically", it.didOverflowHeight)
+                    val item = compose.onNode(hasText(activity.getString(label)) and hasClickAction()).fetchSemanticsNode().boundsInRoot
+                    val origin = text.positionInRoot
+                    for (offset in it.layoutInput.text.indices.filterNot { i -> it.layoutInput.text[i].isWhitespace() }) {
+                        val glyph = it.getBoundingBox(offset).translate(origin)
+                        assertTrue("${activity.getString(label)} glyph $offset must stay inside its tab: $glyph / $item",
+                            rail || (glyph.left >= item.left - 1f && glyph.right <= item.right + 1f && glyph.top >= item.top - 1f && glyph.bottom <= item.bottom + 1f))
+                    }
                 }
             }
             if (!rail) {

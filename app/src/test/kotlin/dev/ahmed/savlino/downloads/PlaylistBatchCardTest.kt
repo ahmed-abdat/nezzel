@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -85,6 +86,42 @@ class PlaylistBatchCardTest {
     private val density get() = context.resources.displayMetrics.density
     private fun SemanticsNodeInteraction.heightDp() = fetchSemanticsNode().boundsInRoot.height / density
 
+    @Test fun englishQueuedPlaylistAndSingleRowsShareConnectivityCopy() = queuedConnectivityCopy("en")
+    @Test @Config(qualifiers = "ar-w384dp-h1600dp-mdpi")
+    fun arabicQueuedPlaylistAndSingleRowsShareConnectivityCopy() = queuedConnectivityCopy("ar")
+
+    private fun queuedConnectivityCopy(language: String) {
+        val offline = mutableStateOf(true)
+        val jobs = listOf(false, true).mapIndexed { i, partial ->
+            DownloadProgress("queued-$i", "Queued $i.mp4", DownloadPhase.PREPARING, waiting = true, hasPartial = partial)
+        }
+        val batch = PlaylistBatch(playlistFixture().record, jobs.mapIndexed { i, job ->
+            BatchItemRecord("list", i, "queued-$i", job.filename, BatchItemState.QUEUED, job.jobId, null, false, false)
+        })
+        host(rtl = language == "ar", content = {
+            CompositionLocalProvider(LocalOffline provides offline.value) {
+                Column {
+                    jobs.forEachIndexed { i, job ->
+                        JobRow(job, {}, {}, {}, Modifier.testTag("single_queued_$i"))
+                    }
+                    PlaylistVideosContent(batch, jobs, language, {})
+                }
+            }
+        }) {
+            fun check(offlineNow: Boolean) {
+                jobs.forEachIndexed { i, job ->
+                    val expected = context.getString(if (offlineNow && job.hasPartial)
+                        R.string.download_waiting_network else R.string.download_waiting)
+                    compose.onNodeWithTag("single_queued_$i").assert(hasAnyDescendant(hasText(expected, substring = true)))
+                    word(i, expected)
+                }
+            }
+            check(true)
+            compose.runOnIdle { offline.value = false }
+            check(false)
+        }
+    }
+
     // The row: flat, opens the sheet, keeps only Pause/Resume.
 
     @Test fun rowPausesAndOpensButHasNoMenuOrInlineList() {
@@ -141,7 +178,7 @@ class PlaylistBatchCardTest {
         word(2, context.getString(R.string.download_transferring))
         word(3, context.getString(R.string.download_waiting))
         word(4, context.getString(R.string.playlist_item_waiting))
-        word(6, context.getString(R.string.download_network_error)); word(6, "Fishing boats at dawn")
+        word(6, context.getString(R.string.network_title)); word(6, "Fishing boats at dawn")
         // A blank title falls back to its real place in the list; the skip says why.
         compose.onNodeWithTag("playlist_sheet_list").performScrollToKey("video-7")
         word(7, context.getString(R.string.viewer_video_n, "8", "8")); word(7, context.getString(R.string.video_gone_title))
@@ -174,7 +211,7 @@ class PlaylistBatchCardTest {
             compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
             compose.onNodeWithTag("playlist_resume").assertDoesNotExist()
             compose.onNodeWithTag("playlist_stop").assertDoesNotExist()
-            word(1, context.getString(R.string.download_network_error))
+            word(1, context.getString(R.string.network_title))
             compose.onNodeWithTag("playlist_retry").assert(hasText(context.getString(R.string.playlist_retry, "1"))).performClick()
             assertEquals(PlaylistBatchAction.RETRY, sent)
         }
@@ -208,7 +245,7 @@ class PlaylistBatchCardTest {
         compose.onNodeWithText(context.getString(R.string.playlist_failed_heading)).assertExists()
         compose.onNodeWithText(context.getString(R.string.playlist_other_videos)).assertDoesNotExist()
         compose.onNodeWithTag("playlist_retry").assert(hasText(context.getString(R.string.playlist_retry, "5")))
-        (0 until 5).forEach { word(it, context.getString(R.string.download_network_error)) }
+        (0 until 5).forEach { word(it, context.getString(R.string.network_title)) }
     }
     @Test fun fiveHundredVideosComposeLazily() = sheet(longPlaylist(500) { it == 250 }) {
         compose.onNodeWithTag("playlist_item_250").assertExists()
@@ -240,7 +277,7 @@ class PlaylistBatchCardTest {
             compose.onNodeWithText("باقي الفيديوهات").assertExists()
             word(0, context.getString(R.string.download_saved))
             word(4, "في الانتظار")
-            word(6, context.getString(R.string.download_network_error))
+            word(6, context.getString(R.string.network_title))
             compose.onNodeWithTag("playlist_sheet_list").performScrollToKey("video-7")
             word(7, context.getString(R.string.viewer_video_n, "8", "8"))
         }
@@ -263,7 +300,7 @@ class PlaylistBatchCardTest {
     @Test fun tappingTheRowOpensTheSheet() = downloads(listOf(playlistMixedFixture()), playlistMixedJobs) {
         compose.onNodeWithTag("playlist_header").performClick(); compose.waitForIdle()
         compose.onNodeWithTag("playlist_sheet_list").assertExists()
-        word(6, context.getString(R.string.download_network_error))
+        word(6, context.getString(R.string.network_title))
     }
     @Test fun aHomeCardOfAFailedPlaylistVideoOpensItsSheetAtThatVideo() {
         var consumed = 0
@@ -271,7 +308,7 @@ class PlaylistBatchCardTest {
             compose.waitForIdle()
             assertEquals(1, consumed)
             compose.onNodeWithTag("playlist_sheet_list").assertExists()
-            word(6, "Fishing boats at dawn"); word(6, context.getString(R.string.download_network_error))
+            word(6, "Fishing boats at dawn"); word(6, context.getString(R.string.network_title))
         }
     }
     @Test fun aHomeCardOfAStandaloneJobOpensNoSheet() {

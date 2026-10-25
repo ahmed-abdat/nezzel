@@ -12,7 +12,7 @@ internal sealed interface FastResult {
     /** Anything unusable, including cancellation: use yt-dlp. */
     data object Miss : FastResult
     /** No HTTP response at all in this run; yt-dlp would wait on the same dead network. */
-    data class Unreachable(val offline: Boolean) : FastResult
+    data object Unreachable : FastResult
 }
 
 /** Blocking on the caller thread. Never retain failures. */
@@ -32,12 +32,12 @@ internal class NpeFastSource(private val downloader: NpeDownloader = NpeDownload
         val cancelled = AtomicBoolean()
         if (operations.putIfAbsent(operationId, cancelled) != null) return FastResult.Miss
         val started = System.nanoTime()
-        var offline: Boolean? = null
-        fun miss() = offline?.takeUnless { cancelled.get() }?.let(FastResult::Unreachable) ?: FastResult.Miss
+        var unreachable = false
+        fun miss() = if (unreachable && !cancelled.get()) FastResult.Unreachable else FastResult.Miss
         return try {
             installed
             if (!ServiceList.YouTube.streamLHFactory.acceptUrl(url)) return FastResult.Miss
-            downloader.operation(operationId, timeoutMs, { offline = it }) {
+            downloader.operation(operationId, timeoutMs, unreachable = { unreachable = true }) {
                 if (cancelled.get()) null
                 else NpeInfoJson.build(StreamInfo.getInfo(ServiceList.YouTube, url))
             }?.takeIf {

@@ -37,13 +37,47 @@ class DownloadsTabIndicatorTest {
     @Test @Config(qualifiers = "+en") fun underlineFollowsTheWordInEnglish() = check(LayoutDirection.Ltr, "en")
     @Test @Config(qualifiers = "+ar") fun underlineFollowsTheWordInArabic() = check(LayoutDirection.Rtl, "ar")
 
-    private fun check(direction: LayoutDirection, language: String) {
+    @Test @Config(qualifiers = "+en") fun doubleFontUnderlineFollowsTheEnglishWord() = check(LayoutDirection.Ltr, "en", 2f)
+    @Test @Config(qualifiers = "+ar") fun doubleFontUnderlineFollowsTheArabicWord() = check(LayoutDirection.Rtl, "ar", 2f)
+    @Test @Config(qualifiers = "+fr") fun doubleFontUnderlineFollowsTheFrenchWord() = check(LayoutDirection.Ltr, "fr", 2f)
+
+    @Test @Config(qualifiers = "+en") fun normalEnglishLabelAndCountAreCentered() = centered(LayoutDirection.Ltr, "en")
+    @Test @Config(qualifiers = "+ar") fun normalArabicLabelAndCountAreCentered() = centered(LayoutDirection.Rtl, "ar")
+
+    private fun centered(direction: LayoutDirection, language: String) {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            controller.get().setContent {
+                CompositionLocalProvider(LocalLayoutDirection provides direction,
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+                        androidx.compose.ui.platform.LocalDensity.current.density, 1f)) {
+                    NezzelTheme(ThemePref.Light, false) {
+                        DownloadsTabRow(DownloadsTab.RUNNING, 3, false, language) {}
+                    }
+                }
+            }
+            compose.waitForIdle()
+            val tab = compose.onNodeWithTag("tab_running").fetchSemanticsNode().boundsInRoot
+            val label = bounds("tab_running_label")
+            val count = compose.onNodeWithTag("tab_running_count", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val groupCenter = (minOf(label.left, count.left) + maxOf(label.right, count.right)) / 2f
+            assertEquals("Label and count centered in the tab", tab.center.x, groupCenter, 3f)
+            for (tag in listOf("tab_running_label", "tab_saved_label")) {
+                val node = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode()
+                assertEquals("Text centered in its label", node.boundsInRoot.center.x, bounds(tag).center.x, 3f)
+            }
+        } finally { controller.pause().stop().destroy() }
+    }
+
+    private fun check(direction: LayoutDirection, language: String, fontScale: Float = 1f) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             var primary = 0
             val jobs = listOf(DownloadProgress("r", "clip.mp4", DownloadPhase.DOWNLOADING, bytes = 1, total = dev.ahmed.savlino.domain.Size.Exact(10)))
             controller.get().setContent {
-                CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                CompositionLocalProvider(LocalLayoutDirection provides direction,
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+                        androidx.compose.ui.platform.LocalDensity.current.density, fontScale)) {
                     NezzelTheme(ThemePref.Light, false) {
                         primary = MaterialTheme.colorScheme.primary.toArgb()
                         DownloadsScreen(jobs, language, {}, {}, {}, {}, {}, null, {}, {})
@@ -60,7 +94,15 @@ class DownloadsTabIndicatorTest {
         } finally { controller.pause().stop().destroy() }
     }
 
-    private fun bounds(tag: String): Rect = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+    private fun bounds(tag: String): Rect {
+        val node = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action!!(layouts)
+        val text = layouts.single()
+        val left = (0 until text.lineCount).minOf(text::getLineLeft)
+        val right = (0 until text.lineCount).maxOf(text::getLineRight)
+        return Rect(node.positionInRoot.x + left, node.boundsInRoot.top, node.positionInRoot.x + right, node.boundsInRoot.bottom)
+    }
 
     /** Primary-coloured pixels on the tab row's last pixel line: (first x, last x). */
     private fun underline(activity: ComponentActivity, primary: Int): Pair<Int, Int> {

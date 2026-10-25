@@ -154,10 +154,25 @@ internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, warning: Boolea
     val reduced = LocalReducedMotion.current
     val row = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val labels = remember { mutableStateMapOf<DownloadsTab, Pair<Float, Float>>() }
-    fun Modifier.label(tab: DownloadsTab) = onGloballyPositioned { coordinates ->
-        val box = row[0]?.takeIf { it.isAttached }?.localBoundingBoxOf(coordinates) ?: return@onGloballyPositioned
-        val span = box.left to box.width
+    val textSpans = remember { mutableMapOf<DownloadsTab, Pair<Float, Float>>() }
+    val positions = remember { mutableMapOf<DownloadsTab, LayoutCoordinates>() }
+    fun updateLabel(tab: DownloadsTab) {
+        val coordinates = positions[tab]?.takeIf { it.isAttached } ?: return
+        val origin = row[0]?.takeIf { it.isAttached }?.localPositionOf(coordinates, Offset.Zero) ?: return
+        val text = textSpans[tab] ?: return
+        val span = origin.x + text.first to text.second
         if (labels[tab] != span) labels[tab] = span
+    }
+    fun Modifier.label(tab: DownloadsTab) = onGloballyPositioned {
+        positions[tab] = it
+        updateLabel(tab)
+    }
+    fun textLayout(tab: DownloadsTab, result: androidx.compose.ui.text.TextLayoutResult) {
+        // The weighted label reserves space for the count; the underline follows only its actual lines.
+        val start = (0 until result.lineCount).minOf(result::getLineLeft)
+        val end = (0 until result.lineCount).maxOf(result::getLineRight)
+        textSpans[tab] = start to end - start
+        updateLabel(tab)
     }
     val left = remember { Animatable(0f) }
     val width = remember { Animatable(0f) }
@@ -185,12 +200,14 @@ internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, warning: Boolea
             Tab(selected == DownloadsTab.RUNNING, { onSelect(DownloadsTab.RUNNING) },
                 Modifier.heightIn(min = 48.dp).testTag("tab_running").then(if (attention) Modifier.semantics { stateDescription = needsLook } else Modifier),
                 selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
-                Row(Modifier.padding(vertical = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    Text(stringResource(R.string.dl_tab_running), Modifier.label(DownloadsTab.RUNNING).testTag("tab_running_label"),
-                        style = MaterialTheme.typography.titleSmall)
+                Row(Modifier.width(IntrinsicSize.Max).padding(horizontal = Space.s, vertical = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    // Balance the trailing attention slot so the label and count stay centered together.
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.dl_tab_running), Modifier.weight(1f).label(DownloadsTab.RUNNING).testTag("tab_running_label"),
+                        onTextLayout = { textLayout(DownloadsTab.RUNNING, it) }, textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.titleSmall)
                     Text(NezzelFormat.count(count.coerceAtLeast(1), language), style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.graphicsLayer { alpha = if (count > 0) 1f else 0f }
+                        modifier = Modifier.testTag("tab_running_count").graphicsLayer { alpha = if (count > 0) 1f else 0f }
                             .then(if (count == 0) Modifier.clearAndSetSemantics {} else Modifier)
                             .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                             .padding(horizontal = Space.s, vertical = 2.dp))
@@ -202,7 +219,7 @@ internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, warning: Boolea
             Tab(selected == DownloadsTab.SAVED, { onSelect(DownloadsTab.SAVED) }, Modifier.heightIn(min = 48.dp).testTag("tab_saved"),
                 selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
                 Text(stringResource(R.string.dl_tab_saved), Modifier.padding(vertical = Space.m).label(DownloadsTab.SAVED).testTag("tab_saved_label"),
-                    style = MaterialTheme.typography.titleSmall)
+                    onTextLayout = { textLayout(DownloadsTab.SAVED, it) }, style = MaterialTheme.typography.titleSmall)
             }
         }
     }

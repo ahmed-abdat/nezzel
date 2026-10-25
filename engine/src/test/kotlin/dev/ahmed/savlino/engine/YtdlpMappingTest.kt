@@ -336,10 +336,19 @@ class YtdlpMappingTest {
             "ERROR: unable to download video data: [Errno 104] Connection reset by peer" to DownloadError.Network,
             "ERROR: Unable to download webpage: [Errno 111] Connection refused" to DownloadError.Network,
             "ERROR: Unable to download webpage: The read operation timed out" to DownloadError.Network,
-            "ERROR: Unable to download webpage: [Errno -2] Name or service not known" to DownloadError.Offline,
+            "ERROR: Unable to download webpage: [Errno -2] Name or service not known" to DownloadError.Network,
             "ERROR: Unknown failure https://example.org/HTTP-Error-403" to DownloadError.Failed)
         for ((stderr, expected) in cases) assertEquals(expected, YtdlpErrorMapper.map(stderr), stderr)
     }
+    @Test fun failedHostnameDoesNotProveTheDeviceIsOffline() {
+        for (failure in listOf("Name or service not known", "Temporary failure in name resolution",
+            "Unable to resolve host", "No address associated with hostname", "nodename nor servname provided",
+            "No route to host")) {
+            assertEquals(DownloadError.Network, YtdlpErrorMapper.map("ERROR: Unable to download webpage: $failure"), failure)
+        }
+        assertEquals(DownloadError.Offline, YtdlpErrorMapper.map("ERROR: Network is unreachable"))
+    }
+
     @Test fun concreteNetworkFailuresRemainNetworkErrors() {
         for (failure in listOf("Failed to establish a new connection", "Failed to resolve 'media.example'",
             "getaddrinfo failed", "Broken pipe", "IncompleteRead(1024 bytes read, 2048 more expected)",
@@ -482,7 +491,7 @@ class YtdlpMappingTest {
             "ERROR: This video is only available for registered users" to DownloadError.LoginRequired,
             "ERROR: Video has been removed" to DownloadError.Unavailable,
             "ERROR: This video is not available in your country" to DownloadError.Unavailable,
-            "ERROR: Temporary failure in name resolution" to DownloadError.Offline,
+            "ERROR: Temporary failure in name resolution" to DownloadError.Network,
             "ERROR: Network is unreachable" to DownloadError.Offline,
             "ERROR: Unable to download webpage: HTTP Error 503" to DownloadError.Failed,
             "ERROR: HTTP Error 429: Too Many Requests" to DownloadError.Failed,

@@ -1,7 +1,5 @@
 package dev.ahmed.savlino.update
 
-import android.content.ActivityNotFoundException
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -43,12 +41,6 @@ import dev.ahmed.savlino.BuildConfig
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 
-internal fun openUpdateReleasePage(context: Context, version: String? = null) {
-    val page = if (version == null) "latest" else "tag/v$version"
-    try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ahmed-abdat/nezzel/releases/$page"))) }
-    catch (_: ActivityNotFoundException) {}
-}
-
 @Composable
 internal fun UpdateCard(release: Release, language: String, open: () -> Unit, dismiss: () -> Unit) {
     // A flat row on the page: the filled Update button is the only emphasis, so there is no box around it.
@@ -56,7 +48,7 @@ internal fun UpdateCard(release: Release, language: String, open: () -> Unit, di
         horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Icon(Icons.Default.Refresh, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(release.version)),
+                Text(stringResource(R.string.update_notification_title),
                     Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
                 Text(release.notes(language).firstOrNull() ?: stringResource(R.string.update_available_title),
                     style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -71,13 +63,13 @@ internal fun UpdateCard(release: Release, language: String, open: () -> Unit, di
 }
 
 /**
- * Top of Settings: who you are running (mark, name, version) and the update state in one compact row, with the
+ * Top of Settings: the app name and mark and the update state in one compact row, with the
  * manual check at its end. The automatic check switch lives under Advanced ([UpdateAutoSetting]); a missing
  * updater still shows the identity.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun UpdateSettings(updates: AppUpdates?, version: String = BuildConfig.VERSION_NAME, open: () -> Unit) {
+internal fun UpdateSettings(updates: AppUpdates?, open: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val language = LocalConfiguration.current.locales[0].language
     val state = updates?.takeIf { it.available }?.state?.collectAsState()?.value
@@ -93,16 +85,10 @@ internal fun UpdateSettings(updates: AppUpdates?, version: String = BuildConfig.
         dev.ahmed.savlino.ui.NezzelMark(Modifier.size(48.dp))
         Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // Name and version share a line and wrap apart only when the text is very large.
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                // The build number is for support; it sits at the bottom of Settings → Advanced.
-                Text(stringResource(R.string.about_version, NezzelFormat.isolate(version)),
-                    style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-            }
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             when {
                 state == null -> Unit
-                offer != null -> Text(stringResource(R.string.update_notification_title, NezzelFormat.isolate(offer.version)),
+                offer != null -> Text(stringResource(R.string.update_notification_title),
                     style = MaterialTheme.typography.bodyMedium, color = colors.primary, fontWeight = FontWeight.Medium)
                 state.check == UpdateCheck.FAILED ->
                     Text(stringResource(R.string.update_check_failed), style = MaterialTheme.typography.bodySmall, color = colors.error)
@@ -147,7 +133,6 @@ internal fun UpdateAutoSetting(updates: AppUpdates) {
 @Composable
 internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: Boolean,
     back: () -> Unit, download: () -> Unit, cancel: () -> Unit, skip: (Long) -> Unit, install: () -> Unit, permission: () -> Unit) {
-    val context = LocalContext.current
     val release = if (state.stage == UpdateStage.IDLE) state.release else state.transfer ?: state.release
     val compact = LocalConfiguration.current.screenHeightDp < 480
     val colors = MaterialTheme.colorScheme
@@ -203,11 +188,7 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                     }
                     Text(message, Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error)
                     Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.try_again)) }
-                    if (state.failure == UpdateFailure.INSTALL || state.failure == UpdateFailure.VERIFY) {
-                        val label = stringResource(R.string.update_open_release)
-                        TextButton(onClick = { openUpdateReleasePage(context) },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = label }) { Text(label) }
-                    }
+
                 }
                 UpdateStage.IDLE -> {
                     Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.update_download, size)) }
@@ -232,9 +213,9 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                     UpdateHero(compact, top, Modifier.fillMaxWidth().height(top + if (compact) 112.dp else 248.dp))
                     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(stringResource(R.string.update_card_version, NezzelFormat.isolate(release.version)),
+                            Text(stringResource(R.string.update_card_version),
                                 Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.update_meta, NezzelFormat.isolate(BuildConfig.VERSION_NAME), size),
+                            Text(stringResource(R.string.update_meta, size),
                                 style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                         }
                         val notes = release.notes(language)
@@ -242,10 +223,8 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(stringResource(R.string.update_whats_new), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.fillMaxWidth().semantics { heading() })
-                                notes.take(6).forEach { NoteBullet(it) }
-                                TextButton(onClick = { openUpdateReleasePage(context, release.version) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text(stringResource(R.string.update_full_notes))
-                                }
+                                notes.forEach { NoteBullet(it) }
+
                             }
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

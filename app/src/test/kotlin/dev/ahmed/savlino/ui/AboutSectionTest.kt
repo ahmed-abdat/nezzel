@@ -63,11 +63,11 @@ class AboutSectionTest {
     }
     private fun click(node: SemanticsNode) { assertEquals(true, node.config[SemanticsActions.OnClick].action?.invoke()) }
 
-    // The app card above About carries the version; the notice and warranty open with the licences.
+    // About ends with the version; the notice and warranty open with the licences.
     private fun assertVersions(a: ComponentActivity) {
         val all = texts(nodes(a))
-        val version = context.getString(R.string.about_version, NezzelFormat.isolate(dev.ahmed.savlino.BuildConfig.VERSION_NAME))
-        // Plain card: the version only; the build number is for support (Settings → Advanced).
+        val version = context.getString(R.string.about_version, NezzelFormat.isolate("1.2.3"))
+        // Small support line at the bottom of About.
         assertTrue(all.contains(version))
         assertFalse(all.contains(context.getString(R.string.about_body)))
         click(clickable(a, context.getString(R.string.about_licences)))
@@ -80,7 +80,8 @@ class AboutSectionTest {
         val all = texts(nodes(a))
         assertTrue(all.contains("Nezzel"))
         assertVersions(a)
-        assertTrue(context.getString(R.string.about_body).contains("github.com/ahmed-abdat/nezzel"))
+        assertTrue(context.getString(R.string.about_body).contains("nezzel.hululsoft.mr"))
+        assertFalse(context.getString(R.string.about_body).contains("github", ignoreCase = true))
         assertEquals("Provided as is, without warranty", context.getString(R.string.about_warranty))
     }
 
@@ -90,7 +91,7 @@ class AboutSectionTest {
         assertTrue(all.contains("Nezzel"))
         assertVersions(a)
         assertTrue(context.getString(R.string.about_body).contains("yt-dlp"))
-        assertTrue(context.getString(R.string.about_body).contains("\u2066github.com/ahmed-abdat/nezzel\u2069"))
+        assertTrue(context.getString(R.string.about_body).contains("\u2066nezzel.hululsoft.mr\u2069"))
     }
 
     @Test fun aboutIsAHeadingAndLicencesRowIsALabelledButton() = render { a ->

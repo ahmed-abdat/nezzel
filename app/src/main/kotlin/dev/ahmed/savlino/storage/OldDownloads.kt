@@ -172,15 +172,23 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
 
         /** Hides found files that the MediaStore listing or a save-folder receipt already shows. */
         internal fun dedupe(found: List<FoundFile>, shown: List<SavedMedia>): List<FoundFile> {
-            // Folder + name is the identity: one folder can't hold two files of the same name (sizes can be stale).
-            fun key(path: String?, name: String) = path?.trimEnd('/')?.lowercase() to name
-            val media = shown.filter { it.uri.authority == "media" }.map { key(it.relativePath, it.filename) }.toSet()
+            // A folder belongs to a concrete volume; identical names on internal storage and SD are different files.
+            fun volume(value: String?): String? = when (val normalized = value?.lowercase()) {
+                null, "", "external", "internal" -> null
+                "primary" -> "external_primary"
+                else -> normalized
+            }
+            fun key(volume: String, file: SavedMedia) = Triple(volume, file.relativePath?.trimEnd('/')?.lowercase(), file.filename)
+            val media = shown.filter { it.uri.authority == "media" }.mapNotNull { file ->
+                volume(file.volumeName ?: file.uri.pathSegments.firstOrNull())?.let { key(it, file) }
+            }.toSet()
             val documents = shown.filter { it.uri.authority == AUTHORITY }.mapNotNull {
                 try { DocumentsContract.getDocumentId(it.uri) } catch (_: IllegalArgumentException) { null }
             }.toSet()
             return found.filter { file ->
-                key(file.media.relativePath, file.media.filename) !in media &&
-                    DocumentsContract.getDocumentId(file.media.uri) !in documents
+                val document = DocumentsContract.getDocumentId(file.media.uri)
+                val sameMedia = volume(document.substringBefore(':', ""))?.let { key(it, file.media) in media } == true
+                !sameMedia && document !in documents
             }
         }
     }

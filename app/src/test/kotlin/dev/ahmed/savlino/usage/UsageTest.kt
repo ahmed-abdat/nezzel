@@ -36,7 +36,8 @@ class UsageTest {
     private val crashDir = File(context.cacheDir, "usage-test-crash").apply { deleteRecursively() }
     private val crashStore = CrashReportStore(crashDir, CrashMetadata("0.5.0", 400, 35)) { clock }
     private val prefs = context.getSharedPreferences("usage-test", Context.MODE_PRIVATE).apply { edit().clear().commit() }
-    private val usage = Usage(prefs, { on }, { path, json -> posts += path to json; gate?.await() ?: answer }, CoroutineScope(Dispatchers.Unconfined),
+    private val usage = newUsage()
+    private fun newUsage() = Usage(prefs, { on }, { path, json -> posts += path to json; gate?.await() ?: answer }, CoroutineScope(Dispatchers.Unconfined),
         "0.5.0", 400, 35, { listOf("set.theme.dark", UsageKeys.brand("Samsung"), "sdk:35") }, object : Usage.Crashes {
             override fun pending() = crashStore.pending()
             override fun delete() = crashStore.deleteReports()
@@ -46,6 +47,43 @@ class UsageTest {
 
     private fun usagePosts() = posts.filter { it.first == InboxClient.USAGE }.map { JSONObject(it.second) }
     private fun counts(json: JSONObject) = json.getJSONObject("counts").let { c -> c.keys().asSequence().associateWith { c.getInt(it) } }
+
+    @Test fun optingBackInKeepsTheSuccessfulUtcDayButClearsEverythingElse() = runBlocking {
+        usage.sendDaily()
+        usage.count(UsageKeys.PASTE)
+        answer = false
+        usage.failed(Report.DOWNLOAD, "Failed", link, null)
+        crashStore.record(Thread.currentThread(), IllegalStateException())
+        on = false; usage.clear(); on = true
+        assertEquals(setOf("usage_day"), prefs.all.keys)
+        assertTrue(usage.queued().isEmpty())
+        assertNull(crashStore.pending())
+        answer = true
+        usage.sendDaily()
+        assertEquals(1, usagePosts().size)
+        clock = (clock / 86_400_000L + 1) * 86_400_000L
+        usage.sendDaily()
+        usage.sendDaily()
+        assertEquals(2, usagePosts().size)
+        assertFalse(counts(usagePosts().last()).containsKey(UsageKeys.PASTE))
+    }
+
+    @Test fun unsendableCrashIsDeletedAndQueuedFailuresStillFlush() = runBlocking {
+        usage.sendDaily()
+        answer = false
+        usage.failed(Report.DOWNLOAD, "Failed", link, null)
+        val pending = usage.queued().single()
+        crashStore.record(Thread.currentThread(), IllegalStateException())
+        val crashFile = crashDir.listFiles()!!.single()
+        crashFile.writeText("https://example.com/private crash message")
+        assertNotNull(crashStore.pending())
+        answer = true; posts.clear()
+        usage.sendDaily()
+        assertFalse(crashFile.exists())
+        assertNull(crashStore.pending())
+        assertEquals(listOf(InboxClient.REPORT to pending), posts)
+        assertTrue(usage.queued().isEmpty())
+    }
 
     @Test fun countersResetOnlyAfterTheInboxAccepted() = runBlocking {
         usage.count(UsageKeys.SHARE); usage.count(UsageKeys.SHARE); usage.site(link)
@@ -57,6 +95,7 @@ class UsageTest {
         usage.sendDaily()
         assertEquals(2, counts(usagePosts()[1])[UsageKeys.SHARE]) // Kept after the failed POST.
         posts.clear()
+        clock += 86_400_000L
         usage.sendDaily()
         assertEquals(setOf("active", "set.theme.dark", "brand:samsung", "sdk:35"), counts(usagePosts().single()).keys)
     }
@@ -123,6 +162,102 @@ class UsageTest {
         clock += 86_400_000L; posts.clear()
         usage.sendDaily()
         assertEquals(5, posts.count { it.first == InboxClient.REPORT })
+    }
+
+    @Test fun optingBackInKeepsTheFailureReportCapUntilTheNextUtcDay() = runBlocking {
+        usage.sendDaily()
+        repeat(Usage.MAX_REPORTS) { usage.failed(Report.DOWNLOAD, "Failed", link, null) }
+        assertEquals(20, posts.count { it.first == InboxClient.REPORT })
+        usage.count(UsageKeys.PASTE)
+        usage.failed(Report.DOWNLOAD, "Unsupported", link, null)
+        crashStore.record(Thread.currentThread(), IllegalStateException())
+        on = false; usage.clear()
+        assertEquals(setOf("usage_day", "slot_day", "slots"), prefs.all.keys)
+        assertTrue(usage.queued().isEmpty())
+        assertNull(crashStore.pending())
+        on = true
+        val restarted = newUsage()
+        posts.clear()
+        restarted.failed(Report.DOWNLOAD, "Failed", link, null)
+        restarted.sendDaily()
+        assertTrue(posts.isEmpty())
+        assertEquals(1, restarted.queued().size)
+        clock = (clock / 86_400_000L + 1) * 86_400_000L
+        restarted.sendDaily()
+        assertEquals(1, posts.count { it.first == InboxClient.REPORT })
+        assertTrue(restarted.queued().isEmpty())
+        assertFalse(counts(usagePosts().single()).containsKey(UsageKeys.PASTE))
+    }
+
+    @Test fun simultaneousFailuresShareTheDailyReportBudget() = runBlocking {
+        gate = CompletableDeferred()
+        repeat(25) { usage.failed(Report.DOWNLOAD, "Failed", link, null) }
+        gate!!.complete(true)
+        assertEquals(20, posts.count { it.first == InboxClient.REPORT })
+        assertEquals(5, usage.queued().size)
+    }
+
+    @Test fun repeatedDailyWorkersSendOneSnapshotAndKeepLaterCountsForTomorrow() = runBlocking {
+        usage.count(UsageKeys.SHARE)
+        usage.sendDaily()
+        usage.count(UsageKeys.PASTE)
+        usage.sendDaily()
+        assertEquals(1, usagePosts().size)
+        clock += 86_400_000L
+        usage.sendDaily()
+        assertEquals(2, usagePosts().size)
+        assertEquals(1, counts(usagePosts().last())[UsageKeys.PASTE])
+        assertFalse(counts(usagePosts().last()).containsKey(UsageKeys.SHARE))
+    }
+
+    @Test fun concurrentDailyWorkersDoNotDuplicateTheSnapshot() = runBlocking {
+        gate = CompletableDeferred()
+        val first = CoroutineScope(Dispatchers.Unconfined).launch { usage.sendDaily() }
+        val second = CoroutineScope(Dispatchers.Unconfined).launch { usage.sendDaily() }
+        gate!!.complete(true)
+        first.join(); second.join()
+        assertEquals(1, usagePosts().size)
+    }
+
+    @Test fun restartingTheCollectorKeepsTheSuccessfulDailySnapshot() = runBlocking {
+        usage.sendDaily()
+        val restarted = newUsage()
+        restarted.count(UsageKeys.PASTE)
+        restarted.sendDaily()
+        assertEquals(1, usagePosts().size)
+        clock += 86_400_000L
+        restarted.sendDaily()
+        assertEquals(1, counts(usagePosts().last())[UsageKeys.PASTE])
+    }
+
+    @Test fun anOldCrashResponseCannotDeleteACrashAfterOptingBackIn() = runBlocking {
+        usage.sendDaily()
+        crashStore.record(Thread.currentThread(), IllegalStateException())
+        gate = CompletableDeferred()
+        val sending = CoroutineScope(Dispatchers.Unconfined).launch { usage.sendDaily() }
+        on = false; usage.clear(); on = true
+        crashStore.record(Thread.currentThread(), IllegalArgumentException())
+        gate!!.complete(true); sending.join()
+        assertTrue(crashStore.pending()!!.contains("IllegalArgumentException"))
+    }
+
+    @Test fun laterSameDayRunFlushesOfflineReportsWithoutAnotherSnapshot() = runBlocking {
+        usage.sendDaily()
+        answer = false
+        usage.failed(Report.DOWNLOAD, "Failed", link, null)
+        answer = true; posts.clear()
+        usage.sendDaily()
+        assertTrue(usagePosts().isEmpty())
+        assertEquals(1, posts.count { it.first == InboxClient.REPORT })
+        assertTrue(usage.queued().isEmpty())
+    }
+
+    @Test fun optingBackInDoesNotLetAnOldSuccessfulReportRestoreItsSlot() = runBlocking {
+        gate = CompletableDeferred()
+        usage.failed(Report.DOWNLOAD, "Failed", link, null)
+        on = false; usage.clear(); on = true
+        gate!!.complete(true)
+        assertTrue(prefs.all.isEmpty())
     }
 
     @Test fun unsentCountsAndReportsAreDroppedAfterSevenDays() = runBlocking {
@@ -225,7 +360,7 @@ class UsageTest {
         assertEquals(Usage.MAX_REPORTS - (Usage.MAX_POSTS - 1), usage.queued().size)
         answer = false; posts.clear()
         usage.sendDaily()
-        assertEquals(1, posts.size) // A refused usage ping ends the run.
+        assertEquals(1, posts.size) // Same-day usage is skipped; the first refused queued report ends the run.
     }
 
     @Test fun distinctSitesAreCappedBetweenSends() = runBlocking {

@@ -15,6 +15,13 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29, 33, 35], application = Application::class)
 class UpdateInstallerTest {
+    @Test fun automaticSessionRequestsNoPromptOnSupportedAndroid() {
+        val context = RuntimeEnvironment.getApplication()
+        val release = Release("0.5.0", 99999, "update.apk", 100, "https://github.com/asset", "a".repeat(64), emptyList(), emptyList())
+        val params = UpdateInstaller.sessionParams(context, release, silent = true)
+        if (Build.VERSION.SDK_INT >= 31)
+            assertEquals(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED, ReflectionHelpers.getField<Int>(params, "requireUserAction"))
+    }
     @Test fun sessionDescribesUserDownloadedUpdateAndRequiresConfirmation() {
         val context = RuntimeEnvironment.getApplication()
         val release = Release("0.4.5", 99999, "update.apk", 100, "https://github.com/asset", "a".repeat(64), emptyList(), emptyList())

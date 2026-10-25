@@ -46,6 +46,34 @@ class DownloadsFailuresTest {
         } finally { c.pause().stop().destroy() }
     }
 
+    @Test fun englishNetworkFailuresFollowRowConnectivity() = networkCopy()
+    @Test @Config(qualifiers = "+ar") fun arabicNetworkFailuresFollowRowConnectivity() = networkCopy()
+
+    private fun networkCopy() {
+        val offline = androidx.compose.runtime.mutableStateOf(true)
+        val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            c.get().setContent {
+                androidx.compose.runtime.CompositionLocalProvider(LocalOffline provides offline.value) {
+                    NezzelTheme(ThemePref.Light, false) {
+                        androidx.compose.foundation.layout.Column {
+                            JobRow(failed("standalone"), {}, {}, {})
+                            PlaylistFailureRow(failedList("list"), emptyList(), language, {}, {})
+                            PlaylistBatchRow(PlaylistBatch(BatchRecord("paused", "Paused list", Preset.BALANCED,
+                                BatchState.PAUSED, 0, DownloadError.Network), failedList("paused").items), language, {}, {})
+                            PlaylistVideosContent(failedList("list"), emptyList(), language, {})
+                        }
+                    }
+                }
+            }
+            for (disconnected in listOf(true, false)) {
+                compose.runOnIdle { offline.value = disconnected }
+                compose.onAllNodesWithText(context.getString(if (disconnected) R.string.download_network_error else R.string.network_title),
+                    substring = true, useUnmergedTree = true).assertCountEquals(5)
+            }
+        } finally { c.pause().stop().destroy() }
+    }
+
     @Test fun retryAllTakesOnlyRowsThatCanRetry() {
         // A failure that cannot be retried and a stopped playlist are left out; one retryable row alone gets no Retry all.
         assertEquals(FailureRetry(listOf("a", "c"), listOf("l1")),

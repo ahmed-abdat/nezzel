@@ -22,7 +22,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.ahmed.savlino.update.AppUpdates
 import dev.ahmed.savlino.update.WhatsNewSheet
-import dev.ahmed.savlino.update.openUpdateReleasePage
 import dev.ahmed.savlino.jobs.NezzelApplication
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -76,8 +75,7 @@ internal object OpenSourceNotices {
 private val ltr = TextDirection.Ltr
 
 /**
- * About group at the bottom of Settings: how-to and What's new, then who makes Nezzel. The version sits in the app
- * card at the top of Settings; the licences are a small link under Advanced ([LicencesLink]).
+ * About group at the bottom of Settings: how-to, notes, maker and a small version line for support.
  */
 @Composable
 internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: () -> Unit = {},
@@ -88,8 +86,8 @@ internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: (
     Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
         SettingsGroup(stringResource(R.string.about)) {
             SettingsNavRow(stringResource(R.string.onboarding_how_it_works), R.drawable.ic_ms_help, onClick = onHowItWorks)
-            if (updates?.available == true) SettingsNavRow(stringResource(R.string.update_whats_new), R.drawable.ic_ms_celebration) {
-                if (updates.currentNotes() != null) showWhatsNew = true else openUpdateReleasePage(context, versionName)
+            if (updates?.available == true && updates.currentNotes() != null) SettingsNavRow(stringResource(R.string.update_whats_new), R.drawable.ic_ms_celebration) {
+                showWhatsNew = true
             }
             val contactIntro = stringResource(R.string.contact_whatsapp_intro)
             SettingsNavRow(stringResource(R.string.contact_whatsapp), R.drawable.logo_whatsapp) {
@@ -98,6 +96,9 @@ internal fun AboutSection(versionName: String, versionCode: Int, onHowItWorks: (
             CrashReportActions()
         }
         Box(Modifier.padding(horizontal = Space.l)) { HululsoftAbout() }
+        Text(stringResource(R.string.about_version, NezzelFormat.isolate(versionName)),
+            Modifier.padding(horizontal = Space.l), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (showWhatsNew) updates?.currentNotes()?.let { notes ->
         WhatsNewSheet(notes, language) { showWhatsNew = false }

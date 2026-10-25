@@ -3,6 +3,7 @@ package dev.ahmed.savlino
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.state.ToggleableState
 import androidx.lifecycle.SavedStateHandle
 import dev.ahmed.savlino.jobs.EngineMaintenanceState
 import dev.ahmed.savlino.jobs.EngineUpdateStatus
@@ -33,6 +34,28 @@ class SettingsScreenTest {
         val owner = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Unconfined)
         val production = object : android.content.ContextWrapper(context) { override fun getPackageName() = "dev.ahmed.savlino" }
         return try { block(AppUpdates(production, owner)) } finally { owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel() }
+    }
+
+    @Test fun tipsSwitchDefaultsOnAndPersistsOffEnglish() = tipsSwitch()
+    @Test fun tipsCanBeTurnedOffWithoutAnAvailableUpdater() = renderThemed({ nodes(it) }, {
+        AdvancedSettings(null, {}, null) {}
+    }) { a ->
+        click(clickable(a, context.getString(R.string.tips_title)))
+        assertFalse(dev.ahmed.savlino.locale.AppPreferences(context).tips)
+    }
+    @Test @Config(qualifiers = "ar-w360dp-h1600dp-mdpi") fun tipsSwitchDefaultsOnAndPersistsOffArabic() = tipsSwitch()
+    private fun tipsSwitch() = withUpdates { updates ->
+        val prefs = dev.ahmed.savlino.locale.AppPreferences(context)
+        assertTrue(prefs.tips)
+        renderThemed({ nodes(it) }, { AdvancedSettings(null, {}, updates) {} }) { a ->
+            val row = clickable(a, context.getString(R.string.tips_title))
+            assertEquals(ToggleableState.On, row.config[SemanticsProperties.ToggleableState])
+            assertTrue(row.layoutInfo.height / context.resources.displayMetrics.density >= 48f)
+            click(row)
+            nodes(a)
+            assertFalse(dev.ahmed.savlino.locale.AppPreferences(context).tips)
+            assertEquals(ToggleableState.Off, clickable(a, context.getString(R.string.tips_title)).config[SemanticsProperties.ToggleableState])
+        }
     }
 
     @Test fun languageRowShowsCurrentValueAndPickerAppliesChoice() = withUpdates { updates ->
@@ -118,14 +141,11 @@ class SettingsScreenTest {
         }) { a ->
             val row = clickable(a, context.getString(R.string.engine_update_now))
             val shown = texts(descendants(row))
-            // Plain words on the row; the engine version only in the small support line.
+            // Plain words; version details belong to About's support line.
             assertFalse(shown.any { "2026.08.19" in it })
             assertTrue(shown.contains(context.getString(R.string.engine_update_body)))
             assertTrue(shown.contains(context.getString(R.string.engine_update_help)))
-            val support = texts(nodes(a)).single { "2026.08.19" in it }
-            // Engine only: a build number means nothing to most people.
-            assertEquals(context.getString(R.string.settings_support_info, "2026.08.19") + " ·", support)
-            assertFalse(support.any { it in '٠'..'٩' })
+            assertFalse(texts(nodes(a)).any { "2026.08.19" in it })
             click(row)
             assertEquals(1, updates)
         }

@@ -238,7 +238,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val result = fastInfoJson(current, source, operationId, fastSource)
             if (result is FastResult.Unreachable && synchronized(fastFailed) {
                     recent.epoch() != epoch || fastFailed.add(key).also { while (fastFailed.size > FAST_FAILED_MAX) fastFailed.remove(fastFailed.first()) }
-                }) return InspectResult.Failure(unreachable(result))
+                }) return InspectResult.Failure(DownloadError.Network) // DNS failure alone does not establish device connectivity.
             val json = (result as? FastResult.Json)?.json
             val inspection = if (json == null) null else try {
                 YtdlpMetadataMapper.map(json, source, version).takeIf {
@@ -262,9 +262,6 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
         return inspectOnce(current, source, version, epoch)
     }
-
-    private fun unreachable(result: FastResult.Unreachable) =
-        if (result.offline) DownloadError.Offline else DownloadError.Network
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun fastInfoJson(current: Operation, source: LinkRevision, operationId: String,
@@ -351,7 +348,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         currentCoroutineContext().ensureActive()
         checkCancelled(current)
         // The page URL would wait on the same dead network; TRANSPORT lets the coordinator wait for one.
-        if (result is FastResult.Unreachable) throw YtdlpExecutionFailure(unreachable(result))
+        if (result is FastResult.Unreachable) throw YtdlpExecutionFailure(DownloadError.Network)
         val json = (result as? FastResult.Json)?.json
         // A different row under the same id goes to the checked yt-dlp read instead.
         if (json == null || !offers(json, command)) return null

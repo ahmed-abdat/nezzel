@@ -469,7 +469,7 @@ private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, r
             ThumbBadge.Failed, ring)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
             FilenameText(job.filename)
-            Text(DownloadNotifications.phase(context, job), color = MaterialTheme.colorScheme.error,
+            Text(DownloadNotifications.phase(context, job, LocalOffline.current), color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             if (!job.awaitingSchedule && !job.retryable)
                 Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall,

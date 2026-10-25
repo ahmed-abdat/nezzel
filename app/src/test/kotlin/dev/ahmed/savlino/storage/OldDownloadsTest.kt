@@ -178,6 +178,22 @@ class OldDownloadsTest {
         assertEquals("Deleting a found file keeps the folder grant", listOf(tree), resolver.persistedUriPermissions.map { it.uri })
     }
 
+    @Test fun recoveryDeduplicatesOnlyTheSameConcreteStorageVolume() {
+        val provider = provider()
+        provider.add("Same.mp4", "video/mp4", size = 10)
+        val primary = OldDownloads(context).apply { onPicked(tree) }.list().single()
+        val sdTree = DocumentsContract.buildTreeDocumentUri(AUTHORITY, "1A2B-3C4D:Download/Nezzel")
+        val sd = FoundFile(primary.media.copy(uri = DocumentsContract.buildDocumentUriUsingTree(
+            sdTree, "1A2B-3C4D:Download/Nezzel/Same.mp4")), primary.modified)
+        fun shown(uriVolume: String, volume: String?) = primary.media.copy(
+            uri = Uri.parse("content://media/$uriVolume/downloads/9"), volumeName = volume)
+        val found = listOf(primary, sd)
+        assertEquals(listOf(sd), OldDownloads.dedupe(found, listOf(shown("external", "external_primary"))))
+        assertEquals(listOf(primary), OldDownloads.dedupe(found, listOf(shown("external", "1a2b-3c4d"))))
+        assertEquals(listOf(primary), OldDownloads.dedupe(found, listOf(shown("1a2b-3c4d", null))))
+        assertEquals(found, OldDownloads.dedupe(found, listOf(shown("external", null))))
+    }
+
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun observeShowsRowsFirstThenFillsDimensions() {
         val provider = provider()

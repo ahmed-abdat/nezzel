@@ -38,11 +38,11 @@ enum class UpdateStage { IDLE, DOWNLOADING, VERIFYING, READY, INSTALLING, ERROR 
 enum class UpdateFailure { NETWORK, SPACE, VERIFY, INSTALL }
 enum class UpdateCheck { NONE, CHECKING, LATEST, AVAILABLE, FAILED }
 class WhatsNew(val version: String, val english: List<String>, val arabic: List<String>, val french: List<String> = emptyList()) {
-    fun notes(language: String): List<String> = when {
+    fun notes(language: String): List<String> = plainUpdateNotes(when {
         language == "ar" && arabic.isNotEmpty() -> arabic
         language == "fr" && french.isNotEmpty() -> french
         else -> english
-    }
+    })
 }
 data class AppUpdateState(val automatic: Boolean = true, val release: Release? = null, val skipped: Long? = null,
     val dismissedAt: Long? = null, val check: UpdateCheck = UpdateCheck.NONE, val stage: UpdateStage = UpdateStage.IDLE,
@@ -67,11 +67,13 @@ class AppUpdates internal constructor(private val context: Context, private val 
         lastChecked = prefs.getLong("success", 0).takeIf { prefs.contains("success") },
         whatsNew = readWhatsNew()))
     val state: StateFlow<AppUpdateState> = mutable.asStateFlow()
-    private var foreground = false
+    @Volatile private var foreground = false
     private var handledInOpen: Long? = null
+    private val bundledNotes by lazy { BundledWhatsNew.read(context.assets) }
     init { currentNotes(); refreshPresentation() } // Discard notes retained by an older build, even before About opens
     private val checkGate = Mutex()
     private val filesGate = Mutex()
+    internal val installGate = Mutex()
     private val scheduleLock = Any()
     private var transfer: Job? = null
     private var installation: Job? = null
@@ -164,13 +166,18 @@ class AppUpdates internal constructor(private val context: Context, private val 
         }
         catch (_: Exception) { if (manual) mutable.update { it.copy(check = UpdateCheck.FAILED) } }
     }
-    @Synchronized internal fun postNotification(ready: Boolean = false) {
-        val release = state.value.release ?: return
+    @Synchronized internal fun postNotification(ready: Boolean = false, confirmation: Intent? = null): Boolean {
+        val release = (if (confirmation != null) state.value.transfer else null) ?: state.value.release ?: return false
+        if (prefs.contains("dismissed-${release.code}") &&
+            now() - prefs.getLong("dismissed-${release.code}", 0) < UpdatePolicy.REMINDER_AGE) return false
         if (UpdatePolicy.notify(context.packageName, appPrefs.appUpdates, release.code, BuildConfig.VERSION_CODE.toLong(),
                 state.value.skipped, prefs.getLong("notified", -1), release.important,
                 prefs.getLong("notified-at-${release.code}", 0).takeIf { prefs.contains("notified-at-${release.code}") }, now()) &&
-            UpdateNotifications(context).post(release, ready))
+            UpdateNotifications(context).post(ready, confirmation)) {
             prefs.edit().putLong("notified", release.code).putLong("notified-at-${release.code}", now()).commit()
+            return true
+        }
+        return false
     }
     fun dismiss() {
         val code = state.value.release?.code ?: return
@@ -210,14 +217,31 @@ class AppUpdates internal constructor(private val context: Context, private val 
         } }
         mutable.update { it.copy(dismissedAt = dismissedAt, offerSheet = sheet) }
     }
-    /** Uses exactly the foreground transfer/verification path; preparation never authorizes installation. */
+    internal suspend fun silentInstallAllowed(verified: Boolean = readyFile != null && state.value.stage == UpdateStage.READY): Boolean {
+        val app = context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication ?: return false
+        if (android.os.Build.VERSION.SDK_INT < 31 || !appPrefs.appUpdates || app.visibility.foreground || foreground || !verified) return false
+        val downloads = app.downloads
+        val busy = downloads.hasQueuedOrRunning() ||
+            downloads.maintenance.state.value.status == dev.ahmed.savlino.jobs.EngineUpdateStatus.UPDATING
+        // Read the switch and visibility after the IO suspension, immediately before the caller commits.
+        return canSilentlyUpdate(android.os.Build.VERSION.SDK_INT, appPrefs.appUpdates, app.visibility.foreground || foreground, busy, verified)
+    }
+    internal fun isAppForeground() = foreground || (context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication)?.visibility?.foreground == true
+    /** The same download and verifier precede both manual and owner-enabled background installation. */
     internal suspend fun notifyInBackground(canPrepare: Boolean = canPrepareUpdate(context)) {
         val release = state.value.release ?: return
         if (!appPrefs.appUpdates || !state.value.badge(BuildConfig.VERSION_CODE.toLong())) return
+        withContext(Dispatchers.IO) { filesGate.withLock { sweepOnce() } }
         if (canPrepare) launchDownload()?.join()
         val current = state.value
-        postNotification(readyFile != null && current.stage == UpdateStage.READY &&
-            current.transfer?.code == release.code && current.transfer?.digest == release.digest)
+        val ready = readyFile != null && current.stage == UpdateStage.READY &&
+            current.transfer?.code == release.code && current.transfer?.digest == release.digest
+        if (ready && android.os.Build.VERSION.SDK_INT >= 31 && !silentAttempted(release.code)) {
+            if (silentInstallAllowed() && UpdateInstaller.install(context, this, silent = true)) return
+        }
+        // Someone using Nezzel sees the in-app update card; a notification on top would only interrupt.
+        if (isAppForeground()) return
+        postNotification(readyFile != null && state.value.stage == UpdateStage.READY)
     }
     @Synchronized fun skip(code: Long) {
         if (!available) return
@@ -305,13 +329,32 @@ class AppUpdates internal constructor(private val context: Context, private val 
         }
     }
     internal fun fail(failure: UpdateFailure) {
-        if (failure == UpdateFailure.INSTALL) clearInstall()
+        if (failure == UpdateFailure.INSTALL) { installFailed(failure); return }
         cleanFiles()
         mutable.update { it.copy(stage = UpdateStage.ERROR, failure = failure, confirmation = null) }
+    }
+    internal fun installFailed(failure: UpdateFailure) {
+        stopSilentAttempts()
+        clearInstall()
+        mutable.update { it.copy(stage = if (readyFile?.isFile == true) UpdateStage.READY else UpdateStage.ERROR,
+            failure = failure, confirmation = null) }
+    }
+    internal fun silentAttempted(code: Long): Boolean = prefs.getInt("silent-attempts-$code", 0) > 0 ||
+        prefs.getBoolean("install-silent", false) && prefs.getLong("install-code", -1) == code
+    /** Reserve before creating a session; a killed or rejected session cannot loop on a cold worker. */
+    internal fun reserveSilentAttempt(code: Long): Boolean = !silentAttempted(code) &&
+        prefs.edit().putInt("silent-attempts-$code", 1).commit()
+    /** A silent try deferred before commit (app opened, work cancelled) never reached Android, so it is given back. */
+    internal fun releaseSilentAttempt(code: Long) { prefs.edit().remove("silent-attempts-$code").commit() }
+    internal fun stopSilentAttempts() {
+        val code = prefs.getLong("install-code", -1)
+        if (prefs.getBoolean("install-silent", false) && code > 0)
+            prefs.edit().putInt("silent-attempts-$code", 1).commit()
     }
     internal fun holdConfirmation(intent: Intent) { mutable.update { it.copy(stage = UpdateStage.INSTALLING, confirmation = intent) } }
     internal fun takeConfirmation(): Intent? = mutable.getAndUpdate { it.copy(confirmation = null) }.confirmation
     internal fun installing() { mutable.update { it.copy(stage = UpdateStage.INSTALLING) } }
+    internal fun deferInstall() { mutable.update { it.copy(stage = UpdateStage.READY, confirmation = null) } }
     internal fun installed() {
         cleanFiles()
         mutable.update { it.copy(release = null, transfer = null, stage = UpdateStage.IDLE, confirmation = null, offerSheet = null) }
@@ -321,15 +364,16 @@ class AppUpdates internal constructor(private val context: Context, private val 
         prefs.edit().remove("ready-file").remove("ready-code").commit()
         directory.listFiles()?.filter { it.name !in keep }?.forEach { it.delete() }
     }
-    internal fun recordInstall(session: Int, release: Release): Boolean = prefs.edit()
+    internal fun recordInstall(session: Int, release: Release, silent: Boolean = false): Boolean = prefs.edit()
         .putInt("install-session", session).putLong("install-code", release.code)
+        .putBoolean("install-silent", silent)
         .putString("install-notes", JSONObject().put("version", release.version)
             .put("en", JSONArray(release.english)).put("ar", JSONArray(release.arabic)).put("fr", JSONArray(release.french)).toString()).commit()
     internal fun clearInstall(): Boolean {
         val editor = prefs.edit()
         // Only a completed update to this build can become About's retained notes.
         readWhatsNew()?.let { notes -> editor.putString("current-notes", encodeNotes(notes)) }
-        val cleared = editor.remove("install-code").remove("install-session").remove("install-notes").commit()
+        val cleared = editor.remove("install-code").remove("install-session").remove("install-notes").remove("install-silent").commit()
         if (cleared) mutable.update { it.copy(whatsNew = null) }
         return cleared
     }
@@ -369,7 +413,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
             catch (_: Exception) { false }
         if (raw != null && !current) prefs.edit().remove("current-notes").commit()
         // A pending first presentation is also available from About before it is dismissed.
-        return readWhatsNew() ?: (if (current) decodeNotes(raw) else null) ?: BundledWhatsNew.read(context.assets)
+        return readWhatsNew() ?: (if (current) decodeNotes(raw) else null) ?: bundledNotes
     }
     internal fun refreshWhatsNew() { mutable.update { it.copy(whatsNew = readWhatsNew()) } }
     fun dismissWhatsNew() {

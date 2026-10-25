@@ -181,14 +181,15 @@ internal fun ImageSaveBar(links: LinkViewModel, language: String) {
 @Composable
 internal fun ImageInspectionError(state: OptionsState.ImageError, onRetry: () -> Unit, onDismiss: () -> Unit,
     host: String? = null, onPasteAnother: ((String?) -> Unit)? = null) {
-    val (title, body, retry) = imageErrorCopy(state)
+    val offline = dev.ahmed.savlino.downloads.rememberOffline()
+    val (title, body, retry) = imageErrorCopy(state, offline)
     // A failed Save is about this image, not the link: no "Paste another link" there.
     val saveFailure = state.failure in setOf(ImageFailure.STAGING, ImageFailure.INSUFFICIENT_SPACE, ImageFailure.STALE, ImageFailure.PROOF_MISMATCH,
         ImageFailure.SAVE_UNAVAILABLE)
     FailureContent(title, body, host, onRetry.takeIf { retry }, onPasteAnother.takeUnless { saveFailure }, onDismiss)
 }
 
-internal fun imageErrorCopy(state: OptionsState.ImageError): Triple<Int, Int?, Boolean> = when (state.failure) {
+internal fun imageErrorCopy(state: OptionsState.ImageError, offline: Boolean = false): Triple<Int, Int?, Boolean> = when (state.failure) {
     ImageFailure.EXPIRED -> Triple(R.string.image_expired, R.string.image_expired_body, true)
     ImageFailure.PREVIEW_LIMIT -> Triple(R.string.image_preview_limit_title, R.string.image_preview_limit_body, false)
     ImageFailure.LINKED_ELSEWHERE -> Triple(R.string.image_linked_elsewhere, null, false)
@@ -206,7 +207,8 @@ internal fun imageErrorCopy(state: OptionsState.ImageError): Triple<Int, Int?, B
     ImageFailure.BUDGET -> if (state.phase == ImagePhase.PAGE) Triple(R.string.read_failed_title, R.string.read_failed_body, true)
         else Triple(R.string.image_large_title, null, false)
     ImageFailure.DIMENSIONS -> Triple(R.string.image_large_title, null, false)
-    ImageFailure.NETWORK -> Triple(R.string.network_title, R.string.network_body, true)
+    ImageFailure.NETWORK -> if (offline) Triple(R.string.offline_title, R.string.offline_body, true)
+        else Triple(R.string.network_title, R.string.network_body, true)
     ImageFailure.STALE, ImageFailure.PROOF_MISMATCH, ImageFailure.SAVE_UNAVAILABLE -> Triple(R.string.image_changed, null, true)
     ImageFailure.INSUFFICIENT_SPACE -> Triple(R.string.image_save_failed, R.string.download_space_error, false)
     ImageFailure.STAGING -> if (state.storage == StorageError.FolderUnavailable)

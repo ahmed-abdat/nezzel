@@ -113,6 +113,11 @@ class DownloadCoordinator(
     /** Only paused rows wait: a manual engine update may proceed once the user accepts they start over. */
     fun onlyPausedWaiting(): Boolean = active.isEmpty() &&
         store.all().filter { !it.stage.terminal }.let { rows -> rows.isNotEmpty() && rows.all { it.stage == JobStage.PAUSED } }
+    /** Durable rows also cover queued playlist items that have not reached the progress stream yet. */
+    internal suspend fun hasQueuedOrRunning(): Boolean = withContext(Dispatchers.IO) {
+        active.isNotEmpty() || store.all().any { !it.stage.terminal && it.stage != JobStage.PAUSED } ||
+            batches.all().any { it.state == BatchState.ACTIVE || it.state == BatchState.WAITING_NETWORK }
+    }
     private val recovery = JobRecovery(store, publisher ?: DestinationPublisher(context, space), File(context.filesDir, "downloads"))
     private val startup = Mutex()
     private val transfer = TransferSlots(parallelDownloads, thermalStatus)

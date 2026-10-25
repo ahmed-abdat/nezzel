@@ -84,6 +84,13 @@ class AppPreferences(context: Context) {
     var appUpdates: Boolean
         get() = prefs.getBoolean("app_updates", true)
         set(value) { prefs.edit().putBoolean("app_updates", value).commit() }
+    var tips: Boolean
+        get() = prefs.getBoolean("tips", true)
+        set(value) {
+            if (value && !tips) tipsHistory.edit().putInt("ignored", 0).commit()
+            prefs.edit().putBoolean("tips", value).commit()
+        }
+    private val tipsHistory = context.getSharedPreferences("tips", Context.MODE_PRIVATE)
     /** "Help improve Nezzel": the daily usage counts and failure/crash reports. */
     var helpImprove: Boolean
         get() = prefs.getBoolean("help_improve", true)

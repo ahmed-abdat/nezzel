@@ -119,6 +119,17 @@ class UxFlowTest {
 
     // U4 -----------------------------------------------------------------------------------------
 
+    private fun online() {
+        val manager = app.getSystemService(android.net.ConnectivityManager::class.java)
+        @Suppress("DEPRECATION")
+        shadowOf(manager).setActiveNetworkInfo(org.robolectric.shadows.ShadowNetworkInfo.newInstance(
+            android.net.NetworkInfo.DetailedState.CONNECTED, android.net.ConnectivityManager.TYPE_WIFI, 0, true, true))
+        val capabilities = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance()
+        shadowOf(capabilities).addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        shadowOf(manager).setNetworkCapabilities(manager.activeNetwork, capabilities)
+        assertFalse(dev.ahmed.savlino.downloads.isOffline(app))
+    }
+
     private fun failing(error: DownloadError) = LinkViewModel(SavedStateHandle(),
         engine = FakeEngine(InspectResult.Failure(error)), currentEngineVersion = { "fixture-v1" }).also {
         it.edit(url); it.checkLink(); idle()
@@ -152,6 +163,7 @@ class UxFlowTest {
             Case(DownloadError.Offline, R.string.offline_title, R.string.offline_body, true),
             Case(DownloadError.Network, R.string.network_title, R.string.network_body, true),
         )
+        online() // Robolectric starts offline, which turns Network into the offline copy (OptionsNetworkCopyTest)
         for (language in listOf("en", "ar")) for (case in cases) {
             val vm = failing(case.error)
             assertEquals(OptionsState.Error(case.error), vm.optionsState)

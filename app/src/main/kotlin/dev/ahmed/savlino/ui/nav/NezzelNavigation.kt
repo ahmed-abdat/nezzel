@@ -7,7 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.outlined.Home as OutlinedHome
 import androidx.compose.foundation.rememberScrollState
@@ -117,8 +117,9 @@ fun NezzelNavigation(
         }
     } else {
         TabBar(destinations, selected, Modifier.testTag("navigation_bar").then(collection)) { destination, index, isSelected ->
-            Column(Modifier.weight(1f).heightIn(min = 54.dp).clip(CircleShape)
-                .selectable(isSelected, role = Role.Tab) { select(destination.route) }.then(itemModifier(destination, index)),
+            Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 54.dp).clip(RoundedCornerShape(27.dp))
+                .selectable(isSelected, role = Role.Tab) { select(destination.route) }.then(itemModifier(destination, index))
+                .padding(horizontal = Space.s, vertical = Space.s),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 TabIcon(destination.route, isSelected, badges, updateDescription)
                 TabLabel(stringResource(destination.label), isSelected)
@@ -147,13 +148,14 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
             val cell = constraints.maxWidth / count
             val pill = measurable.measure(Constraints.fixed(cell, constraints.maxHeight))
             layout(constraints.maxWidth, constraints.maxHeight) { pill.placeRelative((position.value * cell).roundToInt(), 0) }
-        }.shadow(1.dp, CircleShape).background(colors.surfaceBright, CircleShape))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        }.shadow(1.dp, RoundedCornerShape(27.dp)).background(colors.surfaceBright, RoundedCornerShape(27.dp)))
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             destinations.forEachIndexed { i, destination -> item(destination, i, destination.route == selected) }
         }
     }
     Box(modifier.fillMaxWidth().windowInsetsPadding(insets).padding(start = Space.m, end = Space.m, top = Space.s, bottom = Space.m)) {
-        Surface(Modifier.fillMaxWidth(), shape = CircleShape, color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
+        // Bound the corners: a growing capsule cuts off large labels near its outer edges.
+        Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(31.dp), color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
             Box(Modifier.padding(Space.xs)) { tabs() }
         }
     }
@@ -203,7 +205,7 @@ private fun TabLabel(text: String, selected: Boolean) {
     val tint = animateColorAsState(if (selected) colors.onSurface else colors.onSurfaceVariant,
         motionSpec(LocalReducedMotion.current, Motion.TabLabelColor), label = "label")
     // The colour is read while drawing, so a selection change never re-lays the text out.
-    BasicText(text, Modifier.padding(top = 2.dp), color = { tint.value }, maxLines = 2, overflow = TextOverflow.Ellipsis,
+    BasicText(text, Modifier.padding(top = 2.dp), color = { tint.value },
         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp, textAlign = TextAlign.Center,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium))
 }

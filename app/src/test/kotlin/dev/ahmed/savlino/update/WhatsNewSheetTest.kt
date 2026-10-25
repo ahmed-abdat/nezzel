@@ -61,7 +61,7 @@ class WhatsNewSheetTest {
             val displayed = texts(nodes(a))
             assertTrue(displayed.contains(if (language == "ar") "تحسين 1" else "Improvement 1"))
             assertFalse(displayed.contains(if (language == "ar") "Improvement 1" else "تحسين 1"))
-            assertFalse(displayed.contains(app.getString(R.string.update_full_notes)))
+            assertFalse(displayed.any { "GitHub" in it })
             click(a, app.getString(R.string.whats_new_ok))
             assertFalse(visible())
             assertNull(app.appUpdates.state.value.whatsNew)
@@ -198,7 +198,7 @@ class WhatsNewSheetTest {
             if (visible) WhatsNewSheet(notes, selectedLanguage) { visible = false }
         }) { a ->
             assertTrue(texts(nodes(a)).contains("Improvement 6"))
-            assertFalse(texts(nodes(a)).contains("Improvement 7"))
+            assertTrue(texts(nodes(a)).contains("Improvement 7"))
             selectedLanguage = "ar"
             assertTrue(texts(nodes(a)).contains("تحسين 6"))
             assertFalse(texts(nodes(a)).contains("Improvement 1"))
@@ -208,9 +208,8 @@ class WhatsNewSheetTest {
                 assertEquals(true, scrolling.config[SemanticsActions.ScrollBy].action?.invoke(0f, 2000f))
                 nodes(a)
             }
-            click(a, app.getString(R.string.update_full_notes))
-            assertEquals("https://github.com/ahmed-abdat/nezzel/releases/tag/v0.4.5",
-                org.robolectric.Shadows.shadowOf(a).nextStartedActivity?.dataString)
+            assertFalse(texts(nodes(a)).any { "GitHub" in it || Regex("\\d+\\.\\d+").containsMatchIn(it) })
+            assertNull(org.robolectric.Shadows.shadowOf(a).nextStartedActivity)
             // The sheet's accessibility dismiss action shares Back/swipe/scrim's callback.
             val dismiss = nodes(a).first { it.config.getOrNull(SemanticsActions.Dismiss) != null }
             assertEquals(true, dismiss.config[SemanticsActions.Dismiss].action?.invoke())
@@ -218,6 +217,6 @@ class WhatsNewSheetTest {
             assertFalse(visible)
         }
     }
-    @Test fun sheetCapsNotesSwitchesLanguageAndDismisses() = sheet()
+    @Test fun sheetShowsAllNotesSwitchesLanguageAndDismisses() = sheet()
     @Test @Config(qualifiers = "ar-w640dp-h360dp-mdpi") fun sheetScrollsInArabicLandscape() = sheet()
 }

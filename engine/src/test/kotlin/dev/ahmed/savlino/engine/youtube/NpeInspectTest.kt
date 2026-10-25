@@ -208,18 +208,16 @@ class NpeInspectTest {
     }
 
     @Test fun unreachableFailsFastWithoutYtdlp() = runBlocking {
-        for ((offline, error) in listOf(true to DownloadError.Offline, false to DownloadError.Network)) {
-            val runtime = Runtime(fallbackJson)
-            val fast = Fast { FastResult.Unreachable(offline) }
-            assertEquals(InspectResult.Failure(error), engine(runtime, fast).inspect(source, "dead"))
-            assertTrue(runtime.inspections.isEmpty())
-            assertEquals(1, fast.calls.size)
-        }
+        val runtime = Runtime(fallbackJson)
+        val fast = Fast { FastResult.Unreachable }
+        assertEquals(InspectResult.Failure(DownloadError.Network), engine(runtime, fast).inspect(source, "dead"))
+        assertTrue(runtime.inspections.isEmpty())
+        assertEquals(1, fast.calls.size)
     }
 
     @Test fun retryAfterUnreachableTakesTheFullYtdlpPathUntilASuccess() = runBlocking {
         val runtime = Runtime(fallbackJson)
-        val fast = Fast { FastResult.Unreachable(false) }
+        val fast = Fast { FastResult.Unreachable }
         val engine = engine(runtime, fast)
         assertEquals(InspectResult.Failure(DownloadError.Network), engine.inspect(source, "first"))
         assertTrue(runtime.inspections.isEmpty())
@@ -242,7 +240,7 @@ class NpeInspectTest {
 
     @Test fun lateUnreachableVerdictWithinGraceStillFailsFast() = runBlocking {
         val runtime = Runtime(fallbackJson)
-        val fast = Fast { Thread.sleep(450); FastResult.Unreachable(false) }
+        val fast = Fast { Thread.sleep(450); FastResult.Unreachable }
         val result = withTimeout(3000) { engine(runtime, fast, EngineLimits(npeBudgetMs = 300)).inspect(source, "late") }
         assertEquals(InspectResult.Failure(DownloadError.Network), result)
         assertTrue(runtime.inspections.isEmpty())

@@ -5,6 +5,8 @@ import dev.ahmed.savlino.report.InboxClient
 import dev.ahmed.savlino.report.Report
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -22,7 +24,7 @@ interface UsageEvents {
 }
 
 /**
- * Local counters since the last daily send, plus failure reports still to send. Everything here is dropped, never
+ * Local counters since the last daily send, plus failure reports still to send. Counters, payloads and links are dropped, never
  * sent, while "Help improve Nezzel" is off. Counts, payloads and links are never logged.
  */
 class Usage(
@@ -45,6 +47,7 @@ class Usage(
     }
 
     private val lock = Any()
+    private val sends = Mutex()
     /** Bumped by [clear]: a send or queue write begun before the switch went off never lands after it. */
     private var generation = 0L
 
@@ -70,16 +73,27 @@ class Usage(
         val json = report.json()
         val started = synchronized(lock) { generation }
         scope.launch {
-            if (!on(started)) return@launch
-            if (slotLeft() && post(InboxClient.REPORT, json)) takeSlot() else queue(json, started)
+            sends.withLock {
+                if (!on(started)) return@withLock
+                if (slotLeft() && post(InboxClient.REPORT, json)) {
+                    synchronized(lock) { if (on(started)) takeSlot() }
+                } else queue(json, started)
+            }
         }
     }
 
-    /** Switch off: nothing kept, nothing sent. Call off the main thread. */
+    /** Switch off: drop payloads, keeping only the successful usage day and daily failure-slot counters. Call off the main thread. */
     fun clear() {
         synchronized(lock) {
             generation++
-            prefs.edit().clear().commit()
+            val day = prefs.getLong(USAGE_DAY, -1)
+            val slotDay = prefs.getLong(SLOT_DAY, -1)
+            val slots = prefs.getInt(SLOTS, -1)
+            prefs.edit().clear().apply {
+                if (day >= 0) putLong(USAGE_DAY, day)
+                if (slotDay >= 0) putLong(SLOT_DAY, slotDay)
+                if (slots >= 0) putInt(SLOTS, slots)
+            }.commit()
         }
         dropCrash()
     }
@@ -92,33 +106,42 @@ class Usage(
      * the pending crash, then queued failures up to the day's cap. The first failed POST (offline, 429) ends the run and
      * keeps the rest; at most [MAX_POSTS] requests, under the inbox's per-minute limit.
      */
-    suspend fun sendDaily() {
-        if (!enabled()) { clear(); return }
+    suspend fun sendDaily() = sends.withLock {
+        if (!enabled()) { clear(); return@withLock }
         val started = synchronized(lock) { expire(); generation }
-        val payload = payload(synchronized(lock) { counters() })
-        if (!on(started) || !post(InboxClient.USAGE, payload.second)) return
-        synchronized(lock) {
-            if (generation != started) return
-            val edit = prefs.edit()
-            for ((key, n) in payload.first) {
-                val left = prefs.getInt(COUNT + key, 0) - n
-                if (left > 0) edit.putInt(COUNT + key, left) else edit.remove(COUNT + key)
+        var posts = 0
+        // Update work may run more often than daily. Persist the successful UTC day across process restarts.
+        if (synchronized(lock) { prefs.getLong(USAGE_DAY, -1) != now() / DAY_MS }) {
+            val payload = payload(synchronized(lock) { counters() })
+            if (!on(started)) return@withLock
+            posts++
+            if (!post(InboxClient.USAGE, payload.second)) return@withLock
+            synchronized(lock) {
+                if (!on(started)) return@withLock
+                val edit = prefs.edit()
+                for ((key, n) in payload.first) {
+                    val left = prefs.getInt(COUNT + key, 0) - n
+                    if (left > 0) edit.putInt(COUNT + key, left) else edit.remove(COUNT + key)
+                }
+                edit.putLong(SINCE, now()).putLong(USAGE_DAY, now() / DAY_MS).commit()
             }
-            edit.putLong(SINCE, now()).commit()
         }
-        var posts = 1
         crash.pending()?.let { text ->
             val report = Report.crash(text, appVersion, crash.engineVersion(), sdk)
-            if (report.trace == null || !on(started)) return
-            if (!post(InboxClient.REPORT, report.json())) return
+            if (!on(started)) return@withLock
+            if (report.trace == null) {
+                synchronized(lock) { if (on(started)) dropCrash() }
+                return@let
+            }
             posts++
-            dropCrash()
+            if (!post(InboxClient.REPORT, report.json())) return@withLock
+            synchronized(lock) { if (on(started)) dropCrash() }
         }
         for (json in queued()) {
             if (posts >= MAX_POSTS || !on(started) || !slotLeft()) break
             posts++
             if (!post(InboxClient.REPORT, json)) break
-            synchronized(lock) { if (generation == started) { unqueue(json); takeSlot() } }
+            synchronized(lock) { if (on(started)) { unqueue(json); takeSlot() } }
         }
     }
 
@@ -204,6 +227,7 @@ class Usage(
         private const val SINCE = "since"
         private const val QUEUE = "failures"
         private const val SLOT_DAY = "slot_day"
+        private const val USAGE_DAY = "usage_day"
         private const val SLOTS = "slots"
     }
 }

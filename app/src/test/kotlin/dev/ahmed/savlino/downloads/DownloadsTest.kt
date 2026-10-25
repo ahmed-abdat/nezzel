@@ -134,7 +134,7 @@ class DownloadsTest {
         screen(media = emptyList(), jobs = coordinator.progress.value, remove = { runBlocking { coordinator.removeFailed(it) } }) { a ->
             // Failures alone keep the tabs but open Saved.
             click(a, "Downloading")
-            assertTrue(texts(nodes(a)).contains("No internet connection"))
+            assertTrue(texts(nodes(a)).contains("Couldn’t connect"))
             click(a, "Remove")
             assertNull(store.get("failed"))
             assertTrue(coordinator.progress.value.isEmpty())

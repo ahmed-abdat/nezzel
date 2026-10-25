@@ -10,11 +10,11 @@ import org.json.JSONTokener
 class Release(val version: String, val code: Long, val name: String, val size: Long,
               val url: String, val digest: String, internal val english: List<String>, internal val arabic: List<String>,
               internal val french: List<String> = emptyList(), val important: Boolean = false) {
-    fun notes(language: String): List<String> = when {
+    fun notes(language: String): List<String> = plainUpdateNotes(when {
         language == "ar" && arabic.isNotEmpty() -> arabic
         language == "fr" && french.isNotEmpty() -> french
         else -> english
-    }
+    })
     companion object {
         const val API = "https://api.github.com/repos/ahmed-abdat/nezzel/releases/latest"
         const val MANIFEST_ASSET = "https://github.com/ahmed-abdat/nezzel/releases/latest/download/nezzel-update.json"

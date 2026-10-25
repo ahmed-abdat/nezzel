@@ -48,7 +48,7 @@ private fun batchStatus(batch: PlaylistBatch, language: String): String? {
         batch.record.state == BatchState.WAITING_NETWORK -> stringResource(R.string.playlist_waiting_network)
         batch.slowed -> stringResource(R.string.playlist_slowed)
         batch.paused && batch.record.error != null -> DownloadNotifications.phase(context,
-            DownloadProgress("batch", "", DownloadPhase.FAILED, error = batch.record.error))
+            DownloadProgress("batch", "", DownloadPhase.FAILED, error = batch.record.error), LocalOffline.current)
         batch.paused -> stringResource(R.string.download_paused)
         stopped -> stringResource(R.string.playlist_stopped, NezzelFormat.count(batch.items.count { it.state == BatchItemState.SKIPPED }, language))
         batch.terminal && batch.failures.isEmpty() -> stringResource(R.string.dl_batch_saved, saved)
@@ -119,7 +119,7 @@ internal fun PlaylistFailureRow(batch: PlaylistBatch, jobs: List<DownloadProgres
     val byJob = remember(jobs) { jobs.associateBy { it.jobId } }
     val title = batchTitle(batch, language)
     val reason = failed.map { it.error ?: byJob[it.jobId]?.error }.distinct().singleOrNull()?.let {
-        DownloadNotifications.phase(context, DownloadProgress(batch.id, "", DownloadPhase.FAILED, error = it))
+        DownloadNotifications.phase(context, DownloadProgress(batch.id, "", DownloadPhase.FAILED, error = it), LocalOffline.current)
     }
     val meta = listOfNotNull(stringResource(R.string.dl_playlist_failed, NezzelFormat.count(failed.size, language), NezzelFormat.count(batch.total, language)),
         reason).joinToString(" · ")
@@ -255,11 +255,12 @@ private fun PlaylistItemRow(item: BatchItemRecord, job: DownloadProgress?, total
     onRetry: (() -> Unit)? = null, busy: Boolean = false) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
-    fun reason(error: DownloadError?) = DownloadNotifications.phase(context, DownloadProgress(item.jobId, "", DownloadPhase.FAILED, error = error))
+    val offline = LocalOffline.current
+    fun reason(error: DownloadError?) = DownloadNotifications.phase(context, DownloadProgress(item.jobId, "", DownloadPhase.FAILED, error = error), offline)
     val active = job?.running == true
     val (word, tone) = when (item.state) {
         BatchItemState.DONE -> stringResource(R.string.download_saved) to colors.onSurfaceVariant
-        BatchItemState.QUEUED -> (job?.let { DownloadNotifications.phase(context, it) } ?: stringResource(R.string.download_waiting)) to when {
+        BatchItemState.QUEUED -> (job?.let { DownloadNotifications.phase(context, it, offline) } ?: stringResource(R.string.download_waiting)) to when {
             job?.phase == DownloadPhase.FAILED -> colors.error
             active -> colors.primary
             else -> colors.onSurfaceVariant

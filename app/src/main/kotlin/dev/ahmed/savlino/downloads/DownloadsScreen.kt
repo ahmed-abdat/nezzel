@@ -857,7 +857,9 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                 onShare: (SavedMedia) -> Unit = {}, onOpenWith: (SavedMedia) -> Unit = {}, onSeeAll: () -> Unit) {
     val reduced = LocalReducedMotion.current
     // A card opens the swipe viewer Downloads uses, over the same files in Home's order; audio still opens with the system.
-    var viewing by rememberSaveable { mutableStateOf<String?>(null) }
+    // Own key: unkeyed saveables in one function share a key and restore in call order, and the row's
+    // rememberLazyListState below sits after an early return, so a restored Home could hand its saved list here (rc3 crash).
+    var viewing by rememberSaveable(key = "home-recents-viewing") { mutableStateOf<String?>(null) }
     val open = { item: SavedMedia -> if (item.inViewer) viewing = item.uri.toString() else onOpen(item) }
     val entries = remember(media) { homeEntries(media) }
     val recent = remember(entries) { entries.take(RECENT_ROW) }

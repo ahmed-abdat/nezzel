@@ -178,50 +178,69 @@ class SavedMediaRepositoryTest {
     } }
 
     @Test fun repeatedRefreshesDeduplicateInFlightFolderQueries() = folderFixture { repo, folder, media -> runBlocking {
-        val signalTimeoutMillis = 30_000L
-        val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
-        val returned = java.util.concurrent.CountDownLatch(1)
-        val calls = java.util.concurrent.atomic.AtomicInteger()
-        val uris = dev.ahmed.savlino.storage.SaveDestinations(context).publishedUris()
-        val blockedUri = uris.first()
-        val progress = Channel<Unit>(Channel.UNLIMITED)
+        val entered = Channel<Uri>(Channel.UNLIMITED)
+        val returned = Channel<Unit>(Channel.UNLIMITED)
+        val started = java.util.concurrent.atomic.AtomicInteger()
+        // Keep every query pending: a refresh must skip all of them and reach a distinct document.
+        // Signalling entry must never be mistaken for completion of that query.
         folder.onQueryUri = { uri ->
-            if (uri == uris[1]) progress.trySend(Unit)
-            if (uri == blockedUri) {
-                if (calls.incrementAndGet() == 1) {
-                    entered.countDown()
-                    // Only the test releases this query; slow refreshes must not unblock it.
-                    try { release.await() }
-                    finally { returned.countDown() }
-                }
-            }
+            started.incrementAndGet()
+            entered.trySend(uri)
+            try { release.await() }
+            finally { returned.trySend(Unit) }
         }
-        val results = Channel<List<SavedMedia>>(Channel.UNLIMITED)
-        var observer = launch { repo.observe().collect { results.send(it.getOrThrow()) } }
+        val observer = launch { repo.observe().collect { it.getOrThrow() } }
         try {
-            assertTrue(withContext(Dispatchers.IO) { entered.await(signalTimeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS) })
+            val seen = mutableSetOf(withTimeout(5000) { entered.receive() })
             repeat(3) { index ->
                 media.insertRow(index + 2, "video/mp4", (index + 200).toLong())
                 context.contentResolver.notifyChange(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
                 shadowOf(android.os.Looper.getMainLooper()).idle()
-                // Wait for provider progress, allowing IO scheduling headroom in full-suite runs.
-                withTimeout(signalTimeoutMillis) { progress.receive() }
-                assertEquals("Refresh must not stack blocked calls for the same URI", 1, calls.get())
+                val uri = withTimeout(5000) { entered.receive() }
+                assertTrue("Refresh must not repeat an in-flight folder query: $uri", seen.add(uri))
             }
+            assertEquals(4, started.get())
+        } finally {
             observer.cancelAndJoin()
             release.countDown()
-            assertTrue(withContext(Dispatchers.IO) { returned.await(signalTimeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS) })
-            while (results.tryReceive().isSuccess) { }
-            folder.onQueryUri = null
+            withTimeout(5000) { repeat(started.get()) { returned.receive() } }
+        }
+    } }
+
+    @Test fun completedAbandonedFolderQueryCanBeObservedAgain() = folderFixture { repo, folder, _ -> runBlocking {
+        val entered = Channel<Uri>(Channel.UNLIMITED)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val first = java.util.concurrent.atomic.AtomicBoolean(true)
+        folder.onQueryUri = { uri ->
+            if (first.compareAndSet(true, false)) {
+                entered.trySend(uri)
+                check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            }
+        }
+        var observer = launch { repo.observe().collect { it.getOrThrow() } }
+        try {
+            val blocked = withTimeout(5000) { entered.receive() }
+            observer.cancelAndJoin()
+            release.countDown()
+            val results = Channel<List<SavedMedia>>(Channel.UNLIMITED)
             observer = launch { repo.observe().collect { results.send(it.getOrThrow()) } }
-            withTimeout(signalTimeoutMillis) {
-                while (results.receive().none { it.uri == blockedUri && it.size == 123L }) { }
+            // The provider returning is too early: onFinished runs afterwards. Refresh until the observable
+            // result proves repository cleanup completed and this exact URI was queried again.
+            withTimeout(5000) {
+                var found = false
+                while (!found) {
+                    val rows = kotlinx.coroutines.withTimeoutOrNull(100) { results.receive() }
+                    found = rows?.any { it.uri == blocked && it.size == 123L } == true
+                    if (!found) {
+                        context.contentResolver.notifyChange(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
+                        shadowOf(android.os.Looper.getMainLooper()).idle()
+                    }
+                }
             }
         } finally {
             release.countDown()
             observer.cancelAndJoin()
-            assertTrue(withContext(Dispatchers.IO) { returned.await(signalTimeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS) })
         }
     } }
 

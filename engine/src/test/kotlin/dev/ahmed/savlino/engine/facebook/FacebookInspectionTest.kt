@@ -454,7 +454,9 @@ class FacebookInspectionTest : PublicImageTestBase() {
                 assertEquals(1, result.inspection.items.size)
                 assertEquals(1, result.previews.size)
                 assertEquals(ImageDiscovery(1, DiscoveryCompleteness.PARTIAL, 18, notPreviewedCount = 4), result.discovery)
-                assertEquals(listOf(storyTarget, "/1.jpg"), f.server.requests.map { it.target })
+                // Concurrent bodies race for the last budget reservation; whichever wins must keep its own position.
+                val image = listOf("/1.jpg", "/3.jpg", "/5.jpg", "/7.jpg", "/9.jpg")[result.inspection.items.single().position]
+                assertEquals(listOf(storyTarget, image), f.server.requests.map { it.target })
                 assertEquals(0, operation.token.budget.imageLimit())
             }
         }

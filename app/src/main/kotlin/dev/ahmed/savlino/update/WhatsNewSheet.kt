@@ -9,21 +9,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
-import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.NezzelMark
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WhatsNewSheet(whatsNew: WhatsNew, language: String, update: (() -> Unit)? = null, onDismiss: () -> Unit) {
-    val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet,
@@ -33,13 +30,11 @@ internal fun WhatsNewSheet(whatsNew: WhatsNew, language: String, update: (() -> 
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 NezzelMark(Modifier.size(48.dp))
-                Text(stringResource(R.string.whats_new_title, NezzelFormat.isolate(whatsNew.version)),
+                Text(stringResource(R.string.whats_new_title),
                     Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleLarge)
             }
             val notes = whatsNew.notes(language)
-            notes.take(6).forEach { NoteBullet(it, large = true) }
-            if (notes.size > 6) TextButton(onClick = { openUpdateReleasePage(context, whatsNew.version) },
-                modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.update_full_notes)) }
+            notes.forEach { NoteBullet(it, large = true) }
             if (update != null) {
                 Button(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { update() } },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.update_action)) }

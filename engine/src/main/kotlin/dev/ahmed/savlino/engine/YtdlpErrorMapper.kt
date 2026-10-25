@@ -65,7 +65,10 @@ object YtdlpErrorMapper {
                 } ||
                 has("requested format is not available") -> DownloadError.FormatExpired
             has("postprocessing", "ffmpeg exited", "unable to merge") -> DownloadError.MergeFailed
-            has("network is unreachable", "name resolution", "unable to resolve host", "no address associated with hostname", "no route to host", "name or service not known", "nodename nor servname provided") -> DownloadError.Offline
+            has("network is unreachable") -> DownloadError.Offline
+            // A missing hostname or route can affect one site while the device remains connected.
+            has("name resolution", "unable to resolve host", "no address associated with hostname", "no route to host",
+                "name or service not known", "nodename nor servname provided") -> DownloadError.Network
             has("timed out", "connection refused", "connection reset", "connection abort", "remote end closed connection",
                 "failed to establish a new connection", "failed to resolve", "getaddrinfo failed", "broken pipe",
                 "incompleteread", "eof occurred in violation", "ssleoferror") ||

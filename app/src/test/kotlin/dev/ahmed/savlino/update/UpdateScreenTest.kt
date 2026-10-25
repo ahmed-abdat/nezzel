@@ -47,7 +47,7 @@ class UpdateScreenTest {
             if (stage == UpdateStage.IDLE) {
                 assertTrue(shown.contains(context.getString(R.string.update_not_now)))
                 assertTrue(shown.contains(context.getString(R.string.update_trust)))
-                assertTrue(shown.contains(context.getString(R.string.update_full_notes)))
+                assertFalse(shown.any { "GitHub" in it })
             }
             if (stage == UpdateStage.DOWNLOADING) {
                 val progress = all.single { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) != null }
@@ -57,20 +57,8 @@ class UpdateScreenTest {
                 assertEquals(LiveRegionMode.Polite, progress.config[SemanticsProperties.LiveRegion])
                 assertFalse(shown.any { it.startsWith(if (context.resources.configuration.locales[0].language == "ar") "تنزيل التحديث" else "Download update") })
             }
-            val label = context.getString(R.string.update_open_release)
-            if (stage == UpdateStage.ERROR && failure in listOf(UpdateFailure.INSTALL, UpdateFailure.VERIFY)) {
-                assertTrue(shown.contains(label))
-                val releaseButton = buttons.single { label in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
-                assertTrue(releaseButton.layoutInfo.width / context.resources.displayMetrics.density >= 48f)
-                assertEquals(true, releaseButton.config[SemanticsActions.OnClick].action?.invoke())
-                val intent = org.robolectric.Shadows.shadowOf(a).nextStartedActivity!!
-                assertEquals(android.content.Intent.ACTION_VIEW, intent.action)
-                assertEquals("https://github.com/ahmed-abdat/nezzel/releases/latest", intent.dataString)
-                val error = all.first { it.config.getOrNull(SemanticsProperties.LiveRegion) == LiveRegionMode.Polite &&
-                    it.config.getOrNull(SemanticsProperties.Text).orEmpty().isNotEmpty() }
-                val retry = all.first { context.getString(R.string.try_again) in texts(listOf(it)) }
-                assertTrue(error.boundsInRoot.top < retry.boundsInRoot.top)
-            } else assertFalse(shown.contains(label))
+            assertFalse(shown.any { "GitHub" in it || release.version in it || BuildConfig.VERSION_NAME in it })
+            assertNull(org.robolectric.Shadows.shadowOf(a).nextStartedActivity)
             if (stage == UpdateStage.ERROR && failure == UpdateFailure.SPACE) {
                 val language = context.resources.configuration.locales[0].language
                 val needed = dev.ahmed.savlino.locale.NezzelFormat.isolate(dev.ahmed.savlino.locale.NezzelFormat.size(69_206_016, language))
@@ -102,7 +90,7 @@ class UpdateScreenTest {
         assertTrue(bounds.height / context.resources.displayMetrics.density <= 88f)
     }
 
-    private fun cappedNotes() {
+    private fun allNotes() {
         val language = context.resources.configuration.locales[0].language
         val many = Release("0.4.5", 99999, "update.apk", 1_048_576, "https://github.com/asset", "a".repeat(64),
             (1..8).map { "Improvement $it" }, (1..8).map { "تحسين $it" })
@@ -114,20 +102,19 @@ class UpdateScreenTest {
             val all = nodes(a)
             val prefix = if (language == "ar") "تحسين" else "Improvement"
             assertTrue(texts(all).contains("$prefix 6"))
-            assertFalse(texts(all).contains("$prefix 7"))
+            assertTrue(texts(all).contains("$prefix 7"))
             fun click(label: String) {
                 val button = nodes(a).last { it.config.getOrNull(SemanticsActions.OnClick) != null && label in texts(descendants(it)) }
                 assertEquals(true, button.config[SemanticsActions.OnClick].action?.invoke())
             }
-            click(context.getString(R.string.update_full_notes))
-            assertEquals("https://github.com/ahmed-abdat/nezzel/releases/tag/v0.4.5",
-                org.robolectric.Shadows.shadowOf(a).nextStartedActivity?.dataString)
+            assertFalse(texts(all).any { "GitHub" in it })
+            assertNull(org.robolectric.Shadows.shadowOf(a).nextStartedActivity)
             click(context.getString(R.string.update_not_now)); assertTrue(backed)
             click(context.getString(R.string.update_skip)); assertEquals(99999L, skipped)
         }
     }
-    @Test fun notesCappedAndSecondaryActionsWorkEnglish() = cappedNotes()
-    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun notesCappedAndSecondaryActionsWorkArabic() = cappedNotes()
+    @Test fun allNotesAndSecondaryActionsWorkEnglish() = allNotes()
+    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun allNotesAndSecondaryActionsWorkArabic() = allNotes()
 
     private fun cardFallback() = renderThemed({ nodes(it) }, {
         UpdateCard(Release("0.4.5", 99999, "update.apk", 100, "https://github.com/asset", "a".repeat(64), emptyList(), emptyList()),
@@ -164,13 +151,7 @@ class UpdateScreenTest {
     @Test @Config(qualifiers = "en-w640dp-h360dp-mdpi") fun darkLandscapeAt200PercentEnglish() = largeText()
     @Test @Config(qualifiers = "ar-w640dp-h360dp-mdpi") fun darkLandscapeAt200PercentArabic() = largeText()
 
-    @Test fun releasePageWithoutBrowserDoesNotCrash() {
-        val noBrowser = object : android.content.ContextWrapper(context) {
-            override fun startActivity(intent: android.content.Intent) { throw android.content.ActivityNotFoundException() }
-        }
-        openUpdateReleasePage(noBrowser)
-        openUpdateReleasePage(noBrowser, "0.4.5")
-    }
+
 
     @Test fun confirmationIsHeldUntilForegroundRouteConsumesItOnce() {
         val owner = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Unconfined)

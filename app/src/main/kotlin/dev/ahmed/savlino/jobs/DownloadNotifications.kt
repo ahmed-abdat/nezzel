@@ -242,7 +242,7 @@ class DownloadNotifications(private val base: Context,
                 DownloadPhase.SAVING -> R.string.download_saving
                 DownloadPhase.COMPLETED -> R.string.download_saved
                 DownloadPhase.CANCELLED -> R.string.download_cancelled
-                DownloadPhase.FAILED -> errorTitle(progress.error)
+                DownloadPhase.FAILED -> errorTitle(progress.error, offline)
             })
         }
 
@@ -334,8 +334,9 @@ class DownloadNotifications(private val base: Context,
             }
             return NezzelFormat.isolate(if (downloaded == null || progress.phase == DownloadPhase.COMPLETED) total else "$downloaded / $total")
         }
-        private fun errorTitle(error: DownloadError?) = when (error) {
-            DownloadError.Network, DownloadError.Offline -> R.string.download_network_error
+        private fun errorTitle(error: DownloadError?, offline: Boolean) = when (error) {
+            DownloadError.Network -> if (offline) R.string.download_network_error else R.string.network_title
+            DownloadError.Offline -> R.string.download_network_error
             DownloadError.InsufficientSpace -> R.string.download_space_error
             DownloadError.FolderUnavailable -> R.string.save_folder_error
             DownloadError.SaveFailed -> R.string.download_save_error

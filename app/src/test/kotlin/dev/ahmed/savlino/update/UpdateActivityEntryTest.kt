@@ -16,6 +16,35 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], application = IsolatedTestApplication::class)
 class UpdateActivityEntryTest {
+    @Test fun mutedNotificationsReturnPendingSilentSessionToManualReadyState() {
+        val app = RuntimeEnvironment.getApplication() as IsolatedTestApplication
+        val updates = app.appUpdates
+        updates.prefs.edit().putInt("install-session", 123).putLong("install-code", 99999).putBoolean("install-silent", true).commit()
+        org.robolectric.Shadows.shadowOf(app.getSystemService(android.app.NotificationManager::class.java)).setNotificationsEnabled(false)
+        UpdateInstallReceiver().onReceive(app, Intent(UpdateInstaller.STATUS)
+            .putExtra(android.content.pm.PackageInstaller.EXTRA_SESSION_ID, 123)
+            .putExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION)
+            .putExtra(Intent.EXTRA_INTENT, Intent("dev.ahmed.savlino.TEST_INSTALL_CONFIRMATION")))
+        assertEquals(UpdateStage.READY, updates.state.value.stage)
+        assertNull(updates.state.value.confirmation)
+        assertFalse(updates.prefs.contains("install-session"))
+    }
+    @Test fun silentPendingConfirmationWithoutAnOfferDoesNotBypassNotificationPolicy() {
+        val app = RuntimeEnvironment.getApplication() as IsolatedTestApplication
+        val updates = app.appUpdates
+        updates.prefs.edit().putInt("install-session", 123).putBoolean("install-silent", true).putLong("notified", 99999).commit()
+        val confirmation = Intent("dev.ahmed.savlino.TEST_INSTALL_CONFIRMATION")
+        val status = Intent(UpdateInstaller.STATUS)
+            .putExtra(android.content.pm.PackageInstaller.EXTRA_SESSION_ID, 123)
+            .putExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION)
+            .putExtra(Intent.EXTRA_INTENT, confirmation)
+        UpdateInstallReceiver().onReceive(app, status)
+        assertTrue(app.getSystemService(android.app.NotificationManager::class.java).activeNotifications.isEmpty())
+        assertNull(org.robolectric.Shadows.shadowOf(app).nextStartedActivity)
+        assertNull(updates.state.value.confirmation)
+        assertEquals(UpdateStage.READY, updates.state.value.stage)
+        assertFalse(updates.prefs.contains("install-session"))
+    }
     @Test fun receiverHoldsPendingConfirmationWithoutStartingAnActivity() {
         val app = RuntimeEnvironment.getApplication() as IsolatedTestApplication
         val updates = app.appUpdates

@@ -178,6 +178,19 @@ class NpeDownloaderTest {
         assertPrivate(assertFailsWith<IOException> { downloader.execute(request("not a URL")) })
     }
 
+    @Test fun unreachableCallbackNeedsNoOfflineArgument() {
+        for (error in listOf(java.net.UnknownHostException(), java.net.ConnectException(),
+            java.net.NoRouteToHostException(), java.io.InterruptedIOException())) {
+            val downloader = NpeDownloader(client { throw error })
+            var notifications = 0
+            val unreachable: () -> Unit = { notifications++ }
+            downloader.operation(Any(), 5000, unreachable) {
+                assertPrivate(assertFailsWith<IOException> { downloader.execute(request()) })
+            }
+            assertEquals(1, notifications)
+        }
+    }
+
     private fun assertPrivate(failure: IOException) {
         val text = failure.toString()
         for (secret in listOf("http", "youtube", "googlevideo", "fixture", "private", "body", "evil"))

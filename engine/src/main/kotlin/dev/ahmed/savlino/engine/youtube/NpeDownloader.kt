@@ -63,8 +63,8 @@ internal class NpeDownloader(client: OkHttpClient) : Downloader() {
         }
     }
 
-    /** [unreachable] receives the run's verdict when no request got any response (see [Token.offline]). */
-    fun <T> operation(id: Any, callTimeoutMs: Long, unreachable: (offline: Boolean) -> Unit = {}, block: () -> T): T {
+    /** [unreachable] runs when no request got any response (see [Token.offline]). */
+    fun <T> operation(id: Any, callTimeoutMs: Long, unreachable: () -> Unit = {}, block: () -> T): T {
         if (callTimeoutMs <= 0) throw IOException("Extraction stopped")
         val token = Token(callTimeoutMs)
         synchronized(lock) {
@@ -76,7 +76,7 @@ internal class NpeDownloader(client: OkHttpClient) : Downloader() {
         try { return block() }
         finally {
             if (previous == null) current.remove() else current.set(previous)
-            synchronized(lock) { operations.remove(id); token.offline() }?.let(unreachable)
+            synchronized(lock) { operations.remove(id); token.offline() }?.let { unreachable() }
         }
     }
 

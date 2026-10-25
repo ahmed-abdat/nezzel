@@ -94,7 +94,7 @@ class SettingsFlatCaptureTest {
                 androidx.compose.ui.unit.Density(density.density, scale)) {
                 androidx.compose.material3.Surface {
                     androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(top = 24.dp)) {
-                        dev.ahmed.savlino.update.UpdateSettings(updates, "0.4.9") {}
+                        dev.ahmed.savlino.update.UpdateSettings(updates) {}
                     }
                 }
             }

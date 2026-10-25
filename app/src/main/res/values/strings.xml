@@ -276,7 +276,7 @@
     <string name="crash_share">Share crash report</string>
     <string name="crash_delete">Delete crash reports</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_body">Nezzel is free and downloads files on your phone without ads, using open-source software: yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) and Python (PSF) — source: github.com/ahmed-abdat/nezzel</string>
+    <string name="about_body">Nezzel is free and downloads files on your phone without ads, using open-source software: yt-dlp (Unlicense), youtubedl-android (GPL-3.0), FFmpeg (GPL) and Python (PSF) — source: nezzel.hululsoft.mr</string>
     <string name="company_name" translatable="false">Hululsoft</string>
     <string name="company_site" translatable="false">hululsoft.mr</string>
     <string name="company_made_by">Made by %1$s</string>
@@ -387,17 +387,17 @@
     <string name="open_file_failed">Couldn’t open this file</string>
     <string name="audio_only_type">Audio only · %1$s</string>
 
-    <!-- App updates: owner-approved GitHub checks, explicit installation. -->
+    <!-- App update presentation. -->
     <string name="update_available_title">A better Nezzel is ready</string>
-    <string name="update_card_version">Nezzel %1$s</string>
+    <string name="update_card_version">A new Nezzel is ready</string>
     <string name="update_action">Update</string>
     <string name="update_not_now">Not now</string>
     <string name="update_screen_title">App update</string>
-    <string name="update_current">You have %1$s</string>
+    <string name="update_current">Nezzel is up to date</string>
     <string name="update_whats_new">What\'s new</string>
     <string name="update_keeps_data">Your files and settings stay as they are</string>
     <string name="update_download">Download update · %1$s</string>
-    <string name="update_skip">Skip this version</string>
+    <string name="update_skip">Skip this update</string>
     <string name="update_progress">%1$s of %2$s</string>
     <string name="update_verifying">Checking the update…</string>
     <string name="update_installing">Installing the update…</string>
@@ -409,26 +409,24 @@
     <string name="update_failed_space">Not enough free space for the update (%1$s needed)</string>
     <string name="update_failed_verify">This update couldn\'t be verified, so it wasn\'t installed</string>
     <string name="update_not_installed">The update wasn\'t installed</string>
-    <string name="update_open_release">Open release page</string>
-    <string name="update_done">Updated to %1$s</string>
+    <string name="update_done">Nezzel is up to date</string>
     <string name="settings_updates_heading">App updates</string>
-    <string name="settings_updates_auto">Look for new versions</string>
-    <string name="settings_updates_auto_body">Checks twice a day. Nothing installs without your OK</string>
+    <string name="settings_updates_auto">Automatic updates</string>
+    <string name="settings_updates_auto_body">Keeps Nezzel up to date while you’re away</string>
     <string name="settings_updates_check_now">Check now</string>
-    <string name="update_latest">You have the latest version</string>
+    <string name="update_latest">Nezzel is up to date</string>
     <string name="update_check_failed">Couldn\'t check for updates — try again later</string>
     <string name="update_channel">App updates</string>
-    <string name="update_notification_title">Nezzel %1$s is ready</string>
+    <string name="update_notification_title">A new Nezzel is ready</string>
     <string name="update_notification_ready">Ready to install. Tap to update</string>
     <string name="update_later">Later</string>
     <string name="update_badge_description">Update available</string>
     <string name="update_notification_text">Tap to see what\'s new and update</string>
     <string name="settings_updates_last_checked">Last checked</string>
-    <string name="whats_new_title">What\'s new in Nezzel %1$s</string>
+    <string name="whats_new_title">What\'s new in Nezzel</string>
     <string name="whats_new_ok">Got it</string>
-    <string name="update_full_notes">Full notes on GitHub</string>
-    <string name="update_meta">You have %1$s · %2$s</string>
-    <string name="update_trust">Nezzel checks the file and its signature before installing</string>
+    <string name="update_meta">Download size: %1$s</string>
+    <string name="update_trust">Nezzel checks the update before installing</string>
     <string name="update_downloading">Downloading %1$s</string>
     <string name="settings_update_accessibility">Settings, update available</string>
     <string name="shortcut_paste_link">Paste link</string>
@@ -617,4 +615,20 @@
     <string name="home_hero_sites">Works with YouTube, TikTok, Instagram, Facebook and more.</string>
     <string name="home_earlier">Earlier</string>
     <string name="home_job_open">Show in Downloads</string>
+
+    <!-- Local feature reminders. -->
+    <string name="tips_title">Tips</string>
+    <string name="tips_help">A helpful tip when you haven’t opened Nezzel for a few days</string>
+    <string name="tip_links_title">Save up to 50 links</string>
+    <string name="tip_links_body">Copy your links together, then paste them in Nezzel.</string>
+    <string name="tip_playlist_title">Save a whole playlist</string>
+    <string name="tip_playlist_body">Paste a YouTube playlist link and choose what to save.</string>
+    <string name="tip_mp3_title">Keep the music and its cover</string>
+    <string name="tip_mp3_body">Choose MP3 to save just the sound, with its cover.</string>
+    <string name="tip_statuses_title">Keep a WhatsApp status</string>
+    <string name="tip_statuses_body">Open Statuses in Nezzel to save a status you’ve viewed.</string>
+    <string name="tip_widget_title">Nezzel on your Home screen</string>
+    <string name="tip_widget_body">Add the Nezzel widget to paste links and see your downloads.</string>
+    <string name="tip_pause_title">Pause everything with one tap</string>
+    <string name="tip_pause_body">In Downloads, you can pause all your downloads and resume them together.</string>
 </resources>

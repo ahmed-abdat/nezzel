@@ -431,6 +431,7 @@ private fun moreFormatDetail(format: Format, language: String): String = listOfN
 @Composable
 private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> Unit, onPasteAnother: (String?) -> Unit,
     onDismiss: () -> Unit, secondary: (@Composable () -> Unit)? = null) {
+    val offline = dev.ahmed.savlino.downloads.rememberOffline()
     val (title, body) = when (error) {
         DownloadError.EngineUnavailable -> R.string.unavailable_title to R.string.unavailable_body
         DownloadError.Unsupported -> R.string.unsupported_title to R.string.unsupported_body
@@ -442,8 +443,8 @@ private fun InspectionError(error: DownloadError, host: String?, onRetry: () -> 
         DownloadError.Unavailable -> R.string.video_gone_title to R.string.video_gone_body
         DownloadError.NotAPost -> R.string.not_a_post_title to R.string.not_a_post_body
         DownloadError.Offline -> R.string.offline_title to R.string.offline_body
-        // Online but the request failed or timed out: not "No internet connection".
-        DownloadError.Network -> R.string.network_title to R.string.network_body
+        DownloadError.Network -> if (offline) R.string.offline_title to R.string.offline_body
+            else R.string.network_title to R.string.network_body
         DownloadError.FormatExpired -> R.string.expired_title to R.string.expired_body
         else -> R.string.read_failed_title to R.string.read_failed_body
     }

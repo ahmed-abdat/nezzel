@@ -15,6 +15,8 @@ import kotlinx.coroutines.channels.awaitClose
 /** On-demand WorkManager initialization; workers cannot pass the coordinator's startup barrier. */
 open class NezzelApplication : Application(), Configuration.Provider {
     val preferences by lazy { dev.ahmed.savlino.locale.AppPreferences(this) }
+    internal val tips by lazy { dev.ahmed.savlino.tips.Tips(this) }
+    internal val visibility by lazy { AppVisibility { tips.onOpen() } }
     private val thermalStatus = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE)
     private val thermalListener = android.os.PowerManager.OnThermalStatusChangedListener { thermalStatus.value = it }
     open val downloads by lazy { DownloadCoordinator(this, parallelDownloads = preferences.parallelDownloadsFlow,
@@ -64,6 +66,8 @@ open class NezzelApplication : Application(), Configuration.Provider {
     }
     override fun onCreate() {
         super.onCreate()
+        registerActivityLifecycleCallbacks(visibility)
+        scope.launch { tips.schedule() }
         // Before anything writes settings: the first start of an install decides the old-downloads offer.
         dev.ahmed.savlino.storage.OldDownloads.markFirstStart(this)
         // The heat guard is optional: a missing thermal service ("Listener failed to set") must not stop startup.
