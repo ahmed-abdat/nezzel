@@ -39,22 +39,12 @@ class DownloadsTabsTest {
         assertEquals(DownloadsTab.SAVED, entryTab(listOf(job("a", DownloadPhase.COMPLETED)), listOf(playlistFixture(BatchState.COMPLETED, failed = true))))
     }
 
-    @Test fun tabsShowOnlyWhileDownloadingHasRows() {
-        assertFalse(showDownloadsTabs(emptyList(), emptyList(), 0))
-        assertTrue(showDownloadsTabs(listOf(job("a")), emptyList(), 0))
-        assertTrue(showDownloadsTabs(emptyList(), listOf(playlistFixture()), 0))
-        assertTrue(showDownloadsTabs(emptyList(), emptyList(), 1))
-        // Visible rows come from visibleJobs: a finished job is not a row, a failed one is.
-        assertFalse(showDownloadsTabs(visibleJobs(listOf(job("a", DownloadPhase.COMPLETED))), emptyList(), 0))
-        assertTrue(showDownloadsTabs(visibleJobs(listOf(job("a", DownloadPhase.FAILED))), emptyList(), 0))
-    }
-
     @Test fun switchRules() {
-        assertEquals(DownloadsTab.SAVED, nextDownloadsTab(DownloadsTab.RUNNING, tabs = false, newActive = false))
-        assertEquals(DownloadsTab.SAVED, nextDownloadsTab(DownloadsTab.RUNNING, tabs = false, newActive = true))
-        assertEquals(DownloadsTab.RUNNING, nextDownloadsTab(DownloadsTab.SAVED, tabs = true, newActive = true))
-        assertEquals(DownloadsTab.SAVED, nextDownloadsTab(DownloadsTab.SAVED, tabs = true, newActive = false))
-        assertEquals(DownloadsTab.RUNNING, nextDownloadsTab(DownloadsTab.RUNNING, tabs = true, newActive = false))
+        assertEquals(DownloadsTab.RUNNING, nextDownloadsTab(DownloadsTab.RUNNING, newActive = false))
+        assertEquals(DownloadsTab.RUNNING, nextDownloadsTab(DownloadsTab.RUNNING, newActive = true))
+        assertEquals(DownloadsTab.RUNNING, nextDownloadsTab(DownloadsTab.SAVED, newActive = true))
+        assertEquals(DownloadsTab.SAVED, nextDownloadsTab(DownloadsTab.SAVED, newActive = false))
+        assertEquals(DownloadsTab.RUNNING, nextDownloadsTab(DownloadsTab.RUNNING, newActive = false))
     }
 
     @Test fun batchRowsCountsAndMembers() {
@@ -83,22 +73,30 @@ class DownloadsTabsTest {
     private fun pass(millis: Long) {
         compose.mainClock.advanceTimeBy(millis); compose.waitForIdle()
     }
-    private val noTabs get() = compose.onNodeWithTag("tab_running").assertDoesNotExist()
+    private val savedTab get() = compose.onNodeWithTag("tab_saved").assertIsSelected()
 
-    @Test fun lastJobFinishingShowsSavedThenFoldsTheTabsToTheLibrary() {
+    @Test fun lastJobFinishingKeepsTheTabRowAndListPosition() = finishingLayout()
+
+    @Test @Config(qualifiers = "ar-w360dp-h800dp-mdpi", fontScale = 2f)
+    fun lastJobFinishingKeepsTheViewportInArabicAtLargeText() = finishingLayout()
+
+    private fun finishingLayout() {
         val jobs = mutableStateOf(listOf(job("a")))
         render({ DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
             compose.onNodeWithTag("tab_running").assertIsSelected()
             compose.onNodeWithTag("running_list").assertExists()
+            val top = compose.onNodeWithTag("running_list").fetchSemanticsNode().boundsInRoot.top
+            val tabTop = compose.onNodeWithTag("tab_running").fetchSemanticsNode().boundsInRoot.top
             jobs.value = listOf(job("a", DownloadPhase.COMPLETED))
             compose.waitForIdle()
             // The "Saved" moment shows in Downloading first.
             compose.onNodeWithTag("tab_running").assertIsSelected()
             compose.onNodeWithText("a.mp4", substring = true).assertExists()
             pass(Motion.SAVED_DWELL + 1000)
-            noTabs
-            compose.onNodeWithTag("running_list").assertDoesNotExist()
-            compose.onNodeWithText(context.getString(R.string.saved_empty_title)).assertExists()
+            compose.onNodeWithTag("tab_running").assertIsSelected()
+            assertEquals(top, compose.onNodeWithTag("running_list").fetchSemanticsNode().boundsInRoot.top, 1f)
+            assertEquals(tabTop, compose.onNodeWithTag("tab_running").fetchSemanticsNode().boundsInRoot.top, 1f)
+            compose.onNodeWithText(context.getString(R.string.downloads_running_empty)).assertExists()
         }
     }
 
@@ -135,7 +133,7 @@ class DownloadsTabsTest {
 
     @Test fun cleanBatchAlreadyFinishedOnEntryIsNotShown() = render({
         DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, playlists = listOf(playlistFixture(BatchState.COMPLETED)))
-    }) { noTabs; compose.onNodeWithTag("playlist_batch_list").assertDoesNotExist() }
+    }) { savedTab; compose.onNodeWithTag("playlist_batch_list").assertDoesNotExist() }
 
     @Test fun twoOrMoreWaitingRowsFoldIntoOneLine() = render({
         DownloadsScreen(listOf(job("run"), job("w1", waiting = true), job("w2", waiting = true)), "en", {}, {}, {}, {}, {}, null, {}, {})

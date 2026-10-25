@@ -2,6 +2,8 @@ package dev.ahmed.savlino.downloads
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -37,19 +39,9 @@ internal fun hasActiveWork(jobs: List<DownloadProgress>, playlists: List<Playlis
 internal fun entryTab(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): DownloadsTab =
     if (hasActiveWork(jobs, playlists)) DownloadsTab.RUNNING else DownloadsTab.SAVED
 
-/**
- * The tab row exists only while Downloading has rows: [rows] (standalone jobs incl. a "Saved" moment and failures),
- * visible playlist batches, or check warnings. Otherwise the library shows alone.
- */
-internal fun showDownloadsTabs(rows: List<DownloadProgress>, batches: List<PlaylistBatch>, warnings: Int): Boolean =
-    rows.isNotEmpty() || batches.isNotEmpty() || warnings > 0
-
-/** No tab row means Saved; a job that starts while the screen watches takes the person to Downloading. */
-internal fun nextDownloadsTab(current: DownloadsTab, tabs: Boolean, newActive: Boolean): DownloadsTab = when {
-    !tabs -> DownloadsTab.SAVED
-    newActive -> DownloadsTab.RUNNING
-    else -> current
-}
+/** A new active job opens Running; completion never changes the person's current sub-tab. */
+internal fun nextDownloadsTab(current: DownloadsTab, newActive: Boolean): DownloadsTab =
+    if (newActive) DownloadsTab.RUNNING else current
 
 /** Work still to do in Downloading: unfinished standalone jobs plus every playlist video not saved or failed yet. */
 internal fun downloadingCount(standalone: List<DownloadProgress>, playlists: List<PlaylistBatch>): Int =
@@ -87,14 +79,14 @@ internal fun rememberVisibleBatches(playlists: List<PlaylistBatch>): List<Playli
 
 /** Selected tab: entry rule once, kept across rotation, then [nextDownloadsTab] on every change. */
 @Composable
-internal fun rememberDownloadsTab(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>, tabs: Boolean): MutableState<DownloadsTab> {
+internal fun rememberDownloadsTab(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): MutableState<DownloadsTab> {
     val tab = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(entryTab(jobs, playlists)) }
     // A job that becomes active while the screen watches (new, or the same id on a new attempt) counts as started.
     val activeNow = jobs.filter { !it.terminal || it.awaitingSchedule }.mapTo(HashSet()) { it.jobId }
     val before = remember { HashSet(activeNow) }
     val started = (activeNow - before).isNotEmpty()
     before.clear(); before += activeNow
-    val next = nextDownloadsTab(tab.value, tabs, started)
+    val next = nextDownloadsTab(tab.value, started)
     if (next != tab.value) SideEffect { tab.value = next }
     return tab
 }
@@ -110,11 +102,15 @@ internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, attention: Bool
             selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
             Row(Modifier.padding(vertical = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Text(stringResource(R.string.dl_tab_running), style = MaterialTheme.typography.titleSmall)
-                if (count > 0) Text(NezzelFormat.count(count, language), style = MaterialTheme.typography.labelMedium,
+                Text(NezzelFormat.count(count.coerceAtLeast(1), language), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                    modifier = Modifier.graphicsLayer { alpha = if (count > 0) 1f else 0f }
+                        .then(if (count == 0) Modifier.clearAndSetSemantics {} else Modifier)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                         .padding(horizontal = Space.s, vertical = 2.dp))
-                if (attention) Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.error, CircleShape).testTag("tab_attention"))
+                // Keep the count and warning slots: removing either must not unwrap the label at large text.
+                Box(Modifier.size(8.dp).graphicsLayer { alpha = if (attention) 1f else 0f }
+                    .background(MaterialTheme.colorScheme.error, CircleShape).then(if (attention) Modifier.testTag("tab_attention") else Modifier))
             }
         }
         Tab(selected == DownloadsTab.SAVED, { onSelect(DownloadsTab.SAVED) }, Modifier.heightIn(min = 48.dp).testTag("tab_saved"),
