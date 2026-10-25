@@ -25,7 +25,8 @@ class LocaleResourcesTest {
         val english = entries("values")
         for (locale in listOf("values-ar", "values-fr")) {
             val translated = entries(locale)
-            for (name in listOf("saved_post_position", "tiktok_sound", "image_expired", "image_expired_body")) {
+            for (name in listOf("saved_post_position", "tiktok_sound", "image_expired", "image_expired_body",
+                "sound_save", "sound_saving", "sound_save_failed")) {
                 val entry = translated.getValue(name)
                 assertTrue("$locale/$name", entry.textContent.isNotBlank())
                 assertEquals("$locale/$name", arguments(english.getValue(name).textContent), arguments(entry.textContent))

@@ -146,7 +146,7 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                 }
                 is OptionsState.ImageReady -> {
                     ImageOptions(state, host.orEmpty(), language, links.selectedImageRefs, !links.imageSaving,
-                        links::toggleImage, links::selectAllImages, links::inspectCarouselVideo)
+                        links::toggleImage, links::selectAllImages, links::inspectCarouselVideo, links.soundSelected, links::toggleSound)
                     SavesTo()
                 }
                 is OptionsState.ImageError -> ImageInspectionError(state, links::checkLink, onDismiss, host, links::pasteAnother)

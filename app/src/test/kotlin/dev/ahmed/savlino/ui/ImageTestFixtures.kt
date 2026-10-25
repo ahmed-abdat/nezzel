@@ -98,3 +98,12 @@ internal val noSpaceCheck = object : SpaceGate {
     override fun beforeTransfer(stagingBytes: Long?, outputBytes: Long?, unknownSizeUpperBound: Long?) = Unit
     override fun beforePublication(outputBytes: Long) = Unit
 }
+
+/** A TikTok photo post with its sound and the post's own /video/ link, as the TikTok reader returns it. */
+internal fun tikTokPhotoSuccess(source: LinkRevision, photos: Int, sound: dev.ahmed.savlino.engine.tiktok.TikTokSound =
+    dev.ahmed.savlino.engine.tiktok.TikTokSound("original sound", "synthetic", 12)): MediaInspectResult.Success {
+    val original = imageSuccess(source, found = photos, metadata = MediaMetadata("Post"))
+    val video = LinkInput.parse(source.link.rawUrl.replace("/photo/", "/video/"))!!
+    return MediaInspectResult.Success(original.inspection, original.preview, original.discovery.copy(sound = sound, photoLimit = 40),
+        original.saveAvailability, original.previews, LinkRevision(video, source.revision)) { original.close() }
+}

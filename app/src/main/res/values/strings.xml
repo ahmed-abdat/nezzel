@@ -304,6 +304,10 @@
         <item quantity="one">Save %1$s photo</item>
         <item quantity="other">Save %1$s photos</item>
     </plurals>
+    <plurals name="image_save_count_sound">
+        <item quantity="one">Save %1$s photo and sound</item>
+        <item quantity="other">Save %1$s photos and sound</item>
+    </plurals>
     <plurals name="image_available_count">
         <item quantity="one">%1$s photo available</item>
         <item quantity="other">%1$s photos available</item>
@@ -487,6 +491,9 @@
     <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
     <string name="saved_post_position">%1$s of %2$s</string>
     <string name="tiktok_sound">Sound</string>
+    <string name="sound_save">Save sound</string>
+    <string name="sound_saving">Getting the sound…</string>
+    <string name="sound_save_failed">Couldn’t save the sound</string>
     <string name="image_expired">Not available anymore</string>
     <string name="image_expired_body">Reopen the link to refresh the photos.</string>
 

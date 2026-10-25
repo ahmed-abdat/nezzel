@@ -330,6 +330,14 @@
         <item quantity="many">حفظ %1$s صورة</item>
         <item quantity="other">حفظ %1$s صورة</item>
     </plurals>
+    <plurals name="image_save_count_sound">
+        <item quantity="zero">حفظ الصوت</item>
+        <item quantity="one">حفظ صورة واحدة والصوت</item>
+        <item quantity="two">حفظ صورتين والصوت</item>
+        <item quantity="few">حفظ %1$s صور والصوت</item>
+        <item quantity="many">حفظ %1$s صورة والصوت</item>
+        <item quantity="other">حفظ %1$s صورة والصوت</item>
+    </plurals>
     <plurals name="image_available_count">
         <item quantity="zero">لا صور متاحة</item>
         <item quantity="one">صورة واحدة متاحة</item>
@@ -551,6 +559,9 @@
     <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
     <string name="saved_post_position">%1$s من %2$s</string>
     <string name="tiktok_sound">الصوت</string>
+    <string name="sound_save">حفظ الصوت</string>
+    <string name="sound_saving">جارٍ تجهيز الصوت…</string>
+    <string name="sound_save_failed">تعذّر حفظ الصوت</string>
     <string name="image_expired">لم تعد الصورة متاحة</string>
     <string name="image_expired_body">أعد فتح الرابط لتحديث الصور.</string>
 

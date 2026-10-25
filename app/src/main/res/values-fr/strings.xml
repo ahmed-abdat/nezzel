@@ -309,6 +309,11 @@
         <item quantity="many">Enregistrer %1$s photos</item>
         <item quantity="other">Enregistrer %1$s photos</item>
     </plurals>
+    <plurals name="image_save_count_sound">
+        <item quantity="one">Enregistrer %1$s photo et le son</item>
+        <item quantity="many">Enregistrer %1$s photos et le son</item>
+        <item quantity="other">Enregistrer %1$s photos et le son</item>
+    </plurals>
     <plurals name="image_available_count">
         <item quantity="one">%1$s photo disponible</item>
         <item quantity="many">%1$s photos disponibles</item>
@@ -497,6 +502,9 @@
     <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
     <string name="saved_post_position">%1$s sur %2$s</string>
     <string name="tiktok_sound">Son</string>
+    <string name="sound_save">Enregistrer le son</string>
+    <string name="sound_saving">Préparation du son…</string>
+    <string name="sound_save_failed">Impossible d’enregistrer le son</string>
     <string name="image_expired">Plus disponible</string>
     <string name="image_expired_body">Rouvrez le lien pour actualiser les photos.</string>
 

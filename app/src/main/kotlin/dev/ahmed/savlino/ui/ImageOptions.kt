@@ -21,6 +21,7 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.engine.mediaimage.ImagePhase
 import dev.ahmed.savlino.engine.mediaimage.ImageFailure
 import dev.ahmed.savlino.engine.mediaimage.ImageSaveAvailability
+import dev.ahmed.savlino.engine.tiktok.TikTokSound
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.storage.StorageError
 import dev.ahmed.savlino.ui.theme.Space
@@ -39,7 +40,8 @@ internal fun imageBatchMessage(resources: android.content.res.Resources,
 @Composable
 internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language: String,
     selected: Set<MediaRenditionRef> = state.photos.map { it.ref }.toSet(), enabled: Boolean = true,
-    onToggle: (MediaRenditionRef) -> Unit = {}, onSelectAll: (Boolean) -> Unit = {}, onVideo: () -> Unit = {}) {
+    onToggle: (MediaRenditionRef) -> Unit = {}, onSelectAll: (Boolean) -> Unit = {}, onVideo: () -> Unit = {},
+    soundSelected: Boolean = false, onToggleSound: () -> Unit = {}) {
     // Preview pixels may belong to a smaller CDN rendition, never to the file being saved.
     val width = state.image.width
     val height = state.image.height
@@ -60,6 +62,8 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
             modifier = Modifier.heightIn(min = 48.dp)) {
             Text(stringResource(if (allSelected) R.string.image_select_none else R.string.image_select_all))
         }
+        // Above the grid: under 11 photos it would be out of sight.
+        state.discovery.sound?.let { SoundTile(it, soundSelected, enabled, onToggleSound) }
         // Regular Rows compose every bounded item and inherit LayoutDirection, including the reading order in Arabic.
         state.photos.chunked(3).forEach { photos ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -112,19 +116,7 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
     if (found > state.photos.size && state.discovery.unavailableCount == 0 && state.discovery.cappedCount == 0 && state.discovery.notPreviewedCount == 0)
         Text(stringResource(R.string.image_available_of, NezzelFormat.count(state.photos.size, language),
             NezzelFormat.count(found, language)), style = MaterialTheme.typography.bodyMedium)
-    state.discovery.sound?.let { sound ->
-        OutlinedCard(onClick = onVideo, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp)) {
-            Row(Modifier.padding(Space.m), horizontalArrangement = Arrangement.spacedBy(Space.m),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(R.drawable.ic_music), contentDescription = null)
-                Column {
-                    Text(stringResource(R.string.tiktok_sound), style = MaterialTheme.typography.titleSmall)
-                    sound.title?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodyMedium) }
-                    sound.author?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodySmall) }
-                }
-            }
-        }
-    }
+    if (!state.isCarousel) state.discovery.sound?.let { SoundTile(it, soundSelected, enabled, onToggleSound) }
     if (state.discovery.hasVideo) TextButton(onClick = onVideo, enabled = enabled,
         modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.image_video_options)) }
     if (!state.isCarousel && state.expiredPhotos.isNotEmpty()) {
@@ -135,6 +127,24 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
         Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
 }
 
+/** A TikTok post's sound as one more tickable item, like a photo tile; Save downloads it with the photos. */
+@Composable
+private fun SoundTile(sound: TikTokSound, checked: Boolean, enabled: Boolean, onToggle: () -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).toggleable(checked, enabled = enabled, role = Role.Checkbox,
+            onValueChange = { onToggle() }).padding(start = Space.m, top = Space.s, bottom = Space.s, end = Space.xs),
+            horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(R.drawable.ic_music), contentDescription = null)
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.tiktok_sound), style = MaterialTheme.typography.titleSmall)
+                sound.title?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodyMedium) }
+                sound.author?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodySmall) }
+            }
+            Checkbox(checked, onCheckedChange = null, enabled = enabled, modifier = Modifier.clearAndSetSemantics {})
+        }
+    }
+}
+
 /** Explicit Save of the chosen images; progress and Cancel replace it during the batch. */
 @Composable
 internal fun ImageSaveBar(links: LinkViewModel, language: String) {
@@ -143,7 +153,8 @@ internal fun ImageSaveBar(links: LinkViewModel, language: String) {
         if (links.imageSaving) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             val progress = links.imageSaveProgress
-            val saving = if (progress != null && ready.isCarousel) stringResource(R.string.image_saving_count,
+            val saving = if (links.soundSaving) stringResource(R.string.sound_saving)
+                else if (progress != null && ready.isCarousel) stringResource(R.string.image_saving_count,
                 NezzelFormat.count(progress.first, language), NezzelFormat.count(progress.second, language))
                 else stringResource(R.string.image_saving)
             Text(saving, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -155,7 +166,10 @@ internal fun ImageSaveBar(links: LinkViewModel, language: String) {
             // Only the complete measured body is a size; otherwise none is shown.
             val bytes = ready.image.proof?.measuredBytes
             val count = (links.selectedImageRefs - ready.expiredPhotos).size
-            val label = if (ready.isCarousel) pluralStringResource(R.plurals.image_save_count, count,
+            val sound = links.soundSelected && ready.discovery.sound != null
+            val label = if (sound && count == 0) stringResource(R.string.sound_save)
+                else if (sound) pluralStringResource(R.plurals.image_save_count_sound, count, NezzelFormat.count(count, language))
+                else if (ready.isCarousel) pluralStringResource(R.plurals.image_save_count, count,
                 NezzelFormat.count(count, language)) else if (bytes != null) stringResource(R.string.image_save_size, NezzelFormat.isolate(NezzelFormat.size(bytes, language)))
                 else stringResource(R.string.image_save)
             Button(onClick = links::saveImage, enabled = links.imageSaveEnabled,
