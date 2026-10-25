@@ -5,4 +5,4 @@
 • TikTok photo posts: keep the photos, the sound, or both
 • Downloads: grid view, swipe between files, rename, sort and search
 • A Home screen widget, and your old downloads come back after a reinstall
-• Long downloads and playlists run more smoothly
+• Nezzel now keeps itself up to date in the background

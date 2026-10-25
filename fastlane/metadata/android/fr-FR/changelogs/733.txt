@@ -5,4 +5,4 @@
 • Photos TikTok : gardez les images, le son ou les deux
 • Téléchargements : grille, balayage, renommer, trier et rechercher
 • Un widget d’accueil, et vos fichiers reviennent après réinstallation
-• Longs téléchargements et playlists plus fluides
+• Nezzel se met à jour tout seul en arrière-plan
