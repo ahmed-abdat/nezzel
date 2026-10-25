@@ -122,7 +122,7 @@ main{overflow-x:clip}
 .bar{display:flex;align-items:center;gap:10px;padding:8px;padding-inline-start:12px;border-radius:999px;border:1px solid transparent;transition:background .4s,box-shadow .4s,border-color .4s}
 body.scrolled .bar{background:color-mix(in oklab,var(--c-lowest) 85%,transparent);backdrop-filter:saturate(1.5) blur(12px);-webkit-backdrop-filter:saturate(1.5) blur(12px);box-shadow:0 10px 30px -14px rgb(var(--ink-sh)/.3);border-color:color-mix(in oklab,var(--outline-v) 55%,transparent)}
 body.ondark .bar{--on-bg:#DEE4E1;--c-high:#252B2A;--c-lowest:#090F0E;--outline-v:#3F4946;--outline:#899390;color:#E6EEEB;background:rgb(9 15 14/.82);border-color:rgb(255 255 255/.08);box-shadow:none}
-.brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;font-weight:800;font-size:19px}
+.brand{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;min-width:48px;color:inherit;text-decoration:none;font-weight:800;font-size:19px}
 .brand img{width:34px;height:34px;border-radius:10px}
 .bar .sp{flex:1}
 .locale-switch{position:relative;flex:none}
@@ -137,7 +137,7 @@ body.ondark .bar{--on-bg:#DEE4E1;--c-high:#252B2A;--c-lowest:#090F0E;--outline-v
 .locale-switch[open] .lang{background:var(--primary-c);color:var(--on-primary-c)}
 .lang-menu{position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:180px;padding:6px;border-radius:18px;background:var(--c-lowest);border:1px solid var(--outline-v);box-shadow:0 10px 30px -10px rgb(var(--ink-sh)/.3);transform-origin:100% 0}
 [dir=rtl] .lang-menu{transform-origin:0 0}
-.lang-menu a{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:44px;padding:8px 12px;border-radius:12px;text-decoration:none;color:var(--on-bg);font-size:15px;transition:background .15s ease-out}
+.lang-menu a{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;padding:8px 12px;border-radius:12px;text-decoration:none;color:var(--on-bg);font-size:15px;transition:background .15s ease-out}
 .lang-menu a:hover,.lang-menu a:focus-visible{background:var(--c-high)}
 .lang-menu a[aria-current=page]{background:var(--primary-c);color:var(--on-primary-c);font-weight:700}
 .lang-menu .i{width:18px;height:18px;visibility:hidden}
@@ -156,7 +156,7 @@ body.ondark .bar{--on-bg:#DEE4E1;--c-high:#252B2A;--c-lowest:#090F0E;--outline-v
 :root[data-mode=dark] .theme .moon{opacity:0;transform:rotate(90deg) scale(.4)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 html[data-vt]::view-transition-group(root){animation-duration:.6s}
-.mini{min-height:48px;display:inline-flex;align-items:center;gap:8px;padding:0 18px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:15px;opacity:0;transform:translateY(-6px) scale(.96);pointer-events:none;transition:opacity .4s var(--ease),transform .4s var(--ease)}
+.mini{min-height:48px;min-width:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 18px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:15px;opacity:0;transform:translateY(-6px) scale(.96);pointer-events:none;transition:opacity .4s var(--ease),transform .4s var(--ease)}
 .mini .i{width:18px;height:18px}
 body.past .mini{opacity:1;transform:none;pointer-events:auto}
 
@@ -194,6 +194,7 @@ h1 bdi{color:var(--primary)}
 .cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:40px}
 .meta{font-size:14.5px;color:var(--muted);text-wrap:balance}
 .meta a{font-weight:600;white-space:nowrap}
+.meta a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
 
 /* paper: every object on the desk shares one soft shadow and a hairline edge */
 .pp{background:var(--paper);box-shadow:0 0 0 1px var(--edge);filter:var(--shf)}
@@ -217,7 +218,7 @@ h1 bdi{color:var(--primary)}
 .wires .o,.wires .f{stroke-dasharray:1 1;stroke-dashoffset:var(--dw,0)}
 .live .cb:not(.on) .rb{opacity:0}
 /* without JS the desk still fits: a stepped scale until the script measures it */
-@media (max-width:1191px){.mach{--k:.86}}@media (max-width:1039px){.mach{--k:.74}}@media (max-width:899px){.mach{--k:.62}}@media (max-width:759px){.mach{--k:.99}}@media (max-width:391px){.mach{--k:.8}}
+@media (max-width:1191px){.mach{--k:.86}}@media (max-width:1039px){.mach{--k:.74}}@media (max-width:899px){.mach{--k:.62}}@media (max-width:759px){.mach{--k:.99}}@media (min-width:760px) and (max-width:1023px) and (orientation:portrait){.mach{--k:1.05}}@media (max-width:391px){.mach{--k:.8}}
 .wires .jk{fill:var(--paper);stroke:var(--wire);stroke-width:2.5}
 .wires .cn{fill:none;stroke:color-mix(in oklab,var(--on-bg) 38%,transparent);stroke-width:1.5;stroke-dasharray:6 8}
 .wires .cn.a{stroke:var(--primary);animation:flow 1.4s linear infinite}
@@ -279,7 +280,8 @@ html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
 
 /* the phone sits mid-desk; on narrow screens the desk turns to a column and objects come and go */
 .mach>.phone{inset-inline-start:435px;top:0}
-@media (max-width:759px){
+/* phones and portrait tablets get the tall single-column machine */
+@media (max-width:759px),(max-width:1023px) and (orientation:portrait){
   .mach{--W:360px;--H:880px}
   .wires.d{display:none}
   .wires.m{display:block}
@@ -672,7 +674,7 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 .end{position:relative;z-index:1;margin-top:clamp(104px,12vw,150px);overflow:hidden;padding:clamp(120px,14vw,170px) 0 clamp(24px,4vw,48px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
 .end a{color:inherit}
 .end h2{font-size:clamp(18px,2vw,22px);font-weight:600;line-height:1.5;opacity:.7;max-width:none}
-.end .go{display:flex;flex-wrap:wrap;align-items:center;gap:0 .25em;margin-top:10px;text-decoration:none;font-weight:800;font-size:clamp(42px,11vw,168px);line-height:1.15;transition:color .3s}
+.end .go{display:flex;flex-wrap:wrap;align-items:center;min-height:48px;gap:0 .25em;margin-top:10px;text-decoration:none;font-weight:800;font-size:clamp(42px,11vw,168px);line-height:1.15;transition:color .3s}
 html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 .end .go .i{width:.7em;height:.7em;stroke-width:1.5;transform:scaleX(var(--x));transition:transform .5s var(--spring)}
 @media (hover:hover) and (pointer:fine){.end .go:hover{color:#9EF2E1}.end .go:hover .i{transform:translateX(calc(var(--x) * 16px)) scaleX(var(--x))}}
@@ -682,14 +684,15 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 [dir=rtl] .sep{transform-origin:right}
 .frow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 32px}
 .fl{display:flex;flex-wrap:wrap;gap:0 22px}
-.fl a{display:inline-flex;align-items:center;gap:6px;min-height:44px;text-decoration:none;font-size:15px;font-weight:600;opacity:.85;transition:opacity .2s}
+.fl a{display:inline-flex;align-items:center;gap:6px;min-height:48px;text-decoration:none;font-size:15px;font-weight:600;opacity:.85;transition:opacity .2s}
 .fl a:hover{opacity:1}
 .fl .ne{width:14px;height:14px;transform:scaleX(var(--x));transition:transform .3s var(--ease)}
 .fl a:hover .ne{transform:translate(calc(var(--x) * 2px),-2px) scaleX(var(--x))}
 .fm{display:flex;flex-wrap:wrap;align-items:center;gap:0 22px;font-size:15px;opacity:.7}
 .langs{display:flex;gap:18px}
-.langs a{display:inline-flex;align-items:center;min-height:44px;text-decoration:none}
+.langs a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;min-width:48px;text-decoration:none}
 .langs a:hover{text-decoration:underline}
+.cr{margin:14px 0 0;font-size:13px;opacity:.5}
 .mark{display:flex;align-items:flex-end;gap:3%;margin-top:clamp(28px,4vw,56px);direction:ltr;transition:transform 1.2s var(--ease),opacity 1.2s var(--ease)}
 .mark img{width:17%;flex:none;border-radius:22%}
 .mark svg{flex:1;min-width:0;display:block}
@@ -990,6 +993,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       </nav>
       <div class="fm"><span class="langs"><a href="/" hreflang="ar" lang="ar" dir="rtl">العربية</a><a href="/fr/" hreflang="fr" lang="fr" dir="ltr">Français</a><a href="/en/" hreflang="en" lang="en" dir="ltr">English</a></span><span data-i="foot">Développé par <a href="https://hululsoft.mr">Hululsoft</a></span></div>
     </div>
+    <p class="cr fe" style="--f:3" data-i="credit">Images vidéo : Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY</p>
     <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
   </div>
 </footer>
@@ -1040,6 +1044,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gh:"GitHub", rel:"Releases",
     "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
+    credit:"Video stills: Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Yours to keep, even after they vanish",
     "x2p": "Paste its link and Nezzel saves them one by one",
     "x3p": "Paste them together, tap once",
@@ -1172,6 +1177,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "rel": "الإصدارات",
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
+      "credit": "صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> © Blender Foundation، CC BY",
       "lic": "التراخيص",
       "sec": "الأمان",
       "to-light": "الوضع الفاتح",
@@ -1243,6 +1249,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gh:"GitHub", rel:"Versions",
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
+    credit:"Images vidéo : Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Ils restent, même une fois disparus",
     "x2p": "Collez son lien, Nezzel enregistre les vidéos une à une",
     "x3p": "Collez-les ensemble, un seul geste suffit",
@@ -1396,7 +1403,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     { c: "e-copy e-toast", ev: [[250, "e-sheet"], [1500, "e-full"], [2300, "tap:q1080"], [2400, "e-pick"]] },
     { c: "e-copy e-toast e-sheet e-full e-pick", ev: [[500, "tap:pb2"], [600, "e-press2"], [900, "drop"], [3700, "e-done"], [3800, "out"], [3900, "e-snack"]] }
   ];
-  const wide = matchMedia("(min-width: 760px)"), rtl = document.documentElement.dir === "rtl";
+  const wide = matchMedia("(min-width: 1024px), (min-width: 760px) and (orientation: landscape)"), rtl = document.documentElement.dir === "rtl";
   let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1, rides = [];
   const cable = i => $("#c" + i + (wide.matches ? "d" : "m") + " .rb");
   function tapAt(id) {
@@ -1472,7 +1479,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   let top = 88, pending = 0;
   function layout() {
     const dh = innerHeight - top, avail = document.documentElement.clientWidth - (wide.matches ? 48 : 24);
-    const k = Math.min(1, avail / mach.offsetWidth, still ? 1 : (dh - 28) / mach.offsetHeight);
+    const k = Math.min(wide.matches ? 1 : 1.3, avail / mach.offsetWidth, still ? 1 : (dh - 28) / mach.offsetHeight);
     mach.style.setProperty("--k", k.toFixed(3));
     rig.style.setProperty("--dh", dh + "px"); desk.style.setProperty("--top", top + "px");
     if (!still) onDesk();
