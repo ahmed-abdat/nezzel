@@ -90,8 +90,7 @@ private object HomeFixtures {
 /** The real Home + T1 bar, as NezzelApp wires them, with fixture rows instead of the journal and MediaStore. */
 @Composable
 private fun HomeShell(lang: String, dark: Boolean, withDownloads: Boolean, copied: Boolean, route: String, onRoute: (String) -> Unit = {},
-                      onPaste: () -> Unit = {}, load: LibraryLoadState? = null, fontScale: Float = 1f,
-                      docked: Boolean = true) {
+                      onPaste: () -> Unit = {}, load: LibraryLoadState? = null, fontScale: Float = 1f) {
     // The engine is shown as available (the real-world look); automatic options stay off, so nothing is inspected.
     val vm = remember { LinkViewModel(SavedStateHandle(), engine = dev.ahmed.savlino.engine.FakeEngine()).apply {
         automaticOptions = false
@@ -102,8 +101,7 @@ private fun HomeShell(lang: String, dark: Boolean, withDownloads: Boolean, copie
     val library = remember(media) { LibraryState(load ?: LibraryLoadState.Ready(media), {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     CompositionLocalProvider(LocalLayoutDirection provides if (lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr,
-        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale),
-        dev.ahmed.savlino.ui.nav.LocalDockedTabBar provides docked) {
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
         NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
             NavigationScaffold(route, jobs, lang, onRoute, updateAvailable = withDownloads) {
                 TabContent(route) { r ->
@@ -262,26 +260,26 @@ class HomeRedesignTest {
         } finally { controller.pause().stop().destroy() }
     }
 
-    /** Owner pick: A docked / B floating, stills × ar/en × light/dark plus one ar-light GIF frame set each. */
-    @Test fun captureTabBarOptions() {
+    /** The floating tab bar: stills × ar/en × light/dark plus one ar-light GIF frame set. */
+    @Test fun captureTabBar() {
         assumeTrue(dir != null)
-        for (docked in listOf(true, false)) {
-            val option = File(dir, if (docked) "A-docked" else "B-floating")
+        run {
+            val option = File(dir, "tab-bar")
             for ((lang, dark) in combos) {
                 RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
                 Robolectric.setupContentProvider(FixtureThumbnails::class.java, "nezzel.fixture")
                 val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
                 try {
-                    controller.get().setContent { HomeShell(lang, dark, true, false, "Home", docked = docked) }
+                    controller.get().setContent { HomeShell(lang, dark, true, false, "Home") }
                     repeat(8) { Snapshot.sendApplyNotifications(); compose.mainClock.advanceTimeBy(250); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250)) }
                     controller.get().capture(File(option, "home-$lang-${if (dark) "dark" else "light"}.png"))
                 } finally { controller.pause().stop().destroy() }
             }
-            tabFrames("ar", false, File(option, "frames"), docked)
+            tabFrames("ar", false, File(option, "frames"))
         }
     }
 
-    private fun tabFrames(lang: String, dark: Boolean, out: File, docked: Boolean = true) {
+    private fun tabFrames(lang: String, dark: Boolean, out: File) {
         compose.mainClock.autoAdvance = false
         RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
         Robolectric.setupContentProvider(FixtureThumbnails::class.java, "nezzel.fixture")
@@ -289,7 +287,7 @@ class HomeRedesignTest {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         val activity = controller.get()
         try {
-            activity.setContent { HomeShell(lang, dark, true, false, route, { route = it }, docked = docked) }
+            activity.setContent { HomeShell(lang, dark, true, false, route, { route = it }) }
             repeat(6) { compose.mainClock.advanceTimeBy(250); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250)) }
             var n = 0
             fun grab() { compose.waitForIdle(); activity.capture(File(out, "f-${(n++).toString().padStart(4, '0')}.png"), .5f) }

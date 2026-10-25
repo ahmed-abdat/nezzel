@@ -65,9 +65,6 @@ val TopLevelDestinations = listOf(
 @Immutable
 data class NavigationBadges(val running: Int = 0, val failed: Boolean = false, val update: Boolean = false, val language: String = "en")
 
-/** Owner pick pending (beta12 feedback): true = A, docked edge to edge; false = B, floating with a lighter shadow. Delete the loser. */
-internal val LocalDockedTabBar = staticCompositionLocalOf { true }
-
 /** Replace this drawing for a new design; selection, re-selection and content state stay in the host. */
 @Composable
 fun NezzelNavigation(
@@ -119,7 +116,7 @@ fun NezzelNavigation(
             }
         }
     } else {
-        TabBar(destinations, selected, LocalDockedTabBar.current, Modifier.testTag("navigation_bar").then(collection)) { destination, index, isSelected ->
+        TabBar(destinations, selected, Modifier.testTag("navigation_bar").then(collection)) { destination, index, isSelected ->
             Column(Modifier.weight(1f).heightIn(min = 54.dp).clip(CircleShape)
                 .selectable(isSelected, role = Role.Tab) { select(destination.route) }.then(itemModifier(destination, index)),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -131,12 +128,12 @@ fun NezzelNavigation(
 }
 
 /**
- * T1: docked edge to edge (A) or a pill floating above the content (B). The raised inner pill travels on a spatial
+ * T1: a pill floating above the content (owner pick B, 2026-10-25). The raised inner pill travels on a spatial
  * spring; it is placed in the layout's placement step only, so moving it never recomposes the tabs. Badges sit on the
  * icon and never shift a label.
  */
 @Composable
-private fun TabBar(destinations: List<NavigationDestination>, selected: String, docked: Boolean, modifier: Modifier,
+private fun TabBar(destinations: List<NavigationDestination>, selected: String, modifier: Modifier,
                    item: @Composable RowScope.(NavigationDestination, Int, Boolean) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val reduced = LocalReducedMotion.current
@@ -150,21 +147,14 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
             val cell = constraints.maxWidth / count
             val pill = measurable.measure(Constraints.fixed(cell, constraints.maxHeight))
             layout(constraints.maxWidth, constraints.maxHeight) { pill.placeRelative((position.value * cell).roundToInt(), 0) }
-        }.then(if (docked) Modifier else Modifier.shadow(1.dp, CircleShape)).background(colors.surfaceBright, CircleShape))
+        }.shadow(1.dp, CircleShape).background(colors.surfaceBright, CircleShape))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             destinations.forEachIndexed { i, destination -> item(destination, i, destination.route == selected) }
         }
     }
-    if (docked) {
-        // No shadows: the bar's colour runs under the gesture handle; only its tabs keep clear of it.
-        Surface(modifier.fillMaxWidth(), color = colors.surfaceContainer) {
-            Box(Modifier.windowInsetsPadding(insets).padding(horizontal = Space.s, vertical = Space.xs)) { tabs() }
-        }
-    } else {
-        Box(modifier.fillMaxWidth().windowInsetsPadding(insets).padding(start = Space.m, end = Space.m, top = Space.s, bottom = Space.m)) {
-            Surface(Modifier.fillMaxWidth(), shape = CircleShape, color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
-                Box(Modifier.padding(Space.xs)) { tabs() }
-            }
+    Box(modifier.fillMaxWidth().windowInsetsPadding(insets).padding(start = Space.m, end = Space.m, top = Space.s, bottom = Space.m)) {
+        Surface(Modifier.fillMaxWidth(), shape = CircleShape, color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
+            Box(Modifier.padding(Space.xs)) { tabs() }
         }
     }
 }
