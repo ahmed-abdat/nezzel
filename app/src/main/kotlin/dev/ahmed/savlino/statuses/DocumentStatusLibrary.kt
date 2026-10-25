@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.statuses
 
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -9,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
+import android.provider.MediaStore
 import java.security.MessageDigest
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -88,7 +90,7 @@ class DocumentStatusLibrary(
             walk.children(folder.documentId).orEmpty().filter { it.isStatus }.map { source to (walk to it) }
         }
         val seen = marks.seen()
-        val saved = marks.saved()
+        val saved = marks.saved(resolver)
         val items = listed.map { (source, entry) ->
             val (walk, child) = entry
             StatusItem(DocumentsContract.buildDocumentUriUsingTree(walk.tree, child.documentId), source,
@@ -107,7 +109,7 @@ class DocumentStatusLibrary(
         currentCoroutineContext().ensureActive()
         val result = saveOne(StatusSaveSource(item.uri, item.mimeType, item.sizeBytes, item.lastModifiedMillis))
         if (result is StatusSaveResult.Saved) withContext(io) {
-            marks.markSaved(DocumentsContract.getDocumentId(item.uri), item.sizeBytes, item.lastModifiedMillis)
+            marks.markSaved(DocumentsContract.getDocumentId(item.uri), item.sizeBytes, item.lastModifiedMillis, result.uri)
         }
         result
     }
@@ -187,18 +189,41 @@ class DocumentStatusLibrary(
 
 /**
  * Saved marks (provider document id + size + time, hashed; unknown fields are never marked) and the ids seen on the
- * previous load. Prefs, not the job database: no schema migration. No names are stored.
+ * previous load. New marks also retain the saved MediaStore URI; legacy hash-only marks remain saved.
+ * Prefs, not the job database: no schema migration. No names are stored.
  */
 internal class StatusMarks(private val prefs: SharedPreferences) {
-    fun saved(): Set<String> = savedList().toSet()
+    /** Called on the library's IO dispatcher. Only a successful query can prove a saved copy is gone. */
+    @Synchronized fun saved(resolver: ContentResolver): Set<String> {
+        val saved = savedEntries()
+        // A row whose uri has no numeric id can't be checked: it stays saved, like a legacy mark.
+        val ids = saved.values.filterNotNull().distinct()
+            .mapNotNull { uri -> Uri.parse(uri).lastPathSegment?.toLongOrNull()?.let { uri to it } }.toMap()
+        if (ids.isEmpty()) return saved.keys
+        val present = try {
+            // StatusSaver publishes only to primary Downloads. Numeric ids avoid the SQLite bind-argument limit.
+            resolver.query(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns._ID} IN (${ids.values.distinct().joinToString(",")})", null, null)?.use { cursor ->
+                buildSet<Long> { while (cursor.moveToNext()) add(cursor.getLong(0)) }
+            } ?: return saved.keys
+        } catch (_: SecurityException) {
+            return saved.keys
+        }
+        val kept = saved.filterValues { uri -> val id = uri?.let(ids::get); id == null || id in present }
+        if (kept.size != saved.size) writeSaved(kept)
+        return kept.keys
+    }
 
     fun isSaved(saved: Set<String>, documentId: String, size: Long?, modified: Long?) =
         savedKey(documentId, size, modified)?.let { it in saved } == true
 
-    @Synchronized fun markSaved(documentId: String, size: Long?, modified: Long?) {
+    @Synchronized fun markSaved(documentId: String, size: Long?, modified: Long?, uri: Uri) {
         val key = savedKey(documentId, size, modified) ?: return
-        val list = savedList().filter { it != key } + key
-        prefs.edit().putString(SAVED, list.takeLast(CAP).joinToString("\n")).apply()
+        val saved = savedEntries().toMutableMap()
+        saved.remove(key)
+        saved[key] = uri.toString()
+        writeSaved(saved)
     }
 
     /** Null before the first load: nothing counts as new without a previous visit. */
@@ -211,7 +236,17 @@ internal class StatusMarks(private val prefs: SharedPreferences) {
 
     fun seenKey(documentId: String) = hash("seen\u0000$documentId")
 
-    private fun savedList() = prefs.getString(SAVED, null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
+    private fun savedEntries(): Map<String, String?> =
+        prefs.getString(SAVED, null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty().associate {
+            it.substringBefore('\t') to it.substringAfter('\t', "").takeIf(String::isNotEmpty)
+        }
+
+    private fun writeSaved(saved: Map<String, String?>) {
+        val rows = saved.entries.toList().takeLast(CAP).joinToString("\n") { (key, uri) ->
+            if (uri == null) key else "$key\t$uri"
+        }
+        prefs.edit().putString(SAVED, rows).apply()
+    }
 
     private fun savedKey(documentId: String, size: Long?, modified: Long?): String? {
         if (size == null || size < 0 || modified == null || modified <= 0) return null
