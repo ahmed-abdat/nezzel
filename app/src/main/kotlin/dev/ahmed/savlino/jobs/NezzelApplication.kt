@@ -48,7 +48,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
         scope.launch { if (on) usageStore.dropCrash() else usageStore.clear() }
         appUpdates.reschedule()
     }
-    val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, artwork = { downloads.artwork.load(it) }) }
+    val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, playlistBatches, artwork = { downloads.artwork.load(it) }) }
     /** One-shot image Save: no journal or worker; leftovers of a killed Save are swept at start. */
     open val media by lazy { dev.ahmed.savlino.media.MediaServices(this, { downloads.engine }, scope, usage) }
     /** What the link screens use from [media]; tests swap in fakes here. */

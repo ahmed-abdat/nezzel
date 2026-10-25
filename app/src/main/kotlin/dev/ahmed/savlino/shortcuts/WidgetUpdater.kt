@@ -52,7 +52,8 @@ data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int 
         fun from(job: DownloadProgress?): WidgetUiState = from(listOfNotNull(job))
 
         /** Running first, then paused/queued, then failed. Completed/cancelled files belong to the shelf. */
-        fun from(jobs: List<DownloadProgress>, saved: List<SavedMedia> = emptyList()): WidgetUiState {
+        /** [unfed]: a playlist's videos not handed out as jobs yet; they wait too, so «+N» counts them. */
+        fun from(jobs: List<DownloadProgress>, saved: List<SavedMedia> = emptyList(), unfed: Int = 0): WidgetUiState {
             val visible = jobs.asReversed().filter { !it.terminal || it.phase == DownloadPhase.FAILED }
                 .sortedBy { if (it.running) 0 else if (!it.terminal) 1 else 2 }
             return WidgetUiState(visible.take(2).map { job ->
@@ -65,7 +66,7 @@ data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int 
                     (if (job.paused) job.percent else job.visiblePercent)?.let { it / 5 * 5 },
                     job.paused, job.waiting || job.awaitingSchedule,
                     job.remainingTransferSeconds?.takeIf { measured && it > 0 }, job.mimeType)
-            }, (visible.size - 2).coerceAtLeast(0), saved.size,
+            }, (visible.size + unfed - 2).coerceAtLeast(0), saved.size,
                 saved.sortedByDescending { it.addedSeconds }.take(4).map { WidgetRecent(it) })
         }
 
@@ -78,6 +79,7 @@ data class WidgetUiState(val jobs: List<WidgetJob> = emptyList(), val more: Int 
 class WidgetUpdater(
     private val context: Context,
     private val progress: StateFlow<List<DownloadProgress>>,
+    private val playlists: Flow<List<dev.ahmed.savlino.jobs.PlaylistBatch>> = flowOf(emptyList()),
     private val widgetIds: () -> IntArray = {
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, NezzelWidgetProvider::class.java))
     },
@@ -151,8 +153,10 @@ class WidgetUpdater(
                 pictures = latest.associateWith { pictures[it] ?: thumbnail(it) }
                 rows
             }
-        combine(progress, saved) { jobs, files ->
-            WidgetUiState.from(jobs, files).let { state ->
+        combine(progress, saved, playlists.onStart { emit(emptyList()) }) { jobs, files, batches ->
+            val listed = jobs.mapTo(HashSet()) { it.jobId }
+            val unfed = batches.filterNot { it.terminal }.sumOf { batch -> batch.items.count { it.state in UNFED && it.jobId !in listed } }
+            WidgetUiState.from(jobs, files, unfed).let { state ->
                 state.copy(recents = state.recents.map { it.copy(thumbnail = pictures[it.media]) })
             }
         }.combine(arts) { state, pictures ->
@@ -171,4 +175,5 @@ class WidgetUpdater(
     }
 }
 
+private val UNFED = setOf(dev.ahmed.savlino.jobs.BatchItemState.WAITING, dev.ahmed.savlino.jobs.BatchItemState.QUEUED)
 private val ARTWORK_RETRY_MS = longArrayOf(0, 1_000, 3_000, 8_000)

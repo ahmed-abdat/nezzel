@@ -216,7 +216,10 @@ fun NezzelApp(
                     catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
                 }
             } }
+            // Two files finishing together each found no other job left: only the later one speaks.
+            var lastCompleted: String? = null
             links.downloads?.completed?.collect { job ->
+                lastCompleted = job.jobId
                 launch {
                     val problem = job.check as? dev.ahmed.savlino.domain.ResultCheck.Problem
                     if (problem != null) {
@@ -238,6 +241,7 @@ fun NezzelApp(
                     // A playlist feeds its videos a few at a time, so between two of them no other job may be listed yet.
                     val unfed = setOf(dev.ahmed.savlino.jobs.BatchItemState.WAITING, dev.ahmed.savlino.jobs.BatchItemState.QUEUED)
                     if (playlists.any { batch -> !batch.terminal && batch.items.any { it.jobId != job.jobId && it.state in unfed } }) return@launch
+                    if (lastCompleted != job.jobId) return@launch
                     snackbar.currentSnackbarData?.dismiss()
                     val saved = context.getString(R.string.saved_snackbar, NezzelFormat.isolate(destinations.publishedFolderName(job.publishedUri)))
                     val action = snackbar.showSnackbar(
@@ -342,7 +346,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
     val completedJobs = remember { mutableStateOf(emptyList<DownloadProgress>()) }
     LaunchedEffect(links.downloads) {
         links.downloads?.completed?.collect { job ->
-            completedJobs.value = (completedJobs.value.filterNot { it.jobId == job.jobId } + job).takeLast(dev.ahmed.savlino.downloads.HOME_JOB_CARDS)
+            completedJobs.value = (completedJobs.value.filterNot { it.jobId == job.jobId } + job).takeLast(dev.ahmed.savlino.downloads.HOME_JOB_CARDS * 2)
         }
     }
     val homeJobs = { latestJobs.value.let { live -> live + completedJobs.value.filter { done -> live.none { it.jobId == done.jobId } } } }

@@ -823,6 +823,8 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     val started = remember { mutableListOf<String>() }
     val landing = remember { LinkedHashSet<String>() }
     val fileJobs = remember { LinkedHashMap<String, String>() }
+    // Only a job that had a card here lands: one past the visible cards has no card to keep its slot with.
+    val carded = remember { HashSet<String>() }
     val expiry = remember { mutableIntStateOf(0) }
     val slots by remember(media) {
         val listed = media.mapTo(HashSet()) { fileKey(it.uri) }
@@ -832,18 +834,19 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             // The coordinator drops a job from the list the moment it completes: one that leaves after its transfer
             // finished is landing, and keeps its slot until its file lists. Leaving mid-transfer is a cancel: the slot goes.
             val ids = all.mapTo(HashSet()) { it.jobId }
-            seen.entries.removeAll { (id, last) -> (id !in ids).also { gone -> if (gone && last.transferDone) landing += id } }
+            seen.entries.removeAll { (id, last) -> (id !in ids).also { gone -> if (gone && last.transferDone && id in carded) landing += id } }
             all.forEach { job ->
                 val before = seen.put(job.jobId, job)?.phase
                 if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
-                    before != DownloadPhase.CANCELLED) landing += job.jobId
+                    before != DownloadPhase.CANCELLED && job.jobId in carded) landing += job.jobId
                 if (!job.saved) landing -= job.jobId
             }
             val running = all.filter { it.running }.map { it.jobId }
             started.retainAll(running.toSet()); running.forEach { if (it !in started) started += it }
             // A landed job whose file listed is done landing: if that file is deleted later, no empty job card comes back.
             landing.removeAll { id -> fileJobs.any { (file, job) -> job == id && file in listed } }
-            homeSlots(all, recent, listed, started, landing, fileJobs).also {
+            homeSlots(all, recent, listed, started, landing, fileJobs).also { shown ->
+                carded.clear(); shown.forEach { if (it is JobSlot) carded += it.jobId }
                 // Only the newest mappings can still hold a slot; the rest would grow with every download.
                 fileJobs.keys.iterator().let { keys -> while (fileJobs.size > FILE_JOBS && keys.hasNext()) { keys.next(); keys.remove() } }
             }

@@ -61,6 +61,13 @@ class WidgetTest {
         assertEquals("⁦+1⁩", text(rendered, R.id.widget_more))
     }
 
+    // A playlist hands out a few videos at a time; the rest still wait, so «+N» is not «+1» with 15 to go.
+    @Test fun aPlaylistsVideosNotHandedOutYetCountInTheRest() {
+        val state = WidgetUiState.from(listOf(job("a"), job("b")), unfed = 15)
+        assertEquals(listOf("b", "a"), state.jobs.map { it.id })
+        assertEquals(15, state.more)
+    }
+
     @Test fun runningComesBeforePausedQueuedAndFailedAndFinishedFilesLeaveTheRows() {
         val state = WidgetUiState.from(listOf(job("live"), job("paused").copy(paused = true),
             job("failed", DownloadPhase.FAILED), job("done", DownloadPhase.COMPLETED), job("gone", DownloadPhase.CANCELLED)))
