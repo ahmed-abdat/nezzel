@@ -285,7 +285,7 @@ html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
   .mach>.phone{inset-inline-start:70px;top:40px}
   .slip{top:0;width:250px;padding:10px;rotate:calc(var(--x) * -5deg);z-index:3}
   .apps{gap:6px}.ap{padding:5px;font-size:13px}.ap .apt{width:48px}
-  .tray{inset-inline-start:0;top:466px;width:220px;padding:10px;z-index:3}
+  .tray{inset-inline-start:0;top:420px;width:220px;padding:10px;z-index:3}
   .step{top:680px;inset-inline-start:0!important;width:360px}
   .step h3{font-size:28px}
   .step p{font-size:18px}
@@ -296,6 +296,12 @@ html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
 }
 
 /* the live phone */
+/* real app captures (site/img/app/<lang>-<theme>-<key>.webp) sit over the drawn screens; a missing capture leaves the drawn one showing */
+.shots{position:absolute;inset:0;z-index:7;pointer-events:none}
+.shot{position:absolute;inset:0;width:100%;height:auto;opacity:0;transition:opacity .35s var(--ease)}
+.shots .rsb{position:absolute;inset-inline:0;top:0;display:none}
+.shots.on .rsb{display:flex}
+.mach:not(.e-sheet):not(.e-recent) .k-home.ok,.e-sheet:not(.e-full) .k-sheet-load.ok,.e-sheet.e-full .k-sheet.ok,.e-recent:not(.e-done) .k-recent.ok,.e-recent.e-done .k-saved.ok{opacity:1}
 .phone{--W:290px;position:relative;z-index:2;width:var(--W);height:calc(var(--W) * 2.07);padding:9px;border-radius:46px;background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1.5px #29302e inset,0 0 0 1px rgb(255 255 255/.05);font-size:12.5px;line-height:1.45}
 @media (max-width:380px){.phone{--W:262px}}
 /* as the page moves, the phone tips up from lying back and settles flat */
@@ -810,6 +816,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       <div class="screen" aria-hidden="true">
         <span class="cam"></span>
         <span class="tap" id="tap"></span>
+        <div class="shots"><img class="shot k-home" alt=""><img class="shot k-sheet-load" alt=""><img class="shot k-sheet" alt=""><img class="shot k-recent" alt=""><img class="shot k-saved" alt=""><div class="sb rsb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div></div>
         <div class="sc s1">
           <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
@@ -1516,8 +1523,20 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   // ---------- theme: system by default, a tap overrides it ----------
   const root = document.documentElement, themeBtn = $("#theme"), sysDark = matchMedia("(prefers-color-scheme: dark)");
   const mode = () => root.dataset.theme || (sysDark.matches ? "dark" : "light");
+  // Real captures: <lang>-<theme>-<key>, falling back to the light set; the drawn screen stays if neither exists.
+  function shots() {
+    const box = $(".shots"); if (!box) return;
+    $$(".shot", box).forEach(img => {
+      const k = img.className.match(/k-([\w-]+)/)[1], tries = [lang() + "-" + mode() + "-" + k, lang() + "-light-" + k];
+      const next = () => { const n = tries.shift(); if (!n) { img.removeAttribute("src"); img.classList.remove("ok"); return; } img.src = "/img/app/" + n + ".webp"; };
+      img.onload = () => { img.classList.add("ok"); box.classList.add("on"); };
+      img.onerror = () => { img.classList.remove("ok"); next(); };
+      img.classList.remove("ok"); next();
+    });
+  }
   function syncTheme() {
     const m = mode(); root.dataset.mode = m;
+    shots();
     themeBtn.dataset.iAria = m === "dark" ? "to-light" : "to-dark";
     themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
     $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
