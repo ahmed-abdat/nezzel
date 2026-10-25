@@ -1,5 +1,7 @@
 package dev.ahmed.savlino.ui.theme
 
+import androidx.compose.ui.graphics.Color
+
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
@@ -21,6 +23,13 @@ object Motion {
     val TabFadeOut: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 3800f)
     val TabFadeIn: FiniteAnimationSpec<Float> = DelayedSpec(spring(dampingRatio = 1f, stiffness = 1600f), 60)
     val TabScale: FiniteAnimationSpec<Float> = spring(dampingRatio = .9f, stiffness = 700f)
+    /** Spatial: the tab bar's raised pill settles in about 300 ms with a small overshoot. */
+    val TabIndicator: FiniteAnimationSpec<Float> = spring(dampingRatio = .7f, stiffness = 800f)
+    /** Effects: icon fill and label colour, no overshoot. */
+    val TabIconFill: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 1600f)
+    val TabLabelColor: FiniteAnimationSpec<Color> = spring(dampingRatio = 1f, stiffness = 1600f)
+    /** Press feedback on the primary action. */
+    val Press: FiniteAnimationSpec<Float> = spring(dampingRatio = .6f, stiffness = 1200f)
     const val FADE_OUT = 90
     const val FADE_IN = 180
     const val STATE = 200

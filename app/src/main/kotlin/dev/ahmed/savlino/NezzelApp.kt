@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.ThemePref
@@ -309,9 +310,8 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
+internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
                        onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit,
                        onRemove: (String) -> Unit, onRetry: (String) -> Unit,
                        onCancel: (String) -> Unit, onPause: (String) -> Unit, onResume: (String) -> Unit) {
@@ -322,6 +322,8 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
         links.hasSuggestion && links.destination == "Home" && links.optionsState == dev.ahmed.savlino.ui.OptionsState.Hidden &&
             !links.hasPendingNotificationChoice
     }
+    // First run: nothing saved or running yet, so the page says what Nezzel is for.
+    val firstRun = jobs.isEmpty() && library.media.isEmpty()
     Scaffold(snackbarHost = {
         if (links.invalidShare) {
             Snackbar(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, action = {
@@ -329,59 +331,91 @@ private fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libra
             }) { Text(stringResource(R.string.invalid_link)) }
         }
     }) { insets ->
-        BoxWithConstraints(Modifier.fillMaxSize().padding(insets).imePadding(), contentAlignment = Alignment.TopCenter) {
-            // Short content leaves the privacy line and studio credit at the bottom; long content scrolls them along.
-            Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(scroll).heightIn(min = maxHeight)
-                .padding(start = Space.l, end = Space.l, top = Space.l, bottom = Space.xl), verticalArrangement = Arrangement.SpaceBetween) {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.xl)) {
-                // Title and subtitle are one section child, so the pair sits 4dp apart and 24dp above the field.
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    // The mark beside the name, as in Settings' app card (owner 2026-10-21: "only the name without the logo").
-                    Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                        dev.ahmed.savlino.ui.NezzelMark(Modifier.size(36.dp))
-                        Text(stringResource(R.string.app_name), Modifier.semantics { heading() },
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+        Column(Modifier.fillMaxSize().padding(insets).imePadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+            BoxWithConstraints(Modifier.weight(1f).widthIn(max = 720.dp).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                // Short content keeps the first-run words just above the dock; long content scrolls.
+                val heroHeight = (maxHeight * .5f).coerceIn(200.dp, 440.dp)
+                Column(Modifier.fillMaxWidth().verticalScroll(scroll).heightIn(min = maxHeight).padding(bottom = Space.l),
+                    verticalArrangement = Arrangement.SpaceBetween) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                        HomeBrand()
+                        HomeNotes(links, jobs, language, firstRun, onAllowNotifications)
+                        if (firstRun) {
+                            // The sites Nezzel saves from, around the mark; decorative, so TalkBack skips it.
+                            dev.ahmed.savlino.update.UpdateHero(compact = false, top = 0.dp,
+                                Modifier.fillMaxWidth().height(heroHeight))
+                        } else {
+                            Box(Modifier.padding(horizontal = Space.l)) {
+                                DownloadStrip(jobs, language, onCancel, onRemove, onRetry, onPause, onResume) { links.navigate("Downloads") }
+                            }
+                            HomeRecents(library.media, language, library.open) { links.navigate("Downloads") }
+                        }
+                        Box(Modifier.padding(horizontal = Space.l)) { LibraryLoadStatus(library.load, library.onRetry) }
+                        if (links.engineUnavailable) Box(Modifier.padding(horizontal = Space.l)) { EngineUnavailableNote() }
                     }
-                    // First run: nothing saved or running yet, so say what this place is for.
-                    if (jobs.isEmpty() && library.media.isEmpty() && links.text.isEmpty())
-                        Text(stringResource(R.string.home_subtitle), style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (firstRun) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
+                    else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
                 }
-                val updater = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates
-                if (updater?.available == true) {
-                    val update by updater.state.collectAsState()
-                    if (update.card(BuildConfig.VERSION_CODE.toLong())) update.release?.let { release ->
-                        UpdateCard(release, language, { links.navigate("AppUpdate") }, updater::dismiss)
-                    }
-                }
-                links.downloads?.let { downloads ->
-                    val coordinatorError by downloads.error.collectAsState()
-                    if (coordinatorError != null) {
-                        Text(stringResource(R.string.download_coordinator_error), color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    }
-                }
-                if (links.hasPendingShare) PendingShareNote(links.pendingShareHost, links::acceptShare, links::dismissShare)
-                links.nextLinkHost?.let { host ->
-                    NextLinkNote(host, links.nextLinkNumber, links.linkQueueTotal, language, links::openNextLink, links::skipRemainingLinks)
-                }
-                HomeLinkCard(links, copiedHost, onAccept, onDismiss, onPaste)
-                DownloadStrip(jobs, language, onCancel, onRemove, onRetry, onPause, onResume) { links.navigate("Downloads") }
-                if(runningCount(jobs) > 0 && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                        Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = onAllowNotifications, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.allow_notifications)) }
-                    }
-                }
-                LibraryLoadStatus(library.load, library.onRetry)
-                RecentFiles(library.media, language, library.open) { links.navigate("Downloads") }
-                if (links.engineUnavailable) EngineUnavailableNote()
             }
-            dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(top = Space.xl))
+            Box(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.xs)) {
+                HomeLinkCard(links, copiedHost, onAccept, onDismiss, onPaste)
             }
         }
     }
 }
 
+/** The mark beside the name, as in Settings' app card (owner 2026-10-21: "only the name without the logo"). */
+@Composable
+private fun HomeBrand() {
+    Row(Modifier.padding(start = Space.l, end = Space.l, top = Space.s).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        dev.ahmed.savlino.ui.NezzelMark(Modifier.size(36.dp))
+        Text(stringResource(R.string.app_name), Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+    }
+}
+
+/** Update card, errors, a pending share or the next queued link: whatever needs the person comes first. */
+@Composable
+private fun HomeNotes(links: LinkViewModel, jobs: List<DownloadProgress>, language: String, firstRun: Boolean, onAllowNotifications: () -> Unit) {
+    Column(Modifier.padding(horizontal = Space.l), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+        val updater = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates
+        if (updater?.available == true) {
+            val update by updater.state.collectAsState()
+            if (update.card(BuildConfig.VERSION_CODE.toLong())) update.release?.let { release ->
+                UpdateCard(release, language, { links.navigate("AppUpdate") }, updater::dismiss)
+            }
+        }
+        links.downloads?.let { downloads ->
+            val coordinatorError by downloads.error.collectAsState()
+            if (coordinatorError != null) {
+                Text(stringResource(R.string.download_coordinator_error), color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+        }
+        if (links.hasPendingShare) PendingShareNote(links.pendingShareHost, links::acceptShare, links::dismissShare)
+        links.nextLinkHost?.let { host ->
+            NextLinkNote(host, links.nextLinkNumber, links.linkQueueTotal, language, links::openNextLink, links::skipRemainingLinks)
+        }
+        if (!firstRun && runningCount(jobs) > 0 && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onAllowNotifications, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.allow_notifications)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FirstRunWords(modifier: Modifier = Modifier) {
+    val arabic = LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Text(stringResource(R.string.home_hero_title), Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                fontSize = 30.sp, lineHeight = if (arabic) 44.sp else 36.sp))
+        Text(stringResource(R.string.home_hero_line), style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.home_hero_sites), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
