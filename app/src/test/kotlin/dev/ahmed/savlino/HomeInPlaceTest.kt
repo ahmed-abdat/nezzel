@@ -158,6 +158,27 @@ class HomeInPlaceTest {
         }
     }
 
+    @Test fun theJobCardStaysUntilTheFilesPictureIsReady() {
+        val picture = kotlinx.coroutines.CompletableDeferred<android.graphics.Bitmap>()
+        val pictures = dev.ahmed.savlino.viewer.MediaPictures { uri, _, _ ->
+            if (uri == landed.uri) picture.await() else android.graphics.Bitmap.createBitmap(32, 20, android.graphics.Bitmap.Config.ARGB_8888)
+        }
+        var jobs by mutableStateOf(listOf(running))
+        var media by mutableStateOf(library)
+        show { CompositionLocalProvider(dev.ahmed.savlino.ui.LocalThumbnailCache provides dev.ahmed.savlino.ui.ThumbnailCache(8_000_000),
+            dev.ahmed.savlino.viewer.LocalMediaPictures provides pictures) {
+            NezzelTheme(ThemePref.Light, false) { HomeRecents(media, "en", {}, { jobs }) {} }
+        } }.use {
+            compose.runOnIdle { jobs = listOf(finished); media = listOf(landed) + library }
+            compose.waitForIdle()
+            // Listed, but its picture is still decoding: the saved job card stays, no empty box.
+            compose.onNodeWithTag("home-job-saved", useUnmergedTree = true).assertExists()
+            compose.runOnIdle { picture.complete(android.graphics.Bitmap.createBitmap(32, 20, android.graphics.Bitmap.Config.ARGB_8888)) }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("home-job-saved", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+            compose.onNode(hasText("Caminandes", substring = true) and hasText("1080p", substring = true) and hasClickAction()).assertExists()
+        }
+    }
+
     @Test fun aJobCardIsAsTallAsAFileCardAtLargeText() {
         for (scale in listOf(1f, 2f)) {
             show { CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, scale)) {

@@ -75,6 +75,7 @@ import dev.ahmed.savlino.ui.theme.isLargeText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
 /**
@@ -720,18 +721,25 @@ private val SavedMedia.thumbnailKind get() = when (kind) { SavedMediaKind.VIDEO 
 /** Row and card artwork edge in pixels; Home recents and the Downloads list share these cache entries. */
 private const val THUMB_PX = 320
 
+/** Loads a saved file's list artwork; audio gives its embedded cover, or null when it has none. */
 @Composable
-fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
+private fun rememberThumbnailLoader(): suspend (SavedMedia) -> android.graphics.Bitmap? {
     val context = LocalContext.current
     val pictures = LocalMediaPictures.current
-    val bitmap = rememberCachedThumbnail(ThumbnailCache.key(item.uri, THUMB_PX)) {
-        // Audio shows its embedded cover; the music icon stays only when the file has none.
+    return remember(context, pictures) { { item ->
         when {
             item.kind == null -> null
             pictures != null -> pictures.load(item.uri, item.thumbnailKind, THUMB_PX)
             else -> withContext(Dispatchers.IO) { dev.ahmed.savlino.ui.loadMediaThumbnail(context, item.uri, item.thumbnailKind, THUMB_PX, 180) }
         }
-    }
+    } }
+}
+
+@Composable
+fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
+    val load = rememberThumbnailLoader()
+    // Audio shows its embedded cover; the music icon stays only when the file has none.
+    val bitmap = rememberCachedThumbnail(ThumbnailCache.key(item.uri, THUMB_PX)) { load(item) }
     Surface(modifier.clip(shape), color = if (item.kind == SavedMediaKind.AUDIO) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
             val loaded = bitmap
@@ -836,6 +844,8 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     // A new card (a download, or a file landing) comes in at the start, and LazyRow keeps the old first card anchored.
     // If the row was at its start, show the new one. Scroll state is read only when the first key changes.
     val rowState = rememberLazyListState()
+    val thumbs = dev.ahmed.savlino.ui.rememberThumbnailCache()
+    val loadThumb = rememberThumbnailLoader()
     val firstKey = slots.first().key
     val shownFirst = remember { arrayOf(firstKey) }
     if (shownFirst[0] != firstKey) {
@@ -854,9 +864,17 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                     // One call site for a job's key, so its card fades into its file's card in place when the file lists.
                     val file = (slot as? FileSlot)?.item
                     val lastFile = remember { arrayOfNulls<SavedMedia>(1) }.also { if (file != null) it[0] = file }
-                    Crossfade(file != null, motion, easeOut(reduced, 300), label = "landed") { landed ->
+                    // The job card stays until the file's picture is decoded, so the fade never lands on an empty box.
+                    val jobId = slot.key.removePrefix("job:")
+                    val ready = remember { mutableStateOf(file != null && (thumbs[ThumbnailCache.key(file.uri, THUMB_PX)] != null || jobs().none { it.jobId == jobId })) }
+                    LaunchedEffect(file?.uri) {
+                        if (file == null || ready.value) return@LaunchedEffect
+                        withTimeoutOrNull(PICTURE_WAIT_MS) { thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX)) { loadThumb(file) } }
+                        ready.value = true
+                    }
+                    Crossfade(file != null && ready.value, motion, easeOut(reduced, 300), label = "landed") { landed ->
                         val shown = if (landed) file ?: lastFile[0] else null
-                        if (shown != null) RecentCard(shown, language, onOpen) else JobSlotCard(slot.key.removePrefix("job:"), jobs, onJob)
+                        if (shown != null) RecentCard(shown, language, onOpen) else JobSlotCard(jobId, jobs, onJob)
                     }
                 } else RecentCard((slot as FileSlot).item, language, onOpen, motion)
             }
@@ -908,6 +926,8 @@ private const val RECENT_ROW = 8
 /** How long a finished job waits for its file to list before it gives its slot up. */
 private const val LANDING_MS = 10_000L
 private const val EARLIER_ROWS = 3
+/** How long a landed job waits for its file's picture before it fades to the file card anyway. */
+private const val PICTURE_WAIT_MS = 1_500L
 
 /**
  * A small top app bar that grows with its title: the fixed 64dp TopAppBar clips an Arabic headline
