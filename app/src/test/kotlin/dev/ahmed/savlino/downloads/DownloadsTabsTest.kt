@@ -160,6 +160,9 @@ class DownloadsTabsTest {
             pass(BATCH_DWELL + 1000)
             compose.onNodeWithTag("playlist_batch_list").assertDoesNotExist()
             compose.onNodeWithTag("playlist_batch_bad").assertExists()
+            // Retry lives in the playlist's sheet now; the row opens it.
+            compose.onNodeWithTag("playlist_retry").assertDoesNotExist()
+            compose.onNodeWithTag("playlist_header").performClick(); compose.waitForIdle()
             compose.onNodeWithTag("playlist_retry").assertExists()
         }
     }

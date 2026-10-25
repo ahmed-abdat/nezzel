@@ -561,7 +561,8 @@
     <string name="playlist_stop_confirm">Stop this playlist? Saved videos stay.</string>
     <string name="playlist_done">Done: %1$s saved, %2$s couldn\'t be saved</string>
     <string name="playlist_show_videos">Show videos</string>
-    <string name="playlist_hide_videos">Hide videos</string>
+    <string name="playlist_failed_heading">Not saved</string>
+    <string name="playlist_other_videos">Other videos</string>
     <string name="playlist_item_waiting">Waiting</string>
     <string name="playlist_item_skipped">Skipped</string>
     <string name="playlist_notification_progress">Playlist: %1$s of %2$s saved</string>

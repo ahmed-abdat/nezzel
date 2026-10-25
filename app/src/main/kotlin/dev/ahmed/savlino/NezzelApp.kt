@@ -122,6 +122,8 @@ fun NezzelApp(
         app?.playlistBatches ?: kotlinx.coroutines.flow.flowOf(emptyList())
     }.collectAsState(initial = emptyList())
     var playlistBusy by remember { mutableStateOf(emptySet<String>()) }
+    // A Home card of a playlist video opens Downloads at that playlist's sheet (Downloads finds the batch, then clears it).
+    var playlistJob by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val playlistAction: (String, dev.ahmed.savlino.downloads.PlaylistBatchAction) -> Unit = { id, action ->
         if (id !in playlistBusy) {
             playlistBusy = playlistBusy + id
@@ -291,8 +293,12 @@ fun NezzelApp(
                             canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy,
                             playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
-                            openSavedUri = openSavedUri, onSavedOpened = onSavedOpened)
-                        else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications)
+                            openSavedUri = openSavedUri, onSavedOpened = onSavedOpened,
+                            openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null })
+                        else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications) { id ->
+                            playlistJob = id
+                            links.navigate("Downloads")
+                        }
                     } }
                 }
             }
@@ -328,7 +334,8 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
 
 @Composable
 internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
-                       onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit) {
+                       onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit,
+                       onJob: (jobId: String) -> Unit = { links.navigate("Downloads") }) {
     val scroll = rememberScrollState()
     ScrollOnTabReselect { scroll.scrollTo(0) }
     // The copied link is offered inline only while nothing else is in front of the person.
@@ -379,7 +386,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                                     Modifier.fillMaxWidth().height(heroHeight))
                             } else {
                                 // A download is the row's first card, where its file will land: nothing above or below moves.
-                                HomeRecents(library.media, language, library.open, homeJobs, { links.navigate("Downloads") },
+                                HomeRecents(library.media, language, library.open, homeJobs, onJob,
                                     library.share, library.openWith) {
                                     links.navigate("Downloads")
                                 }

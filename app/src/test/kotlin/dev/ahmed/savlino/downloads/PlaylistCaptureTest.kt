@@ -87,8 +87,8 @@ class PlaylistCaptureTest {
                                     "options" -> OptionsScreen(links, language, links::dismissOptions)
                                     "sheet" -> PlaylistSheet(playlist, language, playlist::close)
                                     else -> Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                        PlaylistBatchCard(playlistFixture(if (kind == "failures") BatchState.COMPLETED else BatchState.ACTIVE,
-                                            failed = kind == "failures"), language, {})
+                                        PlaylistBatchRow(playlistFixture(if (kind == "failures") BatchState.COMPLETED else BatchState.ACTIVE,
+                                            failed = kind == "failures"), language, {}, {})
                                     }
                                 }
                             }

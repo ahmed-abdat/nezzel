@@ -573,7 +573,8 @@
     <string name="playlist_stop_confirm">Arrêter cette playlist\u00A0? Les vidéos enregistrées restent.</string>
     <string name="playlist_done">Terminé\u00A0: %1$s enregistrées, %2$s n’ont pas pu être enregistrées</string>
     <string name="playlist_show_videos">Afficher les vidéos</string>
-    <string name="playlist_hide_videos">Masquer les vidéos</string>
+    <string name="playlist_failed_heading">Non enregistrées</string>
+    <string name="playlist_other_videos">Autres vidéos</string>
     <string name="playlist_item_waiting">À venir</string>
     <string name="playlist_item_skipped">Ignorée</string>
     <string name="playlist_notification_progress">Playlist\u00A0: %1$s sur %2$s enregistrées</string>

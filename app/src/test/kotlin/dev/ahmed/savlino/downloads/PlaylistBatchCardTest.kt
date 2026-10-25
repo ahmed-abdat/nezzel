@@ -2,7 +2,17 @@ package dev.ahmed.savlino.downloads
 
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.jobs.*
@@ -37,25 +47,119 @@ internal fun playlistMixedFixture(state: BatchState = BatchState.ACTIVE) = Playl
 internal val playlistMixedJobs = listOf(DownloadProgress("job-c", "harbour.mp4", DownloadPhase.DOWNLOADING),
     DownloadProgress("job-d", "dusk.mp4", DownloadPhase.PREPARING, waiting = true))
 
+/** [n] videos, item i failed when [failedAt] says so; the rest saved or waiting. */
+internal fun longPlaylist(n: Int, state: BatchState = BatchState.ACTIVE, title: String = "Coastal walks",
+    failedAt: (Int) -> Boolean = { false }) = PlaylistBatch(BatchRecord("long", title, Preset.BALANCED, state, 0, null),
+    (0 until n).map { i -> when {
+        failedAt(i) -> BatchItemRecord("long", i, "i$i", "Video number $i", BatchItemState.FAILED, "job-$i", DownloadError.Network, true, false)
+        i < n / 3 -> BatchItemRecord("long", i, "i$i", "Video number $i", BatchItemState.DONE, "job-$i", null, false, false)
+        else -> BatchItemRecord("long", i, "i$i", "Video number $i", BatchItemState.WAITING, "job-$i", null, false, false)
+    } })
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], qualifiers = "en-w384dp-h1600dp-mdpi")
 class PlaylistBatchCardTest {
     @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     private val context get() = RuntimeEnvironment.getApplication()
-    private fun render(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, language: String = "en",
-        jobs: List<DownloadProgress> = emptyList(), check: () -> Unit) {
+    private fun host(rtl: Boolean = false, dark: Boolean = false, fontScale: Float = 1f, content: @Composable () -> Unit, check: () -> Unit) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
-            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { PlaylistBatchCard(batch, language, action, jobs = jobs) } }
+            controller.get().setContent {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                    LocalDensity provides Density(density.density, fontScale)) {
+                    NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) { content() }
+                }
+            }
             compose.waitForIdle(); check()
         } finally { controller.pause().stop().destroy() }
     }
-    @Test fun runningPauseAndStopRequireTheRightActions() {
+    private fun row(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, onOpen: () -> Unit = {}, language: String = "en",
+        check: () -> Unit) = host(rtl = language == "ar", content = { PlaylistBatchRow(batch, language, action, onOpen) }, check = check)
+    private fun sheet(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, language: String = "en", jobs: List<DownloadProgress> = emptyList(),
+        focus: String? = null, dark: Boolean = false, fontScale: Float = 1f, check: () -> Unit) =
+        host(language == "ar", dark, fontScale, { Box(Modifier.fillMaxSize()) { PlaylistVideosContent(batch, jobs, language, action, focusJob = focus) } }, check)
+    private fun word(position: Int, text: String) =
+        compose.onNodeWithTag("playlist_item_$position").assert(hasText(text, substring = true))
+    private val density get() = context.resources.displayMetrics.density
+    private fun SemanticsNodeInteraction.heightDp() = fetchSemanticsNode().boundsInRoot.height / density
+
+    // The row: flat, opens the sheet, keeps only Pause/Resume.
+
+    @Test fun rowPausesAndOpensButHasNoMenuOrInlineList() {
         val sent = mutableListOf<PlaylistBatchAction>()
-        render(playlistFixture(), sent::add) {
+        var opened = 0
+        row(playlistMixedFixture(), sent::add, { opened++ }) {
+            compose.onNodeWithTag("playlist_pause").performClick()
+            assertEquals(listOf(PlaylistBatchAction.PAUSE), sent); assertEquals(0, opened)
+            compose.onNodeWithTag("playlist_more").assertDoesNotExist()
+            compose.onNodeWithTag("playlist_stop").assertDoesNotExist()
+            compose.onNodeWithText("Morning by the sea", substring = true).assertDoesNotExist()
+            compose.onNodeWithTag("playlist_header").assert(SemanticsMatcher("opens the videos") {
+                it.config.getOrNull(SemanticsActions.OnClick)?.label == context.getString(R.string.playlist_show_videos)
+            }).performClick()
+            assertEquals(1, opened)
+            assertTrue(compose.onNodeWithTag("playlist_pause").heightDp() >= 48f)
+        }
+    }
+    @Test fun pausedRowCanResume() {
+        var sent: PlaylistBatchAction? = null
+        row(playlistFixture(BatchState.PAUSED), { sent = it }) {
+            compose.onNodeWithText(context.getString(R.string.download_paused), substring = true).assertExists()
+            compose.onNodeWithTag("playlist_resume").performClick(); assertEquals(PlaylistBatchAction.RESUME, sent)
+        }
+    }
+    @Test fun waitingNetworkIsExplicit() = row(playlistFixture(BatchState.WAITING_NETWORK)) {
+        compose.onNodeWithText(context.getString(R.string.playlist_waiting_network), substring = true).assertExists()
+        compose.onNodeWithTag("playlist_resume").assertExists()
+    }
+    @Test fun slowedDownIsExplicit() = row(playlistFixture(BatchState.PAUSED, DownloadError.SourceRefused)) {
+        compose.onNodeWithText(context.getString(R.string.playlist_slowed), substring = true).assertExists()
+    }
+    @Test fun finishedRowShowsOnlyTheResult() = row(playlistFixture(BatchState.COMPLETED)) {
+        compose.onNodeWithText("Saved 2").assertExists()
+        compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_retry").assertDoesNotExist()
+    }
+    @Test @Config(qualifiers = "ar-w384dp-h1600dp-mdpi") fun arabicRowPointsItsChevronToTheEnd() = row(playlistMixedFixture(), language = "ar") {
+        compose.onNodeWithText(context.getString(R.string.dl_batch_saved_of, "2", "8"), substring = true).assertExists()
+        // RTL: the end side is the left, so the chevron sits left of the title.
+        val chevron = compose.onNodeWithTag("playlist_chevron", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("Coastal walks", substring = true, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(chevron.right <= title.left)
+    }
+
+    // The sheet: one lazy list, failed first, actions in the header.
+
+    @Test fun sheetListsFailedFirstThenTheRestInOrder() = sheet(playlistMixedFixture(), jobs = playlistMixedJobs) {
+        compose.onNodeWithText(context.getString(R.string.playlist_failed_heading)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.playlist_other_videos)).assertExists()
+        val top = { p: Int -> compose.onNodeWithTag("playlist_item_$p").fetchSemanticsNode().boundsInRoot.top }
+        assertTrue(top(6) < top(0)); assertTrue(top(0) < top(2)); assertTrue(top(2) < top(5))
+        word(0, context.getString(R.string.download_saved)); word(0, "Morning by the sea")
+        word(2, context.getString(R.string.download_transferring))
+        word(3, context.getString(R.string.download_waiting))
+        word(4, context.getString(R.string.playlist_item_waiting))
+        word(6, context.getString(R.string.download_network_error)); word(6, "Fishing boats at dawn")
+        // A blank title falls back to its real place in the list; the skip says why.
+        compose.onNodeWithTag("playlist_sheet_list").performScrollToKey("video-7")
+        word(7, context.getString(R.string.viewer_video_n, "8", "8")); word(7, context.getString(R.string.video_gone_title))
+        assertTrue(compose.onNodeWithTag("playlist_item_0").heightDp() >= 56f)
+    }
+    @Test fun withoutJobInfoAQueuedVideoSaysQueuedNotDownloading() = sheet(playlistMixedFixture()) {
+        word(2, context.getString(R.string.download_waiting))
+        compose.onNodeWithText(context.getString(R.string.download_transferring)).assertDoesNotExist()
+    }
+    @Test fun noFailuresNoHeadings() = sheet(playlistFixture()) {
+        compose.onNodeWithText(context.getString(R.string.playlist_failed_heading)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.playlist_other_videos)).assertDoesNotExist()
+        compose.onNodeWithTag("playlist_retry").assertDoesNotExist()
+    }
+    @Test fun sheetPauseAndStopRequireTheRightActions() {
+        val sent = mutableListOf<PlaylistBatchAction>()
+        sheet(playlistFixture(), sent::add) {
             compose.onNodeWithTag("playlist_pause").performClick()
             assertEquals(listOf(PlaylistBatchAction.PAUSE), sent)
-            compose.onNodeWithTag("playlist_more").performClick()
             compose.onNodeWithTag("playlist_stop").performClick()
             assertEquals(1, sent.size)
             compose.onNodeWithText(context.getString(R.string.playlist_stop_confirm)).assertExists()
@@ -63,97 +167,103 @@ class PlaylistBatchCardTest {
             assertEquals(PlaylistBatchAction.STOP, sent.last())
         }
     }
-    @Test fun pausedCanResume() {
+    @Test fun terminalSheetOffersOnlyRetry() {
         var sent: PlaylistBatchAction? = null
-        render(playlistFixture(BatchState.PAUSED), { sent = it }) {
-            compose.onNodeWithText(context.getString(R.string.download_paused), substring = true).assertExists()
-            compose.onNodeWithTag("playlist_resume").performClick(); assertEquals(PlaylistBatchAction.RESUME, sent)
-        }
-    }
-    @Test fun waitingNetworkIsExplicit() = render(playlistFixture(BatchState.WAITING_NETWORK)) {
-        compose.onNodeWithText(context.getString(R.string.playlist_waiting_network), substring = true).assertExists()
-        compose.onNodeWithTag("playlist_resume").assertExists()
-    }
-    @Test fun slowedDownIsExplicit() = render(playlistFixture(BatchState.PAUSED, DownloadError.SourceRefused)) {
-        compose.onNodeWithText(context.getString(R.string.playlist_slowed), substring = true).assertExists()
-    }
-    @Test fun doneListsFailuresAndRetryWiresThrough() {
-        var sent: PlaylistBatchAction? = null
-        render(playlistFixture(BatchState.COMPLETED, failed = true), { sent = it }) {
+        sheet(playlistFixture(BatchState.COMPLETED, failed = true), { sent = it }) {
             compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
-            compose.onNodeWithTag("playlist_more").assertDoesNotExist()
-            compose.onNodeWithText("A quiet afternoon", substring = true).assertDoesNotExist()
-            compose.onNodeWithTag("playlist_header").performClick()
-            compose.onNodeWithText("A quiet afternoon", substring = true).assertExists()
-            compose.onNodeWithText(context.getString(R.string.download_network_error)).assertExists()
-            compose.onNodeWithTag("playlist_retry").performClick(); assertEquals(PlaylistBatchAction.RETRY, sent)
+            compose.onNodeWithTag("playlist_resume").assertDoesNotExist()
+            compose.onNodeWithTag("playlist_stop").assertDoesNotExist()
+            word(1, context.getString(R.string.download_network_error))
+            compose.onNodeWithTag("playlist_retry").assert(hasText(context.getString(R.string.playlist_retry, "1"))).performClick()
+            assertEquals(PlaylistBatchAction.RETRY, sent)
         }
     }
-    @Test fun cleanFinishShowsOnlyTheSavedCount() = render(playlistFixture(BatchState.COMPLETED)) {
-        compose.onNodeWithText("Saved 2").assertExists()
-        compose.onNodeWithTag("playlist_more").assertDoesNotExist()
+    @Test fun stoppedSheetHasNoButtons() = sheet(playlistFixture(BatchState.STOPPED, failed = true)) {
+        listOf("playlist_pause", "playlist_resume", "playlist_stop", "playlist_retry").forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
     }
-    private fun word(position: Int, text: String) =
-        compose.onNodeWithTag("playlist_item_$position").assert(hasText(text, substring = true))
-
-    @Test fun tappingTheHeaderListsEveryVideoWithItsStateAndTappingAgainHidesThem() =
-        render(playlistMixedFixture(), jobs = playlistMixedJobs) {
-            compose.onNodeWithTag("playlist_items").assertDoesNotExist()
-            compose.onNodeWithTag("playlist_expand").assertContentDescriptionEquals(context.getString(R.string.playlist_show_videos))
-            compose.onNodeWithTag("playlist_header").performClick()
-            compose.onNodeWithTag("playlist_items").assertExists()
-            word(0, context.getString(R.string.download_saved)); word(0, "Morning by the sea")
-            word(2, context.getString(R.string.download_transferring))
-            word(3, context.getString(R.string.download_waiting))
-            word(4, context.getString(R.string.playlist_item_waiting))
-            word(6, context.getString(R.string.download_network_error)); word(6, "Fishing boats at dawn")
-            // A blank title falls back to its real place in the list; the skip says why.
-            word(7, context.getString(R.string.viewer_video_n, "8", "8")); word(7, context.getString(R.string.video_gone_title))
-            compose.onNodeWithTag("playlist_expand").assertContentDescriptionEquals(context.getString(R.string.playlist_hide_videos))
-            compose.onNodeWithTag("playlist_expand").performClick()
-            compose.onNodeWithTag("playlist_items").assertDoesNotExist()
+    @Test fun allFailedHasNoOtherVideosHeading() = sheet(longPlaylist(5, BatchState.COMPLETED) { true }) {
+        compose.onNodeWithText(context.getString(R.string.playlist_failed_heading)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.playlist_other_videos)).assertDoesNotExist()
+        compose.onNodeWithTag("playlist_retry").assert(hasText(context.getString(R.string.playlist_retry, "5")))
+        (0 until 5).forEach { word(it, context.getString(R.string.download_network_error)) }
+    }
+    @Test fun fiveHundredVideosComposeLazily() = sheet(longPlaylist(500) { it == 250 }) {
+        compose.onNodeWithTag("playlist_item_250").assertExists()
+        compose.onNodeWithTag("playlist_item_499").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_sheet_list").performScrollToKey("video-499")
+        word(499, "Video number 499")
+        compose.onNodeWithTag("playlist_item_0").assertDoesNotExist()
+    }
+    @Test fun focusedVideoScrollsIntoView() = sheet(longPlaylist(500), focus = "job-420") {
+        compose.onNodeWithTag("playlist_item_420").assertIsDisplayed()
+        compose.onNodeWithTag("playlist_item_0").assertDoesNotExist()
+    }
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE) fun veryLongTitleStopsAtTwoLines() = sheet(longPlaylist(3, title = "A very long playlist title ".repeat(12))) {
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("playlist_sheet_title").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(2, layouts.single().lineCount)
+        assertTrue(layouts.single().hasVisualOverflow)
+    }
+    @Test fun largeTextKeepsEveryActionAtFullSize() = sheet(playlistMixedFixture(), fontScale = 1.5f, dark = true) {
+        listOf("playlist_pause", "playlist_stop", "playlist_retry").forEach {
+            compose.onNodeWithTag(it).assertIsDisplayed(); assertTrue(compose.onNodeWithTag(it).heightDp() >= 48f)
         }
-
-    @Test fun withoutJobInfoAQueuedVideoSaysQueuedNotDownloading() = render(playlistMixedFixture()) {
-        compose.onNodeWithTag("playlist_header").performClick()
-        word(2, context.getString(R.string.download_waiting))
-        compose.onNodeWithText(context.getString(R.string.download_transferring)).assertDoesNotExist()
+        word(6, "Fishing boats at dawn")
     }
-
-    @Test fun headerButtonsStillActWithoutOpeningTheList() {
-        val sent = mutableListOf<PlaylistBatchAction>()
-        render(playlistMixedFixture(), sent::add) {
-            compose.onNodeWithTag("playlist_pause").performClick()
-            assertEquals(listOf(PlaylistBatchAction.PAUSE), sent)
-            compose.onNodeWithTag("playlist_items").assertDoesNotExist()
-        }
-    }
-
-    @Test @Config(qualifiers = "ar-w384dp-h1600dp-mdpi") fun arabicListUsesArabicWords() =
-        render(playlistMixedFixture(), language = "ar", jobs = playlistMixedJobs) {
+    @Test @Config(qualifiers = "ar-w384dp-h1600dp-mdpi") fun arabicSheetUsesArabicWords() =
+        sheet(playlistMixedFixture(), language = "ar", jobs = playlistMixedJobs) {
             assertEquals("في الانتظار", context.getString(R.string.playlist_item_waiting))
-            compose.onNodeWithContentDescription(context.getString(R.string.playlist_show_videos)).performClick()
+            compose.onNodeWithText("لم تُحفظ").assertExists()
+            compose.onNodeWithText("باقي الفيديوهات").assertExists()
             word(0, context.getString(R.string.download_saved))
             word(4, "في الانتظار")
             word(6, context.getString(R.string.download_network_error))
+            compose.onNodeWithTag("playlist_sheet_list").performScrollToKey("video-7")
             word(7, context.getString(R.string.viewer_video_n, "8", "8"))
         }
 
-    @Test fun runningMembersShowUnderTheHeaderAndQueuedOnesDoNot() {
-        val batch = playlistFixture()
-        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
-        try {
-            controller.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                DownloadsScreen(listOf(DownloadProgress("job-b", "Running member.mp4", DownloadPhase.DOWNLOADING),
-                    DownloadProgress("job-c", "Other member.mp4", DownloadPhase.PREPARING, waiting = true)), "en",
-                    {}, {}, {}, {}, {}, null, {}, {}, playlists = listOf(batch))
-            } }
+    // Downloads: the row opens the real sheet; members still show; a Home card lands on its video.
+
+    private fun downloads(batches: List<PlaylistBatch>, jobs: List<DownloadProgress>, openJob: String? = null, opened: () -> Unit = {}, check: () -> Unit) =
+        host(content = { DownloadsScreen(jobs, "en", {}, {}, {}, {}, {}, null, {}, {}, playlists = batches,
+            openPlaylistJob = openJob, onPlaylistJobOpened = opened) }, check = check)
+
+    @Test fun runningMembersShowUnderTheRowAndQueuedOnesDoNot() = downloads(listOf(playlistFixture()),
+        listOf(DownloadProgress("job-b", "Running member.mp4", DownloadPhase.DOWNLOADING),
+            DownloadProgress("job-c", "Other member.mp4", DownloadPhase.PREPARING, waiting = true))) {
+        compose.onNodeWithTag("tab_running").assertExists()
+        compose.onNodeWithTag("playlist_batch_list").assertExists()
+        // JobRow isolates the confirmed filename for RTL; the semantic text includes those marks.
+        compose.onNodeWithText("Running member.mp4", substring = true).assertExists()
+        compose.onNodeWithTag("playlist_sheet_list").assertDoesNotExist()
+    }
+    @Test fun tappingTheRowOpensTheSheet() = downloads(listOf(playlistMixedFixture()), playlistMixedJobs) {
+        compose.onNodeWithTag("playlist_header").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("playlist_sheet_list").assertExists()
+        word(6, context.getString(R.string.download_network_error))
+    }
+    @Test fun aHomeCardOfAFailedPlaylistVideoOpensItsSheetAtThatVideo() {
+        var consumed = 0
+        downloads(listOf(playlistMixedFixture(BatchState.COMPLETED)), emptyList(), openJob = "job-g", opened = { consumed++ }) {
             compose.waitForIdle()
-            compose.onNodeWithTag("tab_running").assertExists()
-            compose.onNodeWithTag("playlist_batch_list").assertExists()
-            // JobRow isolates the confirmed filename for RTL; the semantic text includes those marks.
-            compose.onNodeWithText("Running member.mp4", substring = true).assertExists()
-            compose.onNodeWithText("Show videos").assertDoesNotExist()
-        } finally { controller.pause().stop().destroy() }
+            assertEquals(1, consumed)
+            compose.onNodeWithTag("playlist_sheet_list").assertExists()
+            word(6, "Fishing boats at dawn"); word(6, context.getString(R.string.download_network_error))
+        }
+    }
+    @Test fun aHomeCardOfAStandaloneJobOpensNoSheet() {
+        var consumed = 0
+        downloads(listOf(playlistMixedFixture()), emptyList(), openJob = "elsewhere", opened = { consumed++ }) {
+            assertEquals(1, consumed)
+            compose.onNodeWithTag("playlist_sheet_list").assertDoesNotExist()
+        }
+    }
+    @Test fun homeJobCardHandsItsJobIdOver() {
+        val tapped = mutableListOf<String>()
+        host(content = { HomeRecents(emptyList(), "en", {}, { listOf(DownloadProgress("job-g", "Fishing boats.mp4", DownloadPhase.FAILED,
+            error = DownloadError.Network)) }, { tapped += it }) {} }) {
+            compose.onNodeWithText("Fishing boats", substring = true).performClick()
+            assertEquals(listOf("job-g"), tapped)
+        }
     }
 }

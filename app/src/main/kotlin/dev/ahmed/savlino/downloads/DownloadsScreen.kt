@@ -132,6 +132,8 @@ fun DownloadsScreen(
     /** Null: the real offer (tests and captures pass their own). */
     oldDownloads: OldDownloadsOffer? = null,
     openSavedUri: String? = null, onSavedOpened: () -> Unit = {},
+    /** A playlist video's job id (a Home card): opens that playlist's sheet at the video. */
+    openPlaylistJob: String? = null, onPlaylistJobOpened: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -181,6 +183,25 @@ fun DownloadsScreen(
             if (item != null) open(item)
             onSavedOpened()
         }
+    }
+    // The open playlist sheet: its id, and the video to bring into view. The last snapshot keeps it valid if the batch leaves.
+    var sheetBatchId by rememberSaveable { mutableStateOf<String?>(null) }
+    var sheetFocus by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(openPlaylistJob, playlists) {
+        val id = openPlaylistJob ?: return@LaunchedEffect
+        playlists.firstOrNull { batch -> batch.items.any { it.jobId == id } }?.let { batch ->
+            tab = DownloadsTab.RUNNING
+            sheetBatchId = batch.id
+            sheetFocus = id
+        }
+        onPlaylistJobOpened()
+    }
+    val lastSheet = remember(sheetBatchId) { arrayOfNulls<dev.ahmed.savlino.jobs.PlaylistBatch>(1) }
+    val sheetBatch = sheetBatchId?.let { id -> playlists.firstOrNull { it.id == id }?.also { lastSheet[0] = it } ?: lastSheet[0] }
+    if (sheetBatchId != null && sheetBatch == null) SideEffect { sheetBatchId = null; sheetFocus = null }
+    sheetBatch?.let { batch ->
+        PlaylistVideosSheet(batch, jobs, language, { onPlaylistAction(batch.id, it) }, { sheetBatchId = null; sheetFocus = null },
+            busy = batch.id in playlistBusy, focusJob = sheetFocus)
     }
     val filtered = remember(saved, effectiveFilter, query, sort, language) {
         savedLibraryItems(saved, effectiveFilter, query, sort, Locale.forLanguageTag(language))
@@ -269,8 +290,8 @@ fun DownloadsScreen(
                 }
                 batches.forEach { batch ->
                     item(key = "playlist-${batch.id}") {
-                        PlaylistBatchCard(batch, language, { onPlaylistAction(batch.id, it) }, busy = batch.id in playlistBusy,
-                            modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)), jobs = jobs)
+                        PlaylistBatchRow(batch, language, { onPlaylistAction(batch.id, it) }, { sheetFocus = null; sheetBatchId = batch.id },
+                            busy = batch.id in playlistBusy, modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)))
                     }
                     items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }
@@ -808,7 +829,7 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
  */
 @Composable
 fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit,
-                jobs: () -> List<DownloadProgress> = { emptyList() }, onJob: () -> Unit = {},
+                jobs: () -> List<DownloadProgress> = { emptyList() }, onJob: (jobId: String) -> Unit = {},
                 onShare: (SavedMedia) -> Unit = {}, onOpenWith: (SavedMedia) -> Unit = {}, onSeeAll: () -> Unit) {
     val reduced = LocalReducedMotion.current
     // A card opens the swipe viewer Downloads uses, over the same files in Home's order; audio still opens with the system.
@@ -894,7 +915,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                     }
                     Crossfade(file != null && ready.value, motion, easeOut(reduced, 300), label = "landed") { landed ->
                         val shown = if (landed) file ?: lastFile[0] else null
-                        if (shown != null) RecentCard(shown, language, open) else JobSlotCard(jobId, jobs, onJob)
+                        if (shown != null) RecentCard(shown, language, open) else JobSlotCard(jobId, jobs) { onJob(jobId) }
                     }
                 } else RecentCard((slot as FileSlot).item, language, open, motion)
             }
