@@ -147,6 +147,8 @@ class HomeInPlaceTest {
         show { NezzelTheme(ThemePref.Light, false) { HomeRecents(media, "en", {}, { jobs }) {} } }.use {
             val slot = card("Caminandes")
             compose.runOnIdle { jobs = listOf(finished); media = listOf(landed) + library }
+            // This file has no picture: the card waits out the picture timeout, then turns into the file.
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("home-job-saved", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
             compose.waitForIdle()
             compose.onAllNodesWithTag("home-job-dial", useUnmergedTree = true).assertCountEquals(0)
             compose.onAllNodesWithTag("home-job-saved", useUnmergedTree = true).assertCountEquals(0)
@@ -160,8 +162,10 @@ class HomeInPlaceTest {
 
     @Test fun theJobCardStaysUntilTheFilesPictureIsReady() {
         val picture = kotlinx.coroutines.CompletableDeferred<android.graphics.Bitmap>()
+        // The just-listed file fails to decode once, then decodes when the picture is ready.
+        var tries = 0
         val pictures = dev.ahmed.savlino.viewer.MediaPictures { uri, _, _ ->
-            if (uri == landed.uri) picture.await() else android.graphics.Bitmap.createBitmap(32, 20, android.graphics.Bitmap.Config.ARGB_8888)
+            if (uri == landed.uri) { if (tries++ == 0) null else picture.await() } else android.graphics.Bitmap.createBitmap(32, 20, android.graphics.Bitmap.Config.ARGB_8888)
         }
         var jobs by mutableStateOf(listOf(running))
         var media by mutableStateOf(library)
@@ -172,6 +176,7 @@ class HomeInPlaceTest {
             compose.runOnIdle { jobs = listOf(finished); media = listOf(landed) + library }
             compose.waitForIdle()
             // Listed, but its picture is still decoding: the saved job card stays, no empty box.
+            compose.waitUntil(5_000) { tries >= 2 }
             compose.onNodeWithTag("home-job-saved", useUnmergedTree = true).assertExists()
             compose.runOnIdle { picture.complete(android.graphics.Bitmap.createBitmap(32, 20, android.graphics.Bitmap.Config.ARGB_8888)) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("home-job-saved", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }

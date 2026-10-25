@@ -869,7 +869,11 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                     val ready = remember { mutableStateOf(file != null && (thumbs[ThumbnailCache.key(file.uri, THUMB_PX)] != null || jobs().none { it.jobId == jobId })) }
                     LaunchedEffect(file?.uri) {
                         if (file == null || ready.value) return@LaunchedEffect
-                        withTimeoutOrNull(PICTURE_WAIT_MS) { thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX)) { loadThumb(file) } }
+                        // A file that just listed can fail to decode for a moment; audio may have no cover at all.
+                        withTimeoutOrNull(PICTURE_WAIT_MS) {
+                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX)) { loadThumb(file) } == null &&
+                                file.kind != SavedMediaKind.AUDIO && file.kind != null) kotlinx.coroutines.delay(120)
+                        }
                         ready.value = true
                     }
                     Crossfade(file != null && ready.value, motion, easeOut(reduced, 300), label = "landed") { landed ->
