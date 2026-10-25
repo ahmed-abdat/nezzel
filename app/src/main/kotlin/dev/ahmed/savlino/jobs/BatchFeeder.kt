@@ -16,6 +16,7 @@ internal interface BatchJobActions {
     suspend fun resume(id: String): Boolean
     suspend fun cancel(id: String)
     suspend fun retry(id: String): Boolean
+    suspend fun removeFailed(id: String)
 }
 
 /** Sequential inspection, durable identity, bounded lookahead. No transfer slot or publication logic lives here. */
@@ -61,7 +62,13 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 if (existing != null) {
                     if (existing.stage == JobStage.FAILED && item.retryable) {
                         if (actions.retry(item.jobId)) batches.queued(item, existing.preset != batch.preset)
-                        else batches.finish(item, BatchItemState.FAILED, existing.error ?: DownloadError.FormatExpired)
+                        else {
+                            // Retry may have waited for the old worker, or scrubbed a stale confirmation.
+                            val latest = jobs.get(item.jobId)
+                            if (latest?.stage?.terminal == false) batches.queued(item, latest.preset != batch.preset)
+                            else if (batches.refresh(item)) actions.removeFailed(item.jobId)
+                            else batches.finish(item, BatchItemState.FAILED, batchError(item, latest ?: existing) ?: DownloadError.ExecutionRestricted)
+                        }
                     } else batches.queued(item, existing.preset != batch.preset)
                     reconcile()
                     applyControls()
@@ -89,7 +96,10 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 resolvingOperation = operation
                 val result = coroutineScope {
                     val resolve = async(start = CoroutineStart.LAZY) {
-                        try { engine.inspect(source, operation) }
+                        try {
+                            if (item.jobId.endsWith(BatchStore.FRESH_SUFFIX)) engine.inspectFresh(source, operation)
+                            else engine.inspect(source, operation)
+                        }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) { InspectResult.Failure(DownloadError.Failed) }
                     }
@@ -128,7 +138,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                         else {
                             val (format, actualPreset) = selected
                             val confirmed = DownloadCommand.confirm(item.jobId, result.inspection, source, format.id, item.title)
-                            if (confirmed !is ConfirmResult.Confirmed) batches.finish(item, BatchItemState.FAILED, DownloadError.FormatExpired)
+                            if (confirmed !is ConfirmResult.Confirmed) batches.finish(item, BatchItemState.FAILED,
+                                (confirmed as? ConfirmResult.Invalid)?.reason ?: DownloadError.Interrupted)
                             else {
                                 // Link items have no list artwork: the running row fetches the inspected thumbnail late.
                                 result.inspection.thumbnailUrl?.let { SheetArtwork.source(result.inspection.inspectionId, it) }
@@ -157,14 +168,43 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
         item.state == BatchItemState.QUEUED && jobs.get(item.jobId)?.let { !it.stage.terminal && it.stage != JobStage.PAUSED } == true
     } }
 
-    /** No re-inspection of a job inserted before death; terminal item flags survive jobs' 100-row pruning. */
-    private fun reconcile() {
+    // An expired confirmation says nothing about whether the site's current formats changed.
+    private suspend fun batchError(item: BatchItemRecord, job: JobRecord?): DownloadError? {
+        if (item.itemId.startsWith(BatchStore.LINK_ITEM) || job?.error != DownloadError.FormatExpired) return job?.error
+        if (System.currentTimeMillis() - job.createdAt > JobStore.CONFIRMATION_LIFETIME_MS) return DownloadError.Interrupted
+        val version = try { engine.installedVersion() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { return DownloadError.EngineUnavailable }
+        return if (version != job.engineVersion) DownloadError.EngineUnavailable else job.error
+    }
+
+    /** Adopt live/committed work; interrupted playlist jobs get one durable fresh resolution. */
+    private suspend fun reconcile() {
         for (batch in batches.all()) {
+            var deferredFresh = false
             for (item in batches.items(batch.id)) {
                 if (item.state !in setOf(BatchItemState.WAITING, BatchItemState.QUEUED, BatchItemState.FAILED)) continue
                 val job = jobs.get(item.jobId)
                 if (job == null) {
-                    if (item.state == BatchItemState.QUEUED) batches.finish(item, BatchItemState.FAILED, DownloadError.Interrupted)
+                    if (item.state == BatchItemState.QUEUED && batches.canRefresh(item) &&
+                        batch.state in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) {
+                        deferredFresh = true
+                        continue
+                    }
+                    if (item.state == BatchItemState.QUEUED && !batches.refresh(item))
+                        batches.finish(item, BatchItemState.FAILED, DownloadError.Interrupted)
+                    continue
+                }
+                val needsFresh = job.stage == JobStage.FAILED && !item.itemId.startsWith(BatchStore.LINK_ITEM) &&
+                    (job.error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.FormatExpired) ||
+                        System.currentTimeMillis() - job.createdAt > JobStore.CONFIRMATION_LIFETIME_MS)
+                // Do not discard the source or consume the fresh attempt while batch controls defer it.
+                if (needsFresh && batches.canRefresh(item) && batch.state in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) {
+                    deferredFresh = true
+                    continue
+                }
+                if (needsFresh && batches.refresh(item)) {
+                    actions.removeFailed(item.jobId)
                     continue
                 }
                 if (item.state == BatchItemState.FAILED && job.stage != JobStage.COMPLETED) continue
@@ -174,11 +214,11 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 when (job.stage) {
                     JobStage.COMPLETED -> batches.finish(item, BatchItemState.DONE)
                     JobStage.CANCELLED -> batches.finish(item, BatchItemState.SKIPPED, DownloadError.Cancelled)
-                    JobStage.FAILED -> batches.finish(item, BatchItemState.FAILED, job.error, job.retryable)
+                    JobStage.FAILED -> batches.finish(item, BatchItemState.FAILED, batchError(item, job), job.retryable)
                     else -> Unit
                 }
             }
-            batches.finishIfIdle(batch.id)
+            if (!deferredFresh) batches.finishIfIdle(batch.id)
         }
     }
 
@@ -205,10 +245,10 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
         }
     }
     suspend fun resume(id: String) = gate.withLock { resumeUnderGate(id); wake() }
-    private suspend fun resumeUnderGate(id: String) {
+    private suspend fun resumeUnderGate(id: String, automatic: Boolean = false) {
         batches.scrubExpired()
         if (batches.get(id)?.state !in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) return
-        batches.requestRetries(id)
+        batches.requestRetries(id, automatic)
         if (!batches.state(id, BatchState.ACTIVE)) return
         batches.items(id).filter { it.state == BatchItemState.QUEUED && jobs.get(it.jobId)?.stage == JobStage.PAUSED }
             .forEach { actions.resume(it.jobId) }
@@ -226,11 +266,11 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
         }
     }
     suspend fun retry(id: String) = gate.withLock { retryUnderGate(id); wake() }
-    private suspend fun retryUnderGate(id: String) {
+    private suspend fun retryUnderGate(id: String, automatic: Boolean = false) {
         batches.scrubExpired()
         val batch = batches.get(id) ?: return
         if (batch.state in setOf(BatchState.STOPPED, BatchState.EXPIRED)) return
-        val changed = batches.requestRetries(id)
+        val changed = batches.requestRetries(id, automatic)
         if (changed) {
             batches.state(id, BatchState.ACTIVE)
             batches.items(id).filter { it.state == BatchItemState.QUEUED && jobs.get(it.jobId)?.stage == JobStage.PAUSED }
@@ -239,8 +279,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
     }
     internal suspend fun networkAvailable() = gate.withLock {
         for (batch in batches.all()) if (batch.state == BatchState.WAITING_NETWORK) {
-            retryUnderGate(batch.id)
-            resumeUnderGate(batch.id)
+            retryUnderGate(batch.id, automatic = true)
+            resumeUnderGate(batch.id, automatic = true)
         }
         wake()
     }

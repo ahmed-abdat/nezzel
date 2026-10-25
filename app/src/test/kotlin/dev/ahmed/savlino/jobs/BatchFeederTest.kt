@@ -41,6 +41,7 @@ class BatchFeederTest {
             override suspend fun resume(id: String) = jobs.resume(id)
             override suspend fun cancel(id: String) { jobs.cancel(id) }
             override suspend fun retry(id: String) = jobs.retry(id)
+            override suspend fun removeFailed(id: String) { jobs.remove(id) }
         }
     }
     @After fun close() { jobs.close() }
@@ -467,6 +468,244 @@ class BatchFeederTest {
         assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
     }
 
+    @Test fun processDeathKeepsAPlaylistVideosPartialBytesLikeASingleLink() = runBlocking {
+        create(1)
+        feeder().tick()
+        val original = batches.items("batch").single().jobId
+        assertTrue(jobs.startTransfer(original))
+        JobDirectory(app.filesDir).createOrAdopt(original).directory.resolve("partial.part").writeText("partial")
+        jobs.close()
+        jobs = JobStore(app); jobs.writableDatabase
+        batches = BatchStore(jobs, cipher) { now }
+        JobRecovery(jobs, transferOnlyPublisher(), File(app.filesDir, "downloads")).recover()
+        // A large video killed near the end resumes; a stale recipe fails as FormatExpired at transfer and refreshes then.
+        assertEquals(JobStage.ENQUEUED, jobs.get(original)!!.stage)
+        assertTrue(jobs.get(original)!!.hasPartial)
+        jobs.fail(original, DownloadError.FormatExpired)
+        feeder().tick()
+        val item = batches.items("batch").single()
+        assertEquals(BatchItemState.QUEUED, item.state)
+        assertNotEquals(original, item.jobId)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun pausedInterruptedPlaylistWaitsForResumeBeforeFreshInspection() = runBlocking {
+        create(1)
+        val f = feeder(); f.tick()
+        val original = batches.items("batch").single().jobId
+        jobs.fail(original, DownloadError.StoppedByBattery)
+        batches.state("batch", BatchState.PAUSED)
+        f.tick()
+        assertEquals(1, engine.calls)
+        assertEquals(original, batches.items("batch").single().jobId)
+        f.resume("batch"); f.tick()
+        assertEquals(BatchItemState.QUEUED, batches.items("batch").single().state)
+        assertNull(batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun refreshBudgetSurvivesDeathBeforeEnqueue() = runBlocking {
+        create(1)
+        feeder().tick()
+        val original = batches.items("batch").single()
+        jobs.fail(original.jobId, DownloadError.Interrupted)
+        assertTrue(batches.refresh(original)) // Death immediately after durable reservation.
+        jobs.close()
+        jobs = JobStore(app); jobs.writableDatabase
+        batches = BatchStore(jobs, cipher) { now }
+        JobRecovery(jobs, transferOnlyPublisher(), File(app.filesDir, "downloads")).recover()
+        assertNull(jobs.get(original.jobId))
+        feeder().tick()
+        val fresh = batches.items("batch").single()
+        assertEquals(BatchItemState.QUEUED, fresh.state)
+        jobs.fail(fresh.jobId, DownloadError.Interrupted)
+        repeat(3) { feeder().tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.Interrupted, batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun realFormatChangeOnFreshJobStillReportsFormatExpired() = runBlocking {
+        create(1)
+        feeder().tick()
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.Interrupted)
+        feeder().tick()
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.FormatExpired)
+        repeat(3) { feeder().tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.FormatExpired, batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun connectivityCannotRepeatTheConsumedFreshInspection() = runBlocking {
+        create(2)
+        feeder().tick()
+        jobs.fail(batches.items("batch").first().jobId, DownloadError.Interrupted)
+        engine.failure = DownloadError.Offline
+        feeder().tick()
+        batches.state("batch", BatchState.WAITING_NETWORK)
+        val calls = engine.calls
+        val f = feeder(); f.networkAvailable(); f.tick()
+        assertEquals(BatchItemState.FAILED, batches.items("batch").first().state)
+        assertEquals(DownloadError.Offline, batches.items("batch").first().error)
+        assertEquals(calls, engine.calls)
+        engine.failure = null
+        f.retry("batch"); f.tick() // An explicit user retry remains available.
+        assertEquals(BatchItemState.QUEUED, batches.items("batch").first().state)
+    }
+
+    @Test fun freshAttemptDoesNotReuseTheEngineInspectionCache() = runBlocking {
+        create(1)
+        feeder().tick()
+        engine.cached = engine.inspections.single()
+        engine.formats = listOf(Format("new", "mp4", true, true, height = 720))
+        engine.presets = listOf(PresetChoice(Preset.BALANCED, "new"))
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.Interrupted)
+        feeder().tick()
+        val item = batches.items("batch").single()
+        assertEquals(BatchItemState.QUEUED, item.state)
+        assertEquals("new", jobs.get(item.jobId)!!.format.id)
+    }
+
+    @Test fun engineVersionMismatchAfterTheFreshAttemptReportsEngineUnavailable() = runBlocking {
+        create(1)
+        feeder().tick()
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.Interrupted)
+        feeder().tick()
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.FormatExpired)
+        engine.version = "updated"
+        repeat(3) { feeder().tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.EngineUnavailable, batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    private fun transferOnlyPublisher() = object : Publisher {
+        override fun insertPending(job: JobDirectory.Job, name: String, mimeType: String): PendingPublication = error("No publication")
+        override fun copy(pending: PendingPublication, source: File, cancellation: android.os.CancellationSignal) = error("No publication")
+        override fun commit(pending: PendingPublication): PublicationResult = error("No publication")
+        override fun recover(uri: Uri): RecoveryResult = error("No publication")
+        override fun abandon(uri: Uri): RecoveryResult = error("No publication")
+        override fun publish(job: JobDirectory.Job, stagedFile: File, title: String, extension: String,
+            mimeType: String, cancellation: android.os.CancellationSignal): PublicationResult = error("No publication")
+    }
+
+    @Test fun interruptedPlaylistGetsOneFreshInspectionAcrossFeederRestarts() = runBlocking {
+        create(1)
+        feeder().tick()
+        val original = batches.items("batch").single().jobId
+        jobs.fail(original, DownloadError.Interrupted)
+        feeder().tick()
+        val fresh = batches.items("batch").single()
+        assertEquals(BatchItemState.QUEUED, fresh.state)
+        assertNull(fresh.error)
+        assertNotEquals(original, fresh.jobId)
+        assertEquals(2, engine.calls)
+        jobs.fail(fresh.jobId, DownloadError.Interrupted)
+        repeat(3) { feeder().tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.Interrupted, batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun freshInspectionFailuresKeepTheActualReasonAndDoNotLoop() = runBlocking {
+        for ((index, error) in listOf(DownloadError.Network, DownloadError.Offline,
+            DownloadError.Unavailable, DownloadError.EngineUnavailable).withIndex()) {
+            val id = "fresh-error-$index"
+            batches.create(id, "Fixture", Preset.BALANCED, batchItems(1))
+            engine.failure = null
+            feeder().tick()
+            jobs.fail(batches.items(id).single().jobId, DownloadError.Interrupted)
+            engine.failure = error
+            feeder().tick()
+            val calls = engine.calls
+            repeat(3) { feeder().tick() }
+            val item = batches.items(id).single()
+            assertEquals(if (error == DownloadError.Unavailable) BatchItemState.SKIPPED else BatchItemState.FAILED, item.state)
+            assertEquals(error, item.error)
+            assertEquals(calls, engine.calls)
+        }
+    }
+
+    @Test fun staleStoredJobGetsFreshFormatsEvenAfterTheOriginalBatchDeadline() = runBlocking {
+        create(1)
+        feeder().tick()
+        val original = batches.items("batch").single().jobId
+        jobs.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?",
+            arrayOf<Any>(System.currentTimeMillis() - 86_401_000, original))
+        now += 86_401_000
+        batches.scrubExpired() // Same ordering as startup before feeder reconciliation.
+        engine.formats = listOf(Format("new", "mp4", true, true, height = 720))
+        engine.presets = listOf(PresetChoice(Preset.BALANCED, "new"))
+        feeder().tick()
+        val item = batches.items("batch").single()
+        assertEquals(BatchItemState.QUEUED, item.state)
+        assertNull(item.error)
+        assertEquals("new", jobs.get(item.jobId)!!.format.id)
+        assertEquals(2, engine.calls)
+        complete(item.jobId); feeder().tick()
+        assertEquals(BatchItemState.DONE, batches.items("batch").single().state)
+    }
+
+    @Test fun refusedStoredRetryGetsOneFreshInspectionAndPreservesItsFailure() = runBlocking {
+        create(1)
+        feeder().tick()
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.Network)
+        val f = feeder(); f.tick(); f.retry("batch")
+        actions = object : BatchJobActions by actions {
+            override suspend fun retry(id: String) = false
+        }
+        engine.failure = DownloadError.Offline
+        feeder().tick()
+        repeat(3) { feeder().tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.Offline, batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun invalidConfirmationKeepsItsActualError() = runBlocking {
+        create(1)
+        jobs.writableDatabase.execSQL("UPDATE batch_items SET job_id='invalid id' WHERE batch_id='batch'")
+        feeder().tick()
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.InvalidInput, batches.items("batch").single().error)
+        assertTrue(jobs.all().isEmpty())
+    }
+
+    @Test fun aSecondStaleConfirmationEndsInterruptedWithoutAnotherInspection() = runBlocking {
+        create(1)
+        feeder().tick()
+        jobs.fail(batches.items("batch").single().jobId, DownloadError.Interrupted)
+        feeder().tick()
+        val fresh = batches.items("batch").single()
+        jobs.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?",
+            arrayOf<Any>(System.currentTimeMillis() - 86_401_000, fresh.jobId))
+        repeat(3) { feeder().tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.Interrupted, batches.items("batch").single().error)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun mismatchedInspectionSourceIsInterruptedRatherThanFormatExpired() = runBlocking {
+        create(1)
+        engine.inspectionRevision = 1
+        feeder().tick()
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.Interrupted, batches.items("batch").single().error)
+        assertTrue(jobs.all().isEmpty())
+    }
+
+    @Test fun lostBatchKeyReportsExecutionRestrictedRatherThanFormatExpired() = runBlocking {
+        create(1)
+        batches = BatchStore(jobs, object : LinkCipher by cipher {
+            override fun open(blob: ByteArray) = LinkCipher.Opened.Gone
+        }) { now }
+        feeder().tick()
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.ExecutionRestricted, batches.items("batch").single().error)
+        assertTrue(jobs.all().isEmpty())
+    }
+
     private fun links(vararg urls: String) = urls.map { LinkInput.parse(it)!! }
 
     @Test fun linkBatchFeedsAnyHostAYouTubeListAsItsFirstVideoAndSkipsAPhotoPostWithItsReason() = runBlocking {
@@ -521,16 +760,25 @@ class BatchFeederTest {
         var failure: DownloadError? = null
         var failFor: (LinkRevision) -> DownloadError? = { null }
         var failAfter: Int? = null
+        var version = "fixture"
+        override suspend fun installedVersion() = version
+        var inspectionRevision = 0L
         var calls = 0
         var duringInspect: suspend () -> Unit = {}
         var onCancel: (String) -> Unit = {}
         var thumbnail: String? = null
         val inspections = mutableListOf<Inspection>()
+        var cached: Inspection? = null
+        override suspend fun inspectFresh(source: LinkRevision, operationId: String): InspectResult {
+            cached = null
+            return inspect(source, operationId)
+        }
         override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+            cached?.let { return InspectResult.Success(it) }
             duringInspect()
             calls++
             (failure ?: failFor(source))?.let { return InspectResult.Failure(it) }
-            return InspectResult.Success(Inspection(source, "fixture", formats,
+            return InspectResult.Success(Inspection(LinkRevision(source.link, inspectionRevision), version, formats,
                 if (failAfter != null && calls > failAfter!!) emptyList() else presets, thumbnailUrl = thumbnail).also { inspections += it })
         }
         override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult = error("No transfers in feeder tests")

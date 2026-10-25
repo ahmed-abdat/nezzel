@@ -26,6 +26,11 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
     fun recover(receiptCleanupExecutor: Executor = cleanupExecutor) = synchronized(lock) {
         // Finish known work first. A provider/cleanup failure leaves its durable boundary for next time.
         for (row in store.all()) {
+            // Death may separate the atomic fresh-id reservation from old-row/progress cleanup.
+            if (row.stage == JobStage.FAILED && BatchStore(store).containsJob(row.jobId + BatchStore.FRESH_SUFFIX)) {
+                store.remove(row.jobId)
+                continue
+            }
             when (row.stage) {
                 JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
                 JobStage.STAGED -> store.fail(row.jobId, DownloadError.SaveFailed)

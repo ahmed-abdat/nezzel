@@ -82,7 +82,7 @@ class BatchStoreTest {
         now += 86_400_001
         batches.scrubExpired()
         assertEquals(BatchState.EXPIRED, batches.get("old")!!.state)
-        assertTrue(batches.items("old").all { it.state == BatchItemState.SKIPPED && it.error == DownloadError.FormatExpired })
+        assertTrue(batches.items("old").all { it.state == BatchItemState.SKIPPED && it.error == DownloadError.Interrupted })
         jobs.readableDatabase.rawQuery("SELECT COUNT(*) FROM batch_items WHERE source_url IS NOT NULL", null).use {
             assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
         }
@@ -109,6 +109,7 @@ class BatchStoreTest {
         })
         assertNull(gone.source(item))
         assertEquals(BatchItemState.FAILED, gone.items("locked").single().state)
+        assertEquals(DownloadError.ExecutionRestricted, gone.items("locked").single().error)
         assertNull(BatchStore(jobs, cipher).source(item))
     }
 

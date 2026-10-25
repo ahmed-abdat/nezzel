@@ -79,6 +79,37 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     @Synchronized fun containsJob(jobId: String): Boolean = db.query("batch_items", arrayOf("job_id"),
         "job_id=?", arrayOf(jobId), null, null, null, "1").use { it.moveToFirst() }
 
+    @Synchronized internal fun canRefresh(item: BatchItemRecord): Boolean {
+        if (item.itemId.startsWith(LINK_ITEM) || item.jobId.endsWith(FRESH_SUFFIX)) return false
+        val batch = get(item.batchId) ?: return false
+        if (batch.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || now() - batch.createdAt >= 2 * LIFETIME_MS) return false
+        return db.query("batch_items", arrayOf("job_id"),
+            "batch_id=? AND position=? AND job_id=? AND source_url IS NOT NULL",
+            arrayOf(item.batchId, item.position.toString(), item.jobId), null, null, null).use { it.moveToFirst() }
+    }
+
+    /**
+     * The allocated job id also journals the one automatic fresh attempt. Rotate before inspecting so
+     * death in the inspect/enqueue gap cannot restore the budget. Never replace a live/publishing job.
+     */
+    @Synchronized internal fun refresh(item: BatchItemRecord): Boolean {
+        db.beginTransaction()
+        try {
+            val batch = get(item.batchId) ?: return false
+            if (batch.state !in setOf(BatchState.ACTIVE, BatchState.COMPLETED) || !canRefresh(item)) return false
+            val changed = db.update("batch_items", ContentValues().apply {
+                put("job_id", item.jobId + FRESH_SUFFIX); put("state", BatchItemState.WAITING.name)
+                putNull("error"); put("retryable", 0)
+            }, "batch_id=? AND position=? AND job_id=? AND source_url IS NOT NULL " +
+                "AND state IN ('WAITING','QUEUED','FAILED') AND NOT EXISTS " +
+                "(SELECT 1 FROM jobs WHERE job_id=? AND (stage!='FAILED' OR pending_uri IS NOT NULL))",
+                arrayOf(item.batchId, item.position.toString(), item.jobId, item.jobId)) == 1
+            if (changed) db.execSQL("UPDATE batches SET state='ACTIVE' WHERE batch_id=?", arrayOf(item.batchId))
+            db.setTransactionSuccessful()
+            return changed
+        } finally { db.endTransaction() }
+    }
+
     /** Unavailable Keystore is transient; a lost key is permanent and its blob is discarded. */
     @Synchronized internal fun source(item: BatchItemRecord): String? {
         val blob = db.query("batch_items", arrayOf("source_url"), "batch_id=? AND position=?", args(item), null, null, null)
@@ -86,7 +117,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         return when (val opened = cipher.open(blob)) {
             is LinkCipher.Opened.Link -> opened.text
             LinkCipher.Opened.Unavailable -> null
-            LinkCipher.Opened.Gone -> { finish(item, BatchItemState.FAILED, DownloadError.FormatExpired); null }
+            LinkCipher.Opened.Gone -> { finish(item, BatchItemState.FAILED, DownloadError.ExecutionRestricted); null }
         }
     }
 
@@ -102,7 +133,9 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         require(state in setOf(BatchItemState.DONE, BatchItemState.FAILED, BatchItemState.SKIPPED))
         db.beginTransaction()
         try {
-            val keep = retryable && get(item.batchId)?.let { now() - it.createdAt < LIFETIME_MS } == true
+            val keep = retryable && get(item.batchId)?.let {
+                now() - it.createdAt < (if (item.jobId.endsWith(FRESH_SUFFIX)) 2 * LIFETIME_MS else LIFETIME_MS)
+            } == true
             val allowed = if (state == BatchItemState.DONE) "('WAITING','QUEUED','FAILED')" else "('WAITING','QUEUED')"
             val changed = db.update("batch_items", ContentValues().apply {
                 put("state", state.name); put("error", error?.name); put("retryable", if (keep) 1 else 0)
@@ -151,13 +184,16 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         } finally { db.endTransaction() }
     }
 
-    @Synchronized internal fun requestRetries(id: String): Boolean {
+    @Synchronized internal fun requestRetries(id: String, automatic: Boolean = false): Boolean {
         scrubExpired()
         val row = get(id) ?: return false
-        if (row.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || now() - row.createdAt >= LIFETIME_MS) return false
+        val age = now() - row.createdAt
+        if (row.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || age >= 2 * LIFETIME_MS) return false
+        val eligible = (if (age >= LIFETIME_MS) " AND job_id LIKE '%$FRESH_SUFFIX'" else "") +
+            (if (automatic) " AND job_id NOT LIKE '%$FRESH_SUFFIX'" else "")
         return db.update("batch_items", ContentValues().apply {
             put("state", BatchItemState.WAITING.name); putNull("error")
-        }, "batch_id=? AND state='FAILED' AND retryable=1 AND source_url IS NOT NULL", arrayOf(id)) > 0
+        }, "batch_id=? AND state='FAILED' AND retryable=1 AND source_url IS NOT NULL" + eligible, arrayOf(id)) > 0
     }
 
     @Synchronized internal fun finishIfIdle(id: String) {
@@ -167,15 +203,24 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
 
     @Synchronized fun scrubExpired() {
         val cutoff = now() - LIFETIME_MS
+        // A started playlist may refresh its confirmation once; unstarted rows still expire at 24h.
+        // The second day bounds sealed-source retention even if death happens before fresh enqueue.
+        val refreshable = "item_id NOT LIKE 'link-%' AND (job_id IN (SELECT job_id FROM jobs) OR job_id LIKE '%$FRESH_SUFFIX')"
+        val retained = "(state IN ('WAITING','QUEUED','FAILED') AND $refreshable AND batch_id IN (SELECT batch_id FROM batches WHERE created_at>?))"
+        val refreshCutoff = now() - 2 * LIFETIME_MS
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE batches SET state='EXPIRED', error='FormatExpired' WHERE created_at<=? " +
+            db.execSQL("UPDATE batches SET state='EXPIRED', error='Interrupted' WHERE created_at<=? " +
                 "AND state IN ('ACTIVE','PAUSED','WAITING_NETWORK') AND EXISTS " +
                 "(SELECT 1 FROM batch_items WHERE batch_items.batch_id=batches.batch_id AND state='WAITING' " +
-                "AND job_id NOT IN (SELECT job_id FROM jobs))", arrayOf(cutoff))
-            db.execSQL("UPDATE batch_items SET state='SKIPPED', error='FormatExpired' WHERE state='WAITING' AND batch_id IN " +
-                "(SELECT batch_id FROM batches WHERE created_at<=?) AND job_id NOT IN (SELECT job_id FROM jobs)", arrayOf(cutoff))
-            db.execSQL("UPDATE batch_items SET source_url=NULL, retryable=0 WHERE batch_id IN (SELECT batch_id FROM batches WHERE created_at<=?)", arrayOf(cutoff))
+                "AND job_id NOT IN (SELECT job_id FROM jobs) AND job_id NOT LIKE '%$FRESH_SUFFIX') " +
+                "AND NOT EXISTS (SELECT 1 FROM batch_items WHERE batch_items.batch_id=batches.batch_id " +
+                "AND source_url IS NOT NULL AND $refreshable)", arrayOf(cutoff))
+            db.execSQL("UPDATE batch_items SET state='SKIPPED', error='Interrupted' WHERE state='WAITING' AND batch_id IN " +
+                "(SELECT batch_id FROM batches WHERE created_at<=?) AND job_id NOT IN (SELECT job_id FROM jobs) " +
+                "AND NOT $retained", arrayOf(cutoff, refreshCutoff))
+            db.execSQL("UPDATE batch_items SET source_url=NULL, retryable=0 WHERE batch_id IN " +
+                "(SELECT batch_id FROM batches WHERE created_at<=?) AND NOT $retained", arrayOf(cutoff, refreshCutoff))
             val expiredHistory = "SELECT batch_id FROM batches WHERE created_at<=? AND state IN ('COMPLETED','STOPPED','EXPIRED')"
             val retentionCutoff = arrayOf<Any>(now() - RETENTION_MS)
             // Foreign keys are disabled: explicitly remove children in the same transaction.
@@ -198,6 +243,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         internal const val LIFETIME_MS = 86_400_000L
         internal const val RETENTION_MS = 30L * LIFETIME_MS
         internal const val LINK_ITEM = "link-"
+        internal const val FRESH_SUFFIX = "-fresh"
         internal fun createTables(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE IF NOT EXISTS batches (
                 batch_id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, preset TEXT NOT NULL,

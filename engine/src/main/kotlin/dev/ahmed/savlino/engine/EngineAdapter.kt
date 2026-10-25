@@ -36,6 +36,8 @@ interface EngineAdapter {
     suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken? = null): PlaylistResult =
         PlaylistResult.Failure(DownloadError.Unsupported)
     suspend fun inspect(source: LinkRevision, operationId: String): InspectResult
+    /** Renew a lazy playlist selection after interruption; bypass reusable inspection results. */
+    suspend fun inspectFresh(source: LinkRevision, operationId: String): InspectResult = inspect(source, operationId)
     /** Local best-effort persistence of already inspected metadata, after explicit confirmation. */
     fun prepareDownload(command: DownloadCommand) = Unit
     /** yt-dlp-shaped JSON a native reader already fetched for [link]; a later inspect may use it. Memory only. */

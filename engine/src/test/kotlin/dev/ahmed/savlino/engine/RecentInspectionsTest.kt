@@ -68,6 +68,20 @@ class RecentInspectionsTest {
         assertTrue("--load-info-json" in runtime.transfers.single())
     }
 
+    @Test fun freshPlaylistInspectionBypassesTheRecentResultAndKeepsTheRealFailure() = runBlocking {
+        val runtime = Runtime(json())
+        val engine = engine(runtime)
+        assertIs<InspectResult.Success>(engine.inspect(source, "initial"))
+        runtime.json = json().replace("\"18\"", "\"22\"")
+        // Ordinary inspection still reuses its recent result.
+        assertTrue("18" in assertIs<InspectResult.Success>(engine.inspect(source, "ordinary")).inspection.formats.map { it.id })
+        val fresh = assertIs<InspectResult.Success>(engine.inspectFresh(source, "fresh"))
+        assertTrue("22" in fresh.inspection.formats.map { it.id })
+        runtime.inspect = { throw YtdlpExecutionFailure(DownloadError.Offline) }
+        val failed = assertIs<InspectResult.Failure>(engine.inspectFresh(source, "fresh-offline"))
+        assertEquals(DownloadError.Offline, failed.error)
+    }
+
     @Test fun fifteenMinutesAndAVersionChangeMiss() = runBlocking {
         val runtime = Runtime(json())
         val engine = engine(runtime)

@@ -49,6 +49,11 @@ class DownloadCoordinator(
         override suspend fun resume(id: String) = this@DownloadCoordinator.resume(id)
         override suspend fun cancel(id: String) { this@DownloadCoordinator.cancel(id) }
         override suspend fun retry(id: String) = this@DownloadCoordinator.retry(id)
+        override suspend fun removeFailed(id: String) {
+            // The old worker must finish delivering progress before its replaced row is removed.
+            activeDone[id]?.await()
+            this@DownloadCoordinator.removeFailed(id)
+        }
     }, parallelDownloads, thermalStatus) }
 
     private val playlistRefresh = MutableStateFlow(0L)
