@@ -845,7 +845,7 @@ class DownloadCoordinator(
             JobStage.COMPLETED -> DownloadPhase.COMPLETED
             JobStage.CANCELLED -> DownloadPhase.CANCELLED
             else -> DownloadPhase.FAILED
-        }, error = row.error, publishedUri = row.pendingUri.takeIf { row.stage == JobStage.COMPLETED }, mimeType = mime(row.format), total = row.format.size, qualityHeight = VideoQuality.of(row.format.width, row.format.height), waiting = row.stage == JobStage.ENQUEUED,
+        }, error = row.error, publishedUri = row.pendingUri.takeIf { row.stage == JobStage.COMPLETED }, targetUri = row.pendingUri, mimeType = mime(row.format), total = row.format.size, qualityHeight = VideoQuality.of(row.format.width, row.format.height), waiting = row.stage == JobStage.ENQUEUED,
         retryable = row.stage == JobStage.FAILED && row.retryable && row.sourceUrl != null,
         paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch)
     private fun scheduleFailed(row: JobRecord) = fromRecord(row).copy(phase = DownloadPhase.FAILED,

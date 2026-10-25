@@ -67,7 +67,10 @@ internal const val HOME_JOB_CARDS = 8
  */
 internal fun homeSlots(jobs: List<DownloadProgress>, recent: List<SavedMedia>, listed: Set<String>, started: List<String>,
                        landing: Set<String>, fileJobs: MutableMap<String, String> = HashMap()): List<HomeSlot> {
-    val live = visibleJobs(jobs, started).take(HOME_JOB_CARDS).map { JobSlot(it.jobId) }
+    val shownJobs = visibleJobs(jobs, started).take(HOME_JOB_CARDS)
+    val live = shownJobs.map { JobSlot(it.jobId) }
+    // Listed before its job reports saved: the job's card already stands for the file, so it is not shown twice.
+    val writing = shownJobs.mapNotNullTo(HashSet()) { job -> job.targetUri?.takeIf { !job.saved }?.let(::fileKey) }
     val landed = jobs.filter { it.jobId in landing && it.saved && it.publishedUri?.let { uri -> fileKey(uri) in listed } != true }
         .map { JobSlot(it.jobId, landing = true) }
     // Remembered past the job's own life: when the finished job leaves the list, its file keeps the job's key, so the
@@ -75,7 +78,7 @@ internal fun homeSlots(jobs: List<DownloadProgress>, recent: List<SavedMedia>, l
     jobs.forEach { job -> if (job.saved) job.publishedUri?.let { fileJobs[fileKey(it)] = job.jobId } }
     val byFile = fileJobs
     val used = HashSet<String>()
-    return live + landed + recent.map { item ->
+    return live + landed + recent.filter { fileKey(it.uri) !in writing }.map { item ->
         FileSlot(item, byFile[fileKey(item.uri)]?.let(::jobKey)?.takeIf(used::add) ?: item.uri.toString())
     }
 }

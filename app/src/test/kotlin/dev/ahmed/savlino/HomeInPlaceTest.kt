@@ -130,6 +130,17 @@ class HomeInPlaceTest {
         assertEquals("no remove + insert when the finished job is pruned", withJob.map { it.key }, jobGone.map { it.key })
     }
 
+    @Test fun aFileListedBeforeItsJobSaysSavedIsNotShownTwice() {
+        val finishing = running.copy(phase = DownloadPhase.SAVING, targetUri = finished.publishedUri)
+        val recent = listOf(landed) + library.take(3)
+        val listed = recent.mapTo(HashSet()) { dev.ahmed.savlino.downloads.fileKey(it.uri) }
+        val fileJobs = HashMap<String, String>()
+        val early = dev.ahmed.savlino.downloads.homeSlots(listOf(finishing), recent, listed, listOf("r1"), emptySet(), fileJobs)
+        val saved = dev.ahmed.savlino.downloads.homeSlots(listOf(finished), recent, listed, emptyList(), emptySet(), fileJobs)
+        assertEquals(listOf("job:r1") + library.take(3).map { it.uri.toString() }, early.map { it.key })
+        assertEquals("the job's slot turns into the file, the rest stay", early.map { it.key }, saved.map { it.key })
+    }
+
     @Test fun aFinishedJobBecomesItsSavedCardInTheSameSlot() {
         var jobs by mutableStateOf(listOf(running))
         var media by mutableStateOf(library)
