@@ -93,11 +93,14 @@ fun OldDownloadsCard(onShow: () -> Unit, onDismiss: () -> Unit, modifier: Modifi
             Row(verticalAlignment = Alignment.CenterVertically) { Glyph(); Spacer(Modifier.weight(1f)); Close() }
             Message(Modifier.padding(end = Space.m, bottom = Space.s))
             Show()
-        } else Row(Modifier.padding(start = Space.rowH, end = Space.xs, top = Space.s, bottom = Space.s),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-            Glyph()
-            Message(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.CenterVertically) { Show(); Close() }
+        // Beside the button the question wrapped to four short lines in Arabic: it keeps the row, the button sits under it.
+        } else Column(Modifier.padding(start = Space.rowH, end = Space.xs, top = Space.xs, bottom = Space.m)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
+                Glyph()
+                Message(Modifier.weight(1f))
+                Close()
+            }
+            Box(Modifier.padding(start = 24.dp + Space.inline)) { Show() }
         }
     }
 }

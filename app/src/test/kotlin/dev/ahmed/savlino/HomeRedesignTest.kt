@@ -12,6 +12,7 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -258,6 +259,29 @@ class HomeRedesignTest {
             repeat(8) { Snapshot.sendApplyNotifications(); compose.mainClock.advanceTimeBy(250); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250)) }
             controller.get().capture(File(dir, "first-run-en-light-1.3x.png"))
         } finally { controller.pause().stop().destroy() }
+    }
+
+    /** The old-downloads offer at normal text, ar/en × light/dark. */
+    @Test fun captureOldDownloadsCard() {
+        assumeTrue(dir != null)
+        for ((lang, dark) in combos) {
+            RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
+            val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+            try {
+                controller.get().setContent {
+                    CompositionLocalProvider(LocalLayoutDirection provides if (lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                        NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
+                            androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
+                                dev.ahmed.savlino.downloads.OldDownloadsCard({}, {}, androidx.compose.ui.Modifier
+                                    .padding(dev.ahmed.savlino.ui.theme.Space.m))
+                            }
+                        }
+                    }
+                }
+                repeat(4) { Snapshot.sendApplyNotifications(); compose.mainClock.advanceTimeBy(250); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250)) }
+                controller.get().capture(File(dir, "old-downloads-card/card-$lang-${if (dark) "dark" else "light"}.png"))
+            } finally { controller.pause().stop().destroy() }
+        }
     }
 
     /** The floating tab bar: stills × ar/en × light/dark plus one ar-light GIF frame set. */
