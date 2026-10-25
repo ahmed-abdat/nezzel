@@ -185,6 +185,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
             for (item in batches.items(batch.id)) {
                 if (item.state !in setOf(BatchItemState.WAITING, BatchItemState.QUEUED, BatchItemState.FAILED)) continue
                 val job = jobs.get(item.jobId)
+                if (item.state == BatchItemState.FAILED && !item.hasSource && !item.itemId.startsWith(BatchStore.LINK_ITEM))
+                    job?.sourceUrl?.let { batches.adoptSource(item, it) }
                 if (job == null) {
                     if (item.state == BatchItemState.QUEUED && batches.canRefresh(item) &&
                         batch.state in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)) {
@@ -265,12 +267,19 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
             wake()
         }
     }
-    suspend fun retry(id: String) = gate.withLock { retryUnderGate(id); wake() }
-    private suspend fun retryUnderGate(id: String, automatic: Boolean = false) {
+    /** A person's Retry: every failed video whose link is still stored, or only the one at [position]. */
+    suspend fun retry(id: String, position: Int? = null) = gate.withLock { retryUnderGate(id, position = position); wake() }
+    private suspend fun retryUnderGate(id: String, automatic: Boolean = false, position: Int? = null) {
         batches.scrubExpired()
         val batch = batches.get(id) ?: return
         if (batch.state in setOf(BatchState.STOPPED, BatchState.EXPIRED)) return
-        val changed = batches.requestRetries(id, automatic)
+        // Connectivity retries only what the engine called retryable; a tap also re-resolves the rest, once per tap.
+        val changed = if (automatic) batches.requestRetries(id, true)
+            else batches.requestUserRetries(id, position).let { (changed, replaced) ->
+                // The replaced failed rows would otherwise linger as standalone failures.
+                replaced.forEach { actions.removeFailed(it) }
+                changed
+            }
         if (changed) {
             batches.state(id, BatchState.ACTIVE)
             batches.items(id).filter { it.state == BatchItemState.QUEUED && jobs.get(it.jobId)?.stage == JobStage.PAUSED }

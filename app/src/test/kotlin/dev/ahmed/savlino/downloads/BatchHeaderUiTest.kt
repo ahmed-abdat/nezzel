@@ -87,11 +87,11 @@ class BatchHeaderUiTest {
         }
     }
 
-    @Test fun threeFailedShowRetryAllUnderStopped() {
+    @Test fun threeFailedShowRetryAllUnderNotSaved() {
         var sent: BatchAction? = null
         render(listOf(failed("f1"), failed("f2"), failed("f3")), { sent = it }) {
-            compose.onNodeWithTag("tab_running").performClick()
-            compose.onNodeWithText(context.getString(R.string.downloads_stopped_header, NezzelFormat.count(3, language))).assertExists()
+            compose.onNodeWithTag("tab_running").assertIsSelected()
+            compose.onNodeWithText(context.getString(R.string.dl_failed_header)).assertExists()
             compose.onNodeWithContentDescription(label(R.string.downloads_retry_all, 3)).performClick()
             // Failures show newest first; Retry all follows the same order.
             assertEquals(BatchAction(BatchKind.RETRY, listOf("f3", "f2", "f1")), sent)

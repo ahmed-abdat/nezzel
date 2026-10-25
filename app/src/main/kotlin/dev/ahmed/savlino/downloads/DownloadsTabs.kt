@@ -32,7 +32,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.jobs.BatchItemRecord
 import dev.ahmed.savlino.jobs.BatchItemState
+import dev.ahmed.savlino.jobs.BatchState
+import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
 import dev.ahmed.savlino.jobs.PlaylistBatch
 import dev.ahmed.savlino.jobs.running
@@ -46,9 +49,43 @@ enum class DownloadsTab { RUNNING, SAVED }
 internal fun hasActiveWork(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): Boolean =
     runningCount(jobs) > 0 || playlists.any { !it.terminal }
 
-/** Entering Downloads opens Downloading only while something is active; failures and warnings alone open Saved. */
+/** Entering Downloads opens Downloading while something is active or did not save; warnings alone open Saved. */
 internal fun entryTab(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): DownloadsTab =
-    if (hasActiveWork(jobs, playlists)) DownloadsTab.RUNNING else DownloadsTab.SAVED
+    if (hasActiveWork(jobs, playlists) || failureCount(jobs, playlists) > 0) DownloadsTab.RUNNING else DownloadsTab.SAVED
+
+/** Downloads under «Not saved»: failed and not waiting for a scheduled retry. [jobs] are the standalone ones. */
+internal fun failedJobs(jobs: List<DownloadProgress>): List<DownloadProgress> =
+    jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
+
+/** A playlist's videos that did not save: recorded failures plus queued ones whose job already failed. */
+internal fun PlaylistBatch.failedVideos(jobs: List<DownloadProgress>): List<BatchItemRecord> =
+    playlistSections(this, jobs.associateBy { it.jobId }).first
+
+/** Playlists with a «Not saved» line: still listed and holding at least one video that did not save. */
+internal fun failedPlaylists(playlists: List<PlaylistBatch>, jobs: List<DownloadProgress>): List<PlaylistBatch> =
+    playlists.filter { it.keepsRow() && it.failedVideos(jobs).isNotEmpty() }
+
+/** A playlist's own Retry: something to retry and not stopped by the person. */
+internal val PlaylistBatch.canRetryFailed: Boolean get() = userRetryable > 0 && record.state !in setOf(BatchState.STOPPED, BatchState.EXPIRED)
+
+/** Failed videos a person's Retry can resolve again: their link is still stored, whatever the automatic flag says. */
+internal val PlaylistBatch.userRetryable: Int get() = items.count { it.state == BatchItemState.FAILED && it.hasSource }
+
+/** Downloads and playlist videos not saved yet: the tab's error dot and its TalkBack count. [jobs] are all jobs. */
+internal fun failureCount(jobs: List<DownloadProgress>, playlists: List<PlaylistBatch>): Int {
+    val members = playlists.flatMapTo(HashSet()) { batch -> batch.items.map { it.jobId } }
+    return failedJobs(jobs.filter { it.jobId !in members }).size + failedPlaylists(playlists, jobs).sumOf { it.failedVideos(jobs).size }
+}
+
+/** Retry all under «Not saved»: the rows that offer their own Retry, in display order. */
+internal data class FailureRetry(val jobs: List<String>, val playlists: List<String>)
+
+/** Null under two such rows: the row's own button covers one. Rows that cannot be retried are left out. */
+internal fun failureRetry(failed: List<DownloadProgress>, playlists: List<PlaylistBatch>): FailureRetry? {
+    val ids = failed.filter { it.batchRetryable }.map { it.jobId }
+    val lists = playlists.filter { it.canRetryFailed }.map { it.id }
+    return FailureRetry(ids, lists).takeIf { ids.size + lists.size >= 2 }
+}
 
 /** A new active job opens Running; completion never changes the person's current sub-tab. */
 internal fun nextDownloadsTab(current: DownloadsTab, newActive: Boolean): DownloadsTab =
@@ -59,7 +96,7 @@ internal fun downloadingCount(standalone: List<DownloadProgress>, playlists: Lis
     runningCount(standalone) + playlists.filter { !it.terminal }.sumOf { it.total - it.finished }
 
 /** A finished batch stays only while it has something to retry; a clean or final one leaves after its moment. */
-internal fun PlaylistBatch.keepsRow(): Boolean = !terminal || retryable > 0
+internal fun PlaylistBatch.keepsRow(): Boolean = !terminal || userRetryable > 0
 
 /** Members shown under a batch header: moving or paused ones (at most the parallel limit). Waiting ones are counted. */
 internal fun batchMemberRows(batch: PlaylistBatch, jobs: List<DownloadProgress>): List<DownloadProgress> {
@@ -105,13 +142,15 @@ internal fun rememberDownloadsTab(jobs: List<DownloadProgress>, playlists: List<
 }
 
 /**
- * Downloading · Saved. A count on Downloading; a dot (and TalkBack "Needs a look") while a check warning is open.
+ * Downloading · Saved. A count on Downloading; an error dot while something did not save (TalkBack "Not saved: N") or a
+ * check warning is open (TalkBack "Needs a look").
  * The underline sits under the selected word itself, not under the count and dot slots kept beside it, so it is measured
  * from the label in the row's own left-to-right pixels: the same code lands under the word in Arabic.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, attention: Boolean, language: String, onSelect: (DownloadsTab) -> Unit) {
+internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, warning: Boolean, language: String, failed: Int = 0, onSelect: (DownloadsTab) -> Unit) {
+    val attention = warning || failed > 0
     val reduced = LocalReducedMotion.current
     val row = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val labels = remember { mutableStateMapOf<DownloadsTab, Pair<Float, Float>>() }
@@ -141,7 +180,8 @@ internal fun DownloadsTabRow(selected: DownloadsTab, count: Int, attention: Bool
         }
     }) {
         PrimaryTabRow(selectedTabIndex = selected.ordinal, containerColor = MaterialTheme.colorScheme.surface, indicator = {}, divider = {}) {
-            val needsLook = stringResource(R.string.check_needs_look)
+            val needsLook = listOfNotNull(stringResource(R.string.dl_failed_count, NezzelFormat.count(failed, language)).takeIf { failed > 0 },
+                stringResource(R.string.check_needs_look).takeIf { warning }).joinToString(", ")
             Tab(selected == DownloadsTab.RUNNING, { onSelect(DownloadsTab.RUNNING) },
                 Modifier.heightIn(min = 48.dp).testTag("tab_running").then(if (attention) Modifier.semantics { stateDescription = needsLook } else Modifier),
                 selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant) {

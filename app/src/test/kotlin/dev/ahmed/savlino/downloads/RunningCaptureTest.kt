@@ -88,7 +88,7 @@ class RunningCaptureTest {
     }
     /** Downloading tab: running, paused, a playlist header with its running video, failed, "3 waiting", Needs a look. */
     @Test fun runningTab() = shoot("running")
-    /** Only a failure and a warning left: tabs stay with the dot, entry opens Saved; Statuses chip ends the filter row. */
+    /** Only a failure and a warning left: tabs stay with the dot, entry opens Downloading under «Not saved». */
     @Test fun savedTabWithDot() = shoot("saved")
     /** Nothing in Downloading: no tab row, the library alone. */
     @Test fun libraryAlone() = shoot("library")

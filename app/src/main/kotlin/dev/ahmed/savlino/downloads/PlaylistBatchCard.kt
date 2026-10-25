@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -104,6 +106,45 @@ internal fun PlaylistBatchRow(batch: PlaylistBatch, language: String, onAction: 
     }
 }
 
+/**
+ * A playlist's line under «Not saved», shaped like a failed download row: its title over "N of M not saved" (with the reason
+ * when every failed video shares one), its own Retry and a chevron. The row opens [PlaylistVideosSheet], whose failed videos come first.
+ */
+@Composable
+internal fun PlaylistFailureRow(batch: PlaylistBatch, jobs: List<DownloadProgress>, language: String, onRetry: () -> Unit, onOpen: () -> Unit,
+    busy: Boolean = false, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val failed = batch.failedVideos(jobs)
+    val byJob = remember(jobs) { jobs.associateBy { it.jobId } }
+    val title = batchTitle(batch, language)
+    val reason = failed.map { it.error ?: byJob[it.jobId]?.error }.distinct().singleOrNull()?.let {
+        DownloadNotifications.phase(context, DownloadProgress(batch.id, "", DownloadPhase.FAILED, error = it))
+    }
+    val meta = listOfNotNull(stringResource(R.string.dl_playlist_failed, NezzelFormat.count(failed.size, language), NezzelFormat.count(batch.total, language)),
+        reason).joinToString(" · ")
+    val light = scheme.surface.luminance() > .5f
+    Surface(modifier.fillMaxWidth().testTag("playlist_failed_${batch.id}"), shape = MaterialTheme.shapes.large, color = rowBase(scheme, light)) {
+        Row(Modifier.fillMaxWidth().clickable(onClickLabel = stringResource(R.string.playlist_show_videos), role = Role.Button, onClick = onOpen)
+            .heightIn(min = JobRowHeight).padding(start = Space.rowH, top = Space.s, bottom = Space.s, end = Space.s),
+            horizontalArrangement = Arrangement.spacedBy(Space.inline), verticalAlignment = Alignment.CenterVertically) {
+            if (!dev.ahmed.savlino.ui.theme.isLargeText()) Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.medium).background(scheme.errorContainer),
+                contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_list), null, Modifier.size(24.dp), tint = scheme.onErrorContainer) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
+                Text(NezzelFormat.isolate(title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta, style = MaterialTheme.typography.bodyMedium, color = scheme.error, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (batch.canRetryFailed) {
+                val retry = stringResource(R.string.playlist_retry, NezzelFormat.count(batch.userRetryable, language))
+                FilledTonalIconButton(onClick = onRetry, enabled = !busy, modifier = Modifier.size(48.dp).testTag("playlist_failed_retry")
+                    .semantics { contentDescription = retry }) { Icon(Icons.Default.Refresh, null, Modifier.size(24.dp)) }
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(24.dp), tint = scheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 private fun BatchBar(batch: PlaylistBatch, modifier: Modifier = Modifier) =
     LinearProgressIndicator(progress = { if (batch.total == 0) 0f else batch.finished.toFloat() / batch.total }, modifier = modifier.fillMaxWidth())
@@ -120,21 +161,21 @@ internal fun playlistSections(batch: PlaylistBatch, byJob: Map<String, DownloadP
 @Composable
 internal fun PlaylistVideosSheet(batch: PlaylistBatch, jobs: List<DownloadProgress>, language: String, onAction: (PlaylistBatchAction) -> Unit,
     onDismiss: () -> Unit, busy: Boolean = false, focusJob: String? = null,
-    state: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
+    state: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false), onRetryVideo: (Int) -> Unit = {}) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state, containerColor = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 0.dp) {
-        PlaylistVideosContent(batch, jobs, language, onAction, busy, focusJob)
+        PlaylistVideosContent(batch, jobs, language, onAction, busy, focusJob, onRetryVideo = onRetryVideo)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PlaylistVideosContent(batch: PlaylistBatch, jobs: List<DownloadProgress>, language: String, onAction: (PlaylistBatchAction) -> Unit,
-    busy: Boolean = false, focusJob: String? = null, modifier: Modifier = Modifier) {
+    busy: Boolean = false, focusJob: String? = null, modifier: Modifier = Modifier, onRetryVideo: (Int) -> Unit = {}) {
     var stopping by rememberSaveable(batch.id) { mutableStateOf(false) }
     val byJob = remember(jobs) { jobs.associateBy { it.jobId } }
     val (failed, rest) = remember(batch.items, byJob) { playlistSections(batch, byJob) }
     val stopped = batch.record.state in setOf(BatchState.STOPPED, BatchState.EXPIRED)
-    val canRetry = batch.retryable > 0 && !stopped
+    val canRetry = batch.canRetryFailed
     val list = rememberLazyListState()
     LaunchedEffect(focusJob) {
         val failedAt = failed.indexOfFirst { it.jobId == focusJob }
@@ -178,7 +219,7 @@ internal fun PlaylistVideosContent(batch: PlaylistBatch, jobs: List<DownloadProg
                     }
                     if (canRetry) OutlinedButton({ onAction(PlaylistBatchAction.RETRY) }, enabled = !busy,
                         modifier = Modifier.heightIn(min = 48.dp).testTag("playlist_retry")) {
-                        Text(stringResource(R.string.playlist_retry, NezzelFormat.count(batch.retryable, language)))
+                        Text(stringResource(R.string.playlist_retry, NezzelFormat.count(batch.userRetryable, language)))
                     }
                 }
             }
@@ -186,7 +227,9 @@ internal fun PlaylistVideosContent(batch: PlaylistBatch, jobs: List<DownloadProg
         if (failed.isNotEmpty()) {
             item(key = "failed-heading", contentType = "heading") { SheetHeading(stringResource(R.string.playlist_failed_heading), error = true) }
             items(failed, key = { "video-${it.position}" }, contentType = { "video" }) { item ->
-                PlaylistItemRow(item, byJob[item.jobId], batch.total, language, item.jobId == focusJob)
+                // A failed video with its link still stored has its own Retry; one without says how to try again.
+                val retry: (() -> Unit)? = if (item.state == BatchItemState.FAILED && item.hasSource && !stopped) { { onRetryVideo(item.position) } } else null
+                PlaylistItemRow(item, byJob[item.jobId], batch.total, language, item.jobId == focusJob, retry, busy)
             }
             if (rest.isNotEmpty()) item(key = "rest-heading", contentType = "heading") { SheetHeading(stringResource(R.string.playlist_other_videos)) }
         }
@@ -208,7 +251,8 @@ private fun SheetHeading(text: String, error: Boolean = false) =
 
 /** One video of a playlist: a state glyph, its title and one short state word. Only real states; no made-up progress. */
 @Composable
-private fun PlaylistItemRow(item: BatchItemRecord, job: DownloadProgress?, total: Int, language: String, focused: Boolean) {
+private fun PlaylistItemRow(item: BatchItemRecord, job: DownloadProgress?, total: Int, language: String, focused: Boolean,
+    onRetry: (() -> Unit)? = null, busy: Boolean = false) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     fun reason(error: DownloadError?) = DownloadNotifications.phase(context, DownloadProgress(item.jobId, "", DownloadPhase.FAILED, error = error))
@@ -247,6 +291,13 @@ private fun PlaylistItemRow(item: BatchItemRecord, job: DownloadProgress?, total
                 color = if (item.state == BatchItemState.SKIPPED) colors.onSurfaceVariant else colors.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(word, style = MaterialTheme.typography.bodyMedium, color = tone, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (item.state == BatchItemState.FAILED && onRetry == null)
+                Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        if (onRetry != null) {
+            val label = stringResource(R.string.try_again)
+            FilledTonalIconButton(onClick = onRetry, enabled = !busy, modifier = Modifier.size(48.dp).testTag("playlist_item_retry_${item.position}")
+                .semantics { contentDescription = label }) { Icon(Icons.Default.Refresh, null, Modifier.size(24.dp)) }
         }
     }
 }

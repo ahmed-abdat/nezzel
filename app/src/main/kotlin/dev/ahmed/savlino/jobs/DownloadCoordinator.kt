@@ -88,7 +88,8 @@ class DownloadCoordinator(
     suspend fun pauseBatch(id: String) = batchFeeder.pause(id)
     suspend fun resumeBatch(id: String) = batchFeeder.resume(id)
     suspend fun stopBatch(id: String) = batchFeeder.stop(id)
-    suspend fun retryBatch(id: String) = batchFeeder.retry(id).also { playlistRefresh.update { revision -> revision + 1 } }
+    /** A person's Retry: the batch's failed videos, or the one at [position] (a row in its sheet). */
+    suspend fun retryBatch(id: String, position: Int? = null) = batchFeeder.retry(id, position).also { playlistRefresh.update { revision -> revision + 1 } }
 
     /** Replay durable batch controls before startup admits any worker; publications have already recovered. */
     private fun restoreBatchControls() {

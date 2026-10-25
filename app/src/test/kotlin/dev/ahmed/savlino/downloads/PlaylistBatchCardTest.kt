@@ -77,8 +77,9 @@ class PlaylistBatchCardTest {
     private fun row(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, onOpen: () -> Unit = {}, language: String = "en",
         check: () -> Unit) = host(rtl = language == "ar", content = { PlaylistBatchRow(batch, language, action, onOpen) }, check = check)
     private fun sheet(batch: PlaylistBatch, action: (PlaylistBatchAction) -> Unit = {}, language: String = "en", jobs: List<DownloadProgress> = emptyList(),
-        focus: String? = null, dark: Boolean = false, fontScale: Float = 1f, check: () -> Unit) =
-        host(language == "ar", dark, fontScale, { Box(Modifier.fillMaxSize()) { PlaylistVideosContent(batch, jobs, language, action, focusJob = focus) } }, check)
+        focus: String? = null, dark: Boolean = false, fontScale: Float = 1f, onRetryVideo: (Int) -> Unit = {}, check: () -> Unit) =
+        host(language == "ar", dark, fontScale, { Box(Modifier.fillMaxSize()) {
+            PlaylistVideosContent(batch, jobs, language, action, focusJob = focus, onRetryVideo = onRetryVideo) } }, check)
     private fun word(position: Int, text: String) =
         compose.onNodeWithTag("playlist_item_$position").assert(hasText(text, substring = true))
     private val density get() = context.resources.displayMetrics.density
@@ -177,6 +178,28 @@ class PlaylistBatchCardTest {
             compose.onNodeWithTag("playlist_retry").assert(hasText(context.getString(R.string.playlist_retry, "1"))).performClick()
             assertEquals(PlaylistBatchAction.RETRY, sent)
         }
+    }
+    /** beta24: a finished playlist whose videos failed FormatExpired before the automatic flag existed; links still stored. */
+    private fun staleFinished(hasSource: Boolean) = PlaylistBatch(BatchRecord("old", "Coastal walks", Preset.BALANCED, BatchState.COMPLETED, 0, null),
+        listOf(BatchItemRecord("old", 0, "a", "Morning by the sea", BatchItemState.DONE, "job-a", null, false, false),
+            BatchItemRecord("old", 1, "b", "A quiet afternoon", BatchItemState.FAILED, "job-b", DownloadError.FormatExpired, false, false, hasSource),
+            BatchItemRecord("old", 2, "c", "Harbour at dusk", BatchItemState.FAILED, "job-c", DownloadError.FormatExpired, false, false, hasSource)))
+    @Test fun everyFailedVideoWithItsLinkHasItsOwnRetryAndTheCountIsRight() {
+        val sent = mutableListOf<Int>()
+        var batch: PlaylistBatchAction? = null
+        sheet(staleFinished(true), { batch = it }, onRetryVideo = { sent += it }) {
+            compose.onNodeWithTag("playlist_item_retry_2", useUnmergedTree = true).assertHasClickAction().performClick()
+            compose.onNodeWithTag("playlist_item_retry_1", useUnmergedTree = true).performClick()
+            assertEquals(listOf(2, 1), sent)
+            compose.onNodeWithTag("playlist_retry").assert(hasText(context.getString(R.string.playlist_retry, "2"))).performClick()
+            assertEquals(PlaylistBatchAction.RETRY, batch)
+            compose.onNodeWithText(context.getString(R.string.download_retry_hint), substring = true).assertDoesNotExist()
+        }
+    }
+    @Test fun aFailedVideoWithoutItsLinkSaysWhyAndOffersNothing() = sheet(staleFinished(false)) {
+        compose.onNodeWithTag("playlist_item_retry_1", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("playlist_retry").assertDoesNotExist()
+        word(1, context.getString(R.string.download_retry_hint))
     }
     @Test fun stoppedSheetHasNoButtons() = sheet(playlistFixture(BatchState.STOPPED, failed = true)) {
         listOf("playlist_pause", "playlist_resume", "playlist_stop", "playlist_retry").forEach { compose.onNodeWithTag(it).assertDoesNotExist() }

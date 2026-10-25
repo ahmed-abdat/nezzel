@@ -587,6 +587,9 @@
     <string name="dl_tab_running">En cours</string>
     <string name="dl_tab_saved">Enregistrés</string>
     <string name="dl_waiting_count">%1$s en attente</string>
+    <string name="dl_failed_header">Non enregistrés</string>
+    <string name="dl_failed_count">Non enregistrés : %1$s</string>
+    <string name="dl_playlist_failed">%1$s sur %2$s non enregistrées</string>
     <string name="dl_batch_saved_of">%1$s sur %2$s enregistrés</string>
     <string name="dl_batch_saved">%1$s enregistrés</string>
     <!-- dl-viewer: gallery grid and swipe viewer -->

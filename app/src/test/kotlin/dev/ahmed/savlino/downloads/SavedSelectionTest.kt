@@ -25,7 +25,8 @@ class SavedSelectionTest {
         SavedMedia(Uri.parse("content://media/external/downloads/1"), "Family.mp4", "Family", "video/mp4", 100, 100, null, null, null),
         SavedMedia(Uri.parse("content://media/external/downloads/2"), "Song.m4a", "Song", "audio/mp4", 100, 100, null, null, null),
     )
-    private val stopped = dev.ahmed.savlino.jobs.DownloadProgress("f", "late.mp4", dev.ahmed.savlino.jobs.DownloadPhase.FAILED, retryable = true)
+    // A failure now opens Downloading; a check warning still keeps the tabs and opens Saved.
+    private val warning = dev.ahmed.savlino.jobs.CheckWarning("w", "late.mp4", null, dev.ahmed.savlino.domain.ResultCheck.Problem.NO_SOUND, true)
     private fun nodes(a: ComponentActivity): List<SemanticsNode> {
         compose.waitForIdle()
         return semanticsNodes(a, rounds = 4, idleMillis = 100)
@@ -60,9 +61,9 @@ class SavedSelectionTest {
         var opened = 0
         var shared = emptyList<SavedMedia>()
         renderThemed({ nodes(it) }, {
-            // One stopped job keeps the Downloading · Saved tabs; without any job the saved files stand alone.
-            DownloadsScreen(listOf(stopped), context.resources.configuration.locales[0].language, {}, {}, { opened++ }, {}, {}, null, {}, {},
-                libraryLoad = LibraryLoadState.Ready(rows), onShareSelected = { shared = it })
+            // One check warning keeps the Downloading · Saved tabs; without anything to show the saved files stand alone.
+            DownloadsScreen(emptyList(), context.resources.configuration.locales[0].language, {}, {}, { opened++ }, {}, {}, null, {}, {},
+                libraryLoad = LibraryLoadState.Ready(rows), onShareSelected = { shared = it }, warnings = listOf(warning))
         }) { check(it, { opened }, { shared }) }
     }
     @Test fun longPressSelectsTapTogglesWithoutOpenAndShareUsesSelection() = render { a, opened, shared ->
@@ -86,7 +87,7 @@ class SavedSelectionTest {
         selectedCount(a, "1 selected")
         click(a, context.getString(R.string.dl_tab_running))
         assertFalse(texts(nodes(a)).contains("1 selected"))
-        assertTrue(texts(nodes(a)).any { it.contains("late.mp4") })
+        assertTrue(texts(nodes(a)).any { it.contains(context.getString(R.string.check_needs_look)) })
         click(a, context.getString(R.string.dl_tab_saved))
         assertFalse(texts(nodes(a)).contains("1 selected"))
         assertEquals(Role.Button, row(a, "Family").config.getOrNull(SemanticsProperties.Role))

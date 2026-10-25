@@ -11,8 +11,6 @@ import dev.ahmed.savlino.downloads.DownloadsScreen
 import dev.ahmed.savlino.downloads.HomeRecents
 import dev.ahmed.savlino.downloads.LibraryLoadState
 import dev.ahmed.savlino.downloads.SavedMedia
-import dev.ahmed.savlino.jobs.DownloadPhase
-import dev.ahmed.savlino.jobs.DownloadProgress
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.nav.TabContent
 import dev.ahmed.savlino.ui.theme.NezzelTheme
@@ -58,13 +56,13 @@ class ThumbnailCacheTest {
         val pictures = MediaPictures { uri, _, size -> synchronized(loads) { loads += "$uri@$size" }; picture(32, 18) }
         val cache = ThumbnailCache(ThumbnailCache.budget(64))
         var route by mutableStateOf("Home")
-        // A stopped job keeps Downloading · Saved, so the sub-tab switch is covered too.
-        val stopped = listOf(DownloadProgress("f", "late.mp4", DownloadPhase.FAILED, retryable = true))
+        // A check warning keeps Downloading · Saved (and opens Saved), so the sub-tab switch is covered too.
+        val warnings = listOf(dev.ahmed.savlino.jobs.CheckWarning("w", "late.mp4", null, dev.ahmed.savlino.domain.ResultCheck.Problem.NO_SOUND, true))
         @Composable fun Screen() = CompositionLocalProvider(LocalThumbnailCache provides cache, LocalMediaPictures provides pictures) {
             TabContent(route) { destination ->
                 when (destination) {
                     "Home" -> HomeRecents(media, "en", {}) {}
-                    "Downloads" -> DownloadsScreen(stopped, "en", {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(media))
+                    "Downloads" -> DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(media), warnings = warnings)
                     else -> androidx.compose.material3.Text(destination)
                 }
             }

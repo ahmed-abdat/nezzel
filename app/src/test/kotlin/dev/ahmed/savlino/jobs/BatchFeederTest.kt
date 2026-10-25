@@ -627,6 +627,94 @@ class BatchFeederTest {
         }
     }
 
+    /** The owner's beta24 record: a finished playlist whose video failed FormatExpired with retryable=0 but its link kept. */
+    private fun completedWithAStaleFailure(count: Int = 1): String {
+        create(count)
+        runBlocking { feeder().tick() }
+        val old = batches.items("batch").first().jobId
+        // Network on the job keeps today's automatic fresh attempt out of it; the item carries the old recorded reason.
+        runBlocking { jobs.fail(old, DownloadError.Network) }
+        jobs.writableDatabase.execSQL("UPDATE batch_items SET state='FAILED', error='FormatExpired', retryable=0 WHERE batch_id='batch' AND position=0")
+        if (count == 1) jobs.writableDatabase.execSQL("UPDATE batches SET state='COMPLETED' WHERE batch_id='batch'")
+        return old
+    }
+
+    @Test fun aFailureRecordedBeforeLinksOutlivedFailuresGetsItsLinkBackFromItsJob() = runBlocking {
+        completedWithAStaleFailure()
+        // beta22-24 dropped the sealed link of a non-retryable failure; the failed job row still holds it.
+        jobs.writableDatabase.execSQL("UPDATE batch_items SET source_url=NULL WHERE batch_id='batch' AND position=0")
+        assertFalse(batches.items("batch").single().hasSource)
+        val f = feeder(); f.tick()
+        assertTrue(batches.items("batch").single().hasSource)
+        f.retry("batch", 0); f.tick()
+        assertEquals(BatchItemState.QUEUED, batches.items("batch").single().state)
+    }
+
+    @Test fun aNonRetryableFailureKeepsItsLinkForThePersonsRetry() = runBlocking {
+        create(1)
+        feeder().tick()
+        val item = batches.items("batch").single()
+        assertTrue(batches.finish(item, BatchItemState.FAILED, DownloadError.LoginRequired, retryable = false))
+        val failed = batches.items("batch").single()
+        assertFalse(failed.retryable)
+        assertTrue(failed.hasSource)
+    }
+
+    @Test fun aTapOnAStaleFailedVideoResolvesItAgainOnceWithoutTheCache() = runBlocking {
+        val old = completedWithAStaleFailure()
+        assertTrue(batches.items("batch").single().hasSource)
+        engine.cached = engine.inspections.single()
+        engine.formats = listOf(Format("new", "mp4", true, true, height = 720))
+        engine.presets = listOf(PresetChoice(Preset.BALANCED, "new"))
+        val f = feeder()
+        repeat(2) { f.tick() } // Nothing automatic revives it.
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(1, engine.calls)
+        f.retry("batch", 0); f.tick()
+        val item = batches.items("batch").single()
+        assertEquals(BatchItemState.QUEUED, item.state)
+        assertTrue(item.jobId.endsWith(BatchStore.FRESH_SUFFIX))
+        assertEquals("new", jobs.get(item.jobId)!!.format.id)
+        assertEquals(2, engine.calls)
+        assertNull(jobs.get(old)) // The replaced failure does not linger as a standalone row.
+        assertEquals(BatchState.ACTIVE, batches.get("batch")!!.state)
+        // One inspection per tap: it fails the same way, and no tick resolves it again.
+        jobs.fail(item.jobId, DownloadError.FormatExpired)
+        repeat(3) { f.tick() }
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(2, engine.calls)
+    }
+
+    @Test fun aRowRetryTouchesOnlyItsOwnVideo() = runBlocking {
+        completedWithAStaleFailure(3)
+        val f = feeder()
+        jobs.fail(batches.items("batch")[1].jobId, DownloadError.Network); f.tick()
+        jobs.writableDatabase.execSQL("UPDATE batch_items SET retryable=0 WHERE batch_id='batch' AND position=1")
+        f.retry("batch", 0)
+        val items = batches.items("batch")
+        assertNotEquals(BatchItemState.FAILED, items[0].state)
+        assertEquals(BatchItemState.FAILED, items[1].state)
+    }
+
+    @Test fun aVideoWhoseLinkIsGoneOffersNoRetry() = runBlocking {
+        completedWithAStaleFailure()
+        jobs.writableDatabase.execSQL("UPDATE batch_items SET source_url=NULL WHERE batch_id='batch'")
+        val item = batches.items("batch").single()
+        assertFalse(item.hasSource)
+        assertFalse(batches.requestUserRetries("batch", 0).first)
+        val f = feeder(); f.retry("batch", 0); f.tick()
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+        assertEquals(DownloadError.FormatExpired, batches.items("batch").single().error)
+        assertEquals(1, engine.calls)
+    }
+
+    @Test fun aStoppedPlaylistRefusesTheUserRetry() = runBlocking {
+        completedWithAStaleFailure()
+        jobs.writableDatabase.execSQL("UPDATE batches SET state='STOPPED' WHERE batch_id='batch'")
+        assertFalse(batches.requestUserRetries("batch", 0).first)
+        assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+    }
+
     @Test fun staleStoredJobGetsFreshFormatsEvenAfterTheOriginalBatchDeadline() = runBlocking {
         create(1)
         feeder().tick()

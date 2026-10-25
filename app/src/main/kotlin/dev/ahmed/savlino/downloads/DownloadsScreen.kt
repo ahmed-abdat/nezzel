@@ -134,6 +134,8 @@ fun DownloadsScreen(
     openSavedUri: String? = null, onSavedOpened: () -> Unit = {},
     /** A playlist video's job id (a Home card): opens that playlist's sheet at the video. */
     openPlaylistJob: String? = null, onPlaylistJobOpened: () -> Unit = {},
+    /** Retry one failed playlist video: the batch id and the video's position. */
+    onPlaylistVideoRetry: (String, Int) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -158,8 +160,9 @@ fun DownloadsScreen(
     val batches = rememberVisibleBatches(playlists)
     var tab by rememberDownloadsTab(jobs, playlists)
     // Downloading exists only while it holds something: a job (moving, waiting, paused, failed or in its Saved moment),
-    // a playlist or a check to look at. Otherwise there are no tabs and the saved files are the screen.
-    val showTabs = active.isNotEmpty() || batches.isNotEmpty() || warnings.isNotEmpty()
+    // a playlist, something that did not save or a check to look at. Otherwise there are no tabs and the saved files are the screen.
+    val failures = failureCount(jobs, playlists)
+    val showTabs = active.isNotEmpty() || batches.isNotEmpty() || warnings.isNotEmpty() || failures > 0
     if (!showTabs && tab != DownloadsTab.SAVED) SideEffect { tab = DownloadsTab.SAVED }
     val current = if (showTabs) tab else DownloadsTab.SAVED
     val runningState = rememberLazyListState()
@@ -201,7 +204,7 @@ fun DownloadsScreen(
     if (sheetBatchId != null && sheetBatch == null) SideEffect { sheetBatchId = null; sheetFocus = null }
     sheetBatch?.let { batch ->
         PlaylistVideosSheet(batch, jobs, language, { onPlaylistAction(batch.id, it) }, { sheetBatchId = null; sheetFocus = null },
-            busy = batch.id in playlistBusy, focusJob = sheetFocus)
+            busy = batch.id in playlistBusy, focusJob = sheetFocus, onRetryVideo = { onPlaylistVideoRetry(batch.id, it) })
     }
     val filtered = remember(saved, effectiveFilter, query, sort, language) {
         savedLibraryItems(saved, effectiveFilter, query, sort, Locale.forLanguageTag(language))
@@ -254,7 +257,7 @@ fun DownloadsScreen(
         // The row folds away (and comes back) in place of a jump; reduced motion snaps.
         AnimatedVisibility(showTabs, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced, Motion.TAB)),
             exit = fadeOut(easeOut(reduced, Motion.FADE_OUT)) + shrinkVertically(easeOut(reduced, Motion.TAB))) {
-            DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language) { tab = it }
+            DownloadsTabRow(current, downloadingCount(standalone, playlists), warnings.isNotEmpty(), language, failures) { tab = it }
         }
         // Pinned under the app bar, outside the list: always in view, and free to grow at 200% text.
         AnimatedVisibility(search && saved.isNotEmpty() && current == DownloadsTab.SAVED, enter = fadeIn(easeOut(reduced, Motion.FADE_IN)) + expandVertically(easeOut(reduced)),
@@ -274,13 +277,34 @@ fun DownloadsScreen(
                 // Two or more queued rows fold into one "N waiting" line; one stays a row of its own.
                 val waiting = active.filter { it.queuedOnly }.takeIf { it.size >= 2 }.orEmpty()
                 val (failed, moving) = (active - waiting.toSet()).partition { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
+                // A finished playlist with failures lives only on its «Not saved» line; one still running keeps its row below too.
+                val failedLists = failedPlaylists(batches, jobs)
+                val listed = batches.filter { !(it.terminal && it in failedLists) }
                 // One download alone: the tab's badge already says "1", so no header repeats it.
                 val lone = active.size == 1 && runningCount(jobs) == 1 && batches.isEmpty() && warnings.isEmpty()
-                if (active.isNotEmpty()) {
+                // What did not save comes first, each with its reason and Retry; Retry all once two rows offer it.
+                if (failed.isNotEmpty() || failedLists.isNotEmpty()) {
+                    stickyHeader(key = "failed-header") {
+                        val retry = failureRetry(failed, failedLists)
+                        SectionHeader(stringResource(R.string.dl_failed_header), error = true, retry?.let { all -> {
+                            BatchButton(BatchAction(BatchKind.RETRY, all.jobs + all.playlists), language, !batchBusy) {
+                                if (all.jobs.isNotEmpty()) onBatch(BatchAction(BatchKind.RETRY, all.jobs))
+                                all.playlists.forEach { onPlaylistAction(it, PlaylistBatchAction.RETRY) }
+                            }
+                        } })
+                    }
+                    items(failed, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
+                    items(failedLists, key = { "playlist-failed-${it.id}" }, contentType = { "playlist-failed" }) { batch ->
+                        PlaylistFailureRow(batch, jobs, language, { onPlaylistAction(batch.id, PlaylistBatchAction.RETRY) },
+                            { sheetFocus = null; sheetBatchId = batch.id }, busy = batch.id in playlistBusy, modifier = rowMotion())
+                    }
+                }
+                val unfinished = active.filter { it !in failed }
+                if (unfinished.isNotEmpty()) {
                     if (!lone) stickyHeader(key = "jobs-header") {
-                        val batch = batchAction(active)
+                        val batch = batchAction(unfinished)
                         SectionHeader(stringResource(if (runningCount(jobs) == 0) R.string.downloads_stopped_header else R.string.downloads_running_header,
-                            NezzelFormat.count(if(runningCount(jobs) == 0) active.size else runningCount(jobs), language)), runningCount(jobs) == 0,
+                            NezzelFormat.count(if(runningCount(jobs) == 0) unfinished.size else runningCount(jobs), language)), runningCount(jobs) == 0,
                             batch?.let { { BatchButton(it, language, !batchBusy) { onBatch(it) } } })
                     }
                     // Severe heat holds downloads to one; say so once, above the rows that wait for it.
@@ -288,14 +312,6 @@ fun DownloadsScreen(
                         item(key = "heat-note") { HeatNote(Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) }
                     items(moving, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }
-                batches.forEach { batch ->
-                    item(key = "playlist-${batch.id}") {
-                        PlaylistBatchRow(batch, language, { onPlaylistAction(batch.id, it) }, { sheetFocus = null; sheetBatchId = batch.id },
-                            busy = batch.id in playlistBusy, modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)))
-                    }
-                    items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
-                }
-                items(failed, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 if (waiting.isNotEmpty()) {
                     item(key = "waiting-line") {
                         WaitingLine(waiting.size, waitingOpen, language, Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120))) {
@@ -303,6 +319,13 @@ fun DownloadsScreen(
                         }
                     }
                     if (waitingOpen) items(waiting, key = { "job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
+                }
+                listed.forEach { batch ->
+                    item(key = "playlist-${batch.id}") {
+                        PlaylistBatchRow(batch, language, { onPlaylistAction(batch.id, it) }, { sheetFocus = null; sheetBatchId = batch.id },
+                            busy = batch.id in playlistBusy, modifier = Modifier.animateItem(fadeInSpec = easeOut(reduced), fadeOutSpec = easeOut(reduced, 120)))
+                    }
+                    items(batchMemberRows(batch, jobs), key = { "playlist-job-${it.jobId}" }, contentType = { "job" }) { job -> JobItem(job) }
                 }
                 // Result check: saved files that need a look (in memory only).
                 if (warnings.isNotEmpty()) {

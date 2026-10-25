@@ -28,15 +28,18 @@ class DownloadsTabsTest {
         awaitingSchedule: Boolean = false, retryable: Boolean = false) =
         DownloadProgress(id, "$id.mp4", phase, waiting = waiting, paused = paused, awaitingSchedule = awaitingSchedule, retryable = retryable)
 
-    @Test fun entryOpensDownloadingOnlyWhileSomethingIsActive() {
+    @Test fun entryOpensDownloadingWhileSomethingIsActiveOrNotSaved() {
         assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a")), emptyList()))
         assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a", waiting = true)), emptyList()))
         assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a", paused = true)), emptyList()))
         assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a", DownloadPhase.FAILED, awaitingSchedule = true)), emptyList()))
         assertEquals(DownloadsTab.RUNNING, entryTab(emptyList(), listOf(playlistFixture())))
-        // Failures and finished work alone open Saved.
-        assertEquals(DownloadsTab.SAVED, entryTab(listOf(job("a", DownloadPhase.FAILED, retryable = true)), emptyList()))
-        assertEquals(DownloadsTab.SAVED, entryTab(listOf(job("a", DownloadPhase.COMPLETED)), listOf(playlistFixture(BatchState.COMPLETED, failed = true))))
+        // Something that did not save opens Downloading, where its reason and Retry are; finished work alone opens Saved.
+        assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a", DownloadPhase.FAILED, retryable = true)), emptyList()))
+        assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a", DownloadPhase.FAILED)), emptyList()))
+        assertEquals(DownloadsTab.RUNNING, entryTab(listOf(job("a", DownloadPhase.COMPLETED)), listOf(playlistFixture(BatchState.COMPLETED, failed = true))))
+        assertEquals(DownloadsTab.SAVED, entryTab(listOf(job("a", DownloadPhase.COMPLETED)), listOf(playlistFixture(BatchState.COMPLETED))))
+        assertEquals(DownloadsTab.SAVED, entryTab(emptyList(), emptyList()))
     }
 
     @Test fun switchRules() {
@@ -108,9 +111,12 @@ class DownloadsTabsTest {
         compose.onNodeWithTag("saved_list").assertExists()
     }
 
-    @Test fun aStoppedJobKeepsTheTabsButOpensSaved() = render({
+    @Test fun aFailedJobOpensDownloadingUnderNotSaved() = render({
         DownloadsScreen(listOf(job("a", DownloadPhase.FAILED, retryable = true)), "en", {}, {}, {}, {}, {}, null, {}, {})
-    }) { savedTab; compose.onNodeWithTag("tab_running").assertExists() }
+    }) {
+        compose.onNodeWithTag("tab_running").assertIsSelected()
+        compose.onNodeWithText(context.getString(R.string.dl_failed_header)).assertExists()
+    }
 
     @Test fun oneDownloadAloneHasNoHeaderButTwoDo() {
         render({ DownloadsScreen(listOf(job("a")), "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
@@ -125,6 +131,7 @@ class DownloadsTabsTest {
     @Test fun aJobStartingWhileOnSavedMovesToDownloading() {
         val jobs = mutableStateOf(listOf(job("a", DownloadPhase.FAILED, retryable = true)))
         render({ DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {}) }) {
+            compose.onNodeWithTag("tab_saved").performClick()
             compose.onNodeWithTag("tab_saved").assertIsSelected()
             jobs.value = jobs.value + job("b", waiting = true)
             compose.waitForIdle()
@@ -159,10 +166,11 @@ class DownloadsTabsTest {
             compose.onNodeWithText("Saved 2").assertExists()
             pass(BATCH_DWELL + 1000)
             compose.onNodeWithTag("playlist_batch_list").assertDoesNotExist()
-            compose.onNodeWithTag("playlist_batch_bad").assertExists()
-            // Retry lives in the playlist's sheet now; the row opens it.
+            // A finished playlist with failures stays as its «Not saved» line only; the line opens its sheet.
+            compose.onNodeWithTag("playlist_batch_bad").assertDoesNotExist()
+            compose.onNodeWithTag("playlist_failed_bad").assertExists()
             compose.onNodeWithTag("playlist_retry").assertDoesNotExist()
-            compose.onNodeWithTag("playlist_header").performClick(); compose.waitForIdle()
+            compose.onNodeWithTag("playlist_failed_bad").performClick(); compose.waitForIdle()
             compose.onNodeWithTag("playlist_retry").assertExists()
         }
     }

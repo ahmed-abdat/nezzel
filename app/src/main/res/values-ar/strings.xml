@@ -647,6 +647,9 @@
     <string name="dl_tab_running">جارية</string>
     <string name="dl_tab_saved">محفوظة</string>
     <string name="dl_waiting_count">في الانتظار: %1$s</string>
+    <string name="dl_failed_header">لم تُحفظ</string>
+    <string name="dl_failed_count">لم تُحفظ: %1$s</string>
+    <string name="dl_playlist_failed">%1$s من %2$s لم تُحفظ</string>
     <string name="dl_batch_saved_of">حُفظ %1$s من %2$s</string>
     <string name="dl_batch_saved">تم حفظ %1$s</string>
     <!-- dl-viewer: gallery grid and swipe viewer -->

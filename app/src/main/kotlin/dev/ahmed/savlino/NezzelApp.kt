@@ -141,6 +141,12 @@ fun NezzelApp(
             }
         }
     }
+    val playlistVideoRetry: (String, Int) -> Unit = { id, position ->
+        if (id !in playlistBusy) {
+            playlistBusy = playlistBusy + id
+            scope.launch { try { links.downloads?.retryBatch(id, position) } finally { playlistBusy = playlistBusy - id } }
+        }
+    }
     val cancel: (String) -> Unit = { id -> links.cancelDownload(id); DownloadNotifications(context).dismissPaused(id) }
     // A paused notification outlives its pause only if the job expired or was removed elsewhere: clear it when the row leaves Paused.
     var pausedIds by remember { mutableStateOf(emptySet<String>()) }
@@ -291,7 +297,7 @@ fun NezzelApp(
                             retry, pause, resume, libraryLoad = library.load, onLibraryRetry = library.onRetry,
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
                             canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy,
-                            playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy,
+                            playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy, onPlaylistVideoRetry = playlistVideoRetry,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
                             openSavedUri = openSavedUri, onSavedOpened = onSavedOpened,
                             openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null })

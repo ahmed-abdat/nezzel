@@ -575,6 +575,9 @@
     <string name="dl_tab_running">Downloading</string>
     <string name="dl_tab_saved">Saved</string>
     <string name="dl_waiting_count">%1$s waiting</string>
+    <string name="dl_failed_header">Not saved</string>
+    <string name="dl_failed_count">Not saved: %1$s</string>
+    <string name="dl_playlist_failed">%1$s of %2$s not saved</string>
     <string name="dl_batch_saved_of">Saved %1$s of %2$s</string>
     <string name="dl_batch_saved">Saved %1$s</string>
     <!-- dl-viewer: gallery grid and swipe viewer -->

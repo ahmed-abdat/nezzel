@@ -17,7 +17,9 @@ class BatchRecord(val id: String, val title: String, val preset: Preset, val sta
 class BatchItemRecord(val batchId: String, val position: Int, val itemId: String, val title: String,
     val state: BatchItemState, val jobId: String, val error: DownloadError?, val retryable: Boolean,
     /** A BALANCED request had to use SMALL; the later batch card can disclose this. */
-    val fallback: Boolean)
+    val fallback: Boolean,
+    /** Its sealed link is still stored, so a person's Retry can resolve it again. */
+    val hasSource: Boolean = retryable)
 
 /** Same database/upgrade owner as jobs; source URLs are authenticated ciphertext, never a plaintext fallback. */
 class BatchStore internal constructor(internal val jobs: JobStore, private val cipher: LinkCipher = KeystoreLinkCipher.current(),
@@ -110,6 +112,17 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         } finally { db.endTransaction() }
     }
 
+    /** A failure recorded before links outlived failures: reseal the job's own link while the batch is alive. */
+    @Synchronized internal fun adoptSource(item: BatchItemRecord, link: String): Boolean {
+        if (item.state != BatchItemState.FAILED || item.hasSource) return false
+        val batch = get(item.batchId) ?: return false
+        if (batch.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || now() - batch.createdAt >= LIFETIME_MS) return false
+        val sealed = cipher.seal(link) ?: return false
+        return db.update("batch_items", ContentValues().apply { put("source_url", sealed) },
+            "batch_id=? AND position=? AND job_id=? AND state='FAILED' AND source_url IS NULL",
+            arrayOf(item.batchId, item.position.toString(), item.jobId)) == 1
+    }
+
     /** Unavailable Keystore is transient; a lost key is permanent and its blob is discarded. */
     @Synchronized internal fun source(item: BatchItemRecord): String? {
         val blob = db.query("batch_items", arrayOf("source_url"), "batch_id=? AND position=?", args(item), null, null, null)
@@ -117,7 +130,12 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         return when (val opened = cipher.open(blob)) {
             is LinkCipher.Opened.Link -> opened.text
             LinkCipher.Opened.Unavailable -> null
-            LinkCipher.Opened.Gone -> { finish(item, BatchItemState.FAILED, DownloadError.ExecutionRestricted); null }
+            LinkCipher.Opened.Gone -> {
+                // The key is gone, so this sealed link can never open again: drop it.
+                finish(item, BatchItemState.FAILED, DownloadError.ExecutionRestricted)
+                db.update("batch_items", ContentValues().apply { putNull("source_url") }, "batch_id=? AND position=?", args(item))
+                null
+            }
         }
     }
 
@@ -133,13 +151,15 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         require(state in setOf(BatchItemState.DONE, BatchItemState.FAILED, BatchItemState.SKIPPED))
         db.beginTransaction()
         try {
-            val keep = retryable && get(item.batchId)?.let {
+            val alive = get(item.batchId)?.let {
                 now() - it.createdAt < (if (item.jobId.endsWith(FRESH_SUFFIX)) 2 * LIFETIME_MS else LIFETIME_MS)
             } == true
+            val keep = retryable && alive
             val allowed = if (state == BatchItemState.DONE) "('WAITING','QUEUED','FAILED')" else "('WAITING','QUEUED')"
             val changed = db.update("batch_items", ContentValues().apply {
                 put("state", state.name); put("error", error?.name); put("retryable", if (keep) 1 else 0)
-                if (!keep) putNull("source_url")
+                // A failed video keeps its sealed link for the person's own Retry until the batch lifetime scrubs it.
+                if (!(state == BatchItemState.FAILED && alive)) putNull("source_url")
             }, "batch_id=? AND position=? AND state IN $allowed", args(item)) == 1
             if (changed) {
                 val network = error in setOf(DownloadError.Network, DownloadError.Offline)
@@ -196,6 +216,43 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         }, "batch_id=? AND state='FAILED' AND retryable=1 AND source_url IS NOT NULL" + eligible, arrayOf(id)) > 0
     }
 
+    /**
+     * A person's Retry (the whole batch, or one video at [position]): every failed video whose link is still stored, whatever
+     * the automatic retryable flag says. Retryable ones go back as they are; the others get a new fresh job id, so the feeder
+     * resolves the link again instead of reusing the confirmation that failed. Never a stopped/expired batch or one past its
+     * lifetime. Returns whether anything changed and the replaced job ids (their failed rows are removed by the caller).
+     */
+    @Synchronized internal fun requestUserRetries(id: String, position: Int? = null): Pair<Boolean, List<String>> {
+        scrubExpired()
+        val row = get(id) ?: return false to emptyList()
+        val age = now() - row.createdAt
+        if (row.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || age >= 2 * LIFETIME_MS) return false to emptyList()
+        val at = if (position != null) " AND position=${position.toInt()}" else ""
+        db.beginTransaction()
+        try {
+            val revived = requestRetriesAt(id, age, at)
+            val replaced = items(id).filter { it.state == BatchItemState.FAILED && it.hasSource && (position == null || it.position == position) &&
+                (!it.retryable || (age >= LIFETIME_MS && !it.jobId.endsWith(FRESH_SUFFIX))) }
+                .filter { item ->
+                    db.update("batch_items", ContentValues().apply {
+                        put("job_id", userJobId(item.jobId)); put("state", BatchItemState.WAITING.name); putNull("error"); put("retryable", 0)
+                    }, "batch_id=? AND position=? AND job_id=? AND state='FAILED' AND source_url IS NOT NULL AND NOT EXISTS " +
+                        "(SELECT 1 FROM jobs WHERE job_id=? AND (stage!='FAILED' OR pending_uri IS NOT NULL))",
+                        arrayOf(item.batchId, item.position.toString(), item.jobId, item.jobId)) == 1
+                }.map { it.jobId }
+            db.setTransactionSuccessful()
+            return (revived || replaced.isNotEmpty()) to replaced
+        } finally { db.endTransaction() }
+    }
+
+    private fun requestRetriesAt(id: String, age: Long, at: String): Boolean = db.update("batch_items", ContentValues().apply {
+        put("state", BatchItemState.WAITING.name); putNull("error")
+    }, "batch_id=? AND state='FAILED' AND retryable=1 AND source_url IS NOT NULL" +
+        (if (age >= LIFETIME_MS) " AND job_id LIKE '%$FRESH_SUFFIX'" else "") + at, arrayOf(id)) > 0
+
+    /** The base id plus "-u<time>" and the fresh suffix: unique per tap, and fresh so the feeder skips cached formats. */
+    private fun userJobId(jobId: String) = jobId.replace(USER_RETRY, "") + "-u" + now() + FRESH_SUFFIX
+
     @Synchronized internal fun finishIfIdle(id: String) {
         if (items(id).none { it.state in setOf(BatchItemState.WAITING, BatchItemState.QUEUED) })
             db.execSQL("UPDATE batches SET state='COMPLETED' WHERE batch_id=? AND state IN ('ACTIVE','PAUSED','WAITING_NETWORK')", arrayOf(id))
@@ -235,7 +292,8 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         BatchState.valueOf(c.text("state")), c.getLong(c.getColumnIndexOrThrow("created_at")), c.optional("error")?.let(DownloadError::valueOf))
     private fun item(c: Cursor) = BatchItemRecord(c.text("batch_id"), c.getInt(c.getColumnIndexOrThrow("position")), c.text("item_id"), c.text("title"),
         BatchItemState.valueOf(c.text("state")), c.text("job_id"), c.optional("error")?.let(DownloadError::valueOf),
-        c.getInt(c.getColumnIndexOrThrow("retryable")) == 1, c.getInt(c.getColumnIndexOrThrow("fallback")) == 1)
+        c.getInt(c.getColumnIndexOrThrow("retryable")) == 1, c.getInt(c.getColumnIndexOrThrow("fallback")) == 1,
+        !c.isNull(c.getColumnIndexOrThrow("source_url")))
     private fun Cursor.text(name: String) = getString(getColumnIndexOrThrow(name))
     private fun Cursor.optional(name: String): String? = getColumnIndexOrThrow(name).let { if (isNull(it)) null else getString(it) }
 
@@ -244,6 +302,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         internal const val RETENTION_MS = 30L * LIFETIME_MS
         internal const val LINK_ITEM = "link-"
         internal const val FRESH_SUFFIX = "-fresh"
+        private val USER_RETRY = Regex("(-u\\d+)?(-fresh)?$")
         internal fun createTables(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE IF NOT EXISTS batches (
                 batch_id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, preset TEXT NOT NULL,
