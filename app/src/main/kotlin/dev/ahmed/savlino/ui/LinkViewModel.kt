@@ -758,6 +758,7 @@ class LinkViewModel(
                     if (operationId != id || currentSource()?.matches(origin) != true) return@launch
                     selectedImageRefs = result.inspection.items.flatMap { it.renditions.filterIsInstance<MediaRendition.Image>() }
                         .map { it.ref }.toSet()
+                    if (selectedPositions == null) soundSelected = false // A new post starts with its sound unticked.
                     if (selectedPositions != null) selectedImageRefs = result.inspection.items
                         .filter { it.position in selectedPositions }.flatMap { it.renditions }.map { it.ref }.toSet()
                     operationId = null; imageOperation = false
@@ -1212,7 +1213,25 @@ class LinkViewModel(
         private set
     var imageSaveProgress by mutableStateOf<Pair<Int, Int>?>(null)
         private set
-    val imageSaving get() = pendingImageSave != null
+    /** TikTok photo post: the sound tile is ticked; Save also downloads it. Unticked for every new post. */
+    var soundSelected by mutableStateOf(false)
+        private set
+    /** The sheet whose Save is still reading its sound; it holds only that sheet, never the next link's. */
+    private var soundSheet by mutableStateOf<OptionsState.ImageReady?>(null)
+    private var soundJob: kotlinx.coroutines.Job? = null
+    private var soundOperation: String? = null
+    /** Sound failed while photos still save: told after the photo result, so its snackbar does not hide this one. */
+    private var soundNoticeAfterPhotos = false
+    private val soundFailedChannel = Channel<Unit>(Channel.UNLIMITED)
+    /** The sound of this sheet's Save could not be downloaded (no read, or no audio-only format returned). */
+    val soundFailedEvents: Flow<Unit> = soundFailedChannel.receiveAsFlow()
+    val imageSaving get() = pendingImageSave != null || soundSheet.let { it != null && it === optionsState }
+    /** Only the sound is being read: the bar says so instead of a photo count. */
+    val soundSaving get() = pendingImageSave == null && imageSaving
+    fun toggleSound() {
+        val ready = optionsState as? OptionsState.ImageReady ?: return
+        if (!imageSaving && ready.discovery.sound != null) soundSelected = !soundSelected
+    }
     fun toggleImage(ref: MediaRenditionRef) {
         val ready = optionsState as? OptionsState.ImageReady ?: return
         if (imageSaving || ref in ready.expiredPhotos || ready.photos.none { it.ref == ref }) return
@@ -1231,33 +1250,48 @@ class LinkViewModel(
         val source = ready.inspection.source
         val route = ImageRoute.of(source.link)
         val video = ready.videoSource
+        val sound = tikTokSoundSource(ready)
         invalidateOptions()
-        if (ready.discovery.sound != null && video != null && video.revision == source.revision &&
-            TikTokPostIdentity.parse(video.link.rawUrl)?.videoUrl == video.link.rawUrl &&
-            TikTokPostIdentity.parse(video.link.rawUrl)?.postId == TikTokPostIdentity.parse(source.link.rawUrl)?.postId)
-            startLegacyInspection(video, origin, tikTokPhotos = false)
+        if (sound != null) startLegacyInspection(sound, origin, tikTokPhotos = false)
         else if (video == null) startLegacyInspection(legacyReaderSource(source, route), origin)
         else if (route == MediaSourceRoute.FACEBOOK && video.revision == source.revision && CANONICAL_WATCH.matches(video.link.rawUrl))
             startLegacyInspection(video, origin)
         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
     }
+    /** The post's own exact /video/ link at this revision: the only link its sound is read from. */
+    private fun tikTokSoundSource(ready: OptionsState.ImageReady): LinkRevision? {
+        val video = ready.videoSource ?: return null
+        val source = ready.inspection.source
+        val identity = TikTokPostIdentity.parse(video.link.rawUrl)
+        return video.takeIf { ready.discovery.sound != null && it.revision == source.revision && identity?.videoUrl == it.link.rawUrl &&
+            identity.postId == TikTokPostIdentity.parse(source.link.rawUrl)?.postId }
+    }
     init { imageSaver?.let { saver -> viewModelScope.launch { saver.outcome.collect { onImageOutcome(it) } } } }
     val imageSaveEnabled get() = (optionsState as? OptionsState.ImageReady)?.let { ready ->
-        imageSaver != null && !imageSaving && ready.availability == ImageSaveAvailability.Available &&
-            ready.photos.any { it.ref in selectedImageRefs && it.ref !in ready.expiredPhotos } && currentSource()?.matches(ready.origin ?: ready.inspection.source) == true
+        val photos = imageSaver != null && ready.availability == ImageSaveAvailability.Available &&
+            ready.photos.any { it.ref in selectedImageRefs && it.ref !in ready.expiredPhotos }
+        !imageSaving && (photos || (soundSelected && ready.discovery.sound != null)) &&
+            currentSource()?.matches(ready.origin ?: ready.inspection.source) == true
     } == true
-    /** Explicit Save of the chosen returned images. No notification permission: nothing is posted. */
+    /** Explicit Save of the chosen returned images (and the ticked sound). No notification permission: nothing is posted. */
     fun saveImage() {
         if (!imageSaveEnabled) return
         val ready = optionsState as? OptionsState.ImageReady ?: return
         val chosen = ready.photos.filter { it.ref in selectedImageRefs && it.ref !in ready.expiredPhotos }
-        val first = chosen.firstOrNull() ?: return
+            .takeIf { imageSaver != null && ready.availability == ImageSaveAvailability.Available }.orEmpty()
+        val sound = soundSelected
+        usage.count(UsageKeys.FUNNEL_TAPPED)
+        // Photos first: a sound failure seen before their save starts would otherwise be hidden by their snackbar.
+        if (chosen.isNotEmpty()) savePhotos(ready, chosen)
+        if (sound) saveSound(ready, alone = chosen.isEmpty())
+    }
+    private fun savePhotos(ready: OptionsState.ImageReady, chosen: List<MediaRendition.Image>) {
+        val first = chosen.first()
         val metadata = ready.inspection.items.first().metadata
         val title = (metadata.title ?: metadata.uploader)?.let(::shortFileTitle)?.takeIf { it.isNotBlank() } ?: "Nezzel_" +
             java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", java.util.Locale.ROOT))
         val selection = ready.inspection.selection(first.ref) ?: return
         // Preserve single-image outcomes/API. Carousel suffixes use original returned item positions, not tap order.
-        usage.count(UsageKeys.FUNNEL_TAPPED)
         if (!ready.isCarousel) {
             if (imageSaver?.save(selection, first.image, title) == true) {
                 pendingImageSave = selection; imageSaveProgress = 1 to 1
@@ -1285,7 +1319,42 @@ class LinkViewModel(
         val cut = trimmed.substring(0, trimmed.offsetByCodePoints(0, IMAGE_TITLE_MAX))
         return cut.substringBeforeLast(' ').takeIf { it.isNotBlank() }?.trim() ?: cut
     }
-    fun cancelImageSave() { if (imageSaving) imageSaver?.cancel() }
+    /**
+     * Save is the confirmation: read the post's /video/ link as the sound route does, keep only an audio-only row the
+     * engine returned (M4A first) and enqueue it as a normal job. The photo sheet stays as it is meanwhile.
+     */
+    private fun saveSound(ready: OptionsState.ImageReady, alone: Boolean) {
+        soundSelected = false // Handled by this Save; a second Save after a partial photo failure must not repeat it.
+        val video = tikTokSoundSource(ready)
+        val coordinator = downloads
+        if (video == null || coordinator == null) { soundFailed(); return }
+        val id = newOperationId()
+        soundOperation = id
+        soundSheet = ready
+        // Application scope: the job is the person's confirmed choice and outlives the sheet; Main as the legacy read is.
+        soundJob = (coordinatorScope ?: viewModelScope).launch(Dispatchers.Main) {
+            val inspected = (readLegacy(video, id).result as? InspectResult.Success)?.inspection?.takeIf { it.source.matches(video) }
+            val audio = inspected?.let(::selectable)?.filter { !it.hasVideo && it.hasAudio }
+            val row = audio?.firstOrNull { it.container == "m4a" } ?: audio?.firstOrNull()
+            val command = if (inspected == null || row == null) null else
+                (DownloadCommand.confirm(UUID.randomUUID().toString(), inspected, video, row.id, "Nezzel") as? ConfirmResult.Confirmed)?.command
+            val queued = command != null && try {
+                coordinator.enqueue(command, inspected?.presets?.firstOrNull { it.formatId == row?.id }?.preset)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Throwable) { if (failure is VirtualMachineError && failure !is StackOverflowError) throw failure; false }
+            if (soundOperation != id) return@launch
+            soundOperation = null; soundJob = null; soundSheet = null
+            if (!queued) soundFailed()
+            else if (alone && optionsState === ready) { acceptedJob = command?.jobId; dismissOptions(); clearField() }
+        }
+    }
+    private fun soundFailed() { if (pendingImageSave != null) soundNoticeAfterPhotos = true else soundFailedChannel.trySend(Unit) }
+    fun cancelImageSave() {
+        if (!imageSaving) return
+        imageSaver?.cancel()
+        soundOperation?.let { engine.cancel(it); soundOperation = null }
+        soundJob?.cancel(); soundJob = null; soundSheet = null
+    }
     private fun onImageOutcome(outcome: ImageSaveState) {
         if (outcome is ImageSaveState.Saving) {
             if (imageSaving) imageSaveProgress = outcome.current to outcome.total
@@ -1320,6 +1389,7 @@ class LinkViewModel(
                 ready?.directImage == true)
             else -> imageEventChannel.trySend(outcome)
         }
+        if (soundNoticeAfterPhotos) { soundNoticeAfterPhotos = false; soundFailedChannel.trySend(Unit) }
     }
     private fun refreshExpiredImages(ready: OptionsState.ImageReady, failures: List<ImageSaveState.Failed>) {
         val expired = failures.filter { it.image == ImageFailure.EXPIRED }.map { it.selection.renditionRef }

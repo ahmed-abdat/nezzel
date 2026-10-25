@@ -191,6 +191,8 @@ fun NezzelApp(
             launch { links.downloads?.cancelled?.collect {
                 snackbar.showSnackbar(context.getString(R.string.download_cancelled))
             } }
+            // Queued after the photo result (never dismissing it): both messages are read.
+            launch { links.soundFailedEvents.collect { snackbar.showSnackbar(context.getString(R.string.sound_save_failed)) } }
             launch { links.imageEvents.collect { event ->
                 snackbar.currentSnackbarData?.dismiss()
                 if (event is ImageSaveState.BatchFinished) {

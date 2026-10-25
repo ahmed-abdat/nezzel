@@ -82,6 +82,8 @@ class ShareSheetActivity : AppCompatActivity() {
             }
             LaunchedEffect(links.moreFormats) { if (links.moreFormats) openInNezzel() }
             LaunchedEffect(Unit) { links.imageEvents.collect(::onImageEvent) }
+            LaunchedEffect(Unit) { links.soundFailedEvents.collect {
+                Toast.makeText(applicationContext, R.string.sound_save_failed, Toast.LENGTH_LONG).show() } }
             NezzelTheme(preferences.theme, preferences.matchWallpaper) {
                 ShareSheet(links, language, ShareSheetHooks(onOpenApp = { if (!links.imageSaving) openInNezzel() }, onFinish = ::finishAndRemoveTask,
                     notifyLine = notifyLine, onAllowNotifications = ::askNotifications,
