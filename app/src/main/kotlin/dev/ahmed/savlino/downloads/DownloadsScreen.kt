@@ -261,6 +261,15 @@ fun DownloadsScreen(
     val closeSearch = { search = false; query = "" }
     BackHandler(search, closeSearch)
     BackHandler(selecting) { clearSelection() }
+    // The list keeps its first visible row anchored when something is inserted above it (the old-downloads card, the load
+    // status), which cuts the new top item off. Composition still sees the state from before the change (also while
+    // Downloading is shown and the list is not composed), so a list resting at its start is sent back to the start.
+    val head = Triple(libraryLoad !is LibraryLoadState.Ready, offer.card && !selecting && !search, saved.isNotEmpty())
+    val shownHead = remember { arrayOf(head) }
+    if (shownHead[0] != head) {
+        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) listState.requestScrollToItem(0)
+        shownHead[0] = head
+    }
     // Results replace the list in place; start them at the top so a filtered list never opens mid-scroll.
     LaunchedEffect(query) { if (search && query.isNotEmpty()) listState.scrollToItem(0) }
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = { Column {
