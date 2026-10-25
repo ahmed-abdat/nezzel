@@ -66,11 +66,14 @@ internal const val HOME_JOB_CARDS = 8
  * here but are not listed yet ([landing]), then the saved files. A file whose job is still in the journal takes the job's key.
  */
 internal fun homeSlots(jobs: List<DownloadProgress>, recent: List<SavedMedia>, listed: Set<String>, started: List<String>,
-                       landing: Set<String>): List<HomeSlot> {
+                       landing: Set<String>, fileJobs: MutableMap<String, String> = HashMap()): List<HomeSlot> {
     val live = visibleJobs(jobs, started).take(HOME_JOB_CARDS).map { JobSlot(it.jobId) }
     val landed = jobs.filter { it.jobId in landing && it.saved && it.publishedUri?.let { uri -> fileKey(uri) in listed } != true }
         .map { JobSlot(it.jobId, landing = true) }
-    val byFile = jobs.filter { it.saved && it.publishedUri != null }.associate { fileKey(it.publishedUri!!) to it.jobId }
+    // Remembered past the job's own life: when the finished job leaves the list, its file keeps the job's key, so the
+    // card never swaps keys (a remove plus an insert that slides the row).
+    jobs.forEach { job -> if (job.saved) job.publishedUri?.let { fileJobs[fileKey(it)] = job.jobId } }
+    val byFile = fileJobs
     val used = HashSet<String>()
     return live + landed + recent.map { item ->
         FileSlot(item, byFile[fileKey(item.uri)]?.let(::jobKey)?.takeIf(used::add) ?: item.uri.toString())

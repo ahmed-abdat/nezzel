@@ -810,6 +810,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     val seen = remember { HashMap<String, DownloadPhase>() }
     val started = remember { mutableListOf<String>() }
     val landing = remember { LinkedHashSet<String>() }
+    val fileJobs = remember { HashMap<String, String>() }
     val expiry = remember { mutableIntStateOf(0) }
     val slots by remember(media) {
         val listed = media.mapTo(HashSet()) { fileKey(it.uri) }
@@ -824,7 +825,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             }
             val running = all.filter { it.running }.map { it.jobId }
             started.retainAll(running.toSet()); running.forEach { if (it !in started) started += it }
-            homeSlots(all, recent, listed, started, landing)
+            homeSlots(all, recent, listed, started, landing, fileJobs)
         }
     }
     // A file that never lists (deleted at once, a failed query) gives its slot up after a while.

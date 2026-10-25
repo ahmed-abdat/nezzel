@@ -120,6 +120,16 @@ class HomeInPlaceTest {
         }
     }
 
+    @Test fun theFileKeepsItsJobKeyAfterTheJobLeavesTheList() {
+        val fileJobs = HashMap<String, String>()
+        val recent = listOf(landed) + library.take(3)
+        val listed = recent.mapTo(HashSet()) { dev.ahmed.savlino.downloads.fileKey(it.uri) }
+        val withJob = dev.ahmed.savlino.downloads.homeSlots(listOf(finished), recent, listed, emptyList(), emptySet(), fileJobs)
+        val jobGone = dev.ahmed.savlino.downloads.homeSlots(emptyList(), recent, listed, emptyList(), emptySet(), fileJobs)
+        assertEquals("job:r1", withJob.first().key)
+        assertEquals("no remove + insert when the finished job is pruned", withJob.map { it.key }, jobGone.map { it.key })
+    }
+
     @Test fun aFinishedJobBecomesItsSavedCardInTheSameSlot() {
         var jobs by mutableStateOf(listOf(running))
         var media by mutableStateOf(library)
