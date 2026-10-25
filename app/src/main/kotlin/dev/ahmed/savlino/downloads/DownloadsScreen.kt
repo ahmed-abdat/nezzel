@@ -184,6 +184,7 @@ fun DownloadsScreen(
     renameRepository: SavedMediaRepository? = null,
     /** Null: the real offer (tests and captures pass their own). */
     oldDownloads: OldDownloadsOffer? = null,
+    openSavedUri: String? = null, onSavedOpened: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -217,6 +218,19 @@ fun DownloadsScreen(
     val view = rememberLibraryView(preferences, effectiveFilter)
     var viewingUri by rememberSaveable { mutableStateOf<String?>(null) }
     val open = { item: SavedMedia -> if (item.inViewer) viewingUri = item.uri.toString() else onOpen(item) }
+    // Match the actual library row before opening: stale/deleted widget tiles must not open a different file.
+    LaunchedEffect(openSavedUri, libraryLoad) {
+        if (openSavedUri != null && libraryLoad !is LibraryLoadState.Loading) {
+            val item = saved.firstOrNull { it.uri.toString() == openSavedUri }
+            filterName = MediaFilter.ALL.name
+            query = ""
+            search = false
+            tab = DownloadsTab.SAVED
+            viewingUri = null
+            if (item != null) open(item)
+            onSavedOpened()
+        }
+    }
     val filtered = remember(saved, effectiveFilter, query, sort, language) {
         savedLibraryItems(saved, effectiveFilter, query, sort, Locale.forLanguageTag(language))
     }

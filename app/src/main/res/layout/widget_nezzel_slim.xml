@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared shape for every widget size: tokens and type live in values/widget.xml.
+     Framework RemoteViews requires android:tint; AppCompat app:tint cannot apply here. -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UseAppTint"
+    android:id="@android:id/background"
+    style="@style/Widget.Nezzel.Root">
+    <LinearLayout android:id="@+id/widget_paste" style="@style/Widget.Nezzel.Paste">
+        <ImageView style="@style/Widget.Nezzel.PasteIcon" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+            <TextView style="@style/Widget.Nezzel.Text.Label" android:text="@string/widget_paste_short" />
+            <TextView android:id="@+id/widget_saved_count" style="@style/Widget.Nezzel.Text.Count" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_slim_live"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <ImageView android:id="@+id/widget_paste_icon" style="@style/Widget.Nezzel.PasteCircle" android:visibility="gone" />
+        <LinearLayout android:id="@+id/widget_job" style="@style/Widget.Nezzel.Row"
+            android:layout_width="0dp" android:layout_weight="1">
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView android:id="@+id/widget_title" style="@style/Widget.Nezzel.Text.Title" android:visibility="gone" />
+                <TextView android:id="@+id/widget_status" style="@style/Widget.Nezzel.Text.Big" />
+                <ProgressBar android:id="@+id/widget_progress" style="@style/Widget.Nezzel.Bar" android:layout_marginTop="4dp" />
+                <ProgressBar android:id="@+id/widget_progress_paused" style="@style/Widget.Nezzel.Bar.Paused" android:layout_marginTop="4dp" />
+                <TextView android:id="@+id/widget_remaining" style="@style/Widget.Nezzel.Text.Meta" android:visibility="gone" />
+            </LinearLayout>
+            <ImageView android:id="@+id/widget_control" style="@style/Widget.Nezzel.Control" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/widget_job_second" style="@style/Widget.Nezzel.Row">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <TextView android:id="@+id/widget_title_second" style="@style/Widget.Nezzel.Text.Title"
+                    android:layout_width="0dp" android:layout_weight="1" />
+                <TextView android:id="@+id/widget_status_second" style="@style/Widget.Nezzel.Text.Percent" />
+            </LinearLayout>
+            <ProgressBar android:id="@+id/widget_progress_second" style="@style/Widget.Nezzel.Bar" />
+            <ProgressBar android:id="@+id/widget_progress_paused_second" style="@style/Widget.Nezzel.Bar.Paused" />
+            <TextView android:id="@+id/widget_remaining_second" style="@style/Widget.Nezzel.Text.Meta" android:visibility="gone" />
+        </LinearLayout>
+        <ImageView android:id="@+id/widget_control_second" style="@style/Widget.Nezzel.Control" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/widget_recents"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal">
+        <ImageView android:id="@+id/widget_recent_1" style="@style/Widget.Nezzel.Tile" />
+        <TextView android:id="@+id/widget_recent_gap_1" style="@style/Widget.Nezzel.TileGap" />
+        <ImageView android:id="@+id/widget_recent_2" style="@style/Widget.Nezzel.Tile" />
+        <TextView android:id="@+id/widget_recent_gap_2" style="@style/Widget.Nezzel.TileGap" />
+        <ImageView android:id="@+id/widget_recent_3" style="@style/Widget.Nezzel.Tile" />
+        <TextView android:id="@+id/widget_recent_gap_3" style="@style/Widget.Nezzel.TileGap" />
+        <ImageView android:id="@+id/widget_recent_4" style="@style/Widget.Nezzel.Tile" />
+    </LinearLayout>
+    <TextView android:id="@+id/widget_more" style="@style/Widget.Nezzel.Text.More" android:visibility="gone" />
+</LinearLayout>

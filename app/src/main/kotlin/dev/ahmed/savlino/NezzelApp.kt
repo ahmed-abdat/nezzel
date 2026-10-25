@@ -55,6 +55,7 @@ fun NezzelApp(
     onHowItWorks: () -> Unit = {},
     notificationRationaleShowing: Boolean = false,
     statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary? = null,
+    openSavedUri: String? = null, onSavedOpened: () -> Unit = {},
 ) {
     var updateBack by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
     SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack = links.destination }
@@ -272,7 +273,8 @@ fun NezzelApp(
                             onShareSelected = library.shareSelected, onDeleteSelected = library.deleteSelected,
                             canShowFiles = library.canShowFiles, onBatch = batch, batchBusy = batchBusy,
                             playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy,
-                            warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) })
+                            warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
+                            openSavedUri = openSavedUri, onSavedOpened = onSavedOpened)
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
                             onRemove = removeFailed, onRetry = retry,
                             onCancel = cancel, onPause = pause, onResume = resume)

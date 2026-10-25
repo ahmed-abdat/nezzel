@@ -1,10 +1,151 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Nezzel teal, not wallpaper colors: the widget keeps the brand default (AGENTS.md rule 5). -->
     <color name="widget_surface">#E9EFEC</color>
     <color name="widget_on_surface">#171D1B</color>
     <color name="widget_on_surface_variant">#3F4946</color>
     <color name="widget_primary">#006B5E</color>
+    <color name="widget_on_primary">#FFFFFF</color>
+    <color name="widget_container">#CCE8E2</color>
     <color name="widget_track">#333F4946</color>
+    <!-- Pre-31 fallbacks; values-v31 uses the launcher's radii. Padding = outer - inner radius. -->
     <dimen name="widget_radius">16dp</dimen>
+    <dimen name="widget_inner_radius">8dp</dimen>
+    <dimen name="widget_padding">8dp</dimen>
     <bool name="open_with_links">false</bool>
+
+    <style name="Widget.Nezzel" parent="" />
+    <style name="Widget.Nezzel.Root">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:padding">@dimen/widget_padding</item>
+        <item name="android:background">@drawable/widget_background</item>
+        <item name="android:layoutDirection">locale</item>
+    </style>
+    <style name="Widget.Nezzel.Paste">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:background">@drawable/widget_button</item>
+        <item name="android:contentDescription">@string/paste_link</item>
+    </style>
+    <style name="Widget.Nezzel.PasteIcon">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_marginEnd">8dp</item>
+        <item name="android:src">@drawable/ic_paste</item>
+        <item name="android:tint">@color/widget_on_primary</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <!-- Live state: Paste stays the one filled control; pause/resume are quiet icons. -->
+    <style name="Widget.Nezzel.PasteCircle">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:src">@drawable/ic_paste</item>
+        <item name="android:tint">@color/widget_on_primary</item>
+        <item name="android:background">@drawable/widget_circle</item>
+        <item name="android:contentDescription">@string/paste_link</item>
+    </style>
+    <style name="Widget.Nezzel.Control">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:src">@drawable/ic_pause</item>
+        <item name="android:tint">@color/widget_primary</item>
+        <item name="android:contentDescription">@string/pause</item>
+    </style>
+    <style name="Widget.Nezzel.Text">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textDirection">firstStrong</item>
+        <item name="android:textAlignment">viewStart</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <style name="Widget.Nezzel.Text.Label">
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/widget_on_primary</item>
+    </style>
+    <style name="Widget.Nezzel.Text.Count">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/widget_on_primary</item>
+        <item name="android:alpha">0.8</item>
+        <item name="android:layout_marginTop">2dp</item>
+    </style>
+    <style name="Widget.Nezzel.Text.Title">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/widget_on_surface</item>
+    </style>
+    <style name="Widget.Nezzel.Text.Percent">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/widget_primary</item>
+        <item name="android:layout_marginStart">8dp</item>
+    </style>
+    <style name="Widget.Nezzel.Text.Big">
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/widget_primary</item>
+    </style>
+    <style name="Widget.Nezzel.Text.Meta">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/widget_on_surface_variant</item>
+        <item name="android:layout_marginTop">4dp</item>
+    </style>
+    <style name="Widget.Nezzel.Text.More">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/widget_on_surface_variant</item>
+        <item name="android:importantForAccessibility">yes</item>
+    </style>
+    <!-- Gravity stays left in widget_progress: this Material style mirrors the bar in RTL. -->
+    <style name="Widget.Nezzel.Bar" parent="@android:style/Widget.Material.ProgressBar.Horizontal">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">4dp</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:max">100</item>
+        <item name="android:progressDrawable">@drawable/widget_progress</item>
+        <item name="android:indeterminateTint">@color/widget_primary</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <style name="Widget.Nezzel.Bar.Paused">
+        <item name="android:alpha">0.5</item>
+        <item name="android:visibility">gone</item>
+    </style>
+    <style name="Widget.Nezzel.Row">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:visibility">gone</item>
+    </style>
+    <style name="Widget.Nezzel.Tile">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">@drawable/widget_tile</item>
+        <item name="android:scaleType">centerCrop</item>
+        <item name="android:src">@drawable/ic_widget_movie</item>
+        <item name="android:contentDescription">@string/open_file</item>
+        <item name="android:visibility">gone</item>
+        <!-- Read from API 31 only; older launchers get the pre-masked bitmap instead. -->
+        <item name="android:clipToOutline" tools:targetApi="31">true</item>
+        <item name="android:outlineProvider">background</item>
+    </style>
+    <style name="Widget.Nezzel.TileGap">
+        <item name="android:layout_width">8dp</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="android:visibility">gone</item>
+    </style>
 </resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_saved_count">%1$s محفوظ</string>
+    <string name="widget_empty_saved">0 محفوظ</string>
+    <string name="widget_failed">فشل التنزيل</string>
+    <string name="widget_open_saved">فتح %1$s</string>
+    <string name="widget_paste_short">لصق</string>
+    <plurals name="widget_more_accessibility">
+        <item quantity="zero">لا تنزيلات أخرى</item>
+        <item quantity="one">تنزيل آخر</item>
+        <item quantity="two">تنزيلان آخران</item>
+        <item quantity="few">%1$s تنزيلات أخرى</item>
+        <item quantity="many">%1$s تنزيلًا آخر</item>
+        <item quantity="other">%1$s تنزيل آخر</item>
+    </plurals>
+</resources>

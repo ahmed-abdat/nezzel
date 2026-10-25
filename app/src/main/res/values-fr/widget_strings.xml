@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_saved_count">%1$s enregistrés</string>
+    <string name="widget_empty_saved">0 enregistré</string>
+    <string name="widget_failed">Échec</string>
+    <string name="widget_open_saved">Ouvrir %1$s</string>
+    <string name="widget_paste_short">Coller</string>
+    <plurals name="widget_more_accessibility">
+        <item quantity="one">%1$s de plus</item>
+        <item quantity="other">%1$s de plus</item>
+    </plurals>
+</resources>

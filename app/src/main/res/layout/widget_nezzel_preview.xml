@@ -1,26 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget picker sample (API 31+): a static 45% row, never app data. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="horizontal" android:gravity="center_vertical"
-    android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="8dp" android:paddingBottom="8dp"
-    android:background="@drawable/widget_background" android:layoutDirection="locale">
-    <ImageView android:layout_width="24dp" android:layout_height="32dp" android:layout_marginEnd="12dp"
-        android:src="@drawable/ic_widget_mark" android:importantForAccessibility="no" />
-    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-        android:orientation="vertical">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical">
-            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp" android:text="@string/widget_preview_title" android:textSize="14sp"
-                android:textColor="@color/widget_on_surface" android:maxLines="1" android:ellipsize="end"
-                android:textDirection="firstStrong" android:textAlignment="viewStart" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/widget_preview_percent" android:textSize="13sp"
-                android:textColor="@color/widget_on_surface_variant" android:maxLines="1" />
+<!-- Shared shape for every widget size: tokens and type live in values/widget.xml.
+     Framework RemoteViews requires android:tint; AppCompat app:tint cannot apply here. -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UseAppTint"
+    android:id="@android:id/background"
+    style="@style/Widget.Nezzel.Root">
+    <LinearLayout android:id="@+id/widget_paste" style="@style/Widget.Nezzel.Paste">
+        <ImageView style="@style/Widget.Nezzel.PasteIcon" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+            <TextView style="@style/Widget.Nezzel.Text.Label" android:text="@string/paste_link" />
+            <TextView android:id="@+id/widget_saved_count" style="@style/Widget.Nezzel.Text.Count" android:text="@string/widget_empty_saved" />
         </LinearLayout>
-        <ProgressBar style="@android:style/Widget.Material.ProgressBar.Horizontal"
-            android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="8dp"
-            android:max="100" android:progress="45" android:progressDrawable="@drawable/widget_progress" />
     </LinearLayout>
 </LinearLayout>

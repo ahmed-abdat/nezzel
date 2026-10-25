@@ -445,7 +445,7 @@
         <item quantity="many">%1$s autres en cours</item>
         <item quantity="other">%1$s autres en cours</item>
     </plurals>
-    <string name="widget_description">\u2066Nezzel\u2069 : suivez la progression</string>
+    <string name="widget_description">Collez un lien, suivez les téléchargements et ouvrez les fichiers enregistrés</string>
     <string name="shortcut_downloads_short">Fichiers</string>
     <string name="download_battery_error">Android a arrêté ce téléchargement pour économiser la batterie</string>
     <string name="battery_settings">Réglages batterie</string>
