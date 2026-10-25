@@ -214,7 +214,7 @@ internal fun DownloadProgress.kindIcon(): Int = when {
 val LocalJobArtwork = staticCompositionLocalOf<suspend (String) -> Bitmap?> { { null } }
 
 @Composable
-private fun rememberJobArtwork(jobId: String, settled: Boolean): ImageBitmap? {
+internal fun rememberJobArtwork(jobId: String, settled: Boolean): ImageBitmap? {
     val load = LocalJobArtwork.current
     // A row can show before its preview is saved (playlist items, a quick confirm): an active job looks again briefly.
     return rememberTabResource<ImageBitmap?>(null, jobId, settled, load) {
@@ -444,7 +444,7 @@ internal fun progressAnnouncement(job: DownloadProgress): String? {
 
 /** The one authored moment: the ring resolves into a check. */
 @Composable
-private fun SavedCheck(size: androidx.compose.ui.unit.Dp) {
+internal fun SavedCheck(size: androidx.compose.ui.unit.Dp) {
     val reduced = LocalReducedMotion.current
     var shown by remember { mutableStateOf(reduced) }
     LaunchedEffect(Unit) { shown = true }

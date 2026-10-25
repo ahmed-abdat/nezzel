@@ -3,7 +3,6 @@ package dev.ahmed.savlino.downloads
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.animation.*
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.shape.CircleShape
 import dev.ahmed.savlino.ui.ThumbnailKind
 import androidx.compose.foundation.Image
@@ -110,62 +109,6 @@ fun DownloadNavigation(route: String, jobs: List<DownloadProgress>, language: St
         dev.ahmed.savlino.ui.nav.NavigationBadges(runningCount(jobs), jobs.any { it.phase == DownloadPhase.FAILED }, updateAvailable, language),
         onNavigate, {},
     )
-}
-
-/** Most rows Home stacks: one per transfer slot. */
-internal const val HOME_STRIP_ROWS = 3
-
-/**
- * Home's view of the queue: one row per running job (up to [HOME_STRIP_ROWS], in start order), or the next job in line
- * (a failure as its own row) when none runs; a count opens Downloads when more wait beyond the rows.
- */
-@Composable
-fun DownloadStrip(jobs: List<DownloadProgress>, language: String, onCancel: (String) -> Unit = {}, onRemove: (String) -> Unit = {},
-                  onRetry: (String) -> Unit = {}, onPause: (String) -> Unit = {}, onResume: (String) -> Unit = {}, onClick: () -> Unit) {
-    val active = jobs.filter { !it.terminal || it.awaitingSchedule }
-    val failed = jobs.filter { it.phase == DownloadPhase.FAILED && !it.awaitingSchedule }
-    val started = rememberStartOrder(jobs)
-    val shown = rememberWithSavedMoment(jobs, visibleJobs(jobs, started))
-    if (shown.isEmpty()) return
-    val reduced = LocalReducedMotion.current
-    val context = LocalContext.current
-    // Saved cards (in their moment) and running jobs each get a row; otherwise the first in line stands alone.
-    val rows = shown.takeWhile { it.saved || it.running }.take(HOME_STRIP_ROWS).ifEmpty { shown.take(1) }
-    // With a count action the 48dp header row carries its own air (4dp to the row); a bare heading is natural height + 8dp.
-    val counted = shown.size > rows.size
-    Column(Modifier.fillMaxWidth().animateContentSize(easeOut(reduced)), verticalArrangement = Arrangement.spacedBy(if (counted) Space.xs else Space.s)) {
-        val first = rows.first()
-        // The header names what the lead card is, so a failure alone never reads as progress.
-        val header = when {
-            first.saved && rows.none { it.running } -> stringResource(R.string.saved_files)
-            first.phase == DownloadPhase.FAILED && !first.awaitingSchedule ->
-                stringResource(R.string.downloads_stopped_header, NezzelFormat.count(failed.size, language))
-            else -> stringResource(R.string.home_active_header)
-        }
-        Row(Modifier.fillMaxWidth().then(if (counted) Modifier.heightIn(min = 48.dp) else Modifier), verticalAlignment = Alignment.CenterVertically) {
-            Text(header, Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (counted) TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(if (active.size > 1) context.resources.getQuantityString(R.plurals.downloads_running, active.size, NezzelFormat.count(active.size, language))
-                    else stringResource(R.string.see_all))
-            }
-        }
-        // Rows already there when Home opens are simply shown; only a job that starts later fades in.
-        val opening = remember { rows.mapTo(HashSet()) { it.jobId } }
-        Column(verticalArrangement = Arrangement.spacedBy(Space.item)) {
-            rows.forEach { job ->
-                // Keyed by job: a row keeps its state while others start or leave.
-                key(job.jobId) {
-                    val appear = remember { MutableTransitionState(job.jobId in opening) }.apply { targetState = true }
-                    AnimatedVisibility(appear, enter = fadeIn(easeOut(reduced, Motion.FADE_IN, 50)) + expandVertically(easeOut(reduced)),
-                        label = "home job") {
-                        JobRow(job, { onCancel(job.jobId) }, { onRemove(job.jobId) }, { onRetry(job.jobId) },
-                            onPause = { onPause(job.jobId) }, onResume = { onResume(job.jobId) })
-                    }
-                }
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
@@ -842,18 +785,48 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
 /**
  * Home's library: the newest files as a sideways row of fixed-size cards (the cut-off card at the end says there is
  * more), then an «Earlier» list. Real saved files only; thumbnails come from the tab-gated loader.
+ * Downloads lead the row as cards of the same size, and a finished one becomes its file's card in the same slot, so
+ * Home never changes height while files arrive (owner 2026-10-25). [jobs] is read in snapshots, never in this scope:
+ * a progress tick recomposes only its own card.
  */
 @Composable
-fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit, onSeeAll: () -> Unit) {
-    if (media.isEmpty()) return
-    val openLabel = stringResource(R.string.open_file)
+fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit,
+                jobs: () -> List<DownloadProgress> = { emptyList() }, onJob: () -> Unit = {}, onSeeAll: () -> Unit) {
+    val reduced = LocalReducedMotion.current
     val entries = remember(media) { homeEntries(media) }
     val recent = remember(entries) { entries.take(RECENT_ROW) }
     val earlier = remember(entries) { entries.drop(RECENT_ROW).take(EARLIER_ROWS) }
-    // A finished download lands at index 0, and LazyRow keeps the old first card anchored. If the row was at its
-    // start, show the new one. Scroll state is read only when the first key changes, so scrolling never recomposes.
+    // Bookkeeping outside state, updated inside the derivation like rememberStartOrder: the phase each job last had here,
+    // running ids in start order, and jobs that finished here whose file is not listed yet.
+    val seen = remember { HashMap<String, DownloadPhase>() }
+    val started = remember { mutableListOf<String>() }
+    val landing = remember { LinkedHashSet<String>() }
+    val expiry = remember { mutableIntStateOf(0) }
+    val slots by remember(media) {
+        val listed = media.mapTo(HashSet()) { fileKey(it.uri) }
+        derivedStateOf {
+            expiry.intValue
+            val all = jobs()
+            all.forEach { job ->
+                val before = seen.put(job.jobId, job.phase)
+                if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
+                    before != DownloadPhase.CANCELLED) landing += job.jobId
+                if (!job.saved) landing -= job.jobId
+            }
+            val running = all.filter { it.running }.map { it.jobId }
+            started.retainAll(running.toSet()); running.forEach { if (it !in started) started += it }
+            homeSlots(all, recent, listed, started, landing)
+        }
+    }
+    // A file that never lists (deleted at once, a failed query) gives its slot up after a while.
+    slots.forEach { slot -> if (slot is JobSlot && slot.landing) key(slot.jobId) {
+        LaunchedEffect(slot.jobId) { kotlinx.coroutines.delay(LANDING_MS); landing -= slot.jobId; expiry.intValue++ }
+    } }
+    if (slots.isEmpty()) return
+    // A new card (a download, or a file landing) comes in at the start, and LazyRow keeps the old first card anchored.
+    // If the row was at its start, show the new one. Scroll state is read only when the first key changes.
     val rowState = rememberLazyListState()
-    val firstKey = recent.first().uri
+    val firstKey = slots.first().key
     val shownFirst = remember { arrayOf(firstKey) }
     if (shownFirst[0] != firstKey) {
         if (rowState.firstVisibleItemIndex == 0 && rowState.firstVisibleItemScrollOffset == 0) rowState.requestScrollToItem(0)
@@ -865,20 +838,21 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             TextButton(onClick = onSeeAll, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.see_all)) }
         }
         LazyRow(state = rowState, contentPadding = PaddingValues(horizontal = Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-            items(recent, key = { it.uri.toString() }) { item ->
-                Column(Modifier.width(196.dp).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
-                    .clickable(onClickLabel = openLabel) { onOpen(item) }, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f).padding(bottom = Space.xs), MaterialTheme.shapes.large)
-                    // Inset from the card's rounded clip: at the corners it cut the meta's first and last letters.
-                    Column(Modifier.padding(start = Space.xs, end = Space.xs, bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                        Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            items(slots, key = { it.key }) { slot ->
+                val motion = Modifier.animateItem(fadeInSpec = easeOut(reduced), placementSpec = easeOut(reduced, 220), fadeOutSpec = easeOut(reduced, 120))
+                if (slot.key.startsWith("job:")) {
+                    // One call site for a job's key, so its card fades into its file's card in place when the file lists.
+                    val file = (slot as? FileSlot)?.item
+                    val lastFile = remember { arrayOfNulls<SavedMedia>(1) }.also { if (file != null) it[0] = file }
+                    Crossfade(file != null, motion, easeOut(reduced, 300), label = "landed") { landed ->
+                        val shown = if (landed) file ?: lastFile[0] else null
+                        if (shown != null) RecentCard(shown, language, onOpen) else JobSlotCard(slot.key.removePrefix("job:"), jobs, onJob)
                     }
-                }
+                } else RecentCard((slot as FileSlot).item, language, onOpen, motion)
             }
         }
         if (earlier.isNotEmpty()) Column(Modifier.padding(horizontal = Space.l).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            val openLabel = stringResource(R.string.open_file)
             Text(stringResource(R.string.home_earlier), Modifier.heightIn(min = 48.dp).wrapContentHeight().semantics { heading() },
                 style = MaterialTheme.typography.titleMedium)
             earlier.forEach { item ->
@@ -897,7 +871,32 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     }
 }
 
+/** A saved file's recents card: 196dp wide, 16:10 picture, title and meta. [HomeJobCard] keeps the same box. */
+@Composable
+private fun RecentCard(item: SavedMedia, language: String, onOpen: (SavedMedia) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.width(196.dp).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
+        .clickable(onClickLabel = stringResource(R.string.open_file)) { onOpen(item) }, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+        MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f).padding(bottom = Space.xs), MaterialTheme.shapes.large)
+        // Inset from the card's rounded clip: at the corners it cut the meta's first and last letters.
+        Column(Modifier.padding(start = Space.xs, end = Space.xs, bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            Text(NezzelFormat.firstStrong(item.displayName), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Reads its own job from the snapshot: only this card recomposes on a progress tick. Keeps the last job while it leaves. */
+@Composable
+private fun JobSlotCard(jobId: String, jobs: () -> List<DownloadProgress>, onClick: () -> Unit) {
+    val job by remember(jobId) { derivedStateOf { jobs().firstOrNull { it.jobId == jobId } } }
+    val last = remember { arrayOfNulls<DownloadProgress>(1) }
+    (job ?: last[0])?.let { last[0] = it; HomeJobCard(it, onClick) }
+}
+
 private const val RECENT_ROW = 8
+/** How long a finished job waits for its file to list before it gives its slot up. */
+private const val LANDING_MS = 10_000L
 private const val EARLIER_ROWS = 3
 
 /**

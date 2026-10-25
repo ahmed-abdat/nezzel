@@ -94,18 +94,6 @@ class ParallelCaptureTest {
         }
     }
 
-    @Test fun homeStrip() = shoot("home") { lang ->
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(Space.gutter)) {
-            DownloadStrip(listOf(first, second), lang) {}
-        }
-    }
-
-    @Test fun homeStripWithQueue() = shoot("home-queue") { lang ->
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(Space.gutter)) {
-            DownloadStrip(listOf(first, failed, second, queued), lang) {}
-        }
-    }
-
     @Test fun widget() {
         assumeTrue(dir != null)
         val state = WidgetUiState.from(listOf(first, second, queued))

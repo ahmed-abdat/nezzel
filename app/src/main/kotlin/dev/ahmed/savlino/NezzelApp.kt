@@ -39,7 +39,9 @@ import dev.ahmed.savlino.ui.OptionsScreen
 import dev.ahmed.savlino.ui.OptionsState
 import dev.ahmed.savlino.media.ImageSaveState
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
+import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 
 /** Intake, revision-bound options, and journal-backed progress. */
@@ -276,9 +278,7 @@ fun NezzelApp(
                             playlists = playlists, onPlaylistAction = playlistAction, playlistBusy = playlistBusy,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
                             openSavedUri = openSavedUri, onSavedOpened = onSavedOpened)
-                        else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications,
-                            onRemove = removeFailed, onRetry = retry,
-                            onCancel = cancel, onPause = pause, onResume = resume)
+                        else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications)
                     } }
                 }
             }
@@ -314,9 +314,7 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
 
 @Composable
 internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
-                       onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit,
-                       onRemove: (String) -> Unit, onRetry: (String) -> Unit,
-                       onCancel: (String) -> Unit, onPause: (String) -> Unit, onResume: (String) -> Unit) {
+                       onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit) {
     val scroll = rememberScrollState()
     ScrollOnTabReselect { scroll.scrollTo(0) }
     // The copied link is offered inline only while nothing else is in front of the person.
@@ -327,6 +325,9 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
     // First run: the library loaded and nothing is saved or running yet, so the page says what Nezzel is for.
     // While loading or after a failed query the saved list is unknown, not empty.
     val firstRun = jobs.isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty()
+    // Recents read the jobs in snapshots, so a progress tick redraws one card, not Home.
+    val latestJobs = rememberUpdatedState(jobs)
+    val reduced = LocalReducedMotion.current
     Scaffold(snackbarHost = {
         if (links.invalidShare) {
             Snackbar(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, action = {
@@ -344,21 +345,29 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                     Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
                         HomeBrand()
                         HomeNotes(links, jobs, language, firstRun, onAllowNotifications)
-                        if (firstRun) {
-                            // The sites Nezzel saves from, around the mark; decorative, so TalkBack skips it.
-                            dev.ahmed.savlino.update.UpdateHero(compact = false, top = 0.dp,
-                                Modifier.fillMaxWidth().height(heroHeight))
-                        } else {
-                            Box(Modifier.padding(horizontal = Space.l)) {
-                                DownloadStrip(jobs, language, onCancel, onRemove, onRetry, onPause, onResume) { links.navigate("Downloads") }
+                        // The first download takes the hero's place once: a fade, then the row stays for good.
+                        AnimatedContent(firstRun, transitionSpec = {
+                            (fadeIn(easeOut(reduced, 300)) togetherWith fadeOut(easeOut(reduced, Motion.FADE_OUT))).using(SizeTransform { _, _ -> easeOut(reduced, 300) })
+                        },
+                            label = "first run") { first ->
+                            if (first) {
+                                // The sites Nezzel saves from, around the mark; decorative, so TalkBack skips it.
+                                dev.ahmed.savlino.update.UpdateHero(compact = false, top = 0.dp,
+                                    Modifier.fillMaxWidth().height(heroHeight))
+                            } else {
+                                // A download is the row's first card, where its file will land: nothing above or below moves.
+                                HomeRecents(library.media, language, library.open, { latestJobs.value }, { links.navigate("Downloads") }) {
+                                    links.navigate("Downloads")
+                                }
                             }
-                            HomeRecents(library.media, language, library.open) { links.navigate("Downloads") }
                         }
                         Box(Modifier.padding(horizontal = Space.l)) { LibraryLoadStatus(library.load, library.onRetry) }
                         if (links.engineUnavailable) Box(Modifier.padding(horizontal = Space.l)) { EngineUnavailableNote() }
                     }
-                    if (firstRun) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
-                    else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
+                    Crossfade(firstRun, animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
+                        if (first) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
+                        else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
+                    }
                 }
             }
             Box(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.xs)) {
