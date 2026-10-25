@@ -110,6 +110,10 @@ fun groupDownloads(items: List<SavedMedia>): List<SavedMedia> {
     return blocks.sortedByDescending { block -> block.maxOf { it.addedSeconds } }.flatten()
 }
 
+/** Home lists a saved post once, by its first file; Downloads still shows every file of it. */
+fun homeEntries(items: List<SavedMedia>): List<SavedMedia> =
+    groupDownloads(items).filter { it.postPosition == null || it.postPosition.index == 1 }
+
 enum class SavedMediaKind { IMAGE, VIDEO, AUDIO }
 /** STATUSES stays last: its chip ends the row. */
 enum class MediaFilter { ALL, VIDEO, AUDIO, IMAGE, STATUSES }

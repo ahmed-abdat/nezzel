@@ -214,7 +214,7 @@ private fun PresetRow(links: LinkViewModel, row: PresetRowChoice, language: Stri
     // Same row as the full list ("Full HD · 1080p"); the preset name leads the hint as a short tag.
     // A merged row keeps every member's last-used state; selection follows the actual format.
     // "Last used" is the amber badge (DESIGN.md), not hint text.
-    val last = if (links.lastUsedFormat?.id == format.id) stringResource(R.string.last_used) else null
+    val last = if (links.lastUsedBadge?.id == format.id) stringResource(R.string.last_used) else null
     FormatRow(formatTitle(format, language, tiers), format, links.roughSizeBytes(format), links.selectedFormat?.id == format.id, !links.confirmed, language,
         // One short hint: the title already names the quality, so the tier's description would only repeat it.
         if (format.hasVideo) label else formatHint(format),
@@ -284,7 +284,7 @@ private fun FormatChoiceRow(links: LinkViewModel, format: Format, language: Stri
     tiers: Map<String, FormatChoices.Tier?>?, technical: Boolean) {
     FormatRow(formatTitle(format, language, tiers), format, links.roughSizeBytes(format), links.selectedFormat?.id == format.id,
         !links.confirmed, language, formatHint(format), if (technical) moreFormatDetail(format, language) else null,
-        badge = if (links.lastUsedFormat?.id == format.id) stringResource(R.string.last_used) else null) {
+        badge = if (links.lastUsedBadge?.id == format.id) stringResource(R.string.last_used) else null) {
         links.selectFormat(format.id)
     }
 }

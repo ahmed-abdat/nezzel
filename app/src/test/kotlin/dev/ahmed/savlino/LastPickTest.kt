@@ -192,6 +192,14 @@ class LastPickTest {
         assertFalse(vm.formatOptions.any { it.id == unsupported.id || it.id == silent.id })
     }
 
+    @Test fun aLoneVideoRowHasNoBadge() {
+        val prefs = store().apply { lastHeight = 720 }
+        val vm = model(prefs, listOf(720))
+        assertEquals("v720", vm.lastUsedFormat?.id)
+        assertNull(vm.lastUsedBadge)
+        assertBadge(vm, null)
+    }
+
     @Test fun rememberedHeightDoesNotChangeAudioOnlyPreselectionOrBadge() {
         val prefs = store().apply { lastHeight = 1440 }
         val vm = model(prefs, emptyList())

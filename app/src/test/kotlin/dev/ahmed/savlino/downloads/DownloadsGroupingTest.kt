@@ -49,4 +49,9 @@ class DownloadsGroupingTest {
             file(3, "Post_00.jpg", 102), file(4, "Post_sound.m4a", 103))
         assertTrue(groupDownloads(input).all { it.postPosition == null })
     }
+    @Test fun homeListsAPostOnceByItsFirstFile() {
+        val rows = homeEntries(listOf(file(3, "Post_03.jpg", 102), file(9, "Clip.mp4", 50),
+            file(2, "Post_02.jpg", 101), file(1, "Post_01.jpg", 100)))
+        assertEquals(listOf("1", "9"), rows.map { it.uri.lastPathSegment })
+    }
 }

@@ -847,8 +847,9 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
 fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit, onSeeAll: () -> Unit) {
     if (media.isEmpty()) return
     val openLabel = stringResource(R.string.open_file)
-    val recent = remember(media) { media.take(RECENT_ROW) }
-    val earlier = remember(media) { media.drop(RECENT_ROW).take(EARLIER_ROWS) }
+    val entries = remember(media) { homeEntries(media) }
+    val recent = remember(entries) { entries.take(RECENT_ROW) }
+    val earlier = remember(entries) { entries.drop(RECENT_ROW).take(EARLIER_ROWS) }
     // A finished download lands at index 0, and LazyRow keeps the old first card anchored. If the row was at its
     // start, show the new one. Scroll state is read only when the first key changes, so scrolling never recomposes.
     val rowState = rememberLazyListState()

@@ -485,6 +485,8 @@ class LinkViewModel(
             ?: primaryFormats.filter { it.hasVideo && FormatChoices.quality(it)?.let { quality -> quality <= height } == true }
                 .maxByOrNull { FormatChoices.quality(it)!! }
     }
+    /** The badge only helps tell rows apart: with one video row there is nothing to tell apart. */
+    val lastUsedBadge: Format? get() = lastUsedFormat?.takeIf { primaryFormats.count { it.hasVideo } > 1 }
     val confirmed get() = submitted
     /** The last job the coordinator accepted from this view model; the share sheet closes on it. */
     var acceptedJob by mutableStateOf<String?>(null); private set
