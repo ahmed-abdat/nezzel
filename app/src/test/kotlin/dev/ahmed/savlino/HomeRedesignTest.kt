@@ -188,6 +188,24 @@ class HomeRedesignTest {
         }
     }
 
+    @Test fun aRecentCardOpensTheViewerAndAudioOpensWithTheSystem() {
+        val context = RuntimeEnvironment.getApplication()
+        val song = HomeFixtures.library[0].copy(uri = Uri.parse("content://nezzel.fixture/thumb/40"), filename = "Song.m4a",
+            title = "Song", mimeType = "audio/mp4", height = null, width = null)
+        val opened = mutableListOf<SavedMedia>()
+        show {
+            NezzelTheme(ThemePref.Light, false) { dev.ahmed.savlino.downloads.HomeRecents(listOf(song) + HomeFixtures.library, "en", { opened += it }) {} }
+        }.use {
+            compose.onNodeWithText("Big Buck Bunny", substring = true).performClick()
+            compose.onNodeWithContentDescription(context.getString(R.string.viewer_close)).assertExists().performClick()
+            compose.waitForIdle()
+            compose.onAllNodesWithContentDescription(context.getString(R.string.viewer_close)).assertCountEquals(0)
+            assertTrue(opened.isEmpty())
+            compose.onNodeWithText("Song", substring = true).performClick()
+            assertEquals(listOf(song), opened)
+        }
+    }
+
     @Test fun pasteDockRunsTheForegroundPasteAndTheCopiedCardShowsOnlyTheHost() {
         val context = RuntimeEnvironment.getApplication()
         var pastes = 0

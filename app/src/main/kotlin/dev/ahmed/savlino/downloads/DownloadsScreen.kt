@@ -808,8 +808,12 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
  */
 @Composable
 fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit,
-                jobs: () -> List<DownloadProgress> = { emptyList() }, onJob: () -> Unit = {}, onSeeAll: () -> Unit) {
+                jobs: () -> List<DownloadProgress> = { emptyList() }, onJob: () -> Unit = {},
+                onShare: (SavedMedia) -> Unit = {}, onOpenWith: (SavedMedia) -> Unit = {}, onSeeAll: () -> Unit) {
     val reduced = LocalReducedMotion.current
+    // A card opens the swipe viewer Downloads uses, over the same files in Home's order; audio still opens with the system.
+    var viewing by rememberSaveable { mutableStateOf<String?>(null) }
+    val open = { item: SavedMedia -> if (item.inViewer) viewing = item.uri.toString() else onOpen(item) }
     val entries = remember(media) { homeEntries(media) }
     val recent = remember(entries) { entries.take(RECENT_ROW) }
     val earlier = remember(entries) { entries.drop(RECENT_ROW).take(EARLIER_ROWS) }
@@ -882,9 +886,9 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                     }
                     Crossfade(file != null && ready.value, motion, easeOut(reduced, 300), label = "landed") { landed ->
                         val shown = if (landed) file ?: lastFile[0] else null
-                        if (shown != null) RecentCard(shown, language, onOpen) else JobSlotCard(jobId, jobs, onJob)
+                        if (shown != null) RecentCard(shown, language, open) else JobSlotCard(jobId, jobs, onJob)
                     }
-                } else RecentCard((slot as FileSlot).item, language, onOpen, motion)
+                } else RecentCard((slot as FileSlot).item, language, open, motion)
             }
         }
         if (earlier.isNotEmpty()) Column(Modifier.padding(horizontal = Space.l).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -893,7 +897,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                 style = MaterialTheme.typography.titleMedium)
             earlier.forEach { item ->
                 Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).semantics(mergeDescendants = true) {}
-                    .clickable(onClickLabel = openLabel) { onOpen(item) }.heightIn(min = 72.dp),
+                    .clickable(onClickLabel = openLabel) { open(item) }.heightIn(min = 72.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
                     MediaThumbnail(item, Modifier.width(112.dp).aspectRatio(16f / 9f), MaterialTheme.shapes.medium)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
@@ -905,6 +909,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             }
         }
     }
+    viewing?.let { LibraryViewer(groupDownloads(media), it, language, { viewing = null }, onShare, onOpenWith) }
 }
 
 /** A saved file's recents card: 196dp wide, 16:10 picture, title and meta. [HomeJobCard] keeps the same box. */

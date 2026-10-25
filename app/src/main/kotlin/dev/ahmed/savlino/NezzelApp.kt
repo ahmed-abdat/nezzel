@@ -367,7 +367,8 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                                     Modifier.fillMaxWidth().height(heroHeight))
                             } else {
                                 // A download is the row's first card, where its file will land: nothing above or below moves.
-                                HomeRecents(library.media, language, library.open, homeJobs, { links.navigate("Downloads") }) {
+                                HomeRecents(library.media, language, library.open, homeJobs, { links.navigate("Downloads") },
+                                    library.share, library.openWith) {
                                     links.navigate("Downloads")
                                 }
                             }
