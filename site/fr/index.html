@@ -58,10 +58,11 @@
   --primary:#006B5E;--on-primary:#fff;--primary-c:#9EF2E1;--on-primary-c:#00201B;
   --secondary-c:#CDE8E1;--on-secondary-c:#051F1B;
   --tertiary:#7A5520;--tertiary-c:#FFDDB3;--on-tertiary-c:#2A1800;
-  --bg:#F5FBF8;--on-bg:#171D1B;--muted:#3F4946;
+  --bg:#F4F5F0;--app:#F5FBF8;--on-bg:#171D1B;--muted:#3F4946;
+  --paper:#FFFEFB;--edge:rgb(20 19 15/.09);--shf:drop-shadow(0 10px 11px rgb(20 19 15/.16));--wire:#2B3330;
   --c-low:#EFF5F2;--c:#E9EFEC;--c-high:#E3EAE7;--c-highest:#DEE4E1;--c-lowest:#fff;
   --outline:#6F7976;--outline-v:#BEC9C5;--inverse:#16302B;--on-inverse:#ECF2EF;--inverse-primary:#82D5C5;
-  --dot:rgb(0 107 94/.16);--ink-sh:23 29 27;
+  --ink-sh:23 29 27;
   --r-xl:36px;--r-l:24px;
   --ease:cubic-bezier(.16,1,.3,1);--spring:cubic-bezier(.34,1.56,.64,1);
   --x:1;color-scheme:light;
@@ -71,19 +72,21 @@
   --primary:#82D5C5;--on-primary:#003731;--primary-c:#005047;--on-primary-c:#9EF2E1;
   --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
   --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
-  --bg:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
+  --bg:#121614;--app:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
+  --paper:#1E2523;--edge:rgb(255 255 255/.07);--shf:drop-shadow(0 10px 11px rgb(0 0 0/.5));--wire:#B9C4C0;
   --c-low:#171D1B;--c:#1B211F;--c-high:#252B2A;--c-highest:#303634;--c-lowest:#090F0E;
   --outline:#899390;--outline-v:#3F4946;--inverse:#DEE4E1;--on-inverse:#16302B;--inverse-primary:#006B5E;
-  --dot:rgb(130 213 197/.13);--ink-sh:0 0 0;color-scheme:dark;
+  --ink-sh:0 0 0;color-scheme:dark;
 }}
 :root[data-theme=dark]{
   --primary:#82D5C5;--on-primary:#003731;--primary-c:#005047;--on-primary-c:#9EF2E1;
   --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
   --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
-  --bg:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
+  --bg:#121614;--app:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
+  --paper:#1E2523;--edge:rgb(255 255 255/.07);--shf:drop-shadow(0 10px 11px rgb(0 0 0/.5));--wire:#B9C4C0;
   --c-low:#171D1B;--c:#1B211F;--c-high:#252B2A;--c-highest:#303634;--c-lowest:#090F0E;
   --outline:#899390;--outline-v:#3F4946;--inverse:#DEE4E1;--on-inverse:#16302B;--inverse-primary:#006B5E;
-  --dot:rgb(130 213 197/.13);--ink-sh:0 0 0;color-scheme:dark;
+  --ink-sh:0 0 0;color-scheme:dark;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:96px;interpolate-size:allow-keywords}
@@ -174,58 +177,119 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 .roll>span{display:block;text-shadow:0 1.5em currentColor;transition:transform .3s cubic-bezier(.22,1,.36,1)}
 .btn .i{transition:transform .5s var(--spring)}
 
-/* story: the hero phone is the one object; it stays while the three steps pass */
-.story{display:grid;grid-template-columns:minmax(0,1fr)}
-.hero{display:grid;align-items:center;padding:48px 0 0}
-@media (min-width:960px){
-  .story{grid-template-columns:1.05fr .95fr;column-gap:40px;grid-template-areas:"hero stage" "flow stage"}
-  .hero{grid-area:hero;padding-top:56px;min-height:min(820px,calc(100svh - 80px))}
-  .stage{grid-area:stage}
-  .flow{grid-area:flow}
+/* hero: the headline rises line by line through a mask, once; a ghost wordmark rests behind it */
+.hero{position:relative;isolation:isolate;padding:clamp(64px,10vw,128px) 0 0;text-align:center}
+.ghost{position:absolute;z-index:-1;inset-inline:0;bottom:-.52em;font:800 clamp(120px,26vw,380px)/1 system-ui,-apple-system,Roboto,sans-serif;letter-spacing:-.06em;color:color-mix(in oklab,var(--on-bg) 5%,transparent);direction:ltr;text-align:center;white-space:nowrap;pointer-events:none;user-select:none}
+h1{font-size:clamp(40px,7.4vw,96px);line-height:1.18;font-weight:800;margin:0 auto;font-stretch:92%;text-wrap:balance}
+html[dir=ltr] h1{font-family:ui-serif,"Iowan Old Style",Charter,Georgia,"Noto Serif",serif;font-weight:500;letter-spacing:-.03em;line-height:1.04}
+html[lang=fr] h1{font-size:clamp(36px,6.4vw,84px)}
+h1 .ln{display:block;clip-path:inset(-.4em -.6em -.34em)}
+h1 .ln>span{display:inline-block}
+h1 bdi{color:var(--primary)}
+@media (prefers-reduced-motion:no-preference){
+  .js h1 .ln>span{transform:translateY(150%)}
+  .ready h1 .ln>span{animation:rise .85s cubic-bezier(.215,.61,.355,1) forwards;animation-delay:calc(60ms + var(--k,0) * 80ms)}
 }
-.copy{text-align:center}
-@media (min-width:960px){.copy{text-align:start}}
-h1{font-size:clamp(42px,7.2vw,88px);line-height:1.12;font-weight:800;margin:0;letter-spacing:0;font-stretch:92%}
-html[dir=ltr] h1{letter-spacing:-.04em;line-height:1}
-h1 em{display:block;font-style:normal;color:color-mix(in oklab,currentColor 55%,transparent)}
-html[lang=fr] h1{font-size:clamp(34px,10.4vw,64px)}
-.lede{font-size:clamp(18px,2vw,21px);color:var(--muted);max-width:30ch;margin:22px auto 0;text-wrap:pretty}
-@media (min-width:960px){.lede{margin-inline:0}}
-.cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:34px}
-@media (min-width:960px){.copy .cta{align-items:flex-start}}
-.meta{font-size:14.5px;color:var(--muted)}
-.meta{text-wrap:balance}
+@keyframes rise{to{transform:none}}
+.cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:40px}
+.meta{font-size:14.5px;color:var(--muted);text-wrap:balance}
 .meta a{font-weight:600;white-space:nowrap}
 
-/* stage: dot grid, halo, chips that fall into the phone */
-.stage{position:relative;z-index:4;perspective:1400px;display:grid;justify-items:center;align-content:start;align-self:start;padding:24px 0 0}
-.fall{transition:opacity .4s var(--ease)}
-.stage[data-k]:not([data-k="0"]) .fall{opacity:0}
-.stage[data-k]:not([data-k="0"]) .chip{animation-play-state:paused}
-/* sticky only with JS and motion allowed; otherwise the steps sit stacked under a still phone */
+/* paper: every object on the desk shares one soft shadow and a hairline edge */
+.pp{background:var(--paper);box-shadow:0 0 0 1px var(--edge);filter:var(--shf)}
+
+/* the machine: the real flow performed on a desk; chat slip, cable, phone, cable, tray */
+.flow{position:relative;padding-top:clamp(88px,11vw,140px)}
+.flow>h2{margin-inline:auto;text-align:center}
+.desk{position:relative;padding-top:20px;overflow-x:clip}
+.mach{--W:1160px;--H:780px;position:relative;width:var(--W);height:var(--H);margin-inline:calc(50% - var(--W) / 2);transform:scale(var(--k,1));transform-origin:50% 0;margin-bottom:calc(var(--H) * (var(--k,1) - 1))}
 @media (prefers-reduced-motion:no-preference){
-  .js .stage{position:sticky;top:max(92px,calc(50svh - 310px))}
-  .js .phone{transform:scale(var(--sc,1));transform-origin:50% 0}
-  @media (max-width:959px){
-    /* the band covers from the very top, so steps slide under it, not under the header */
-    .js .stage{top:0;padding-top:92px;height:var(--band,auto);margin-inline:-16px;background:var(--bg)}
-    .js .stage::after{content:"";position:absolute;inset-inline:0;top:100%;height:20px;background:linear-gradient(var(--bg),transparent);pointer-events:none}
-  }
+  .js .rig{height:calc(var(--dh,100svh) * 3.3)}
+  .js .desk{position:sticky;top:var(--top,84px);height:var(--dh,auto)}
 }
-.fall{position:absolute;inset:-30px max(0px,calc(50% - 230px)) 30%;overflow:hidden;pointer-events:none;-webkit-mask:linear-gradient(#000 70%,transparent);mask:linear-gradient(#000 70%,transparent)}
-.chip{position:absolute;top:0;display:inline-flex;align-items:center;gap:6px;padding:6px 11px 6px 9px;border-radius:12px;background:var(--c-lowest);color:var(--on-bg);font:700 12.5px/1 system-ui,sans-serif;direction:ltr;box-shadow:0 8px 20px -10px rgb(var(--ink-sh)/.45),0 0 0 1px color-mix(in oklab,var(--outline-v) 60%,transparent);animation:drop var(--t,7s) linear infinite;animation-delay:var(--dl,0s);opacity:0}
-.chip .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
-.chip.a .i{color:var(--tertiary)}
-@media (max-width:599px){.fall{display:none}}
-@keyframes drop{0%{transform:translateY(-40px) rotate(var(--r0,-8deg));opacity:0}12%{opacity:1}70%{opacity:1}100%{transform:translateY(420px) rotate(var(--r1,6deg)) scale(.8);opacity:0}}
+.mach>*{position:absolute}
+.wires{inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+[dir=rtl] .wires{transform:scaleX(-1)}
+.wires.m{display:none}
+.wires .o{fill:none;stroke:var(--wire);stroke-width:13;stroke-linecap:round}
+.wires .f{fill:none;stroke:var(--paper);stroke-width:9;stroke-linecap:round}
+.wires .rb{fill:none;stroke:var(--wire);stroke-width:9;stroke-dasharray:1.6 6.5;opacity:.5;transition:opacity .5s var(--ease)}
+.wires .o,.wires .f{stroke-dasharray:1 1;stroke-dashoffset:var(--dw,0)}
+.live .cb:not(.on) .rb{opacity:0}
+/* without JS the desk still fits: a stepped scale until the script measures it */
+@media (max-width:1191px){.mach{--k:.86}}@media (max-width:1039px){.mach{--k:.74}}@media (max-width:899px){.mach{--k:.62}}@media (max-width:759px){.mach{--k:.99}}@media (max-width:391px){.mach{--k:.8}}
+.wires .jk{fill:var(--paper);stroke:var(--wire);stroke-width:2.5}
+.wires .cn{fill:none;stroke:color-mix(in oklab,var(--on-bg) 38%,transparent);stroke-width:1.5;stroke-dasharray:6 8}
+.wires .cn.a{stroke:var(--primary);animation:flow 1.4s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-28}}
+
+/* the chat slip: the message the link came from, generic, no app name */
+.slip{inset-inline-start:0;top:118px;width:320px;padding:14px;border-radius:22px;rotate:calc(var(--x) * -4deg);display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.45;transition:opacity .5s var(--ease),translate .6s var(--ease)}
+.slip .msg,.slip .vcard{box-shadow:0 0 0 1px var(--edge)}
+.slip .vcard{width:86%}
+.slip .toast{position:static;margin-top:2px;opacity:0;transform:translateY(6px)}
+.e-toast .slip .toast{opacity:1;transform:none}
+.lchip{left:0;top:0;display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 9px;border-radius:12px;font:600 13px/1 system-ui,sans-serif;direction:ltr;color:var(--on-bg);opacity:0;transition:opacity .25s;will-change:transform}
+.lchip .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
+.lchip.on{opacity:1}
+
+/* the tray: Downloads/Nezzel, where the file lands */
+.tray{inset-inline-start:850px;top:250px;width:300px;padding:14px;border-radius:22px;rotate:calc(var(--x) * 3deg);transition:opacity .5s var(--ease),translate .6s var(--ease)}
+.tray .trh{display:flex;align-items:center;gap:8px;font:600 13px/1 system-ui,sans-serif;color:var(--muted);padding:2px 2px 12px}
+.tray .trh .i{width:18px;height:18px;color:var(--primary)}
+.trg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.trt{position:relative;aspect-ratio:16/10;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:var(--c);color:var(--muted);font:700 11px/1 system-ui,sans-serif;direction:ltr}
+.trt .i{width:22px;height:22px}
+.trt>b{position:absolute;bottom:6px;inset-inline-start:7px;font-weight:700}
+.trt svg.sc2{position:absolute;inset:0;width:100%;height:100%}
+.trt.v>b,.trt.nw small{color:#fff;text-shadow:0 1px 2px rgb(0 0 0/.5)}
+.trt.nw{background:transparent;box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--on-bg) 22%,transparent)}
+.trt.nw>*{opacity:0;transform:scale(.9);transition:opacity .4s var(--ease),transform .5s var(--spring)}
+.trt.nw small{position:absolute;bottom:6px;inset-inline:7px;font:700 10.5px/1.2 system-ui,sans-serif;text-align:start}
+.landed .trt.nw{box-shadow:0 0 0 2px var(--primary)}
+.landed .trt.nw>*{opacity:1;transform:none}
+.fcard{left:0;top:0;width:118px;padding:5px;border-radius:12px;opacity:0;transition:opacity .25s;will-change:transform}
+.fcard .art{border-radius:8px}
+.fcard.on{opacity:1}
+
+/* the three steps sit under their object, numbered; the one playing is in ink */
+.steps{list-style:none;margin:0;padding:0;inset:0;pointer-events:none}
+.step{position:absolute;top:640px;width:300px;display:grid;grid-template-columns:auto 1fr;column-gap:14px;align-content:start;pointer-events:auto;transition:opacity .4s var(--ease)}
+.step:nth-child(1){inset-inline-start:10px}
+.step:nth-child(2){inset-inline-start:440px}
+.step:nth-child(3){inset-inline-start:860px}
+.step .n{grid-row:span 3;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1.5px var(--on-bg);font:700 16px/1 system-ui,sans-serif;transition:background .35s var(--ease),color .35s var(--ease),box-shadow .35s}
+.step h3{margin:0;font-size:24px;line-height:1.3;font-weight:800}
+html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
+.step p{margin:6px 0 0;color:var(--muted);font-size:16px;line-height:1.5;max-width:30ch;text-wrap:pretty}
+.step .note{font-size:13px;margin-top:10px}
+.step.on .n{background:var(--primary);color:var(--on-primary);box-shadow:none}
+@media (prefers-reduced-motion:no-preference){.live .step:not(.on){opacity:.35}}
+
+/* the phone sits mid-desk; on narrow screens the desk turns to a column and objects come and go */
+.mach>.phone{inset-inline-start:435px;top:0}
+@media (max-width:759px){
+  .mach{--W:360px;--H:880px}
+  .wires.d{display:none}
+  .wires.m{display:block}
+  .mach>.phone{inset-inline-start:70px;top:40px}
+  .slip{top:0;width:230px;padding:10px;font-size:11.5px;rotate:calc(var(--x) * -5deg);z-index:3}
+  .slip .msg{display:none}
+  .tray{inset-inline-start:0;top:466px;width:220px;padding:10px;z-index:3}
+  .step{top:680px;inset-inline-start:0!important;width:360px}
+  .step h3{font-size:28px}
+  .step p{font-size:18px}
+  .live .slip{translate:0 0}
+  .live:not(.k0):not(.k1) .slip{opacity:0;translate:0 -24px}
+  .live:not(.k3) .tray{opacity:0;translate:0 24px}
+  .live .step:not(.on){opacity:0}
+}
 
 /* the live phone */
 .phone{--W:290px;position:relative;z-index:2;width:var(--W);height:calc(var(--W) * 2.07);padding:9px;border-radius:46px;background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1.5px #29302e inset,0 0 0 1px rgb(255 255 255/.05);font-size:12.5px;line-height:1.45}
 @media (max-width:380px){.phone{--W:262px}}
 /* as the page moves, the phone tips up from lying back and settles flat */
-@media (prefers-reduced-motion:no-preference){@supports (animation-timeline:scroll()){.js .phone{animation:settle linear both;animation-timeline:scroll(root);animation-range:0 55vh}}}
-@keyframes settle{from{scale:.92;rotate:x 16deg}}
-.screen{position:relative;height:100%;border-radius:37px;overflow:hidden;background:var(--bg);color:var(--on-bg);font-family:"Noto Sans Arabic",system-ui,sans-serif}
+.screen{--bg:var(--app);position:relative;height:100%;border-radius:37px;overflow:hidden;background:var(--bg);color:var(--on-bg);font-family:"Noto Sans Arabic",system-ui,sans-serif}
 html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .cam{position:absolute;z-index:9;top:12px;left:50%;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#0c100f}
 .sb{display:flex;justify-content:space-between;padding:12px 22px 0;font:600 11px/1 system-ui,sans-serif;opacity:.85}
@@ -234,9 +298,7 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .sc{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transform:translateX(calc(var(--x) * 24px)) scale(.985);transition:opacity .35s var(--ease),transform .4s var(--ease);pointer-events:none}
 .sc.out{transform:translateX(calc(var(--x) * -24px)) scale(.985)}
 /* the signature moment: the copied clip zooms toward you and Nezzel settles in behind it */
-#demo .s0.out{transform:scale(1.14);transition-duration:.3s,.4s}
-#demo:not([data-s="1"]) .s1:not(.out){transform:scale(.94)}
-.phone[data-s="0"] .s0,.phone[data-s="1"] .s1{opacity:1;transform:none}
+#demo .s1{opacity:1;transform:none}
 .ab{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
 .ab b{font-size:15px}
 .ab .i{width:20px;height:20px}
@@ -255,7 +317,7 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .pmenu .i{width:16px;height:16px}
 .e-menu .pmenu{opacity:1;transform:none}
 [dir=ltr] .pmenu{transform-origin:top left}
-:root[data-mode=dark] .screen :is(.msg,.vcard,.pmenu){background:var(--c-high)}
+:root[data-mode=dark] .slip :is(.msg,.vcard,.pmenu){background:var(--c-high)}
 .vcard,.msg{transition:transform .45s var(--spring),box-shadow .45s var(--ease),opacity .3s}
 .e-menu .vcard{transform:scale(1.03);box-shadow:0 14px 30px -12px rgb(var(--ink-sh)/.4)}
 .e-menu .msg{opacity:.45}
@@ -366,7 +428,7 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 .snack .st{display:grid;line-height:1.35}
 .snack small{opacity:.8}
 .snack b{color:var(--inverse-primary)}
-.e-toast .s0 .toast,.e-snack .snack{opacity:1;transform:none}
+.e-snack .snack{opacity:1;transform:none}
 /* progress ring: only the ring svg rotates, never the check inside; clockwise in both directions, like the app */
 .ring{position:relative;width:var(--rs,40px);height:var(--rs,40px);flex:none}
 .ring>.rg{width:100%;height:100%;transform:rotate(-90deg)}
@@ -382,23 +444,6 @@ html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
 html[dir=ltr] h2{letter-spacing:-.04em;line-height:1.08}
 .sub{color:var(--muted);font-size:18px;max-width:46ch;margin:14px 0 0;text-wrap:pretty}
-
-/* the three steps: plain text beside (desktop) or under (phone) the sticky phone */
-.flow{padding-top:112px}
-.steps{list-style:none;margin:36px 0 0;padding:0;counter-reset:st}
-.step{display:grid;grid-template-columns:auto 1fr;column-gap:18px;align-content:center;padding:28px 0;transition:opacity .35s var(--ease)}
-.step .n{grid-row:span 2;width:44px;height:44px;margin-top:4px;border-radius:50%;display:grid;place-items:center;background:var(--primary-c);color:var(--on-primary-c);font:800 17px/1 system-ui,sans-serif;transition:background .35s var(--ease),color .35s var(--ease),transform .4s var(--spring)}
-.step h3{margin:0;font-size:clamp(26px,3.4vw,40px);line-height:1.25;font-weight:800;text-wrap:balance}
-html[dir=ltr] .step h3{letter-spacing:-.03em;line-height:1.1}
-.step p{margin:10px 0 0;color:var(--muted);font-size:clamp(17px,1.6vw,19px);max-width:34ch;text-wrap:pretty}
-@media (prefers-reduced-motion:no-preference){
-  .story.live .step{min-height:max(200px,calc((100svh - var(--band,0px)) * .62));align-content:start}
-  @media (min-width:960px){.story.live .step{min-height:68svh;align-content:center}.story.live .steps{padding-bottom:10svh}}
-  .story.live .step:not(.on){opacity:.32}
-  .story.live .step.on .n{background:var(--primary);color:var(--on-primary);transform:scale(1.08)}
-}
-.note{margin:8px 0 0;font-size:14px;color:var(--muted);max-width:52ch}
-.step .note{grid-column:2;margin-top:18px}
 
 /* promo video slot (not shipped): poster + tap to play, between the hero and the steps */
 .promo img,.promo video{display:block;width:100%;aspect-ratio:16/9;border-radius:var(--r-xl);background:var(--c)}
@@ -675,7 +720,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
   [data-r],.w,.fe,.mark{opacity:1!important;transform:none!important;filter:none!important}
-  .fall{display:none}
 }
 </style>
 </head>
@@ -730,12 +774,11 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 </div>
 
 <main id="main">
-<div class="wrap story">
-<header class="hero" id="top">
+<header class="hero wrap" id="top">
+  <span class="ghost" aria-hidden="true">Nezzel</span>
   <div class="copy">
-    <h1 id="h1" data-i="h1">La vidéo, <em>il suffit du lien</em></h1>
-    <p class="lede" data-i="lede" data-r style="--d:6">Le son et les photos aussi. Gratuit, et tout se passe sur votre téléphone</p>
-    <div class="cta" data-r style="--d:8">
+    <h1 id="h1" data-i="h1"><span class="ln"><span>Copiez le lien</span></span> <span class="ln"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span></h1>
+    <div class="cta">
       <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/download/v0.5.0/nezzel-0.5.0.apk">
         <svg class="i"><use href="#dl"/></svg>
         <span class="roll"><span data-i="cta">Télécharger l’application</span></span> <span class="sz ltr num size" data-mb="61.5">61,5 Mo</span>
@@ -745,34 +788,37 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   </div>
 </header>
 
-  <div class="stage" data-r style="--d:4">
-    <div class="fall" aria-hidden="true">
-      <span class="chip" style="left:6%;--t:7.5s;--dl:0s"><svg class="i"><use href="#video"/></svg>1080p</span>
-      <span class="chip a" style="left:72%;--t:8.5s;--dl:1.6s;--r0:10deg;--r1:-4deg"><svg class="i"><use href="#music"/></svg>M4A</span>
-      <span class="chip" style="left:18%;--t:9s;--dl:3.4s;--r0:4deg"><svg class="i"><use href="#image"/></svg>JPG</span>
-      <span class="chip" style="left:80%;--t:7s;--dl:4.6s;--r0:-12deg"><svg class="i"><use href="#video"/></svg>720p</span>
-      <span class="chip a" style="left:2%;--t:8s;--dl:6s;--r0:8deg"><svg class="i"><use href="#music"/></svg>MP3</span>
-      <span class="chip" style="left:66%;--t:9.5s;--dl:7.2s"><svg class="i"><use href="#image"/></svg>GIF</span>
-    </div>
-
-    <div class="phone" id="demo" data-s="0" role="img" data-i-aria="demo-aria" aria-label="Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré">
-      <div class="screen" aria-hidden="true">
-        <span class="cam"></span>
-        <span class="tap" id="tap"></span>
-        <div class="sc s0">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="ab"><svg class="i flip"><use href="#back"/></svg><span class="av" data-i="av">F</span><b data-i="chat">Famille</b></div>
-          <div class="body">
-            <div class="msg" data-i="msg">Regardez cette vidéo</div>
-            <div class="vcard"><div class="art"><svg><use href="#scene"/></svg><span class="pl"><svg class="i"><use href="#play"/></svg></span><span class="du">2:48</span></div><b data-i="vt">Souvenirs de vacances</b></div>
-            <div class="pmenu">
+<!-- promo video slot, between the hero and the steps: a poster <img loading="lazy"> in a <button>; a tap swaps in <video controls autoplay playsinline preload="none">. One video only. -->
+<section class="flow" id="how" aria-labelledby="how-h">
+  <h2 id="how-h" data-i="how-h">Trois gestes, et c’est sur votre téléphone</h2>
+  <div class="rig">
+  <div class="desk">
+  <div class="mach e-menu e-copy e-toast e-sheet e-full e-pick landed" id="mach">
+    <svg class="wires d" viewBox="0 0 1160 780" aria-hidden="true">
+      <g class="cb" id="c1d"><path class="o" pathLength="1" d="M300 318C372 318 352 486 396 486S430 392 440 380"/><path class="f" pathLength="1" d="M300 318C372 318 352 486 396 486S430 392 440 380"/><path class="rb" d="M300 318C372 318 352 486 396 486S430 392 440 380"/></g>
+      <g class="cb" id="c2d"><path class="o" pathLength="1" d="M720 300C800 300 780 470 820 470S844 352 858 330"/><path class="f" pathLength="1" d="M720 300C800 300 780 470 820 470S844 352 858 330"/><path class="rb" d="M720 300C800 300 780 470 820 470S844 352 858 330"/></g>
+      <circle class="jk" cx="300" cy="318" r="6"/><circle class="jk" cx="440" cy="380" r="6"/><circle class="jk" cx="720" cy="300" r="6"/><circle class="jk" cx="858" cy="330" r="6"/>
+      <path class="cn" data-c="0" d="M150 628V560"/><path class="cn" data-c="1" d="M580 628V606"/><path class="cn" data-c="2" d="M1000 628V520"/>
+    </svg>
+    <svg class="wires m" viewBox="0 0 360 820" aria-hidden="true">
+      <g class="cb" id="c1m"><path class="o" pathLength="1" d="M60 296C40 360 40 410 72 420"/><path class="f" pathLength="1" d="M60 296C40 360 40 410 72 420"/><path class="rb" d="M60 296C40 360 40 410 72 420"/></g>
+      <g class="cb" id="c2m"><path class="o" pathLength="1" d="M72 400C24 410 24 444 56 472"/><path class="f" pathLength="1" d="M72 400C24 410 24 444 56 472"/><path class="rb" d="M72 400C24 410 24 444 56 472"/></g>
+    </svg>
+    <div class="slip pp" aria-hidden="true">
+      <span class="tap"></span>
+      <div class="msg" data-i="msg">Regardez cette vidéo</div>
+      <div class="vcard"><div class="art"><svg><use href="#scene"/></svg><span class="pl"><svg class="i"><use href="#play"/></svg></span><span class="du">2:48</span></div><b data-i="vt">Souvenirs de vacances</b></div>
+      <div class="pmenu">
               <span><svg class="i flip"><use href="#reply"/></svg><span data-i="m-reply">Répondre</span></span>
               <span><svg class="i flip"><use href="#share"/></svg><span data-i="m-share">Partager</span></span>
               <span class="cp" id="cp"><svg class="i"><use href="#link"/></svg><span data-i="m-copy">Copier le lien</span></span>
             </div>
-            <div class="toast"><svg class="i"><use href="#check"/></svg><span data-i="copied">Lien copié</span></div>
-          </div>
-        </div>
+      <div class="toast"><svg class="i"><use href="#check"/></svg><span data-i="copied">Lien copié</span></div>
+    </div>
+    <div class="phone" id="demo" role="img" data-i-aria="demo-aria" aria-label="Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré">
+      <div class="screen" aria-hidden="true">
+        <span class="cam"></span>
+        <span class="tap" id="tap"></span>
         <div class="sc s1">
           <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
           <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
@@ -813,18 +859,27 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       </div>
     </div>
 
-  </div>
-
-<!-- promo video slot, between the hero and the steps: a poster <img loading="lazy"> in a <button>; a tap swaps in <video controls autoplay playsinline preload="none">. One video only. -->
-<section class="flow" id="how" aria-labelledby="how-h">
-  <h2 id="how-h" data-i="how-h" data-r>Trois gestes, et c’est sur votre téléphone</h2>
+    <div class="tray pp" aria-hidden="true">
+      <div class="trh"><svg class="i"><use href="#file"/></svg><span class="ltr">Downloads/Nezzel</span></div>
+      <div class="trg">
+        <span class="trt a"><svg class="i"><use href="#music"/></svg><b>MP3</b></span>
+        <span class="trt"><svg class="i"><use href="#image"/></svg><b>JPG</b></span>
+        <span class="trt v"><svg class="sc2" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><b>720p</b></span>
+        <span class="trt nw"><svg class="sc2" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><small class="num">1080p · <span data-mb="40.6">40,6 Mo</span></small></span>
+      </div>
+    </div>
+    <span class="lchip pp" aria-hidden="true"><svg class="i"><use href="#link"/></svg>youtu.be/…</span>
+    <span class="fcard pp" aria-hidden="true"><span class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span></span>
   <ol class="steps">
     <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">Copiez le lien</h3><p data-i="s1p">Ou partagez-le directement avec Nezzel</p></li>
     <li class="step" data-step="1"><span class="n">2</span><h3 data-i="s2">Choisissez la qualité</h3><p data-i="s2p">Ouvrez Nezzel : le lien vous attend</p></li>
     <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">Appuyez sur Télécharger</h3><p data-i="s3p">Rien ne démarre sans vous</p><p class="note" data-i="note">Simple démo. Chaque site fixe ses qualités</p></li>
   </ol>
+
+  </div>
+  </div>
+  </div>
 </section>
-</div>
 
 <section class="stack" id="more" aria-labelledby="more-h">
   <h2 class="wrap" id="more-h" data-i="more-h">Et ce n’est pas tout</h2>
@@ -947,8 +1002,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const EN = {
     language:"Language", "og-alt":"Nezzel: save videos straight from a link. A phone showing the qualities on offer",
-    skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"Save videos <em>straight from a link</em>",
-    lede:"Audio and photos too. Free, and it all happens on your phone",
+    skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"<span class=\"ln\"><span>Copy the link</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> does the rest</span></span>",
     cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved",
     av:"F", chat:"Family", msg:"Look at this clip", vt:"Summer trip highlights",
@@ -986,7 +1040,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "tr-h":"No ads, no account", "tr-p":"No ads before or after a download. No sign-up",
     "tr-src":"Source code",
     gh:"GitHub", rel:"Releases",
-    "fin-h":"Copy the link. We’ll take it from there",
+    "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
     "x1p": "Yours to keep, even after they vanish",
     "x2p": "Paste its link and Nezzel saves them one by one",
@@ -1015,8 +1069,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "skip": "تخطَّ إلى المحتوى",
       "get": "تنزيل",
       "to-dark": "الوضع الداكن",
-      "h1": "حمّل الفيديو <em>من رابطه</em>",
-      "lede": "والصوت والصور كذلك. مجانًا، وكل شيء على هاتفك",
+      "h1": "<span class=\"ln\"><span>انسخ الرابط</span></span> <span class=\"ln\"><span>والباقي على <bdi>Nezzel</bdi></span></span>",
       "cta": "تنزيل التطبيق",
       "meta": "لأندرويد 10 أو أحدث · الإصدار",
       "howto": "كيف أثبّته؟",
@@ -1153,8 +1206,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   };
   const FR = {
     language:"Langue", "og-alt":"Nezzel : la vidéo, il suffit du lien. Un téléphone affiche les qualités proposées",
-    skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"La vidéo, <em>il suffit du lien</em>",
-    lede:"Le son et les photos aussi. Gratuit, et tout se passe sur votre téléphone",
+    skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"<span class=\"ln\"><span>Copiez le lien</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span>",
     cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré",
     av:"F", chat:"Famille", msg:"Regardez cette vidéo", vt:"Souvenirs de vacances",
@@ -1231,8 +1283,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 
   // shared state, declared before anything can render
   let rel = null, done3 = false;
-  const demo = $("#demo"), tap = $("#tap"), jobm = $("#jobm");
-  const stage = $(".stage"), story = $(".story"), steps = $$(".step");
+  const mach = $("#mach"), jobm = $("#jobm"), chip = $(".lchip"), fcard = $(".fcard");
+  const rig = $(".rig"), desk = $(".desk"), steps = $$(".step");
 
   // ---------- language ----------
   function splitWords(el, cls, mask) {
@@ -1339,19 +1391,32 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const ring = (root, p) => { $(".pr", root).style.strokeDashoffset = String(1 - p / 100); };
   const line = (total, p) => "<span class=\"ltr num\">" + number(p, 0) + (lang() === "fr" ? "\u00a0% · " : "% · ") + number(total * p / 100) + " / " + mb(total, 1) + "</span>";
 
-  // ---------- the story: the phone stays, the three steps scroll past it ----------
-  // Beat 0 is the hero; beats 1-3 play when their step crosses a line on the screen.
+  // ---------- the machine: the copied link rides a cable into Nezzel, the file rides out to the tray ----------
+  // Beat 0 waits above the desk; beats 1-3 play while the pinned desk scrolls through its three thirds.
   const BEATS = [
-    { s: 0, ev: [[700, "e-menu"]] },
-    { s: 0, ev: [[0, "e-menu"], [450, "tap:cp"], [600, "e-copy"], [900, "e-toast"]] },
-    { s: 1, ev: [[250, "e-sheet"], [1500, "e-full"], [2300, "tap:q1080"], [2400, "e-pick"]] },
-    { s: 1, c: "e-sheet e-full e-pick", ev: [[500, "tap:pb2"], [600, "e-press2"], [900, "drop"], [3700, "e-done"], [3900, "e-snack"]] }
+    { ev: [[700, "e-menu"]] },
+    { ev: [[0, "e-menu"], [450, "tap:cp"], [600, "e-copy"], [900, "e-toast"], [1000, "ride"]] },
+    { c: "e-copy e-toast", ev: [[250, "e-sheet"], [1500, "e-full"], [2300, "tap:q1080"], [2400, "e-pick"]] },
+    { c: "e-copy e-toast e-sheet e-full e-pick", ev: [[500, "tap:pb2"], [600, "e-press2"], [900, "drop"], [3700, "e-done"], [3800, "out"], [3900, "e-snack"]] }
   ];
-  let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1;
+  const wide = matchMedia("(min-width: 760px)"), rtl = document.documentElement.dir === "rtl";
+  let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1, rides = [];
+  const cable = i => $("#c" + i + (wide.matches ? "d" : "m") + " .rb");
   function tapAt(id) {
-    const scr = $(".screen", demo), a = $("#" + id).getBoundingClientRect(), b = scr.getBoundingClientRect(), k = b.width / scr.offsetWidth;
-    tap.style.left = (a.left - b.left + a.width / 2) / k + "px"; tap.style.top = (a.top - b.top + a.height / 2) / k + "px";
-    tap.classList.remove("go"); void tap.offsetWidth; tap.classList.add("go");
+    const a = $("#" + id), box = a.closest(".screen, .slip"), dot = $(".tap", box), k = mach.getBoundingClientRect().width / mach.offsetWidth;
+    const r = a.getBoundingClientRect(), b = box.getBoundingClientRect();
+    dot.style.left = (r.left + r.width / 2 - b.left - b.width / 2) / k + box.offsetWidth / 2 + "px";
+    dot.style.top = (r.top + r.height / 2 - b.top - b.height / 2) / k + box.offsetHeight / 2 + "px";
+    dot.classList.remove("go"); void dot.offsetWidth; dot.classList.add("go");
+  }
+  // Wires live in the desk's own coordinates; they are mirrored in Arabic, so the point is too.
+  function place(node, path, u) {
+    const pt = path.getPointAtLength(path.getTotalLength() * u), x = rtl ? mach.offsetWidth - pt.x : pt.x;
+    node.style.transform = "translate(" + (x - node.offsetWidth / 2) + "px," + (pt.y - node.offsetHeight / 2) + "px)";
+  }
+  function ride(node, i, dur, end) {
+    node.classList.add("on"); place(node, cable(i), 0);
+    rides.push({ node, i, t0: el, dur, end });
   }
   // The app's own status lines, in order: preparing, downloading with a percent, joining, then quality and size.
   function renderDemo3(p) {
@@ -1359,24 +1424,23 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     $(".pc", jobm).textContent = p > 6 && p < 90 ? number(p, 0) + "%" : "";
     $(".pl-line", jobm).innerHTML = p >= 100 ? "<span class=\"ltr num\">1080p · " + mb(40.6, 1) + "</span>" : t(p <= 6 ? "prep" : p < 90 ? "dling" : "join");
   }
-  function slideTo(box, i) {
-    const prev = +box.dataset.s;
-    $$(".sc", box).forEach((c, k) => c.classList.toggle("out", k === prev && prev !== i));
-    box.dataset.s = i;
-  }
-  function enter(i) {
-    demo.className = "phone " + (BEATS[beat].c || ""); slideTo(demo, i);
-    const p = demo.classList.contains("e-pick"); $("#q1080").classList.toggle("sel", p); $("#q720").classList.toggle("sel", !p);
+  function enter() {
+    mach.className = "mach live k" + beat + " " + (BEATS[beat].c || "");
+    const p = mach.classList.contains("e-pick"); $("#q1080").classList.toggle("sel", p); $("#q720").classList.toggle("sel", !p);
+    rides = []; chip.classList.remove("on"); fcard.classList.remove("on");
     jobm.classList.remove("done"); done3 = false; t3 = -1; renderDemo3(0);
+    $$(".cn").forEach(c => c.classList.toggle("a", +c.dataset.c === beat - 1));
   }
   function fire(ev) {
     if (ev.startsWith("tap:")) { if (!still) tapAt(ev.slice(4)); return; }
-    if (ev[0] === "-") { demo.classList.remove(ev.slice(1)); return; }
-    if (ev === "drop") { demo.classList.remove("e-sheet", "e-full", "e-press2"); demo.classList.add("e-recent"); t3 = el; return; }
-    demo.classList.add(ev);
+    if (ev === "ride") return ride(chip, 1, 1100, () => chip.classList.remove("on"));
+    if (ev === "out") return ride(fcard, 2, 1300, () => { fcard.classList.remove("on"); mach.classList.add("landed"); });
+    if (ev === "drop") { mach.classList.remove("e-sheet", "e-full", "e-press2"); mach.classList.add("e-recent"); t3 = el; return; }
+    mach.classList.add(ev);
     if (ev === "e-pick") { $("#q720").classList.remove("sel"); $("#q1080").classList.add("sel"); }
     if (ev === "e-done") { jobm.classList.add("done"); done3 = true; renderDemo3(100); }
   }
+  const busy = () => fired < BEATS[beat].ev.length || (t3 >= 0 && !done3) || rides.length;
   function frame(now) {
     raf = 0;
     if (document.hidden) { last = 0; return; }
@@ -1384,38 +1448,43 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     const ev = BEATS[beat].ev;
     while (fired < ev.length && el >= ev[fired][0]) fire(ev[fired++][1]);
     if (t3 >= 0 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, (el - t3) / 2800), 2)))));
-    if (fired < ev.length || (t3 >= 0 && !done3)) raf = requestAnimationFrame(frame);
+    rides = rides.filter(r => {
+      const u = Math.min(1, (el - r.t0) / r.dur);
+      place(r.node, cable(r.i), u < .5 ? 2 * u * u : 1 - Math.pow(2 - 2 * u, 2) / 2);
+      if (u >= 1) r.end();
+      return u < 1;
+    });
+    if (busy()) raf = requestAnimationFrame(frame);
   }
-  const resume = () => { if (!raf && beat >= 0 && (fired < BEATS[beat].ev.length || (t3 >= 0 && !done3))) raf = requestAnimationFrame(frame); };
+  const resume = () => { if (!raf && beat >= 0 && busy()) raf = requestAnimationFrame(frame); };
   document.addEventListener("visibilitychange", resume);
   function play(k) {
     if (k === beat) return;
-    beat = k; el = 0; fired = 0; last = 0; stage.dataset.k = k;
+    beat = k; el = 0; fired = 0; last = 0;
     steps.forEach((x, i) => x.classList.toggle("on", i === k - 1));
-    enter(BEATS[k].s); resume();
+    enter(); resume();
   }
-  // Phone scale and the sticky band height on narrow screens; then pick the step that is in full view.
-  const desk = matchMedia("(min-width: 960px)");
-  let band = 0, pending = 0;
-  function layout() {
-    const h = demo.offsetHeight, sc = Math.min(1, (desk.matches ? innerHeight - 112 : innerHeight * .44) / h);
-    band = desk.matches ? 92 : Math.round(92 + h * sc + 18);
-    stage.style.setProperty("--sc", sc.toFixed(3));
-    stage.style.setProperty("--band", desk.matches ? "auto" : band + "px"); story.style.setProperty("--band", band + "px");
-    pickStep();
-  }
-  function pickStep() {
-    pending = 0;
-    const vh = innerHeight, zone = vh - band, boxes = steps.map(x => {
-      const r = x.querySelector("h3").getBoundingClientRect(), q = x.querySelector("p:last-child").getBoundingClientRect();
-      return { top: r.top, mid: (r.top + q.bottom) / 2 };
+  // The cables draw in as the desk arrives: p = how far its top has come up the screen.
+  function wires(p) {
+    $$(".cb").forEach(g => {
+      const i = g.id[1] - 1, d = Math.min(1, Math.max(0, p * 1.6 - i * .6));
+      g.style.setProperty("--dw", (1 - d).toFixed(3)); g.classList.toggle("on", d > .995);
     });
-    const at = b => desk.matches ? Math.abs(b.mid - vh / 2) : Math.abs(b.top - (band + zone * .22));
-    if (desk.matches ? boxes[0].mid > vh * .8 : boxes[0].top > band + zone * .7) return play(0);
-    if (boxes.at(-1).top < band + 4) return play(boxes.length);
-    let k = -1;
-    boxes.forEach((b, i) => { if (b.top >= band + 4 && (k < 0 || at(b) < at(boxes[k]))) k = i; });
-    if (k >= 0) play(k + 1);
+  }
+  // Fit the desk to the screen under the header; the pinned desk then scrolls through three equal thirds.
+  let top = 88, pending = 0;
+  function layout() {
+    const dh = innerHeight - top, avail = document.documentElement.clientWidth - (wide.matches ? 48 : 24);
+    const k = Math.min(1, avail / mach.offsetWidth, still ? 1 : (dh - 28) / mach.offsetHeight);
+    mach.style.setProperty("--k", k.toFixed(3));
+    rig.style.setProperty("--dh", dh + "px"); desk.style.setProperty("--top", top + "px");
+    if (!still) onDesk();
+  }
+  function onDesk() {
+    pending = 0;
+    const vh = innerHeight, r = rig.getBoundingClientRect(), span = r.height - desk.offsetHeight;
+    wires(((.85 * vh) - mach.getBoundingClientRect().top) / (.75 * vh));
+    play(r.top > top + 1 ? 0 : 1 + Math.min(2, Math.floor(Math.max(0, (top - r.top) / span) * 3)));
   }
 
   // ---------- features: each panel plays once when it arrives, the one below steps back ----------
@@ -1486,12 +1555,13 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   syncTheme();
 
   // ---------- start ----------
-  if (still) { enter(2); fire("e-pick"); }
-  else {
-    story.classList.add("live"); layout();
-    addEventListener("scroll", () => { if (!pending) pending = requestAnimationFrame(pickStep); }, { passive: true });
-    let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
-    splitWords($("#h1"), "w", true); splitWords($(".lit"), "lw");
+  // Fonts first, so the headline lines rise as they will stay (capped, never blocks).
+  Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 300))]).then(() => document.documentElement.classList.add("ready"));
+  layout(); if (still) wires(1);
+  let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
+  if (!still) {
+    addEventListener("scroll", () => { if (!pending) pending = requestAnimationFrame(onDesk); }, { passive: true });
+    splitWords($(".lit"), "lw");
   }
 })();
 </script>
