@@ -23,6 +23,6 @@ Confidentialité
 Sans publicité, compte ni navigateur intégré — le traitement reste sur votre appareil, avec des demandes envoyées directement aux sites sources, à leurs serveurs de fichiers et aux services de mise à jour du moteur — le chargement automatique des options peut récupérer des informations et des aperçus lorsque l’application est au premier plan ou accepte un lien partagé ou collé — désactivez Afficher les options automatiquement pour les consulter manuellement — aucune lecture du presse-papiers en arrière-plan, et l’enregistrement des médias nécessite toujours une confirmation explicite
 
 Configuration et disponibilité
-Android 10 ou plus récent et arm64-v8a uniquement — la compatibilité native avec les pages de 16 Ko n’est pas résolue, et les vérifications sur appareil concernent les pages de 4 Ko — cette fiche n’annonce pas de disponibilité sur F-Droid ou un autre magasin — la distribution publique des APK nécessite toujours le code source correspondant et les mentions complètes des composants tiers
+Android 10 ou plus récent sur téléphones 64 bits (arm64-v8a) — les bibliothèques natives sont alignées pour les téléphones à pages mémoire de 16 Ko — le code source et les mentions des composants tiers accompagnent chaque version sur GitHub
 
 Copyright (C) 2026 Hululsoft — Nezzel est sous licence GPL-3.0-or-later ; les composants tiers conservent leurs propres conditions — téléchargez seulement les contenus que vous avez le droit d’enregistrer — contact : contact@hululsoft.mr

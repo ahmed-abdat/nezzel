@@ -23,6 +23,6 @@ Privacy
 No ads, account or embedded browser — processing stays on your device, with requests sent directly to source sites/CDNs and upstream engine-update infrastructure — automatic option loading may fetch metadata and previews while the app is in the foreground or accepts a shared/pasted link — turn off Show options automatically for manual inspection — no background clipboard monitoring, and saving media always needs explicit confirmation
 
 Requirements and availability
-Android 10+ and arm64-v8a only — native 16 KB page-size compatibility is unresolved, and current device evidence is for 4 KB pages — store metadata does not announce availability on F-Droid or another store — public APK distribution still needs matching corresponding source and complete third-party notices
+Android 10+ on 64-bit phones (arm64-v8a) — native libraries are aligned for phones with 16 KB memory pages — source code and third-party notices come with every release on GitHub
 
 Copyright (C) 2026 Hululsoft — Nezzel is GPL-3.0-or-later; third-party components retain their own terms — download only content you have the right to save — contact: contact@hululsoft.mr
