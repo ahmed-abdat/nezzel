@@ -54,4 +54,9 @@ class DownloadsGroupingTest {
             file(2, "Post_02.jpg", 101), file(1, "Post_01.jpg", 100)))
         assertEquals(listOf("1", "9"), rows.map { it.uri.lastPathSegment })
     }
+    @Test fun aNameClashNumberStaysOutOfTheTitle() {
+        assertEquals("Tears of Steel", file(1, "Tears of Steel (1).mp4", 0).displayName)
+        assertEquals("Lecture (2026)", file(2, "Lecture (2026).mp4", 0).displayName)
+        assertEquals("(1)", file(3, "(1).mp4", 0).displayName)
+    }
 }

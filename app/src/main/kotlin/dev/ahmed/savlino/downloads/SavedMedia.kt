@@ -46,8 +46,10 @@ data class SavedMedia(
     val postPosition: SavedPostPosition? = null,
     val postAddedSeconds: Long? = null,
 ) {
-    /** File labels follow DISPLAY_NAME; provider TITLE remains available to search. */
-    val displayName: String get() = filename.removeSuffix(savedExtension(filename))
+    /** File labels follow DISPLAY_NAME without the " (1)" a name clash added; provider TITLE remains available to search. */
+    val displayName: String get() = filename.removeSuffix(savedExtension(filename)).let { stem ->
+        stem.replace(CLASH_SUFFIX, "").ifBlank { stem }
+    }
     val searchKey: String by lazy { SearchText.fold("$title $filename") }
     val kind: SavedMediaKind? get() = when {
         mimeType.startsWith("image/") -> SavedMediaKind.IMAGE
@@ -72,6 +74,8 @@ data class SavedMedia(
     }
     val date: LocalDate get() = Instant.ofEpochSecond(postAddedSeconds ?: addedSeconds).atZone(ZoneId.systemDefault()).toLocalDate()
 }
+private val CLASH_SUFFIX = Regex(" \\([0-9]{1,3}\\)$")
+
 /** Ordinal among saved siblings, not a claim about unsaved attachments on the source post. */
 data class SavedPostPosition(val index: Int, val total: Int)
 
