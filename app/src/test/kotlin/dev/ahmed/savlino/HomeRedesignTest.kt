@@ -111,7 +111,7 @@ private fun HomeShell(lang: String, dark: Boolean, withDownloads: Boolean, copie
                         "Downloads" -> DownloadsScreen(jobs, lang, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(media))
                         "Settings" -> SettingsScreen(vm, lang, if (dark) ThemePref.Dark else ThemePref.Light, false, true, {}, {}, {}, {}, {}, {}, updates = null)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(null, lang)
-                        else -> HomeScreen(vm, jobs, library, lang, onPaste, {}, {}, {}, {}, {}, {}, {}, {})
+                        else -> HomeScreen(vm, jobs, library, lang, onPaste, {}, {}, {})
                     }
                 }
             }
@@ -178,7 +178,7 @@ class HomeRedesignTest {
     @Test fun aFinishedDownloadShowsAtTheStartOfTheRecentsRow() {
         var media by mutableStateOf(HomeFixtures.library.drop(1))
         show {
-            NezzelTheme(ThemePref.Light, false) { dev.ahmed.savlino.downloads.HomeRecents(media, "en", {}, {}) }
+            NezzelTheme(ThemePref.Light, false) { dev.ahmed.savlino.downloads.HomeRecents(media, "en", {}) {} }
         }.use {
             compose.onNodeWithText("Sintel", substring = true).assertIsDisplayed()
             // The new file is inserted before the card the row was anchored on.

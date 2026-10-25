@@ -177,7 +177,6 @@ class DesignCaptureTest {
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(24.dp)) {
                     androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.app_name), style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
                     HomeLinkCard(vm, "youtube.com") {}
-                    dev.ahmed.savlino.downloads.DownloadStrip(listOf(jobs.last()), lang) {}
                     dev.ahmed.savlino.downloads.RecentFiles(media.take(2), lang, {}) {}
                 }
                 dev.ahmed.savlino.downloads.DownloadNavigation("Home", jobs, lang) {}

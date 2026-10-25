@@ -39,7 +39,7 @@ class DownloadProgressTest {
         var progress by mutableStateOf(initial)
         try {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                if (strip) DownloadStrip(listOf(progress), language) {}
+                if (strip) HomeRecents(emptyList(), language, {}, { listOf(progress) }) {}
                 else DownloadsScreen(listOf(progress), language, {}, {}, {}, {}, {}, null, {}, {})
             } }
             compose.waitForIdle()
@@ -171,13 +171,16 @@ class DownloadProgressTest {
         text(context.getString(R.string.download_transferring)).assertDoesNotExist()
         update(active.copy(stalled = false))
         text(stalledLabel).assertDoesNotExist()
-        text("25%").assertExists()
+        // Home's card carries the ring's number as its state; the words under it say time left.
+        compose.onNode(SemanticsMatcher("25% state") { it.config.getOrNull(SemanticsProperties.StateDescription)?.contains("25%") == true })
+            .assertExists()
+        text(remaining).assertExists()
         update(active.copy(stalled = true, waiting = true))
         text(context.getString(R.string.download_waiting)).assertExists()
         text(stalledLabel).assertDoesNotExist()
     }
-    @Test fun homeStripKeepsFactualStallAndWorkWaitingPrecedenceEnglish() = truthfulStallStrip()
-    @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi") fun homeStripKeepsFactualStallAndWorkWaitingPrecedenceArabic() = truthfulStallStrip()
+    @Test fun homeCardKeepsFactualStallAndWorkWaitingPrecedenceEnglish() = truthfulStallStrip()
+    @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi") fun homeCardKeepsFactualStallAndWorkWaitingPrecedenceArabic() = truthfulStallStrip()
 
     private fun preparingHasNoSize() = render(active.copy(phase = DownloadPhase.PREPARING,
         bytes = 1, total = Size.Exact(1024))) {

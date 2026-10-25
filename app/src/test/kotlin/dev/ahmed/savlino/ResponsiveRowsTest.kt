@@ -45,7 +45,7 @@ class ResponsiveRowsTest {
     }
     private fun render(content: @Composable () -> Unit, check: (ComponentActivity) -> Unit) = renderThemed({ nodes(it) }, content, check)
 
-    // #7: the running job leads Home even when a newer one is queued behind it.
+    // #7: running jobs lead, then the queue in run order.
     private fun job(id: String, phase: DownloadPhase, waiting: Boolean = false) =
         DownloadProgress(id, "$id.mp4", phase, bytes = 10_000_000, total = Size.Exact(100_000_000), waiting = waiting)
 
@@ -80,47 +80,10 @@ class ResponsiveRowsTest {
 
     @Test fun slotWaitingJobDoesNotLookRunning() {
         val queued = job("queued", DownloadPhase.PREPARING, waiting = true)
-        render({ DownloadStrip(listOf(queued), language) {} }) { a ->
+        render({ HomeRecents(emptyList(), language, {}, { listOf(queued) }) {} }) { a ->
             val row = nodes(a).filter { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) != null }
             assertTrue("A queued row claims no progress, not even a spinner: " + row, row.isEmpty())
             assertTrue(texts(nodes(a)).toString(), texts(nodes(a)).any { context.getString(R.string.download_waiting) in it })
-        }
-    }
-
-    @Test fun homeStripShowsEveryRunningJobAndCountsTheQueueBeyond() {
-        val first = job("first", DownloadPhase.DOWNLOADING)
-        val second = job("second", DownloadPhase.DOWNLOADING)
-        val queued = job("queued", DownloadPhase.PREPARING, waiting = true)
-        val failed = job("failed", DownloadPhase.FAILED)
-        render({ DownloadStrip(listOf(first, failed, second, queued), language) {} }) { a ->
-            val shown = texts(nodes(a))
-            listOf(first, second).forEach { assertTrue(shown.toString(), shown.contains(NezzelFormat.isolate(it.filename))) }
-            listOf(queued, failed).forEach { assertFalse(shown.toString(), shown.contains(NezzelFormat.isolate(it.filename))) }
-            val firstTop = nodes(a).first { NezzelFormat.isolate(first.filename) in texts(listOf(it)) }.boundsInRoot.top
-            val secondTop = nodes(a).first { NezzelFormat.isolate(second.filename) in texts(listOf(it)) }.boundsInRoot.top
-            assertTrue("Oldest started on top", firstTop < secondTop)
-            assertTrue(shown.contains(context.resources.getQuantityString(R.plurals.downloads_running, 3, NezzelFormat.count(3, language))))
-        }
-        // Two running and nothing beyond: two rows, no count.
-        render({ DownloadStrip(listOf(first, second), language) {} }) { a ->
-            val shown = texts(nodes(a))
-            listOf(first, second).forEach { assertTrue(shown.toString(), shown.contains(NezzelFormat.isolate(it.filename))) }
-            assertFalse(shown.toString(), shown.any { "running" in it })
-        }
-    }
-
-    @Test fun homeStripShowsTheTransferringJobNotTheNewestQueuedOneAndKeepsTheCount() {
-        val running = job("running", DownloadPhase.DOWNLOADING)
-        val queued = job("queued", DownloadPhase.PREPARING, waiting = true)
-        var opened = 0
-        render({ DownloadStrip(listOf(running, queued), language) { opened++ } }) { a ->
-            val shown = texts(nodes(a))
-            assertTrue(shown.toString(), shown.contains(NezzelFormat.isolate(running.filename)))
-            assertFalse(shown.toString(), shown.contains(NezzelFormat.isolate(queued.filename)))
-            val count = context.resources.getQuantityString(R.plurals.downloads_running, 2, NezzelFormat.count(2, language))
-            val action = nodes(a).last { it.config.getOrNull(SemanticsActions.OnClick) != null && count in texts(descendants(it)) }
-            assertEquals(true, action.config[SemanticsActions.OnClick].action?.invoke())
-            assertEquals(1, opened)
         }
     }
 
