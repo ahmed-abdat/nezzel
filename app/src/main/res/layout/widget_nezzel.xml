@@ -18,6 +18,7 @@
             <TextView android:id="@+id/widget_saved_count" style="@style/Widget.Nezzel.Text.Count" />
         </LinearLayout>
     </LinearLayout>
+    <!-- Live: picture, title and progress per row; pause is the tonal control, Paste a quiet icon at the end. -->
     <LinearLayout
         android:id="@+id/widget_live"
         android:layout_width="match_parent"
@@ -27,30 +28,22 @@
         android:gravity="center_vertical"
         android:visibility="gone">
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="12dp"
-            android:orientation="vertical"
-            android:gravity="center_horizontal">
-            <ImageView android:id="@+id/widget_paste_icon" style="@style/Widget.Nezzel.PasteCircle" />
-            <TextView android:id="@+id/widget_more" style="@style/Widget.Nezzel.Text.More" android:visibility="gone" />
-        </LinearLayout>
-        <LinearLayout
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:orientation="vertical">
             <LinearLayout android:id="@+id/widget_job" style="@style/Widget.Nezzel.Row">
+                <ImageView android:id="@+id/widget_art" style="@style/Widget.Nezzel.Art" />
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
                     android:orientation="vertical">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
+                        android:orientation="horizontal">
                         <TextView android:id="@+id/widget_title" style="@style/Widget.Nezzel.Text.Title"
                             android:layout_width="0dp" android:layout_weight="1" />
                         <TextView android:id="@+id/widget_status" style="@style/Widget.Nezzel.Text.Percent" />
@@ -59,19 +52,20 @@
                     <ProgressBar android:id="@+id/widget_progress_paused" style="@style/Widget.Nezzel.Bar.Paused" />
                     <TextView android:id="@+id/widget_remaining" style="@style/Widget.Nezzel.Text.Meta" android:visibility="gone" />
                 </LinearLayout>
-                <ImageView android:id="@+id/widget_control" style="@style/Widget.Nezzel.Control" />
+                <ImageView android:id="@+id/widget_control" style="@style/Widget.Nezzel.Control.Tonal" android:layout_marginStart="4dp" />
             </LinearLayout>
             <LinearLayout android:id="@+id/widget_job_second" style="@style/Widget.Nezzel.Row">
+                <ImageView android:id="@+id/widget_art_second" style="@style/Widget.Nezzel.Art" />
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
                     android:orientation="vertical">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
+                        android:orientation="horizontal">
                         <TextView android:id="@+id/widget_title_second" style="@style/Widget.Nezzel.Text.Title"
                             android:layout_width="0dp" android:layout_weight="1" />
                         <TextView android:id="@+id/widget_status_second" style="@style/Widget.Nezzel.Text.Percent" />
@@ -80,8 +74,18 @@
                     <ProgressBar android:id="@+id/widget_progress_paused_second" style="@style/Widget.Nezzel.Bar.Paused" />
                     <TextView android:id="@+id/widget_remaining_second" style="@style/Widget.Nezzel.Text.Meta" android:visibility="gone" />
                 </LinearLayout>
-                <ImageView android:id="@+id/widget_control_second" style="@style/Widget.Nezzel.Control" />
+                <ImageView android:id="@+id/widget_control_second" style="@style/Widget.Nezzel.Control.Tonal" android:layout_marginStart="4dp" />
             </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+            <ImageView android:id="@+id/widget_control_end" style="@style/Widget.Nezzel.Control.Tonal" android:visibility="gone" />
+            <ImageView android:id="@+id/widget_paste_icon" style="@style/Widget.Nezzel.PasteQuiet" />
+            <TextView android:id="@+id/widget_more" style="@style/Widget.Nezzel.Text.More" android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
     <LinearLayout

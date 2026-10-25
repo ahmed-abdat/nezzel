@@ -203,8 +203,12 @@ class WidgetTest {
             root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
             root.layout(0, 0, width, height)
-            for (id in if (!live) listOf(R.id.widget_paste) else if (size == WidgetSize.SLIM) listOf(R.id.widget_control)
-                else listOf(R.id.widget_paste_icon, R.id.widget_control)) {
+            for (id in if (!live) listOf(R.id.widget_paste) else when (size) {
+                WidgetSize.SLIM -> listOf(R.id.widget_control)
+                WidgetSize.SQUARE -> listOf(R.id.widget_paste_icon, R.id.widget_control)
+                // One job: pause sits above Paste at the end, so the title keeps the width.
+                WidgetSize.WIDE -> listOf(R.id.widget_paste_icon, R.id.widget_control_end)
+            }) {
                 val target = root.findViewById<View>(id)
                 val rect = android.graphics.Rect(0, 0, target.width, target.height)
                 (root as android.view.ViewGroup).offsetDescendantRectToMyCoords(target, rect)
@@ -215,7 +219,7 @@ class WidgetTest {
         }
     }
 
-    @Test fun wideRowsShareBarsAndEtaAppearsOnlyInRoomyWide() {
+    @Test fun wideRowsShareBarsAndEtaAppearsOnlyForASingleJob() {
         val first = job("first").copy(bytesPerSecond = 10.0, remainingTransferSeconds = 6)
         val state = WidgetUiState.from(listOf(job("second"), first))
         for (height in listOf(110, 150)) {
@@ -223,7 +227,16 @@ class WidgetTest {
             assertNull(root.findViewById<View>(R.id.widget_ring))
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_progress).visibility)
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_progress_second).visibility)
-            assertEquals(if (height == 110) View.GONE else View.VISIBLE, root.findViewById<View>(R.id.widget_remaining).visibility)
+            assertEquals(View.GONE, root.findViewById<View>(R.id.widget_remaining).visibility)
+            // Two rows: each keeps its own pause; the end column only has Paste.
+            assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_control_second).visibility)
+            assertEquals(View.GONE, root.findViewById<View>(R.id.widget_control_end).visibility)
+            val single = view(WidgetUiState.from(first), WidgetSize.WIDE, heightDp = height)
+            assertEquals(View.VISIBLE, single.findViewById<View>(R.id.widget_remaining).visibility)
+            assertEquals("≈ 0:06 left", text(single, R.id.widget_remaining).replace(Regex("[\u2066-\u2069]"), ""))
+            assertEquals(2, single.findViewById<android.widget.TextView>(R.id.widget_title).maxLines)
+            assertEquals(View.GONE, single.findViewById<View>(R.id.widget_control).visibility)
+            assertEquals(View.VISIBLE, single.findViewById<View>(R.id.widget_control_end).visibility)
         }
         assertEquals(View.GONE, view(state, WidgetSize.SLIM).findViewById<View>(R.id.widget_remaining).visibility)
         val square = view(state, WidgetSize.SQUARE)
@@ -291,7 +304,7 @@ class WidgetTest {
         assertFalse(tile.clipToOutline)
     }
 
-    @Test fun liveStatesCarryNoThumbnailsAndProgressTicksTouchOnlyTextAndBars() {
+    @Test fun liveStatesHideRecentsAndProgressTicksTouchOnlyTextAndBars() {
         val picture = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
         val idle = WidgetUiState.from(emptyList(), listOf(saved(1)))
         val live = WidgetUiState.from(listOf(job()), listOf(saved(1))).let { ui ->
@@ -308,13 +321,76 @@ class WidgetTest {
         NezzelWidgetProvider.progressViews(app, later, WidgetSize.WIDE).reapply(app, root)
         assertEquals("45%", text(root, R.id.widget_status))
         assertEquals(45, root.findViewById<android.widget.ProgressBar>(R.id.widget_progress).progress)
-        assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_control).visibility)
+        assertEquals(View.VISIBLE, root.findViewById<View>(R.id.widget_control_end).visibility)
         // Partial views never carry bitmaps; pre-31 squares take a full update instead.
         val square = view(live, WidgetSize.SQUARE)
         val ring = square.findViewById<android.widget.ImageView>(R.id.widget_ring).drawable
         NezzelWidgetProvider.progressViews(app, later, WidgetSize.SQUARE).reapply(app, square)
         assertSame(ring, square.findViewById<android.widget.ImageView>(R.id.widget_ring).drawable)
         assertEquals("45%", text(square, R.id.widget_status))
+    }
+
+    @Test fun runningRowsShowTheJobPictureOrItsKindIconNeverAStandIn() {
+        val picture = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888)
+        val art = checkNotNull(WidgetArt.of(picture))
+        val with = WidgetUiState.from(job()).let { ui -> ui.copy(jobs = ui.jobs.map { it.copy(art = art) }) }
+        val tile = view(with).findViewById<android.widget.ImageView>(R.id.widget_art)
+        // Pre-31: a masked copy, never the shared source bitmap.
+        assertNotSame(picture, (tile.drawable as android.graphics.drawable.BitmapDrawable).bitmap)
+        assertEquals(0, tile.paddingTop)
+        val audio = WidgetUiState.from(job().copy(mimeType = "audio/mp4"))
+        val icon = view(audio).findViewById<android.widget.ImageView>(R.id.widget_art)
+        assertTrue(icon.paddingTop > 0)
+        assertEquals(R.drawable.ic_widget_music, shadowOf(icon.drawable).createdFromResId)
+        // Square: the picture is the tile behind the ring; without one the plain ring stays.
+        assertEquals(View.VISIBLE, view(with, WidgetSize.SQUARE).findViewById<View>(R.id.widget_art).visibility)
+        assertEquals(View.GONE, view(audio, WidgetSize.SQUARE).findViewById<View>(R.id.widget_art).visibility)
+        // A new picture is a layout change; the same one is not.
+        assertFalse(with.sameLayout(WidgetUiState.from(job())))
+        assertTrue(with.sameLayout(with.copy(jobs = with.jobs.map { it.copy(percent = 50) })))
+    }
+
+    @Test @Config(sdk = [33]) fun android12RunningPicturesTravelAsSmallJpegsSizedToTheRow() {
+        val picture = android.graphics.Bitmap.createBitmap(160, 160, android.graphics.Bitmap.Config.ARGB_8888)
+        val art = checkNotNull(WidgetArt.of(picture))
+        val density = app.resources.displayMetrics.density
+        fun state(vararg ids: String) = WidgetUiState.from(ids.map(::job)).let { ui -> ui.copy(jobs = ui.jobs.map { it.copy(art = art) }) }
+        // One job at 300x150: min(150 - 16, (300 - 16) * 0.3) = 85dp; two jobs: (134 - 8) / 2 = 63dp each.
+        for ((state, side) in listOf(state("a") to 85, state("a", "b") to 63)) {
+            val tile = view(state, WidgetSize.WIDE, widthDp = 300, heightDp = 150).findViewById<android.widget.ImageView>(R.id.widget_art)
+            assertTrue(tile.clipToOutline)
+            assertNotNull(tile.drawable)
+            assertEquals((side * density).toInt().toFloat(), tile.layoutParams.width.toFloat(), 1f)
+            assertEquals(tile.layoutParams.width, tile.layoutParams.height)
+        }
+        val views = NezzelWidgetProvider.views(app, state("a"), WidgetSize.WIDE)
+        val parcel = android.os.Parcel.obtain()
+        try { views.writeToParcel(parcel, 0); assertTrue("${parcel.dataSize()} bytes", parcel.dataSize() < 64 * 1024) }
+        finally { parcel.recycle() }
+    }
+
+    @Test fun updaterLoadsEachJobPictureOnceRetryingWhileItIsSaved() = runTest {
+        val progress = MutableStateFlow(listOf(job()))
+        val calls = mutableListOf<Pair<String, WidgetUiState>>()
+        var loads = 0
+        val picture = android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)
+        val updater = WidgetUpdater(app, progress, widgetIds = { intArrayOf(1) },
+            render = { state, _ -> calls += "full" to state }, renderProgress = { state, _ -> calls += "progress" to state },
+            savedMedia = { flowOf(emptyList()) }, thumbnail = { null },
+            artwork = { id -> assertEquals("new", id); loads++; if (loads == 1) null else picture })
+        val collection = updater.start(backgroundScope)
+        runCurrent()
+        assertNull(calls.last().second.jobs.single().art)
+        advanceTimeBy(1_001); runCurrent()
+        assertEquals(2, loads)
+        assertEquals("full", calls.last().first)
+        val art = checkNotNull(calls.last().second.jobs.single().art)
+        assertSame(picture, art.bitmap)
+        progress.value = listOf(job(bytes = 47)); advanceTimeBy(5_000); runCurrent()
+        assertEquals("progress", calls.last().first)
+        assertSame(art, calls.last().second.jobs.single().art)
+        assertEquals(2, loads)
+        collection.cancel()
     }
 
     @Test fun titleDropsOnlyAnExtensionLikeSuffix() {

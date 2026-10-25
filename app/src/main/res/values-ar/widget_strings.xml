@@ -5,6 +5,7 @@
     <string name="widget_failed">فشل التنزيل</string>
     <string name="widget_open_saved">فتح %1$s</string>
     <string name="widget_paste_short">لصق</string>
+    <string name="widget_time_left">متبقٍّ ≈ %1$s</string>
     <plurals name="widget_more_accessibility">
         <item quantity="zero">لا تنزيلات أخرى</item>
         <item quantity="one">تنزيل آخر</item>
