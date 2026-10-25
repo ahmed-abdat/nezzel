@@ -106,6 +106,20 @@ class HomeInPlaceTest {
         }
     }
 
+    @Test fun theNotificationsOffNoteSitsBelowTheLibrary() {
+        org.robolectric.Shadows.shadowOf(context.getSystemService(android.app.NotificationManager::class.java)).setNotificationsEnabled(false)
+        val vm = model()
+        var jobs by mutableStateOf(emptyList<DownloadProgress>())
+        show { Home(vm, jobs, library) }.use {
+            val before = earlierTop()
+            compose.runOnIdle { jobs = listOf(running) }
+            compose.waitForIdle()
+            val note = compose.onNodeWithText(context.getString(R.string.notifications_off)).fetchSemanticsNode().boundsInRoot
+            assertEquals("The note moves nothing above it", before, earlierTop(), .5f)
+            assertTrue("below Earlier", note.top > before)
+        }
+    }
+
     @Test fun aFinishedJobBecomesItsSavedCardInTheSameSlot() {
         var jobs by mutableStateOf(listOf(running))
         var media by mutableStateOf(library)

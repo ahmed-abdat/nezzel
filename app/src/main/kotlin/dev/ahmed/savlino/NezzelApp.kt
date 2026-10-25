@@ -346,7 +346,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                     verticalArrangement = Arrangement.SpaceBetween) {
                     Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
                         HomeBrand()
-                        HomeNotes(links, jobs, language, firstRun, onAllowNotifications)
+                        HomeNotes(links, language)
                         // The first download takes the hero's place once: a fade, then the row stays for good.
                         AnimatedContent(firstRun, transitionSpec = {
                             (fadeIn(easeOut(reduced, 300)) togetherWith fadeOut(easeOut(reduced, Motion.FADE_OUT))).using(SizeTransform { _, _ -> easeOut(reduced, 300) })
@@ -366,6 +366,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                         Box(Modifier.padding(horizontal = Space.l)) { LibraryLoadStatus(library.load, library.onRetry) }
                         if (links.engineUnavailable) Box(Modifier.padding(horizontal = Space.l)) { EngineUnavailableNote() }
                     }
+                    NotificationsOffNote(jobs, firstRun, onAllowNotifications)
                     Crossfade(firstRun, animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
                         if (first) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
                         else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
@@ -392,7 +393,7 @@ private fun HomeBrand() {
 
 /** Update card, errors, a pending share or the next queued link: whatever needs the person comes first. */
 @Composable
-private fun HomeNotes(links: LinkViewModel, jobs: List<DownloadProgress>, language: String, firstRun: Boolean, onAllowNotifications: () -> Unit) {
+private fun HomeNotes(links: LinkViewModel, language: String) {
     Column(Modifier.padding(horizontal = Space.l), verticalArrangement = Arrangement.spacedBy(Space.l)) {
         val updater = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates
         if (updater?.available == true) {
@@ -412,12 +413,17 @@ private fun HomeNotes(links: LinkViewModel, jobs: List<DownloadProgress>, langua
         links.nextLinkHost?.let { host ->
             NextLinkNote(host, links.nextLinkNumber, links.linkQueueTotal, language, links::openNextLink, links::skipRemainingLinks)
         }
-        if (!firstRun && runningCount(jobs) > 0 && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = onAllowNotifications, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.allow_notifications)) }
-            }
+    }
+}
+
+/** Below the library, so appearing with a download and leaving after it never moves the cards above. */
+@Composable
+private fun NotificationsOffNote(jobs: List<DownloadProgress>, firstRun: Boolean, onAllowNotifications: () -> Unit) {
+    if (!firstRun && runningCount(jobs) > 0 && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
+        Column(Modifier.padding(horizontal = Space.l).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = onAllowNotifications, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.allow_notifications)) }
         }
     }
 }
