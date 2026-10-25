@@ -218,9 +218,9 @@ fun NezzelApp(
             } }
             links.downloads?.completed?.collect { job ->
                 launch {
-                    snackbar.currentSnackbarData?.dismiss()
                     val problem = job.check as? dev.ahmed.savlino.domain.ResultCheck.Problem
                     if (problem != null) {
+                        snackbar.currentSnackbarData?.dismiss()
                         // A problem stays until handled: Try again (kept link) or dismiss.
                         val downloads = links.downloads
                         val canRetry = downloads?.warnings?.value?.any { it.jobId == job.jobId && it.canRetry } == true
@@ -231,6 +231,10 @@ fun NezzelApp(
                             snackbar.showSnackbar(context.getString(R.string.download_retry_hint))
                         return@launch
                     }
+                    // Mid-batch, each file posting its own snackbar kept one up for the whole batch over the paste bar;
+                    // the cards and the batch header already say saved, so only the last file of a run speaks.
+                    if (links.downloads?.progress?.value.orEmpty().any { it.jobId != job.jobId && (!it.terminal || it.awaitingSchedule) }) return@launch
+                    snackbar.currentSnackbarData?.dismiss()
                     val saved = context.getString(R.string.saved_snackbar, NezzelFormat.isolate(destinations.publishedFolderName(job.publishedUri)))
                     val action = snackbar.showSnackbar(
                         DownloadNotifications.checkLine(job.check)?.let { saved + "\n" + context.getString(it) } ?: saved,
