@@ -13,6 +13,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.storage.*
+import dev.ahmed.savlino.usage.UsageEvents
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
@@ -29,6 +30,168 @@ import java.io.File
 @Config(sdk = [33, 35], manifest = Config.NONE)
 class DownloadWorkerTest {
     private val app get() = RuntimeEnvironment.getApplication()
+
+    @Test fun repeatedProgressCountsOnlyOneFinishedEnd() = runBlocking {
+        val usage = UsageRecorder()
+        val clock = java.util.concurrent.atomic.AtomicLong()
+        fixture(FakeEngine(), usage = usage, clock = clock::get, nextTick = { awaitCancellation() },
+            script = { _, dir, emit ->
+                repeat(64) {
+                    clock.addAndGet(250) // Each sample reaches the real coordinator through ProgressDelivery.
+                    emit(EngineEvent.Progress(it.toLong(), Size.Exact(64)))
+                }
+                emit(EngineEvent.Merging)
+                val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-progress")))
+            assertEquals(ListenableWorker.Result.success(), f.worker("usage-progress").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("usage-progress")!!.stage)
+            assertEquals(1, f.attempts.get())
+            assertEquals(1, f.provider.rows.size)
+            assertEquals(mapOf("dl.finished.video.hd" to 1), usage.ends())
+        }
+    }
+
+    @Test fun repeatedUserCancellationCountsOneEnd() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), usage = usage, cancelHook = { stopped.complete(Unit) }, script = { _, _, emit ->
+            emit(EngineEvent.Progress(2, Size.Exact(4)))
+            entered.complete(Unit)
+            stopped.await()
+            TransferResult.Failure(DownloadError.Cancelled)
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-cancel")))
+            val running = async(Dispatchers.Default) { f.worker("usage-cancel").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                f.coordinator.cancel("usage-cancel")
+                assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { running.await() })
+                repeat(16) { f.coordinator.cancel("usage-cancel") }
+                assertEquals(JobStage.CANCELLED, f.store.get("usage-cancel")!!.stage)
+                assertEquals(1, f.attempts.get())
+                assertEquals(mapOf("dl.cancelled.video.hd" to 1), usage.ends())
+            } finally { stopped.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun repeatedFailedJobDeliveryCountsOneEnd() = runBlocking {
+        val usage = UsageRecorder()
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.FormatExpired))), usage = usage).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-failed")))
+            repeat(16) {
+                // An expired row is delivered again by waitingResult, without another engine attempt.
+                assertEquals(ListenableWorker.Result.failure(), f.worker("usage-failed").doWork())
+            }
+            assertEquals(JobStage.FAILED, f.store.get("usage-failed")!!.stage)
+            assertEquals(1, f.attempts.get())
+            assertEquals(mapOf("dl.failed.video.hd" to 1), usage.ends())
+        }
+    }
+
+    @Test fun networkWaitStopResumeCountsOnlyFinishedEnd() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        fixture(FakeEngine(), usage = usage, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(2, Size.Exact(4)))
+            if (attempts.incrementAndGet() == 1) {
+                dir.resolve("output.mp4.part").writeText("keep")
+                entered.complete(Unit)
+                awaitCancellation()
+            }
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-network")))
+            val worker = f.worker("usage-network")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                worker.stop(WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)
+                withTimeout(5000) { running.cancelAndJoin() } // WorkManager cancels the stopped coroutine.
+                assertEquals(JobStage.ENQUEUED, f.store.get("usage-network")!!.stage)
+                assertTrue(f.store.get("usage-network")!!.hasPartial)
+                assertTrue(usage.ends().isEmpty())
+                assertEquals(ListenableWorker.Result.success(), f.worker("usage-network").doWork())
+                assertEquals(JobStage.COMPLETED, f.store.get("usage-network")!!.stage)
+                assertEquals(2, f.attempts.get())
+                assertEquals(1, f.provider.rows.size)
+                assertEquals(mapOf("dl.finished.video.hd" to 1), usage.ends())
+            } finally { running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun pauseResumeCountsOnlyFinishedEnd() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        fixture(FakeEngine(), usage = usage, cancelHook = { stopped.complete(Unit) }, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(2, Size.Exact(4)))
+            if (attempts.incrementAndGet() == 1) {
+                dir.resolve("output.mp4.part").writeText("keep")
+                entered.complete(Unit)
+                stopped.await()
+                TransferResult.Failure(DownloadError.Cancelled)
+            } else {
+                val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-pause")))
+            val running = async(Dispatchers.Default) { f.worker("usage-pause").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                assertTrue(f.coordinator.pause("usage-pause"))
+                assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { running.await() })
+                assertEquals(JobStage.PAUSED, f.store.get("usage-pause")!!.stage)
+                assertTrue(usage.ends().isEmpty())
+                assertTrue(f.coordinator.resume("usage-pause"))
+                assertEquals(ListenableWorker.Result.success(), f.worker("usage-pause").doWork())
+                assertEquals(JobStage.COMPLETED, f.store.get("usage-pause")!!.stage)
+                assertEquals(2, f.attempts.get())
+                assertEquals(mapOf("dl.finished.video.hd" to 1), usage.ends())
+            } finally { stopped.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun restartReplaysTerminalRowsWithoutNewCountsOrTransfers() = runBlocking {
+        val usage = UsageRecorder()
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))),
+            usage = usage).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-saved")))
+            assertEquals(ListenableWorker.Result.success(), f.worker("usage-saved").doWork())
+            assertTrue(f.coordinator.enqueue(command("usage-cancelled")))
+            f.coordinator.cancel("usage-cancelled")
+            assertEquals(mapOf("dl.finished.video.hd" to 1, "dl.cancelled.video.hd" to 1), usage.ends())
+        }
+        val before = usage.keys.toList()
+        repeat(8) {
+            JobStore(app).use { store ->
+                val engine = FakeEngine()
+                var schedules = 0
+                val coordinator = DownloadCoordinator(app, engine, store, usage = usage,
+                    workManager = { schedules++; error("Terminal jobs must not be scheduled") })
+                coordinator.initialize()
+                coordinator.initialize()
+                // Even stale worker delivery after pruning must leave a terminal journal row alone.
+                assertEquals(JobStage.COMPLETED, coordinator.execute("usage-saved", {}, {})!!.stage)
+                assertEquals(JobStage.CANCELLED, coordinator.execute("usage-cancelled", {}, {})!!.stage)
+                assertTrue(engine.commands.isEmpty())
+                assertEquals(0, schedules)
+                assertEquals(before, usage.keys.toList())
+            }
+        }
+    }
+
+    private class UsageRecorder : UsageEvents {
+        val keys = java.util.concurrent.CopyOnWriteArrayList<String>()
+        override fun count(key: String) { keys += key }
+        fun ends() = keys.filter { it.startsWith("dl.") && !it.startsWith("dl.started.") }.groupingBy { it }.eachCount()
+    }
 
     @Test fun deniedNotificationsStillPublishOnceScrubUrlAndReportRealStages() = runBlocking {
         shadowOf(app).denyPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -1596,6 +1759,7 @@ class DownloadWorkerTest {
         downloadFailure: Exception? = null, cancelHook: () -> Unit = {},
         clock: () -> Long = { android.os.SystemClock.elapsedRealtime() }, nextTick: suspend () -> Unit = { delay(250) },
         version: suspend () -> String? = { null },
+        usage: UsageEvents = UsageEvents.None,
         script: (suspend (DownloadCommand, File, (EngineEvent) -> Unit) -> TransferResult)? = null): Fixture {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
@@ -1623,7 +1787,7 @@ class DownloadWorkerTest {
             }
         }
         val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick,
-            probe = { null }) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
+            probe = { null }, usage = usage) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
         (app as IsolatedTestApplication).coordinatorOverride = coordinator
         return Fixture(engine, provider, store, coordinator, engineStopped, attempts)
     }

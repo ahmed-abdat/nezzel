@@ -716,11 +716,13 @@ class DownloadCoordinator(
             }
             if (!event.paused && row?.stage == JobStage.PAUSED) return
         }
-        val newlyTerminal = previous != null && (!previous.terminal || previous.awaitingSchedule)
+        // Progress ticks and scheduling failures are not job ends; startup replay has no live predecessor.
+        val newlyTerminal = event.terminal && !event.awaitingSchedule &&
+            previous != null && (!previous.terminal || previous.awaitingSchedule)
         if (newlyTerminal) {
             if (event.phase == DownloadPhase.COMPLETED) finishedEvents.tryEmit(event)
             if (event.phase == DownloadPhase.CANCELLED) cancellationEvents.tryEmit(event)
-            if (!event.awaitingSchedule) countTerminal(event, previous?.bytesPerSecond)
+            countTerminal(event, previous.bytesPerSecond)
         }
         mutableProgress.update { old ->
             // An expiry callback can win after the journal check above; never resurrect that confirmation.
@@ -737,7 +739,8 @@ class DownloadCoordinator(
         val outcome = when (event.phase) {
             DownloadPhase.COMPLETED -> UsageKeys.Download.FINISHED
             DownloadPhase.FAILED -> UsageKeys.Download.FAILED
-            else -> UsageKeys.Download.CANCELLED
+            DownloadPhase.CANCELLED -> UsageKeys.Download.CANCELLED
+            else -> return
         }
         usage.count(UsageKeys.download(outcome, row.format))
         if (outcome == UsageKeys.Download.CANCELLED) return
