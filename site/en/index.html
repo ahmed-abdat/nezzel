@@ -447,7 +447,7 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
 .nsig.off .wa{opacity:.3}
 .nsig.off .wx{stroke-dashoffset:0}
 @media (min-width:960px){.nrow{transform:scale(1.28)}}
-@media (max-width:599px){.nt-st{padding:64px 10px 40px}.nrow{gap:10px;padding:10px;padding-inline-end:6px}.nrow img{width:46px;height:46px;border-radius:12px}.nbt{width:44px;height:44px}.ntt{font-size:16px}.nst{font-size:15px;gap:8px}}
+@media (max-width:599px){.nt-st{padding:64px 10px 40px}.nrow{gap:10px;padding:10px;padding-inline-end:6px}.nrow img{width:46px;height:46px;border-radius:12px}.nbt{width:44px;height:44px}.ntt{font-size:16px}.nst{font-size:15px;flex-wrap:wrap;gap:2px 8px}.nwt{flex-basis:100%;white-space:normal;overflow:visible}}
 /* F: the app's own logo wall, tilted like on its Update screen, every tile a site Nezzel works with; the rows drift on their own, alternating, and fade out in a clearing round the Nezzel mark */
 .amw{--t:clamp(56px,6.4vw,88px);--m:clamp(96px,11.5vw,148px);--g:calc(var(--t) * .3);position:relative;height:clamp(460px,50vw,600px);margin-top:clamp(4px,1.5vw,16px);direction:ltr}
 .amf{position:absolute;inset:0;overflow:hidden;
@@ -1268,24 +1268,22 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     return el;
   };
   const motionOk = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // The network drop: the row fills, the signal goes, the row says it's waiting, the signal comes back and it carries on
+  // The network drop: the row waits at 52% with the signal gone, the signal comes back and it carries on
   addEventListener("DOMContentLoaded", () => {
     const row = $(".nrow"), sig = $(".nsig"), pc = $(".npc"); if (!row) return;
     const pct = p => { row.style.setProperty("--p", p.toFixed(4)); pc.textContent = Math.round(p * 100) + (document.documentElement.lang === "fr" ? " %" : "%"); };
     const off = on => { row.classList.toggle("off", on); sig.classList.toggle("off", on); };
     const { gsap, ScrollTrigger } = window;
     if (!motionOk || !gsap || !ScrollTrigger) { pct(.52); off(true); return; }
-    pct(.1); off(false);
-    const v = { p: .1 };
-    const tl = gsap.timeline({ repeat: -1, paused: true, onRepeat: () => off(false) })
-      .set(v, { p: .1, onComplete: () => { pct(.1); off(false); } })
-      .to(v, { p: .52, duration: 2.8, ease: "none", onUpdate: () => pct(v.p) })
-      .call(() => off(true))
-      .to({}, { duration: 2.4 })
+    // it opens on the drop itself (52%, waiting), so a glance shows it; then the signal returns and it finishes
+    pct(.52); off(true);
+    const v = { p: .52 };
+    const tl = gsap.timeline({ repeat: -1, paused: true })
+      .to({}, { duration: 3 })
       .call(() => off(false))
-      .to(v, { p: 1, duration: 2.6, ease: "none", onUpdate: () => pct(v.p) })
+      .to(v, { p: 1, duration: 1.6, ease: "none", onUpdate: () => pct(v.p) })
       .to(row, { opacity: 0, y: 8, duration: .45, ease: "power2.in" }, "+=1.1")
-      .set(v, { p: .1, onComplete: () => pct(.1) })
+      .set(v, { p: .52, onComplete: () => { pct(.52); off(true); } })
       .to(row, { opacity: 1, y: 0, duration: .5, ease: "power3.out" });
     const st = ScrollTrigger.create({ trigger: ".nt-st", start: "top 85%", end: "bottom 10%", onToggle: s => s.isActive ? tl.play() : tl.pause() });
     // reduced motion switched on while the page is open: stop on the waiting state
