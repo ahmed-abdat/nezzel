@@ -49,11 +49,11 @@ internal data class GridLine(val items: List<SavedMedia>) { val key get() = "gri
 /** Tiles fill rows of [columns] in list order. */
 internal fun gridLines(entries: List<SavedMedia>, columns: Int = 3): List<GridLine> = entries.chunked(columns).map(::GridLine)
 
-/** Images and videos open in Nezzel's viewer; audio and unknown files go to the phone's own player. */
-internal val SavedMedia.inViewer get() = kind == SavedMediaKind.IMAGE || kind == SavedMediaKind.VIDEO
+/** Images, videos and audio open in Nezzel's viewer (audio plays over its cover); unknown files go to the phone's own app. */
+internal val SavedMedia.inViewer get() = kind == SavedMediaKind.IMAGE || kind == SavedMediaKind.VIDEO || kind == SavedMediaKind.AUDIO
 
 internal fun viewerItems(items: List<SavedMedia>) = items.filter { it.inViewer }
-    .map { ViewerItem(it.uri, it.kind == SavedMediaKind.VIDEO, it.mimeType, it.durationMillis) }
+    .map { ViewerItem(it.uri, it.kind == SavedMediaKind.VIDEO, it.mimeType, it.durationMillis, isAudio = it.kind == SavedMediaKind.AUDIO) }
 
 /** Grid or list for the current filter, remembered per filter. */
 @Stable

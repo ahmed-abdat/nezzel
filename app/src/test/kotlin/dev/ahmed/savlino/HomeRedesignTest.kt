@@ -187,7 +187,7 @@ class HomeRedesignTest {
         }
     }
 
-    @Test fun aRecentCardOpensTheViewerAndAudioOpensWithTheSystem() {
+    @Test fun aRecentCardAudioIncludedOpensTheViewerNotTheSystem() {
         val context = RuntimeEnvironment.getApplication()
         val song = HomeFixtures.library[0].copy(uri = Uri.parse("content://nezzel.fixture/thumb/40"), filename = "Song.m4a",
             title = "Song", mimeType = "audio/mp4", height = null, width = null)
@@ -200,8 +200,12 @@ class HomeRedesignTest {
             compose.waitForIdle()
             compose.onAllNodesWithContentDescription(context.getString(R.string.viewer_close)).assertCountEquals(0)
             assertTrue(opened.isEmpty())
+            // Audio plays in the same viewer, so the phone never asks which app should open it.
             compose.onNodeWithText("Song", substring = true).performClick()
-            assertEquals(listOf(song), opened)
+            compose.onNodeWithContentDescription(context.getString(R.string.viewer_close)).assertExists()
+            compose.onNodeWithContentDescription(context.getString(R.string.viewer_play)).assertExists()
+            compose.onAllNodesWithContentDescription(context.getString(R.string.viewer_mute)).assertCountEquals(0)
+            assertTrue(opened.isEmpty())
         }
     }
 

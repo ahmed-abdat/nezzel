@@ -649,6 +649,7 @@
     <!-- dl-viewer: gallery grid and swipe viewer -->
     <string name="viewer_image_n">صورة %1$s من %2$s</string>
     <string name="viewer_video_n">فيديو %1$s من %2$s</string>
+    <string name="viewer_audio_n">صوت %1$s من %2$s</string>
     <string name="viewer_close">إغلاق</string>
     <string name="viewer_play">تشغيل</string>
     <string name="viewer_pause">إيقاف مؤقت</string>

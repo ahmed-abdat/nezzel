@@ -78,15 +78,16 @@ class LibraryGridTest {
         assertTrue(AppPreferences(activity).libraryGrid(MediaFilter.ALL.name))
         compose.onNode(hasContentDescription("Photo 2", substring = true) and hasClickAction()).performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "2", "5")).assertIsDisplayed()
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "2", "6")).assertIsDisplayed()
         assertTrue(opened.isEmpty())
     }
 
-    @Test fun audioStillOpensInThePhonePlayer() {
+    @Test fun audioPlaysInTheViewerNotThePhonePlayer() {
         show(listOf(photos[0], song))
         compose.onAllNodes(hasText("Song", substring = true) and hasClickAction()).onFirst().performClick()
         compose.waitForIdle()
-        assertEquals(listOf(song), opened)
-        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertDoesNotExist()
+        assertTrue(opened.isEmpty())
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_audio_n, "2", "2")).assertIsDisplayed()
+        compose.onNodeWithContentDescription(s(R.string.viewer_play)).assertExists()
     }
 }

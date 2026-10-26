@@ -74,14 +74,14 @@ class LibraryGridCaptureTest {
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun shoot(name: String, content: @Composable (String) -> Unit) {
+    private fun shoot(name: String, pics: MediaPictures = pictures, content: @Composable (String) -> Unit) {
         assumeTrue(dir != null)
         for (lang in listOf("en", "ar")) for (dark in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
             val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
             try {
                 controller.get().setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
-                    CompositionLocalProvider(LocalMediaPictures provides pictures) { content(lang) }
+                    CompositionLocalProvider(LocalMediaPictures provides pics) { content(lang) }
                 } }
                 idle()
                 // Pictures land after the first frame: lay every window out again before drawing.
@@ -112,5 +112,16 @@ class LibraryGridCaptureTest {
     @Test fun viewerVideo() = shoot("4-viewer-video") { lang ->
         val pages = viewerItems(items)
         MediaViewer(pages, 1, lang, {}, {}, {})
+    }
+
+    // Robolectric's VideoView freezes the captured frame on the first draw, so video/audio covers never show here.
+    @Test fun viewerAudio() = shoot("5-viewer-audio") { lang ->
+        val pages = viewerItems(items)
+        MediaViewer(pages, 4, lang, {}, {}, {})
+    }
+
+    @Test fun viewerAudioNoCover() = shoot("6-viewer-audio-no-cover", MediaPictures { _, _, _ -> null }) { lang ->
+        val pages = viewerItems(items)
+        MediaViewer(pages, 4, lang, {}, {}, {})
     }
 }

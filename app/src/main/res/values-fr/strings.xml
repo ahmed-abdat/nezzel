@@ -589,6 +589,7 @@
     <!-- dl-viewer: gallery grid and swipe viewer -->
     <string name="viewer_image_n">Image %1$s sur %2$s</string>
     <string name="viewer_video_n">Vidéo %1$s sur %2$s</string>
+    <string name="viewer_audio_n">Audio %1$s sur %2$s</string>
     <string name="viewer_close">Fermer</string>
     <string name="viewer_play">Lire</string>
     <string name="viewer_pause">Pause</string>

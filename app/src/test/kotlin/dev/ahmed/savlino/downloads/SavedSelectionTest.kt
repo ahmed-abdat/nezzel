@@ -53,6 +53,15 @@ class SavedSelectionTest {
         val node = row(a, title)
         compose.runOnIdle { node.config[SemanticsActions.OnClick].action!!.invoke() }
     }
+    /** A tap that opens (not selects): audio and video both play in Nezzel's viewer, so close it again. */
+    private fun opensViewer(a: ComponentActivity, title: String, opened: () -> Int) {
+        click(a, title)
+        val close = context.getString(R.string.viewer_close)
+        assertTrue(nodes(a).any { close in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
+        assertEquals(0, opened())
+        click(a, close)
+        assertFalse(nodes(a).any { close in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
+    }
     private fun selectedCount(a: ComponentActivity, title: String) {
         val count = nodes(a).single { title in texts(listOf(it)) }
         assertEquals(LiveRegionMode.Polite, count.config.getOrNull(SemanticsProperties.LiveRegion))
@@ -99,10 +108,10 @@ class SavedSelectionTest {
         selectedCount(a, "2 selected")
         compose.runOnIdle { a.onBackPressedDispatcher.onBackPressed() }
         assertFalse(texts(nodes(a)).contains("2 selected"))
-        click(a, "Song"); assertEquals(1, opened())
+        opensViewer(a, "Song", opened)
         longPress(a, "Song")
         click(a, context.getString(R.string.saved_selection_close))
-        click(a, "Song"); assertEquals(2, opened())
+        opensViewer(a, "Song", opened)
     }
     @Test fun selectAllTogglesToDeselectAllWhenEverythingIsSelected() = render { a, opened, _ ->
         longPress(a, "Family")
@@ -111,7 +120,7 @@ class SavedSelectionTest {
         assertFalse(nodes(a).any { context.getString(R.string.saved_select_all) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
         click(a, context.getString(R.string.saved_deselect_all))
         assertFalse(texts(nodes(a)).any { it.endsWith(" selected") })
-        click(a, "Song"); assertEquals(1, opened())
+        opensViewer(a, "Song", opened)
     }
     @Test fun filterChangeClearsSelectionAndSelectAllOnlySelectsVisibleFiles() = render { a, _, shared ->
         longPress(a, "Family")

@@ -89,10 +89,10 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
                 HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { items[it].uri.toString() },
                     userScrollEnabled = zooms[current.uri]?.zoomed != true) { page ->
                     val item = items[page]
-                    val description = stringResource(if (item.isVideo) R.string.viewer_video_n else R.string.viewer_image_n,
+                    val description = stringResource(when { item.isVideo -> R.string.viewer_video_n; item.isAudio -> R.string.viewer_audio_n; else -> R.string.viewer_image_n },
                         NezzelFormat.count(page + 1, language), NezzelFormat.count(items.size, language))
                     Box(Modifier.fillMaxSize().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
-                        if (item.isVideo) ViewerVideo(item, current = pager.settledPage == page)
+                        if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page)
                         else ZoomableImage(item, zooms.getValue(item.uri))
                     }
                 }

@@ -7,6 +7,7 @@ import android.widget.VideoView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -19,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -39,11 +41,12 @@ import kotlinx.coroutines.delay
 
 /**
  * One video page: the platform VideoView, its poster until the first frame, and play/pause, seek and mute.
+ * Audio plays in the same view over its cover, once through and without mute (pause does that).
  * Plays only while [current]; swiping away pauses it, and leaving the pager releases the player.
  */
 @Composable
 internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
-    val poster = rememberMediaPicture(item.uri, ThumbnailKind.VIDEO, screenPixels())
+    val poster = rememberMediaPicture(item.uri, if (item.isAudio) ThumbnailKind.AUDIO else ThumbnailKind.VIDEO, screenPixels())
     var video by remember { mutableStateOf<VideoView?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var playing by remember { mutableStateOf(false) }
@@ -74,20 +77,27 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
         // (keeping its aspect ratio) instead of showing a low-resolution file at its pixel size.
         AndroidView({ context -> FrameLayout(context).apply { addView(VideoView(context).apply {
                 setOnPreparedListener { prepared ->
-                    prepared.isLooping = true
+                    prepared.isLooping = !item.isAudio
                     prepared.setVolume(if (latestMuted) 0f else 1f, if (latestMuted) 0f else 1f)
                     duration = prepared.duration.toLong().takeIf { it > 0 } ?: duration
                     player = prepared
                     if (latestCurrent) { start(); playing = true }
                 }
                 setOnInfoListener { _, what, _ -> if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) rendering = true; false }
+                setOnCompletionListener { playing = false }
                 setOnErrorListener { _, _, _ -> playing = false; player = null; true }
                 setOnClickListener { play(!playing) }
                 setVideoURI(item.uri)
                 video = this
             }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER)) }
         }, Modifier.fillMaxSize(), onRelease = { (it.getChildAt(0) as? VideoView)?.stopPlayback(); video = null; player = null })
-        if (!rendering) poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        // Audio has no frames: a square cover (or a music note when the file has none) stands in the middle.
+        if (item.isAudio) Box(Modifier.fillMaxWidth(.72f).widthIn(max = 360.dp).aspectRatio(1f).clip(RoundedCornerShape(20.dp))
+            .background(Color.White.copy(alpha = .1f)), contentAlignment = Alignment.Center) {
+            poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                ?: Icon(painterResource(R.drawable.ic_music), null, Modifier.size(72.dp), tint = Color.White.copy(alpha = .7f))
+        }
+        else if (!rendering) poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
 
         // Media controls keep left-to-right time in RTL too, like the phone's own players.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -111,7 +121,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
                     duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) }).joinToString(" / "),
                     style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Ltr))
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { muted = !muted }, Modifier.size(48.dp)) {
+                if (!item.isAudio) IconButton(onClick = { muted = !muted }, Modifier.size(48.dp)) {
                     Icon(painterResource(if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_up),
                         stringResource(if (muted) R.string.viewer_unmute else R.string.viewer_mute))
                 }

@@ -141,7 +141,8 @@ class UnreportedDirectMp4Test {
             compose.onAllNodes(isSelectable()).assertCountEquals(1)
             compose.onNode(isSelectable() and hasText(context.getString(R.string.video_unknown_quality_hint), substring = true))
                 .assertExists()
-            compose.onNode(isSelectable() and hasText(context.getString(R.string.unknown_size), substring = true)).assertExists()
+            // No exact size: the row names none, like an estimate.
+            compose.onAllNodes(isSelectable() and hasText(context.getString(R.string.unknown_size), substring = true)).assertCountEquals(0)
         } finally { controller.pause().stop().destroy() }
     }
 
