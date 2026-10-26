@@ -40,10 +40,9 @@
     <string name="last_used">Last used</string>
     <string name="all_formats">All quality options</string>
     <string name="unknown_size">Size unavailable</string>
-    <string name="estimated_size">≈ %1$s</string>
     <string name="download_size">Download · %1$s</string>
     <string name="saves_to">Saves to %1$s</string>
-    <string name="mobile_data_about">Uses about %1$s of your mobile data</string>
+    <string name="mobile_data_large">Uses a lot of your mobile data</string>
     <string name="mobile_data_exact">Uses %1$s of your mobile data</string>
     <string name="choice_confirmed">Selection confirmed</string>
     <string name="checking_again">Checking again…</string>
@@ -73,7 +72,6 @@
     <string name="mp3_hint">Plays in almost any player; takes longer</string>
     <string name="other_versions">Other formats (%1$s)</string>
     <string name="other_versions_hide">Hide other formats</string>
-    <string name="size_estimate_a11y">Estimated size: %1$s</string>
     <string name="unsupported_title">No download found</string>
     <string name="unsupported_body">No download found for this link — try another public link</string>
     <string name="no_video_title">This post has no video</string>
@@ -113,7 +111,6 @@
     <string name="download_save_error">Couldn’t save the file</string>
     <string name="download_expired_error">Check the available quality options again</string>
     <string name="download_interrupted_error">Download stopped</string>
-    <string name="download_estimate">≈ %1$s · estimate</string>
     <string name="open_file">Open</string>
     <string name="share_file">Share</string>
     <string name="notifications_off">Notifications are off — follow progress here in Nezzel</string>
@@ -181,8 +178,8 @@
     <string name="download_resume_accessibility">Resume download %1$s</string>
     <string name="download_speed">%1$s/s</string>
     <string name="download_bytes_per_second">%1$s\u00A0B/s</string>
-    <string name="download_transfer_remaining">≈ %1$s left to download</string>
-    <string name="download_row_remaining">≈ %1$s left</string>
+    <string name="download_transfer_remaining">%1$s left to download</string>
+    <string name="download_row_remaining">%1$s left</string>
     <string name="download_row_bytes">%1$s of %2$s</string>
     <string name="download_remove">Remove from list</string>
     <string name="files_location">Current save folder: %1$s — earlier files may be in other folders</string>
@@ -234,7 +231,6 @@
     <string name="automatic_options">Show options automatically</string>
     <string name="automatic_options_help">Saving still waits for your tap</string>
     <string name="not_now">Not now</string>
-    <string name="rough_size">≈ %1$s</string>
     <string name="link_field_hint">Paste a public link</string>
     <string name="link_field_label">Link</string>
     <string name="copied_chip">Use copied link</string>

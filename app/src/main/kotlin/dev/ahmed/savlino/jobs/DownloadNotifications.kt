@@ -327,11 +327,9 @@ class DownloadNotifications(private val base: Context,
             if (progress.phase == DownloadPhase.DOWNLOADING && progress.exactTransferTotal == null) {
                 return NezzelFormat.isolate(downloaded ?: context.getString(R.string.unknown_size))
             }
-            val total = when (val size = progress.total) {
-                is Size.Exact -> NezzelFormat.size(size.bytes, language)
-                is Size.Estimated -> context.getString(R.string.download_estimate, NezzelFormat.size(size.bytes, language))
-                Size.Unknown -> context.getString(R.string.unknown_size)
-            }
+            // Exact totals only: an estimated total shows like an unknown one (owner 2026-10-25, no "≈").
+            val total = (progress.total as? Size.Exact)?.let { NezzelFormat.size(it.bytes, language) }
+                ?: return NezzelFormat.isolate(downloaded ?: context.getString(R.string.unknown_size))
             return NezzelFormat.isolate(if (downloaded == null || progress.phase == DownloadPhase.COMPLETED) total else "$downloaded / $total")
         }
         private fun errorTitle(error: DownloadError?, offline: Boolean) = when (error) {

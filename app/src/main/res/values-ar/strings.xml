@@ -40,10 +40,9 @@
     <string name="last_used">آخر اختيار</string>
     <string name="all_formats">كل خيارات الجودة</string>
     <string name="unknown_size">الحجم غير متاح</string>
-    <string name="estimated_size">≈ %1$s</string>
     <string name="download_size">تنزيل · %1$s</string>
     <string name="saves_to">يُحفظ في %1$s</string>
-    <string name="mobile_data_about">يستهلك نحو %1$s من بيانات هاتفك</string>
+    <string name="mobile_data_large">يستهلك كثيرًا من بيانات هاتفك</string>
     <string name="mobile_data_exact">يستهلك %1$s من بيانات هاتفك</string>
     <string name="choice_confirmed">تم تأكيد الاختيار</string>
     <string name="checking_again">جارٍ التحقق من جديد…</string>
@@ -73,7 +72,6 @@
     <string name="mp3_hint">يعمل في كل المشغّلات تقريبًا، لكنه يستغرق وقتًا أطول</string>
     <string name="other_versions">صيغ أخرى (%1$s)</string>
     <string name="other_versions_hide">إخفاء الصيغ الأخرى</string>
-    <string name="size_estimate_a11y">الحجم التقديري: %1$s</string>
     <string name="unsupported_title">لم نجد ملفًا للتنزيل</string>
     <string name="unsupported_body">لم نجد ملفًا يمكن تنزيله من هذا الرابط، جرّب رابطًا عامًا آخر</string>
     <string name="no_video_title">لا يوجد فيديو في هذا المنشور</string>
@@ -113,7 +111,6 @@
     <string name="download_save_error">تعذّر حفظ الملف</string>
     <string name="download_expired_error">تحقّق من خيارات الجودة المتاحة مجددًا</string>
     <string name="download_interrupted_error">توقّف التنزيل</string>
-    <string name="download_estimate">≈ %1$s · تقدير</string>
     <string name="open_file">فتح</string>
     <string name="share_file">مشاركة</string>
     <string name="notifications_off">الإشعارات متوقفة، تابع تقدّم التنزيل هنا في Nezzel</string>
@@ -197,8 +194,8 @@
     <string name="download_resume_accessibility">استئناف تنزيل %1$s</string>
     <string name="download_speed">%1$s/s</string>
     <string name="download_bytes_per_second">%1$s\u00A0B/s</string>
-    <string name="download_transfer_remaining">متبقٍّ للتنزيل ≈ %1$s</string>
-    <string name="download_row_remaining">متبقٍّ &#x2066;≈ %1$s&#x2069;</string>
+    <string name="download_transfer_remaining">متبقٍّ للتنزيل %1$s</string>
+    <string name="download_row_remaining">متبقٍّ %1$s</string>
     <string name="download_row_bytes">%1$s من %2$s</string>
     <string name="download_remove">إزالة من القائمة</string>
     <string name="files_location">مجلد الحفظ الحالي: %1$s، وقد تجد الملفات السابقة في مجلدات أخرى</string>
@@ -258,7 +255,6 @@
     <string name="automatic_options">عرض الخيارات تلقائيًا</string>
     <string name="automatic_options_help">لا يبدأ الحفظ إلا بضغطة منك</string>
     <string name="not_now">ليس الآن</string>
-    <string name="rough_size">≈ %1$s</string>
     <string name="link_field_hint">الصق رابطًا عامًا</string>
     <string name="link_field_label">الرابط</string>
     <string name="copied_chip">استخدم الرابط المنسوخ</string>

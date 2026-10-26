@@ -49,7 +49,7 @@ class MobileDataNoteTest {
         assertFalse(largeOnMobileData(big.copy(size = Size.Exact(LARGE_ON_MOBILE_DATA_BYTES - 1)), null, metered = true))
         assertTrue(largeOnMobileData(big.copy(size = Size.Estimated(250_000_000)), null, metered = true))
         assertFalse(largeOnMobileData(big.copy(size = Size.Unknown), null, metered = true))
-        // A rough size is the same ≈ figure the Download button already shows.
+        // A big estimate or rough size still warns, without naming a number.
         assertTrue(largeOnMobileData(big.copy(size = Size.Unknown), 300_000_000, metered = true))
     }
 
@@ -59,12 +59,16 @@ class MobileDataNoteTest {
         assertTrue(vm.downloadEnabled)
     }
 
-    @Test fun estimatedSizeSaysAboutWithoutTheApproxSign() = render(Size.Estimated(240_000_000), metered = true) { activity, _ ->
-        assertEquals(listOf("Uses about \u2066240\u00a0MB\u2069 of your mobile data"), noteTexts(activity))
+    @Test fun estimatedSizeWarnsWithoutANumber() = render(Size.Estimated(240_000_000), metered = true) { activity, _ ->
+        assertEquals(listOf("Uses a lot of your mobile data"), noteTexts(activity))
     }
 
-    @Test @Config(qualifiers = "ar") fun arabicKeepsTheSizeIsolated() = render(Size.Estimated(240_000_000), metered = true) { activity, _ ->
-        assertEquals(listOf("يستهلك نحو \u2066240\u00a0MB\u2069 من بيانات هاتفك"), noteTexts(activity))
+    @Test @Config(qualifiers = "ar") fun arabicKeepsTheSizeIsolated() = render(Size.Exact(240_000_000), metered = true) { activity, _ ->
+        assertEquals(listOf("يستهلك \u2066240\u00a0MB\u2069 من بيانات هاتفك"), noteTexts(activity))
+    }
+
+    @Test @Config(qualifiers = "ar") fun arabicEstimateWarnsWithoutANumber() = render(Size.Estimated(240_000_000), metered = true) { activity, _ ->
+        assertEquals(listOf("يستهلك كثيرًا من بيانات هاتفك"), noteTexts(activity))
     }
 
     @Test fun unmeteredShowsNoNote() = render(Size.Exact(240_000_000), metered = false) { activity, _ -> assertFalse(note(activity)) }

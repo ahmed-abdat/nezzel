@@ -113,9 +113,9 @@ class FlatAllCaptureTest {
         fun fmt(id: String, h: Int, mb: Long) = Format(id, "mp4", true, true, height = h, size = Size.Exact(mb * 1_000_000))
         Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             SavedBeforeNotice(SavedBefore(android.net.Uri.parse("content://media/1"), System.currentTimeMillis() - 86_400_000L * 3), "mp4", lang)
-            FormatRow("1080p", fmt("a", 1080, 68), null, false, true, lang, "Full HD") {}
-            FormatRow("720p", fmt("b", 720, 32), null, true, true, lang, "Good for most phones") {}
-            FormatRow("360p", fmt("c", 360, 9), null, false, true, lang, "Smallest") {}
+            FormatRow("1080p", fmt("a", 1080, 68), false, true, lang, "Full HD") {}
+            FormatRow("720p", fmt("b", 720, 32), true, true, lang, "Good for most phones") {}
+            FormatRow("360p", fmt("c", 360, 9), false, true, lang, "Smallest") {}
         }
     }
 

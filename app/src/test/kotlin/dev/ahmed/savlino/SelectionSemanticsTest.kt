@@ -58,8 +58,8 @@ class SelectionSemanticsTest {
     @Test fun sheetShowsOnlyMappedPresetsAndAccessibleSizeLabelsInEnglish() = assertSheet("en")
     @Test @Config(qualifiers = "ar") fun sheetShowsOnlyMappedPresetsAndAccessibleSizeLabelsInArabic() = assertSheet("ar")
 
-    @Test fun roughSizesAppearInEnglishRowsAndConfirmationWithoutChangingCommand() = assertSheet("en", true)
-    @Test @Config(qualifiers = "ar") fun roughSizesAppearInArabicRowsAndConfirmationWithoutChangingCommand() = assertSheet("ar", true)
+    @Test fun roughSizesStayHiddenInEnglishRowsAndConfirmationWithoutChangingCommand() = assertSheet("en", true)
+    @Test @Config(qualifiers = "ar") fun roughSizesStayHiddenInArabicRowsAndConfirmationWithoutChangingCommand() = assertSheet("ar", true)
 
     private fun assertSheet(language: String, rough: Boolean = false) {
         run {
@@ -84,18 +84,16 @@ class SelectionSemanticsTest {
                 assertTrue(labels.any { it.contains("youtube.com") })
                 assertFalse(labels.any { it.contains("MP3") })
                 assertTrue(labels.any { it.contains("68\u00a0MB") })
-                assertTrue(labels.any { it.contains("8.1\u00a0MB") && it.contains("≈") })
+                // Owner 2026-10-25: estimates show no size and no "≈", in text or for TalkBack.
+                assertFalse(labels.any { it.contains("8.1\u00a0MB") || it.contains("≈") })
+                assertFalse(nodes.any { node -> node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { it.contains("≈") } })
+                assertFalse(labels.contains(context.getString(R.string.unknown_size)))
                 if (rough) {
-                    assertFalse(labels.contains(context.getString(R.string.unknown_size)))
-                    // Owner 2026-10-18: "≈" alone marks an estimate; TalkBack still hears the word.
-                    assertTrue(labels.toString(), labels.count { it.contains("90\u00a0MB") && it.contains("≈") } >= 2)
-                    val spoken = context.getString(R.string.size_estimate_a11y, "").substringBefore('%').trim().split(' ', '،', ',').first()
-                    assertTrue(nodes.any { node -> node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
-                        .any { it.contains("90\u00a0MB") && it.contains(spoken) } })
+                    assertFalse(labels.toString(), labels.any { it.contains("90\u00a0MB") })
                     assertNull(vm.takeConfirmedCommand())
                     vm.confirmDownload()
                     assertEquals(Size.Unknown, vm.takeConfirmedCommand()!!.format.size)
-                } else assertTrue(labels.contains(context.getString(R.string.unknown_size)))
+                }
                 assertFalse(labels.any { text -> text.any { it in '\u0660'..'\u0669' || it in '\u06f0'..'\u06f9' } })
                 assertTrue(nodes.any { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
                     it.config.getOrNull(SemanticsProperties.Selected) == true })

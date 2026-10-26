@@ -75,19 +75,16 @@ private fun DownloadButton(links: LinkViewModel, language: String, metered: Bool
     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         val format = links.selectedFormat
         val roughBytes = format?.let(links::roughSizeBytes)
-        val sized = format != null && (format.size != Size.Unknown || roughBytes != null)
         if (format != null && !links.confirmed && largeOnMobileData(format, roughBytes, metered)) {
-            MobileDataNote(format, roughBytes, language)
+            MobileDataNote(format, language)
         }
         val sizedLabel = if (again) R.string.download_again_size else R.string.download_size
+        val size = format?.let { sizeLabel(it, language) }
         val label = if (links.refreshing) stringResource(R.string.checking_again)
-            else if (sized) stringResource(sizedLabel, sizeLabel(format!!, language, roughBytes))
+            else if (size != null) stringResource(sizedLabel, size)
             else stringResource(if (again) R.string.download_again else R.string.download)
-        // TalkBack hears "About 4.7 MB, estimated", never the ≈ symbol.
-        val spoken = if (sized && !links.refreshing) stringResource(sizedLabel, spokenSize(format!!, language, roughBytes)) else label
         Button(onClick = links::requestDownload, enabled = links.downloadEnabled,
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
-                contentDescription = spoken
                 if (links.refreshing) liveRegion = LiveRegionMode.Polite
             }) { Text(label) }
     }
@@ -123,11 +120,10 @@ private fun NotifyLine(onAllow: () -> Unit) {
     }
 }
 
-/** States the cost: "Uses about 412 MB of your mobile data". The words carry "about", so the size drops its ≈. */
+/** States the cost: "Uses 412 MB of your mobile data" when the size is exact; a big estimate names no number. */
 @Composable
-private fun MobileDataNote(format: Format, roughBytes: Long?, language: String) {
-    val bytes = knownBytes(format, roughBytes) ?: return
-    val amount = NezzelFormat.isolate(NezzelFormat.size(bytes, language))
+private fun MobileDataNote(format: Format, language: String) {
+    val amount = exactBytes(format)?.let { NezzelFormat.isolate(NezzelFormat.size(it, language)) }
     Row(Modifier.testTag("mobile_data_note").semantics(mergeDescendants = true) { },
         horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         // Centred on the first line, so a wrapped sentence keeps the icon beside its start.
@@ -135,14 +131,14 @@ private fun MobileDataNote(format: Format, roughBytes: Long?, language: String) 
         Icon(painterResource(R.drawable.ic_mobile_data), contentDescription = null,
             Modifier.padding(top = ((line - 18.dp) / 2).coerceAtLeast(0.dp)).size(18.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(mobileDataText(isEstimate(format, roughBytes), amount), style = MaterialTheme.typography.bodyMedium,
+        Text(mobileDataText(amount), style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-internal fun mobileDataText(estimate: Boolean, amount: String): String =
-    stringResource(if (estimate) R.string.mobile_data_about else R.string.mobile_data_exact, amount)
+internal fun mobileDataText(amount: String?): String =
+    if (amount == null) stringResource(R.string.mobile_data_large) else stringResource(R.string.mobile_data_exact, amount)
 
 private fun knownBytes(format: Format, roughBytes: Long?): Long? = when (val size = format.size) {
     is Size.Exact -> size.bytes
@@ -150,7 +146,7 @@ private fun knownBytes(format: Format, roughBytes: Long?): Long? = when (val siz
     Size.Unknown -> roughBytes
 }
 
-/** The pick is big enough to matter on a data plan: only a size the Download button shows (exact or ≈), never a guess. */
+/** The pick is big enough to matter on a data plan, by its exact size or the engine's estimate. */
 internal const val LARGE_ON_MOBILE_DATA_BYTES = 100_000_000L
 
 internal fun largeOnMobileData(format: Format, roughBytes: Long?, metered: Boolean): Boolean {

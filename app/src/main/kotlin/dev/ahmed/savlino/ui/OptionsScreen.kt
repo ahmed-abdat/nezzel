@@ -215,7 +215,7 @@ private fun PresetRow(links: LinkViewModel, row: PresetRowChoice, language: Stri
     // A merged row keeps every member's last-used state; selection follows the actual format.
     // "Last used" is the amber badge (DESIGN.md), not hint text.
     val last = if (links.lastUsedBadge?.id == format.id) stringResource(R.string.last_used) else null
-    FormatRow(formatTitle(format, language, tiers), format, links.roughSizeBytes(format), links.selectedFormat?.id == format.id, !links.confirmed, language,
+    FormatRow(formatTitle(format, language, tiers), format, links.selectedFormat?.id == format.id, !links.confirmed, language,
         // One short hint: the title already names the quality, so the tier's description would only repeat it.
         if (format.hasVideo) label else formatHint(format),
         badge = last) { links.selectPreset(preset) }
@@ -282,7 +282,7 @@ private fun FormatList(links: LinkViewModel, formats: List<Format>, language: St
 @Composable
 private fun FormatChoiceRow(links: LinkViewModel, format: Format, language: String,
     tiers: Map<String, FormatChoices.Tier?>?, technical: Boolean) {
-    FormatRow(formatTitle(format, language, tiers), format, links.roughSizeBytes(format), links.selectedFormat?.id == format.id,
+    FormatRow(formatTitle(format, language, tiers), format, links.selectedFormat?.id == format.id,
         !links.confirmed, language, formatHint(format), if (technical) moreFormatDetail(format, language) else null,
         badge = if (links.lastUsedBadge?.id == format.id) stringResource(R.string.last_used) else null) {
         links.selectFormat(format.id)
@@ -291,31 +291,29 @@ private fun FormatChoiceRow(links: LinkViewModel, format: Format, language: Stri
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FormatRow(label: String, format: Format, roughSizeBytes: Long?, selected: Boolean, enabled: Boolean, language: String,
+internal fun FormatRow(label: String, format: Format, selected: Boolean, enabled: Boolean, language: String,
     hint: String, details: String? = null, badge: String? = null, onSelect: () -> Unit) {
-    val unknownSize = format.size == Size.Unknown && roughSizeBytes == null
-    val size = sizeLabel(format, language, roughSizeBytes)
-    val sizeSpoken = spokenSize(format, language, roughSizeBytes)
-    val sizeStyle = if (unknownSize) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleSmall
+    // Exact sizes only; a row without one shows no size.
+    val size = sizeLabel(format, language)
+    val sizeStyle = MaterialTheme.typography.titleSmall
     val titleStyle = MaterialTheme.typography.titleMedium
     val sizeText = @Composable { modifier: Modifier ->
-        Text(size, modifier, style = sizeStyle,
-            color = if (unknownSize) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+        if (size != null) Text(size, modifier, style = sizeStyle, color = MaterialTheme.colorScheme.onSurface)
     }
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val spokenRow = listOfNotNull(label, badge, hint.ifEmpty { null }, details, sizeSpoken).joinToString(stringResource(R.string.spoken_separator))
+    val spokenRow = listOfNotNull(label, badge, hint.ifEmpty { null }, details, size).joinToString(stringResource(R.string.spoken_separator))
     // Only the chosen quality is a container; the rest sit flat on the sheet.
     Surface(color = if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
-            // One spoken line for the row, so TalkBack says the size as a word ("About 4.7 MB, estimated"), never "≈".
+            // One spoken line for the row.
             .semantics { contentDescription = spokenRow }) { BoxWithConstraints {
         // Stacks by measured width, not font scale: when the title (up to ~10em) no longer fits on one line beside
         // the radio and an end-aligned size, every fact takes the full card width and the row grows instead.
         val stacked = with(density) {
             val chrome = Space.l * 2 + 24.dp + Space.m * 2 // padding, the 24dp radio, the two gaps
-            val sizeWidth = if (unknownSize) 0.dp else measurer.measure(size, sizeStyle, maxLines = 1).size.width.toDp()
+            val sizeWidth = size?.let { measurer.measure(it, sizeStyle, maxLines = 1).size.width.toDp() } ?: 0.dp
             val titleNeed = minOf(measurer.measure(label, titleStyle, maxLines = 1).size.width.toDp(), titleStyle.fontSize.toDp() * 10)
             maxWidth - chrome - sizeWidth < titleNeed
         }
@@ -341,9 +339,8 @@ internal fun FormatRow(label: String, format: Format, roughSizeBytes: Long?, sel
                     LastUsedBadge(badge)
                 }
                 RowFacts(hint, details)
-                if (unknownSize) sizeText(Modifier)
             }
-            if (!unknownSize) sizeText(Modifier)
+            sizeText(Modifier)
         }
     } }
 }

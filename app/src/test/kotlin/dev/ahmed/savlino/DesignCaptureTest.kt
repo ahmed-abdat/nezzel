@@ -199,7 +199,7 @@ class DesignCaptureTest {
             val vm = androidx.compose.runtime.remember { readyLinks() }
             androidx.compose.material3.Surface { dev.ahmed.savlino.ui.OptionsSheetContent(vm, lang) {} }
         }
-        // A tall window so the whole list (audio, MP3, Other options, ≈ note) is in one capture.
+        // A tall window so the whole list (audio, MP3, Other options) is in one capture.
         RuntimeEnvironment.setQualifiers("+h1400dp")
         try { composable("qualities") { lang -> dev.ahmed.savlino.ui.MoreFormatsScreen(androidx.compose.runtime.remember { readyLinks() }, lang) } }
         finally { RuntimeEnvironment.setQualifiers("+h832dp") }

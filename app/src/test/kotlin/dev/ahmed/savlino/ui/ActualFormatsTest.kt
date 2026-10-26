@@ -126,14 +126,15 @@ class ActualFormatsTest {
         try {
             controller.get().setContent { NezzelTheme(ThemePref.Light, false) { MoreFormatsScreen(vm, language) } }
             compose.waitForIdle()
-            val expected = if (rough == null) context.getString(R.string.unknown_size)
-                else NezzelFormat.isolate(context.getString(R.string.rough_size, NezzelFormat.size(rough, language)))
-            compose.onNodeWithText(expected, useUnmergedTree = true).assertExists()
+            // No exact size: the row names none, neither a rough one nor "Size unavailable".
+            compose.onNodeWithText(context.getString(R.string.unknown_size), useUnmergedTree = true).assertDoesNotExist()
+            rough?.let { compose.onNodeWithText(NezzelFormat.size(it, language), substring = true, useUnmergedTree = true).assertDoesNotExist() }
+            compose.onNodeWithText("≈", substring = true, useUnmergedTree = true).assertDoesNotExist()
             assertEquals(Size.Unknown, vm.selectedFormat!!.size)
             assertTrue(vm.downloadEnabled)
         } finally { controller.pause().stop().destroy() }
     }
-    @Test fun selectedConversionRoughSizeIsExplicitlyAnEstimateEnglish() = conversionSizeLabel(420000L)
+    @Test fun selectedConversionRoughSizeShowsNoSizeEnglish() = conversionSizeLabel(420000L)
     @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi")
     fun selectedConversionUnknownDurationStaysUnknownArabic() = conversionSizeLabel(null)
     @Test fun englishAllActualRowsFitAndSecondSameHeightClickConfirmsExactPartner() = renderAndChoose()

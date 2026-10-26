@@ -40,10 +40,9 @@
     <string name="last_used">Dernier choix</string>
     <string name="all_formats">Toutes les qualités</string>
     <string name="unknown_size">Taille inconnue</string>
-    <string name="estimated_size">≈ %1$s</string>
     <string name="download_size">Télécharger · %1$s</string>
     <string name="saves_to">Enregistré dans %1$s</string>
-    <string name="mobile_data_about">Consomme environ %1$s de données mobiles</string>
+    <string name="mobile_data_large">Consomme beaucoup de données mobiles</string>
     <string name="mobile_data_exact">Consomme %1$s de données mobiles</string>
     <string name="choice_confirmed">Choix confirmé</string>
     <string name="checking_again">Nouvelle vérification…</string>
@@ -73,7 +72,6 @@
     <string name="mp3_hint">Compatible avec presque tous les lecteurs ; prend plus de temps</string>
     <string name="other_versions">Autres formats (%1$s)</string>
     <string name="other_versions_hide">Masquer les autres formats</string>
-    <string name="size_estimate_a11y">Taille estimée : %1$s</string>
     <string name="unsupported_title">Aucun fichier à télécharger</string>
     <string name="unsupported_body">Aucun fichier à télécharger pour ce lien — essayez un autre lien public</string>
     <string name="no_video_title">Cette publication n’a pas de vidéo</string>
@@ -113,7 +111,6 @@
     <string name="download_save_error">Impossible d’enregistrer le fichier</string>
     <string name="download_expired_error">Vérifiez à nouveau les qualités disponibles</string>
     <string name="download_interrupted_error">Téléchargement arrêté</string>
-    <string name="download_estimate">≈ %1$s · estimation</string>
     <string name="open_file">Ouvrir</string>
     <string name="share_file">Partager</string>
     <string name="notifications_off">Notifications désactivées — suivez la progression ici dans Nezzel</string>
@@ -185,8 +182,8 @@
     <string name="download_resume_accessibility">Reprendre le téléchargement de %1$s</string>
     <string name="download_speed">%1$s/s</string>
     <string name="download_bytes_per_second">%1$s\u00A0o/s</string>
-    <string name="download_transfer_remaining">≈ %1$s restant à télécharger</string>
-    <string name="download_row_remaining">≈ %1$s restant</string>
+    <string name="download_transfer_remaining">%1$s restant à télécharger</string>
+    <string name="download_row_remaining">%1$s restant</string>
     <string name="download_row_bytes">%1$s sur %2$s</string>
     <string name="download_remove">Retirer de la liste</string>
     <string name="files_location">Dossier actuel : %1$s — les anciens fichiers peuvent se trouver dans d’autres dossiers</string>
@@ -240,7 +237,6 @@
     <string name="automatic_options">Afficher les options automatiquement</string>
     <string name="automatic_options_help">Rien ne s’enregistre sans votre accord</string>
     <string name="not_now">Plus tard</string>
-    <string name="rough_size">≈ %1$s</string>
     <string name="link_field_hint">Collez un lien public</string>
     <string name="link_field_label">Lien</string>
     <string name="copied_chip">Utiliser le lien copié</string>

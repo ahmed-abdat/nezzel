@@ -243,7 +243,7 @@ class WidgetTest {
             assertEquals(View.GONE, root.findViewById<View>(R.id.widget_control_end).visibility)
             val single = view(WidgetUiState.from(first), WidgetSize.WIDE, heightDp = height)
             assertEquals(View.VISIBLE, single.findViewById<View>(R.id.widget_remaining).visibility)
-            assertEquals("≈ 0:06 left", text(single, R.id.widget_remaining).replace(Regex("[\u2066-\u2069]"), ""))
+            assertEquals("0:06 left", text(single, R.id.widget_remaining).replace(Regex("[\u2066-\u2069]"), ""))
             assertEquals(2, single.findViewById<android.widget.TextView>(R.id.widget_title).maxLines)
             assertEquals(View.GONE, single.findViewById<View>(R.id.widget_control).visibility)
             assertEquals(View.VISIBLE, single.findViewById<View>(R.id.widget_control_end).visibility)

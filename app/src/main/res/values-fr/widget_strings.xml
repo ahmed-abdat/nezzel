@@ -5,7 +5,7 @@
     <string name="widget_failed">Échec</string>
     <string name="widget_open_saved">Ouvrir %1$s</string>
     <string name="widget_paste_short">Coller</string>
-    <string name="widget_time_left">≈ %1$s restant</string>
+    <string name="widget_time_left">%1\$s restant</string>
     <plurals name="widget_more_accessibility">
         <item quantity="one">%1$s de plus</item>
         <item quantity="many">%1$s de plus</item>

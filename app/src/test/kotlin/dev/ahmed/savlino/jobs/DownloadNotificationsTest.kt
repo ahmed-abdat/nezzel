@@ -185,7 +185,7 @@ class DownloadNotificationsTest {
         }
         val localized = app.createConfigurationContext(config)
         val speed = "2.5\u00a0MB/s"
-        val remaining = if (language == "ar") "متبقٍّ للتنزيل ≈ \u20660:30\u2069" else "≈ \u20660:30\u2069 left to download"
+        val remaining = if (language == "ar") "متبقٍّ للتنزيل \u20660:30\u2069" else "\u20660:30\u2069 left to download"
         val text = DownloadNotifications.text(localized, metrics())
         assertTrue(text, text.contains(speed))
         assertTrue(text, text.contains(remaining))
