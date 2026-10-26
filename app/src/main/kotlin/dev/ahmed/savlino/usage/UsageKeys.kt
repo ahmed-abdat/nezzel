@@ -37,9 +37,22 @@ object UsageKeys {
     const val PICK_UP = "pick.up"
     const val PICK_DOWN = "pick.down"
     const val PICK_AUDIO = "pick.audio"
+    /** 0.5.1 player, Statuses and sharing: one count per explicit action, never per frame, timer or restore. */
+    const val PLAYER_OPEN_VIDEO = "player.open.video"
+    const val PLAYER_OPEN_AUDIO = "player.open.audio"
+    const val PLAYER_SEEK = "player.seek"
+    const val PLAYER_SPEED = "player.speed"
+    const val PLAYER_FULLSCREEN = "player.fullscreen"
+    const val PLAYER_BACKGROUND = "player.background"
+    const val PLAYER_FAILED = "player.failed"
+    const val STATUSES_READY = "statuses.ready"
+    const val STATUSES_SAVE_FAILED = "statuses.save_failed"
+    /** The WhatsApp app opened with the file; not a sent message or posted status. */
+    const val SHARE_WHATSAPP = "share.whatsapp"
 
     enum class Download { STARTED, FINISHED, FAILED, CANCELLED }
-    enum class Path(val key: String) { NPE("npe"), YTDLP("ytdlp"), OWN("own") }
+    /** Which reader produced the options shown; CACHE = a recent inspection reused, no reader ran. */
+    enum class Path(val key: String) { NPE("npe"), YTDLP("ytdlp"), OWN("own"), CACHE("cache") }
 
     private val events = Download.entries.map { it.name.lowercase() }
     private val tiers = mapOf("video" to listOf("low", "sd", "hd", "fhd", "qhd", "uhd", "unknown"),
@@ -51,7 +64,9 @@ object UsageKeys {
     val fixed: Set<String> = buildSet {
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
             STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
-            FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO))
+            FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO,
+            PLAYER_OPEN_VIDEO, PLAYER_OPEN_AUDIO, PLAYER_SEEK, PLAYER_SPEED, PLAYER_FULLSCREEN, PLAYER_BACKGROUND, PLAYER_FAILED,
+            STATUSES_READY, STATUSES_SAVE_FAILED, SHARE_WHATSAPP))
         for (event in events) for ((kind, names) in tiers) for (tier in names) add("dl.$event.$kind.$tier")
         for (path in Path.entries) for (time in optionTimes) add("options.${path.key}.$time")
         addAll(speeds.map { "speed.$it" })
