@@ -131,6 +131,21 @@ class AudioPlaybackServiceTest {
         service.foregroundChanged(true); service.foregroundChanged(false)
         assertEquals(1, service.counts.count { it == dev.ahmed.savlino.usage.UsageKeys.PLAYER_BACKGROUND })
     }
+    @Test fun systemControlsGetBackForwardAndStopAsSessionCommands() {
+        val actions = service.playbackSession!!.mediaButtonPreferences.map { it.sessionCommand!!.customAction }
+        assertEquals(listOf(PlaybackControllerPolicy.BACK, PlaybackControllerPolicy.FORWARD, PlaybackControllerPolicy.STOP), actions)
+        playing()
+        val system = MediaSession.ControllerInfo.createTestOnlyControllerInfo("com.android.systemui", 10002, 0, 0, 0, false, android.os.Bundle.EMPTY, true)
+        val callback = service.sessionCallback!!
+        val unknown = callback.onCustomCommand(service.playbackSession!!, system, androidx.media3.session.SessionCommand("other", android.os.Bundle.EMPTY), android.os.Bundle.EMPTY).get()
+        assertNotEquals(androidx.media3.session.SessionResult.RESULT_SUCCESS, unknown.resultCode)
+        assertFalse(service.recording.released)
+        val stop = androidx.media3.session.SessionCommand(PlaybackControllerPolicy.STOP, android.os.Bundle.EMPTY)
+        assertEquals(androidx.media3.session.SessionResult.RESULT_SUCCESS, callback.onCustomCommand(service.playbackSession!!, system, stop, android.os.Bundle.EMPTY).get().resultCode)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(service.recording.released)
+        assertTrue(shadowOf(service).isStoppedBySelf)
+    }
     @Test fun notificationChannelIsSeparateAndLocalized() {
         val channel = service.getSystemService(NotificationManager::class.java).getNotificationChannel(AudioPlaybackService.CHANNEL)
         assertEquals(service.getString(dev.ahmed.savlino.R.string.playback_channel), channel.name)

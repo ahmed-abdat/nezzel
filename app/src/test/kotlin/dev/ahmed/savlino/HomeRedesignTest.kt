@@ -188,6 +188,7 @@ class HomeRedesignTest {
     }
 
     @Test fun aRecentCardAudioIncludedOpensTheViewerNotTheSystem() {
+        dev.ahmed.savlino.playback.registerAudioServiceBinding()
         val context = RuntimeEnvironment.getApplication()
         val song = HomeFixtures.library[0].copy(uri = Uri.parse("content://nezzel.fixture/thumb/40"), filename = "Song.m4a",
             title = "Song", mimeType = "audio/mp4", height = null, width = null)

@@ -10,6 +10,9 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.playback.PlaybackControllerPolicy.Companion.BACK
+import dev.ahmed.savlino.playback.PlaybackControllerPolicy.Companion.FORWARD
+import dev.ahmed.savlino.playback.PlaybackControllerPolicy.Companion.STOP
 import dev.ahmed.savlino.viewer.ViewerItem
 import kotlinx.coroutines.*
 
@@ -19,6 +22,7 @@ open class AudioPlaybackService : MediaSessionService() {
     private lateinit var environment: PlaybackEnvironment
     private var playback: PlaybackSession? = null
     internal var playbackSession: MediaSession? = null; private set
+    internal var sessionCallback: MediaSession.Callback? = null; private set
     private var pausedTimeout: PlaybackCancellation? = null
     private var visibility: Job? = null
     private var stateObserver: Job? = null
@@ -101,11 +105,28 @@ open class AudioPlaybackService : MediaSessionService() {
             // Add has no current-item activation/restore path; keep this a single-item service.
             override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> =
                 Futures.immediateFailedFuture(UnsupportedOperationException())
+            // Transport only, like the player commands every controller already has: no item can be chosen this way.
+            override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: android.os.Bundle): ListenableFuture<SessionResult> {
+                when (customCommand.customAction) {
+                    BACK -> if (hasItem) session.player.seekBack()
+                    FORWARD -> if (hasItem) session.player.seekForward()
+                    STOP -> environment.scheduler.after(0) { shutdown() }
+                    else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             override fun onPlayerInteractionFinished(session: MediaSession, controller: MediaSession.ControllerInfo, playerCommands: Player.Commands) {
                 if (playerCommands.contains(Player.COMMAND_STOP)) environment.scheduler.after(0) { shutdown() }
             }
         }
-        playbackSession = MediaSession.Builder(this, player).setCallback(callback).apply { launcher?.let(::setSessionActivity) }.build()
+        fun button(icon: Int, label: Int, action: String, slot: Int) = CommandButton.Builder(icon).setDisplayName(strings.getString(label))
+            .setSessionCommand(SessionCommand(action, android.os.Bundle.EMPTY)).setSlots(slot).build()
+        val buttons = listOf(button(CommandButton.ICON_SKIP_BACK_10, R.string.playback_back_10, BACK, CommandButton.SLOT_BACK),
+            button(CommandButton.ICON_SKIP_FORWARD_10, R.string.playback_forward_10, FORWARD, CommandButton.SLOT_FORWARD),
+            button(CommandButton.ICON_STOP, R.string.playback_stop, STOP, CommandButton.SLOT_OVERFLOW))
+        sessionCallback = callback
+        playbackSession = MediaSession.Builder(this, player).setCallback(callback).setMediaButtonPreferences(buttons)
+            .apply { launcher?.let(::setSessionActivity) }.build()
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { updateBackgroundPolicy() }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { updateBackgroundPolicy() }

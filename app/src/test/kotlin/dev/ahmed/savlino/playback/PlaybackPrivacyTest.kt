@@ -28,6 +28,8 @@ class PlaybackPrivacyTest {
             assertTrue(commands.contains(androidx.media3.common.Player.COMMAND_PLAY_PAUSE))
             assertFalse(commands.contains(androidx.media3.common.Player.COMMAND_CHANGE_MEDIA_ITEMS))
             assertFalse(commands.contains(androidx.media3.common.Player.COMMAND_SET_MEDIA_ITEM))
+            // Outside controllers (Android 13+ system controls) get only the ±10 s and Stop session commands.
+            assertEquals(PlaybackControllerPolicy.TRANSPORT.toSet(), policy.onConnect(session, external).availableSessionCommands.commands)
             val hostile = listOf(MediaItem.fromUri("https://invalid.test/a"))
             for (caller in listOf(external, controller(context.packageName, 10001))) {
                 try { policy.onSetMediaItems(session, caller, hostile, 0, 0).get(); fail() } catch (_: java.util.concurrent.ExecutionException) {}

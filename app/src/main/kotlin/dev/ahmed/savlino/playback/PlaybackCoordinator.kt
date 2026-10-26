@@ -105,6 +105,7 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
     }
     init {
         audio.onStopped = {
+            observe?.cancel(); observe = null
             player.value?.removeListener(audioListener); player.value = null; audioOpened = false
             state.value = environment.audioState.value.let { if (it is PlaybackState.Failed) it else PlaybackState.Ended }
         }
@@ -148,6 +149,7 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
         if (current.isAudio && !audioOpened) {
             audioOpened = true
             if (!audioCounted) { audioCounted = true; environment.usage.count(UsageKeys.PLAYER_OPEN_AUDIO) }
+            observe?.cancel()
             observe = environment.scope.launch { environment.audioState.collect { if (it != PlaybackState.Idle) state.value = it } }
             state.value = PlaybackState.Loading
             val expected = generation

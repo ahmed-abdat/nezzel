@@ -89,7 +89,8 @@ class PauseNotificationsTest {
             // The notification's own Resume button goes through the receiver.
             DownloadControlReceiver().onReceive(app, Intent(DownloadNotifications.RESUME).putExtra(DownloadWorker.JOB_ID, "job"))
             val deadline = System.currentTimeMillis() + 5000
-            while (store.get("job")!!.stage == JobStage.PAUSED && System.currentTimeMillis() < deadline) Thread.sleep(20)
+            // The stage and the notification cancel land separately; wait for both.
+            while ((store.get("job")!!.stage == JobStage.PAUSED || manager.activeNotifications.isNotEmpty()) && System.currentTimeMillis() < deadline) Thread.sleep(20)
             assertEquals(JobStage.ENQUEUED, store.get("job")!!.stage)
             assertTrue(manager.activeNotifications.isEmpty())
             assertFalse("a second Resume is refused", DownloadControls.resume(app, app, "job"))
