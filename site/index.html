@@ -378,16 +378,88 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
 .wpz svg,.wcl{width:clamp(18px,5cqw,24px);height:clamp(18px,5cqw,24px);fill:currentColor}
 .wcl{color:#3F4946}
 
-/* real screens: the app's own captures in a row, no frame copy around them. With motion the section pins and the
-   scroll slides the row toward the start (GSAP); the CSS here is the plain swipe row for no JS / reduced motion */
-.reel{padding-top:clamp(88px,12vw,150px);overflow-x:clip}
-.reel h2{margin-bottom:clamp(28px,4.4vw,52px)}
-.rs{--pw:min(300px,(100svh - 160px) / 2.17);list-style:none;margin:0;padding:6px max(16px,(100% - 1160px) / 2) 44px;display:flex;gap:clamp(16px,3vw,44px);overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:16px;scrollbar-width:none;overscroll-behavior-x:contain}
-.rs::-webkit-scrollbar{display:none}
-.rs li{--w:min(66vw,var(--pw));flex:none;width:var(--w);padding:7px;border-radius:calc(var(--w) * .135);background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1px rgb(255 255 255/.05);scroll-snap-align:center}
-.rs img{display:block;width:100%;height:auto;border-radius:calc(var(--w) * .135 - 7px);background:var(--c)}
-.js .reel.pin{min-height:100svh;padding-top:84px;display:flex;flex-direction:column;justify-content:center;touch-action:pan-y}
-.js .reel.pin .rs{--pw:min(300px,(100svh - 210px) / 2.17);overflow:visible;scroll-snap-type:none;padding-bottom:24px;will-change:transform}
+/* the apps: each site's mark drawn the way its app icon looks (Simple Icons paths, CC0; decorative, no claim of partnership) */
+.apps{padding-top:clamp(88px,12vw,150px);overflow-x:clip}
+.ap-c{display:flex;flex-direction:column;align-items:center;text-align:center}
+.ap-c h2{margin-inline:auto}
+.ap-c .sub{margin-inline:auto}
+.tl{--s:80px;flex:none;width:var(--s);height:var(--s);border-radius:calc(var(--s) * .275);display:grid;place-items:center;background:var(--tb,#fff);color:var(--tg,#000);box-shadow:0 calc(var(--s) * .18) calc(var(--s) * .32) calc(var(--s) * -.2) rgb(var(--ink-sh)/.42),inset 0 0 0 1px rgb(0 0 0/.06)}
+.tl svg{grid-area:1/1;width:calc(var(--s) * var(--gs,.575));height:calc(var(--s) * var(--gs,.575));fill:currentColor;overflow:visible}
+.tl-yt{--tg:#F00;--gs:.675}.tl-fb{--tg:#0866FF;--gs:.675}.tl-tg{--tg:#26A5E4;--gs:.675}
+.tl-ig{--tg:#fff;background:linear-gradient(to top right,#FFC21A,#FF6A00,#FF0069)}
+.tl-wa{--tb:#25D366;--tg:#fff}
+.tl-tt{--tb:#000;--tg:#fff;--gs:.55}
+.tl-tt .e1{color:#25F4EE;translate:calc(var(--s) * -.019) calc(var(--s) * -.019)}
+.tl-tt .e2{color:#FE2C55;translate:calc(var(--s) * .019) calc(var(--s) * .019)}
+.tl-x{--tb:#000;--tg:#fff;--gs:.5}
+.tl-sc{--tb:#FFFC00;--tg:#fff}
+.tl-sc .ol{color:#000;stroke:#000;stroke-width:1.5px;stroke-linejoin:round}
+.tl-li{--tb:#fff;--tg:#0A66C2;--gs:1.04;overflow:hidden}
+.tl-pi{--tb:#fff;--tg:#E60023;--gs:.78}
+.tl-bs{--tb:#fff;--tg:#0085FF;--gs:.66}
+.tl-dm{--tb:#0D0D0D;--tg:#fff;--gs:.6}
+.tl-vm{--tb:#1AB7EA;--tg:#fff;--gs:.6}
+.tl-vk{--tb:#fff;--tg:#0077FF;--gs:1.02;overflow:hidden}
+.tl-scl{--tg:#fff;--gs:.7;background:linear-gradient(to bottom,#FF8800,#FF3300)}
+.tl-mx{--tg:#fff;--gs:.72;background:linear-gradient(135deg,#7B3FFF,#3A0CFF)}
+.tl-bc{--tb:#1DA0C3;--tg:#fff;--gs:.6}
+.tl-im{--tb:#1BB76E;--tg:#fff;--gs:.62}
+.tl-od{--tb:#fff;--tg:#EF1970;--gs:.82}
+.tl-tw{--tb:#9146FF;--tg:#fff;--gs:.56}
+.tl-9g{--tb:#000;--tg:#fff;--gs:.62}
+.tl-bi{--tb:#fff;--tg:#00A1D6;--gs:.66}
+.tl-kk{--tb:#000;--tg:#53FC19;--gs:.5}
+:root[data-mode=dark] .tl{box-shadow:0 calc(var(--s) * .18) calc(var(--s) * .32) calc(var(--s) * -.2) rgb(0 0 0/.6),inset 0 0 0 1px rgb(255 255 255/.08)}
+
+/* the network drops: the app's own download row, waiting and then carrying on */
+.net{padding-top:clamp(88px,12vw,150px)}
+.nt-g{display:grid;gap:clamp(28px,4vw,48px);align-items:center}
+@media (min-width:960px){.nt-g{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}}
+.nt-st{position:relative;display:grid;place-items:center;min-height:clamp(260px,30vw,360px);padding:56px 20px;border-radius:var(--r-xl);background:radial-gradient(80% 70% at 50% 0%,color-mix(in oklab,var(--primary-c) 55%,transparent),transparent 70%),var(--app);box-shadow:inset 0 0 0 1px var(--edge);overflow:hidden}
+.nrow{--p:0;position:relative;display:flex;align-items:center;gap:14px;width:min(460px,100%);padding:12px;padding-inline-end:10px;border-radius:24px;background:var(--c-high);overflow:hidden;isolation:isolate}
+.nrow::before{content:"";position:absolute;inset:0;z-index:-1;background:color-mix(in oklab,var(--primary-c) 80%,transparent);transform-origin:left;transform:scaleX(var(--p))}
+[dir=rtl] .nrow::before{transform-origin:right}
+.nrow img{width:52px;height:52px;border-radius:14px;object-fit:cover;flex:none}
+.ntx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ntt{font-weight:500;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;text-align:start}
+[dir=rtl] .ntt{text-align:end}
+.nst{display:flex;align-items:center;gap:10px;font-size:16px;min-height:24px}
+.npc{font-weight:700;font-variant-numeric:tabular-nums;min-width:3.4ch}
+.nwt{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;opacity:0;transition:opacity .35s var(--ease)}
+.nrow.off .nwt{opacity:1;animation:nwt 1.6s ease-in-out infinite}
+@keyframes nwt{50%{opacity:.45}}
+.nbt{display:grid;place-items:center;flex:none;width:52px;height:52px;border-radius:50%;background:var(--secondary-c);color:var(--on-secondary-c)}
+.nbt .i{width:22px;height:22px;stroke-width:2.6}
+.ncl{display:grid;place-items:center;flex:none;width:36px;height:36px;color:var(--on-bg)}
+.nsig{position:absolute;top:18px;inset-inline-end:18px;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--paper);color:var(--primary);box-shadow:0 10px 24px -14px rgb(var(--ink-sh)/.5),inset 0 0 0 1px var(--edge);transition:color .3s var(--ease)}
+.nsig svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.nsig .wa{transition:opacity .3s var(--ease)}
+.nsig .wx{stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .4s var(--ease)}
+.nsig.off{color:var(--muted)}
+.nsig.off .wa{opacity:.3}
+.nsig.off .wx{stroke-dashoffset:0}
+@media (min-width:960px){.nrow{transform:scale(1.28)}}
+@media (max-width:599px){.nt-st{padding:64px 10px 40px}.nrow{gap:10px;padding:10px;padding-inline-end:6px}.nrow img{width:46px;height:46px;border-radius:12px}.nbt{width:44px;height:44px}.ntt{font-size:16px}.nst{font-size:15px;gap:8px}}
+/* F: the app's own logo wall, tilted like on its Update screen, every tile a site Nezzel works with; the rows drift on their own, alternating, and fade out in a clearing round the Nezzel mark */
+.amw{--t:clamp(56px,6.4vw,88px);--m:clamp(96px,11.5vw,148px);--g:calc(var(--t) * .3);position:relative;height:clamp(460px,50vw,600px);margin-top:clamp(4px,1.5vw,16px);direction:ltr}
+.amf{position:absolute;inset:0;overflow:hidden;
+  -webkit-mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 62% 48% at 50% 50%,#000 50%,transparent 100%);-webkit-mask-composite:source-in;
+  mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 62% 48% at 50% 50%,#000 50%,transparent 100%);mask-composite:intersect}
+@media (max-width:759px){.amw{--t:58px;height:500px}.amf{-webkit-mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 95% 50% at 50% 50%,#000 56%,transparent 100%);-webkit-mask-composite:source-in;mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 95% 50% at 50% 50%,#000 56%,transparent 100%);mask-composite:intersect}}
+html:not(.js) .amw{height:auto}
+html:not(.js) .amf{position:static;-webkit-mask:none;mask:none}
+html:not(.js) .atl{position:static;translate:none;rotate:none;display:block;padding-inline:16px}
+html:not(.js) .atl .amr{width:auto;max-width:960px;margin-inline:auto;flex-wrap:wrap;justify-content:center}
+html:not(.js) .amk{display:none}
+.atl{position:absolute;left:50%;top:50%;display:grid;grid-template-columns:100%;gap:var(--g);translate:-50% -50%;rotate:-24deg}
+.atl .amr{display:flex;width:max-content;gap:var(--g);will-change:transform}
+.atl .tl{--s:var(--t)}
+.apf.on .amr{animation:amr var(--d,60s) linear infinite}
+.apf.on .amr:nth-child(even){animation-direction:reverse}
+@keyframes amr{to{transform:translateX(calc(-50% - var(--g) / 2))}}
+.amk{position:absolute;left:50%;top:50%;width:var(--m);aspect-ratio:1;translate:-50% -50%;border-radius:22.2%;box-shadow:0 34px 60px -26px rgb(0 60 50/.6)}
+.amk img{display:block;width:100%;height:100%;border-radius:inherit}
+@media (prefers-reduced-motion:reduce){.apf.on .amr{animation:none}}
 
 /* install: four numbered steps in a row, one Android switch */
 .ins{padding-top:clamp(104px,12vw,150px)}
@@ -497,7 +569,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
+  <symbol id="lg-youtube" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0 -2.122 -2.136 C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186 C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136 c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122 -2.136 C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z "/></symbol><symbol id="lg-facebook" viewBox="0 0 24 24"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141 .195 v3.325a8.623 8.623 0 0 0 -.653 -.036 26.805 26.805 0 0 0 -.733 -.009 c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0 -.679 .622 c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z "/></symbol><symbol id="lg-instagram" viewBox="0 0 24 24"><path d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144 a1.44 1.44 0 0 0 -1.437 1.4424 M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921 A3.9996 3.9996 0 0 1 8 12.0077 "/></symbol><symbol id="lg-whatsapp" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z "/></symbol><symbol id="lg-tiktok" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z "/></symbol><symbol id="lg-telegram" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12 a12 12 0 0 0 12 12 12 12 0 0 0 12 -12 A12 12 0 0 0 12 0 a12 12 0 0 0 -.056 0 zm4.962 7.224c.1-.002.321.023.465.14a.506 .506 0 0 1 .171 .325 c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z "/></symbol><symbol id="lg-x" viewBox="0 0 24 24"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z "/></symbol><symbol id="lg-snapchat" viewBox="0 0 24 24"><path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301.165-.088.344-.104.464-.104.182 0 .359.029.509.09.45.149.734.479.734.838.015.449-.39.839-1.213 1.168-.089.029-.209.075-.344.119-.45.135-1.139.36-1.333.81-.09.224-.061.524.12.868l.015.015c.06.136 1.526 3.475 4.791 4.014.255.044.435.27.42.509 0 .075-.015.149-.045.225-.24.569-1.273.988-3.146 1.271-.059.091-.12.375-.164.57-.029.179-.074.36-.134.553-.076.271-.27.405-.555.405h-.03c-.135 0-.313-.031-.538-.074-.36-.075-.765-.135-1.273-.135-.3 0-.599.015-.913.074-.6.104-1.123.464-1.723.884-.853.599-1.826 1.288-3.294 1.288-.06 0-.119-.015-.18-.015h-.149c-1.468 0-2.427-.675-3.279-1.288-.599-.42-1.107-.779-1.707-.884-.314-.045-.629-.074-.928-.074-.54 0-.958.089-1.272.149-.211.043-.391.074-.54.074-.374 0-.523-.224-.583-.42-.061-.192-.09-.389-.135-.567-.046-.181-.105-.494-.166-.57-1.918-.222-2.95-.642-3.189-1.226-.031-.063-.052-.15-.055-.225-.015-.243.165-.465.42-.509 3.264-.54 4.73-3.879 4.791-4.02l.016-.029c.18-.345.224-.645.119-.869-.195-.434-.884-.658-1.332-.809-.121-.029-.24-.074-.346-.119-1.107-.435-1.257-.93-1.197-1.273.09-.479.674-.793 1.168-.793.146 0 .27.029.383.074.42.194.789.3 1.104.3.234 0 .384-.06.465-.105l-.046-.569c-.098-1.626-.225-3.651.307-4.837C7.392 1.077 10.739.807 11.727.807l.419-.015h.06z "/></symbol><symbol id="lg-linkedin" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></symbol><symbol id="lg-pinterest" viewBox="0 0 24 24"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z"/></symbol><symbol id="lg-bluesky" viewBox="0 0 24 24"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8Z"/></symbol><symbol id="lg-dailymotion" viewBox="0 0 24 24"><path d="M21.823 7.327a11.928 11.928 0 0 0-2.606-3.814 12.126 12.126 0 0 0-3.866-2.57A12.246 12.246 0 0 0 10.617 0H1.831a.602.602 0 0 0-.609.603v3.764c0 .162.064.312.179.426l4.164 4.123a.612.612 0 0 0 .439.177h4.56c.806 0 1.56.313 2.125.88.557.559.856 1.296.843 2.075-.029 1.571-1.343 2.849-2.931 2.849h-6.74a.613.613 0 0 0-.432.176.619.619 0 0 0-.178.427v3.764c0 .162.063.312.178.427l4.139 4.099a.647.647 0 0 0 .476.21h2.572a12.276 12.276 0 0 0 4.733-.945 12.145 12.145 0 0 0 3.866-2.571 11.959 11.959 0 0 0 2.607-3.813c.633-1.479.956-3.051.956-4.67 0-1.619-.321-3.19-.956-4.669l.001-.005ZM2.441 4.118V1.982l2.945 2.755.001 2.297-2.946-2.916Zm4.975 17.813-2.945-2.917v-2.137l2.945 2.755v2.299Zm-2.004-5.832h5.19c2.248 0 4.107-1.807 4.147-4.03a4.027 4.027 0 0 0-1.192-2.937 4.203 4.203 0 0 0-2.996-1.239H6.606V5.216h3.996c1.831 0 3.553.706 4.849 1.986a6.724 6.724 0 0 1-.152 9.736 6.875 6.875 0 0 1-4.697 1.84H8.275L5.412 16.1v-.001Zm15.289.1a10.753 10.753 0 0 1-2.345 3.431 10.91 10.91 0 0 1-3.48 2.314 11.018 11.018 0 0 1-4.26.847H8.633v-2.814h1.916c2.145 0 4.161-.802 5.675-2.254a7.88 7.88 0 0 0 2.451-5.728c0-2.177-.87-4.21-2.451-5.728-1.514-1.454-3.528-2.254-5.675-2.254h-4.16L3.383 1.202h7.234c1.479 0 2.911.285 4.259.847a10.957 10.957 0 0 1 3.48 2.313 10.769 10.769 0 0 1 2.345 3.432c.571 1.33.86 2.743.86 4.202 0 1.46-.289 2.873-.86 4.203Z"/></symbol><symbol id="lg-vimeo" viewBox="0 0 24 24"><path d="M23.9765 6.4168c-.105 2.338-1.739 5.5429-4.894 9.6088-3.2679 4.247-6.0258 6.3699-8.2898 6.3699-1.409 0-2.578-1.294-3.553-3.881l-1.9179-7.1138c-.719-2.584-1.488-3.878-2.312-3.878-.179 0-.806.378-1.8809 1.132l-1.129-1.457a315.06 315.06 0 003.501-3.1279c1.579-1.368 2.765-2.085 3.5539-2.159 1.867-.18 3.016 1.1 3.447 3.838.465 2.953.789 4.789.971 5.5069.5389 2.45 1.1309 3.674 1.7759 3.674.502 0 1.256-.796 2.265-2.385 1.004-1.589 1.54-2.797 1.612-3.628.144-1.371-.395-2.061-1.614-2.061-.574 0-1.167.121-1.777.391 1.186-3.8679 3.434-5.7568 6.7619-5.6368 2.4729.06 3.6279 1.664 3.4929 4.7969z"/></symbol><symbol id="lg-vk" viewBox="0 0 24 24"><path d="m9.489.004.729-.003h3.564l.73.003.914.01.433.007.418.011.403.014.388.016.374.021.36.025.345.03.333.033c1.74.196 2.933.616 3.833 1.516.9.9 1.32 2.092 1.516 3.833l.034.333.029.346.025.36.02.373.025.588.012.41.013.644.009.915.004.98-.001 3.313-.003.73-.01.914-.007.433-.011.418-.014.403-.016.388-.021.374-.025.36-.03.345-.033.333c-.196 1.74-.616 2.933-1.516 3.833-.9.9-2.092 1.32-3.833 1.516l-.333.034-.346.029-.36.025-.373.02-.588.025-.41.012-.644.013-.915.009-.98.004-3.313-.001-.73-.003-.914-.01-.433-.007-.418-.011-.403-.014-.388-.016-.374-.021-.36-.025-.345-.03-.333-.033c-1.74-.196-2.933-.616-3.833-1.516-.9-.9-1.32-2.092-1.516-3.833l-.034-.333-.029-.346-.025-.36-.02-.373-.025-.588-.012-.41-.013-.644-.009-.915-.004-.98.001-3.313.003-.73.01-.914.007-.433.011-.418.014-.403.016-.388.021-.374.025-.36.03-.345.033-.333c.196-1.74.616-2.933 1.516-3.833.9-.9 2.092-1.32 3.833-1.516l.333-.034.346-.029.36-.025.373-.02.588-.025.41-.012.644-.013.915-.009ZM6.79 7.3H4.05c.13 6.24 3.25 9.99 8.72 9.99h.31v-3.57c2.01.2 3.53 1.67 4.14 3.57h2.84c-.78-2.84-2.83-4.41-4.11-5.01 1.28-.74 3.08-2.54 3.51-4.98h-2.58c-.56 1.98-2.22 3.78-3.8 3.95V7.3H10.5v6.92c-1.6-.4-3.62-2.34-3.71-6.92Z"/></symbol><symbol id="lg-soundcloud" viewBox="0 0 24 24"><path d="M23.999 14.165c-.052 1.796-1.612 3.169-3.4 3.169h-8.18a.68.68 0 0 1-.675-.683V7.862a.747.747 0 0 1 .452-.724s.75-.513 2.333-.513a5.364 5.364 0 0 1 2.763.755 5.433 5.433 0 0 1 2.57 3.54c.282-.08.574-.121.868-.12.884 0 1.73.358 2.347.992s.948 1.49.922 2.373ZM10.721 8.421c.247 2.98.427 5.697 0 8.672a.264.264 0 0 1-.53 0c-.395-2.946-.22-5.718 0-8.672a.264.264 0 0 1 .53 0ZM9.072 9.448c.285 2.659.37 4.986-.006 7.655a.277.277 0 0 1-.55 0c-.331-2.63-.256-5.02 0-7.655a.277.277 0 0 1 .556 0Zm-1.663-.257c.27 2.726.39 5.171 0 7.904a.266.266 0 0 1-.532 0c-.38-2.69-.257-5.21 0-7.904a.266.266 0 0 1 .532 0Zm-1.647.77a26.108 26.108 0 0 1-.008 7.147.272.272 0 0 1-.542 0 27.955 27.955 0 0 1 0-7.147.275.275 0 0 1 .55 0Zm-1.67 1.769c.421 1.865.228 3.5-.029 5.388a.257.257 0 0 1-.514 0c-.21-1.858-.398-3.549 0-5.389a.272.272 0 0 1 .543 0Zm-1.655-.273c.388 1.897.26 3.508-.01 5.412-.026.28-.514.283-.54 0-.244-1.878-.347-3.54-.01-5.412a.283.283 0 0 1 .56 0Zm-1.668.911c.4 1.268.257 2.292-.026 3.572a.257.257 0 0 1-.514 0c-.241-1.262-.354-2.312-.023-3.572a.283.283 0 0 1 .563 0Z"/></symbol><symbol id="lg-mixcloud" viewBox="0 0 24 24"><path d="M2.462 8.596l1.372 6.49h.319l1.372-6.49h2.462v6.808H6.742v-5.68l.232-.81h-.402l-1.43 6.49H2.854l-1.44-6.49h-.391l.222.81v5.68H0V8.596zM24 8.63v1.429L21.257 12 24 13.941v1.43l-3.235-2.329h-.348l-3.226 2.329v-1.43l2.734-1.94-2.733-1.942V8.63l3.225 2.338h.348zm-7.869 2.75v1.24H9.304v-1.24z"/></symbol><symbol id="lg-bandcamp" viewBox="0 0 24 24"><path d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z"/></symbol><symbol id="lg-imgur" viewBox="0 0 24 24"><path d="M21.147 3.043c-.002-.113-.069-.182-.189-.191a14.117 14.117 0 00-.51-.045l-.162-.01a21.998 21.998 0 00-1.085-.046l-.217-.005c-.172-.003-.35-.004-.532-.004l-.189-.001c-.295 0-.601.003-.919.01l-.106.003a55.86 55.86 0 00-.87.026l-.237.009c-.335.013-.676.029-1.027.049l-.012.001c-.357.021-.724.045-1.095.071l-.275.021c-.304.023-.609.048-.92.076l-.25.021c-.38.035-.766.074-1.156.115-.08.009-.161.019-.242.027-.319.035-.641.073-.965.113l-.33.042c-.403.051-.806.105-1.212.164a.547.547 0 00-.154.045.303.303 0 00-.097.074l-.003.002c-.045.055-.047.12.004.179.003.004.002.008.005.012l3.488 3.456-6.629 6.596c-.069.067-.068.165 0 .251.856 1.093 1.44 1.793 2.143 2.492.699.703 1.398 1.286 2.493 2.143a.216.216 0 00.132.051.167.167 0 00.119-.051l6.597-6.629 3.455 3.488a.143.143 0 00.101.047c.096 0 .187-.118.212-.292.746-5.141.882-10.051.634-12.31z M15.87 24l6.356-6.357.026-.026.156-.155-.006-.006a3.144 3.144 0 00.822-1.711c.804-5.53.903-10.591.654-12.952a2.904 2.904 0 00-.834-1.812 2.96 2.96 0 00-1.816-.855C20.458.042 19.476 0 18.318 0c-2.999 0-6.667.284-10.063.777a3.143 3.143 0 00-1.887.991L0 8.137V24H15.87zm1.528-6.707c-.151 0-.563.405-.563.613a.1.1 0 01-.099.1.1.1 0 01-.099-.1c0-.208-.411-.613-.563-.613a.1.1 0 01-.099-.1c0-.054.044-.098.099-.098.152 0 .563-.404.563-.614 0-.055.044-.098.099-.098.054 0 .099.043.099.098 0 .21.412.614.563.614a.1.1 0 010 .198zM5.4 7.045c.197 0 .735-.528.735-.801a.13.13 0 01.128-.129c.071 0 .128.058.128.129 0 .272.538.801.735.801.071 0 .128.057.128.128a.128.128 0 01-.128.128c-.197 0-.735.528-.735.801a.128.128 0 01-.128.128.128.128 0 01-.128-.128c0-.273-.538-.801-.735-.801a.128.128 0 010-.256zm-3.99 3.26c0-.065.057-.098.119-.118.69-.228 1.269-.8 1.403-1.554.011-.064.053-.118.118-.118.066 0 .107.054.119.118.133.754.711 1.326 1.401 1.554.062.02.118.053.118.118s-.056.098-.118.119c-.69.227-1.269.799-1.403 1.553-.011.064-.053.119-.119.119-.065 0-.106-.054-.118-.119-.134-.754-.713-1.326-1.403-1.553-.061-.022-.117-.054-.117-.119zm1.565 9.307c-.113 0-.42.302-.42.459 0 .04-.034.073-.074.073a.074.074 0 01-.074-.073c0-.157-.307-.459-.42-.459a.074.074 0 01-.074-.073c0-.039.034-.073.074-.073.113 0 .42-.302.42-.457 0-.042.033-.073.074-.073.04 0 .074.031.074.073 0 .155.307.457.42.457.04 0 .073.034.073.073a.073.073 0 01-.073.073zm.568-3.047c-.14 0-.521.375-.521.568a.092.092 0 11-.183 0c0-.193-.381-.568-.521-.568a.09.09 0 01-.091-.09c0-.051.041-.092.091-.092.14 0 .521-.375.521-.568a.09.09 0 01.092-.09.09.09 0 01.091.09c0 .193.381.568.521.568a.091.091 0 010 .182zm3.334 4.382c-.203 0-.758.546-.758.827 0 .073-.06.133-.132.133a.133.133 0 01-.133-.133c0-.281-.555-.827-.758-.827a.134.134 0 01-.133-.133c0-.073.059-.132.133-.132.204 0 .758-.545.758-.828 0-.071.06-.132.133-.132.073 0 .132.061.132.132 0 .283.555.828.758.828.074 0 .133.059.133.132a.133.133 0 01-.133.133zm1.922-.806c-1.086-.851-1.869-1.498-2.653-2.287-.789-.784-1.436-1.566-2.287-2.654-.626-.8-.566-1.897.144-2.607l.001-.001.002-.001L9.364 7.26 7.149 5.066l-.003-.003-.002-.003c-.52-.52-.7-1.27-.472-1.958.148-.447.464-.802.867-1.049a1.983 1.983 0 01.371-.19 2.1 2.1 0 01.468-.131c.005 0 .009-.003.014-.004C11.746 1.24 15.363.96 18.317.96h.002c1.125 0 2.072.041 2.818.121.469.046.903.249 1.228.576.328.331.525.767.562 1.237.243 2.311.144 7.253-.651 12.714-.001.01-.006.016-.007.025a2.258 2.258 0 01-.18.586c-.006.014-.01.028-.018.042-.333.699-1.001 1.163-1.771 1.163-.51 0-.992-.2-1.358-.567l-.003-.002-.004-.004-2.192-2.215-5.333 5.359-.001.002h-.001a1.94 1.94 0 01-1.378.573c-.44 0-.877-.151-1.231-.429zm2.576 2.09c-.139 0-.518.373-.518.566a.09.09 0 01-.091.09.09.09 0 01-.09-.09c0-.193-.379-.566-.519-.566a.09.09 0 110-.18c.139 0 .519-.373.519-.566a.09.09 0 01.09-.09c.05 0 .091.041.091.09 0 .193.379.566.518.566.05 0 .091.039.091.09s-.04.09-.091.09zm2.115-2.437c.248 0 .922-.662.922-1.003 0-.088.072-.161.161-.161.088 0 .161.073.161.161 0 .341.674 1.003.921 1.003.089 0 .161.073.161.161a.16.16 0 01-.161.161c-.247 0-.921.662-.921 1.005a.162.162 0 01-.161.162.162.162 0 01-.161-.162c0-.343-.674-1.005-.922-1.005a.161.161 0 010-.322z"/></symbol><symbol id="lg-odysee" viewBox="0 0 24 24"><path d="M11.965 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12 12 12 0 0 0-3.209-8.167 7.272 7.272 0 0 1-.799 3.218c-.548.957-2.281 2.77-3.264 3.699a.723.723 0 0 0 .056 1.104c.996.74 2.658 2.151 2.788 3.422.176 1.835 1.6 4.02 1.675 4.159a.67.67 0 0 1-.105.327 12.067 12.067 0 0 1-2.03 1.898 2.435 2.435 0 0 1-.807.126c-1.944-.04-1.526-1.866-1.712-2.905s-.78-3.085-2.716-2.788c0 0 .484 4.243-1.489 5.546s-5.843 2.27-6.55-.408 2.46-2.384 2.684-2.384c.223 0 2.233-.632 1.267-2.53-.967-1.898-2.01-3.5-2.01-3.5a11.37 11.37 0 0 0-2.735 1.285 5.42 5.42 0 0 0-1.061.82c-1.065 1.104-2.19 1.713-2.954 1.358a1.368 1.368 0 0 1-.32-.221A11.926 11.926 0 0 1 .1 13.503c.43-.641 2.082-2.038 3.696-2.906 1.304-.702 2.737-.988 3.118-1.355-.671-2.235-1.882-5.703.832-7.33C9.881.634 12.69-.142 13.77 2.958c1.08 3.1.802 3.796 1.267 3.796.465 0 1.608.223 2.09-1.75.356-1.445.574-2.685 1.379-3.087A12 12 0 0 0 12 0a12 12 0 0 0-.035 0zm-.498 2.125c-.353-.019-.78.05-1.303.224 0 0-1.895.52-1.749 2.53.13 1.777 1.08 2.753 3.053 2.01 1.972-.737 2.31-1.264 1.824-2.753-.364-1.117-.765-1.956-1.825-2.011zm.48.726a.249.249 0 0 1 .183.07 1.58 1.58 0 0 1 .232.346.253.253 0 0 1-.197.37.253.253 0 0 1-.233-.131 1.559 1.559 0 0 0-.148-.232.256.256 0 0 1 0-.353.249.249 0 0 1 .163-.07zm3.529.152a.22.22 0 0 1 .192.103.22.22 0 0 1-.07.305.22.22 0 1 1-.122-.408zM12.609 4.27a.253.253 0 0 1 .227.133 1.5 1.5 0 0 1 .102.982.253.253 0 0 1-.246.205h-.049a.253.253 0 0 1-.2-.295 1.013 1.013 0 0 0-.071-.697.253.253 0 0 1 .237-.328zm-8.035.552a.12.12 0 0 1 .029.003.12.12 0 1 1-.147.091.12.12 0 0 1 .118-.094zm15.77 3.419.273.539.593.12-.539.275-.123.592-.272-.539-.592-.123.538-.272zm-17.767.535a.22.22 0 0 1 .193.104.22.22 0 0 1-.07.304.22.22 0 1 1-.123-.408zm16.004 2.79a.258.258 0 0 1 .062.007.258.258 0 1 1-.31.195.258.258 0 0 1 .248-.202zM4.914 16.115a.17.17 0 0 1 .165.14.17.17 0 0 1-.137.197.17.17 0 1 1-.028-.337zm9.769 4.094a.2.2 0 0 1 .036.004.2.2 0 1 1-.233.15.2.2 0 0 1 .197-.154z"/></symbol><symbol id="lg-twitch" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></symbol><symbol id="lg-9gag" viewBox="0 0 24 24"><path d="m17.279 21.008 5.193-2.995V5.992l-5.193-2.996C14.423 1.348 12.048 0 12 0c-.048 0-2.423 1.348-5.279 2.996L1.528 5.992v2.354l5.193 2.996c2.856 1.648 5.232 2.996 5.28 2.996.048 0 1.469-.797 3.157-1.772a229.633 229.633 0 0 1 3.097-1.772c.016 0 .027 1.096.027 2.437l-.002 2.436-3.076 1.772c-1.692.975-3.115 1.783-3.163 1.795-.048.013-1.471-.776-3.162-1.752-1.69-.976-3.113-1.775-3.161-1.775-.155 0-4.036 2.274-4.011 2.35.031.093 10.136 5.937 10.276 5.943.057.002 2.44-1.344 5.296-2.992ZM9.847 8.391c-1.118-.65-2.033-1.2-2.033-1.222 0-.071 4.06-2.376 4.186-2.376.125 0 4.186 2.305 4.186 2.376 0 .063-4.047 2.375-4.184 2.39-.068.007-1.037-.519-2.155-1.168Z"/></symbol><symbol id="lg-bilibili" viewBox="0 0 24 24"><path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373Z"/></symbol><symbol id="lg-kick" viewBox="0 0 24 24"><path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z"/></symbol><symbol id="pz" viewBox="0 0 24 24"><path d="M9 6.5v11M15 6.5v11"/></symbol><symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
   <symbol id="link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
   <symbol id="grp" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14a5 5 0 0 1 3 5"/></symbol><symbol id="share" viewBox="0 0 24 24"><path d="M15 5l4 4-4 4M19 9H9a5 5 0 0 0 0 10h1"/></symbol>
   <symbol id="reply" viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 5 5v1"/></symbol>
@@ -580,7 +652,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 <section class="stack" id="more" aria-labelledby="more-h">
   <h2 class="wrap" id="more-h" data-i="more-h">وفي Nezzel أيضًا</h2>
   <article class="card" style="--i:0"><div class="pnl t-lt">
-    <div class="cx"><h3 data-i="x1">احتفظ بحالات واتساب</h3><p data-i="x1p">تبقى عندك حتى بعد أن تختفي</p></div>
+    <div class="cx"><h3 data-i="x1">احتفظ بحالات واتساب</h3><p data-i="x1p">احفظ الحالات التي تريد الاحتفاظ بها</p></div>
     <div class="viz"><div class="sts" aria-hidden="true">
       <span class="st"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18.5"/></svg><span class="ph"><img src="/img/films/bbb.webp" alt="" width="480" height="270" loading="lazy" decoding="async" style="object-position:28% 50%"></span></span>
       <span class="st"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18.5"/></svg><span class="ph"><img src="/img/films/tos.webp" alt="" width="480" height="270" loading="lazy" decoding="async" style="object-position:62% 50%"></span></span>
@@ -638,13 +710,20 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   </div></article>
 </section>
 
-<section class="reel" id="screens" aria-labelledby="rs-h">
-  <div class="wrap"><h2 id="rs-h" data-i="rs-h">التطبيق كما هو</h2></div>
-  <ul class="rs">
-    <li data-i="rs1"><img src="/img/screens/ar-light-downloads.webp" alt="تنزيل جارٍ ونسبته" width="640" height="1387" loading="lazy" decoding="async"></li>
-    <li data-i="rs2"><img src="/img/screens/ar-light-grid.webp" alt="ملفاتك المحفوظة في شبكة" width="640" height="1387" loading="lazy" decoding="async"></li>
-    <li data-i="rs3"><img src="/img/screens/ar-light-settings.webp" alt="الإعدادات: اللغة والمظهر ومكان الحفظ" width="640" height="1387" loading="lazy" decoding="async"></li>
-  </ul>
+<section class="apps apf" id="apps" aria-labelledby="ap-h">
+  <div class="wrap ap-c"><h2 id="ap-h" data-i="ap-h">من التطبيقات التي تحبها</h2><p class="sub" data-i="ap-sub">وغيرها كثير</p></div>
+  <ul class="sr"><li>YouTube</li><li>WhatsApp</li><li>TikTok</li><li>Instagram</li><li>Facebook</li><li>Snapchat</li><li>X</li><li>Telegram</li><li>LinkedIn</li><li>Pinterest</li><li>Bluesky</li><li>Dailymotion</li><li>Vimeo</li><li>VK</li><li>SoundCloud</li><li>Mixcloud</li><li>Bandcamp</li><li>Imgur</li><li>Odysee</li><li>Twitch</li><li>9GAG</li><li>Bilibili</li><li>Kick</li></ul>
+  <div class="amw" aria-hidden="true"><div class="amf"><div class="atl"><div class="amr"><i class="tl tl-yt"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-youtube"/></svg></i><i class="tl tl-wa"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-whatsapp"/></svg></i><i class="tl tl-tt"><svg class="e1" viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-tiktok"/></svg><svg class="e2" viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-tiktok"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-tiktok"/></svg></i><i class="tl tl-ig"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-instagram"/></svg></i><i class="tl tl-fb"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-facebook"/></svg></i><i class="tl tl-sc"><svg class="ol" viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-snapchat"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-snapchat"/></svg></i><i class="tl tl-x"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-x"/></svg></i><i class="tl tl-tg"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-telegram"/></svg></i><i class="tl tl-li"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-linkedin"/></svg></i><i class="tl tl-pi"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-pinterest"/></svg></i><i class="tl tl-bs"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-bluesky"/></svg></i><i class="tl tl-dm"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-dailymotion"/></svg></i><i class="tl tl-vm"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-vimeo"/></svg></i><i class="tl tl-vk"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-vk"/></svg></i><i class="tl tl-scl"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-soundcloud"/></svg></i><i class="tl tl-mx"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-mixcloud"/></svg></i><i class="tl tl-bc"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-bandcamp"/></svg></i><i class="tl tl-im"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-imgur"/></svg></i><i class="tl tl-od"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-odysee"/></svg></i><i class="tl tl-tw"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-twitch"/></svg></i><i class="tl tl-9g"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-9gag"/></svg></i><i class="tl tl-bi"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-bilibili"/></svg></i><i class="tl tl-kk"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-kick"/></svg></i></div></div></div><span class="amk"><img src="/img/icon.svg" alt="" width="148" height="148"></span></div>
+</section>
+
+<section class="wrap net" id="net" aria-labelledby="nt-h">
+  <div class="nt-g">
+    <div><h2 id="nt-h" data-i="nt-h">انقطع الاتصال؟ لا يضيع شيء</h2><p class="sub" data-i="nt-sub">يتوقف التنزيل وينتظر، ثم يكمل من حيث توقف</p></div>
+    <div class="nt-st" aria-hidden="true">
+      <span class="nsig off"><svg viewBox="0 0 24 24"><g class="wa"><path d="M2.5 9.2a14 14 0 0 1 19 0"/><path d="M5.8 12.7a9.2 9.2 0 0 1 12.4 0"/><path d="M9.1 16.2a4.4 4.4 0 0 1 5.8 0"/><path d="M12 19.6h.01"/></g><path class="wx" d="M4 4l16 16"/></svg></span>
+      <div class="nrow off" style="--p:.52"><img src="/img/films/sintel.webp" alt="" width="52" height="52"><div class="ntx"><b class="ntt"><bdi>Sintel - Open Movie by Blender Foundation</bdi></b><span class="nst"><span class="npc ltr num">52%</span><span class="nwt" data-i="nt-wait">في انتظار الاتصال</span></span></div><span class="nbt"><svg class="i"><use href="#pz"/></svg></span><span class="ncl"><svg class="i"><use href="#x"/></svg></span></div>
+    </div>
+  </div>
 </section>
 
 <section class="wrap ins" id="install" aria-labelledby="ins-h">
@@ -692,7 +771,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       </nav>
       <div class="fm"><span class="langs"><a href="/" hreflang="ar" lang="ar" dir="rtl">العربية</a><a href="/fr/" hreflang="fr" lang="fr" dir="ltr">Français</a><a href="/en/" hreflang="en" lang="en" dir="ltr">English</a></span><span data-i="foot">من تطوير <a href="https://hululsoft.mr">Hululsoft</a></span></div>
     </div>
-    <p class="cr fe" style="--f:3" data-i="credit">صور الفيديو: <bdi>Big Buck Bunny, Caminandes 2: Gran Dillama, Sintel, Singularity, Tears of Steel, Wing It!</bdi> <bdi>© Blender Foundation، CC BY</bdi></p>
+    <p class="cr fe" style="--f:3" data-i="credit">صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation، <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a></bdi></p>
     <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
   </div>
 </footer>
@@ -725,11 +804,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     i4:"Open Nezzel and try it", i4p:"Copy any link, then open the app, or paste the link in",
     "sys-done":"Download complete", "sys-t2":"Install unknown apps", "sys-browser":"Browser", "sys-allow":"Allow from this source",
     "sys-q":"Do you want to install this app?", "sys-cancel":"Cancel", "sys-install":"Install",
-    "rs-h":"The app as it is",
+    "ap-h":"From the apps you love",
+    "ap-sub":"And many more",
+    "nt-h":"Lost signal? Nothing’s lost",
+    "nt-sub":"The download waits, then picks up where it stopped",
+    "nt-wait":"Waiting for network",
     "how-shots":"<img class=\"shot\" src=\"/img/screens/en-light-home.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-    rs1:"<img src=\"/img/screens/en-light-downloads.webp\" alt=\"A download in progress, with its percentage\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-    rs2:"<img src=\"/img/screens/en-light-grid.webp\" alt=\"Your saved files in a grid\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-    rs3:"<img src=\"/img/screens/en-light-settings.webp\" alt=\"Settings: language, appearance and save location\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     "faq-h":"Quick answers",
     f1:"Is it free?", f1a:"Yes, completely. No ads, no subscription",
     f2:"Which sites work?", f2a:"Popular video and photo sites, as long as the link is public. Some links won’t work, and private, protected or sign-in-only content isn’t supported. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites we’ve tested</a>", f8:"How do I keep WhatsApp statuses?", f8a:"Watch the status in WhatsApp, then open the Statuses tab in Nezzel. The first time, you allow access to one folder. That’s all",
@@ -744,8 +824,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
     lede:"Save WhatsApp, YouTube, Facebook and TikTok videos to your phone",
-    credit:"Video stills: <bdi>Big Buck Bunny, Caminandes 2: Gran Dillama, Sintel, Singularity, Tears of Steel, Wing It!</bdi> <bdi>© Blender Foundation, CC BY</bdi>",
-    "x1p": "Yours to keep, even after they vanish",
+    credit:"Video stills: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation, <a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></bdi>",
+    "x1p": "Save the statuses you want to keep",
     "x2p": "Paste its link and Nezzel saves them one by one",
     "x3p": "Paste them together, tap once",
     "x4p": "For songs and podcasts, in a smaller file",
@@ -826,11 +906,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "sys-q": "هل تريد تثبيت هذا التطبيق؟",
       "sys-cancel": "إلغاء",
       "sys-install": "تثبيت",
-      "rs-h": "التطبيق كما هو",
+      "ap-h": "من التطبيقات التي تحبها",
+      "ap-sub": "وغيرها كثير",
+      "nt-h": "انقطع الاتصال؟ لا يضيع شيء",
+      "nt-sub": "يتوقف التنزيل وينتظر، ثم يكمل من حيث توقف",
+      "nt-wait": "في انتظار الاتصال",
       "how-shots": "<img class=\"shot\" src=\"/img/screens/ar-light-home.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/ar-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/ar-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-      "rs1": "<img src=\"/img/screens/ar-light-downloads.webp\" alt=\"تنزيل جارٍ ونسبته\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-      "rs2": "<img src=\"/img/screens/ar-light-grid.webp\" alt=\"ملفاتك المحفوظة في شبكة\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-      "rs3": "<img src=\"/img/screens/ar-light-settings.webp\" alt=\"الإعدادات: اللغة والمظهر ومكان الحفظ\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
       "faq-h": "أسئلة سريعة",
       "f1": "هل هو مجاني؟",
       "f1a": "نعم، مجاني تمامًا، بلا إعلانات ولا اشتراكات",
@@ -857,14 +938,14 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
       "lede": "احفظ فيديوهات واتساب ويوتيوب وفيسبوك وتيك توك على هاتفك",
-      "credit": "صور الفيديو: <bdi>Big Buck Bunny, Caminandes 2: Gran Dillama, Sintel, Singularity, Tears of Steel, Wing It!</bdi> <bdi>© Blender Foundation، CC BY</bdi>",
+      "credit": "صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation، <a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></bdi>",
       "lic": "التراخيص",
       "sec": "الأمان",
       "to-light": "الوضع الفاتح",
       "saved": "تم الحفظ",
       "language": "اللغة",
       "og-alt": "Nezzel: حمّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة",
-    "x1p": "تبقى عندك حتى بعد أن تختفي",
+    "x1p": "احفظ الحالات التي تريد الاحتفاظ بها",
     "x2p": "الصق رابطها، ويحفظها Nezzel مقطعًا تلو الآخر",
     "x3p": "الصقها معًا، وضغطة واحدة تكفي",
     "x4p": "للأغاني والبودكاست، بملف أصغر",
@@ -907,11 +988,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     i4:"Ouvrez Nezzel et essayez", i4p:"Copiez un lien puis ouvrez l’appli, ou collez-y directement le lien",
     "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
     "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
-    "rs-h":"L’appli telle qu’elle est",
+    "ap-h":"Vos applis préférées",
+    "ap-sub":"Et bien d’autres",
+    "nt-h":"Plus de réseau ? Rien n’est perdu",
+    "nt-sub":"Le téléchargement attend, puis reprend là où il s’était arrêté",
+    "nt-wait":"En attente du réseau",
     "how-shots":"<img class=\"shot\" src=\"/img/screens/en-light-home.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-    rs1:"<img src=\"/img/screens/en-light-downloads.webp\" alt=\"Un téléchargement en cours, avec son pourcentage\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-    rs2:"<img src=\"/img/screens/en-light-grid.webp\" alt=\"Vos fichiers enregistrés, en grille\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
-    rs3:"<img src=\"/img/screens/en-light-settings.webp\" alt=\"Les réglages : langue, apparence et dossier d’enregistrement\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     "faq-h":"Vos questions",
     f1:"C’est gratuit ?", f1a:"Oui, entièrement. Ni pub, ni abonnement",
     f2:"Ça marche avec quels sites ?", f2a:"Les grands sites de vidéos et de photos, tant que le lien est public. Certains liens peuvent ne pas passer, et les contenus privés, protégés ou réservés aux membres connectés ne sont pas pris en charge. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Les sites testés</a>", f8:"Comment garder les statuts WhatsApp ?", f8a:"Regardez le statut dans WhatsApp, puis ouvrez l’onglet Statuts de Nezzel. La première fois, vous autorisez l’accès à un dossier, et c’est tout",
@@ -926,8 +1008,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
     lede:"Gardez sur votre téléphone les vidéos WhatsApp, YouTube, Facebook et TikTok",
-    credit:"Images vidéo : <bdi>Big Buck Bunny, Caminandes 2: Gran Dillama, Sintel, Singularity, Tears of Steel, Wing It!</bdi> <bdi>© Blender Foundation, CC BY</bdi>",
-    "x1p": "Ils restent, même une fois disparus",
+    credit:"Images vidéo : <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation, <a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></bdi>",
+    "x1p": "Gardez les statuts qui comptent pour vous",
     "x2p": "Collez son lien, Nezzel enregistre les vidéos une à une",
     "x3p": "Collez-les ensemble, un seul geste suffit",
     "x4p": "Pour la musique et les podcasts, en plus léger",
@@ -1162,21 +1244,77 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gsap.fromTo(wd, { scale: .92, opacity: 0 }, { scale: 1, opacity: 1, ease: "power3.out", scrollTrigger: { trigger: c5, start: "top 85%", end: "top 45%", scrub: .6 } });
     const w = { v: .15 };
     gsap.to(w, { v: .75, ease: "power1.inOut", onUpdate: () => widget(w.v), scrollTrigger: { trigger: c5, start: "top 60%", end: () => "+=" + (stack.offsetTop + stack.offsetHeight - c5.offsetTop - innerHeight * .4), scrub: .6 } });
-    // real screens: the phones rise into place
-    const rs = $(".rs"), rise = gsap.fromTo($$("li", rs), { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .9, ease: "power3.out", stagger: .07, paused: true });
-    ScrollTrigger.create({ trigger: rs, start: "top 88%", onEnter: () => rise.restart(), onLeaveBack: () => rise.pause(0) });
-    // then the section holds still while the scroll slides the row toward the start, for as far as the row overflows.
-    // On phones the last screen stops in the middle; the pin holds a little longer so the scrub settles before the page moves on.
-    const reel = $(".reel"); reel.classList.add("pin");
-    const over = () => {
-      const a = rs.firstElementChild.getBoundingClientRect(), b = rs.lastElementChild.getBoundingClientRect(), pad = parseFloat(getComputedStyle(rs).paddingInlineStart);
-      const o = Math.max(a.right, b.right) - Math.min(a.left, b.left) + 2 * pad - rs.clientWidth;
-      return Math.max(0, b.width * 2 > rs.clientWidth ? o + (rs.clientWidth - b.width) / 2 - pad : o);
-    };
-    gsap.timeline({ scrollTrigger: { trigger: reel, start: "top top", end: () => "+=" + over() * 1.2, pin: true, scrub: .5, invalidateOnRefresh: true } })
-      .fromTo(rs, { x: 0 }, { x: () => (rtl ? 1 : -1) * over(), ease: "none", duration: 1 }).to({}, { duration: .2 });
   }
   addEventListener("DOMContentLoaded", deck);
+  // ---------- the apps + the network drop ----------
+  const APPS = [
+    { k: "youtube", c: "yt", n: "YouTube", s: { ar: "فيديو وصوت", en: "Videos and audio", fr: "Vidéos et audio" } },
+    { k: "whatsapp", c: "wa", n: "WhatsApp", s: { ar: "الحالات", en: "Statuses", fr: "Statuts" } },
+    { k: "tiktok", c: "tt", n: "TikTok", s: { ar: "فيديو", en: "Videos", fr: "Vidéos" } },
+    { k: "instagram", c: "ig", n: "Instagram", s: { ar: "ريلز وصور", en: "Reels and photos", fr: "Reels et photos" } },
+    { k: "facebook", c: "fb", n: "Facebook", s: { ar: "فيديو وصور", en: "Videos and photos", fr: "Vidéos et photos" } },
+    { k: "snapchat", c: "sc", n: "Snapchat", s: { ar: "فيديو", en: "Videos", fr: "Vidéos" } },
+    { k: "x", c: "x", n: "X", s: { ar: "فيديو وصور", en: "Videos and photos", fr: "Vidéos et photos" } },
+    { k: "telegram", c: "tg", n: "Telegram", s: { ar: "فيديو", en: "Videos", fr: "Vidéos" } }
+  ];
+  // the other sites a test run on the phone passed, smaller and without a caption
+  const MORE = [["linkedin", "li"], ["pinterest", "pi"], ["bluesky", "bs"], ["dailymotion", "dm"], ["vimeo", "vm"], ["vk", "vk"], ["soundcloud", "scl"],
+    ["mixcloud", "mx"], ["bandcamp", "bc"], ["imgur", "im"], ["odysee", "od"], ["twitch", "tw"], ["9gag", "9g"], ["bilibili", "bi"], ["kick", "kk"]].map(([k, c]) => ({ k, c }));
+  const appTile = (a, tag = "i") => {
+    const el = document.createElement(tag), u = '<svg viewBox="0 0 24 24"' + ' aria-hidden="true"><use href="#lg-' + a.k + '"/></svg>';
+    el.className = "tl tl-" + a.c;
+    el.innerHTML = (a.c === "tt" ? u.replace("<svg", '<svg class="e1"') + u.replace("<svg", '<svg class="e2"') : "") +
+      (a.c === "sc" ? u.replace("<svg", '<svg class="ol"') : "") + u;
+    return el;
+  };
+  const motionOk = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // The network drop: the row fills, the signal goes, the row says it's waiting, the signal comes back and it carries on
+  addEventListener("DOMContentLoaded", () => {
+    const row = $(".nrow"), sig = $(".nsig"), pc = $(".npc"); if (!row) return;
+    const pct = p => { row.style.setProperty("--p", p.toFixed(4)); pc.textContent = Math.round(p * 100) + (document.documentElement.lang === "fr" ? " %" : "%"); };
+    const off = on => { row.classList.toggle("off", on); sig.classList.toggle("off", on); };
+    const { gsap, ScrollTrigger } = window;
+    if (!motionOk || !gsap || !ScrollTrigger) { pct(.52); off(true); return; }
+    pct(.1); off(false);
+    const v = { p: .1 };
+    const tl = gsap.timeline({ repeat: -1, paused: true, onRepeat: () => off(false) })
+      .set(v, { p: .1, onComplete: () => { pct(.1); off(false); } })
+      .to(v, { p: .52, duration: 2.8, ease: "none", onUpdate: () => pct(v.p) })
+      .call(() => off(true))
+      .to({}, { duration: 2.4 })
+      .call(() => off(false))
+      .to(v, { p: 1, duration: 2.6, ease: "none", onUpdate: () => pct(v.p) })
+      .to(row, { opacity: 0, y: 8, duration: .45, ease: "power2.in" }, "+=1.1")
+      .set(v, { p: .1, onComplete: () => pct(.1) })
+      .to(row, { opacity: 1, y: 0, duration: .5, ease: "power3.out" });
+    const st = ScrollTrigger.create({ trigger: ".nt-st", start: "top 85%", end: "bottom 10%", onToggle: s => s.isActive ? tl.play() : tl.pause() });
+    // reduced motion switched on while the page is open: stop on the waiting state
+    matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", e => { if (e.matches) { st.kill(); tl.pause(); pct(.52); off(true); } });
+  });
+  // F: enough tilted rows to cover the wall; each runs through the sites from its own start (so neighbours differ), as many as the wall is wide, copied once for a seamless loop.
+  // CSS moves them (transform only), only while the wall is on screen; rebuilt when the width changes.
+  addEventListener("DOMContentLoaded", () => {
+    const sec = $(".apf"), w = $(".amw"), tl = $(".atl"); if (!sec) return;
+    const all = [], more = MORE.slice();
+    APPS.forEach((a, i) => { all.push(a); if (more.length) all.push(more.shift()); if (i % 3 === 2 && more.length) all.push(more.shift()); });
+    all.push(...more);
+    function build() {
+      const W = w.clientWidth, H = w.clientHeight, t = $(".amk").offsetWidth / 1.68 || 70, pitch = t * 1.3;
+      const n = Math.ceil((W * .45 + H * 1.1) / pitch) | 1, span = W * .95 + H * .45, len = Math.min(all.length, Math.ceil(span / pitch) + 2), fill = Math.max(1, Math.ceil(span / (len * pitch)));
+      tl.textContent = ""; tl.style.width = span.toFixed(0) + "px";
+      for (let i = 0; i < n; i++) {
+        const r = document.createElement("div"), set = all.slice(i * 5 % all.length).concat(all.slice(0, i * 5 % all.length)).slice(0, len);
+        r.className = "amr";
+        for (let c = 0; c < fill * 2; c++) set.forEach(a => r.appendChild(appTile(a)));
+        r.style.setProperty("--d", (set.length * fill * (2.6 + (i % 3) * .35)) + "s");
+        r.style.marginInlineStart = (-(i * pitch * .37) % pitch) + "px";
+        tl.appendChild(r);
+      }
+    }
+    build();
+    let vw = innerWidth, raf = 0; addEventListener("resize", () => { if (innerWidth !== vw && !raf) raf = requestAnimationFrame(() => { raf = 0; vw = innerWidth; build(); }); });
+    new IntersectionObserver(([e]) => sec.classList.toggle("on", e.isIntersecting)).observe(w);
+  });
 
   // ---------- footer wordmark + dark header ----------
   // Fit the wordmark's viewBox to its real glyph box, so it spans the gutter and never clips, whatever font draws it.
@@ -1202,7 +1340,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     const m = mode(); root.dataset.mode = m;
     waveTheme();
     // the Arabic screens exist in both themes; the English set is light only
-    if (lang() === "ar") $$(".rs img, .shot, .fan img").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
+    if (lang() === "ar") $$(".shot, .fan img").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
     themeBtn.dataset.iAria = m === "dark" ? "to-light" : "to-dark";
     themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
     $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
