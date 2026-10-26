@@ -56,7 +56,8 @@ android {
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
-        applicationId = "dev.ahmed.savlino"
+        // -Pnezzel.applicationIdSuffix=.demo installs a separate test copy beside the real app.
+        applicationId = "dev.ahmed.savlino" + (providers.gradleProperty("nezzel.applicationIdSuffix").orNull ?: "")
         minSdk = 29
         targetSdk = 35
         // scripts/release.sh passes both; local builds keep the scaffold values.
