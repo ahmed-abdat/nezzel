@@ -248,7 +248,7 @@ class DownloadsTest {
             assertTrue(coordinator.progress.value.isEmpty())
         } finally { c.pause().stop().destroy(); store.close(); app.coordinatorOverride = null }
     }
-    @Test fun finishOnSettingsHonorsAccessibilityTimeoutAndOpenUsesPublishedUri() = runBlocking {
+    @Test fun finishOnSettingsHonorsAccessibilityTimeoutAndShareUsesPublishedUri() = runBlocking {
         val app = RuntimeEnvironment.getApplication() as IsolatedTestApplication
         app.deleteDatabase(JobStore.DATABASE_NAME)
         val store = JobStore(app)
@@ -273,6 +273,8 @@ class DownloadsTest {
             val command = (DownloadCommand.confirm("finished", Inspection(source, "v1", listOf(format)), source, "720", "Family") as ConfirmResult.Confirmed).command
             store.enqueue(command)
             coordinator.execute("finished", {}, {})
+            // The action waits for the installed-apps lookup (off the main thread) before the snackbar shows.
+            dev.ahmed.savlino.waitWhile({ nodes(c.get()) }) { texts(nodes(c.get())).none { it.contains("Saved to") } }
             val labels = texts(nodes(c.get()))
             assertTrue(labels.toString(), labels.any { it.contains("Saved to") && it.contains("Downloads/Nezzel") })
             assertEquals("Settings", c.get().links.destination)
@@ -282,12 +284,16 @@ class DownloadsTest {
                 shadowOf(Looper.getMainLooper()).idle()
                 System.nanoTime() - shownAt >= java.util.concurrent.TimeUnit.SECONDS.toNanos(7)
             }
-            assertTrue("Accessibility-extended Open action expired after 7 seconds", texts(nodes(c.get())).any { it.contains("Saved to") })
-            click(c.get(), "Open")
-            val intent = shadowOf(c.get()).nextStartedActivity
-            assertEquals(Intent.ACTION_VIEW, intent.action)
-            assertEquals(store.get("finished")!!.pendingUri, intent.data)
-            assertEquals("video/mp4", intent.type)
+            assertTrue("Accessibility-extended action expired after 7 seconds", texts(nodes(c.get())).any { it.contains("Saved to") })
+            // No WhatsApp installed: one saved file offers Share (the chooser) for exactly that file.
+            click(c.get(), "Share")
+            var started: Intent? = null
+            dev.ahmed.savlino.waitWhile({ nodes(c.get()) }) { started = shadowOf(c.get()).nextStartedActivity; started == null }
+            assertEquals(Intent.ACTION_CHOOSER, started!!.action)
+            @Suppress("DEPRECATION") val send = started!!.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+            assertEquals(Intent.ACTION_SEND, send.action)
+            @Suppress("DEPRECATION") assertEquals(store.get("finished")!!.pendingUri, send.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+            assertEquals("video/mp4", send.type)
         } finally { c.pause().stop().destroy(); store.close(); app.coordinatorOverride = null }
     }
     class LibraryProvider : ContentProvider() {

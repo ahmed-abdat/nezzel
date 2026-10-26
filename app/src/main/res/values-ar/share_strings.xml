@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_whatsapp">واتساب</string>
+    <string name="share_other_apps">تطبيقات أخرى</string>
+    <string name="share_file_unavailable">لم نجد هذا الملف، ربما نُقل أو حُذف</string>
+    <string name="share_unavailable">تعذّرت مشاركة هذا الملف</string>
+    <string name="view_saved_files">عرض الملفات</string>
+</resources>

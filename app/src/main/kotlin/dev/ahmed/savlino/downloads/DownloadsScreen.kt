@@ -692,6 +692,11 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
     val copy = LocalLinkCopy.current
     val link by produceState<String?>(null, item.uri) { value = copy?.find?.invoke(item) }
     val better = LocalBetterQuality.current
+    val sharer = dev.ahmed.savlino.sharing.LocalFileSharer.current
+    // Installed WhatsApp apps for this file type; null while the package manager answers.
+    val targets by produceState<List<dev.ahmed.savlino.sharing.ShareTarget>?>(if (sharer == null) emptyList() else null, item.uri, sharer) {
+        if (sharer != null) value = sharer.targets(item.mimeType)
+    }
     val canLookForBetter by produceState(false, item.uri) {
         value = item.kind == SavedMediaKind.VIDEO && better?.eligible?.invoke(item) == true
     }
@@ -713,7 +718,14 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
             }
             HorizontalDivider(Modifier.padding(horizontal = Space.xl))
             Spacer(Modifier.height(Space.s))
-            SheetAction(R.drawable.ic_ms_share, stringResource(R.string.share_file)) { act(onShare) }
+            // With a WhatsApp installed: one row per app, then Other apps (the chooser). Without: the plain Share row.
+            when {
+                targets == null -> Spacer(Modifier.height(56.dp))
+                targets.isNullOrEmpty() || sharer == null -> SheetAction(R.drawable.ic_ms_share, stringResource(R.string.share_file)) {
+                    act { sharer?.share(item.uri, item.mimeType, null) ?: onShare() }
+                }
+                else -> dev.ahmed.savlino.sharing.ShareTargetRows(targets.orEmpty()) { target -> act { sharer?.share(item.uri, item.mimeType, target) } }
+            }
             link?.let { url ->
                 SheetAction(R.drawable.ic_ms_link, stringResource(R.string.copy_link),
                     supporting = android.net.Uri.parse(url).host?.removePrefix("www.")) { act { copy?.copy?.invoke(url) } }

@@ -76,6 +76,9 @@ fun NezzelApp(
     val library = rememberLibraryState(snackbar, sweep = shareLinks?.let { it::sweep })
     val jobs by (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()
     val scope = rememberCoroutineScope()
+    val sharer = dev.ahmed.savlino.sharing.rememberFileSharer { id -> scope.launch { snackbar.showSnackbar(context.getString(id)) } }
+    // Both WhatsApp apps installed: the "Saved" snackbar's WhatsApp opens this choice for the file.
+    var shareChoice by remember { mutableStateOf<Pair<DownloadProgress, List<dev.ahmed.savlino.sharing.ShareTarget>>?>(null) }
     // The app scope outlives the file sheet, so a copy still lands after the sheet closes.
     val linkCopy = remember(shareLinks) {
         shareLinks?.let { share -> LinkCopy(share::link) { url -> scope.launch {
@@ -233,11 +236,15 @@ fun NezzelApp(
             } }
             // Two files finishing together each found no other job left: only the later one speaks.
             var lastCompleted: String? = null
+            // Files saved since the last message: one file can be shared from the snackbar, several are a batch.
+            var runSize = 0
             links.downloads?.completed?.collect { job ->
                 lastCompleted = job.jobId
+                runSize++
                 launch {
                     val problem = job.check as? dev.ahmed.savlino.domain.ResultCheck.Problem
                     if (problem != null) {
+                        runSize = 0
                         snackbar.currentSnackbarData?.dismiss()
                         // A problem stays until handled: Try again (kept link) or dismiss.
                         val downloads = links.downloads
@@ -257,15 +264,28 @@ fun NezzelApp(
                     val unfed = setOf(dev.ahmed.savlino.jobs.BatchItemState.WAITING, dev.ahmed.savlino.jobs.BatchItemState.QUEUED)
                     if (playlists.any { batch -> !batch.terminal && batch.items.any { it.jobId != job.jobId && it.state in unfed } }) return@launch
                     if (lastCompleted != job.jobId) return@launch
+                    val run = runSize.also { runSize = 0 }
+                    val uri = job.publishedUri
+                    val choice = uri?.let { dev.ahmed.savlino.sharing.completionAction(run, sharer.targets(job.mimeType)) }
                     snackbar.currentSnackbarData?.dismiss()
                     val saved = context.getString(R.string.saved_snackbar, NezzelFormat.isolate(destinations.publishedFolderName(job.publishedUri)))
+                    val label = when (choice) {
+                        null -> context.getString(R.string.open_file)
+                        dev.ahmed.savlino.sharing.CompletionAction.ViewSaved -> context.getString(R.string.view_saved_files)
+                        is dev.ahmed.savlino.sharing.CompletionAction.Share -> choice.targets.singleOrNull()?.label
+                            ?: context.getString(if (choice.targets.isEmpty()) R.string.share_file else R.string.share_whatsapp)
+                    }
                     val action = snackbar.showSnackbar(
                         DownloadNotifications.checkLine(job.check)?.let { saved + "\n" + context.getString(it) } ?: saved,
-                        context.getString(R.string.open_file), duration = SnackbarDuration.Long)
-                    if(action == SnackbarResult.ActionPerformed) {
-                        try { context.startActivity(DownloadNotifications.openIntent(job)) }
-                        catch (_: android.content.ActivityNotFoundException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
-                        catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
+                        label, duration = SnackbarDuration.Long)
+                    if (action == SnackbarResult.ActionPerformed) when (choice) {
+                        null -> try { context.startActivity(DownloadNotifications.openIntent(job)) }
+                            catch (_: android.content.ActivityNotFoundException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
+                            catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
+                        dev.ahmed.savlino.sharing.CompletionAction.ViewSaved -> links.navigate("Downloads")
+                        is dev.ahmed.savlino.sharing.CompletionAction.Share ->
+                            if (choice.targets.size > 1) shareChoice = job to choice.targets
+                            else if (uri != null) sharer.share(uri, job.mimeType, choice.targets.singleOrNull())
                     }
                 }
             }
@@ -277,7 +297,8 @@ fun NezzelApp(
         val store = links.downloads?.artwork; { id -> store?.load(id) }
     }
     CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline(),
-        dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork) {
+        dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork,
+        dev.ahmed.savlino.sharing.LocalFileSharer provides sharer) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         if (updates != null) AppUpdateSheets(updates, updateState, links, language, notificationRationaleShowing)
@@ -318,6 +339,11 @@ fun NezzelApp(
             }
             if (showOptions) OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
             if (links.multi.visible) dev.ahmed.savlino.ui.MultiLinkSheet(links.multi, language, links::dismissMulti)
+        }
+        shareChoice?.let { (job, targets) ->
+            dev.ahmed.savlino.sharing.ShareTargetsSheet(targets, { target ->
+                job.publishedUri?.let { sharer.share(it, job.mimeType, target) }
+            }) { shareChoice = null }
         }
     }
     }
