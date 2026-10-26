@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.CancellationSignal
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.provider.MediaStore
@@ -15,6 +16,11 @@ import java.security.MessageDigest
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -26,7 +32,7 @@ import kotlinx.coroutines.withContext
  */
 class DocumentStatusLibrary(
     context: Context,
-    private val saveOne: suspend (StatusSaveSource) -> StatusSaveResult,
+    private val copy: suspend (StatusSaveSource, CancellationSignal) -> StatusSaveResult,
     private val grants: StatusGrants = StatusGrants(context),
     private val sdk: Int = Build.VERSION.SDK_INT,
     private val io: CoroutineDispatcher = Dispatchers.IO,
@@ -105,13 +111,26 @@ class DocumentStatusLibrary(
         StatusAccess.Ready(apps, sources, items)
     }
 
-    override suspend fun save(items: List<StatusItem>): List<StatusSaveResult> = items.map { item ->
+    override suspend fun saveOne(item: StatusItem): StatusSaveResult {
         currentCoroutineContext().ensureActive()
-        val result = saveOne(StatusSaveSource(item.uri, item.mimeType, item.sizeBytes, item.lastModifiedMillis))
-        if (result is StatusSaveResult.Saved) withContext(io) {
-            marks.markSaved(DocumentsContract.getDocumentId(item.uri), item.sizeBytes, item.lastModifiedMillis, result.uri)
+        // Cancelling a coroutine can't interrupt a blocked provider query or MediaStore call; the signal can. The copy itself
+        // runs non-cancellable so a file committed just before the cancel still comes back as saved.
+        val signal = CancellationSignal()
+        val watcher = CoroutineScope(currentCoroutineContext()).launch(start = CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { signal.cancel() }
         }
-        result
+        val result = try {
+            // The mark is written in here too: coming back from another dispatcher would drop the result of a cancelled caller.
+            withContext(NonCancellable) {
+                copy(StatusSaveSource(item.uri, item.mimeType, item.sizeBytes, item.lastModifiedMillis), signal).also { result ->
+                    if (result is StatusSaveResult.Saved) withContext(io) {
+                        marks.markSaved(DocumentsContract.getDocumentId(item.uri), item.sizeBytes, item.lastModifiedMillis, result.uri)
+                    }
+                }
+            }
+        } finally { watcher.cancel() }
+        if (result !is StatusSaveResult.Saved) currentCoroutineContext().ensureActive()
+        return result
     }
 
     override suspend fun forget() = withContext(io) { grants.forget() }
@@ -183,7 +202,7 @@ class DocumentStatusLibrary(
             Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED)
 
         fun create(context: Context, saver: StatusSaver): StatusLibrary =
-            DocumentStatusLibrary(context.applicationContext, { saver.save(it) })
+            DocumentStatusLibrary(context.applicationContext, saver::save)
     }
 }
 

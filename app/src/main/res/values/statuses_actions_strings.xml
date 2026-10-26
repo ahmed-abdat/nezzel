@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Statuses tab: saving from the grid, select mode and batch results. -->
+<resources>
+    <string name="statuses_preview">Preview</string>
+    <string name="statuses_select_all">Select all</string>
+    <string name="statuses_clear_selection">Clear</string>
+    <string name="statuses_saving">Saving…</string>
+    <string name="statuses_saving_progress">Saving %1$s of %2$s</string>
+    <string name="statuses_all_saved">All saved</string>
+    <plurals name="statuses_saved_n">
+        <item quantity="one">%1$s saved</item>
+        <item quantity="other">%1$s saved</item>
+    </plurals>
+    <plurals name="statuses_not_saved_n">
+        <item quantity="one">%1$s not saved</item>
+        <item quantity="other">%1$s not saved</item>
+    </plurals>
+</resources>

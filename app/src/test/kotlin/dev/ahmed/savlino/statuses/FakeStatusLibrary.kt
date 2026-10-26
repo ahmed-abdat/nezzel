@@ -7,13 +7,15 @@ import android.net.Uri
 class FakeStatusLibrary(var access: StatusAccess = StatusAccess.NeedsGrant(listOf(APP)),
                         var grant: StatusGrantResult = StatusGrantResult.Granted,
                         var results: (StatusItem) -> StatusSaveResult = { StatusSaveResult.Saved(Uri.parse("content://media/external/file/${it.uri.lastPathSegment}")) }) : StatusLibrary {
-    val saved = mutableListOf<List<StatusItem>>()
+    /** Every file copied, in order. */
+    val saved = mutableListOf<StatusItem>()
+    var readyShown = 0
     val picked = mutableListOf<Uri?>()
     var loads = 0
     var forgotten = false
     /** Set to the access a successful grant moves to. */
     var afterGrant: StatusAccess? = null
-    /** When set, saves wait for it (captures of the saving state). */
+    /** When set, each save waits for it (captures of the saving state). */
     var hold: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 
     override fun grantIntent(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
@@ -23,17 +25,22 @@ class FakeStatusLibrary(var access: StatusAccess = StatusAccess.NeedsGrant(listO
         return grant
     }
     override suspend fun load(): StatusAccess { loads++; return access }
-    override suspend fun save(items: List<StatusItem>): List<StatusSaveResult> {
+    /** Runs before one item's copy (a test can hold just that one). */
+    var gate: suspend (StatusItem) -> Unit = {}
+    /** False: saved files come back unmarked, like a status with unknown size or time. */
+    var marks = true
+    override suspend fun saveOne(item: StatusItem): StatusSaveResult {
         hold?.await()
-        saved += items
-        val out = items.map(results)
+        gate(item)
+        saved += item
+        val out = results(item)
         // Saved items come back marked on the next load, as the real library does.
-        (access as? StatusAccess.Ready)?.let { ready ->
-            val done = items.zip(out).filter { it.second is StatusSaveResult.Saved }.map { it.first.uri }.toSet()
-            access = ready.copy(items = ready.items.map { if (it.uri in done) it.copy(saved = true, isNew = false) else it })
+        if (out is StatusSaveResult.Saved && marks) (access as? StatusAccess.Ready)?.let { ready ->
+            access = ready.copy(items = ready.items.map { if (it.uri == item.uri) it.copy(saved = true, isNew = false) else it })
         }
         return out
     }
+    override fun readyShown() { readyShown++ }
     override suspend fun forget() { forgotten = true }
 
     companion object {
