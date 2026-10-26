@@ -523,7 +523,8 @@ private fun SelectCircle(selected: Boolean, modifier: Modifier) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectionBar(state: StatusesState, language: String) {
-    val count = state.selectedItems.size
+    // Picked ones that are copying now still count as picked.
+    val count = state.selection.size
     Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
         Row(Modifier.fillMaxWidth().windowInsetsPadding(TopAppBarDefaults.windowInsets).heightIn(min = 64.dp).padding(horizontal = Space.xs),
             verticalAlignment = Alignment.CenterVertically) {
@@ -554,7 +555,9 @@ private fun SaveBar(state: StatusesState, language: String) {
                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LinearProgressIndicator(progress = { done.toFloat() / total }, Modifier.fillMaxWidth())
             }
-            Button(onClick = { state.save(state.selectedItems) }, enabled = count > 0, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            // While copies run, the bar is their progress; Save N returns once more statuses are picked.
+            if (!state.saving || count > 0) Button(onClick = { state.save(state.selectedItems) }, enabled = count > 0,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(when {
                     count > 0 -> pluralStringResource(R.plurals.statuses_save_n, count, NezzelFormat.count(count, language))
                     !state.canSelect && !state.saving -> stringResource(R.string.statuses_all_saved)
