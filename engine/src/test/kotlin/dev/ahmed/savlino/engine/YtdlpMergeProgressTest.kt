@@ -26,6 +26,13 @@ class YtdlpMergeProgressTest {
         assertEquals(EngineEvent.Progress(275, Size.Exact(999)), mapper.map("nezzel:a:75:NA:NA"))
     }
 
+    @Test fun aResumeCountsTheStreamThatWasAlreadyDownloaded() {
+        val mapper = YtdlpProgressMapper(2, expected = Size.Exact(300))
+        // yt-dlp skips a finished stream with a "finished" hook that has its size but no downloaded bytes.
+        assertEquals(EngineEvent.Progress(200, Size.Exact(300)), mapper.map("nezzel-v2:v:NA:200:NA:NA:NA"))
+        assertEquals(EngineEvent.Progress(225, Size.Exact(300)), mapper.map("nezzel-v2:a:25:100:NA:NA:NA"))
+    }
+
     @Test fun mergeWithoutExactInspectionTotalKeepsMeasuredTotals() {
         val mapper = YtdlpProgressMapper(2, expected = Size.Estimated(999))
         mapper.map("nezzel:v:200:200:NA")

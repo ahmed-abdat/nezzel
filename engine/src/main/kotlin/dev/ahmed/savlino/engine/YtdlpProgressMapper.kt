@@ -22,7 +22,9 @@ class YtdlpProgressMapper(private val streamCount: Int = 1, private val expected
         // Read numeric fields from the end; format IDs may themselves contain colons.
         val id = fields.dropLast(numericFields).joinToString(":")
         val values = fields.takeLast(numericFields)
-        val bytes = values[0].toLongOrNull()?.takeIf { it >= 0 } ?: return null
+        // A stream yt-dlp skips as already downloaded (a resumed merge) reports only its size: it counts in full.
+        val bytes = values[0].toLongOrNull()?.takeIf { it >= 0 }
+            ?: byteSize(values[1])?.takeIf { values[0] == "NA" } ?: return null
         val total = byteSize(values[1])?.let(Size::Exact)
             ?: byteSize(values[2])?.let(Size::Estimated) ?: Size.Unknown
         val count = values.getOrNull(4)?.toLongOrNull()?.takeIf { it > 0 }
