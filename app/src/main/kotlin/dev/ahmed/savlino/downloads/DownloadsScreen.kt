@@ -139,6 +139,8 @@ fun DownloadsScreen(
     onPlaylistVideoRetry: (String, Int) -> Unit = { _, _ -> },
     /** Finished jobs: the coordinator drops them from [jobs] at once, so their Saved moment comes from here. */
     completed: kotlinx.coroutines.flow.Flow<DownloadProgress>? = null,
+    /** "View files" after a batch: show Saved with every file, whatever tab was remembered. */
+    openSaved: Boolean = false, onSavedShown: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -188,6 +190,15 @@ fun DownloadsScreen(
             viewingUri = null
             if (item != null) open(item)
             onSavedOpened()
+        }
+    }
+    LaunchedEffect(openSaved) {
+        if (openSaved) {
+            filterName = MediaFilter.ALL.name
+            query = ""
+            search = false
+            tab = DownloadsTab.SAVED
+            onSavedShown()
         }
     }
     // The open playlist sheet: its id, and the video to bring into view. The last snapshot keeps it valid if the batch leaves.

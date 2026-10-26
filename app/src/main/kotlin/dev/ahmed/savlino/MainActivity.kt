@@ -63,6 +63,8 @@ class MainActivity : AppCompatActivity() {
 
     internal companion object {
         @androidx.annotation.VisibleForTesting var startupWrites: ((() -> Unit) -> Unit)? = null
+        /** The app whose share entry already decided "seen": a launch before the off-main write lands skips the tour too. */
+        private var seenIn: android.app.Application? = null
     }
 
     override fun attachBaseContext(base: Context) { super.attachBaseContext(AppLocale.attach(base)) }
@@ -75,9 +77,12 @@ class MainActivity : AppCompatActivity() {
         replayingOnboarding = launchShare == null && savedInstanceState?.getBoolean("onboardingReplay") == true
         onboarding = if (launchShare != null) {
             // The decision is made here; only the disk write leaves the main thread before the first frame.
-            if (!preferences.onboardingSeen) offMain { preferences.markOnboardingSeen() }
+            if (!preferences.onboardingSeen) {
+                seenIn = application
+                offMain { preferences.markOnboardingSeen() }
+            }
             false
-        } else replayingOnboarding || preferences.needsOnboarding {
+        } else replayingOnboarding || seenIn !== application && preferences.needsOnboarding {
             // Once-per-install upgrade check, only while onboarding_seen is false.
             dev.ahmed.savlino.jobs.JobStore(this).use { it.all().isNotEmpty() }
         }

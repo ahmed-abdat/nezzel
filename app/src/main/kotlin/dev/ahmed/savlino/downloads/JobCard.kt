@@ -82,15 +82,20 @@ internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List
                                      completed: Flow<DownloadProgress>? = null): List<DownloadProgress> {
     val seen = remember { mutableMapOf<String, DownloadPhase>() }
     val flashing = remember { mutableStateMapOf<String, DownloadProgress>() }
+    // Ids whose end came from [completed]: the list may still hold their last live row for a moment.
+    val ended = remember { mutableSetOf<String>() }
     // The coordinator drops a finished job from its list instead of showing it COMPLETED: its end arrives here.
     LaunchedEffect(completed) {
         completed?.collect { job ->
+            ended += job.jobId
             val before = seen.put(job.jobId, DownloadPhase.COMPLETED)
             if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
                 before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
         }
     }
     jobs.forEach { job ->
+        // A stale live row of a job that already ended must not undo its Saved moment.
+        if (job.jobId in ended && !job.saved) return@forEach
         val before = seen.put(job.jobId, job.phase)
         if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
             before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
@@ -101,7 +106,8 @@ internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List
     }
     if (flashing.isEmpty()) return visible
     val ids = visible.mapTo(HashSet()) { it.jobId }
-    return (flashing.values.filter { it.jobId !in ids } + visible)
+    // A flashing job still listed live shows Saved in its place.
+    return (flashing.values.filter { it.jobId !in ids } + visible.map { flashing[it.jobId] ?: it })
 }
 
 

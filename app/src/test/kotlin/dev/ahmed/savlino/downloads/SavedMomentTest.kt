@@ -85,4 +85,30 @@ class SavedMomentTest {
             }
         }
     }
+
+    /** The end arrives before the coordinator drops the live row; a recomposition in between must not wipe the Saved moment. */
+    @Test fun staleLiveRowAfterCompletionKeepsSaved() {
+        val live = dev.ahmed.savlino.jobs.DownloadProgress("stale", "clip.mp4", dev.ahmed.savlino.jobs.DownloadPhase.DOWNLOADING,
+            bytes = 90, total = dev.ahmed.savlino.domain.Size.Exact(100))
+        val jobs = androidx.compose.runtime.mutableStateOf(listOf(live))
+        val completed = kotlinx.coroutines.flow.MutableSharedFlow<dev.ahmed.savlino.jobs.DownloadProgress>(extraBufferCapacity = 1)
+        renderThemed({ nodes(it) }, {
+            DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {},
+                libraryLoad = LibraryLoadState.Ready(listOf(video)), completed = completed)
+        }) { activity ->
+            val saved = context.getString(R.string.download_saved)
+            fun all() = texts(nodes(activity))
+            waitWhile({ }) { all().none { "clip" in it } }
+            val before = all().count { saved in it }
+            assertTrue(completed.tryEmit(live.copy(phase = dev.ahmed.savlino.jobs.DownloadPhase.COMPLETED, bytes = 100)))
+            waitWhile({ }) { all().count { saved in it } <= before }
+            // Terminal accounting still lists the live row (a fresher byte count) before it is dropped.
+            jobs.value = listOf(live.copy(bytes = 95))
+            nodes(activity)
+            assertTrue("Saved kept over the stale row", all().count { saved in it } > before)
+            jobs.value = emptyList()
+            nodes(activity)
+            assertTrue("Saved kept once the row is dropped", all().count { saved in it } > before)
+        }
+    }
 }

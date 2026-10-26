@@ -145,6 +145,20 @@ class OnboardingTest {
         } finally { MainActivity.startupWrites = null }
     }
 
+    @Test fun aRelaunchBeforeTheSeenWriteLandsSkipsTheTour() {
+        val queued = mutableListOf<() -> Unit>()
+        MainActivity.startupWrites = { queued += it }
+        try {
+            val first = Robolectric.buildActivity(MainActivity::class.java, share("https://example.com/first")).setup()
+            first.pause().stop().destroy()
+            // The writer is held: nothing is on disk yet, but the decision made at the share entry stands.
+            assertFalse(AppPreferences(RuntimeEnvironment.getApplication()).onboardingSeen)
+            withActivity { compose.onNodeWithTag("onboarding").assertDoesNotExist() }
+            queued.forEach { it() }
+            assertTrue(AppPreferences(RuntimeEnvironment.getApplication()).onboardingSeen)
+        } finally { MainActivity.startupWrites = null }
+    }
+
     @Test fun shareDuringTourFinishesItAndOpensOptionsBeforeClipboardIntake() = withActivity { controller ->
         compose.onNodeWithText("Keep what you love").assertIsDisplayed()
         val clipboard = controller.get().getSystemService(ClipboardManager::class.java)
