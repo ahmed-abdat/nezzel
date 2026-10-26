@@ -1303,7 +1303,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
         const r = document.createElement("div"), set = all.slice(i * 5 % all.length).concat(all.slice(0, i * 5 % all.length)).slice(0, len);
         r.className = "amr";
         for (let c = 0; c < fill * 2; c++) set.forEach(a => r.appendChild(appTile(a)));
-        r.style.setProperty("--d", (set.length * fill * (2.6 + (i % 3) * .35)) + "s");
+        r.style.setProperty("--d", (set.length * fill * (4.5 + (i % 3) * .5)) + "s");
         r.style.marginInlineStart = (-(i * pitch * .37) % pitch) + "px";
         tl.appendChild(r);
       }
