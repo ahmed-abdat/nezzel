@@ -29,6 +29,7 @@ class LibraryGridTest {
     private val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
     private val activity get() = controller.get()
     private fun s(id: Int) = activity.getString(id)
+    @org.junit.Before fun bindAudio() { dev.ahmed.savlino.playback.registerAudioServiceBinding() }
     @After fun close() { controller.pause().stop().destroy() }
 
     private fun media(n: Int, name: String, mime: String) = SavedMedia(Uri.parse("content://media/external/downloads/$n"), name,
@@ -82,6 +83,12 @@ class LibraryGridTest {
         assertTrue(opened.isEmpty())
     }
 
+    @Test fun savedFilesOpenWithDurableResume() {
+        val pages = viewerItems(listOf(photos[0], clip, song))
+        assertEquals(3, pages.size)
+        assertTrue(pages.all { it.resumePolicy == dev.ahmed.savlino.playback.ResumePolicy.SAVED })
+        assertEquals(dev.ahmed.savlino.playback.ResumePolicy.SESSION_ONLY, dev.ahmed.savlino.viewer.ViewerItem(clip.uri, true, "video/mp4").resumePolicy)
+    }
     @Test fun audioPlaysInTheViewerNotThePhonePlayer() {
         show(listOf(photos[0], song))
         compose.onAllNodes(hasText("Song", substring = true) and hasClickAction()).onFirst().performClick()

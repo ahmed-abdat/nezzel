@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_loading">Loading…</string>
+    <string name="viewer_file_unavailable">This file is missing or cannot be read.</string>
+    <string name="viewer_playback_unsupported">This format cannot be played on this device.</string>
+    <string name="viewer_playback_failed">Playback failed.</string>
+    <string name="viewer_retry">Retry</string>
+    <string name="viewer_resumed_at">Resumed at %1$s</string>
+    <string name="viewer_start_over">Start over</string>
+    <string name="playback_channel">Audio playback</string>
+    <string name="playback_audio">Audio</string>
+    <string name="playback_stop">Stop</string>
+    <string name="playback_back_10">Back 10 seconds</string>
+    <string name="playback_forward_10">Forward 10 seconds</string>
+</resources>

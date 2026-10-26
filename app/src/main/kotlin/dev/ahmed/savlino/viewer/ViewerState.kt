@@ -19,7 +19,8 @@ import kotlinx.coroutines.withContext
 
 /** One page of the viewer: Downloads and Statuses map their own rows into this. */
 data class ViewerItem(val uri: Uri, val isVideo: Boolean, val mimeType: String, val durationMillis: Long? = null,
-    val isAudio: Boolean = false)
+    val isAudio: Boolean = false,
+    val resumePolicy: dev.ahmed.savlino.playback.ResumePolicy = dev.ahmed.savlino.playback.ResumePolicy.SESSION_ONLY)
 
 /** The tapped item's page; an item that is gone opens the first one. */
 fun viewerStart(items: List<ViewerItem>, uri: Uri): Int = items.indexOfFirst { it.uri == uri }.coerceAtLeast(0)

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_loading">Chargement…</string>
+    <string name="viewer_file_unavailable">Ce fichier est introuvable ou illisible.</string>
+    <string name="viewer_playback_unsupported">Ce format ne peut pas être lu sur cet appareil.</string>
+    <string name="viewer_playback_failed">La lecture a échoué.</string>
+    <string name="viewer_retry">Réessayer</string>
+    <string name="viewer_resumed_at">Reprise à %1$s</string>
+    <string name="viewer_start_over">Recommencer</string>
+    <string name="playback_channel">Lecture audio</string>
+    <string name="playback_audio">Audio</string>
+    <string name="playback_stop">Arrêter</string>
+    <string name="playback_back_10">Reculer de 10 secondes</string>
+    <string name="playback_forward_10">Avancer de 10 secondes</string>
+</resources>

@@ -53,7 +53,8 @@ internal fun gridLines(entries: List<SavedMedia>, columns: Int = 3): List<GridLi
 internal val SavedMedia.inViewer get() = kind == SavedMediaKind.IMAGE || kind == SavedMediaKind.VIDEO || kind == SavedMediaKind.AUDIO
 
 internal fun viewerItems(items: List<SavedMedia>) = items.filter { it.inViewer }
-    .map { ViewerItem(it.uri, it.kind == SavedMediaKind.VIDEO, it.mimeType, it.durationMillis, isAudio = it.kind == SavedMediaKind.AUDIO) }
+    .map { ViewerItem(it.uri, it.kind == SavedMediaKind.VIDEO, it.mimeType, it.durationMillis, isAudio = it.kind == SavedMediaKind.AUDIO,
+        resumePolicy = dev.ahmed.savlino.playback.ResumePolicy.SAVED) } // Saved files remember where you stopped; status copies stay session-only.
 
 /** Grid or list for the current filter, remembered per filter. */
 @Stable
