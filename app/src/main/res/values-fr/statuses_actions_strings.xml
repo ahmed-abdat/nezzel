@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="statuses_preview">Aperçu</string>
+    <string name="statuses_select_all">Tout sélectionner</string>
+    <string name="statuses_clear_selection">Désélectionner</string>
+    <string name="statuses_saving">Enregistrement…</string>
+    <string name="statuses_saving_progress">Enregistrement %1$s sur %2$s</string>
+    <string name="statuses_all_saved">Tout est enregistré</string>
+    <plurals name="statuses_saved_n">
+        <item quantity="one">%1$s enregistré</item>
+        <item quantity="many">%1$s enregistrés</item>
+        <item quantity="other">%1$s enregistrés</item>
+    </plurals>
+    <plurals name="statuses_not_saved_n">
+        <item quantity="one">%1$s non enregistré</item>
+        <item quantity="many">%1$s non enregistrés</item>
+        <item quantity="other">%1$s non enregistrés</item>
+    </plurals>
+</resources>

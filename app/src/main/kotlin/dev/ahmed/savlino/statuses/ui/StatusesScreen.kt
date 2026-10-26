@@ -33,8 +33,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -78,22 +77,6 @@ import dev.ahmed.savlino.viewer.ViewerIntents
 import dev.ahmed.savlino.viewer.ViewerItem
 import dev.ahmed.savlino.viewer.viewerStart
 
-@Composable
-fun rememberStatusesState(library: StatusLibrary?): StatusesState {
-    val scope = rememberCoroutineScope()
-    // The opened account survives rotation and process death; the first load drops it if its folder is gone
-    val saver = Saver<StatusesState, List<String>>(
-        save = { state -> listOf(state.account?.let { "${it.accountIndex}/${it.packageName}" }.orEmpty(), state.filter.name, state.hideSaved.toString()) },
-        restore = { saved ->
-            val opened = saved[0].takeIf { it.isNotEmpty() }?.split('/', limit = 2)?.let { (index, pkg) ->
-                index.toIntOrNull()?.let { StatusSource(pkg, it) }
-            }
-            StatusesState(library, scope, opened).apply { filter = StatusFilter.valueOf(saved[1]); hideSaved = saved[2].toBoolean() }
-        },
-    )
-    return rememberSaveable(library, saver = saver) { StatusesState(library, scope) }
-}
-
 /**
  * The Statuses tab: explainer and one folder grant, then a grid of statuses the person already opened in WhatsApp.
  * Reloads on every resume (statuses expire after about a day); saving is always an explicit tap.
@@ -117,6 +100,8 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
             snapshotFlow { active.value }.collectLatest { if (it && (resumed || state.stale())) { resumed = false; state.refresh() } }
         }
     }
+    // Shown/hidden edges, not disposal: a visited tab stays composed while hidden. A rotation is no edge (the state remembers).
+    LaunchedEffect(state, active) { snapshotFlow { active.value }.collect(state::setActive) }
     LaunchedEffect(state) {
         state.events.collect { event ->
             snackbar.currentSnackbarData?.dismiss()
@@ -130,6 +115,12 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
                     } catch (_: ActivityNotFoundException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
                     catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
                 }
+                is StatusEvent.Batch -> snackbar.showSnackbar(listOfNotNull(
+                    context.resources.getQuantityString(R.plurals.statuses_saved_n, event.saved, NezzelFormat.count(event.saved, language)),
+                    event.notSaved.takeIf { it > 0 }?.let { context.resources.getQuantityString(R.plurals.statuses_not_saved_n, it,
+                        NezzelFormat.count(it, language)) },
+                    context.getString(R.string.download_space_error).takeIf { event.noSpace },
+                ).joinToString(context.getString(R.string.separator)))
                 is StatusEvent.Gone -> snackbar.showSnackbar(context.resources.getQuantityString(R.plurals.statuses_gone, event.count,
                     NezzelFormat.count(event.count, language)))
                 StatusEvent.NoSpace -> snackbar.showSnackbar(context.getString(R.string.download_space_error))
@@ -138,17 +129,17 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
             }
         }
     }
-    BackHandler(state.selecting) { state.clearSelection() }
+    BackHandler(state.selecting) { state.exitSelect() }
     BackHandler(!state.selecting && state.selectedAccount != null) { state.closeAccount() }
     Scaffold(
         topBar = {
             val ready = state.access as? StatusAccess.Ready
             val opened = state.selectedAccount
-            if (state.selecting) SelectionBar(state.selection.size, language, state::clearSelection)
+            if (state.selecting) SelectionBar(state, language)
             else if (ready != null && opened != null) AccountBar(state, ready, opened, media, language)
-            else ScreenHeader(stringResource(R.string.statuses_tab))
+            else ScreenHeader(stringResource(R.string.statuses_tab)) { if (ready != null) SelectAction(state) }
         },
-        bottomBar = { if (state.selecting) SaveBar(state.selection.size, language, state.saving) { state.save(state.selectedItems) } },
+        bottomBar = { if (state.selecting) SaveBar(state, language) },
         snackbarHost = { SnackbarHost(snackbar) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
@@ -248,7 +239,9 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
     val items = state.visible
     val scroll = rememberLazyGridState()
     ScrollOnTabReselect { scroll.scrollToItem(0) }
-    LazyVerticalGrid(GridCells.Fixed(3), Modifier.widthIn(max = 720.dp).fillMaxSize(), state = scroll,
+    // Columns follow the text size: three at 100%, two from about 130%, so Save stays whole in every language.
+    val columns = 104.dp * (1f + (LocalDensity.current.fontScale - 1f).coerceIn(0f, 1f) * .6f)
+    LazyVerticalGrid(GridCells.Adaptive(columns), Modifier.widthIn(max = 720.dp).fillMaxSize(), state = scroll,
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.l),
         horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
         if (state.showFilters || state.showHideSaved) item(key = "chips", span = { GridItemSpan(maxLineSpan) }) {
@@ -272,8 +265,9 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
             }
         }
         items(items, key = { it.uri.toString() }, contentType = { "status" }) { item ->
-            StatusTile(item, media, state.selecting, item.uri in state.selection,
-                onClick = { if (state.selecting) state.toggle(item) else state.openPreview(item) }, onLongClick = { state.toggle(item) })
+            StatusTile(item, media, state.selecting, item.uri in state.selection, item.uri in state.pending,
+                onClick = { if (state.selecting) state.toggle(item) else state.openPreview(item) }, onLongClick = { state.toggle(item) },
+                onSave = { state.save(listOf(item)) })
         }
     }
 }
@@ -386,6 +380,15 @@ private fun AccountBar(state: StatusesState, access: StatusAccess.Ready, source:
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
+        SelectAction(state)
+    }
+}
+
+/** The visible way into select mode; long press on a tile is the shortcut. Only while something can still be saved. */
+@Composable
+private fun SelectAction(state: StatusesState) {
+    if (state.canSelect) TextButton(onClick = state::enterSelect, modifier = Modifier.heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.statuses_select))
     }
 }
 
@@ -409,42 +412,68 @@ private fun describe(item: StatusItem, duration: Long?): String = listOfNotNull(
     stringResource(R.string.statuses_new).takeIf { item.isNew },
 ).joinToString(stringResource(R.string.separator))
 
+/**
+ * One status: the picture previews on tap (picks in select mode) and Save is its own touch target on the picture's
+ * corner, so saving needs no preview. Save, then Saving, then Saved.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean, selected: Boolean, saving: Boolean,
+                       onClick: () -> Unit, onLongClick: () -> Unit, onSave: () -> Unit) {
     val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 320)) { media.thumbnail(item, 320) }
     val duration = rememberDuration(item, media)
     val description = describe(item, duration)
     val shape = MaterialTheme.shapes.small
     val primary = MaterialTheme.colorScheme.primary
-    Box(Modifier.aspectRatio(9f / 14f).clip(shape)
-        .then(if (selected) Modifier.border(3.dp, primary, shape) else Modifier)
-        .combinedClickable(onClickLabel = stringResource(if (selecting) R.string.statuses_select else R.string.statuses_save),
-            onLongClickLabel = stringResource(R.string.statuses_select), onLongClick = onLongClick, onClick = onClick)
-        .semantics(mergeDescendants = true) {
-            contentDescription = description
-            if (selecting) this.selected = selected
-        }) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.secondaryContainer) {
-            val loaded = thumb
-            if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else Box(contentAlignment = Alignment.Center) {
-                if (item.isVideo) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
+    val pickable = !item.saved && !saving
+    Box(Modifier.aspectRatio(9f / 14f)) {
+        Box(Modifier.fillMaxSize().clip(shape)
+            .then(if (selected) Modifier.border(3.dp, primary, shape) else Modifier)
+            .combinedClickable(onClickLabel = stringResource(if (selecting) R.string.statuses_select else R.string.statuses_preview),
+                onLongClickLabel = stringResource(R.string.statuses_select).takeIf { pickable },
+                onLongClick = onLongClick.takeIf { pickable }, onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                if (selecting && pickable) this.selected = selected
+            }) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.secondaryContainer) {
+                val loaded = thumb
+                if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Box(contentAlignment = Alignment.Center) {
+                    if (item.isVideo) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
+                }
+            }
+            // Marks: new at top-start, the selection circle at top-end, duration at bottom-start.
+            if (item.isNew && !selecting) Box(Modifier.align(Alignment.TopStart).padding(Space.s).size(12.dp).clip(CircleShape)
+                .background(Color.White).padding(2.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+            if (selecting && pickable) SelectCircle(selected, Modifier.align(Alignment.TopEnd).padding(Space.xs))
+            duration?.let {
+                TileLabel(Modifier.align(Alignment.BottomStart)) {
+                    Text(NezzelFormat.duration(it / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+                }
+            }
+            // A saved mark on the picture (an icon and a word, never a check circle, so it can't read as selected).
+            if (item.saved) TileLabel(Modifier.align(Alignment.BottomEnd).testTag("status-saved")) {
+                Icon(painterResource(R.drawable.ic_download_done), null, Modifier.size(12.dp))
+                Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
-        // Marks: new at top-start, the selection circle at top-end; along the bottom, duration then "Saved" as a dark
-        // label (an icon and a word, never a check circle, so it can't read as selected).
-        if (item.isNew && !selecting) Box(Modifier.align(Alignment.TopStart).padding(Space.s).size(12.dp).clip(CircleShape)
-            .background(Color.White).padding(2.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
-        if (selecting) SelectCircle(selected, Modifier.align(Alignment.TopEnd).padding(Space.xs))
-        duration?.let {
-            TileLabel(Modifier.align(Alignment.BottomStart)) {
-                Text(NezzelFormat.duration(it / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+        if (!item.saved) CornerSave(saving, onSave, Modifier.align(Alignment.BottomEnd))
+    }
+}
+
+/** Save: a round button on the picture's bottom-end corner, 48dp to touch. */
+@Composable
+private fun CornerSave(saving: Boolean, onSave: () -> Unit, modifier: Modifier) {
+    val label = stringResource(if (saving) R.string.statuses_saving else R.string.statuses_save)
+    Box(modifier.size(48.dp).clickable(enabled = !saving, role = Role.Button, onClick = onSave)
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Surface(Modifier.size(36.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer, shadowElevation = 2.dp) {
+            Box(contentAlignment = Alignment.Center) {
+                if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+                else Icon(painterResource(R.drawable.ic_download), null, Modifier.size(20.dp))
             }
-        }
-        if (item.saved) TileLabel(Modifier.align(Alignment.BottomEnd).testTag("status-saved")) {
-            Icon(painterResource(R.drawable.ic_download_done), null, Modifier.size(12.dp))
-            Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelSmall, maxLines = 1)
         }
     }
 }
@@ -468,35 +497,53 @@ private fun SelectCircle(selected: Boolean, modifier: Modifier) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectionBar(count: Int, language: String, onClose: () -> Unit) {
+private fun SelectionBar(state: StatusesState, language: String) {
+    // Picked ones that are copying now still count as picked.
+    val count = state.selection.size
     Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
         Row(Modifier.fillMaxWidth().windowInsetsPadding(TopAppBarDefaults.windowInsets).heightIn(min = 64.dp).padding(horizontal = Space.xs),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.saved_selection_close)) }
+            IconButton(onClick = state::exitSelect, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.saved_selection_close)) }
             Text(pluralStringResource(R.plurals.saved_selected, count, NezzelFormat.count(count, language)),
                 Modifier.weight(1f).padding(vertical = Space.s).semantics { heading(); liveRegion = LiveRegionMode.Polite },
-                style = MaterialTheme.typography.titleLarge)
+                style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Select all covers what is shown here: this account and filter, not saved yet.
+            if (state.allSelected) TextButton(onClick = state::clearSelection, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.statuses_clear_selection))
+            } else if (state.canSelect) TextButton(onClick = state::selectAll, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.statuses_select_all))
+            }
         }
     }
 }
 
+/** Save N, with the real count done while copies run. */
 @Composable
-private fun SaveBar(count: Int, language: String, saving: Boolean, onSave: () -> Unit) {
+private fun SaveBar(state: StatusesState, language: String) {
+    val count = state.selectedItems.size
     Surface(color = MaterialTheme.colorScheme.surface) {
-        SaveButton(pluralStringResource(R.plurals.statuses_save_n, count, NezzelFormat.count(count, language)), saving, onSave,
-            Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.s))
+        Column(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            val (done, total) = state.progress
+            if (state.saving && total > 0) {
+                Text(stringResource(R.string.statuses_saving_progress, NezzelFormat.count((done + 1).coerceAtMost(total), language),
+                    NezzelFormat.count(total, language)), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LinearProgressIndicator(progress = { done.toFloat() / total }, Modifier.fillMaxWidth())
+            }
+            // While copies run, the bar is their progress; Save N returns once more statuses are picked.
+            if (!state.saving || count > 0) Button(onClick = { state.save(state.selectedItems) }, enabled = count > 0,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(when {
+                    count > 0 -> pluralStringResource(R.plurals.statuses_save_n, count, NezzelFormat.count(count, language))
+                    !state.canSelect && !state.saving -> stringResource(R.string.statuses_all_saved)
+                    else -> stringResource(R.string.statuses_save)
+                })
+            }
+        }
     }
 }
 
-@Composable
-private fun SaveButton(label: String, saving: Boolean, onSave: () -> Unit, modifier: Modifier) {
-    Button(onClick = onSave, enabled = !saving, modifier = modifier.heightIn(min = 48.dp)) {
-        if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
-        else Text(label)
-    }
-}
-
-/** The shared swipe viewer over the open account's current filter; Save sits in its top bar and copies nothing until tapped. */
+/** The shared swipe viewer over the open account's current filter; Save sits in its top bar, and the viewer stays on the page after it. */
 @Composable
 private fun StatusViewer(state: StatusesState, opened: StatusItem, media: StatusMedia, language: String) {
     val context = LocalContext.current
@@ -512,13 +559,18 @@ private fun StatusViewer(state: StatusesState, opened: StatusItem, media: Status
         MediaViewer(pages, start, language, onClose = state::closePreview,
             onShare = { launch(ViewerIntents.share(it)) }, onOpenWith = { launch(ViewerIntents.openWith(it)) }) { page ->
             val item = items.firstOrNull { it.uri == page.uri } ?: return@MediaViewer
+            val saving = item.uri in state.pending
             if (item.saved) Row(Modifier.heightIn(min = 48.dp).padding(horizontal = Space.s).semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primaryContainer)
                 Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelLarge)
-            } else TextButton(onClick = { state.save(listOf(item)) }, enabled = !state.saving, modifier = Modifier.heightIn(min = 48.dp),
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
-                Text(stringResource(R.string.statuses_save))
+            } else TextButton(onClick = { state.save(listOf(item)) }, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White, disabledContentColor = Color.White.copy(alpha = .8f))) {
+                if (saving) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+                    Spacer(Modifier.width(Space.xs))
+                }
+                Text(stringResource(if (saving) R.string.statuses_saving else R.string.statuses_save))
             }
         }
     }

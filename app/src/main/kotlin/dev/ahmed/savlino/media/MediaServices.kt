@@ -11,6 +11,7 @@ import dev.ahmed.savlino.engine.mediahttp.MediaHttpClient
 import dev.ahmed.savlino.engine.mediahttp.ShortLinkResolver
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
 import dev.ahmed.savlino.engine.mediaimage.*
+import dev.ahmed.savlino.statuses.counted
 import dev.ahmed.savlino.storage.DestinationPublisher
 import dev.ahmed.savlino.storage.SaveDestination
 import dev.ahmed.savlino.storage.SaveDestinations
@@ -42,13 +43,7 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
     private val statusSaver = dev.ahmed.savlino.statuses.StatusSaver(context)
     /** Statuses tab storage: one READ-only folder grant; created on first use. */
     val statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary by lazy {
-        val library = dev.ahmed.savlino.statuses.DocumentStatusLibrary.create(context, statusSaver)
-        object : dev.ahmed.savlino.statuses.StatusLibrary by library {
-            override suspend fun save(items: List<dev.ahmed.savlino.statuses.StatusItem>) = library.save(items).also { results ->
-                results.filterIsInstance<dev.ahmed.savlino.statuses.StatusSaveResult.Saved>()
-                    .forEach { _ -> usage.count(dev.ahmed.savlino.usage.UsageKeys.STATUSES_SAVED) }
-            }
-        }
+        dev.ahmed.savlino.statuses.DocumentStatusLibrary.create(context, statusSaver).counted(usage::count)
     }
     val saver: ImageSaver = run {
         val destinations = SaveDestinations(context)

@@ -17,7 +17,12 @@ import android.provider.DocumentsContract.Document
 import android.provider.MediaStore
 import java.io.File
 import java.io.FileNotFoundException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -62,7 +67,7 @@ class DocumentStatusLibraryTest {
         }
     }
 
-    private fun library() = DocumentStatusLibrary(app, { saveCalls += it; saveAnswer(it) })
+    private fun library() = DocumentStatusLibrary(app, { source, _ -> saveCalls += source; saveAnswer(source) })
     private fun install(name: String, label: String) = shadowOf(app.packageManager).installPackage(PackageInfo().apply {
         packageName = name
         applicationInfo = ApplicationInfo().apply { packageName = name; nonLocalizedLabel = label; enabled = true }
@@ -268,6 +273,46 @@ class DocumentStatusLibraryTest {
         // Same name, new content: a different status, not saved.
         File(root, "$wa/accounts/1001/Media/.Statuses/b.mp4").setLastModified(9_100)
         assertFalse(ready(library().load()).items.first().saved)
+    }
+
+    @Test fun cancellingASaveStopsTheBlockedCopyThroughItsSignalAndMarksNothing() = runBlocking {
+        seedPhone()
+        val started = CompletableDeferred<Unit>()
+        var signalled = false
+        // Like a provider query stuck on I/O: only the CancellationSignal gets it out.
+        val library = DocumentStatusLibrary(app, { _, signal -> withContext(Dispatchers.IO) {
+            started.complete(Unit)
+            while (!signal.isCanceled) Thread.sleep(5)
+            signalled = true
+            StatusSaveResult.Cancelled
+        } })
+        library.onPicked(tree("Android/media"))
+        val item = ready(library.load()).items.first()
+        var result: StatusSaveResult? = null
+        val job = launch(Dispatchers.Default) { result = library.saveOne(item) }
+        withTimeout(5_000) { started.await() }
+        job.cancel()
+        withTimeout(5_000) { job.join() }
+        assertTrue(signalled)
+        assertNull("a cancelled caller gets the cancellation, not a result", result)
+        assertFalse(ready(library.load()).items.first().saved)
+    }
+
+    @Test fun aCopyCommittedJustAsTheCancelCameStaysSaved() = runBlocking {
+        seedPhone()
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val library = DocumentStatusLibrary(app, { _, _ -> started.complete(Unit); release.await(); StatusSaveResult.Saved(savedUri()) })
+        library.onPicked(tree("Android/media"))
+        val item = ready(library.load()).items.first()
+        var result: StatusSaveResult? = null
+        val job = launch(Dispatchers.Default) { result = library.saveOne(item) }
+        withTimeout(5_000) { started.await() }
+        job.cancel()
+        release.complete(Unit)
+        withTimeout(5_000) { job.join() }
+        assertEquals(StatusSaveResult.Saved(savedUri()), result)
+        assertTrue(ready(library.load()).items.first().saved)
     }
 
     @Test fun deletedSavedFileClearsBadgeAndPrunesMarkOnNextLoad() = runBlocking {

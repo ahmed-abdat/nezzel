@@ -54,6 +54,8 @@ class StatusesScreenTest {
         compose.waitForIdle()
     }
 
+    private fun viewerSave() = hasText(s(R.string.statuses_save)) and hasClickAction() and hasAnyAncestor(isDialog())
+    private fun gridSaves() = hasContentDescription(s(R.string.statuses_save)) and hasClickAction() and !hasAnyAncestor(isDialog())
     private fun tiles(kind: Int) = compose.onAllNodes(hasContentDescription(s(kind), substring = true) and hasClickAction())
 
     @Test fun grantScreenShowsFoundAppsOneButtonAndOpensThePicker() {
@@ -198,9 +200,9 @@ class StatusesScreenTest {
         compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 2, "2"))
             .assertHeightIsAtLeast(48.dp).performClick()
         compose.waitForIdle()
-        assertEquals(2, library.saved.single().size)
-        compose.onNodeWithText(s(R.string.statuses_saved)).assertExists()
-        compose.onNodeWithText(s(R.string.open_file)).assertExists()
+        assertEquals(2, library.saved.size)
+        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_saved_n, 2, "2")).assertExists()
+        compose.onNodeWithText(s(R.string.saved_selection_close)).assertDoesNotExist()
     }
 
     @Test fun closingOrSavingInTheViewerStaysInTheOpenedAccount() {
@@ -221,9 +223,11 @@ class StatusesScreenTest {
         tiles(R.string.statuses_video).assertCountEquals(2)
         tiles(R.string.statuses_video).onFirst().performClick()
         compose.waitForIdle()
-        compose.onAllNodes(hasText(s(R.string.statuses_save)) and hasClickAction()).onLast().performClick()
+        compose.onNode(viewerSave()).performClick()
         compose.waitForIdle()
-        assertEquals(1, library.saved.single().size)
+        assertEquals(1, library.saved.size)
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).performClick()
+        compose.waitForIdle()
         tiles(R.string.statuses_video).assertCountEquals(2)
     }
 
@@ -232,10 +236,13 @@ class StatusesScreenTest {
         show(library)
         tiles(R.string.statuses_photo).onFirst().performClick()
         compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertExists()
-        compose.onAllNodes(hasText(s(R.string.statuses_save)) and hasClickAction()).onLast().performClick()
+        compose.onNode(viewerSave()).performClick()
         compose.waitForIdle()
-        assertEquals(1, library.saved.single().size)
-        assertFalse(library.saved.single().single().isVideo)
+        assertEquals(1, library.saved.size)
+        assertFalse(library.saved.single().isVideo)
+        // The viewer stays on the same status and says it is saved.
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertExists()
+        compose.onNode(hasText(s(R.string.statuses_saved)) and hasAnyAncestor(isDialog())).assertExists()
     }
 
     @Test fun viewerSwipesWithinTheFilterAndSaveMarksTheStatusSaved() {
@@ -251,13 +258,107 @@ class StatusesScreenTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "2", "4")).assertIsDisplayed()
         // The second photo is already saved: no Save button there, only the mark.
-        compose.onAllNodes(hasText(s(R.string.statuses_save)) and hasClickAction()).assertCountEquals(0)
+        compose.onAllNodes(viewerSave()).assertCountEquals(0)
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_image_n, "2", "4")).performTouchInput { swipeLeft() }
         compose.waitForIdle()
-        compose.onNode(hasText(s(R.string.statuses_save)) and hasClickAction()).performClick()
+        compose.onNode(viewerSave()).performClick()
         compose.waitForIdle()
-        assertEquals("status-7", library.saved.single().single().uri.lastPathSegment)
-        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertDoesNotExist()
+        assertEquals("status-7", library.saved.single().uri.lastPathSegment)
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertExists()
         compose.onNodeWithText(s(R.string.open_file)).assertExists()
+    }
+
+    @Test fun saveOnATileSavesWithoutAPreviewAndTheTileSaysSaved() {
+        val library = FakeStatusLibrary(ready())
+        show(library)
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(3)
+        compose.onAllNodes(gridSaves()).onFirst().assertHeightIsAtLeast(48.dp).performClick()
+        compose.waitForIdle()
+        assertEquals("status-1", library.saved.single().uri.lastPathSegment)
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertDoesNotExist()
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(4)
+    }
+
+    @Test fun talkBackSaysPreviewOnThePictureAndSaveOnItsOwnButton() {
+        show(FakeStatusLibrary(ready()))
+        val picture = tiles(R.string.statuses_video).onFirst().fetchSemanticsNode()
+        assertEquals(s(R.string.statuses_preview), picture.config[androidx.compose.ui.semantics.SemanticsActions.OnClick].label)
+        assertEquals(s(R.string.statuses_select), picture.config[androidx.compose.ui.semantics.SemanticsActions.OnLongClick].label)
+        compose.onAllNodes(gridSaves()).assertCountEquals(6)
+    }
+
+    @Test fun theCornerVariantSavesWithoutAPreviewToo() {
+        val library = FakeStatusLibrary(ready())
+        activity.setContent {
+            NezzelTheme(ThemePref.Light, false) {
+                CompositionLocalProvider(LocalStatusMedia provides media) {
+                    StatusesScreen(library, "en")
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onAllNodes(hasContentDescription(s(R.string.statuses_save)) and hasClickAction()).onFirst()
+            .assertHeightIsAtLeast(48.dp).performClick()
+        compose.waitForIdle()
+        assertEquals(1, library.saved.size)
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertDoesNotExist()
+    }
+
+    @Test fun visibleSelectThenSelectAllSavesEveryUnsavedStatusShown() {
+        val library = FakeStatusLibrary(ready())
+        show(library)
+        compose.onNode(hasText(s(R.string.statuses_select)) and hasClickAction()).assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithText(s(R.string.statuses_select_all)).performClick()
+        compose.onNodeWithText(s(R.string.statuses_clear_selection)).assertExists()
+        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 6, "6")).performClick()
+        compose.waitForIdle()
+        assertEquals(6, library.saved.size)
+        assertTrue(library.saved.none { it.saved })
+    }
+
+    @Test fun aRotationDoesNotStopTheCopy() {
+        val library = FakeStatusLibrary(ready()).apply { hold = kotlinx.coroutines.CompletableDeferred() }
+        show(library)
+        compose.onAllNodes(gridSaves()).onFirst().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(s(R.string.statuses_saving)).assertExists()
+        controller.recreate()
+        show(library)
+        library.hold!!.complete(Unit)
+        compose.waitUntil(5000) { library.saved.size == 1 }
+        compose.waitForIdle()
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(4)
+    }
+
+    @Test fun switchingTabsStopsTheCopy() {
+        val library = FakeStatusLibrary(ready()).apply { hold = kotlinx.coroutines.CompletableDeferred() }
+        var route by mutableStateOf("Statuses")
+        activity.setContent {
+            NezzelTheme(ThemePref.Light, false) {
+                CompositionLocalProvider(LocalStatusMedia provides media) {
+                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Statuses") StatusesScreen(library, "en") else androidx.compose.material3.Text(it) }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onAllNodes(gridSaves()).onFirst().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { route = "Home" }
+        compose.waitForIdle()
+        library.hold!!.complete(Unit)
+        compose.runOnIdle { route = "Statuses" }
+        compose.waitForIdle()
+        assertEquals(0, library.saved.size)
+        compose.onNodeWithText(s(R.string.statuses_saving)).assertDoesNotExist()
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(3)
+    }
+
+    @Config(fontScale = 2f)
+    @Test fun twiceTheTextSizeDropsToTwoColumns() {
+        show(FakeStatusLibrary(ready()))
+        val first = tiles(R.string.statuses_video).onFirst().fetchSemanticsNode().boundsInRoot
+        val width = activity.resources.displayMetrics.widthPixels
+        assertTrue("two columns: each picture is wider than a third", first.width > width / 3f)
+        compose.onAllNodes(gridSaves()).onFirst().assertHeightIsAtLeast(48.dp)
     }
 }

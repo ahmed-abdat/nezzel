@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="statuses_preview">معاينة</string>
+    <string name="statuses_select_all">تحديد الكل</string>
+    <string name="statuses_clear_selection">إلغاء التحديد</string>
+    <string name="statuses_saving">جارٍ الحفظ…</string>
+    <string name="statuses_saving_progress">جارٍ حفظ %1$s من %2$s</string>
+    <string name="statuses_all_saved">كلها محفوظة</string>
+    <plurals name="statuses_saved_n">
+        <item quantity="zero">لم تُحفظ أي حالة</item>
+        <item quantity="one">حُفظت حالة واحدة</item>
+        <item quantity="two">حُفظت حالتان</item>
+        <item quantity="few">حُفظت %1$s حالات</item>
+        <item quantity="many">حُفظت %1$s حالة</item>
+        <item quantity="other">حُفظت %1$s حالة</item>
+    </plurals>
+    <plurals name="statuses_not_saved_n">
+        <item quantity="zero">لا شيء تعذّر حفظه</item>
+        <item quantity="one">تعذّر حفظ حالة واحدة</item>
+        <item quantity="two">تعذّر حفظ حالتين</item>
+        <item quantity="few">تعذّر حفظ %1$s حالات</item>
+        <item quantity="many">تعذّر حفظ %1$s حالة</item>
+        <item quantity="other">تعذّر حفظ %1$s حالة</item>
+    </plurals>
+</resources>

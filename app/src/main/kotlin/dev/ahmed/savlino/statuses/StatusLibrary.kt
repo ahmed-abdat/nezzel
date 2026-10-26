@@ -2,6 +2,7 @@ package dev.ahmed.savlino.statuses
 
 import android.content.Intent
 import android.net.Uri
+import dev.ahmed.savlino.usage.UsageKeys
 
 /** An installed WhatsApp-family app; the label and icon come from PackageManager. */
 data class StatusApp(val packageName: String, val label: String)
@@ -41,8 +42,28 @@ interface StatusLibrary {
     fun grantIntent(): Intent
     suspend fun onPicked(tree: Uri?): StatusGrantResult
     suspend fun load(): StatusAccess
-    /** Saves serially; results keep the input order. Saved items are marked for later loads. */
-    suspend fun save(items: List<StatusItem>): List<StatusSaveResult>
+    /**
+     * Copies one status; cancelling the caller stops provider and MediaStore work. A committed copy stays [StatusSaveResult.Saved]
+     * even when the cancel came late, and is marked for later loads; otherwise a cancelled caller gets the cancellation.
+     */
+    suspend fun saveOne(item: StatusItem): StatusSaveResult
+    /** The tab showed at least one unsaved status in this visit (counts only). */
+    fun readyShown() {}
     /** Releases the grant. */
     suspend fun forget()
+}
+
+/** Saves serially; results keep the input order. */
+suspend fun StatusLibrary.save(items: List<StatusItem>): List<StatusSaveResult> = items.map { saveOne(it) }
+
+/** Help-improve counts per file, the moment each copy ends: saved, or not saved (failed, gone, no space). Cancelling counts nothing. */
+fun StatusLibrary.counted(count: (String) -> Unit): StatusLibrary = object : StatusLibrary by this {
+    override suspend fun saveOne(item: StatusItem) = this@counted.saveOne(item).also { result ->
+        when (result) {
+            is StatusSaveResult.Saved -> count(UsageKeys.STATUSES_SAVED)
+            StatusSaveResult.Failed, StatusSaveResult.Gone, StatusSaveResult.NoSpace -> count(UsageKeys.STATUSES_SAVE_FAILED)
+            StatusSaveResult.Cancelled -> Unit
+        }
+    }
+    override fun readyShown() = count(UsageKeys.STATUSES_READY)
 }

@@ -9,6 +9,8 @@ import dev.ahmed.savlino.statuses.FakeStatusLibrary.Companion.ready
 import dev.ahmed.savlino.statuses.StatusAccess
 import dev.ahmed.savlino.statuses.StatusGrantResult
 import dev.ahmed.savlino.statuses.StatusSaveResult
+import dev.ahmed.savlino.statuses.counted
+import dev.ahmed.savlino.usage.UsageKeys
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -107,22 +109,140 @@ class StatusesStateTest {
         assertTrue(gone.showAccountList)
     }
 
-    @Test fun savingReportsSavedAndGoneThenReloadsMarks() = runTest {
+    @Test fun aPartlyFailedBatchKeepsTheFailedPickedAndSaysBothCounts() = runTest {
         val items = mixed()
         val library = FakeStatusLibrary(ready(items))
         library.results = { if (it == items[1]) StatusSaveResult.Gone else StatusSaveResult.Saved(android.net.Uri.parse("content://media/1")) }
         val state = loaded(library)
-        state.toggle(items[0]); state.toggle(items[1])
+        state.toggle(items[0]); state.toggle(items[1]); state.toggle(items[2])
         assertTrue(state.selecting)
+        state.preview = items[0]
         state.save(state.selectedItems)
         advanceUntilIdle()
-        val events = state.events.take(2).toList()
-        assertTrue(events[0] is StatusEvent.Saved)
-        assertEquals(StatusEvent.Gone(1), events[1])
-        assertEquals(listOf(items[0], items[1]), library.saved.single())
-        assertFalse(state.selecting)
+        assertEquals(StatusEvent.Batch(saved = 2, notSaved = 1), state.events.first())
+        assertEquals(listOf(items[0], items[1], items[2]), library.saved)
+        assertEquals("the one that didn't save stays picked", setOf(items[1].uri), state.selection)
+        assertTrue(state.selecting)
         assertFalse(state.saving)
+        assertEquals("the preview stays open", items[0].uri, state.preview?.uri)
         assertTrue("the reload shows the saved mark", (state.access as StatusAccess.Ready).items.first { it.uri == items[0].uri }.saved)
+    }
+
+    @Test fun oneSavedFileCanBeOpenedAndAFullBatchClosesSelectMode() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items))
+        val state = loaded(library)
+        state.save(listOf(items[0])); advanceUntilIdle()
+        assertTrue(state.events.first() is StatusEvent.Saved)
+        state.toggle(items[1]); state.toggle(items[4])
+        state.save(state.selectedItems); advanceUntilIdle()
+        assertEquals(StatusEvent.Batch(saved = 2, notSaved = 0), state.events.first())
+        assertFalse(state.selecting)
+    }
+
+    @Test fun savedAndQueuedStatusesAreNeverCopiedTwice() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items)).apply { hold = kotlinx.coroutines.CompletableDeferred() }
+        val state = loaded(library)
+        // items[3] is already saved; items[0] is tapped three times while the first copy waits.
+        state.save(listOf(items[0], items[3]))
+        state.save(listOf(items[0]))
+        state.save(listOf(items[0], items[0], items[4]))
+        advanceUntilIdle()
+        assertEquals(setOf(items[0].uri, items[4].uri), state.pending)
+        assertEquals(0 to 2, state.progress)
+        library.hold!!.complete(Unit); advanceUntilIdle()
+        assertEquals(listOf(items[0], items[4]), library.saved)
+        state.save(listOf(items[0])); advanceUntilIdle()
+        assertEquals("a saved status is skipped", 2, library.saved.size)
+    }
+
+    @Test fun copiesRunOneAtATime() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items))
+        var running = 0; var most = 0
+        library.gate = { running++; most = maxOf(most, running); kotlinx.coroutines.yield(); running-- }
+        val state = loaded(library)
+        state.save(listOf(items[0], items[1])); state.save(listOf(items[2])); state.save(listOf(items[4]))
+        advanceUntilIdle()
+        assertEquals(1, most)
+        assertEquals(listOf(items[0], items[1], items[2], items[4]), library.saved)
+    }
+
+    @Test fun aStatusWithoutALastingMarkStillShowsSavedThisSession() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items)).apply { marks = false }
+        val state = loaded(library)
+        state.preview = items[0]
+        state.save(listOf(items[0])); advanceUntilIdle()
+        assertTrue(state.visible.first { it.uri == items[0].uri }.saved)
+        assertTrue(state.previewItems.first { it.uri == items[0].uri }.saved)
+        state.save(listOf(items[0])); advanceUntilIdle()
+        assertEquals(1, library.saved.size)
+    }
+
+    @Test fun selectAllTakesOnlyWhatIsShownAndAFilterChangeDropsTheRest() = runTest {
+        val items = mixed(MAIN) + mixed(SECOND, offset = 9)
+        val library = FakeStatusLibrary(ready(items))
+        val state = loaded(library)
+        state.open(MAIN)
+        state.enterSelect()
+        assertTrue(state.selecting)
+        assertTrue(state.selection.isEmpty())
+        state.selectAll()
+        // This account, not saved: 6 of its 9.
+        assertEquals(items.take(9).filter { !it.saved }.map { it.uri }.toSet(), state.selection)
+        assertTrue(state.allSelected)
+        state.filter = StatusFilter.PHOTOS
+        assertEquals(listOf(items[1], items[6]).map { it.uri }.toSet(), state.selection)
+        state.save(state.selectedItems); advanceUntilIdle()
+        assertEquals(listOf(items[1], items[6]), library.saved)
+        state.clearSelection()
+        assertTrue(state.selection.isEmpty())
+    }
+
+    @Test fun savedOrSavingStatusesCanNotBePicked() = runTest {
+        val items = mixed()
+        val state = loaded(FakeStatusLibrary(ready(items)))
+        state.toggle(items[3])
+        assertTrue(state.selection.isEmpty())
+    }
+
+    @Test fun leavingTheTabStopsUnfinishedCopiesAndCountsStayPerFile() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items))
+        val stop = kotlinx.coroutines.CompletableDeferred<Unit>()
+        library.gate = { if (it == items[1]) stop.await() }
+        val counts = mutableListOf<String>()
+        val state = StatusesState(library.counted(counts::add), this).also { it.refresh(); advanceUntilIdle() }
+        state.setActive(true)
+        counts.clear()
+        state.toggle(items[0]); state.toggle(items[1]); state.toggle(items[2])
+        state.save(state.selectedItems); advanceUntilIdle()
+        assertEquals("the first file counts the moment it is saved", listOf(UsageKeys.STATUSES_SAVED), counts)
+        state.setActive(false); advanceUntilIdle()
+        assertFalse(state.saving)
+        assertFalse("leaving closes select mode", state.selecting)
+        assertEquals(listOf(items[0]), library.saved)
+        assertEquals("a cancel is not a failure", listOf(UsageKeys.STATUSES_SAVED), counts)
+    }
+
+    @Test fun readyCountsOncePerVisitWhenSomethingIsLeftToSave() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items))
+        val state = loaded(library)
+        assertEquals("not shown yet", 0, library.readyShown)
+        state.setActive(true)
+        assertEquals(1, library.readyShown)
+        state.refresh(); advanceUntilIdle()
+        state.setActive(true)
+        assertEquals("a rescan or a second shown signal is the same visit", 1, library.readyShown)
+        state.setActive(false); state.setActive(true); advanceUntilIdle()
+        assertEquals(2, library.readyShown)
+        library.access = ready(items.map { it.copy(saved = true) })
+        state.refresh(); advanceUntilIdle()
+        state.setActive(false); state.setActive(true)
+        assertEquals("nothing left to save", 2, library.readyShown)
     }
 
     @Test fun noSpaceWinsOverFailed() = runTest {
@@ -157,5 +277,24 @@ class StatusesStateTest {
         state.refresh(); advanceUntilIdle()
         assertTrue(state.selection.isEmpty())
         assertNull(state.preview)
+    }
+
+    @Test fun aRestoredHostReopensTheAccountFilterAndHideSaved() = runTest {
+        val handle = androidx.lifecycle.SavedStateHandle(mapOf("statuses" to androidx.core.os.bundleOf(
+            "account" to "2/${SECOND.packageName}", "filter" to "VIDEOS", "hideSaved" to true)))
+        val state = StatusesHost(handle).state(null)
+        assertEquals(SECOND, state.account)
+        assertEquals(StatusFilter.VIDEOS, state.filter)
+        assertTrue(state.hideSaved)
+    }
+
+    @Test fun partialBatchSaysStorageIsFull() = runTest {
+        val items = mixed().take(3)
+        val library = FakeStatusLibrary(ready(items)).apply {
+            results = { if (it == items[2]) StatusSaveResult.NoSpace else StatusSaveResult.Saved(android.net.Uri.parse("content://media/1")) }
+        }
+        val state = loaded(library)
+        state.save(items); advanceUntilIdle()
+        assertEquals(StatusEvent.Batch(saved = 2, notSaved = 1, noSpace = true), state.events.first())
     }
 }

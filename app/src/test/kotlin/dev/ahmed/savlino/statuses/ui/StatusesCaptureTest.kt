@@ -66,9 +66,12 @@ class StatusesCaptureTest {
     }
 
     private fun shoot(name: String, library: () -> FakeStatusLibrary?, fonts: Boolean = false, dialog: Boolean = false,
-                      setup: suspend StatusesState.() -> Unit = {}) {
+                      u3: Boolean = false, setup: suspend StatusesState.() -> Unit = {}) {
         assumeTrue(dir != null)
-        val variants = listOf("en", "ar", "fr").flatMap { lang -> listOf(Triple(lang, false, 1f), Triple(lang, true, 1f)) } +
+        // Save-flow review set: EN and AR in both themes, Arabic at twice the text size.
+        val variants = if (u3) listOf("en", "ar").flatMap { lang -> listOf(Triple(lang, false, 1f), Triple(lang, true, 1f)) } +
+            listOf(Triple("ar", false, 2f))
+        else listOf("en", "ar", "fr").flatMap { lang -> listOf(Triple(lang, false, 1f), Triple(lang, true, 1f)) } +
             (if (fonts) listOf("en", "ar", "fr").map { Triple(it, false, 1.3f) } else emptyList())
         for ((lang, dark, scale) in variants) {
             RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
@@ -79,6 +82,7 @@ class StatusesCaptureTest {
                 // Load and set up before the first frame: later coroutine writes do not reliably redraw in a reused sandbox.
                 val state = StatusesState(fake, scope).also { probe = it }
                 state.refresh()
+                state.setActive(true)
                 scope.launch { state.setup() }
                 controller.get().setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                     CompositionLocalProvider(LocalStatusMedia provides FakeStatusMedia()) {
@@ -129,4 +133,24 @@ class StatusesCaptureTest {
     @Test fun previewVideo() = shoot("10-preview-video", { FakeStatusLibrary(ready()) }, dialog = true) { preview = visible[0] }
     @Test fun preview() = shoot("10-preview", { FakeStatusLibrary(ready()) }, dialog = true) { preview = visible[1] }
     @Test fun previewSaved() = shoot("10-preview-saved", { FakeStatusLibrary(ready()) }, dialog = true) { preview = visible[3] }
+
+    // U3 save flow: variant A (Save row under the picture) and B (round Save on the corner); the owner picks one.
+    private fun gated(): FakeStatusLibrary = FakeStatusLibrary(ready()).apply {
+        val wait = kotlinx.coroutines.CompletableDeferred<Unit>()
+        gate = { if (it.uri.lastPathSegment != "status-1") wait.await() }
+    }
+    private fun partly() = FakeStatusLibrary(ready()).apply {
+        results = { if (it.uri.lastPathSegment == "status-3") dev.ahmed.savlino.statuses.StatusSaveResult.Failed
+            else dev.ahmed.savlino.statuses.StatusSaveResult.Saved(android.net.Uri.parse("content://media/external/file/1")) }
+    }
+    @Test fun u3Grid() = shoot("u3-grid", { FakeStatusLibrary(ready()) }, u3 = true)
+    @Test fun u3Select() = shoot("u3-select", { FakeStatusLibrary(ready()) }, u3 = true) { enterSelect(); first(this, 3).filter { !it.saved }.forEach(::toggle) }
+    @Test fun u3SelectAll() = shoot("u3-select-all", { FakeStatusLibrary(ready()) }, u3 = true) { selectAll() }
+    @Test fun u3Saving() = shoot("u3-saving", ::gated, u3 = true) { save(first(this, 3)) }
+    @Test fun u3SavingBatch() = shoot("u3-saving-batch", ::gated, u3 = true) { selectAll(); save(selectedItems) }
+    @Test fun u3Saved() = shoot("u3-saved", { FakeStatusLibrary(ready()) }, u3 = true) { save(first(this, 1)) }
+    @Test fun u3PartialFailure() = shoot("u3-partial", ::partly, u3 = true) { first(this, 3).forEach(::toggle); save(selectedItems) }
+    @Test fun u3PreviewSaved() = shoot("u3-preview-after-save", { FakeStatusLibrary(ready()) }, dialog = true, u3 = true) {
+        preview = visible[0]; save(listOf(visible[0]))
+    }
 }
