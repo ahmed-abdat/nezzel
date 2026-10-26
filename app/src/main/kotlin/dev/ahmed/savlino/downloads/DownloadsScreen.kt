@@ -137,6 +137,8 @@ fun DownloadsScreen(
     openPlaylistJob: String? = null, onPlaylistJobOpened: () -> Unit = {},
     /** Retry one failed playlist video: the batch id and the video's position. */
     onPlaylistVideoRetry: (String, Int) -> Unit = { _, _ -> },
+    /** Finished jobs: the coordinator drops them from [jobs] at once, so their Saved moment comes from here. */
+    completed: kotlinx.coroutines.flow.Flow<DownloadProgress>? = null,
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -156,7 +158,7 @@ fun DownloadsScreen(
     val memberIds = playlists.flatMap { batch -> batch.items.map { it.jobId } }.toSet()
     val standalone = jobs.filter { it.jobId !in memberIds }
     val started = rememberStartOrder(standalone)
-    val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) })
+    val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) }, completed)
     val reduced = LocalReducedMotion.current
     val batches = rememberVisibleBatches(playlists)
     var tab by rememberDownloadsTab(jobs, playlists)

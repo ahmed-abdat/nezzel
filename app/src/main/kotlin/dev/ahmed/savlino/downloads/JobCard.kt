@@ -65,6 +65,7 @@ import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.ui.theme.motionSpec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 
 /** A measured byte or fragment fraction exists only during active transfer; every other phase spins. */
 internal fun DownloadProgress.ringFraction(): Float? =
@@ -77,9 +78,18 @@ internal val DownloadProgress.saved get() = phase == DownloadPhase.COMPLETED
  * so the person sees the result before the card leaves. UI-only: the journal is untouched.
  */
 @Composable
-internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List<DownloadProgress>): List<DownloadProgress> {
+internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List<DownloadProgress>,
+                                     completed: Flow<DownloadProgress>? = null): List<DownloadProgress> {
     val seen = remember { mutableMapOf<String, DownloadPhase>() }
     val flashing = remember { mutableStateMapOf<String, DownloadProgress>() }
+    // The coordinator drops a finished job from its list instead of showing it COMPLETED: its end arrives here.
+    LaunchedEffect(completed) {
+        completed?.collect { job ->
+            val before = seen.put(job.jobId, DownloadPhase.COMPLETED)
+            if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
+                before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
+        }
+    }
     jobs.forEach { job ->
         val before = seen.put(job.jobId, job.phase)
         if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&

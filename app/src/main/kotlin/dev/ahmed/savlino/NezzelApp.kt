@@ -307,7 +307,8 @@ fun NezzelApp(
                             playlists = playlists, playlistsLoaded = loadedPlaylists != null, onPlaylistAction = playlistAction, playlistBusy = playlistBusy, onPlaylistVideoRetry = playlistVideoRetry,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
                             openSavedUri = openSavedUri, onSavedOpened = onSavedOpened,
-                            openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null })
+                            openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null },
+                            completed = links.downloads?.completed)
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications) { id ->
                             playlistJob = id
                             links.navigate("Downloads")
