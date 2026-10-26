@@ -185,6 +185,10 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.lifecycle.viewmodel.compose)
+    // Local saved-file playback only (owner 2026-10-26): no DASH/HLS/RTSP, Cast or decoder extensions.
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
+    implementation(libs.media3.ui.compose)
 
     // Resolve test Android jars through Gradle locking + SHA-256 verification; no runtime fetches.
     robolectricSdk29("org.robolectric:android-all-instrumented:10-robolectric-5803371-i7")
