@@ -6,8 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nezzel · Save videos straight from a link</title>
 <meta name="description" content="A free Android app that saves videos, audio and photos from a link. No ads, no account">
-<meta name="theme-color" content="#F5FBF8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0E1513" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F5FBF8">
 <meta name="color-scheme" content="light dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://api.github.com; base-uri 'self'; form-action 'none'; object-src 'none'">
 <link rel="canonical" href="https://nezzel.hululsoft.mr/en/">
@@ -68,7 +67,7 @@
   --x:1;color-scheme:light;
 }
 [dir=rtl]{--x:-1}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+@media not all{:root{
   --primary:#82D5C5;--on-primary:#003731;--primary-c:#005047;--on-primary-c:#9EF2E1;
   --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
   --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
@@ -192,6 +191,7 @@ h1 bdi{color:var(--primary)}
 }
 @keyframes rise{to{transform:none}}
 .cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:40px}
+.free{margin:0;font-size:16px;font-weight:600;color:var(--on-bg);text-wrap:balance}
 .meta{font-size:14.5px;color:var(--muted);text-wrap:balance}
 .meta a{font-weight:600;white-space:nowrap}
 .meta a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
@@ -479,6 +479,8 @@ html[dir=ltr] .cx h3{letter-spacing:-.04em;line-height:1.04}
     .card.under{transform:none}.card.under::after{opacity:0}
   }
 }
+/* phones: the deck reads as a plain column (no sticky stacking, no fixed height, so no overlap or empty bands) */
+@media (max-width:759px){.js .card{position:relative;top:auto;min-height:0;animation:none!important;transform:none!important;align-content:start}.js .card::after{display:none}}
 @keyframes under{to{transform:scale(.94)}}
 @keyframes dim{to{opacity:.32}}
 
@@ -635,8 +637,7 @@ html[dir=ltr] .lit{line-height:1.06;letter-spacing:-.045em}
 @media (min-width:900px){.strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding-top:32px}.strip::before{content:"";position:absolute;top:0;inset-inline:0;height:2px;border-radius:1px;background:var(--primary);transform-origin:left}[dir=rtl] .strip::before{transform-origin:right}}
 .strip li{padding-top:20px;border-top:1px solid var(--outline-v)}
 @media (min-width:900px){.strip li{padding-top:0;border:0}}
-.big{display:block;font:800 clamp(72px,8vw,120px)/.9 system-ui,-apple-system,sans-serif;letter-spacing:-.05em;color:var(--primary)}
-.strip b{display:block;font-size:20px;line-height:1.4;margin-top:16px}
+.strip b{display:block;font-size:20px;line-height:1.4}
 .strip p{margin:8px 0 0;color:var(--muted);font-size:15.5px;text-wrap:pretty}
 @media (prefers-reduced-motion:no-preference){
   @supports (animation-timeline:view()){
@@ -671,7 +672,7 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 .wa .i{fill:#25D366;stroke:none}
 
 /* the end: one dark closing section, a huge call, links, the wordmark over a teal glow */
-.end{position:relative;z-index:1;margin-top:clamp(104px,12vw,150px);overflow:hidden;padding:clamp(120px,14vw,170px) 0 clamp(24px,4vw,48px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
+.end{position:relative;z-index:1;margin-top:clamp(72px,9vw,130px);overflow:hidden;padding:clamp(64px,10vw,150px) 0 clamp(24px,4vw,48px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
 .end a{color:inherit}
 .end h2{font-size:clamp(18px,2vw,22px);font-weight:600;line-height:1.5;opacity:.7;max-width:none}
 .end .go{display:flex;flex-wrap:wrap;align-items:center;min-height:48px;gap:0 .25em;margin-top:10px;text-decoration:none;font-weight:800;font-size:clamp(42px,11vw,168px);line-height:1.15;transition:color .3s}
@@ -751,8 +752,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="gh" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.8 2.8 5.8 3.1 5.8 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
   <symbol id="wa" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z"/></symbol>
-  <!-- sample thumbnail: an illustrated summer coast (no real footage, no real people) -->
-  <symbol id="lg-whatsapp" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></symbol><symbol id="lg-youtube" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></symbol><symbol id="lg-tiktok" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></symbol><symbol id="lg-instagram" viewBox="0 0 24 24"><path d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></symbol><symbol id="lg-facebook" viewBox="0 0 24 24"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></symbol><symbol id="lg-x" viewBox="0 0 24 24"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></symbol><symbol id="lg-snapchat" viewBox="0 0 24 24"><path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301.165-.088.344-.104.464-.104.182 0 .359.029.509.09.45.149.734.479.734.838.015.449-.39.839-1.213 1.168-.089.029-.209.075-.344.119-.45.135-1.139.36-1.333.81-.09.224-.061.524.12.868l.015.015c.06.136 1.526 3.475 4.791 4.014.255.044.435.27.42.509 0 .075-.015.149-.045.225-.24.569-1.273.988-3.146 1.271-.059.091-.12.375-.164.57-.029.179-.074.36-.134.553-.076.271-.27.405-.555.405h-.03c-.135 0-.313-.031-.538-.074-.36-.075-.765-.135-1.273-.135-.3 0-.599.015-.913.074-.6.104-1.123.464-1.723.884-.853.599-1.826 1.288-3.294 1.288-.06 0-.119-.015-.18-.015h-.149c-1.468 0-2.427-.675-3.279-1.288-.599-.42-1.107-.779-1.707-.884-.314-.045-.629-.074-.928-.074-.54 0-.958.089-1.272.149-.211.043-.391.074-.54.074-.374 0-.523-.224-.583-.42-.061-.192-.09-.389-.135-.567-.046-.181-.105-.494-.166-.57-1.918-.222-2.95-.642-3.189-1.226-.031-.063-.052-.15-.055-.225-.015-.243.165-.465.42-.509 3.264-.54 4.73-3.879 4.791-4.02l.016-.029c.18-.345.224-.645.119-.869-.195-.434-.884-.658-1.332-.809-.121-.029-.24-.074-.346-.119-1.107-.435-1.257-.93-1.197-1.273.09-.479.674-.793 1.168-.793.146 0 .27.029.383.074.42.194.789.3 1.104.3.234 0 .384-.06.465-.105l-.046-.569c-.098-1.626-.225-3.651.307-4.837C7.392 1.077 10.739.807 11.727.807l.419-.015h.06z"/></symbol><symbol id="clip" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9 4.5V3.5h6v1"/></symbol><symbol id="scene" viewBox="0 0 160 90"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC98A"/><stop offset=".6" stop-color="#F7A26B"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F8A7B"/><stop offset="1" stop-color="#0B5248"/></linearGradient></defs><rect width="160" height="90" fill="url(#sky)"/><circle cx="104" cy="44" r="15" fill="#FFF1D6"/><path d="M0 54h160v36H0z" fill="url(#sea)"/><path d="M0 58c20-3 38 3 58 0s40-4 62 0 30 2 40 0" stroke="#9EF2E1" stroke-opacity=".45" stroke-width="1.6" fill="none"/><path d="M0 90V68c18-10 40-14 64-6 14 5 22 12 32 22H0Z" fill="#E8C48E"/><path d="M28 70c0-10 2-18 6-24m0 0c-6 0-10 3-13 6m13-6c5-2 10-1 13 2m-13-2c2-4 6-6 10-6" stroke="#2A1800" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <!-- sample thumbnail: an illustrated summer coast (no real footage, no real people) --><symbol id="clip" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9 4.5V3.5h6v1"/></symbol><symbol id="scene" viewBox="0 0 160 90"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC98A"/><stop offset=".6" stop-color="#F7A26B"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F8A7B"/><stop offset="1" stop-color="#0B5248"/></linearGradient></defs><rect width="160" height="90" fill="url(#sky)"/><circle cx="104" cy="44" r="15" fill="#FFF1D6"/><path d="M0 54h160v36H0z" fill="url(#sea)"/><path d="M0 58c20-3 38 3 58 0s40-4 62 0 30 2 40 0" stroke="#9EF2E1" stroke-opacity=".45" stroke-width="1.6" fill="none"/><path d="M0 90V68c18-10 40-14 64-6 14 5 22 12 32 22H0Z" fill="#E8C48E"/><path d="M28 70c0-10 2-18 6-24m0 0c-6 0-10 3-13 6m13-6c5-2 10-1 13 2m-13-2c2-4 6-6 10-6" stroke="#2A1800" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
 </svg>
 
 <a class="sr" href="#main" data-i="skip">Skip to content</a>
@@ -785,7 +785,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
         <svg class="i"><use href="#dl"/></svg>
         <span class="roll"><span data-i="cta">Download the app</span></span> <span class="sz ltr num size" data-mb="61.5">61.5 MB</span>
       </a>
-      <div class="meta"><span data-i="meta">Android 10 or newer · version</span> <span class="ltr num vtxt">0.5.0</span> · <a href="#install" data-i="howto">How to install</a></div>
+      <p class="free" data-i="free">Free, no ads, no account · Made by Hululsoft</p>
+      <div class="meta"><span data-i="meta">Android 10 or newer · version</span> <span class="ltr num vtxt">0.5.0</span><br><span data-i="noplay">Not on the Play Store, so it comes straight from here</span> · <a href="#install" data-i="howto">How to install</a></div>
     </div>
   </div>
 </header>
@@ -826,7 +827,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
           <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
           <div class="home">
             <div class="h0">
-              <div class="wall"><span class="lt" style="--x:6%;--y:40px;--z:30px;--r:-8deg;--c:#0866FF"><svg><use href="#lg-facebook"/></svg></span><span class="lt" style="--x:27%;--y:6px;--z:38px;--r:-10deg;--c:#25D366"><svg><use href="#lg-whatsapp"/></svg></span><span class="lt sn" style="--x:79%;--y:14px;--z:34px;--r:12deg;--c:#FFFC00"><svg><use href="#lg-snapchat"/></svg></span><span class="lt" style="--x:80%;--y:62px;--z:30px;--r:14deg;--c:#FF0000"><svg><use href="#lg-youtube"/></svg></span><span class="lt" style="--x:10%;--y:94px;--z:38px;--r:-12deg;--c:#111"><svg><use href="#lg-tiktok"/></svg></span><span class="lt" style="--x:79%;--y:104px;--z:38px;--r:-10deg;--c:linear-gradient(45deg,#F9A92B,#E1306C 55%,#833AB4)"><svg><use href="#lg-instagram"/></svg></span><span class="lt" style="--x:52%;--y:124px;--z:32px;--r:18deg;--c:#111"><svg><use href="#lg-x"/></svg></span><span class="nm"><img src="/img/icon.svg" alt=""><i><svg class="i"><use href="#dl"/></svg></i></span></div>
               <b data-i="h-title">Save videos to your phone</b>
               <small data-i="h-line">Copy a video link in any app, then tap Paste.</small>
             </div>
@@ -954,10 +954,10 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     <div class="adlg" aria-hidden="true"><b data-i="sys-t2">Install unknown apps</b><small data-i="sys-browser">Browser</small><span class="setrow"><span data-i="sys-allow">Allow from this source</span><span class="tg"></span></span></div>
   </div>
   <ol class="strip">
-    <li style="--k:0"><span class="big num">1</span><b data-i="i1">Get the file and open it</b><p data-i="i1p">Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type</p></li>
-    <li style="--k:1"><span class="big num">2</span><b data-i="i2">Allow the install</b><p data-i="i2p">If Android asks, switch on “Allow from this source”, then go back</p></li>
-    <li style="--k:2"><span class="big num">3</span><b data-i="i3">Tap Install</b><p data-i="i3p">Play Protect may offer to scan the app. Let it, and go with what it says</p></li>
-    <li style="--k:3"><span class="big num">4</span><b data-i="i4">Open Nezzel and try it</b><p data-i="i4p">Copy any link, then open the app, or paste the link in</p></li>
+    <li style="--k:0"><b data-i="i1">Get the file and open it</b><p data-i="i1p">Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type</p></li>
+    <li style="--k:1"><b data-i="i2">Allow the install</b><p data-i="i2p">If Android asks, switch on “Allow from this source”, then go back</p></li>
+    <li style="--k:2"><b data-i="i3">Tap Install</b><p data-i="i3p">Play Protect may offer to scan the app. Let it, and go with what it says</p></li>
+    <li style="--k:3"><b data-i="i4">Open Nezzel and try it</b><p data-i="i4p">Copy any link, then open the app, or paste the link in</p></li>
   </ol>
 </section>
 
@@ -1044,6 +1044,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gh:"GitHub", rel:"Releases",
     "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
+    free:"Free, no ads, no account · Made by Hululsoft", noplay:"Not on the Play Store, so it comes straight from here",
     credit:"Video stills: Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Yours to keep, even after they vanish",
     "x2p": "Paste its link and Nezzel saves them one by one",
@@ -1177,6 +1178,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "rel": "الإصدارات",
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
+      "free": "مجاني، بلا إعلانات ولا حساب · من تطوير <bdi>Hululsoft</bdi>",
+      "noplay": "ليس في متجر Play، تحمّله من هنا مباشرة",
       "credit": "صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> © Blender Foundation، CC BY",
       "lic": "التراخيص",
       "sec": "الأمان",
@@ -1249,6 +1252,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gh:"GitHub", rel:"Versions",
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
+    free:"Gratuit, sans pub ni compte · Développé par Hululsoft", noplay:"Absent du Play Store, il s’installe directement d’ici",
     credit:"Images vidéo : Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Ils restent, même une fois disparus",
     "x2p": "Collez son lien, Nezzel enregistre les vidéos une à une",
@@ -1366,7 +1370,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   function applyRelease() {
     if (!rel) return;
     $$(".dl-link").forEach(a => { a.href = rel.url; });
-    $$(".size").forEach(s => { s.textContent = mb(rel.mb); });
+    $$(".size").forEach(s => { s.textContent = mb(rel.mb, 1); });
     $$(".vtxt").forEach(s => { s.textContent = rel.ver; });
   }
   fetch("https://api.github.com/repos/ahmed-abdat/nezzel/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
@@ -1374,7 +1378,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     .then(j => {
       const apk = (j.assets || []).find(a => /^nezzel-[\d.]+\.apk$/.test(a.name));
       if (!apk) return;
-      rel = { url: apk.browser_download_url, mb: Math.round(apk.size / 1e6), ver: j.tag_name.replace(/^v/, ""),
+      rel = { url: apk.browser_download_url, mb: Math.round(apk.size / 1e5) / 10, ver: j.tag_name.replace(/^v/, ""),
               sha: (apk.digest || "").startsWith("sha256:") ? apk.digest.slice(7) : null };
       applyRelease();
     }).catch(() => {});
@@ -1528,9 +1532,9 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   }, { rootMargin: "0px 0px -92% 0px" });
   $$(".trust, .end, .t-dk").forEach(x => hio.observe(x));
 
-  // ---------- theme: system by default, a tap overrides it ----------
-  const root = document.documentElement, themeBtn = $("#theme"), sysDark = matchMedia("(prefers-color-scheme: dark)");
-  const mode = () => root.dataset.theme || (sysDark.matches ? "dark" : "light");
+  // ---------- theme: light paper by default, a tap switches to dark ----------
+  const root = document.documentElement, themeBtn = $("#theme");
+  const mode = () => root.dataset.theme || "light";
   // Real captures: <lang>-<theme>-<key>, falling back to the light set; the drawn screen stays if neither exists.
   function shots() {
     const box = $(".shots"); if (!box) return;
@@ -1549,7 +1553,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
     $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
   }
-  sysDark.addEventListener("change", syncTheme);
   themeBtn.addEventListener("click", () => {
     const next = mode() === "dark" ? "light" : "dark";
     const apply = () => {
