@@ -475,7 +475,7 @@
     <string name="settings_updates_last_checked">آخر تحقق</string>
     <string name="whats_new_title">الجديد في Nezzel</string>
     <string name="whats_new_ok">حسنًا</string>
-    <string name="update_meta">حجم التنزيل: %1$s</string>
+    <string name="update_meta">الإصدار %1$s · %2$s</string>
     <string name="update_trust">يتحقق Nezzel من سلامة التحديث قبل تثبيته</string>
     <string name="update_downloading">جارٍ تنزيل %1$s</string>
     <string name="settings_update_accessibility">الإعدادات، يتوفر تحديث</string>

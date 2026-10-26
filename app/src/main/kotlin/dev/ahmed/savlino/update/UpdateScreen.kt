@@ -215,7 +215,8 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(stringResource(R.string.update_card_version),
                                 Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.update_meta, size),
+                            // The version is a quiet detail under the title, never in it.
+                            Text(stringResource(R.string.update_meta, NezzelFormat.isolate(release.version), size),
                                 style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                         }
                         val notes = release.notes(language)

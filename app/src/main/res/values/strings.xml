@@ -425,7 +425,7 @@
     <string name="settings_updates_last_checked">Last checked</string>
     <string name="whats_new_title">What\'s new in Nezzel</string>
     <string name="whats_new_ok">Got it</string>
-    <string name="update_meta">Download size: %1$s</string>
+    <string name="update_meta">Version %1$s · %2$s</string>
     <string name="update_trust">Nezzel checks the update before installing</string>
     <string name="update_downloading">Downloading %1$s</string>
     <string name="settings_update_accessibility">Settings, update available</string>

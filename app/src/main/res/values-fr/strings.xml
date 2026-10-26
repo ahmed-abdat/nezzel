@@ -433,7 +433,7 @@
     <string name="settings_updates_last_checked">Dernière vérification</string>
     <string name="whats_new_title">Les nouveautés de Nezzel</string>
     <string name="whats_new_ok">Compris</string>
-    <string name="update_meta">Taille du téléchargement : %1$s</string>
+    <string name="update_meta">Version %1$s · %2$s</string>
     <string name="update_trust">Nezzel vérifie la mise à jour avant de l’installer</string>
     <string name="update_downloading">Téléchargement de %1$s</string>
     <string name="settings_update_accessibility">Paramètres, mise à jour disponible</string>

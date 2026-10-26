@@ -57,7 +57,11 @@ class UpdateScreenTest {
                 assertEquals(LiveRegionMode.Polite, progress.config[SemanticsProperties.LiveRegion])
                 assertFalse(shown.any { it.startsWith(if (context.resources.configuration.locales[0].language == "ar") "تنزيل التحديث" else "Download update") })
             }
-            assertFalse(shown.any { "GitHub" in it || release.version in it || BuildConfig.VERSION_NAME in it })
+            // Only the small line under the title names the new version; no title, button or note does.
+            val meta = context.getString(R.string.update_meta, dev.ahmed.savlino.locale.NezzelFormat.isolate(release.version),
+                dev.ahmed.savlino.locale.NezzelFormat.isolate(dev.ahmed.savlino.locale.NezzelFormat.size(release.size, context.resources.configuration.locales[0].language)))
+            assertTrue(shown.contains(meta))
+            assertFalse(shown.any { "GitHub" in it || (it != meta && release.version in it) || BuildConfig.VERSION_NAME in it })
             assertNull(org.robolectric.Shadows.shadowOf(a).nextStartedActivity)
             if (stage == UpdateStage.ERROR && failure == UpdateFailure.SPACE) {
                 val language = context.resources.configuration.locales[0].language
