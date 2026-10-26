@@ -274,6 +274,8 @@ class LinkViewModel(
     /** "Look for better quality": the saved picture tier these options answer (note + preselect); null otherwise. */
     var betterThan by mutableStateOf<Int?>(null); private set
     private var betterFrom: Format? = null
+    /** The row Nezzel picked when the options opened; usage compares the confirmed row with it. */
+    private var preselected: Format? = null
     private val betterNoneChannel = Channel<Unit>(Channel.CONFLATED)
     /** The re-read returned nothing above the saved tier; the options stay open. */
     val betterNoneEvents: Flow<Unit> = betterNoneChannel.receiveAsFlow()
@@ -994,6 +996,7 @@ class LinkViewModel(
             selectedId = only.id
             selectedPreset = options.firstOrNull { it.second.id == only.id }?.first
         }
+        preselected = selectedFormat?.takeIf { betterFrom == null && eligibleFormats.size > 1 }
         betterFrom?.let { from ->
             // The next tier up from the saved file, as the main list shows it; nothing above → say so, keep the options.
             val above = BetterQuality.above(formatOptions, from)
@@ -1117,6 +1120,7 @@ class LinkViewModel(
         when (val result = DownloadCommand.confirm(UUID.randomUUID().toString(), inspected, jobSource, row.id, "Nezzel")) {
             is ConfirmResult.Confirmed -> {
                 usage.count(UsageKeys.FUNNEL_TAPPED)
+                UsageKeys.pick(preselected, row)?.let(usage::count)
                 submitted = true
                 command = result.command
                 EngineTiming.startDownload(result.command.jobId)

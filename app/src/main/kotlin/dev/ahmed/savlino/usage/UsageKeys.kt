@@ -32,6 +32,11 @@ object UsageKeys {
     const val FUNNEL_TAPPED = "funnel.tapped"
     const val FUNNEL_FINISHED = "funnel.finished"
     const val FUNNEL_FAILED = "funnel.failed"
+    /** A confirmed video link against the quality Nezzel had picked: kept it, went higher, lower, or took audio. */
+    const val PICK_KEPT = "pick.kept"
+    const val PICK_UP = "pick.up"
+    const val PICK_DOWN = "pick.down"
+    const val PICK_AUDIO = "pick.audio"
 
     enum class Download { STARTED, FINISHED, FAILED, CANCELLED }
     enum class Path(val key: String) { NPE("npe"), YTDLP("ytdlp"), OWN("own") }
@@ -46,7 +51,7 @@ object UsageKeys {
     val fixed: Set<String> = buildSet {
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
             STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
-            FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED))
+            FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO))
         for (event in events) for ((kind, names) in tiers) for (tier in names) add("dl.$event.$kind.$tier")
         for (path in Path.entries) for (time in optionTimes) add("options.${path.key}.$time")
         addAll(speeds.map { "speed.$it" })
@@ -90,6 +95,16 @@ object UsageKeys {
             else -> "any"
         }
         return "dl.${event.name.lowercase()}.$kind.$tier"
+    }
+
+    /** Null when Nezzel had picked no video row (audio-only links, a lone row, the better-quality flow). */
+    fun pick(preselected: Format?, chosen: Format): String? {
+        if (preselected == null || !preselected.hasVideo) return null
+        if (!chosen.hasVideo) return PICK_AUDIO
+        if (chosen.id == preselected.id) return PICK_KEPT
+        val from = VideoQuality.of(preselected.width, preselected.height) ?: 0
+        val to = VideoQuality.of(chosen.width, chosen.height) ?: 0
+        return if (to > from) PICK_UP else if (to < from) PICK_DOWN else PICK_KEPT
     }
 
     fun photo(event: Download) = "dl.${event.name.lowercase()}.photo.any"

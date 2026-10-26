@@ -292,6 +292,19 @@ class UsageTest {
         assertEquals("age.day0", UsageKeys.age(0)); assertEquals("age.d31up", UsageKeys.age(31))
     }
 
+    @Test fun pickComparesTheConfirmedRowWithNezzelsPick() {
+        fun video(id: String, height: Int) = Format(id, "mp4", hasVideo = true, hasAudio = true, width = height * 16 / 9, height = height)
+        val hd = video("hd", 720)
+        assertEquals(UsageKeys.PICK_KEPT, UsageKeys.pick(hd, hd))
+        assertEquals(UsageKeys.PICK_KEPT, UsageKeys.pick(hd, video("hd-other", 720)))
+        assertEquals(UsageKeys.PICK_UP, UsageKeys.pick(hd, video("fhd", 1080)))
+        assertEquals(UsageKeys.PICK_DOWN, UsageKeys.pick(hd, video("low", 360)))
+        assertEquals(UsageKeys.PICK_AUDIO, UsageKeys.pick(hd, Format("a", "m4a", false, true)))
+        assertNull(UsageKeys.pick(null, hd))
+        assertNull(UsageKeys.pick(Format("a", "m4a", false, true), hd))
+        listOf(UsageKeys.PICK_KEPT, UsageKeys.PICK_UP, UsageKeys.PICK_DOWN, UsageKeys.PICK_AUDIO).forEach { assertTrue(it, UsageKeys.allowed(it)) }
+    }
+
     @Test fun phoneSnapshotUsesOnlyAllowedKeys() {
         val app = context as NezzelApplication
         val keys = PhoneSnapshot(app, app.preferences).keys()
