@@ -49,7 +49,7 @@ import dev.ahmed.savlino.ui.theme.Space
 
 /**
  * Full-screen swipe viewer over [items], opening at [start]. Images zoom (pinch, double tap) and the pager only swipes at 1x;
- * videos play with the platform player while their page is the settled one. Back or Close dismisses.
+ * videos play with Media3 while their page is the settled one. Back or Close dismisses.
  * [actions] adds screen-specific buttons (Statuses: Save) before Share and Open with.
  */
 @Composable
@@ -57,7 +57,11 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
                 onShare: (ViewerItem) -> Unit, onOpenWith: (ViewerItem) -> Unit,
                 actions: @Composable RowScope.(ViewerItem) -> Unit = {}) {
     if (items.isEmpty()) return
-    Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    val playback = rememberViewerPlayback()
+    val openedBefore = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val restored = remember { openedBefore.value }
+    val close = { playback.close(); onClose() }
+    Dialog(close, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         // Black page: light status and navigation icons whatever the app theme.
         val view = LocalView.current
         LaunchedEffect(view) {
@@ -70,13 +74,16 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
         val current = items[pager.currentPage.coerceIn(0, items.lastIndex)]
         // A page swiped away comes back unzoomed.
         LaunchedEffect(pager.settledPage, items) {
-            val settled = items.getOrNull(pager.settledPage)?.uri
+            val settledItem = items.getOrNull(pager.settledPage)
+            settledItem?.let { playback.settle(it, initiallyTapped = playback.item == null && pager.settledPage == start.coerceIn(0, items.lastIndex), restoreOnly = restored && playback.item == null) }
+            openedBefore.value = true
+            val settled = settledItem?.uri
             zooms.forEach { (uri, zoom) -> if (uri != settled) zoom.reset() }
         }
         Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = Color.White) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
+                    IconButton(onClick = close, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
                     Spacer(Modifier.weight(1f))
                     actions(current)
                     IconButton(onClick = { onShare(current) }, modifier = Modifier.size(48.dp)) {
@@ -92,7 +99,7 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
                     val description = stringResource(when { item.isVideo -> R.string.viewer_video_n; item.isAudio -> R.string.viewer_audio_n; else -> R.string.viewer_image_n },
                         NezzelFormat.count(page + 1, language), NezzelFormat.count(items.size, language))
                     Box(Modifier.fillMaxSize().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
-                        if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page)
+                        if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page, playback, onOpenWith = { onOpenWith(item) }, onClose = close)
                         else ZoomableImage(item, zooms.getValue(item.uri))
                     }
                 }

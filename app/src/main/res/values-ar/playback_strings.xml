@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_loading">جارٍ التحميل…</string>
+    <string name="viewer_file_unavailable">الملف غير موجود أو لا يمكن قراءته.</string>
+    <string name="viewer_playback_unsupported">لا يمكن تشغيل هذا التنسيق على هذا الجهاز.</string>
+    <string name="viewer_playback_failed">تعذّر التشغيل.</string>
+    <string name="viewer_retry">إعادة المحاولة</string>
+    <string name="viewer_resumed_at">تم الاستئناف من %1$s</string>
+    <string name="viewer_start_over">البدء من جديد</string>
+    <string name="playback_channel">تشغيل الصوت</string>
+    <string name="playback_audio">صوت</string>
+    <string name="playback_stop">إيقاف</string>
+    <string name="playback_back_10">الرجوع 10 ثوانٍ</string>
+    <string name="playback_forward_10">التقدّم 10 ثوانٍ</string>
+</resources>

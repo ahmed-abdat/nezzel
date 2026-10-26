@@ -29,6 +29,9 @@ class MediaViewerTest {
     @get:Rule val compose = createEmptyComposeRule()
     private val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
     private val activity get() = controller.get()
+    private val players = mutableListOf<dev.ahmed.savlino.playback.RecordingPlayer>()
+    private val playback = dev.ahmed.savlino.playback.PlaybackEnvironment(activity,
+        dev.ahmed.savlino.playback.PlayerFactory { _, _ -> dev.ahmed.savlino.playback.RecordingPlayer().also(players::add) }, sizeOf = { 10L })
     @After fun close() { controller.pause().stop().destroy() }
 
     private val items = (1..5).map { ViewerItem(Uri.parse("content://media/external/images/$it"), it == 5, if (it == 5) "video/mp4" else "image/jpeg") }
@@ -39,7 +42,7 @@ class MediaViewerTest {
     private fun show(start: Int) {
         activity.setContent {
             NezzelTheme(ThemePref.Light, false) {
-                CompositionLocalProvider(LocalMediaPictures provides pictures) {
+                CompositionLocalProvider(LocalMediaPictures provides pictures, LocalPlaybackEnvironment provides playback) {
                     if (open) MediaViewer(items, start, "en", { open = false }, onShare = { shared += it }, onOpenWith = {})
                 }
             }
@@ -109,7 +112,18 @@ class MediaViewerTest {
         page(R.string.viewer_video_n, 5).assertIsDisplayed()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_mute)).assertHasClickAction().performClick()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_unmute)).assertExists()
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_pause)).performClick()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_play)).assertExists()
+    }
+
+    @Test fun typedPlaybackFailureOffersRetryOpenWithAndClose() {
+        show(4)
+        compose.runOnIdle { players.single().failure(androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED) }
+        compose.waitForIdle()
+        compose.onNodeWithText(activity.getString(R.string.viewer_playback_unsupported)).assertIsDisplayed()
+        compose.onNodeWithText(activity.getString(R.string.viewer_retry)).assertHasClickAction()
+        compose.onNodeWithText(activity.getString(R.string.saved_open_with)).assertHasClickAction()
+        compose.onNodeWithText(activity.getString(R.string.viewer_close)).assertHasClickAction()
     }
 
     @Test fun closeDismisses() {

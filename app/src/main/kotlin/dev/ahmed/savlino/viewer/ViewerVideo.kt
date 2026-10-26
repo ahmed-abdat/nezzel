@@ -1,21 +1,12 @@
 package dev.ahmed.savlino.viewer
 
-import android.media.MediaPlayer
-import android.view.Gravity
-import android.widget.FrameLayout
-import android.widget.VideoView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -24,118 +15,118 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import androidx.media3.common.Player
+import androidx.media3.ui.compose.PlayerSurface
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
+import dev.ahmed.savlino.playback.*
 import dev.ahmed.savlino.ui.ThumbnailKind
 import dev.ahmed.savlino.ui.theme.Space
 import kotlinx.coroutines.delay
 
-/**
- * One video page: the platform VideoView, its poster until the first frame, and play/pause, seek and mute.
- * Audio plays in the same view over its cover, once through and without mute (pause does that).
- * Plays only while [current] and the app is in front; swiping away or leaving the app pauses it, and coming back
- * carries on from there (a finished track stays finished). Leaving the pager releases the player.
- */
+/** Rendering only. Adjacent pages never allocate a player or connect to the audio service. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
+internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoordinator, onOpenWith: () -> Unit, onClose: () -> Unit) {
     val poster = rememberMediaPicture(item.uri, if (item.isAudio) ThumbnailKind.AUDIO else ThumbnailKind.VIDEO, screenPixels())
-    var video by remember { mutableStateOf<VideoView?>(null) }
-    var player by remember { mutableStateOf<MediaPlayer?>(null) }
-    var playing by remember { mutableStateOf(false) }
-    var rendering by remember { mutableStateOf(false) }
-    var position by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(item.durationMillis ?: 0L) }
-    var seeking by remember { mutableStateOf<Float?>(null) }
-    var muted by rememberSaveable { mutableStateOf(false) }
-    var finished by remember { mutableStateOf(false) }
+    val ownedPlayer by owner.player.collectAsState()
+    val ownedState by owner.state.collectAsState()
+    val resumedAt by owner.resumedAt.collectAsState()
+    val player = ownedPlayer.takeIf { current && owner.item?.uri == item.uri }
+    val state = if (current) ownedState else PlaybackState.Idle
+    var playing by remember(item.uri) { mutableStateOf(false) }
+    var position by remember(item.uri) { mutableLongStateOf(0) }
+    var duration by remember(item.uri) { mutableLongStateOf(item.durationMillis ?: 0) }
+    var ratio by remember(item.uri) { mutableFloatStateOf(1f) }
+    var seeking by remember(item.uri) { mutableStateOf<Float?>(null) }
+    var muted by rememberSaveable(item.uri.toString()) { mutableStateOf(false) }
+    var showResume by remember(item.uri, resumedAt) { mutableStateOf(resumedAt > 0) }
+    LaunchedEffect(item.uri, resumedAt) { if (resumedAt > 0) { delay(6_000); showResume = false } }
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val active = current && lifecycle.isAtLeast(Lifecycle.State.RESUMED)
-    val latestActive by rememberUpdatedState(active)
-    val latestMuted by rememberUpdatedState(muted)
-
-    fun play(on: Boolean) {
-        val view = video ?: return
-        if (on) finished = false
-        if (on && player != null) view.start() else view.pause()
-        playing = on && player != null
-    }
-    LaunchedEffect(active, player) { play(active && !finished) }
-    LaunchedEffect(muted, player) { player?.setVolume(if (muted) 0f else 1f, if (muted) 0f else 1f) }
-    LaunchedEffect(playing) {
-        while (playing) {
-            video?.let { position = it.currentPosition.toLong() }
+    LaunchedEffect(current, lifecycle) { if (current) owner.foreground(lifecycle.isAtLeast(Lifecycle.State.RESUMED)) }
+    LaunchedEffect(player) {
+        while (player != null) {
+            playing = player.playWhenReady
+            position = player.currentPosition.coerceAtLeast(0)
+            duration = player.duration.takeIf { it > 0 } ?: item.durationMillis ?: 0
+            val size = player.videoSize
+            if (size.width > 0 && size.height > 0) ratio = size.width * size.pixelWidthHeightRatio / size.height
             delay(250)
         }
+        playing = false
     }
-
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        // A full-screen frame gives the VideoView exact bounds, so it scales the video to fit
-        // (keeping its aspect ratio) instead of showing a low-resolution file at its pixel size.
-        AndroidView({ context -> FrameLayout(context).apply { addView(VideoView(context).apply {
-                setOnPreparedListener { prepared ->
-                    prepared.isLooping = !item.isAudio
-                    prepared.setVolume(if (latestMuted) 0f else 1f, if (latestMuted) 0f else 1f)
-                    duration = prepared.duration.toLong().takeIf { it > 0 } ?: duration
-                    // Back from the background the view prepares afresh: carry on where it paused.
-                    if (!finished && position > 0) prepared.seekTo(position.toInt())
-                    player = prepared
-                }
-                setOnInfoListener { _, what, _ -> if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) rendering = true; false }
-                setOnCompletionListener { playing = false; finished = true }
-                setOnErrorListener { _, _, _ -> playing = false; player = null; true }
-                setOnClickListener { play(!playing) }
-                setVideoURI(item.uri)
-                video = this
-            }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER)) }
-        }, Modifier.fillMaxSize(), onRelease = { (it.getChildAt(0) as? VideoView)?.stopPlayback(); video = null; player = null })
-        // Audio has no frames: a square cover (or a music note when the file has none) stands in the middle.
+    // The poll above refreshes position; Play/Pause follows the player at once so the button never lags a tap.
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { playing = playWhenReady }
+        }
+        player?.addListener(listener)
+        onDispose { player?.removeListener(listener) }
+    }
+    LaunchedEffect(player, muted) { if (!item.isAudio) player?.volume = if (muted) 0f else 1f }
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (player != null && !item.isAudio && state !is PlaybackState.Failed) {
+            val width = minOf(maxWidth, maxHeight * ratio)
+            PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)))
+        }
         if (item.isAudio) Box(Modifier.fillMaxWidth(.72f).widthIn(max = 360.dp).aspectRatio(1f).clip(RoundedCornerShape(20.dp))
             .background(Color.White.copy(alpha = .1f)), contentAlignment = Alignment.Center) {
             poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                 ?: Icon(painterResource(R.drawable.ic_music), null, Modifier.size(72.dp), tint = Color.White.copy(alpha = .7f))
+        } else if (player == null || state == PlaybackState.Loading || state is PlaybackState.Failed) poster?.let {
+            Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         }
-        else if (!rendering) poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
-
-        // Media controls keep left-to-right time in RTL too, like the phone's own players.
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .55f))
+        if (current && state == PlaybackState.Loading) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Text(stringResource(R.string.viewer_loading))
+        }
+        if (current && state is PlaybackState.Failed) Column(Modifier.background(Color.Black.copy(alpha = .85f)).padding(Space.m),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(when (state.failure) {
+                PlaybackFailure.UNAVAILABLE -> R.string.viewer_file_unavailable
+                PlaybackFailure.UNSUPPORTED -> R.string.viewer_playback_unsupported
+                PlaybackFailure.OTHER -> R.string.viewer_playback_failed
+            }))
+            TextButton(owner::retry, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_retry)) }
+            TextButton(onOpenWith, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.saved_open_with)) }
+            TextButton(onClose, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_close)) }
+        }
+        if (current) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .55f))
             .padding(horizontal = Space.s, vertical = Space.xs)) {
-            val end = duration.coerceAtLeast(1L).toFloat()
-            val positionLabel = stringResource(R.string.viewer_position)
-            Slider(seeking ?: position.coerceAtMost(duration).toFloat(), { seeking = it }, Modifier.fillMaxWidth()
-                .semantics { contentDescription = positionLabel }, enabled = duration > 0,
-                valueRange = 0f..end, onValueChangeFinished = {
-                    seeking?.let { target -> video?.seekTo(target.toInt()); position = target.toLong() }
-                    seeking = null
-                }, colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White,
-                    inactiveTrackColor = Color.White.copy(alpha = .3f)))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { play(!playing) }, Modifier.size(48.dp)) {
-                    if (playing) Icon(painterResource(R.drawable.ic_pause), stringResource(R.string.viewer_pause))
-                    else Icon(Icons.Default.PlayArrow, stringResource(R.string.viewer_play))
-                }
-                Text(listOfNotNull(NezzelFormat.duration((seeking?.toLong() ?: position) / 1000),
-                    duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) }).joinToString(" / "),
-                    style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Ltr))
-                Spacer(Modifier.weight(1f))
-                if (!item.isAudio) IconButton(onClick = { muted = !muted }, Modifier.size(48.dp)) {
-                    Icon(painterResource(if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_up),
-                        stringResource(if (muted) R.string.viewer_unmute else R.string.viewer_mute))
+            if (resumedAt > 0 && showResume) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.viewer_resumed_at, "\u2066${NezzelFormat.duration(resumedAt / 1000)}\u2069"), Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium)
+                TextButton(owner::startOver, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_start_over)) }
+            }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                val positionLabel = stringResource(R.string.viewer_position)
+                Slider(seeking ?: position.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), { seeking = it },
+                    Modifier.fillMaxWidth().semantics { contentDescription = positionLabel }, valueRange = 0f..duration.coerceAtLeast(1).toFloat(),
+                    enabled = player != null && duration > 0, onValueChangeFinished = { seeking?.let { owner.seek(it.toLong()) }; seeking = null })
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { if (playing) owner.pause() else if (state is PlaybackState.Failed) owner.retry() else owner.play() }, Modifier.size(48.dp)) {
+                        if (playing) Icon(painterResource(R.drawable.ic_pause), stringResource(R.string.viewer_pause))
+                        else Icon(Icons.Default.PlayArrow, stringResource(R.string.viewer_play))
+                    }
+                    Text(listOfNotNull(NezzelFormat.duration((seeking?.toLong() ?: position) / 1000), duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) }).joinToString(" / "),
+                        style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Ltr))
+                    Spacer(Modifier.weight(1f))
+                    if (!item.isAudio) IconButton(onClick = { muted = !muted }, Modifier.size(48.dp)) {
+                        Icon(painterResource(if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_up), stringResource(if (muted) R.string.viewer_unmute else R.string.viewer_mute))
+                    }
                 }
             }
-        }
         }
     }
 }

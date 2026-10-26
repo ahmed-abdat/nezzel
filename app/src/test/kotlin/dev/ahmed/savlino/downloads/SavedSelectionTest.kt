@@ -19,6 +19,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], qualifiers = "en-w320dp-h1600dp-mdpi")
 class SavedSelectionTest {
+    @org.junit.Before fun bindAudio() { dev.ahmed.savlino.playback.registerAudioServiceBinding() }
     @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     private val context get() = RuntimeEnvironment.getApplication()
     private val rows = listOf(
