@@ -16,6 +16,8 @@ import dev.ahmed.savlino.ui.nav.TabContent
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import dev.ahmed.savlino.viewer.LocalMediaPictures
 import dev.ahmed.savlino.viewer.MediaPictures
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -45,6 +47,81 @@ class ThumbnailCacheTest {
         // 24 slots of 40 KB: the oldest went first.
         assertNull(cache["t0"])
         assertNotNull(cache["u17"])
+    }
+
+    @Test fun sameKeyLoadsShareOneRun() = kotlinx.coroutines.test.runTest {
+        val cache = ThumbnailCache(8_000_000)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var runs = 0
+        val bitmap = picture(10, 10)
+        val waiters = List(5) { async { cache.getOrLoad("k") { runs++; gate.await(); bitmap } } }
+        testScheduler.runCurrent()
+        gate.complete(Unit)
+        waiters.forEach { assertSame(bitmap, it.await()) }
+        assertEquals(1, runs)
+    }
+
+    @Test fun atMostTwoDecodesRunAtOnce() = kotlinx.coroutines.test.runTest {
+        val cache = ThumbnailCache(8_000_000)
+        var running = 0; var most = 0
+        val loads = List(6) { n -> async { cache.getOrLoad("k$n") {
+            running++; most = maxOf(most, running); kotlinx.coroutines.delay(100); running--; picture(4, 4)
+        } } }
+        loads.forEach { assertNotNull(it.await()) }
+        assertEquals(ThumbnailCache.DECODES, most)
+    }
+
+    @Test fun aRunStopsOnlyWhenEveryWaiterHasLeft() = kotlinx.coroutines.test.runTest {
+        val cache = ThumbnailCache(8_000_000)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var stopped = 0
+        val load: suspend () -> Bitmap? = { try { gate.await(); picture(4, 4) } catch (e: kotlinx.coroutines.CancellationException) { stopped++; throw e } }
+        val first = launch { cache.getOrLoad("k", load = load) }
+        val second = async { cache.getOrLoad("k", load = load) }
+        testScheduler.runCurrent()
+        first.cancel(); testScheduler.runCurrent()
+        assertEquals("one waiter left, the other still needs it", 0, stopped)
+        gate.complete(Unit)
+        assertNotNull(second.await())
+        val gate2 = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val a = launch { cache.getOrLoad("j") { try { gate2.await(); null } catch (e: kotlinx.coroutines.CancellationException) { stopped++; throw e } } }
+        val b = launch { cache.getOrLoad("j") { error("shares the first run") } }
+        testScheduler.runCurrent()
+        a.cancel(); b.cancel(); testScheduler.runCurrent()
+        assertEquals(1, stopped)
+    }
+
+    @Test fun aMissIsRememberedBrieflyUnlessRetried() = kotlinx.coroutines.test.runTest {
+        var clock = 0L
+        val cache = ThumbnailCache(8_000_000) { clock }
+        var runs = 0
+        assertNull(cache.getOrLoad("k") { runs++; null })
+        assertNull(cache.getOrLoad("k") { runs++; null })
+        assertEquals(1, runs)
+        assertNull(cache.getOrLoad("k", retryMiss = true) { runs++; null })
+        assertEquals(2, runs)
+        clock += ThumbnailCache.MISS_MS
+        assertNotNull(cache.getOrLoad("k") { runs++; picture(4, 4) })
+        assertEquals(3, runs)
+    }
+
+    @Test fun aLoaderThatAsksForItsOwnKeyDoesNotWaitForItself() = kotlinx.coroutines.test.runTest {
+        // Statuses wraps its own getOrLoad inside rememberCachedThumbnail's.
+        val cache = ThumbnailCache(8_000_000)
+        val result = kotlinx.coroutines.withTimeout(5_000) { cache.getOrLoad("k") { cache.getOrLoad("k") { picture(4, 4) } } }
+        assertNotNull(result)
+    }
+
+    @Test fun cancellingTheCallerCancelsTheProviderSignal() = kotlinx.coroutines.test.runTest {
+        var signal: android.os.CancellationSignal? = null
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val job = launch(kotlinx.coroutines.Dispatchers.IO) {
+            withCancellationSignal { s -> signal = s; started.complete(Unit); while (!s.isCanceled) Thread.sleep(5) }
+        }
+        started.await()
+        assertFalse(signal!!.isCanceled)
+        job.cancel(); job.join()
+        assertTrue(signal!!.isCanceled)
     }
 
     @Test fun switchingTabsBackAndForthAndRecomposingNeverRunsTheLoaderAgain() {

@@ -775,7 +775,7 @@ private fun rememberThumbnailLoader(): suspend (SavedMedia) -> android.graphics.
         when {
             item.kind == null -> null
             pictures != null -> pictures.load(item.uri, item.thumbnailKind, THUMB_PX)
-            else -> withContext(Dispatchers.IO) { dev.ahmed.savlino.ui.loadMediaThumbnail(context, item.uri, item.thumbnailKind, THUMB_PX, 180) }
+            else -> dev.ahmed.savlino.ui.decodeMediaThumbnail(context, item.uri, item.thumbnailKind, THUMB_PX, 180)
         }
     } }
 }
@@ -934,7 +934,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                         if (file == null || ready.value) return@LaunchedEffect
                         // A file that just listed can fail to decode for a moment; audio may have no cover at all.
                         withTimeoutOrNull(PICTURE_WAIT_MS) {
-                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX)) { loadThumb(file) } == null &&
+                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX), retryMiss = true) { loadThumb(file) } == null &&
                                 file.kind != SavedMediaKind.AUDIO && file.kind != null) kotlinx.coroutines.delay(120)
                         }
                         ready.value = true
