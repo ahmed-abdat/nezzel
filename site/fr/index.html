@@ -190,7 +190,8 @@ h1 bdi{color:var(--primary)}
   .ready h1 .ln>span{animation:rise .85s cubic-bezier(.215,.61,.355,1) forwards;animation-delay:calc(60ms + var(--k,0) * 80ms)}
 }
 @keyframes rise{to{transform:none}}
-.cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:40px}
+.lede{margin:20px auto 0;max-width:34ch;font-size:clamp(17px,2vw,21px);line-height:1.6;color:var(--muted);text-wrap:balance}
+.cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:32px}
 .free{margin:0;font-size:16px;font-weight:600;color:var(--on-bg);text-wrap:balance}
 .meta{font-size:14.5px;color:var(--muted);text-wrap:balance}
 .meta a{font-weight:600;white-space:nowrap}
@@ -264,18 +265,18 @@ html[dir=rtl] .tray .trh{font-family:"Noto Sans Arabic",system-ui,sans-serif}
 .fcard .art{border-radius:8px}
 .fcard.on{opacity:1}
 
-/* the three steps sit under their object, numbered; the one playing is in ink */
+/* the three steps sit under their object (position carries the order); the one playing gets a teal rule */
 .steps{list-style:none;margin:0;padding:0;inset:0;pointer-events:none}
-.step{position:absolute;top:640px;width:300px;display:grid;grid-template-columns:auto 1fr;column-gap:14px;align-content:start;pointer-events:auto;transition:opacity .4s var(--ease)}
+.step{position:absolute;top:640px;width:300px;padding-top:16px;pointer-events:auto;transition:opacity .4s var(--ease)}
+.step::before{content:"";position:absolute;top:0;inset-inline-start:0;width:40px;height:3px;border-radius:2px;background:var(--outline-v);transition:background .35s var(--ease),width .35s var(--ease)}
 .step:nth-child(1){inset-inline-start:10px}
 .step:nth-child(2){inset-inline-start:440px}
 .step:nth-child(3){inset-inline-start:860px}
-.step .n{grid-row:span 3;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1.5px var(--on-bg);font:700 16px/1 system-ui,sans-serif;transition:background .35s var(--ease),color .35s var(--ease),box-shadow .35s}
 .step h3{margin:0;font-size:24px;line-height:1.3;font-weight:800}
 html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
 .step p{margin:6px 0 0;color:var(--muted);font-size:16px;line-height:1.5;max-width:30ch;text-wrap:pretty}
 .step .note{font-size:13px;margin-top:10px}
-.step.on .n{background:var(--primary);color:var(--on-primary);box-shadow:none}
+.step.on::before{background:var(--primary);width:64px}
 @media (prefers-reduced-motion:no-preference){.live .step:not(.on){opacity:.35}}
 
 /* the phone sits mid-desk; on narrow screens the desk turns to a column and objects come and go */
@@ -780,6 +781,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   <span class="ghost" aria-hidden="true">Nezzel</span>
   <div class="copy">
     <h1 id="h1" data-i="h1"><span class="ln"><span>Copiez le lien</span></span> <span class="ln"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span></h1>
+    <p class="lede" data-i="lede">Gardez sur votre téléphone les vidéos WhatsApp, YouTube, Facebook et TikTok</p>
     <div class="cta">
       <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/download/v0.5.0/nezzel-0.5.0.apk">
         <svg class="i"><use href="#dl"/></svg>
@@ -872,9 +874,9 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     <span class="lchip pp" aria-hidden="true"><svg class="i"><use href="#link"/></svg>youtu.be/…</span>
     <span class="fcard pp" aria-hidden="true"><span class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span></span>
   <ol class="steps">
-    <li class="step" data-step="0"><span class="n">1</span><h3 data-i="s1">Copiez le lien</h3><p data-i="s1p">Depuis WhatsApp, YouTube, Facebook ou TikTok</p></li>
-    <li class="step" data-step="1"><span class="n">2</span><h3 data-i="s2">Choisissez la qualité</h3><p data-i="s2p">Ouvrez Nezzel : le lien vous attend</p></li>
-    <li class="step" data-step="2"><span class="n">3</span><h3 data-i="s3">Téléchargez et partagez</h3><p data-i="s3p">Puis envoyez-la à vos groupes</p><p class="note" data-i="note">Simple démo. Chaque site fixe ses qualités</p></li>
+    <li class="step" data-step="0"><h3 data-i="s1">Copiez le lien</h3><p data-i="s1p">Depuis WhatsApp, YouTube, Facebook ou TikTok</p></li>
+    <li class="step" data-step="1"><h3 data-i="s2">Choisissez la qualité</h3><p data-i="s2p">Ouvrez Nezzel : le lien vous attend</p></li>
+    <li class="step" data-step="2"><h3 data-i="s3">Téléchargez et partagez</h3><p data-i="s3p">Puis envoyez-la à vos groupes</p><p class="note" data-i="note">Simple démo. Chaque site fixe ses qualités</p></li>
   </ol>
 
   </div>
@@ -1044,6 +1046,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gh:"GitHub", rel:"Releases",
     "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
+    lede:"Save WhatsApp, YouTube, Facebook and TikTok videos to your phone",
     free:"Free, no ads, no account · Made by Hululsoft", noplay:"Not on the Play Store, so it comes straight from here",
     credit:"Video stills: Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Yours to keep, even after they vanish",
@@ -1178,6 +1181,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "rel": "الإصدارات",
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
+      "lede": "احفظ فيديوهات واتساب ويوتيوب وفيسبوك وتيك توك على هاتفك",
       "free": "مجاني، بلا إعلانات ولا حساب · من تطوير <bdi>Hululsoft</bdi>",
       "noplay": "ليس في متجر Play، تحمّله من هنا مباشرة",
       "credit": "صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> © Blender Foundation، CC BY",
@@ -1252,6 +1256,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     gh:"GitHub", rel:"Versions",
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
+    lede:"Gardez sur votre téléphone les vidéos WhatsApp, YouTube, Facebook et TikTok",
     free:"Gratuit, sans pub ni compte · Développé par Hululsoft", noplay:"Absent du Play Store, il s’installe directement d’ici",
     credit:"Images vidéo : Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Ils restent, même une fois disparus",
