@@ -182,13 +182,21 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 .roll>span{display:block;text-shadow:0 1.5em currentColor;transition:transform .3s cubic-bezier(.22,1,.36,1)}
 .btn .i{transition:transform .5s var(--spring)}
 
-/* hero: the headline rises line by line through a mask, once; a ghost wordmark rests behind it */
-.hero{position:relative;isolation:isolate;padding:clamp(64px,10vw,128px) 0 0;text-align:center}
+/* hero: the headline rises line by line through a mask, once; a ghost wordmark rests behind it.
+   Three real screens fan out beside it (under it on phones): home and a download behind, the quality sheet in front */
+.hero{position:relative;isolation:isolate;display:grid;gap:clamp(40px,7vw,64px);padding:clamp(40px,8vw,72px) 0 0;text-align:center}
+@media (min-width:960px){
+  .hero{grid-template-columns:minmax(0,1fr) minmax(0,1.04fr);align-items:center;gap:clamp(24px,4vw,64px);min-height:min(calc(100svh - 72px),860px);padding-block:8px 40px;text-align:start}
+  .hero .lede{margin-inline:0}
+  .hero .cta{align-items:flex-start}
+}
+@media (max-width:959px){.ghost{display:none}}
 .ghost{position:absolute;z-index:-1;inset-inline:0;bottom:-.52em;font:800 clamp(120px,26vw,380px)/1 system-ui,-apple-system,Roboto,sans-serif;letter-spacing:-.06em;color:color-mix(in oklab,var(--on-bg) 5%,transparent);direction:ltr;text-align:center;white-space:nowrap;pointer-events:none;user-select:none}
-h1{font-size:clamp(40px,7.4vw,96px);line-height:1.18;font-weight:800;margin:0 auto;font-stretch:92%;text-wrap:balance}
+h1{font-size:clamp(46px,12.6vw,76px);line-height:1.38;font-weight:800;margin:0 auto;font-stretch:92%;text-wrap:balance}
 html[dir=ltr] h1{font-family:ui-serif,"Iowan Old Style",Charter,Georgia,"Noto Serif",serif;font-weight:500;letter-spacing:-.03em;line-height:1.04}
-html[lang=fr] h1{font-size:clamp(36px,6.4vw,84px)}
-h1 .ln{display:block;clip-path:inset(-.4em -.6em -.34em)}
+html[lang=fr] h1{font-size:clamp(40px,10.6vw,68px)}
+@media (min-width:960px){h1{font-size:clamp(68px,6.6vw,100px)}html[lang=fr] h1{font-size:clamp(54px,5.2vw,80px)}}
+h1 .ln{display:block;clip-path:inset(-.4em -.6em -.5em)}
 h1 .ln>span{display:inline-block}
 h1 bdi{color:var(--primary)}
 @media (prefers-reduced-motion:no-preference){
@@ -198,10 +206,24 @@ h1 bdi{color:var(--primary)}
 @keyframes rise{to{transform:none}}
 .lede{margin:20px auto 0;max-width:34ch;font-size:clamp(17px,2vw,21px);line-height:1.6;color:var(--muted);text-wrap:balance}
 .cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:32px}
-.free{margin:0;font-size:16px;font-weight:600;color:var(--on-bg);text-wrap:balance}
-.meta{font-size:14.5px;color:var(--muted);text-wrap:balance}
-.meta a{font-weight:600;white-space:nowrap}
-.meta a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
+.hm{margin:0;font-size:15px;line-height:1.7;color:var(--muted);text-wrap:balance}
+.hm a{font-weight:600;white-space:nowrap}
+.hm a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
+.fan{position:relative;container-type:inline-size;width:min(100%,560px);aspect-ratio:10/8.9;margin-inline:auto}
+.fph{--w:34;position:absolute;top:14%;width:calc(var(--w) * 1%);padding:calc(var(--w) * .024cqw);border-radius:calc(var(--w) * .135cqw);background:#0c100f;box-shadow:0 28px 44px -26px rgb(0 32 27/.5),0 0 0 1px rgb(255 255 255/.05)}
+.fph img{width:100%;height:auto;border-radius:calc(var(--w) * .111cqw);background:var(--c)}
+.fph.s{inset-inline-start:2%;rotate:-8deg}
+.fph.e{inset-inline-end:2%;rotate:8deg}
+[dir=rtl] .fph.s{rotate:8deg}
+[dir=rtl] .fph.e{rotate:-8deg}
+.fph.m{--w:40;top:0;inset-inline-start:30%;z-index:1;box-shadow:0 36px 56px -28px rgb(0 32 27/.55),0 0 0 1px rgb(255 255 255/.05)}
+@media (prefers-reduced-motion:no-preference){
+  .js .fph{opacity:0;translate:0 12%}
+  .ready .fph{animation:fan 1s var(--ease) forwards;animation-delay:.38s}
+  .ready .fph.s{animation-delay:.5s}
+  .ready .fph.e{animation-delay:.6s}
+}
+@keyframes fan{to{opacity:1;translate:none}}
 
 /* the steps: one phone with the app's real screen for each step, three one-line steps under it.
    With motion the desk pins and the scroll walks the steps; the playing step's rule fills as you go */
@@ -517,17 +539,17 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 <header class="hero wrap" id="top">
   <span class="ghost" aria-hidden="true">Nezzel</span>
   <div class="copy">
-    <h1 id="h1" data-i="h1"><span class="ln"><span>Copiez le lien</span></span> <span class="ln"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span></h1>
+    <h1 id="h1" data-i="h1"><span class="ln" style="--k:0"><span>Copiez le lien</span></span> <span class="ln" style="--k:1"><span><bdi>Nezzel</bdi></span></span> <span class="ln" style="--k:2"><span>s’occupe du reste</span></span></h1>
     <p class="lede" data-i="lede">Gardez sur votre téléphone les vidéos WhatsApp, YouTube, Facebook et TikTok</p>
     <div class="cta">
       <a class="btn dl-link" href="https://github.com/ahmed-abdat/nezzel/releases/download/v0.5.0/nezzel-0.5.0.apk">
         <svg class="i"><use href="#dl"/></svg>
         <span class="roll"><span data-i="cta">Télécharger l’application</span></span> <span class="sz ltr num size" data-mb="61.5">61,5 Mo</span>
       </a>
-      <p class="free" data-i="free">Gratuit, sans pub ni compte · Développé par Hululsoft</p>
-      <div class="meta"><span data-i="meta">Android 10 ou plus récent · version</span> <span class="ltr num vtxt">0.5.0</span><br><span data-i="noplay">Absent du Play Store, il s’installe directement d’ici</span> · <a href="#install" data-i="howto">Comment l’installer ?</a></div>
+      <p class="hm"><span data-i="hm">Gratuit · Android 10 ou plus récent</span><br><span data-i="ver">Version</span> <span class="ltr num vtxt">0.5.0</span> · <a href="#install" data-i="howto">Comment l’installer ?</a></p>
     </div>
   </div>
+  <div class="fan" role="img" data-i-aria="fan-aria" data-i="hero-shots" aria-label="Les écrans de Nezzel : le choix de la qualité, un téléchargement en cours et un fichier enregistré"><div class="fph s"><img src="/img/screens/en-light-recent.webp" alt="" width="640" height="1387" decoding="async"></div><div class="fph e"><img src="/img/screens/en-light-saved.webp" alt="" width="640" height="1387" decoding="async"></div><div class="fph m"><img src="/img/screens/en-light-sheet.webp" alt="" width="640" height="1387" decoding="async"></div></div>
 </header>
 
 <!-- promo video slot, between the hero and the steps: a poster <img loading="lazy"> in a <button>; a tap swaps in <video controls autoplay playsinline preload="none">. One video only. -->
@@ -676,8 +698,10 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const EN = {
     "w-left": "<span class=\"ltr num wt\">0:08</span> left",
     language:"Language", "og-alt":"Nezzel: save videos straight from a link. A phone showing the qualities on offer",
-    skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"<span class=\"ln\"><span>Copy the link</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> does the rest</span></span>",
-    cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
+    skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copy the link</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>does the rest</span></span>",
+    cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone", hm:"Free · Android 10 or newer", ver:"Version",
+    "fan-aria":"Nezzel’s screens: picking a quality, a download on its way and a saved file",
+    "hero-shots":"<div class=\"fph s\"><img src=\"/img/screens/en-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved",
     
     clip:"Link you copied", view:"View download options",
@@ -716,7 +740,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
     lede:"Save WhatsApp, YouTube, Facebook and TikTok videos to your phone",
-    free:"Free, no ads, no account · Made by Hululsoft", noplay:"Not on the Play Store, so it comes straight from here",
     credit:"Video stills: Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Yours to keep, even after they vanish",
     "x2p": "Paste its link and Nezzel saves them one by one",
@@ -742,11 +765,15 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "skip": "تخطَّ إلى المحتوى",
       "get": "تنزيل",
       "to-dark": "الوضع الداكن",
-      "h1": "<span class=\"ln\"><span>انسخ الرابط</span></span> <span class=\"ln\"><span>والباقي على <bdi>Nezzel</bdi></span></span>",
+      "h1": "<span class=\"ln\" style=\"--k:0\"><span>انسخ الرابط</span></span> <span class=\"ln\" style=\"--k:1\"><span>والباقي على</span></span> <span class=\"ln\" style=\"--k:2\"><span><bdi>Nezzel</bdi></span></span>",
       "cta": "تنزيل التطبيق",
       "meta": "لأندرويد 10 أو أحدث · الإصدار",
       "howto": "كيف أثبّته؟",
-      "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون · الإصدار",
+      "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون",
+      "hm": "مجاني · أندرويد 10 أو أحدث",
+      "ver": "الإصدار",
+      "fan-aria": "شاشات من Nezzel: اختيار الجودة، وتنزيل جارٍ، وملف محفوظ",
+      "hero-shots": "<div class=\"fph s\"><img src=\"/img/screens/ar-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/ar-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/ar-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
       "demo-aria": "عرض: تنسخ رابط فيديو فيقترحه Nezzel، تختار الجودة ويُحفظ الملف",
       
       
@@ -828,8 +855,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "fin-h": "انسخ الرابط والباقي علينا",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
       "lede": "احفظ فيديوهات واتساب ويوتيوب وفيسبوك وتيك توك على هاتفك",
-      "free": "مجاني، بلا إعلانات ولا حساب · من تطوير <bdi>Hululsoft</bdi>",
-      "noplay": "ليس في متجر Play، تحمّله من هنا مباشرة",
       "credit": "صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> © Blender Foundation، CC BY",
       "lic": "التراخيص",
       "sec": "الأمان",
@@ -859,8 +884,10 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const FR = {
     "w-left": "<span class=\"ltr num wt\">0:08</span> restant",
     language:"Langue", "og-alt":"Nezzel : la vidéo, il suffit du lien. Un téléphone affiche les qualités proposées",
-    skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"<span class=\"ln\"><span>Copiez le lien</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span>",
-    cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
+    skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copiez le lien</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>s’occupe du reste</span></span>",
+    cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone", hm:"Gratuit · Android 10 ou plus récent", ver:"Version",
+    "fan-aria":"Les écrans de Nezzel : le choix de la qualité, un téléchargement en cours et un fichier enregistré",
+    "hero-shots":"<div class=\"fph s\"><img src=\"/img/screens/en-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré",
     
     clip:"Le lien que vous avez copié", view:"Voir les options",
@@ -899,7 +926,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
     lede:"Gardez sur votre téléphone les vidéos WhatsApp, YouTube, Facebook et TikTok",
-    free:"Gratuit, sans pub ni compte · Développé par Hululsoft", noplay:"Absent du Play Store, il s’installe directement d’ici",
     credit:"Images vidéo : Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY",
     "x1p": "Ils restent, même une fois disparus",
     "x2p": "Collez son lien, Nezzel enregistre les vidéos une à une",
@@ -979,7 +1005,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   // ---------- visitor's device (read in the browser only, never sent) ----------
   const ua = navigator.userAgent;
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  if (ios) { const m = $(".hero [data-i=meta]"); m.dataset.i = "only-ios"; m.textContent = t("only-ios"); }
+  if (ios) { const m = $(".hero [data-i=hm]"); m.dataset.i = "only-ios"; m.textContent = t("only-ios"); }
   const clock = new Intl.DateTimeFormat(lang() + "-u-nu-latn", { hour: "numeric", minute: "2-digit" });
   const tick = () => {
     const now = new Date();
@@ -1083,6 +1109,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       gsap.ticker.lagSmoothing(0);
     }
     if (document.fonts) document.fonts.ready.then(() => ScrollTrigger.refresh());
+    // the hero fan opens a little as you scroll away: the side screens drift outward, the sheet lifts
+    const out = document.documentElement.dir === "rtl" ? 1 : -1;
+    gsap.timeline({ scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: .5 } })
+      .to(".fph.s", { xPercent: 10 * out, yPercent: 5, rotation: 3 * out, ease: "none" }, 0)
+      .to(".fph.e", { xPercent: -10 * out, yPercent: 5, rotation: -3 * out, ease: "none" }, 0)
+      .to(".fph.m", { yPercent: -6, ease: "none" }, 0);
     // A sticky card measures where it is stuck, not where it sits in the page, so every refresh reads the deck flat
     const stack = $(".stack");
     let docks = [];
@@ -1179,7 +1211,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     const m = mode(); root.dataset.mode = m;
     waveTheme();
     // the Arabic screens exist in both themes; the English set is light only
-    if (lang() === "ar") $$(".rs img, .shot").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
+    if (lang() === "ar") $$(".rs img, .shot, .fan img").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
     themeBtn.dataset.iAria = m === "dark" ? "to-light" : "to-dark";
     themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
     $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
