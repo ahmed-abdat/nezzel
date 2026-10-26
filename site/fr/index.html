@@ -119,7 +119,6 @@ main{overflow-x:clip}
 [data-r]{opacity:0;transform:translateY(10px);transition:opacity .3s var(--ease),transform .3s var(--ease);transition-delay:calc(var(--d,0) * 50ms)}
 [data-r].in{opacity:1;transform:none}
 /* the headline rises word by word through a mask, once */
-.wm{display:inline-block;clip-path:inset(-.5em -.3em -.14em -.3em)}
 .w{display:inline-block;transform:translateY(118%);animation:word 1s var(--ease) forwards;animation-delay:calc(100ms + var(--k) * 80ms)}
 @keyframes word{to{transform:none}}
 
@@ -563,31 +562,15 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
 .wpz svg,.wcl{width:clamp(18px,5cqw,24px);height:clamp(18px,5cqw,24px);fill:currentColor}
 .wcl{color:#3F4946}
 
-/* trust: ink on the paper desk, the sentence lights up word by word; the promises are paper slips */
-.trust{position:relative;z-index:1;padding:clamp(88px,13vw,170px) 0}
-.lit{font-size:clamp(36px,6.4vw,84px);line-height:1.32;max-width:19ch;font-weight:800}
-html[dir=ltr] .lit{line-height:1.06;letter-spacing:-.045em}
-.lw{display:inline-block}
-@media (prefers-reduced-motion:no-preference){
-  @supports (animation-timeline:view()){
-    .js .lit{view-timeline:--lit}
-    .js .lw{animation:lw linear both;animation-timeline:--lit;animation-range:cover var(--a) cover var(--b)}
-  }
-  @supports not (animation-timeline:view()){
-    .js .lw{transition:opacity .5s var(--ease) calc(var(--k) * 70ms)}
-    .js .lit:not(.in) .lw{opacity:.15}
-  }
-}
-@keyframes lw{from{opacity:.15}to{opacity:1}}
-.promises{list-style:none;padding:0;display:grid;gap:12px;margin:clamp(48px,7vw,88px) 0 0}
-@media (min-width:960px){.promises{grid-template-columns:repeat(3,1fr);gap:20px}}
-.pi{display:flex;align-items:center;gap:18px;padding:20px 22px;border-radius:22px;background:var(--paper);box-shadow:0 0 0 1px var(--edge),0 8px 20px -14px rgb(var(--ink-sh)/.2)}
-@media (min-width:960px){.pi{padding:26px 28px}.pi:nth-child(2){rotate:calc(var(--x) * .6deg)}.pi:nth-child(3){rotate:calc(var(--x) * -.5deg)}}
-.pi .ic{flex:none;width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--primary-c);color:var(--on-primary-c)}
-.pi .ic .i{width:26px;height:26px}
-.pi .ic .dw{stroke-dasharray:1;transition:stroke-dashoffset 1.1s var(--ease) .3s}
-.js .promises:not(.in) .dw{stroke-dashoffset:1}
-.pi b{font-size:19px;line-height:1.4}
+/* real screens: the app's own captures in a row, no frame copy around them. Phones swipe (snap); wide screens
+   drift the row toward the start as the page scrolls (GSAP). The CSS here is the swipe row, the finished state */
+.reel{padding-top:clamp(88px,12vw,150px);overflow-x:clip}
+.reel h2{margin-bottom:clamp(28px,4.4vw,52px)}
+.rs{--pw:min(300px,(100svh - 160px) / 2.17);list-style:none;margin:0;padding:6px max(16px,(100% - 1160px) / 2) 44px;display:flex;gap:clamp(16px,3vw,44px);overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:16px;scrollbar-width:none;overscroll-behavior-x:contain}
+.rs::-webkit-scrollbar{display:none}
+.rs li{--w:min(66vw,var(--pw));flex:none;width:var(--w);padding:7px;border-radius:calc(var(--w) * .135);background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1px rgb(255 255 255/.05);scroll-snap-align:center}
+.rs img{display:block;width:100%;height:auto;border-radius:calc(var(--w) * .135 - 7px);background:var(--c)}
+.js .rs.drift{overflow:visible;scroll-snap-type:none;will-change:transform}
 
 /* install: four numbered steps in a row, one Android switch */
 .ins{padding-top:clamp(104px,12vw,150px)}
@@ -912,15 +895,15 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   </div></article>
 </section>
 
-<section class="trust" id="trust" aria-labelledby="tr-h">
-  <div class="wrap">
-    <h2 id="tr-h" class="lit" data-i="tr-p">Aucune pub, avant comme après. Aucune inscription</h2>
-    <ul class="promises">
-      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect class="dw" x="7" y="3" width="10" height="18" rx="2.5" pathLength="1"/><path class="dw" d="M11 18h2" pathLength="1"/></svg></span><b data-i="p3">Le fichier arrive directement sur votre téléphone</b></li>
-      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M4 12.5l5 5L20 6.5" pathLength="1"/></svg></span><b data-i="p4">La taille du fichier avant de télécharger</b></li>
-      <li class="pi"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path class="dw" d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6Z" pathLength="1"/><path class="dw" d="m9 12 2.2 2.2L15.5 10" pathLength="1"/></svg></span><b data-i="p5">Ni votre position, ni vos contacts</b></li>
-    </ul>
-  </div>
+<section class="reel" id="screens" aria-labelledby="rs-h">
+  <div class="wrap"><h2 id="rs-h" data-i="rs-h">L’appli telle qu’elle est</h2></div>
+  <ul class="rs">
+    <li data-i="rs1"><img src="/img/screens/en-light-home.webp" alt="L’écran d’accueil de Nezzel" width="640" height="1387" loading="lazy" decoding="async"></li>
+    <li data-i="rs2"><img src="/img/screens/en-light-sheet-load.webp" alt="Nezzel charge les qualités du lien" width="640" height="1387" loading="lazy" decoding="async"></li>
+    <li data-i="rs3"><img src="/img/screens/en-light-sheet.webp" alt="Les qualités proposées, chacune avec sa taille" width="640" height="1387" loading="lazy" decoding="async"></li>
+    <li data-i="rs4"><img src="/img/screens/en-light-recent.webp" alt="Une vidéo en cours de téléchargement" width="640" height="1387" loading="lazy" decoding="async"></li>
+    <li data-i="rs5"><img src="/img/screens/en-light-saved.webp" alt="La vidéo enregistrée dans Downloads/Nezzel" width="640" height="1387" loading="lazy" decoding="async"></li>
+  </ul>
 </section>
 
 <section class="wrap ins" id="install" aria-labelledby="ins-h">
@@ -1003,8 +986,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     i4:"Open Nezzel and try it", i4p:"Copy any link, then open the app, or paste the link in",
     "sys-done":"Download complete", "sys-t2":"Install unknown apps", "sys-browser":"Browser", "sys-allow":"Allow from this source",
     "sys-q":"Do you want to install this app?", "sys-cancel":"Cancel", "sys-install":"Install",
-    p3:"Files come straight to your phone",
-    p4:"See the file size before you download", p5:"Never asks for your location or contacts",
+    "rs-h":"The app as it is",
+    rs1:"<img src=\"/img/screens/en-light-home.webp\" alt=\"Nezzel’s home screen\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs2:"<img src=\"/img/screens/en-light-sheet-load.webp\" alt=\"Nezzel loading the quality options for a link\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs3:"<img src=\"/img/screens/en-light-sheet.webp\" alt=\"The quality options, each with its file size\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs4:"<img src=\"/img/screens/en-light-recent.webp\" alt=\"A video downloading, with its progress\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs5:"<img src=\"/img/screens/en-light-saved.webp\" alt=\"The video saved to Downloads/Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     "faq-h":"Quick answers",
     f1:"Is it free?", f1a:"Yes, completely. No ads, no subscription",
     f2:"Which sites work?", f2a:"Popular video and photo sites, as long as the link is public. Some links won’t work, and private, protected or sign-in-only content isn’t supported. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Sites we’ve tested</a>", f8:"How do I keep WhatsApp statuses?", f8a:"Watch the status in WhatsApp, then open the Statuses tab in Nezzel. The first time, you allow access to one folder. That’s all",
@@ -1015,8 +1002,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     f7:"What if my connection drops?", f7a:"The download waits, then carries on from where it stopped once you’re back online. You can also pause it and finish later",
     wa:"Message us on WhatsApp", "wa-href":"https://wa.me/22237928327?text=Hi%20%F0%9F%91%8B%20Thanks%20for%20Nezzel%21",
     "os-h":"Open source", "os-p":"Every line is on GitHub for anyone to read",
-    "tr-h":"No ads, no account", "tr-p":"No ads before or after a download. No sign-up",
-    "tr-src":"Source code",
     gh:"GitHub", rel:"Releases",
     "fin-h":"Copy the link We’ll take it from there",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
@@ -1122,9 +1107,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "sys-q": "هل تريد تثبيت هذا التطبيق؟",
       "sys-cancel": "إلغاء",
       "sys-install": "تثبيت",
-      "p3": "الملف يصل إلى هاتفك مباشرة",
-      "p4": "ترى حجم الملف قبل التحميل",
-      "p5": "لا يطلب موقعك ولا جهات اتصالك",
+      "rs-h": "التطبيق كما هو",
+      "rs1": "<img src=\"/img/screens/ar-light-home.webp\" alt=\"الصفحة الرئيسية في Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+      "rs2": "<img src=\"/img/screens/ar-light-sheet-load.webp\" alt=\"Nezzel يجلب خيارات الجودة للرابط\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+      "rs3": "<img src=\"/img/screens/ar-light-sheet.webp\" alt=\"خيارات الجودة مع حجم كل ملف\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+      "rs4": "<img src=\"/img/screens/ar-light-recent.webp\" alt=\"الفيديو يتنزّل وتظهر نسبته\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+      "rs5": "<img src=\"/img/screens/ar-light-saved.webp\" alt=\"تم حفظ الفيديو في Downloads/Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
       "faq-h": "أسئلة سريعة",
       "f1": "هل هو مجاني؟",
       "f1a": "نعم، مجاني تمامًا، بلا إعلانات ولا اشتراكات",
@@ -1146,9 +1134,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "wa-href": "https://wa.me/22237928327?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%20%F0%9F%91%8B%20%D8%B4%D9%83%D8%B1%D9%8B%D8%A7%20%D8%B9%D9%84%D9%89%20Nezzel%21",
       "os-h": "مفتوح المصدر",
       "os-p": "شيفرته كاملة على GitHub، يراجعها من يشاء",
-      "tr-h": "بلا إعلانات، بلا حساب",
-      "tr-p": "لا إعلان قبل التحميل ولا بعده، ولا تسجيل",
-      "tr-src": "الشيفرة المصدرية",
       "gh": "GitHub",
       "rel": "الإصدارات",
       "fin-h": "انسخ الرابط والباقي علينا",
@@ -1209,8 +1194,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     i4:"Ouvrez Nezzel et essayez", i4p:"Copiez un lien puis ouvrez l’appli, ou collez-y directement le lien",
     "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
     "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
-    p3:"Le fichier arrive directement sur votre téléphone",
-    p4:"La taille du fichier avant de télécharger", p5:"Ni votre position, ni vos contacts",
+    "rs-h":"L’appli telle qu’elle est",
+    rs1:"<img src=\"/img/screens/en-light-home.webp\" alt=\"L’écran d’accueil de Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs2:"<img src=\"/img/screens/en-light-sheet-load.webp\" alt=\"Nezzel charge les qualités du lien\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs3:"<img src=\"/img/screens/en-light-sheet.webp\" alt=\"Les qualités proposées, chacune avec sa taille\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs4:"<img src=\"/img/screens/en-light-recent.webp\" alt=\"Une vidéo en cours de téléchargement\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
+    rs5:"<img src=\"/img/screens/en-light-saved.webp\" alt=\"La vidéo enregistrée dans Downloads/Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     "faq-h":"Vos questions",
     f1:"C’est gratuit ?", f1a:"Oui, entièrement. Ni pub, ni abonnement",
     f2:"Ça marche avec quels sites ?", f2a:"Les grands sites de vidéos et de photos, tant que le lien est public. Certains liens peuvent ne pas passer, et les contenus privés, protégés ou réservés aux membres connectés ne sont pas pris en charge. <a href=\"https://github.com/ahmed-abdat/nezzel#tested-sites\">Les sites testés</a>", f8:"Comment garder les statuts WhatsApp ?", f8a:"Regardez le statut dans WhatsApp, puis ouvrez l’onglet Statuts de Nezzel. La première fois, vous autorisez l’accès à un dossier, et c’est tout",
@@ -1221,8 +1210,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     f7:"Et si la connexion coupe ?", f7a:"Le téléchargement patiente, puis reprend là où il s’était arrêté dès que le réseau revient. Vous pouvez aussi le mettre en pause et le finir plus tard",
     wa:"Écrivez-nous sur WhatsApp", "wa-href":"https://wa.me/22237928327?text=Bonjour%20%F0%9F%91%8B%20Merci%20pour%20Nezzel%C2%A0%21",
     "os-h":"Un code ouvert à tous", "os-p":"Tout le code est sur GitHub, lisible par tous",
-    "tr-h":"Sans pub, sans compte", "tr-p":"Aucune pub, avant comme après. Aucune inscription",
-    "tr-src":"Code source",
     gh:"GitHub", rel:"Versions",
     "fin-h":"Copiez le lien, on s’occupe du reste",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
@@ -1267,24 +1254,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const rig = $(".rig"), desk = $(".desk"), steps = $$(".step");
 
   // ---------- language ----------
-  function splitWords(el, cls, mask) {
-    // Word-level only: never split Arabic letters, joining would break.
-    const walk = n => [...n.childNodes].forEach(c => {
-      if (c.nodeType === 3) {
-        const f = document.createDocumentFragment();
-        c.textContent.split(/(\s+)/).forEach(p => {
-          if (!p) return;
-          if (/^\s+$/.test(p)) { f.append(p); return; }
-          const s = document.createElement("span"); s.className = cls; s.textContent = p;
-          if (mask) { const m = document.createElement("span"); m.className = "wm"; m.append(s); f.append(m); } else f.append(s);
-        });
-        c.replaceWith(f);
-      } else if (c.nodeType === 1) walk(c);
-    });
-    walk(el);
-    const ws = $$("." + cls, el), n = ws.length;
-    ws.forEach((w, k) => { w.style.setProperty("--k", k); w.style.setProperty("--a", (12 + k * 34 / n).toFixed(1) + "%"); w.style.setProperty("--b", (12 + (k + 1.6) * 34 / n).toFixed(1) + "%"); });
-  }
   const localeSwitch = $("#locale-switch"), langButton = $("#lang"), localeLinks = $$(".lang-menu a");
   localeLinks.forEach(a => { a.tabIndex = -1; });
   const closeLanguages = (refocus = true) => {
@@ -1359,7 +1328,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const io = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }), { threshold: .15, rootMargin: "0px 0px -6% 0px" });
-  $$("[data-r], .lit, .promises, .adlg, .strip, .end").forEach(el => io.observe(el));
+  $$("[data-r], .adlg, .strip, .end").forEach(el => io.observe(el));
   new IntersectionObserver(([e]) => {
     const past = !e.isIntersecting && e.boundingClientRect.top < 0;
     document.body.classList.toggle("past", past); $(".mini").tabIndex = past ? 0 : -1;
@@ -1576,6 +1545,18 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     const w = { v: .15 };
     const run = gsap.to(w, { v: .75, duration: 6, ease: "none", repeat: -1, repeatDelay: 1.2, paused: true, onUpdate: () => widget(w.v) });
     ScrollTrigger.create({ trigger: c5, start: "top 80%", end: "bottom top", onToggle: s => s.isActive ? run.play() : run.pause() });
+    // real screens: the phones rise into place; on wide screens the row drifts toward the start while the section passes
+    const rs = $(".rs"), rise = gsap.fromTo($$("li", rs), { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .9, ease: "power3.out", stagger: .07, paused: true });
+    ScrollTrigger.create({ trigger: rs, start: "top 88%", onEnter: () => rise.restart(), onLeaveBack: () => rise.pause(0) });
+    gsap.matchMedia().add("(min-width: 1024px)", () => {
+      rs.classList.add("drift");
+      const over = () => {
+        const a = rs.firstElementChild.getBoundingClientRect(), b = rs.lastElementChild.getBoundingClientRect();
+        return Math.max(0, Math.max(a.right, b.right) - Math.min(a.left, b.left) + 2 * parseFloat(getComputedStyle(rs).paddingInlineStart) - rs.clientWidth);
+      };
+      gsap.fromTo(rs, { x: 0 }, { x: () => (rtl ? 1 : -1) * over(), ease: "none", scrollTrigger: { trigger: ".reel", start: "top bottom", end: "bottom top", scrub: true, invalidateOnRefresh: true } });
+      return () => rs.classList.remove("drift");
+    });
   }
   addEventListener("DOMContentLoaded", deck);
 
@@ -1613,6 +1594,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   function syncTheme() {
     const m = mode(); root.dataset.mode = m;
     shots(); waveTheme();
+    // the Arabic screens exist in both themes; the English set is light only
+    if (lang() === "ar") $$(".rs img").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
     themeBtn.dataset.iAria = m === "dark" ? "to-light" : "to-dark";
     themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
     $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
@@ -1644,7 +1627,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
   if (!still) {
     addEventListener("scroll", () => { if (!pending) pending = requestAnimationFrame(onDesk); }, { passive: true });
-    splitWords($(".lit"), "lw");
   }
 })();
 </script>
