@@ -195,7 +195,7 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 h1{font-size:clamp(46px,12.6vw,76px);line-height:1.38;font-weight:800;margin:0 auto;font-stretch:92%;text-wrap:balance}
 html[dir=ltr] h1{font-family:ui-serif,"Iowan Old Style",Charter,Georgia,"Noto Serif",serif;font-weight:500;letter-spacing:-.03em;line-height:1.04}
 html[lang=fr] h1{font-size:clamp(40px,10.6vw,68px)}
-@media (min-width:960px){h1{font-size:clamp(56px,5.2vw,84px);line-height:1.2}html[dir=ltr] h1{line-height:1.04}html[lang=fr] h1{font-size:clamp(48px,4.4vw,70px)}h1 .ln>span{white-space:nowrap}}
+@media (min-width:960px){h1{font-size:clamp(60px,5.8vw,88px);line-height:1.24}html[dir=ltr] h1{line-height:1.04}html[lang=fr] h1{font-size:clamp(50px,4.8vw,72px)}h1 .ln>span{white-space:nowrap}}
 h1 .ln{display:block;clip-path:inset(-.4em -.6em -.25em)}
 h1 .ln>span{display:inline-block}
 h1 bdi{color:var(--primary)}
@@ -210,6 +210,7 @@ h1 bdi{color:var(--primary)}
 .hm a{font-weight:600;white-space:nowrap}
 .hm a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
 .fan{position:relative;container-type:inline-size;width:min(100%,560px);aspect-ratio:10/8.9;margin-inline:auto}
+@media (min-width:960px){.fan{width:min(100%,520px)}}
 .fph{--w:34;position:absolute;top:14%;width:calc(var(--w) * 1%);padding:calc(var(--w) * .024cqw);border-radius:calc(var(--w) * .135cqw);background:#0c100f;box-shadow:0 28px 44px -26px rgb(0 32 27/.5),0 0 0 1px rgb(255 255 255/.05)}
 .fph img{width:100%;height:auto;border-radius:calc(var(--w) * .111cqw);background:var(--c)}
 .fph.s{inset-inline-start:2%;rotate:-8deg}
@@ -252,14 +253,17 @@ html:not(.js) .shot{position:static;height:auto;border:clamp(3px,.8vw,6px) solid
 .live .shot{opacity:0;transition:opacity 0s .4s}
 .live .shot.on{opacity:1;z-index:1;transition:opacity .4s var(--ease)}
 .steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,3vw,44px);width:min(100%,880px)}
-.step{position:relative;padding-top:14px;transition:opacity .4s var(--ease)}
+.step{position:relative;padding-top:14px;transition:color .4s var(--ease)}
 .step::before,.step::after{content:"";position:absolute;top:0;inset-inline:0;height:3px;border-radius:2px;background:var(--outline-v)}
 .step::after{background:var(--primary);transform:scaleX(var(--p,1));transform-origin:0 50%}
 [dir=rtl] .step::after{transform-origin:100% 50%}
 .live .step::after{transform:scaleX(var(--p,0))}
 .step h3{margin:0;font-size:clamp(16px,1.9vw,22px);line-height:1.35;font-weight:800;text-wrap:balance}
 html[dir=ltr] .step h3{letter-spacing:-.015em;line-height:1.2}
-.live .step:not(.on){opacity:.4}
+.live .step:not(.on){color:var(--muted)}
+/* phones without motion: each screen sits right over its own step, in one column */
+@media (max-width:759px){html:not(.js) .desk{gap:0}html:not(.js) :is(.phone,.screen,.steps){display:contents}html:not(.js) .shot{width:min(100%,260px);margin-top:24px}html:not(.js) .shot:first-child{margin-top:0}html:not(.js) .step{width:min(100%,260px);margin-top:14px}html:not(.js) .step:nth-child(1){order:1}html:not(.js) .shot:nth-child(2){order:2}html:not(.js) .step:nth-child(2){order:3}html:not(.js) .shot:nth-child(3){order:4}html:not(.js) .step:nth-child(3){order:5}}
+@media (max-width:759px) and (prefers-reduced-motion:reduce){.desk{gap:0}:is(.phone,.screen,.steps){display:contents}.shot{width:min(100%,260px);margin-top:24px}.shot:first-child{margin-top:0}.step{width:min(100%,260px);margin-top:14px}.step:nth-child(1){order:1}.shot:nth-child(2){order:2}.step:nth-child(2){order:3}.shot:nth-child(3){order:4}.step:nth-child(3){order:5}}
 
 /* sections */
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
@@ -273,6 +277,7 @@ html[dir=ltr] h2{letter-spacing:-.04em;line-height:1.08}
    the covered one steps back and fades into the paper (scrubbed by GSAP). The CSS here is the finished state */
 .stack{padding:104px 0 12svh;--top:88px}
 @media (max-width:759px){.stack{--top:76px;padding-top:72px}}
+@media (max-width:767px){.stack{padding-bottom:8svh}}
 .stack>h2{max-width:none;margin-bottom:40px}
 .card{--t:calc(var(--top) + var(--i) * 10px);position:relative;width:min(1200px,100% - 24px);margin:16px auto 0;min-height:min(560px,100svh)}
 .pnl{box-shadow:var(--ring,0 0 #0000),var(--lift,0 0 #0000);position:relative;height:100%;min-height:inherit;display:flex;flex-direction:column;overflow:hidden;padding:24px;border-radius:32px;transform-origin:50% 0;background:var(--pb);color:var(--pf);--pm:color-mix(in oklab,var(--pf) 80%,transparent)}
@@ -297,6 +302,8 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
   /* a sticky card stops at its container's edge: the gap sits on the next card's top, and a tail keeps the last one on stage */
   .js .card+.card{margin-top:36svh}
   .js .stack::after{content:"";display:block;height:30svh}
+  /* phones: shorter cards and gaps, so the five features don't take the whole page */
+  @media (max-width:767px){.js .card{height:min(calc(100svh - var(--t) - 12px),600px)}.js .card+.card{margin-top:20svh}.js .stack::after{height:12svh}}
   .js .pnl{will-change:transform}
   /* the rising card casts a soft shadow up onto the one it covers */
   .js .card+.card .pnl{--lift:0 -18px 36px -22px rgb(0 32 27/.32)}
@@ -440,7 +447,7 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
 .nsig.off .wa{opacity:.3}
 .nsig.off .wx{stroke-dashoffset:0}
 @media (min-width:960px){.nrow{transform:scale(1.28)}}
-@media (max-width:599px){.nt-st{padding:64px 10px 40px}.nrow{gap:10px;padding:10px;padding-inline-end:6px}.nrow img{width:46px;height:46px;border-radius:12px}.nbt{width:44px;height:44px}.ntt{font-size:16px}.nst{font-size:15px;gap:8px}}
+@media (max-width:599px){.nt-st{padding:64px 10px 40px}.nrow{gap:10px;padding:10px;padding-inline-end:6px}.nrow img{width:46px;height:46px;border-radius:12px}.nbt{width:44px;height:44px}.ntt{font-size:16px}.nst{font-size:15px;flex-wrap:wrap;gap:2px 8px}.nwt{flex-basis:100%;white-space:normal;overflow:visible}}
 /* F: the app's own logo wall, tilted like on its Update screen, every tile a site Nezzel works with; the rows drift on their own, alternating, and fade out in a clearing round the Nezzel mark */
 .amw{--t:clamp(56px,6.4vw,88px);--m:clamp(96px,11.5vw,148px);--g:calc(var(--t) * .3);position:relative;height:clamp(460px,50vw,600px);margin-top:clamp(4px,1.5vw,16px);direction:ltr}
 .amf{position:absolute;inset:0;overflow:hidden;
@@ -474,8 +481,8 @@ html:not(.js) .amk{display:none}
 .tg::after{content:"";position:absolute;top:50%;inset-inline-start:24px;width:24px;height:24px;margin-top:-12px;border-radius:50%;background:var(--on-primary);transition:all .45s var(--spring) .7s}
 .js .adlg:not(.in) .tg{background:var(--c-highest);border-color:var(--outline)}
 .js .adlg:not(.in) .tg::after{inset-inline-start:6px;width:16px;height:16px;margin-top:-8px;background:var(--outline)}
-.strip{list-style:none;margin:56px 0 0;padding:0;display:grid;gap:40px;position:relative}
-@media (min-width:900px){.strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding-top:32px}.strip::before{content:"";position:absolute;top:0;inset-inline:0;height:2px;border-radius:1px;background:var(--primary);transform-origin:left}[dir=rtl] .strip::before{transform-origin:right}}
+.strip{list-style:none;margin:32px 0 0;padding:0;display:grid;gap:24px;position:relative}
+@media (min-width:900px){.strip{margin-top:56px;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding-top:32px}.strip::before{content:"";position:absolute;top:0;inset-inline:0;height:2px;border-radius:1px;background:var(--primary);transform-origin:left}[dir=rtl] .strip::before{transform-origin:right}}
 .strip li{padding-top:20px;border-top:1px solid var(--outline-v)}
 @media (min-width:900px){.strip li{padding-top:0;border:0}}
 .strip b{display:block;font-size:20px;line-height:1.4}
@@ -484,16 +491,9 @@ html:not(.js) .amk{display:none}
   @supports (animation-timeline:view()){
     .js .strip{view-timeline:--st}
     .js .strip::before{animation:grow linear both;animation-timeline:--st;animation-range:entry 60% cover 45%}
-    .js .strip li{animation:slide linear both;animation-timeline:view();animation-range:entry 10% cover 35%}
-    @media (min-width:900px){.js .strip li{animation-timeline:--st;animation-range:entry calc(60% + var(--k) * 10%) cover calc(30% + var(--k) * 5%)}}
-  }
-  @supports not (animation-timeline:view()){
-    .js .strip li{transition:opacity .5s var(--ease) calc(var(--k) * 90ms),transform .6s var(--ease) calc(var(--k) * 90ms)}
-    .js .strip:not(.in) li{opacity:0;transform:translateX(calc(var(--x) * -40px))}
   }
 }
 @keyframes grow{from{transform:scaleX(0)}}
-@keyframes slide{from{opacity:0;transform:translateX(calc(var(--x) * -48px))}}
 
 /* faq */
 .faqs{padding-top:clamp(104px,12vw,150px)}
@@ -554,13 +554,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   .bar .sp{min-width:0}
   .brand{flex-shrink:0;gap:8px}
   .lang{min-width:70px;padding:0 9px}
-  .bar .mini span{display:none}
-  .mini{padding:0 14px}
+  .mini{padding:0 12px;font-size:14px;gap:6px}
+  body.past .brand .bn{display:none}
   .flow{padding-top:72px}
 }
-@media (max-width:370px){body.past .brand .bn{display:none}}
 @media (max-width:400px){.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
-@media (max-width:340px){.lang{min-width:0;padding:0 8px}}
+@media (max-width:340px){.lang{min-width:0;padding:0 8px}.bar .mini span{display:none}}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
@@ -627,7 +626,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
         <svg class="i"><use href="#dl"/></svg>
         <span class="roll"><span data-i="cta">Download the app</span></span> <span class="sz ltr num size" data-mb="61.5">61.5 MB</span>
       </a>
-      <p class="hm"><span data-i="hm">Free · Android 10 or newer</span><br><span data-i="ver">Version</span> <span class="ltr num vtxt">0.5.0</span> · <a href="#install" data-i="howto">How to install</a></p>
+      <p class="hm"><span data-i="hm">Free · No ads · Android 10 or newer</span><br><span data-i="ver">Version</span> <span class="ltr num vtxt">0.5.0</span> · <a href="#install" data-i="howto">How to install</a></p>
     </div>
   </div>
   <div class="fan" role="img" data-i-aria="fan-aria" data-i="hero-shots" aria-label="Nezzel’s screens: picking a quality, a download on its way and a saved file"><div class="fph s"><img src="/img/screens/en-light-recent.webp" alt="" width="640" height="1387" decoding="async"></div><div class="fph e"><img src="/img/screens/en-light-saved.webp" alt="" width="640" height="1387" decoding="async"></div><div class="fph m"><img src="/img/screens/en-light-sheet.webp" alt="" width="640" height="1387" decoding="async"></div></div>
@@ -785,7 +784,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "w-left": "<span class=\"ltr num wt\">0:08</span> left",
     language:"Language", "og-alt":"Nezzel: save videos straight from a link. A phone showing the qualities on offer",
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copy the link</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>does the rest</span></span>",
-    cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone", hm:"Free · Android 10 or newer", ver:"Version",
+    cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone", hm:"Free · No ads · Android 10 or newer", ver:"Version",
     "fan-aria":"Nezzel’s screens: picking a quality, a download on its way and a saved file",
     "hero-shots":"<div class=\"fph s\"><img src=\"/img/screens/en-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved",
@@ -855,7 +854,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "meta": "لأندرويد 10 أو أحدث · الإصدار",
       "howto": "كيف أثبّته؟",
       "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون",
-      "hm": "مجاني · أندرويد 10 أو أحدث",
+      "hm": "مجاني · بلا إعلانات · أندرويد 10 أو أحدث",
       "ver": "الإصدار",
       "fan-aria": "شاشات من Nezzel: اختيار الجودة، وتنزيل جارٍ، وملف محفوظ",
       "hero-shots": "<div class=\"fph s\"><img src=\"/img/screens/ar-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/ar-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/ar-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
@@ -969,7 +968,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "w-left": "<span class=\"ltr num wt\">0:08</span> restant",
     language:"Langue", "og-alt":"Nezzel : la vidéo, il suffit du lien. Un téléphone affiche les qualités proposées",
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copiez le lien</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>s’occupe du reste</span></span>",
-    cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone", hm:"Gratuit · Android 10 ou plus récent", ver:"Version",
+    cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone", hm:"Gratuit · Sans pub · Android 10 ou plus récent", ver:"Version",
     "fan-aria":"Les écrans de Nezzel : le choix de la qualité, un téléchargement en cours et un fichier enregistré",
     "hero-shots":"<div class=\"fph s\"><img src=\"/img/screens/en-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré",
@@ -1111,7 +1110,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const io = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }), { threshold: .15, rootMargin: "0px 0px -6% 0px" });
-  $$("[data-r], .adlg, .strip, .end").forEach(el => io.observe(el));
+  $$("[data-r], .adlg, .end").forEach(el => io.observe(el));
   new IntersectionObserver(([e]) => {
     const past = !e.isIntersecting && e.boundingClientRect.top < 0;
     document.body.classList.toggle("past", past); $(".mini").tabIndex = past ? 0 : -1;
@@ -1199,9 +1198,9 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     // the covered card steps back, lifts a little and fades into the paper over the whole climb of the next one
     cards.forEach((c, i) => {
       const nx = cards[i + 1]; if (!nx) return;
-      gsap.timeline({ scrollTrigger: { trigger: nx, start: "top bottom", end: () => "top top+=" + dock(nx), scrub: .6 } })
+      gsap.timeline({ scrollTrigger: { trigger: nx, start: "top 55%", end: () => "top top+=" + dock(nx), scrub: .6 } })
         .to($(".pnl", c), { scale: .92, y: -10, ease: "none" }, 0)
-        .to($(".dim", c), { opacity: .55, ease: "none" }, 0);
+        .to($(".dim", c), { opacity: .2, ease: "none" }, 0);
     });
     // each scene moves with the scroll: it starts as its card climbs past 70% and is finished a little after it docks
     const scene = (c, tl, inv = false) => gsap.timeline({ scrollTrigger: { trigger: c, start: "top 70%", end: () => "top top+=" + (dock(c) - innerHeight * .3), scrub: .6, invalidateOnRefresh: inv } }).add(tl);
@@ -1269,24 +1268,22 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     return el;
   };
   const motionOk = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // The network drop: the row fills, the signal goes, the row says it's waiting, the signal comes back and it carries on
+  // The network drop: the row waits at 52% with the signal gone, the signal comes back and it carries on
   addEventListener("DOMContentLoaded", () => {
     const row = $(".nrow"), sig = $(".nsig"), pc = $(".npc"); if (!row) return;
     const pct = p => { row.style.setProperty("--p", p.toFixed(4)); pc.textContent = Math.round(p * 100) + (document.documentElement.lang === "fr" ? " %" : "%"); };
     const off = on => { row.classList.toggle("off", on); sig.classList.toggle("off", on); };
     const { gsap, ScrollTrigger } = window;
     if (!motionOk || !gsap || !ScrollTrigger) { pct(.52); off(true); return; }
-    pct(.1); off(false);
-    const v = { p: .1 };
-    const tl = gsap.timeline({ repeat: -1, paused: true, onRepeat: () => off(false) })
-      .set(v, { p: .1, onComplete: () => { pct(.1); off(false); } })
-      .to(v, { p: .52, duration: 2.8, ease: "none", onUpdate: () => pct(v.p) })
-      .call(() => off(true))
-      .to({}, { duration: 2.4 })
+    // it opens on the drop itself (52%, waiting), so a glance shows it; then the signal returns and it finishes
+    pct(.52); off(true);
+    const v = { p: .52 };
+    const tl = gsap.timeline({ repeat: -1, paused: true })
+      .to({}, { duration: 3 })
       .call(() => off(false))
-      .to(v, { p: 1, duration: 2.6, ease: "none", onUpdate: () => pct(v.p) })
+      .to(v, { p: 1, duration: 1.6, ease: "none", onUpdate: () => pct(v.p) })
       .to(row, { opacity: 0, y: 8, duration: .45, ease: "power2.in" }, "+=1.1")
-      .set(v, { p: .1, onComplete: () => pct(.1) })
+      .set(v, { p: .52, onComplete: () => { pct(.52); off(true); } })
       .to(row, { opacity: 1, y: 0, duration: .5, ease: "power3.out" });
     const st = ScrollTrigger.create({ trigger: ".nt-st", start: "top 85%", end: "bottom 10%", onToggle: s => s.isActive ? tl.play() : tl.pause() });
     // reduced motion switched on while the page is open: stop on the waiting state
@@ -1307,7 +1304,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
         const r = document.createElement("div"), set = all.slice(i * 5 % all.length).concat(all.slice(0, i * 5 % all.length)).slice(0, len);
         r.className = "amr";
         for (let c = 0; c < fill * 2; c++) set.forEach(a => r.appendChild(appTile(a)));
-        r.style.setProperty("--d", (set.length * fill * (2.6 + (i % 3) * .35)) + "s");
+        r.style.setProperty("--d", (set.length * fill * (4.5 + (i % 3) * .5)) + "s");
         r.style.marginInlineStart = (-(i * pitch * .37) % pitch) + "px";
         tl.appendChild(r);
       }
