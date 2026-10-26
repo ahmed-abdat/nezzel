@@ -261,6 +261,9 @@ html:not(.js) .shot{position:static;height:auto;border:clamp(3px,.8vw,6px) solid
 .step h3{margin:0;font-size:clamp(16px,1.9vw,22px);line-height:1.35;font-weight:800;text-wrap:balance}
 html[dir=ltr] .step h3{letter-spacing:-.015em;line-height:1.2}
 .live .step:not(.on){color:var(--muted)}
+/* phones without motion: each screen sits right over its own step, in one column */
+@media (max-width:759px){html:not(.js) .desk{gap:0}html:not(.js) :is(.phone,.screen,.steps){display:contents}html:not(.js) .shot{width:min(100%,260px);margin-top:24px}html:not(.js) .shot:first-child{margin-top:0}html:not(.js) .step{width:min(100%,260px);margin-top:14px}html:not(.js) .step:nth-child(1){order:1}html:not(.js) .shot:nth-child(2){order:2}html:not(.js) .step:nth-child(2){order:3}html:not(.js) .shot:nth-child(3){order:4}html:not(.js) .step:nth-child(3){order:5}}
+@media (max-width:759px) and (prefers-reduced-motion:reduce){.desk{gap:0}:is(.phone,.screen,.steps){display:contents}.shot{width:min(100%,260px);margin-top:24px}.shot:first-child{margin-top:0}.step{width:min(100%,260px);margin-top:14px}.step:nth-child(1){order:1}.shot:nth-child(2){order:2}.step:nth-child(2){order:3}.shot:nth-child(3){order:4}.step:nth-child(3){order:5}}
 
 /* sections */
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
