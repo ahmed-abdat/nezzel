@@ -274,6 +274,7 @@ html[dir=ltr] h2{letter-spacing:-.04em;line-height:1.08}
    the covered one steps back and fades into the paper (scrubbed by GSAP). The CSS here is the finished state */
 .stack{padding:104px 0 12svh;--top:88px}
 @media (max-width:759px){.stack{--top:76px;padding-top:72px}}
+@media (max-width:767px){.stack{padding-bottom:8svh}}
 .stack>h2{max-width:none;margin-bottom:40px}
 .card{--t:calc(var(--top) + var(--i) * 10px);position:relative;width:min(1200px,100% - 24px);margin:16px auto 0;min-height:min(560px,100svh)}
 .pnl{box-shadow:var(--ring,0 0 #0000),var(--lift,0 0 #0000);position:relative;height:100%;min-height:inherit;display:flex;flex-direction:column;overflow:hidden;padding:24px;border-radius:32px;transform-origin:50% 0;background:var(--pb);color:var(--pf);--pm:color-mix(in oklab,var(--pf) 80%,transparent)}
@@ -298,6 +299,8 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
   /* a sticky card stops at its container's edge: the gap sits on the next card's top, and a tail keeps the last one on stage */
   .js .card+.card{margin-top:36svh}
   .js .stack::after{content:"";display:block;height:30svh}
+  /* phones: shorter cards and gaps, so the five features don't take the whole page */
+  @media (max-width:767px){.js .card{height:min(calc(100svh - var(--t) - 12px),600px)}.js .card+.card{margin-top:20svh}.js .stack::after{height:12svh}}
   .js .pnl{will-change:transform}
   /* the rising card casts a soft shadow up onto the one it covers */
   .js .card+.card .pnl{--lift:0 -18px 36px -22px rgb(0 32 27/.32)}
@@ -1199,9 +1202,9 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     // the covered card steps back, lifts a little and fades into the paper over the whole climb of the next one
     cards.forEach((c, i) => {
       const nx = cards[i + 1]; if (!nx) return;
-      gsap.timeline({ scrollTrigger: { trigger: nx, start: "top bottom", end: () => "top top+=" + dock(nx), scrub: .6 } })
+      gsap.timeline({ scrollTrigger: { trigger: nx, start: "top 55%", end: () => "top top+=" + dock(nx), scrub: .6 } })
         .to($(".pnl", c), { scale: .92, y: -10, ease: "none" }, 0)
-        .to($(".dim", c), { opacity: .55, ease: "none" }, 0);
+        .to($(".dim", c), { opacity: .2, ease: "none" }, 0);
     });
     // each scene moves with the scroll: it starts as its card climbs past 70% and is finished a little after it docks
     const scene = (c, tl, inv = false) => gsap.timeline({ scrollTrigger: { trigger: c, start: "top 70%", end: () => "top top+=" + (dock(c) - innerHeight * .3), scrub: .6, invalidateOnRefresh: inv } }).add(tl);
