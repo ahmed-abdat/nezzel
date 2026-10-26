@@ -555,13 +555,12 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   .bar .sp{min-width:0}
   .brand{flex-shrink:0;gap:8px}
   .lang{min-width:70px;padding:0 9px}
-  .bar .mini span{display:none}
-  .mini{padding:0 14px}
+  .mini{padding:0 12px;font-size:14px;gap:6px}
+  body.past .brand .bn{display:none}
   .flow{padding-top:72px}
 }
-@media (max-width:370px){body.past .brand .bn{display:none}}
 @media (max-width:400px){.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
-@media (max-width:340px){.lang{min-width:0;padding:0 8px}}
+@media (max-width:340px){.lang{min-width:0;padding:0 8px}.bar .mini span{display:none}}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
