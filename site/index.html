@@ -237,7 +237,16 @@ h1 bdi{color:var(--primary)}
 .phone{--W:min(300px,(100svh - var(--top) - var(--sh)) / 2.17,100vw - 64px);flex:none;width:var(--W);padding:7px;border-radius:calc(var(--W) * .135);background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1px rgb(255 255 255/.05)}
 .screen{position:relative;aspect-ratio:640/1387;border-radius:calc(var(--W) * .135 - 7px);overflow:hidden;background:var(--c)}
 .shot{position:absolute;inset:0;display:block;width:100%;height:100%}
-.shot~.shot{opacity:0}
+@media (prefers-reduced-motion:no-preference){.js .shot~.shot{opacity:0}}
+/* without JS or without motion nothing walks the steps: one phone per step, in the steps' columns */
+html:not(.js) .phone{--W:auto;width:min(100%,880px);padding:0;background:none;box-shadow:none;border-radius:0}
+html:not(.js) .screen{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,3vw,44px);aspect-ratio:auto;overflow:visible;background:none;border-radius:0}
+html:not(.js) .shot{position:static;height:auto;border:clamp(3px,.8vw,6px) solid #0c100f;border-radius:clamp(12px,3vw,32px);box-shadow:0 18px 30px -20px rgb(0 32 27/.45)}
+@media (prefers-reduced-motion:reduce){
+  .phone{--W:auto;width:min(100%,880px);padding:0;background:none;box-shadow:none;border-radius:0}
+  .screen{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,3vw,44px);aspect-ratio:auto;overflow:visible;background:none;border-radius:0}
+  .shot{position:static;height:auto;border:clamp(3px,.8vw,6px) solid #0c100f;border-radius:clamp(12px,3vw,32px);box-shadow:0 18px 30px -20px rgb(0 32 27/.45)}
+}
 /* the new screen fades in on top; the old one stays under it until the fade is done, so nothing dips */
 .live .shot{opacity:0;transition:opacity 0s .4s}
 .live .shot.on{opacity:1;z-index:1;transition:opacity .4s var(--ease)}
@@ -487,7 +496,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="wifi" viewBox="0 0 24 24"><path d="M2.5 9a14 14 0 0 1 19 0M6 12.6a9 9 0 0 1 12 0M9.4 16.1a4 4 0 0 1 5.2 0"/><circle cx="12" cy="19.4" r=".6"/></symbol>
   <symbol id="dl" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
   <symbol id="link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
   <symbol id="grp" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14a5 5 0 0 1 3 5"/></symbol><symbol id="share" viewBox="0 0 24 24"><path d="M15 5l4 4-4 4M19 9H9a5 5 0 0 0 0 10h1"/></symbol>
@@ -1005,15 +1013,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const ua = navigator.userAgent;
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
   if (ios) { const m = $(".hero [data-i=hm]"); m.dataset.i = "only-ios"; m.textContent = t("only-ios"); }
-  const clock = new Intl.DateTimeFormat(lang() + "-u-nu-latn", { hour: "numeric", minute: "2-digit" });
-  const tick = () => {
-    const now = new Date();
-    const text = clock.formatToParts(now).filter(p => p.type === "hour" || p.type === "minute" || (p.type === "literal" && p.value.trim() === ":")).map(p => p.value).join("");
-    $$(".sb .clk").forEach(s => { s.textContent = text; });
-    setTimeout(tick, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 50);
-  };
-  tick();
-  if (navigator.connection?.type === "wifi") $$(".sb .net").forEach(s => { s.innerHTML = '<svg class="i"><use href="#wifi"/></svg> ▮▮▮'; });
 
   // ---------- latest release ----------
   function applyRelease() {
