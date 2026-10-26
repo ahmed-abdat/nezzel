@@ -122,7 +122,41 @@ class OnboardingTest {
             assertShareOpened(controller.get(), "https://example.com/first")
             assertTrue((controller.get().application as dev.ahmed.savlino.jobs.IsolatedTestApplication).maintenanceRequests > 0)
         } finally { controller.pause().stop().destroy() }
+        // The seen mark is written on the app's background scope.
+        val prefs = AppPreferences(RuntimeEnvironment.getApplication())
+        val until = System.currentTimeMillis() + 5_000
+        while (!prefs.onboardingSeen && System.currentTimeMillis() < until) Thread.sleep(10)
         withActivity { compose.onNodeWithTag("onboarding").assertDoesNotExist() }
+    }
+
+    @Test fun shareLaunchWritesTheSeenMarkOffTheMainThread() {
+        val queued = mutableListOf<() -> Unit>()
+        MainActivity.startupWrites = { queued += it }
+        try {
+            val controller = Robolectric.buildActivity(MainActivity::class.java, share("https://example.com/first")).setup()
+            try {
+                val prefs = AppPreferences(RuntimeEnvironment.getApplication())
+                compose.onNodeWithTag("onboarding").assertDoesNotExist()
+                assertFalse("nothing written on the main thread before the first frame", prefs.onboardingSeen)
+                assertEquals(1, queued.size)
+                queued.single()()
+                assertTrue(prefs.onboardingSeen)
+            } finally { controller.pause().stop().destroy() }
+        } finally { MainActivity.startupWrites = null }
+    }
+
+    @Test fun aRelaunchBeforeTheSeenWriteLandsSkipsTheTour() {
+        val queued = mutableListOf<() -> Unit>()
+        MainActivity.startupWrites = { queued += it }
+        try {
+            val first = Robolectric.buildActivity(MainActivity::class.java, share("https://example.com/first")).setup()
+            first.pause().stop().destroy()
+            // The writer is held: nothing is on disk yet, but the decision made at the share entry stands.
+            assertFalse(AppPreferences(RuntimeEnvironment.getApplication()).onboardingSeen)
+            withActivity { compose.onNodeWithTag("onboarding").assertDoesNotExist() }
+            queued.forEach { it() }
+            assertTrue(AppPreferences(RuntimeEnvironment.getApplication()).onboardingSeen)
+        } finally { MainActivity.startupWrites = null }
     }
 
     @Test fun shareDuringTourFinishesItAndOpensOptionsBeforeClipboardIntake() = withActivity { controller ->

@@ -10,7 +10,7 @@ import dev.ahmed.savlino.statuses.StatusItem
 import dev.ahmed.savlino.ui.ThumbnailCache
 import dev.ahmed.savlino.ui.ThumbnailKind
 import dev.ahmed.savlino.ui.loadMediaDuration
-import dev.ahmed.savlino.ui.loadMediaThumbnail
+import dev.ahmed.savlino.ui.decodeMediaThumbnail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -30,10 +30,9 @@ class SystemStatusMedia(context: Context) : StatusMedia {
     private val thumbs = ThumbnailCache.shared(this.context)
     private val durations = LruCache<Uri, Long>(256)
 
+    // Cancellable: a status scrolled away cancels its provider call, so it never holds a decode slot.
     override suspend fun thumbnail(item: StatusItem, size: Int): Bitmap? = thumbs.getOrLoad(ThumbnailCache.key(item.uri, size)) {
-        withContext(Dispatchers.IO) {
-            loadMediaThumbnail(context, item.uri, if (item.isVideo) ThumbnailKind.VIDEO else ThumbnailKind.IMAGE, size, size)
-        }
+        decodeMediaThumbnail(context, item.uri, if (item.isVideo) ThumbnailKind.VIDEO else ThumbnailKind.IMAGE, size, size)
     }
 
     override suspend fun durationMillis(item: StatusItem): Long? = if (!item.isVideo) null else durations.get(item.uri)

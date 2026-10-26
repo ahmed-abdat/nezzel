@@ -17,6 +17,7 @@ import dev.ahmed.savlino.shortcuts.ShortcutActions
 import dev.ahmed.savlino.locale.*
 import dev.ahmed.savlino.ui.LinkViewModel
 import dev.ahmed.savlino.ui.theme.NezzelTheme
+import kotlinx.coroutines.launch
 
 /** The Application owns the engine, durable jobs and cancellation across Activity recreation. */
 class MainActivity : AppCompatActivity() {
@@ -57,6 +58,15 @@ class MainActivity : AppCompatActivity() {
     private var suggestions by mutableStateOf(true)
     private var language by mutableStateOf("en")
 
+    /** Startup disk writes run on the app's background scope; tests swap it to observe the hand-off. */
+    private val offMain: (() -> Unit) -> Unit get() = startupWrites ?: { work -> (application as NezzelApplication).scope.launch { work() } }
+
+    internal companion object {
+        @androidx.annotation.VisibleForTesting var startupWrites: ((() -> Unit) -> Unit)? = null
+        /** The app whose share entry already decided "seen": a launch before the off-main write lands skips the tour too. */
+        private var seenIn: android.app.Application? = null
+    }
+
     override fun attachBaseContext(base: Context) { super.attachBaseContext(AppLocale.attach(base)) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,9 +76,13 @@ class MainActivity : AppCompatActivity() {
         val launchShare = ShareInput.from(intent)
         replayingOnboarding = launchShare == null && savedInstanceState?.getBoolean("onboardingReplay") == true
         onboarding = if (launchShare != null) {
-            preferences.markOnboardingSeen()
+            // The decision is made here; only the disk write leaves the main thread before the first frame.
+            if (!preferences.onboardingSeen) {
+                seenIn = application
+                offMain { preferences.markOnboardingSeen() }
+            }
             false
-        } else replayingOnboarding || preferences.needsOnboarding {
+        } else replayingOnboarding || seenIn !== application && preferences.needsOnboarding {
             // Once-per-install upgrade check, only while onboarding_seen is false.
             dev.ahmed.savlino.jobs.JobStore(this).use { it.all().isNotEmpty() }
         }

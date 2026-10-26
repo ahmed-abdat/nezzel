@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -153,7 +154,8 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                 OptionsState.Hidden -> Unit
             }
         }
-        if (links.optionsState is OptionsState.Ready) ConfirmationScreen(links, language, share)
+        // One slot for the action: the placeholder and the Download row share its place, so nothing jumps when qualities land.
+        if (links.optionsState is OptionsState.Ready) Box(Modifier.testTag("options_action")) { ConfirmationScreen(links, language, share) }
         if (links.optionsState is OptionsState.ImageReady) ImageSaveBar(links, language)
         if (links.optionsState is OptionsState.Checking) DownloadPlaceholder()
         // A photo save holds the sheet open; leaving for the app mid-save would lose its result.
@@ -186,9 +188,13 @@ private fun SkeletonRows() {
 /** Holds the Download button's place while qualities load, so the sheet does not jump when they arrive. */
 @Composable
 private fun DownloadPlaceholder() {
-    Box(Modifier.fillMaxWidth().padding(Space.l).navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .testTag("download_placeholder").clearAndSetSemantics { })
+    Box(Modifier.fillMaxWidth().testTag("options_action").padding(Space.l).navigationBarsPadding()) {
+        // Sized like the Download button (56dp, or one label line plus its padding at large text), so it never jumps.
+        Box(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .testTag("download_placeholder").clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+            Text(" ", Modifier.padding(vertical = ButtonDefaults.ContentPadding.calculateTopPadding()).alpha(0f),
+                style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        }
     }
 }
 

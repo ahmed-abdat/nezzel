@@ -65,6 +65,7 @@ import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.ui.theme.motionSpec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 
 /** A measured byte or fragment fraction exists only during active transfer; every other phase spins. */
 internal fun DownloadProgress.ringFraction(): Float? =
@@ -77,10 +78,24 @@ internal val DownloadProgress.saved get() = phase == DownloadPhase.COMPLETED
  * so the person sees the result before the card leaves. UI-only: the journal is untouched.
  */
 @Composable
-internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List<DownloadProgress>): List<DownloadProgress> {
+internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List<DownloadProgress>,
+                                     completed: Flow<DownloadProgress>? = null): List<DownloadProgress> {
     val seen = remember { mutableMapOf<String, DownloadPhase>() }
     val flashing = remember { mutableStateMapOf<String, DownloadProgress>() }
+    // Ids whose end came from [completed]: the list may still hold their last live row for a moment.
+    val ended = remember { mutableSetOf<String>() }
+    // The coordinator drops a finished job from its list instead of showing it COMPLETED: its end arrives here.
+    LaunchedEffect(completed) {
+        completed?.collect { job ->
+            ended += job.jobId
+            val before = seen.put(job.jobId, DownloadPhase.COMPLETED)
+            if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
+                before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
+        }
+    }
     jobs.forEach { job ->
+        // A stale live row of a job that already ended must not undo its Saved moment.
+        if (job.jobId in ended && !job.saved) return@forEach
         val before = seen.put(job.jobId, job.phase)
         if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
             before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
@@ -91,7 +106,8 @@ internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List
     }
     if (flashing.isEmpty()) return visible
     val ids = visible.mapTo(HashSet()) { it.jobId }
-    return (flashing.values.filter { it.jobId !in ids } + visible)
+    // A flashing job still listed live shows Saved in its place.
+    return (flashing.values.filter { it.jobId !in ids } + visible.map { flashing[it.jobId] ?: it })
 }
 
 
@@ -115,11 +131,13 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
     val tone by animateColorAsState(if (job.saved) MaterialTheme.colorScheme.primaryContainer else rowBase(MaterialTheme.colorScheme, light),
         easeOut(reduced, 400), label = "row tone")
     val fraction = job.fillFraction()
-    val spoken = if (fraction != null) progressAnnouncement(job) else null
+    // Paused is a still state: no pulse and no "in progress" semantics, whether or not a fraction is known.
+    val moving = !job.terminal && !job.saved && !job.waiting && !job.paused && job.phase != DownloadPhase.FAILED
+    val spoken = if (job.paused) stringResource(R.string.download_paused) else if (fraction != null) progressAnnouncement(job) else null
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = tone) {
         BoxWithConstraints(Modifier.animateContentSize(easeOut(reduced)).semantics {
             if (fraction != null) progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
-            else if (!job.terminal && !job.saved && !job.waiting && job.phase != DownloadPhase.FAILED) progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+            else if (moving) progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
             spoken?.let { stateDescription = it }
         }) {
             // The tile gives way at large text and on narrow rows (phones under ~390dp), so the meta line keeps
@@ -130,8 +148,8 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
             val behind = if (fraction != null && maxWidth * fraction >= Space.rowH + 40.dp)
                 fillColor(MaterialTheme.colorScheme, job.paused, light).compositeOver(tone) else tone
             if (fraction != null) JobFill(fraction, job.paused, light, Modifier.matchParentSize())
-            // Waiting has nothing to show; every other live row without a fraction breathes so it never looks frozen.
-            else if (!job.terminal && !job.saved && !job.waiting && job.phase != DownloadPhase.FAILED) JobPulse(reduced, Modifier.matchParentSize())
+            // Waiting and paused have nothing to show; every other live row without a fraction breathes so it never looks frozen.
+            else if (moving) JobPulse(reduced, Modifier.matchParentSize().testTag("job_pulse"))
             if (job.phase == DownloadPhase.FAILED) FailedRow(job, tile, art, tone, onCancel, onRemove, onRetry)
             else {
                 Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),

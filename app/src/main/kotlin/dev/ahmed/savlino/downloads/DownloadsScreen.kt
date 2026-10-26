@@ -137,6 +137,10 @@ fun DownloadsScreen(
     openPlaylistJob: String? = null, onPlaylistJobOpened: () -> Unit = {},
     /** Retry one failed playlist video: the batch id and the video's position. */
     onPlaylistVideoRetry: (String, Int) -> Unit = { _, _ -> },
+    /** Finished jobs: the coordinator drops them from [jobs] at once, so their Saved moment comes from here. */
+    completed: kotlinx.coroutines.flow.Flow<DownloadProgress>? = null,
+    /** "View files" after a batch: show Saved with every file, whatever tab was remembered. */
+    openSaved: Boolean = false, onSavedShown: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
@@ -156,7 +160,7 @@ fun DownloadsScreen(
     val memberIds = playlists.flatMap { batch -> batch.items.map { it.jobId } }.toSet()
     val standalone = jobs.filter { it.jobId !in memberIds }
     val started = rememberStartOrder(standalone)
-    val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) })
+    val active = rememberWithSavedMoment(standalone, remember(standalone, started) { visibleJobs(standalone, started) }, completed)
     val reduced = LocalReducedMotion.current
     val batches = rememberVisibleBatches(playlists)
     var tab by rememberDownloadsTab(jobs, playlists)
@@ -186,6 +190,15 @@ fun DownloadsScreen(
             viewingUri = null
             if (item != null) open(item)
             onSavedOpened()
+        }
+    }
+    LaunchedEffect(openSaved) {
+        if (openSaved) {
+            filterName = MediaFilter.ALL.name
+            query = ""
+            search = false
+            tab = DownloadsTab.SAVED
+            onSavedShown()
         }
     }
     // The open playlist sheet: its id, and the video to bring into view. The last snapshot keeps it valid if the batch leaves.
@@ -690,6 +703,11 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
     val copy = LocalLinkCopy.current
     val link by produceState<String?>(null, item.uri) { value = copy?.find?.invoke(item) }
     val better = LocalBetterQuality.current
+    val sharer = dev.ahmed.savlino.sharing.LocalFileSharer.current
+    // Installed WhatsApp apps for this file type; null while the package manager answers.
+    val targets by produceState<List<dev.ahmed.savlino.sharing.ShareTarget>?>(if (sharer == null) emptyList() else null, item.uri, sharer) {
+        if (sharer != null) value = sharer.targets(item.mimeType)
+    }
     val canLookForBetter by produceState(false, item.uri) {
         value = item.kind == SavedMediaKind.VIDEO && better?.eligible?.invoke(item) == true
     }
@@ -711,7 +729,14 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
             }
             HorizontalDivider(Modifier.padding(horizontal = Space.xl))
             Spacer(Modifier.height(Space.s))
-            SheetAction(R.drawable.ic_ms_share, stringResource(R.string.share_file)) { act(onShare) }
+            // With a WhatsApp installed: one row per app, then Other apps (the chooser). Without: the plain Share row.
+            when {
+                targets == null -> Spacer(Modifier.height(56.dp))
+                targets.isNullOrEmpty() || sharer == null -> SheetAction(R.drawable.ic_ms_share, stringResource(R.string.share_file)) {
+                    act { sharer?.share(item.uri, item.mimeType, null) ?: onShare() }
+                }
+                else -> dev.ahmed.savlino.sharing.ShareTargetRows(targets.orEmpty()) { target -> act { sharer?.share(item.uri, item.mimeType, target) } }
+            }
             link?.let { url ->
                 SheetAction(R.drawable.ic_ms_link, stringResource(R.string.copy_link),
                     supporting = android.net.Uri.parse(url).host?.removePrefix("www.")) { act { copy?.copy?.invoke(url) } }
@@ -775,7 +800,7 @@ private fun rememberThumbnailLoader(): suspend (SavedMedia) -> android.graphics.
         when {
             item.kind == null -> null
             pictures != null -> pictures.load(item.uri, item.thumbnailKind, THUMB_PX)
-            else -> withContext(Dispatchers.IO) { dev.ahmed.savlino.ui.loadMediaThumbnail(context, item.uri, item.thumbnailKind, THUMB_PX, 180) }
+            else -> dev.ahmed.savlino.ui.decodeMediaThumbnail(context, item.uri, item.thumbnailKind, THUMB_PX, 180)
         }
     } }
 }
@@ -934,7 +959,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                         if (file == null || ready.value) return@LaunchedEffect
                         // A file that just listed can fail to decode for a moment; audio may have no cover at all.
                         withTimeoutOrNull(PICTURE_WAIT_MS) {
-                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX)) { loadThumb(file) } == null &&
+                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX), retryMiss = true) { loadThumb(file) } == null &&
                                 file.kind != SavedMediaKind.AUDIO && file.kind != null) kotlinx.coroutines.delay(120)
                         }
                         ready.value = true

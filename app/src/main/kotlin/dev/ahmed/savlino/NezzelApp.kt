@@ -76,6 +76,11 @@ fun NezzelApp(
     val library = rememberLibraryState(snackbar, sweep = shareLinks?.let { it::sweep })
     val jobs by (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()
     val scope = rememberCoroutineScope()
+    val sharer = dev.ahmed.savlino.sharing.rememberFileSharer { id -> scope.launch { snackbar.showSnackbar(context.getString(id)) } }
+    // Both WhatsApp apps installed: the "Saved" snackbar's WhatsApp opens this choice for the file.
+    var shareChoice by remember { mutableStateOf<Pair<DownloadProgress, List<dev.ahmed.savlino.sharing.ShareTarget>>?>(null) }
+    // View files after a batch: Downloads opens on Saved even when it remembered Downloading.
+    var showSaved by remember { mutableStateOf(false) }
     // The app scope outlives the file sheet, so a copy still lands after the sheet closes.
     val linkCopy = remember(shareLinks) {
         shareLinks?.let { share -> LinkCopy(share::link) { url -> scope.launch {
@@ -103,9 +108,10 @@ fun NezzelApp(
     }
     // Same scope: a clear started in Settings outlives the screen.
     val clearLinks = remember(links.downloads) {
-        links.downloads?.let { downloads -> { scope.launch {
-            if (!clearLinkHistory(downloads::clearShareLinks)) snackbar.showSnackbar(context.getString(R.string.clear_link_history_failed))
-        }; Unit } }
+        links.downloads?.let { downloads -> LinkHistoryClear(scope, downloads::clearShareLinks) { cleared ->
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(context.getString(if (cleared) R.string.clear_link_history_done else R.string.clear_link_history_failed))
+        } }
     }
     val updates = (context.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available }
     val updateState by (updates?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AppUpdateState()) }).collectAsState()
@@ -196,6 +202,10 @@ fun NezzelApp(
                 snackbar.currentSnackbarData?.dismiss()
                 snackbar.showSnackbar(context.resources.getQuantityString(R.plurals.multiple_links, count, formattedCount), duration = SnackbarDuration.Short)
             } }
+            launch { links.emptyPasteEvents.collect {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(context.getString(R.string.paste_empty))
+            } }
             launch { links.betterNoneEvents.collect {
                 snackbar.currentSnackbarData?.dismiss()
                 snackbar.showSnackbar(context.getString(R.string.better_quality_none))
@@ -226,13 +236,13 @@ fun NezzelApp(
                     catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
                 }
             } }
-            // Two files finishing together each found no other job left: only the later one speaks.
-            var lastCompleted: String? = null
+            val run = CompletionRun()
             links.downloads?.completed?.collect { job ->
-                lastCompleted = job.jobId
+                run.finished(job.jobId)
                 launch {
                     val problem = job.check as? dev.ahmed.savlino.domain.ResultCheck.Problem
                     if (problem != null) {
+                        run.problem()
                         snackbar.currentSnackbarData?.dismiss()
                         // A problem stays until handled: Try again (kept link) or dismiss.
                         val downloads = links.downloads
@@ -251,16 +261,31 @@ fun NezzelApp(
                     // A playlist feeds its videos a few at a time, so between two of them no other job may be listed yet.
                     val unfed = setOf(dev.ahmed.savlino.jobs.BatchItemState.WAITING, dev.ahmed.savlino.jobs.BatchItemState.QUEUED)
                     if (playlists.any { batch -> !batch.terminal && batch.items.any { it.jobId != job.jobId && it.state in unfed } }) return@launch
-                    if (lastCompleted != job.jobId) return@launch
+                    if (!run.isLast(job.jobId)) return@launch
+                    val uri = job.publishedUri
+                    val targets = uri?.let { sharer.targets(job.mimeType) }
+                    // The lookup suspends: a file that finished meanwhile speaks for the whole run instead.
+                    val size = run.take(job.jobId) ?: return@launch
+                    val choice = targets?.let { dev.ahmed.savlino.sharing.completionAction(size, it) }
                     snackbar.currentSnackbarData?.dismiss()
                     val saved = context.getString(R.string.saved_snackbar, NezzelFormat.isolate(destinations.publishedFolderName(job.publishedUri)))
+                    val label = when (choice) {
+                        null -> context.getString(R.string.open_file)
+                        dev.ahmed.savlino.sharing.CompletionAction.ViewSaved -> context.getString(R.string.view_saved_files)
+                        is dev.ahmed.savlino.sharing.CompletionAction.Share -> choice.targets.singleOrNull()?.label
+                            ?: context.getString(if (choice.targets.isEmpty()) R.string.share_file else R.string.share_whatsapp)
+                    }
                     val action = snackbar.showSnackbar(
                         DownloadNotifications.checkLine(job.check)?.let { saved + "\n" + context.getString(it) } ?: saved,
-                        context.getString(R.string.open_file), duration = SnackbarDuration.Long)
-                    if(action == SnackbarResult.ActionPerformed) {
-                        try { context.startActivity(DownloadNotifications.openIntent(job)) }
-                        catch (_: android.content.ActivityNotFoundException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
-                        catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
+                        label, duration = SnackbarDuration.Long)
+                    if (action == SnackbarResult.ActionPerformed) when (choice) {
+                        null -> try { context.startActivity(DownloadNotifications.openIntent(job)) }
+                            catch (_: android.content.ActivityNotFoundException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
+                            catch (_: SecurityException) { snackbar.showSnackbar(context.getString(R.string.saved_action_failed)) }
+                        dev.ahmed.savlino.sharing.CompletionAction.ViewSaved -> { showSaved = true; links.navigate("Downloads") }
+                        is dev.ahmed.savlino.sharing.CompletionAction.Share ->
+                            if (choice.targets.size > 1) shareChoice = job to choice.targets
+                            else if (uri != null) sharer.share(uri, job.mimeType, choice.targets.singleOrNull())
                     }
                 }
             }
@@ -272,7 +297,8 @@ fun NezzelApp(
         val store = links.downloads?.artwork; { id -> store?.load(id) }
     }
     CompositionLocalProvider(LocalReducedMotion provides reduced, LocalOffline provides rememberOffline(),
-        dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork) {
+        dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork,
+        dev.ahmed.savlino.sharing.LocalFileSharer provides sharer) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         if (updates != null) AppUpdateSheets(updates, updateState, links, language, notificationRationaleShowing)
@@ -290,7 +316,7 @@ fun NezzelApp(
                 TabContent(links.destination, reselections, tabStateHolder) { route ->
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
-                            onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks)
+                            onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks?.let { it::start }, clearingLinks = clearLinks?.busy == true)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(statusLibrary, language)
                         "Downloads" -> DownloadsScreen(jobs, language,
                             cancel,
@@ -302,7 +328,8 @@ fun NezzelApp(
                             playlists = playlists, playlistsLoaded = loadedPlaylists != null, onPlaylistAction = playlistAction, playlistBusy = playlistBusy, onPlaylistVideoRetry = playlistVideoRetry,
                             warnings = warnings, onTryAgain = tryAgain, onDismissWarning = { links.downloads?.dismissWarning(it) },
                             openSavedUri = openSavedUri, onSavedOpened = onSavedOpened,
-                            openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null })
+                            openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null },
+                            completed = links.downloads?.completed, openSaved = showSaved, onSavedShown = { showSaved = false })
                         else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications) { id ->
                             playlistJob = id
                             links.navigate("Downloads")
@@ -312,6 +339,11 @@ fun NezzelApp(
             }
             if (showOptions) OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
             if (links.multi.visible) dev.ahmed.savlino.ui.MultiLinkSheet(links.multi, language, links::dismissMulti)
+        }
+        shareChoice?.let { (job, targets) ->
+            dev.ahmed.savlino.sharing.ShareTargetsSheet(targets, { target ->
+                job.publishedUri?.let { sharer.share(it, job.mimeType, target) }
+            }) { shareChoice = null }
         }
     }
     }
@@ -476,4 +508,16 @@ private fun FirstRunWords(modifier: Modifier = Modifier) {
         Text(stringResource(R.string.home_hero_sites), style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** Files saved since the last message: only the last of a run speaks, and one file can be shared while several are a batch. */
+internal class CompletionRun {
+    private var last: String? = null
+    private var size = 0
+    fun finished(jobId: String) { last = jobId; size++ }
+    /** A problem speaks for itself and starts a new run. */
+    fun problem() { size = 0 }
+    fun isLast(jobId: String) = last == jobId
+    /** The run's size, once, for its last file; null when a newer file finished since (it speaks for the run). */
+    fun take(jobId: String): Int? = if (last != jobId) null else size.also { size = 0 }
 }

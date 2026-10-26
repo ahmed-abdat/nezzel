@@ -381,6 +381,9 @@
     <string name="clear_link_history_title">Effacer l’historique des liens ?</string>
     <string name="clear_link_history_body">Nezzel oubliera les liens de tous vos téléchargements. Vos fichiers restent sur votre téléphone.</string>
     <string name="clear_link_history_failed">Impossible d’effacer l’historique des liens. Réessayez.</string>
+    <string name="clear_link_history_busy">Effacement…</string>
+    <string name="clear_link_history_done">Historique des liens effacé</string>
+    <string name="paste_empty">Copiez d’abord un lien</string>
     <string name="clear">Effacer</string>
     <string name="settings_advanced">Avancé</string>
     <string name="settings_advanced_help">Liens, compatibilité et mises à jour</string>

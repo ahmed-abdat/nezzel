@@ -421,6 +421,9 @@
     <string name="clear_link_history_title">هل تريد مسح سجل الروابط؟</string>
     <string name="clear_link_history_body">سينسى Nezzel روابط كل تنزيلاتك. تبقى ملفاتك على هاتفك.</string>
     <string name="clear_link_history_failed">تعذّر مسح سجل الروابط. أعد المحاولة.</string>
+    <string name="clear_link_history_busy">جارٍ المسح…</string>
+    <string name="clear_link_history_done">تم مسح سجل الروابط</string>
+    <string name="paste_empty">انسخ رابطًا أولًا</string>
     <string name="clear">مسح</string>
     <string name="settings_advanced">إعدادات متقدمة</string>
     <string name="settings_advanced_help">الروابط ودعم المواقع والتحديثات</string>

@@ -44,6 +44,30 @@ class PauseRowTest {
     private fun has(desc: String) = compose.onAllNodesWithContentDescription(desc, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
     private fun hasText(text: String) = compose.onAllNodesWithText(text, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
+    private fun pulses() = compose.onAllNodesWithTag("job_pulse", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    private fun indeterminate() = compose.onAllNodes(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo,
+        androidx.compose.ui.semantics.ProgressBarRangeInfo.Indeterminate), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    private fun stateSaysPaused() = compose.onAllNodes(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,
+        context.getString(R.string.download_paused)), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    @Test fun pausedWithoutAFractionIsStillAndSaysPaused() {
+        render(paused.copy(bytes = null)) {
+            assertFalse("a paused row never pulses", pulses())
+            assertFalse("a paused row is not in progress", indeterminate())
+            assertTrue(stateSaysPaused())
+        }
+    }
+
+    @Test fun pausedWithAFractionSaysPausedNotProgress() {
+        render(paused) { assertFalse(pulses()); assertFalse(indeterminate()); assertTrue(stateSaysPaused()) }
+    }
+
+    @Test fun preparingWithoutAFractionStillBreathes() {
+        render(base.copy(phase = DownloadPhase.PREPARING, bytes = null, bytesPerSecond = null)) {
+            assertTrue(pulses()); assertTrue(indeterminate())
+        }
+    }
+
     @Test fun runningRowOffersPauseNamedAfterTheFileAndCancel() {
         var pauses = 0
         render(base, onPause = { pauses++ }) {

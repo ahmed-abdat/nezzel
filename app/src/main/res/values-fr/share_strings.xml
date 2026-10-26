@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_whatsapp">WhatsApp</string>
+    <string name="share_other_apps">Autres applis</string>
+    <string name="share_file_unavailable">Fichier introuvable — il a peut-être été déplacé ou supprimé</string>
+    <string name="share_unavailable">Impossible de partager ce fichier</string>
+    <string name="view_saved_files">Voir les fichiers</string>
+</resources>

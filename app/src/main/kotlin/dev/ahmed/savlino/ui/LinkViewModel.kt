@@ -279,6 +279,9 @@ class LinkViewModel(
     private val betterNoneChannel = Channel<Unit>(Channel.CONFLATED)
     /** The re-read returned nothing above the saved tier; the options stay open. */
     val betterNoneEvents: Flow<Unit> = betterNoneChannel.receiveAsFlow()
+    private val emptyPasteChannel = Channel<Unit>(Channel.CONFLATED)
+    /** Paste found no text on the clipboard: a short notice, nothing else changes. */
+    val emptyPasteEvents: Flow<Unit> = emptyPasteChannel.receiveAsFlow()
     // Never put the remainder (including pending replacement shares) in SavedStateHandle.
     private var linkQueue by mutableStateOf<LinkQueue?>(null)
     private var nextLinkReady by mutableStateOf(false)
@@ -587,7 +590,7 @@ class LinkViewModel(
     }
     private fun setTyped(value: Boolean) { typedDraft = value; saved["typedDraft"] = value }
     fun paste(value: String?) {
-        if (value == null) return
+        if (value.isNullOrBlank()) { emptyPasteChannel.trySend(Unit); return }
         if (openMulti(value)) { usage.count(UsageKeys.PASTE); return }
         val candidates = LinkInput.candidates(value)
         val link = candidates.firstOrNull()

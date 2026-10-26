@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Snackbar action when both WhatsApp apps are installed; one installed shows its own name. -->
+    <string name="share_whatsapp">WhatsApp</string>
+    <string name="share_other_apps">Other apps</string>
+    <string name="share_file_unavailable">Can’t find this file — it may have been moved or deleted</string>
+    <string name="share_unavailable">Couldn’t share this file</string>
+    <string name="view_saved_files">View files</string>
+</resources>
