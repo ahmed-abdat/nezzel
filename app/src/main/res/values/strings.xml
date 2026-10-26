@@ -371,6 +371,9 @@
     <string name="clear_link_history_title">Clear link history?</string>
     <string name="clear_link_history_body">Nezzel will forget the links of all your downloads. Your files stay on your phone.</string>
     <string name="clear_link_history_failed">Couldn’t clear link history. Try again.</string>
+    <string name="clear_link_history_busy">Clearing…</string>
+    <string name="clear_link_history_done">Link history cleared</string>
+    <string name="paste_empty">Copy a link first</string>
     <string name="clear">Clear</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_advanced_help">Links, site support and updates</string>

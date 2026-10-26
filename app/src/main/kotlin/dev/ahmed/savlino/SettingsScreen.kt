@@ -12,7 +12,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +55,8 @@ internal fun SettingsScreen(
     updates: AppUpdates? = (LocalContext.current.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available },
     /** Fire and forget: the caller owns the clear so leaving Settings can't cut it short. */
     onClearLinks: (() -> Unit)? = null,
+    /** A clear is running: the row says so and ignores taps. */
+    clearingLinks: Boolean = false,
 ) {
     var advanced by rememberSaveable { mutableStateOf(false) }
     val advancedSnackbar = remember { SnackbarHostState() }
@@ -66,7 +70,7 @@ internal fun SettingsScreen(
         else fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) togetherWith fadeOut(tween(70, easing = Motion.EaseOut))
     }, label = "settings_page") { page ->
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
-            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks,
+            links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks, clearingLinks,
             app?.preferences?.parallelDownloadsFlow?.collectAsState()?.value, { app?.preferences?.chooseParallelDownloads(it) },
             language, helpImprove.takeIf { app != null }, { on -> helpImprove = on; app?.chooseHelpImprove(on) },
             oldDownloads, advancedSnackbar) { advanced = false }
@@ -127,17 +131,34 @@ internal suspend fun clearLinkHistory(clear: suspend () -> Unit): Boolean = with
     try { clear(); true } catch (_: Exception) { false }
 }
 
+/** One clear at a time: [busy] while it runs, a second start meanwhile does nothing, and [done] hears the result. */
+internal class LinkHistoryClear(private val scope: CoroutineScope, private val clear: suspend () -> Unit,
+                                private val done: suspend (Boolean) -> Unit) {
+    var busy by mutableStateOf(false); private set
+    fun start() {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val cleared = clearLinkHistory(clear)
+            busy = false
+            done(cleared)
+        }
+    }
+}
+
 /**
  * Forgets every saved file's link after one confirmation (files stay), and the Help improve Nezzel switch: a title only,
  * no supporting text (owner 2026-10-24); PRIVACY.md says what it sends.
  */
 @Composable
-internal fun PrivacySettings(onClear: (() -> Unit)?, helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {}) {
+internal fun PrivacySettings(onClear: (() -> Unit)?, helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {},
+                             clearing: Boolean = false) {
     var confirm by rememberSaveable { mutableStateOf(false) }
     if (onClear == null && helpImprove == null) return
     SettingsGroup(stringResource(R.string.settings_privacy)) {
         if (onClear != null) SettingsNavRow(stringResource(R.string.clear_link_history), R.drawable.ic_ms_link,
-            body = stringResource(R.string.clear_link_history_help), chevron = false) { confirm = true }
+            body = stringResource(R.string.clear_link_history_help), chevron = false, enabled = !clearing,
+            note = if (clearing) stringResource(R.string.clear_link_history_busy) else null, liveNote = true) { confirm = true }
         helpImprove?.let { SwitchSetting(stringResource(R.string.help_improve), null, it, R.drawable.ic_ms_bug_report, onHelpImprove) }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false },
@@ -162,7 +183,7 @@ internal fun PrivacySettings(onClear: (() -> Unit)?, helpImprove: Boolean? = nul
 internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: () -> Unit, updates: AppUpdates?,
     automaticOptions: Boolean? = null, onAutomaticOptions: (Boolean) -> Unit = {},
     confirmPausedUpdate: Boolean = false, onPausedUpdate: (Boolean) -> Unit = {}, onClearLinks: (() -> Unit)? = null,
-    parallel: Int? = null, onParallel: (Int) -> Unit = {}, language: String = "en",
+    clearingLinks: Boolean = false, parallel: Int? = null, onParallel: (Int) -> Unit = {}, language: String = "en",
     helpImprove: Boolean? = null, onHelpImprove: (Boolean) -> Unit = {},
     oldDownloads: OldDownloadsOffer? = null, snackbar: SnackbarHostState? = null, back: () -> Unit) {
     if (confirmPausedUpdate) AlertDialog(onDismissRequest = { onPausedUpdate(false) },
@@ -195,7 +216,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                 findOld?.let { SettingsNavRow(stringResource(R.string.old_downloads_setting), R.drawable.ic_folder,
                     body = stringResource(R.string.old_downloads_setting_body), onClick = it.show) }
             }
-            PrivacySettings(onClearLinks, helpImprove, onHelpImprove)
+            PrivacySettings(onClearLinks, helpImprove, onHelpImprove, clearingLinks)
             engine?.let { engine ->
                 val updating = engine.status == EngineUpdateStatus.UPDATING
                 val builtIn = engine.usingBuiltIn && engine.status in setOf(EngineUpdateStatus.IDLE, EngineUpdateStatus.FAILED)

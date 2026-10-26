@@ -83,6 +83,38 @@ class CopyLinkUiTest {
         assertTrue(cleared)
     }
 
+    @Test fun clearLinkHistoryRunsOnceWhileBusyThenReportsItsResult() = kotlinx.coroutines.test.runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var clears = 0
+        val results = mutableListOf<Boolean>()
+        val clear = dev.ahmed.savlino.LinkHistoryClear(this, { clears++; gate.await() }) { results += it }
+        clear.start(); testScheduler.runCurrent()
+        assertTrue(clear.busy)
+        clear.start(); clear.start(); testScheduler.runCurrent() // double tap while the first runs
+        assertEquals(1, clears)
+        assertTrue(results.isEmpty())
+        gate.complete(Unit); testScheduler.advanceUntilIdle()
+        assertFalse(clear.busy)
+        assertEquals(listOf(true), results)
+        val failing = dev.ahmed.savlino.LinkHistoryClear(this, { throw android.database.sqlite.SQLiteException("busy") }) { results += it }
+        failing.start(); testScheduler.advanceUntilIdle()
+        assertFalse(failing.busy)
+        assertEquals(listOf(true, false), results)
+    }
+
+    @Test fun clearingRowSaysSoAndIgnoresTaps() {
+        var cleared = 0
+        render({ PrivacySettings({ cleared++ }, clearing = true) }) { a ->
+            assertTrue(texts(nodes(a)).contains(context.getString(R.string.clear_link_history_busy)))
+            val label = context.getString(R.string.clear_link_history)
+            val row = nodes(a).last { texts(descendants(it)).contains(label) && (it.config.contains(SemanticsProperties.Disabled) ||
+                it.config.getOrNull(SemanticsActions.OnClick) != null) }
+            assertTrue("busy row is disabled", row.config.contains(SemanticsProperties.Disabled))
+            assertFalse(texts(nodes(a)).contains(context.getString(R.string.clear_link_history_title)))
+            assertEquals(0, cleared)
+        }
+    }
+
     @Test fun clearLinkHistoryClearsOnlyAfterConfirmation() {
         var cleared = 0
         render({ PrivacySettings({ cleared++ }) }) { a ->

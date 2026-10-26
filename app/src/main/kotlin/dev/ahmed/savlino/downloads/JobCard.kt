@@ -115,11 +115,13 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
     val tone by animateColorAsState(if (job.saved) MaterialTheme.colorScheme.primaryContainer else rowBase(MaterialTheme.colorScheme, light),
         easeOut(reduced, 400), label = "row tone")
     val fraction = job.fillFraction()
-    val spoken = if (fraction != null) progressAnnouncement(job) else null
+    // Paused is a still state: no pulse and no "in progress" semantics, whether or not a fraction is known.
+    val moving = !job.terminal && !job.saved && !job.waiting && !job.paused && job.phase != DownloadPhase.FAILED
+    val spoken = if (job.paused) stringResource(R.string.download_paused) else if (fraction != null) progressAnnouncement(job) else null
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = tone) {
         BoxWithConstraints(Modifier.animateContentSize(easeOut(reduced)).semantics {
             if (fraction != null) progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
-            else if (!job.terminal && !job.saved && !job.waiting && job.phase != DownloadPhase.FAILED) progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+            else if (moving) progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
             spoken?.let { stateDescription = it }
         }) {
             // The tile gives way at large text and on narrow rows (phones under ~390dp), so the meta line keeps
@@ -130,8 +132,8 @@ internal fun JobRow(job: DownloadProgress, onCancel: () -> Unit, onRemove: () ->
             val behind = if (fraction != null && maxWidth * fraction >= Space.rowH + 40.dp)
                 fillColor(MaterialTheme.colorScheme, job.paused, light).compositeOver(tone) else tone
             if (fraction != null) JobFill(fraction, job.paused, light, Modifier.matchParentSize())
-            // Waiting has nothing to show; every other live row without a fraction breathes so it never looks frozen.
-            else if (!job.terminal && !job.saved && !job.waiting && job.phase != DownloadPhase.FAILED) JobPulse(reduced, Modifier.matchParentSize())
+            // Waiting and paused have nothing to show; every other live row without a fraction breathes so it never looks frozen.
+            else if (moving) JobPulse(reduced, Modifier.matchParentSize().testTag("job_pulse"))
             if (job.phase == DownloadPhase.FAILED) FailedRow(job, tile, art, tone, onCancel, onRemove, onRetry)
             else {
                 Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),

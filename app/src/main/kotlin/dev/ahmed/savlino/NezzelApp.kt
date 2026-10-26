@@ -103,9 +103,10 @@ fun NezzelApp(
     }
     // Same scope: a clear started in Settings outlives the screen.
     val clearLinks = remember(links.downloads) {
-        links.downloads?.let { downloads -> { scope.launch {
-            if (!clearLinkHistory(downloads::clearShareLinks)) snackbar.showSnackbar(context.getString(R.string.clear_link_history_failed))
-        }; Unit } }
+        links.downloads?.let { downloads -> LinkHistoryClear(scope, downloads::clearShareLinks) { cleared ->
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(context.getString(if (cleared) R.string.clear_link_history_done else R.string.clear_link_history_failed))
+        } }
     }
     val updates = (context.applicationContext as? NezzelApplication)?.appUpdates?.takeIf { it.available }
     val updateState by (updates?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AppUpdateState()) }).collectAsState()
@@ -195,6 +196,10 @@ fun NezzelApp(
                 val formattedCount = NezzelFormat.count(count, language)
                 snackbar.currentSnackbarData?.dismiss()
                 snackbar.showSnackbar(context.resources.getQuantityString(R.plurals.multiple_links, count, formattedCount), duration = SnackbarDuration.Short)
+            } }
+            launch { links.emptyPasteEvents.collect {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(context.getString(R.string.paste_empty))
             } }
             launch { links.betterNoneEvents.collect {
                 snackbar.currentSnackbarData?.dismiss()
@@ -290,7 +295,7 @@ fun NezzelApp(
                 TabContent(links.destination, reselections, tabStateHolder) { route ->
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
-                            onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks)
+                            onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks?.let { it::start }, clearingLinks = clearLinks?.busy == true)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(statusLibrary, language)
                         "Downloads" -> DownloadsScreen(jobs, language,
                             cancel,
