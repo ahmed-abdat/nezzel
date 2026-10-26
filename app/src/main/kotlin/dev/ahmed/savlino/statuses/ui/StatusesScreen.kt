@@ -119,6 +119,7 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
                     context.resources.getQuantityString(R.plurals.statuses_saved_n, event.saved, NezzelFormat.count(event.saved, language)),
                     event.notSaved.takeIf { it > 0 }?.let { context.resources.getQuantityString(R.plurals.statuses_not_saved_n, it,
                         NezzelFormat.count(it, language)) },
+                    context.getString(R.string.download_space_error).takeIf { event.noSpace },
                 ).joinToString(context.getString(R.string.separator)))
                 is StatusEvent.Gone -> snackbar.showSnackbar(context.resources.getQuantityString(R.plurals.statuses_gone, event.count,
                     NezzelFormat.count(event.count, language)))
@@ -411,13 +412,9 @@ private fun describe(item: StatusItem, duration: Long?): String = listOfNotNull(
     stringResource(R.string.statuses_new).takeIf { item.isNew },
 ).joinToString(stringResource(R.string.separator))
 
-/** Owner pick pending: A puts Save in a full-width row under the picture, B in a round button on its corner. */
-internal enum class StatusTileStyle { Row, Corner }
-internal val LocalStatusTileStyle = staticCompositionLocalOf { StatusTileStyle.Row }
-
 /**
- * One status: the picture previews on tap (picks in select mode) and Save is its own touch target beside it, never
- * inside it, so saving needs no preview. Save, then Saving, then Saved.
+ * One status: the picture previews on tap (picks in select mode) and Save is its own touch target on the picture's
+ * corner, so saving needs no preview. Save, then Saving, then Saved.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -428,66 +425,44 @@ private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean,
     val description = describe(item, duration)
     val shape = MaterialTheme.shapes.small
     val primary = MaterialTheme.colorScheme.primary
-    val corner = LocalStatusTileStyle.current == StatusTileStyle.Corner
     val pickable = !item.saved && !saving
-    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        Box(Modifier.aspectRatio(9f / 14f)) {
-            Box(Modifier.fillMaxSize().clip(shape)
-                .then(if (selected) Modifier.border(3.dp, primary, shape) else Modifier)
-                .combinedClickable(onClickLabel = stringResource(if (selecting) R.string.statuses_select else R.string.statuses_preview),
-                    onLongClickLabel = stringResource(R.string.statuses_select).takeIf { pickable },
-                    onLongClick = onLongClick.takeIf { pickable }, onClick = onClick)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = description
-                    if (selecting && pickable) this.selected = selected
-                }) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.secondaryContainer) {
-                    val loaded = thumb
-                    if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    else Box(contentAlignment = Alignment.Center) {
-                        if (item.isVideo) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
-                    }
-                }
-                // Marks: new at top-start, the selection circle at top-end, duration at bottom-start.
-                if (item.isNew && !selecting) Box(Modifier.align(Alignment.TopStart).padding(Space.s).size(12.dp).clip(CircleShape)
-                    .background(Color.White).padding(2.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
-                if (selecting && pickable) SelectCircle(selected, Modifier.align(Alignment.TopEnd).padding(Space.xs))
-                duration?.let {
-                    TileLabel(Modifier.align(Alignment.BottomStart)) {
-                        Text(NezzelFormat.duration(it / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
-                    }
-                }
-                // A saved mark on the picture (an icon and a word, never a check circle, so it can't read as selected).
-                if (corner && item.saved) TileLabel(Modifier.align(Alignment.BottomEnd).testTag("status-saved")) {
-                    Icon(painterResource(R.drawable.ic_download_done), null, Modifier.size(12.dp))
-                    Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+    Box(Modifier.aspectRatio(9f / 14f)) {
+        Box(Modifier.fillMaxSize().clip(shape)
+            .then(if (selected) Modifier.border(3.dp, primary, shape) else Modifier)
+            .combinedClickable(onClickLabel = stringResource(if (selecting) R.string.statuses_select else R.string.statuses_preview),
+                onLongClickLabel = stringResource(R.string.statuses_select).takeIf { pickable },
+                onLongClick = onLongClick.takeIf { pickable }, onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                if (selecting && pickable) this.selected = selected
+            }) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.secondaryContainer) {
+                val loaded = thumb
+                if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Box(contentAlignment = Alignment.Center) {
+                    if (item.isVideo) Icon(Icons.Default.PlayArrow, null) else Icon(painterResource(R.drawable.ic_image), null)
                 }
             }
-            if (corner && !item.saved) CornerSave(saving, onSave, Modifier.align(Alignment.BottomEnd))
+            // Marks: new at top-start, the selection circle at top-end, duration at bottom-start.
+            if (item.isNew && !selecting) Box(Modifier.align(Alignment.TopStart).padding(Space.s).size(12.dp).clip(CircleShape)
+                .background(Color.White).padding(2.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+            if (selecting && pickable) SelectCircle(selected, Modifier.align(Alignment.TopEnd).padding(Space.xs))
+            duration?.let {
+                TileLabel(Modifier.align(Alignment.BottomStart)) {
+                    Text(NezzelFormat.duration(it / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+                }
+            }
+            // A saved mark on the picture (an icon and a word, never a check circle, so it can't read as selected).
+            if (item.saved) TileLabel(Modifier.align(Alignment.BottomEnd).testTag("status-saved")) {
+                Icon(painterResource(R.drawable.ic_download_done), null, Modifier.size(12.dp))
+                Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
         }
-        if (!corner) RowSave(item.saved, saving, onSave)
+        if (!item.saved) CornerSave(saving, onSave, Modifier.align(Alignment.BottomEnd))
     }
 }
 
-/** Variant A: the whole width under the picture. Saved is a quiet word, not a button. */
-@Composable
-private fun RowSave(saved: Boolean, saving: Boolean, onSave: () -> Unit) {
-    val large = LocalDensity.current.fontScale > 1.3f
-    if (saved) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("status-saved").clearAndSetSemantics { },
-        horizontalArrangement = Arrangement.spacedBy(Space.xs, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(R.drawable.ic_download_done), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(stringResource(R.string.statuses_saved), style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-    } else FilledTonalButton(onClick = onSave, enabled = !saving, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        contentPadding = PaddingValues(horizontal = Space.s)) {
-        if (saving) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
-        else if (!large) Icon(painterResource(R.drawable.ic_download), null, Modifier.size(18.dp))
-        if (saving || !large) Spacer(Modifier.width(Space.xs))
-        Text(stringResource(if (saving) R.string.statuses_saving else R.string.statuses_save), maxLines = 1)
-    }
-}
-
-/** Variant B: a round button on the picture's bottom-end corner, 48dp to touch. */
+/** Save: a round button on the picture's bottom-end corner, 48dp to touch. */
 @Composable
 private fun CornerSave(saving: Boolean, onSave: () -> Unit, modifier: Modifier) {
     val label = stringResource(if (saving) R.string.statuses_saving else R.string.statuses_save)

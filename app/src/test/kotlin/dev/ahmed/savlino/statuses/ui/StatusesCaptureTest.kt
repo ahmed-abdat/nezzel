@@ -66,7 +66,7 @@ class StatusesCaptureTest {
     }
 
     private fun shoot(name: String, library: () -> FakeStatusLibrary?, fonts: Boolean = false, dialog: Boolean = false,
-                      style: StatusTileStyle = StatusTileStyle.Row, u3: Boolean = false, setup: suspend StatusesState.() -> Unit = {}) {
+                      u3: Boolean = false, setup: suspend StatusesState.() -> Unit = {}) {
         assumeTrue(dir != null)
         // Save-flow review set: EN and AR in both themes, Arabic at twice the text size.
         val variants = if (u3) listOf("en", "ar").flatMap { lang -> listOf(Triple(lang, false, 1f), Triple(lang, true, 1f)) } +
@@ -85,7 +85,7 @@ class StatusesCaptureTest {
                 state.setActive(true)
                 scope.launch { state.setup() }
                 controller.get().setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
-                    CompositionLocalProvider(LocalStatusMedia provides FakeStatusMedia(), LocalStatusTileStyle provides style) {
+                    CompositionLocalProvider(LocalStatusMedia provides FakeStatusMedia()) {
                         NavigationScaffold("Statuses", emptyList(), lang, {}) { StatusesScreen(fake, lang, state) }
                     }
                 } }
@@ -143,18 +143,14 @@ class StatusesCaptureTest {
         results = { if (it.uri.lastPathSegment == "status-3") dev.ahmed.savlino.statuses.StatusSaveResult.Failed
             else dev.ahmed.savlino.statuses.StatusSaveResult.Saved(android.net.Uri.parse("content://media/external/file/1")) }
     }
-    @Test fun u3Grid() = StatusTileStyle.entries.forEach { style -> shoot("u3-grid-${style.name}", { FakeStatusLibrary(ready()) }, style = style, u3 = true) }
-    @Test fun u3Select() = shoot("u3-select-Row", { FakeStatusLibrary(ready()) }, u3 = true) { enterSelect(); first(this, 3).filter { !it.saved }.forEach(::toggle) }
-    @Test fun u3SelectAll() = shoot("u3-select-all-Row", { FakeStatusLibrary(ready()) }, u3 = true) { selectAll() }
-    @Test fun u3Saving() = StatusTileStyle.entries.forEach { style ->
-        shoot("u3-saving-${style.name}", ::gated, style = style, u3 = true) { save(first(this, 3)) }
-    }
-    @Test fun u3SavingBatch() = shoot("u3-saving-batch-Row", ::gated, u3 = true) { selectAll(); save(selectedItems) }
-    @Test fun u3Saved() = StatusTileStyle.entries.forEach { style ->
-        shoot("u3-saved-${style.name}", { FakeStatusLibrary(ready()) }, style = style, u3 = true) { save(first(this, 1)) }
-    }
-    @Test fun u3PartialFailure() = shoot("u3-partial-Row", ::partly, u3 = true) { first(this, 3).forEach(::toggle); save(selectedItems) }
-    @Test fun u3PreviewSaved() = shoot("u3-preview-after-save-Row", { FakeStatusLibrary(ready()) }, dialog = true, u3 = true) {
+    @Test fun u3Grid() = shoot("u3-grid", { FakeStatusLibrary(ready()) }, u3 = true)
+    @Test fun u3Select() = shoot("u3-select", { FakeStatusLibrary(ready()) }, u3 = true) { enterSelect(); first(this, 3).filter { !it.saved }.forEach(::toggle) }
+    @Test fun u3SelectAll() = shoot("u3-select-all", { FakeStatusLibrary(ready()) }, u3 = true) { selectAll() }
+    @Test fun u3Saving() = shoot("u3-saving", ::gated, u3 = true) { save(first(this, 3)) }
+    @Test fun u3SavingBatch() = shoot("u3-saving-batch", ::gated, u3 = true) { selectAll(); save(selectedItems) }
+    @Test fun u3Saved() = shoot("u3-saved", { FakeStatusLibrary(ready()) }, u3 = true) { save(first(this, 1)) }
+    @Test fun u3PartialFailure() = shoot("u3-partial", ::partly, u3 = true) { first(this, 3).forEach(::toggle); save(selectedItems) }
+    @Test fun u3PreviewSaved() = shoot("u3-preview-after-save", { FakeStatusLibrary(ready()) }, dialog = true, u3 = true) {
         preview = visible[0]; save(listOf(visible[0]))
     }
 }

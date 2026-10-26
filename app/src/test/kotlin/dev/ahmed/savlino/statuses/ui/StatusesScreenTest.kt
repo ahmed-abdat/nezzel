@@ -55,7 +55,7 @@ class StatusesScreenTest {
     }
 
     private fun viewerSave() = hasText(s(R.string.statuses_save)) and hasClickAction() and hasAnyAncestor(isDialog())
-    private fun gridSaves() = hasText(s(R.string.statuses_save)) and hasClickAction() and !hasAnyAncestor(isDialog())
+    private fun gridSaves() = hasContentDescription(s(R.string.statuses_save)) and hasClickAction() and !hasAnyAncestor(isDialog())
     private fun tiles(kind: Int) = compose.onAllNodes(hasContentDescription(s(kind), substring = true) and hasClickAction())
 
     @Test fun grantScreenShowsFoundAppsOneButtonAndOpensThePicker() {
@@ -271,12 +271,12 @@ class StatusesScreenTest {
     @Test fun saveOnATileSavesWithoutAPreviewAndTheTileSaysSaved() {
         val library = FakeStatusLibrary(ready())
         show(library)
-        compose.onAllNodes(hasTestTag("status-saved")).assertCountEquals(3)
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(3)
         compose.onAllNodes(gridSaves()).onFirst().assertHeightIsAtLeast(48.dp).performClick()
         compose.waitForIdle()
         assertEquals("status-1", library.saved.single().uri.lastPathSegment)
         compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertDoesNotExist()
-        compose.onAllNodes(hasTestTag("status-saved")).assertCountEquals(4)
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(4)
     }
 
     @Test fun talkBackSaysPreviewOnThePictureAndSaveOnItsOwnButton() {
@@ -291,7 +291,7 @@ class StatusesScreenTest {
         val library = FakeStatusLibrary(ready())
         activity.setContent {
             NezzelTheme(ThemePref.Light, false) {
-                CompositionLocalProvider(LocalStatusMedia provides media, LocalStatusTileStyle provides StatusTileStyle.Corner) {
+                CompositionLocalProvider(LocalStatusMedia provides media) {
                     StatusesScreen(library, "en")
                 }
             }
@@ -321,13 +321,13 @@ class StatusesScreenTest {
         show(library)
         compose.onAllNodes(gridSaves()).onFirst().performClick()
         compose.waitForIdle()
-        compose.onNodeWithText(s(R.string.statuses_saving)).assertExists()
+        compose.onNodeWithContentDescription(s(R.string.statuses_saving)).assertExists()
         controller.recreate()
         show(library)
         library.hold!!.complete(Unit)
         compose.waitUntil(5000) { library.saved.size == 1 }
         compose.waitForIdle()
-        compose.onAllNodes(hasTestTag("status-saved")).assertCountEquals(4)
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(4)
     }
 
     @Test fun switchingTabsStopsTheCopy() {
@@ -350,7 +350,7 @@ class StatusesScreenTest {
         compose.waitForIdle()
         assertEquals(0, library.saved.size)
         compose.onNodeWithText(s(R.string.statuses_saving)).assertDoesNotExist()
-        compose.onAllNodes(hasTestTag("status-saved")).assertCountEquals(3)
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(3)
     }
 
     @Config(fontScale = 2f)

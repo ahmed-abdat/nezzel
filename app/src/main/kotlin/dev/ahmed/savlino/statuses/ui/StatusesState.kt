@@ -31,7 +31,8 @@ sealed interface StatusEvent {
     /** Exactly one file saved and nothing failed: the snackbar can open it. */
     data class Saved(val uri: Uri, val isVideo: Boolean) : StatusEvent
     /** Several saved, or some saved and some not; [notSaved] is 0 when all made it. */
-    data class Batch(val saved: Int, val notSaved: Int) : StatusEvent
+    /** [noSpace]: at least one copy stopped because storage is full, so the message says why. */
+    data class Batch(val saved: Int, val notSaved: Int, val noSpace: Boolean = false) : StatusEvent
     data class Gone(val count: Int) : StatusEvent
     data object NoSpace : StatusEvent
     data object Failed : StatusEvent
@@ -263,7 +264,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
             val notSaved = gone + noSpace + failed
             return when {
                 saved == 1 && notSaved == 0 -> lastSaved?.let { (uri, video) -> StatusEvent.Saved(uri, video) }
-                saved > 0 -> StatusEvent.Batch(saved, notSaved)
+                saved > 0 -> StatusEvent.Batch(saved, notSaved, noSpace > 0)
                 noSpace > 0 -> StatusEvent.NoSpace
                 failed > 0 -> StatusEvent.Failed
                 gone > 0 -> StatusEvent.Gone(gone)

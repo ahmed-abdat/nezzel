@@ -287,4 +287,14 @@ class StatusesStateTest {
         assertEquals(StatusFilter.VIDEOS, state.filter)
         assertTrue(state.hideSaved)
     }
+
+    @Test fun partialBatchSaysStorageIsFull() = runTest {
+        val items = mixed().take(3)
+        val library = FakeStatusLibrary(ready(items)).apply {
+            results = { if (it == items[2]) StatusSaveResult.NoSpace else StatusSaveResult.Saved(android.net.Uri.parse("content://media/1")) }
+        }
+        val state = loaded(library)
+        state.save(items); advanceUntilIdle()
+        assertEquals(StatusEvent.Batch(saved = 2, notSaved = 1, noSpace = true), state.events.first())
+    }
 }
