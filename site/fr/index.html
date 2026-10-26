@@ -61,7 +61,7 @@
   --secondary-c:#CDE8E1;--on-secondary-c:#051F1B;
   --tertiary:#7A5520;--tertiary-c:#FFDDB3;--on-tertiary-c:#2A1800;
   --bg:#F4F5F0;--app:#F5FBF8;--on-bg:#171D1B;--muted:#3F4946;
-  --paper:#FFFEFB;--edge:rgb(20 19 15/.09);--wire:#2B3330;
+  --paper:#FFFEFB;--edge:rgb(20 19 15/.09);
   --c-low:#EFF5F2;--c:#E9EFEC;--c-high:#E3EAE7;--c-highest:#DEE4E1;--c-lowest:#fff;
   --outline:#6F7976;--outline-v:#BEC9C5;--inverse:#16302B;--on-inverse:#ECF2EF;--inverse-primary:#82D5C5;
   --ink-sh:23 29 27;
@@ -75,7 +75,7 @@
   --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
   --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
   --bg:#121614;--app:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
-  --paper:#1E2523;--edge:rgb(255 255 255/.07);--wire:#B9C4C0;
+  --paper:#1E2523;--edge:rgb(255 255 255/.07);
   --c-low:#171D1B;--c:#1B211F;--c-high:#252B2A;--c-highest:#303634;--c-lowest:#090F0E;
   --outline:#899390;--outline-v:#3F4946;--inverse:#DEE4E1;--on-inverse:#16302B;--inverse-primary:#006B5E;
   --ink-sh:0 0 0;color-scheme:dark;
@@ -85,7 +85,7 @@
   --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
   --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
   --bg:#121614;--app:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
-  --paper:#1E2523;--edge:rgb(255 255 255/.07);--wire:#B9C4C0;
+  --paper:#1E2523;--edge:rgb(255 255 255/.07);
   --c-low:#171D1B;--c:#1B211F;--c-high:#252B2A;--c-highest:#303634;--c-lowest:#090F0E;
   --outline:#899390;--outline-v:#3F4946;--inverse:#DEE4E1;--on-inverse:#16302B;--inverse-primary:#006B5E;
   --ink-sh:0 0 0;color-scheme:dark;
@@ -203,250 +203,32 @@ h1 bdi{color:var(--primary)}
 .meta a{font-weight:600;white-space:nowrap}
 .meta a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
 
-/* paper: every object on the desk shares one soft shadow and a hairline edge */
-.pp{background:var(--paper);box-shadow:0 0 0 1px var(--edge),0 8px 20px -14px rgb(var(--ink-sh)/.2)}
-
-/* the machine: the real flow performed on a desk; sources, cable, phone, cable, a group */
+/* the steps: one phone with the app's real screen for each step, three one-line steps under it.
+   With motion the desk pins and the scroll walks the steps; the playing step's rule fills as you go */
 .flow{position:relative;padding-top:clamp(88px,11vw,140px)}
 .flow>h2{margin-inline:auto;text-align:center}
-.desk{position:relative;padding-top:20px;overflow-x:clip}
-.mach{--W:1160px;--H:780px;position:relative;width:var(--W);height:var(--H);margin-inline:calc(50% - var(--W) / 2);transform:scale(var(--k,1));transform-origin:50% 0;margin-bottom:calc(var(--H) * (var(--k,1) - 1))}
+.desk{--top:88px;--sh:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(20px,3.4vh,36px);padding:clamp(28px,5vw,56px) 16px 0}
+@media (max-width:759px){.desk{--top:76px;--sh:132px}}
 @media (prefers-reduced-motion:no-preference){
-  .js .rig{height:calc(var(--dh,100svh) * 3.3)}
-  .js .desk{position:sticky;top:var(--top,84px);height:var(--dh,auto)}
+  .js .rig{height:calc((100svh - 88px) * 3.2)}
+  .js .desk{position:sticky;top:var(--top);height:calc(100svh - var(--top));padding-top:0}
 }
-.mach>*{position:absolute}
-.wires{inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-[dir=rtl] .wires{transform:scaleX(-1)}
-.wires.m{display:none}
-.wires .o{fill:none;stroke:var(--wire);stroke-width:13;stroke-linecap:round}
-.wires .f{fill:none;stroke:var(--paper);stroke-width:9;stroke-linecap:round}
-.wires .rb{fill:none;stroke:var(--wire);stroke-width:9;stroke-dasharray:1.6 6.5;opacity:.5;transition:opacity .5s var(--ease)}
-.wires .o,.wires .f{stroke-dasharray:1 1;stroke-dashoffset:var(--dw,0)}
-.live .cb:not(.on) .rb{opacity:0}
-/* without JS the desk still fits: a stepped scale until the script measures it */
-@media (max-width:1191px){.mach{--k:.86}}@media (max-width:1039px){.mach{--k:.74}}@media (max-width:899px){.mach{--k:.62}}@media (max-width:759px){.mach{--k:.99}}@media (min-width:760px) and (max-width:1023px) and (orientation:portrait){.mach{--k:1.05}}@media (max-width:391px){.mach{--k:.8}}
-.wires .jk{fill:var(--paper);stroke:var(--wire);stroke-width:2.5}
-.wires .cn{fill:none;stroke:color-mix(in oklab,var(--on-bg) 38%,transparent);stroke-width:1.5;stroke-dasharray:6 8}
-.wires .cn.a{stroke:var(--primary);animation:flow 1.4s linear infinite}
-@keyframes flow{to{stroke-dashoffset:-28}}
-
-/* the sources: where people meet the video; labels only, no copied app UIs or logos */
-.slip{inset-inline-start:0;top:96px;width:300px;padding:14px;border-radius:22px;rotate:calc(var(--x) * -4deg);display:flex;flex-direction:column;gap:10px;transition:opacity .5s var(--ease),translate .6s var(--ease)}
-.apps{display:grid;gap:8px}
-.ap{position:relative;display:flex;align-items:center;gap:12px;padding:7px;padding-inline-end:12px;border-radius:14px;background:var(--app);box-shadow:0 0 0 1px var(--edge);font:700 14px/1 system-ui,sans-serif;color:var(--on-bg);rotate:calc(var(--x) * (var(--i) - 1.5) * 1.2deg);transition:transform .5s var(--spring),box-shadow .4s var(--ease),opacity .4s var(--ease),rotate .5s var(--ease)}
-.ap .apt{width:64px;flex:none;aspect-ratio:16/9;border-radius:8px;overflow:hidden;filter:hue-rotate(calc(var(--i) * 70deg))}
-.ap .apt svg{display:block;width:100%;height:100%}
-.ap .cl{margin-inline-start:auto;display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:999px;font:600 11.5px/1 system-ui,sans-serif;opacity:0;transform:scale(.85);transition:opacity .3s var(--ease),transform .3s var(--spring),background .25s,color .25s}
-.ap .cl .i{width:14px;height:14px}
-html[dir=rtl] .ap .cl{font-family:"Noto Sans Arabic",system-ui,sans-serif}
-.e-menu .ap:not(.cp){opacity:.55}
-.e-menu .ap.cp{rotate:0deg;transform:scale(1.04);box-shadow:0 0 0 1px var(--edge),0 14px 28px -14px rgb(var(--ink-sh)/.45)}
-.e-menu .cp .cl{opacity:1;transform:none;background:var(--c-high)}
-.e-copy .cp .cl{background:var(--primary-c);color:var(--on-primary-c)}
-.slip .toast{position:static;opacity:0;transform:translateY(6px)}
-.e-toast .slip .toast{opacity:1;transform:none}
-.lchip{left:0;top:0;display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 9px;border-radius:12px;font:600 13px/1 system-ui,sans-serif;direction:ltr;color:var(--on-bg);opacity:0;transition:opacity .25s;will-change:transform}
-.lchip .i{width:16px;height:16px;color:var(--primary);stroke-width:2.2}
-.lchip.on{opacity:1}
-
-/* the end of the trip: the saved file goes out to a group */
-.tray{inset-inline-start:850px;top:250px;width:300px;padding:14px;border-radius:22px;rotate:calc(var(--x) * 3deg);transition:opacity .5s var(--ease),translate .6s var(--ease)}
-.tray .trh{display:flex;align-items:center;gap:8px;font:600 13px/1 system-ui,sans-serif;color:var(--muted);padding:2px 2px 12px}
-html[dir=rtl] .tray .trh{font-family:"Noto Sans Arabic",system-ui,sans-serif}
-.tray .trh .i{width:18px;height:18px;color:var(--primary)}
-[dir=rtl] .tray .trh .i{transform:scaleX(-1)}
-.grp{display:grid;gap:6px}
-.gr{position:relative;display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 8px;border-radius:14px;font-size:14px;transition:background .4s var(--ease)}
-.gr>i{width:36px;height:36px;flex:none;border-radius:50%;display:grid;place-items:center;background:oklch(.9 .05 var(--h));color:oklch(.38 .08 var(--h))}
-:root[data-mode=dark] .gr>i{background:oklch(.36 .06 var(--h));color:oklch(.9 .05 var(--h))}
-.gr>i .i{width:19px;height:19px}
-.gr .sent{margin-inline-start:auto;position:relative;width:62px;aspect-ratio:16/10;border-radius:9px;overflow:hidden;opacity:0;transform:scale(.8);transition:opacity .4s var(--ease),transform .5s var(--spring)}
-.gr .sent>svg:first-child{display:block;width:100%;height:100%}
-.gr .sent .i{position:absolute;bottom:3px;inset-inline-end:3px;width:16px;height:16px;padding:2px;border-radius:50%;background:var(--primary);color:var(--on-primary);stroke-width:3}
-.gr.nw{box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--on-bg) 16%,transparent)}
-.landed .gr.nw{background:var(--primary-c);box-shadow:none}
-.landed .gr.nw .sent{opacity:1;transform:none}
-.fcard{left:0;top:0;width:118px;padding:5px;border-radius:12px;opacity:0;transition:opacity .25s;will-change:transform}
-.fcard .art{border-radius:8px}
-.fcard.on{opacity:1}
-
-/* the three steps sit under their object (position carries the order); the one playing gets a teal rule */
-.steps{list-style:none;margin:0;padding:0;inset:0;pointer-events:none}
-.step{position:absolute;top:640px;width:300px;padding-top:16px;pointer-events:auto;transition:opacity .4s var(--ease)}
-.step::before{content:"";position:absolute;top:0;inset-inline-start:0;width:40px;height:3px;border-radius:2px;background:var(--outline-v);transition:background .35s var(--ease),width .35s var(--ease)}
-.step:nth-child(1){inset-inline-start:10px}
-.step:nth-child(2){inset-inline-start:440px}
-.step:nth-child(3){inset-inline-start:860px}
-.step h3{margin:0;font-size:24px;line-height:1.3;font-weight:800}
-html[dir=ltr] .step h3{letter-spacing:-.02em;line-height:1.15}
-.step p{margin:6px 0 0;color:var(--muted);font-size:16px;line-height:1.5;max-width:30ch;text-wrap:pretty}
-.step .note{font-size:13px;margin-top:10px}
-.step.on::before{background:var(--primary);width:64px}
-@media (prefers-reduced-motion:no-preference){.live .step:not(.on){opacity:.35}}
-
-/* the phone sits mid-desk; on narrow screens the desk turns to a column and objects come and go */
-.mach>.phone{inset-inline-start:435px;top:0}
-/* phones and portrait tablets get the tall single-column machine */
-@media (max-width:759px),(max-width:1023px) and (orientation:portrait){
-  .mach{--W:360px;--H:880px}
-  .wires.d{display:none}
-  .wires.m{display:block}
-  .mach>.phone{inset-inline-start:70px;top:40px}
-  .slip{top:0;width:250px;padding:10px;rotate:calc(var(--x) * -5deg);z-index:3}
-  .apps{gap:6px}.ap{padding:5px;font-size:13px}.ap .apt{width:48px}
-  .tray{inset-inline-start:0;top:420px;width:220px;padding:10px;z-index:3}
-  .step{top:680px;inset-inline-start:0!important;width:360px}
-  .step h3{font-size:28px}
-  .step p{font-size:18px}
-  .live .slip{translate:0 0}
-  .live:not(.k0):not(.k1) .slip{opacity:0;translate:0 -24px}
-  .live:not(.k3) .tray{opacity:0;translate:0 24px}
-  .live .step:not(.on){opacity:0}
-}
-
-/* the live phone */
-/* real app captures (site/img/app/<lang>-<theme>-<key>.webp) sit over the drawn screens; a missing capture leaves the drawn one showing */
-.shots{position:absolute;inset:0;z-index:7;pointer-events:none}
-.shot{position:absolute;inset:0;width:100%;height:auto;opacity:0;transition:opacity .35s var(--ease)}
-.shots .rsb{position:absolute;inset-inline:0;top:0;display:none}
-.shots.on .rsb{display:flex}
-.mach:not(.e-sheet):not(.e-recent) .k-home.ok,.e-sheet:not(.e-full) .k-sheet-load.ok,.e-sheet.e-full .k-sheet.ok,.e-recent:not(.e-done) .k-recent.ok,.e-recent.e-done .k-saved.ok{opacity:1}
-.phone{--W:290px;position:relative;z-index:2;width:var(--W);height:calc(var(--W) * 2.07);padding:9px;border-radius:46px;background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1.5px #29302e inset,0 0 0 1px rgb(255 255 255/.05);font-size:12.5px;line-height:1.45}
-@media (max-width:380px){.phone{--W:262px}}
-/* as the page moves, the phone tips up from lying back and settles flat */
-.screen{--bg:var(--app);position:relative;height:100%;border-radius:37px;overflow:hidden;background:var(--bg);color:var(--on-bg);font-family:"Noto Sans Arabic",system-ui,sans-serif}
-html[dir=ltr] .screen{font-family:system-ui,-apple-system,Roboto,sans-serif}
-.cam{position:absolute;z-index:9;top:12px;left:50%;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#0c100f}
-.sb{display:flex;justify-content:space-between;padding:12px 22px 0;font:600 11px/1 system-ui,sans-serif;opacity:.85}
-.sb>span{direction:ltr;unicode-bidi:isolate}
-/* scenes wait at the end edge and leave toward the start, so the flow reads forward in both directions */
-.sc{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transform:translateX(calc(var(--x) * 24px)) scale(.985);transition:opacity .35s var(--ease),transform .4s var(--ease);pointer-events:none}
-.sc.out{transform:translateX(calc(var(--x) * -24px)) scale(.985)}
-/* the signature moment: the copied clip zooms toward you and Nezzel settles in behind it */
-#demo .s1{opacity:1;transform:none}
-.art{position:relative;aspect-ratio:16/9;border-radius:11px;overflow:hidden}
-.art svg{width:100%;height:100%;display:block}
-.art .pl{position:absolute;inset:0;margin:auto;width:34px;height:34px;border-radius:50%;background:rgb(0 0 0/.45);display:grid;place-items:center;color:#fff}
-.art .pl .i{width:16px;height:16px;fill:#fff;stroke:none}
-.art .du{position:absolute;bottom:5px;inset-inline-end:6px;font:700 10px/1 system-ui;color:#fff;background:rgb(0 0 0/.65);padding:3px 5px;border-radius:5px;direction:ltr}
-.tap{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:color-mix(in oklab,var(--primary) 30%,transparent);border:2px solid color-mix(in oklab,var(--primary) 55%,transparent);opacity:0;transform:scale(.4);pointer-events:none;z-index:8}
-.tap.go{animation:tap .7s var(--ease)}
-@keyframes tap{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(.8)}100%{opacity:0;transform:scale(1.5)}}
-.pbtn{margin-top:10px;min-height:40px;border-radius:999px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;transition:transform .2s var(--ease),filter .2s}
-.pbtn .i{width:16px;height:16px}
-.ql{font-size:11.5px;font-weight:700;opacity:.7;margin-top:2px}
-.sw{display:inline-grid}
-.sw>*{grid-area:1/1;transition:opacity .3s,transform .4s var(--ease)}
-.sw>:last-child{opacity:0;transform:translateY(8px)}
-.e-pick .sw>:first-child{opacity:0;transform:translateY(-8px)}
-.e-pick .sw>:last-child{opacity:1;transform:none}
-/* Nezzel itself, drawn from the app: home, the quality sheet that rises half-way while it loads and then opens, the file landing in Recent */
-.nzb{display:flex;align-items:center;gap:7px;padding:12px 16px 6px;font-weight:700;font-size:16px;font-family:system-ui,sans-serif}
-.nzb img{width:22px;height:22px;border-radius:50%}
-.home{flex:1;position:relative}
-.h0,.rec{position:absolute;inset:0;padding:0 16px}
-.h0{display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:10px;transition:opacity .35s var(--ease),transform .5s var(--ease)}
-.h0>b{font-size:17px;line-height:1.35;font-weight:800;margin-top:auto}
-.h0>small{font-size:10.5px;opacity:.72;margin-top:4px}
-.wall{position:relative;height:160px;margin-inline:-16px}
-.wall::before{content:"";position:absolute;inset:8% 14%;background:radial-gradient(closest-side,color-mix(in oklab,var(--primary-c) 70%,transparent),transparent);opacity:.8}
-.lt{position:absolute;inset-inline-start:var(--x);top:var(--y);width:var(--z);height:var(--z);border-radius:30%;background:var(--c);display:grid;place-items:center;rotate:var(--r);box-shadow:0 6px 14px -6px rgb(0 0 0/.35);color:#fff}
-.lt svg{width:56%;height:56%;fill:currentColor}
-.lt.sn{color:#111}
-.nm{position:absolute;left:50%;top:44px;width:68px;height:68px;margin-left:-34px;border-radius:50%;background:var(--primary-c);display:grid;place-items:center;box-shadow:0 0 0 12px color-mix(in oklab,var(--primary-c) 45%,transparent)}
-.nm img{width:46px;height:46px;border-radius:50%}
-.nm i{position:absolute;bottom:-6px;inset-inline-start:-4px;width:24px;height:24px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;box-shadow:0 0 0 3px var(--bg)}
-.nm i .i{width:14px;height:14px}
-.rec{padding-top:6px;opacity:0;pointer-events:none}
-.rh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-.rh b{font-size:13px}
-.rh span{font-size:10.5px;color:var(--primary);font-weight:600}
-.rf{width:56%;transition:transform .7s var(--spring),opacity .3s}
-.rf .art{border-radius:12px}
-.rf>b{display:block;font-size:11px;margin-top:5px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rf>small{display:block;text-align:center;font-size:9.5px;color:var(--primary);min-height:1.4em}
-.rf .ring{position:absolute;inset:0;margin:auto;--rs:42px;background:rgb(255 255 255/.92);border-radius:50%;color:#004D43;transition:opacity .4s,transform .4s var(--ease)}
-.rf .ring .pc{position:absolute;inset:0;display:grid;place-items:center;font:700 10px/1 system-ui,sans-serif}
-.rf .ring circle{stroke-width:3.5}
-.rf .du{opacity:0;transition:opacity .4s}
-.rf.done .ring{opacity:0;transform:scale(.6)}
-.rf.done .du{opacity:1}
-.rf.done>small{color:var(--muted)}
-.e-recent .h0{opacity:0;transform:scale(.96)}
-.e-recent .rec{opacity:1}
-.e-recent .rf{animation:land .8s var(--spring) both}
-@keyframes land{from{transform:translateY(150px) scale(.55);opacity:0}}
-.field{margin:6px 12px 8px;padding:6px 6px 6px 12px;border-radius:999px;background:var(--c-high);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
-[dir=rtl] .field{padding:6px 12px 6px 6px}
-.field>.i{width:15px;height:15px}
-.field>span:first-of-type{flex:1}
-.pst{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;background:var(--primary);color:var(--on-primary);font-weight:700}
-.pst .i{width:13px;height:13px}
-.nav{display:flex;justify-content:space-around;margin:0 10px 14px;padding:6px 4px;border-radius:999px;background:var(--c);font-size:9.5px;box-shadow:0 4px 14px -8px rgb(var(--ink-sh)/.4)}
-.nav>span{display:grid;justify-items:center;gap:1px;opacity:.75}
-.nav>span>i{display:grid;place-items:center;width:38px;height:24px;border-radius:999px}
-.nav .i{width:16px;height:16px}
-.nav>span.on{opacity:1;font-weight:700}
-.nav>span.on>i{background:var(--secondary-c);color:var(--on-secondary-c)}
-.scrim{position:absolute;inset:0;background:rgb(0 0 0/.32);opacity:0;transition:opacity .5s var(--ease);pointer-events:none}
-.sheet{position:absolute;inset:13% 0 0 0;padding:8px 14px 14px;border-radius:24px 24px 0 0;background:var(--c-low);box-shadow:0 -10px 30px -14px rgb(0 0 0/.35);display:flex;flex-direction:column;transform:translateY(102%);transition:transform .55s cubic-bezier(.2,0,0,1)}
-.sheet .h{width:32px;height:4px;border-radius:2px;background:var(--outline);opacity:.6;margin:2px auto 12px;flex:none}
-.sheet .lbl{font-weight:700;font-size:11.5px;margin-bottom:6px}
-.e-sheet .scrim{opacity:1}
-.e-sheet .sheet{transform:translateY(27%)}
-.e-full .sheet{transform:none}
-.qh{display:flex;gap:10px;align-items:center;flex-direction:row-reverse;justify-content:flex-end;padding-bottom:8px}
-.qh .art{width:64px;flex:none;border-radius:8px}
-.qh b{font-size:12px;display:block;line-height:1.35}
-.qh small{opacity:.65;font-size:10px}
-.sbody{flex:1;display:grid;min-height:0}
-.ld,.opts{grid-area:1/1;display:flex;flex-direction:column;transition:opacity .35s var(--ease)}
-.ld{gap:12px;padding-top:12px}
-.ld>span{display:flex;justify-content:space-between;align-items:center}
-.ld i{display:block;height:9px;border-radius:5px;background:var(--c-highest);width:24%;animation:shim 1.4s ease-in-out infinite}
-.ld i+i{width:46%}
-.ld small{font-size:11px;font-weight:600;margin-top:4px}
-@keyframes shim{50%{opacity:.45}}
-.e-full .ld{opacity:0}
-.opts{opacity:0;gap:5px}
-.e-full .opts{opacity:1}
-.ql{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;font-weight:700;margin-top:2px}
-.allq{display:inline-flex;align-items:center;gap:2px;color:var(--primary);font-weight:600}
-.allq .i{width:12px;height:12px}
-.qr{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;transition:background .35s var(--ease)}
-.qr .t{flex:1;min-width:0;line-height:1.3}
-.qr .t b{display:block;font-size:11.5px;font-weight:600}
-.qr .t small{font-size:9.5px;opacity:.7}
-.qr .s{font:500 10.5px/1 system-ui,sans-serif;direction:ltr;opacity:.85}
-.rd{width:15px;height:15px;border-radius:50%;border:2px solid var(--outline);flex:none;transition:border-color .3s var(--ease),box-shadow .3s var(--ease)}
-.qr.sel{background:var(--secondary-c);color:var(--on-secondary-c)}
-.qr.sel .rd{border-color:var(--primary);box-shadow:inset 0 0 0 2.5px var(--secondary-c),inset 0 0 0 8px var(--primary)}
-.bdg{display:inline-block;font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--tertiary-c);color:var(--on-tertiary-c);margin-inline-start:6px;vertical-align:1px}
-.opts>.qr,.opts>.ql{opacity:0;transform:translateY(8px);transition:opacity .4s var(--ease),transform .5s var(--ease),background .35s}
-.e-full .opts>.qr,.e-full .opts>.ql{opacity:1;transform:none;transition-delay:calc(var(--q,0) * 60ms + 120ms),calc(var(--q,0) * 60ms + 120ms),0s}
-.to{font-size:9.5px;opacity:.7;margin-top:auto;padding-bottom:6px}
-.opts .pbtn{margin:0}
-.pbtn{min-height:38px;border-radius:999px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;gap:5px;font-weight:700;font-size:12px;transition:transform .2s var(--ease),filter .2s}
-.pbtn .i{width:16px;height:16px}
-.e-press2 .pbtn{transform:scale(.95);filter:brightness(1.1)}
-.toast{position:absolute;bottom:22px;inset-inline:14px;padding:10px 14px;border-radius:12px;background:var(--inverse);color:var(--on-inverse);display:flex;align-items:center;gap:8px;opacity:0;transform:translateY(14px);transition:opacity .35s var(--ease),transform .5s var(--ease);z-index:3}
-.toast .i{width:16px;height:16px;color:var(--inverse-primary);stroke-width:2.4}
-.snack{bottom:112px;inset-inline:10px;border-radius:8px;justify-content:space-between;font-size:10.5px}
-.snack .st{display:grid;line-height:1.35}
-.snack small{opacity:.8}
-.snack b{color:var(--inverse-primary)}
-.e-snack .snack{opacity:1;transform:none}
-/* progress ring: only the ring svg rotates, never the check inside; clockwise in both directions, like the app */
-.ring{position:relative;width:var(--rs,40px);height:var(--rs,40px);flex:none}
-.ring>.rg{width:100%;height:100%;transform:rotate(-90deg)}
-.ring circle{fill:none;stroke-width:4}
-.ring .tr{stroke:color-mix(in oklab,currentColor 16%,transparent)}
-.ring .pr{stroke:var(--rc,var(--primary));stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
-.ring .ok{position:absolute;inset:0;display:grid;place-items:center;color:var(--rc,var(--primary));opacity:0;transform:scale(.5);transition:opacity .35s var(--ease),transform .55s var(--spring)}
-.ring .ok .i{width:55%;height:55%;stroke-width:2.8}
-.done .ring .ok{opacity:1;transform:none}
-.done .ring .pr{stroke-dashoffset:0!important;opacity:.35}
+.phone{--W:min(300px,(100svh - var(--top) - var(--sh)) / 2.17,100vw - 64px);flex:none;width:var(--W);padding:7px;border-radius:calc(var(--W) * .135);background:#0c100f;box-shadow:0 22px 36px -22px rgb(0 32 27/.45),0 0 0 1px rgb(255 255 255/.05)}
+.screen{position:relative;aspect-ratio:640/1387;border-radius:calc(var(--W) * .135 - 7px);overflow:hidden;background:var(--c)}
+.shot{position:absolute;inset:0;display:block;width:100%;height:100%}
+.shot~.shot{opacity:0}
+/* the new screen fades in on top; the old one stays under it until the fade is done, so nothing dips */
+.live .shot{opacity:0;transition:opacity 0s .4s}
+.live .shot.on{opacity:1;z-index:1;transition:opacity .4s var(--ease)}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,3vw,44px);width:min(100%,880px)}
+.step{position:relative;padding-top:14px;transition:opacity .4s var(--ease)}
+.step::before,.step::after{content:"";position:absolute;top:0;inset-inline:0;height:3px;border-radius:2px;background:var(--outline-v)}
+.step::after{background:var(--primary);transform:scaleX(var(--p,1));transform-origin:0 50%}
+[dir=rtl] .step::after{transform-origin:100% 50%}
+.live .step::after{transform:scaleX(var(--p,0))}
+.step h3{margin:0;font-size:clamp(16px,1.9vw,22px);line-height:1.35;font-weight:800;text-wrap:balance}
+html[dir=ltr] .step h3{letter-spacing:-.015em;line-height:1.2}
+.live .step:not(.on){opacity:.4}
 
 /* sections */
 h2{font-size:clamp(30px,4.6vw,50px);line-height:1.25;font-weight:800;margin:0;max-width:18ch;text-wrap:balance}
@@ -752,89 +534,15 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
 <section class="flow" id="how" aria-labelledby="how-h">
   <h2 id="how-h" data-i="how-h">Trois gestes, et c’est sur votre téléphone</h2>
   <div class="rig">
-  <div class="desk">
-  <div class="mach e-menu e-copy e-toast e-sheet e-full e-pick landed" id="mach">
-    <svg class="wires d" viewBox="0 0 1160 780" aria-hidden="true">
-      <g class="cb" id="c1d"><path class="o" pathLength="1" d="M300 318C372 318 352 486 396 486S430 392 440 380"/><path class="f" pathLength="1" d="M300 318C372 318 352 486 396 486S430 392 440 380"/><path class="rb" d="M300 318C372 318 352 486 396 486S430 392 440 380"/></g>
-      <g class="cb" id="c2d"><path class="o" pathLength="1" d="M720 300C800 300 780 470 820 470S844 352 858 330"/><path class="f" pathLength="1" d="M720 300C800 300 780 470 820 470S844 352 858 330"/><path class="rb" d="M720 300C800 300 780 470 820 470S844 352 858 330"/></g>
-      <circle class="jk" cx="300" cy="318" r="6"/><circle class="jk" cx="440" cy="380" r="6"/><circle class="jk" cx="720" cy="300" r="6"/><circle class="jk" cx="858" cy="330" r="6"/>
-      <path class="cn" data-c="0" d="M150 628V560"/><path class="cn" data-c="1" d="M580 628V606"/><path class="cn" data-c="2" d="M1000 628V520"/>
-    </svg>
-    <svg class="wires m" viewBox="0 0 360 820" aria-hidden="true">
-      <g class="cb" id="c1m"><path class="o" pathLength="1" d="M60 296C40 360 40 410 72 420"/><path class="f" pathLength="1" d="M60 296C40 360 40 410 72 420"/><path class="rb" d="M60 296C40 360 40 410 72 420"/></g>
-      <g class="cb" id="c2m"><path class="o" pathLength="1" d="M72 400C24 410 24 444 56 472"/><path class="f" pathLength="1" d="M72 400C24 410 24 444 56 472"/><path class="rb" d="M72 400C24 410 24 444 56 472"/></g>
-    </svg>
-    <div class="slip pp" aria-hidden="true">
-      <span class="tap"></span>
-      <div class="apps">
-        <span class="ap" style="--i:0"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>WhatsApp</bdi></span>
-        <span class="ap cp" id="cp" style="--i:1"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>YouTube</bdi><span class="cl"><svg class="i"><use href="#link"/></svg><span data-i="m-copy">Copier le lien</span></span></span>
-        <span class="ap" style="--i:2"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>Facebook</bdi></span>
-        <span class="ap" style="--i:3"><span class="apt"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span><bdi>TikTok</bdi></span>
-      </div>
-      <div class="toast"><svg class="i"><use href="#check"/></svg><span data-i="copied">Lien copié</span></div>
-    </div>
+  <div class="desk" id="desk">
     <div class="phone" id="demo" role="img" data-i-aria="demo-aria" aria-label="Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré">
-      <div class="screen" aria-hidden="true">
-        <span class="cam"></span>
-        <span class="tap" id="tap"></span>
-        <div class="shots"><img class="shot k-home" alt=""><img class="shot k-sheet-load" alt=""><img class="shot k-sheet" alt=""><img class="shot k-recent" alt=""><img class="shot k-saved" alt=""><div class="sb rsb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div></div>
-        <div class="sc s1">
-          <div class="sb"><span class="clk">9:41</span><span class="net">5G ▮▮▮</span></div>
-          <div class="nzb"><img src="/img/icon.svg" alt="">Nezzel</div>
-          <div class="home">
-            <div class="h0">
-              <b data-i="h-title">Enregistrez des vidéos sur votre téléphone</b>
-              <small data-i="h-line">Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.</small>
-            </div>
-            <div class="rec">
-              <div class="rh"><b data-i="recent">Récents</b><span data-i="see-all">Tout voir</span></div>
-              <div class="rf" id="jobm"><div class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><span class="ring"><svg class="rg" viewBox="0 0 48 48"><circle class="tr" cx="24" cy="24" r="20"/><circle class="pr" cx="24" cy="24" r="20" pathLength="1"/></svg><span class="pc ltr num"></span></span><span class="du">2:48</span></div><b data-i="vt">Souvenirs de vacances</b><small class="pl-line"></small></div>
-            </div>
-          </div>
-          <div class="field"><svg class="i"><use href="#link"/></svg><span data-i="field">Collez un lien public</span><span class="pst"><svg class="i"><use href="#clip"/></svg><span data-i="paste">Coller</span></span></div>
-          <div class="nav"><span class="on"><i><svg class="i"><use href="#home"/></svg></i><span data-i="n-home">Accueil</span></span><span><i><svg class="i"><use href="#dl"/></svg></i><span data-i="n-dl">Téléchargements</span></span><span><i><svg class="i"><use href="#status"/></svg></i><span data-i="n-st">Statuts</span></span><span><i><svg class="i"><use href="#gear"/></svg></i><span data-i="n-set">Paramètres</span></span></div>
-          <div class="scrim"></div>
-          <div class="sheet">
-            <div class="h"></div>
-            <div class="lbl" data-i="clip">Le lien que vous avez copié</div>
-            <div class="qh"><div class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></div><div><b data-i="vt">Souvenirs de vacances</b><small class="ltr">youtu.be · 2:48</small></div></div>
-            <div class="sbody">
-              <div class="ld"><span><i></i><i></i></span><span><i></i><i></i></span><span><i></i><i></i></span><small data-i="fetching">Recherche des qualités…</small></div>
-              <div class="opts">
-                <div class="ql"><span data-i="video">Vidéo</span><span class="allq"><span data-i="all-q">Toutes les qualités</span><svg class="i flip"><use href="#back"/></svg></span></div>
-                <div class="qr" id="q1080" style="--q:0"><span class="rd"></span><span class="t"><b class="ltr">1080p · Full HD</b><small data-i="best">Meilleure qualité</small></span><span class="s" data-mb="40">40 Mo</span></div>
-                <div class="qr sel" id="q720" style="--q:1"><span class="rd"></span><span class="t"><b><span class="ltr">720p · HD</span><span class="bdg" data-i="last">Dernier choix</span></b><small data-i="bal">Équilibrée</small></span><span class="s" data-mb="14">14 Mo</span></div>
-                <div class="qr" style="--q:2"><span class="rd"></span><span class="t"><b><span data-i="lowest">Minimale</span> · <span class="ltr">144p</span></b><small data-i="small">Petit fichier</small></span><span class="s" data-mb="3.5">3,5 Mo</span></div>
-                <div class="ql" style="--q:3" data-i="audio-h">Audio</div>
-                <div class="qr" style="--q:4"><span class="rd"></span><span class="t"><b><span data-i="audio">Audio seul</span> · <span class="ltr">M4A</span></b></span><span class="s" data-mb="2.4">2,4 Mo</span></div>
-                <small class="to"><span data-i="saves-to">Enregistré dans</span> <span class="ltr">Downloads/Nezzel</span></small>
-                <div class="pbtn" id="pb2"><span data-i="dl">Télécharger</span> · <span class="sw ltr num"><span data-mb="14">14 Mo</span><span data-mb="40">40 Mo</span></span></div>
-              </div>
-            </div>
-          </div>
-          <div class="toast snack"><span class="st"><span><span data-i="saved-in">Enregistré dans</span> <span class="ltr">Downloads/Nezzel</span></span><small data-i="av-line">Avec image et son</small></span><b data-i="open">Ouvrir</b></div>
-        </div>
-      </div>
+      <div class="screen" data-i="how-shots"><img class="shot" src="/img/screens/en-light-home.webp" alt="" width="640" height="1387" loading="lazy" decoding="async"><img class="shot" src="/img/screens/en-light-sheet.webp" alt="" width="640" height="1387" loading="lazy" decoding="async"><img class="shot" src="/img/screens/en-light-saved.webp" alt="" width="640" height="1387" loading="lazy" decoding="async"></div>
     </div>
-
-    <div class="tray pp" aria-hidden="true">
-      <div class="trh"><svg class="i"><use href="#share"/></svg><span data-i="sh-h">Partager avec</span></div>
-      <div class="grp">
-        <span class="gr nw" style="--h:168"><i><svg class="i"><use href="#grp"/></svg></i><b data-i="g1">Famille</b><span class="sent"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg><svg class="i"><use href="#check"/></svg></span></span>
-        <span class="gr" style="--h:28"><i><svg class="i"><use href="#grp"/></svg></i><b data-i="g2">Amis</b></span>
-        <span class="gr" style="--h:258"><i><svg class="i"><use href="#grp"/></svg></i><b data-i="g3">Collègues</b></span>
-      </div>
-    </div>
-    <span class="lchip pp" aria-hidden="true"><svg class="i"><use href="#link"/></svg>youtu.be/…</span>
-    <span class="fcard pp" aria-hidden="true"><span class="art"><svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><use href="#scene"/></svg></span></span>
-  <ol class="steps">
-    <li class="step" data-step="0"><h3 data-i="s1">Copiez le lien</h3><p data-i="s1p">Depuis WhatsApp, YouTube, Facebook ou TikTok</p></li>
-    <li class="step" data-step="1"><h3 data-i="s2">Choisissez la qualité</h3><p data-i="s2p">Ouvrez Nezzel : le lien vous attend</p></li>
-    <li class="step" data-step="2"><h3 data-i="s3">Téléchargez et partagez</h3><p data-i="s3p">Puis envoyez-la à vos groupes</p><p class="note" data-i="note">Simple démo. Chaque site fixe ses qualités</p></li>
-  </ol>
-
-  </div>
+    <ol class="steps">
+      <li class="step on"><h3 data-i="s1">Copiez le lien, touchez Coller</h3></li>
+      <li class="step"><h3 data-i="s2">Choisissez la qualité</h3></li>
+      <li class="step"><h3 data-i="s3">Téléchargez, c’est enregistré</h3></li>
+    </ol>
   </div>
   </div>
 </section>
@@ -971,18 +679,14 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", get:"Download", h1:"<span class=\"ln\"><span>Copy the link</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> does the rest</span></span>",
     cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", "only-ios":"Android only for now, not on iPhone · version",
     "demo-aria":"Demo: copy a video link, Nezzel suggests it, pick a quality and the file is saved",
-    vt:"Summer trip highlights",
-    "m-copy":"Copy link", copied:"Link copied", "sh-h":"Share with", g1:"Family", g2:"Friends", g3:"Work team",
-    field:"Paste a public link", "n-home":"Home", "n-dl":"Downloads", "n-set":"Settings",
+    
     clip:"Link you copied", view:"View download options",
-    video:"Video", "audio-h":"Audio", best:"Highest available", last:"Last used", bal:"Balanced", small:"Small", audio:"Audio only",
-    "h-title":"Save videos to your phone", "h-line":"Copy a video link in any app, then tap Paste.", recent:"Recent", "see-all":"See all", paste:"Paste", fetching:"Getting qualities…", "all-q":"All quality options", lowest:"Lowest", "saves-to":"Saves to", "saved-in":"Saved to", "av-line":"Has video and sound", prep:"Preparing…", dling:"Downloading", join:"Joining audio and video…",
-    dl:"Download", open:"Open", saved:"Saved", "saved-to":"Saved to <span class=\"ltr\">Download/Nezzel</span>",
+    video:"Video", 
+    dl:"Download", saved:"Saved", "saved-to":"Saved to <span class=\"ltr\">Download/Nezzel</span>",
     "how-h":"Three steps, and it’s on your phone", 
-    s1:"Copy the link", s1p:"From WhatsApp, YouTube, Facebook or TikTok",
-    s2:"Pick a quality", s2p:"Open Nezzel and the link is waiting",
-    s3:"Download and share", s3p:"Then send it to your groups",
-    note:"Demo only. Each site sets its own qualities", "more-h":"There’s more", x1:"Keep WhatsApp statuses", x2:"Whole playlists", x3:"Several links at once", x4:"Just the audio", x5:"Nezzel on your home screen",
+    s1:"Copy the link, tap Paste",
+    s2:"Pick a quality",
+    s3:"Download, and it’s saved", "more-h":"There’s more", x1:"Keep WhatsApp statuses", x2:"Whole playlists", x3:"Several links at once", x4:"Just the audio", x5:"Nezzel on your home screen",
     "ins-h":"How to install",
     "ins-sub":"It’s not on the Play Store, so Android checks with you first. That’s normal",
     i1:"Get the file and open it", i1p:"Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type",
@@ -992,6 +696,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "sys-done":"Download complete", "sys-t2":"Install unknown apps", "sys-browser":"Browser", "sys-allow":"Allow from this source",
     "sys-q":"Do you want to install this app?", "sys-cancel":"Cancel", "sys-install":"Install",
     "rs-h":"The app as it is",
+    "how-shots":"<img class=\"shot\" src=\"/img/screens/en-light-home.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     rs1:"<img src=\"/img/screens/en-light-home.webp\" alt=\"Nezzel’s home screen\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     rs2:"<img src=\"/img/screens/en-light-sheet-load.webp\" alt=\"Nezzel loading the quality options for a link\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     rs3:"<img src=\"/img/screens/en-light-sheet.webp\" alt=\"The quality options, each with its file size\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
@@ -1018,7 +723,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "x3p": "Paste them together, tap once",
     "x4p": "For songs and podcasts, in a smaller file",
     "x5p": "Follow your downloads without opening the app",
-    "n-st": "Statuses",
     "st-all": "All",
     "st-ph": "Photos",
     "st-vid": "Videos",
@@ -1044,51 +748,30 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "howto": "كيف أثبّته؟",
       "only-ios": "لأندرويد فقط حاليًا، لا يعمل على آيفون · الإصدار",
       "demo-aria": "عرض: تنسخ رابط فيديو فيقترحه Nezzel، تختار الجودة ويُحفظ الملف",
-      "vt": "لقطات من رحلة الصيف",
-      "m-copy": "نسخ الرابط",
-      "copied": "تم نسخ الرابط",
-      "sh-h": "شاركه مع",
-      "g1": "العائلة",
-      "g2": "الأصدقاء",
-      "g3": "زملاء العمل",
-      "field": "الصق رابطًا عامًا",
-      "n-home": "الرئيسية",
-      "n-dl": "التنزيلات",
-      "n-set": "الإعدادات",
+      
+      
+      
+      
+      
       "clip": "الرابط الذي نسخته",
       "view": "عرض خيارات التنزيل",
       "video": "فيديو",
-      "best": "أعلى جودة",
-      "last": "آخر اختيار",
-      "bal": "متوازنة",
-      "small": "حجم صغير",
-      "audio-h": "صوت",
-      "audio": "صوت فقط",
+      
+      
+      
       "dl": "تنزيل",
-      "open": "فتح",
-      "h-title": "احفظ الفيديوهات على هاتفك",
-      "h-line": "انسخ رابط فيديو من أي تطبيق، ثم اضغط «لصق».",
-      "recent": "الملفات الأخيرة",
-      "see-all": "عرض الكل",
-      "paste": "لصق",
-      "fetching": "جارٍ جلب خيارات الجودة…",
-      "all-q": "كل خيارات الجودة",
-      "lowest": "الأدنى",
-      "saves-to": "يُحفظ في",
-      "saved-in": "تم الحفظ في",
-      "av-line": "بالصوت والصورة",
-      "prep": "جارٍ التحضير…",
-      "dling": "جارٍ التنزيل",
-      "join": "جارٍ دمج الصوت والفيديو…",
+      
+      
+      
+      
+      
+      
+      
       "saved-to": "تم الحفظ في <span class=\"ltr\">Download/Nezzel</span>",
       "how-h": "ثلاث خطوات، والفيديو عندك",
-      "s1": "انسخ الرابط",
-      "s1p": "من واتساب أو يوتيوب أو فيسبوك أو تيك توك",
+      "s1": "انسخ الرابط والصقه",
       "s2": "اختر الجودة",
-      "s2p": "افتح Nezzel، تجد الرابط في انتظارك",
-      "s3": "حمّل وشارك",
-      "s3p": "ثم أرسله إلى مجموعاتك",
-      "note": "عرض توضيحي، وكل موقع يحدد جوداته",
+      "s3": "حمّل، ويُحفظ في هاتفك",
       "more-h": "وفي Nezzel أيضًا",
       "x1": "احتفظ بحالات واتساب",
       "x2": "قائمة تشغيل كاملة",
@@ -1113,6 +796,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
       "sys-cancel": "إلغاء",
       "sys-install": "تثبيت",
       "rs-h": "التطبيق كما هو",
+      "how-shots": "<img class=\"shot\" src=\"/img/screens/ar-light-home.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/ar-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/ar-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
       "rs1": "<img src=\"/img/screens/ar-light-home.webp\" alt=\"الصفحة الرئيسية في Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
       "rs2": "<img src=\"/img/screens/ar-light-sheet-load.webp\" alt=\"Nezzel يجلب خيارات الجودة للرابط\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
       "rs3": "<img src=\"/img/screens/ar-light-sheet.webp\" alt=\"خيارات الجودة مع حجم كل ملف\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
@@ -1158,7 +842,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "x3p": "الصقها معًا، وضغطة واحدة تكفي",
     "x4p": "للأغاني والبودكاست، بملف أصغر",
     "x5p": "تابع تحميلاتك دون أن تفتح التطبيق",
-    "n-st": "الحالات",
     "st-all": "الكل",
     "st-ph": "الصور",
     "st-vid": "الفيديوهات",
@@ -1179,18 +862,14 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", get:"Télécharger", h1:"<span class=\"ln\"><span>Copiez le lien</span></span> <span class=\"ln\"><span><bdi>Nezzel</bdi> s’occupe du reste</span></span>",
     cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", "only-ios":"Android uniquement pour l’instant, pas sur iPhone · version",
     "demo-aria":"Démo : copiez un lien vidéo, Nezzel le propose, choisissez la qualité et le fichier est enregistré",
-    vt:"Souvenirs de vacances",
-    "m-copy":"Copier le lien", copied:"Lien copié", "sh-h":"Partager avec", g1:"Famille", g2:"Amis", g3:"Collègues",
-    field:"Collez un lien public", "n-home":"Accueil", "n-dl":"Téléchargements", "n-set":"Paramètres",
+    
     clip:"Le lien que vous avez copié", view:"Voir les options",
-    video:"Vidéo", "audio-h":"Audio", best:"Meilleure qualité", last:"Dernier choix", bal:"Équilibrée", small:"Petit fichier", audio:"Audio seul",
-    "h-title":"Enregistrez des vidéos sur votre téléphone", "h-line":"Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.", recent:"Récents", "see-all":"Tout voir", paste:"Coller", fetching:"Recherche des qualités…", "all-q":"Toutes les qualités", lowest:"Minimale", "saves-to":"Enregistré dans", "saved-in":"Enregistré dans", "av-line":"Avec image et son", prep:"Préparation…", dling:"Téléchargement", join:"Fusion de l’audio et de la vidéo…",
-    dl:"Télécharger", open:"Ouvrir", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
+    video:"Vidéo", 
+    dl:"Télécharger", saved:"Enregistré", "saved-to":"Enregistré dans <span class=\"ltr\">Download/Nezzel</span>",
     "how-h":"Trois gestes, et c’est sur votre téléphone", 
-    s1:"Copiez le lien", s1p:"Depuis WhatsApp, YouTube, Facebook ou TikTok",
-    s2:"Choisissez la qualité", s2p:"Ouvrez Nezzel : le lien vous attend",
-    s3:"Téléchargez et partagez", s3p:"Puis envoyez-la à vos groupes",
-    note:"Simple démo. Chaque site fixe ses qualités", "more-h":"Et ce n’est pas tout", x1:"Gardez les statuts WhatsApp", x2:"Des playlists entières", x3:"Plusieurs liens d’un coup", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil",
+    s1:"Copiez le lien, touchez Coller",
+    s2:"Choisissez la qualité",
+    s3:"Téléchargez, c’est enregistré", "more-h":"Et ce n’est pas tout", x1:"Gardez les statuts WhatsApp", x2:"Des playlists entières", x3:"Plusieurs liens d’un coup", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil",
     "ins-h":"Installer Nezzel, pas à pas",
     "ins-sub":"Nezzel n’est pas sur le Play Store : Android vous demandera d’abord votre accord. C’est normal",
     i1:"Téléchargez le fichier, puis ouvrez-le", i1p:"Appuyez sur « Télécharger l’application », puis ouvrez le fichier. Si GitHub s’ouvre, prenez le fichier APK. Votre navigateur peut vous mettre en garde sur ce type de fichier",
@@ -1200,6 +879,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
     "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
     "rs-h":"L’appli telle qu’elle est",
+    "how-shots":"<img class=\"shot\" src=\"/img/screens/en-light-home.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\"><img class=\"shot\" src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     rs1:"<img src=\"/img/screens/en-light-home.webp\" alt=\"L’écran d’accueil de Nezzel\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     rs2:"<img src=\"/img/screens/en-light-sheet-load.webp\" alt=\"Nezzel charge les qualités du lien\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
     rs3:"<img src=\"/img/screens/en-light-sheet.webp\" alt=\"Les qualités proposées, chacune avec sa taille\" width=\"640\" height=\"1387\" loading=\"lazy\" decoding=\"async\">",
@@ -1226,7 +906,6 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     "x3p": "Collez-les ensemble, un seul geste suffit",
     "x4p": "Pour la musique et les podcasts, en plus léger",
     "x5p": "Suivez vos téléchargements sans ouvrir l’appli",
-    "n-st": "Statuts",
     "st-all": "Tous",
     "st-ph": "Photos",
     "st-vid": "Vidéos",
@@ -1254,9 +933,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const mb = (value, decimals = 0) => number(value, decimals) + (lang() === "fr" ? "\u00a0Mo" : " MB");
 
   // shared state, declared before anything can render
-  let rel = null, done3 = false;
-  const mach = $("#mach"), jobm = $("#jobm"), chip = $(".lchip"), fcard = $(".fcard");
-  const rig = $(".rig"), desk = $(".desk"), steps = $$(".step");
+  let rel = null;
+  const rig = $(".rig"), desk = $("#desk"), steps = $$(".step"), rtl = document.documentElement.dir === "rtl";
 
   // ---------- language ----------
   const localeSwitch = $("#locale-switch"), langButton = $("#lang"), localeLinks = $$(".lang-menu a");
@@ -1341,104 +1019,19 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const onScroll = () => document.body.classList.toggle("scrolled", scrollY > 10);
   addEventListener("scroll", onScroll, { passive: true }); onScroll();
 
-  // ---------- progress helpers ----------
-  const ring = (root, p) => { $(".pr", root).style.strokeDashoffset = String(1 - p / 100); };
-  const line = (total, p) => "<span class=\"ltr num\">" + number(p, 0) + (lang() === "fr" ? "\u00a0% · " : "% · ") + number(total * p / 100) + " / " + mb(total, 1) + "</span>";
-
-  // ---------- the machine: the copied link rides a cable into Nezzel, the file rides out to the tray ----------
-  // Beat 0 waits above the desk; beats 1-3 play while the pinned desk scrolls through its three thirds.
-  const BEATS = [
-    { ev: [[700, "e-menu"]] },
-    { ev: [[0, "e-menu"], [450, "tap:cp"], [600, "e-copy"], [900, "e-toast"], [1000, "ride"]] },
-    { c: "e-copy e-toast", ev: [[250, "e-sheet"], [1500, "e-full"], [2300, "tap:q1080"], [2400, "e-pick"]] },
-    { c: "e-copy e-toast e-sheet e-full e-pick", ev: [[500, "tap:pb2"], [600, "e-press2"], [900, "drop"], [3700, "e-done"], [3800, "out"], [3900, "e-snack"]] }
-  ];
-  const wide = matchMedia("(min-width: 1024px), (min-width: 760px) and (orientation: landscape)"), rtl = document.documentElement.dir === "rtl";
-  let beat = -1, el = 0, fired = 0, last = 0, raf = 0, t3 = -1, rides = [];
-  const cable = i => $("#c" + i + (wide.matches ? "d" : "m") + " .rb");
-  function tapAt(id) {
-    const a = $("#" + id), box = a.closest(".screen, .slip"), dot = $(".tap", box), k = mach.getBoundingClientRect().width / mach.offsetWidth;
-    const r = a.getBoundingClientRect(), b = box.getBoundingClientRect();
-    dot.style.left = (r.left + r.width / 2 - b.left - b.width / 2) / k + box.offsetWidth / 2 + "px";
-    dot.style.top = (r.top + r.height / 2 - b.top - b.height / 2) / k + box.offsetHeight / 2 + "px";
-    dot.classList.remove("go"); void dot.offsetWidth; dot.classList.add("go");
-  }
-  // Wires live in the desk's own coordinates; they are mirrored in Arabic, so the point is too.
-  function place(node, path, u) {
-    const pt = path.getPointAtLength(path.getTotalLength() * u), x = rtl ? mach.offsetWidth - pt.x : pt.x;
-    node.style.transform = "translate(" + (x - node.offsetWidth / 2) + "px," + (pt.y - node.offsetHeight / 2) + "px)";
-  }
-  function ride(node, i, dur, end) {
-    node.classList.add("on"); place(node, cable(i), 0);
-    rides.push({ node, i, t0: el, dur, end });
-  }
-  // The app's own status lines, in order: preparing, downloading with a percent, joining, then quality and size.
-  function renderDemo3(p) {
-    ring(jobm, p);
-    $(".pc", jobm).textContent = p > 6 && p < 90 ? number(p, 0) + "%" : "";
-    $(".pl-line", jobm).innerHTML = p >= 100 ? "<span class=\"ltr num\">1080p · " + mb(40.6, 1) + "</span>" : t(p <= 6 ? "prep" : p < 90 ? "dling" : "join");
-  }
-  function enter() {
-    mach.className = "mach live k" + beat + " " + (BEATS[beat].c || "");
-    const p = mach.classList.contains("e-pick"); $("#q1080").classList.toggle("sel", p); $("#q720").classList.toggle("sel", !p);
-    rides = []; chip.classList.remove("on"); fcard.classList.remove("on");
-    jobm.classList.remove("done"); done3 = false; t3 = -1; renderDemo3(0);
-    $$(".cn").forEach(c => c.classList.toggle("a", +c.dataset.c === beat - 1));
-  }
-  function fire(ev) {
-    if (ev.startsWith("tap:")) { if (!still) tapAt(ev.slice(4)); return; }
-    if (ev === "ride") return ride(chip, 1, 1100, () => chip.classList.remove("on"));
-    if (ev === "out") return ride(fcard, 2, 1300, () => { fcard.classList.remove("on"); mach.classList.add("landed"); });
-    if (ev === "drop") { mach.classList.remove("e-sheet", "e-full", "e-press2"); mach.classList.add("e-recent"); t3 = el; return; }
-    mach.classList.add(ev);
-    if (ev === "e-pick") { $("#q720").classList.remove("sel"); $("#q1080").classList.add("sel"); }
-    if (ev === "e-done") { jobm.classList.add("done"); done3 = true; renderDemo3(100); }
-  }
-  const busy = () => fired < BEATS[beat].ev.length || (t3 >= 0 && !done3) || rides.length;
-  function frame(now) {
-    raf = 0;
-    if (document.hidden) { last = 0; return; }
-    el += last ? Math.min(64, now - last) : 0; last = now;
-    const ev = BEATS[beat].ev;
-    while (fired < ev.length && el >= ev[fired][0]) fire(ev[fired++][1]);
-    if (t3 >= 0 && !done3) renderDemo3(Math.min(99, Math.round(100 * (1 - Math.pow(1 - Math.min(1, (el - t3) / 2800), 2)))));
-    rides = rides.filter(r => {
-      const u = Math.min(1, (el - r.t0) / r.dur);
-      place(r.node, cable(r.i), u < .5 ? 2 * u * u : 1 - Math.pow(2 - 2 * u, 2) / 2);
-      if (u >= 1) r.end();
-      return u < 1;
-    });
-    if (busy()) raf = requestAnimationFrame(frame);
-  }
-  const resume = () => { if (!raf && beat >= 0 && busy()) raf = requestAnimationFrame(frame); };
-  document.addEventListener("visibilitychange", resume);
-  function play(k) {
-    if (k === beat) return;
-    beat = k; el = 0; fired = 0; last = 0;
-    steps.forEach((x, i) => x.classList.toggle("on", i === k - 1));
-    enter(); resume();
-  }
-  // The cables draw in as the desk arrives: p = how far its top has come up the screen.
-  function wires(p) {
-    $$(".cb").forEach(g => {
-      const i = g.id[1] - 1, d = Math.min(1, Math.max(0, p * 1.6 - i * .6));
-      g.style.setProperty("--dw", (1 - d).toFixed(3)); g.classList.toggle("on", d > .995);
-    });
-  }
-  // Fit the desk to the screen under the header; the pinned desk then scrolls through three equal thirds.
-  let top = 88, pending = 0;
-  function layout() {
-    const dh = innerHeight - top, avail = document.documentElement.clientWidth - (wide.matches ? 48 : 24);
-    const k = Math.min(wide.matches ? 1 : 1.3, avail / mach.offsetWidth, still ? 1 : (dh - 28) / mach.offsetHeight);
-    mach.style.setProperty("--k", k.toFixed(3));
-    rig.style.setProperty("--dh", dh + "px"); desk.style.setProperty("--top", top + "px");
-    if (!still) onDesk();
-  }
+  // ---------- the steps: the pinned desk scrolls through three thirds; the phone shows that step's real screen ----------
+  // The playing step's rule fills with the scroll, the ones before it stay full.
+  const shotEls = $$(".shot", desk);
+  let at = -1, top = 84, pending = 0;
+  function layout() { top = parseFloat(getComputedStyle(desk).top) || 0; if (!still) onDesk(); }
   function onDesk() {
     pending = 0;
-    const vh = innerHeight, r = rig.getBoundingClientRect(), span = r.height - desk.offsetHeight;
-    wires(((.85 * vh) - mach.getBoundingClientRect().top) / (.75 * vh));
-    play(r.top > top + 1 ? 0 : 1 + Math.min(2, Math.floor(Math.max(0, (top - r.top) / span) * 3)));
+    const r = rig.getBoundingClientRect(), u = 3 * Math.min(.9999, Math.max(0, (top - r.top) / (r.height - desk.offsetHeight))), k = Math.floor(u);
+    steps.forEach((x, i) => x.style.setProperty("--p", i < k ? 1 : i > k ? 0 : (u - k).toFixed(3)));
+    if (k === at) return;
+    at = k;
+    steps.forEach((x, i) => x.classList.toggle("on", i === k));
+    shotEls.forEach((x, i) => x.classList.toggle("on", i === k));
   }
 
   // ---------- features: a deck of sticky cards. GSAP scrubs the covered card and plays each scene when its card is
@@ -1549,13 +1142,16 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
     // real screens: the phones rise into place
     const rs = $(".rs"), rise = gsap.fromTo($$("li", rs), { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: .9, ease: "power3.out", stagger: .07, paused: true });
     ScrollTrigger.create({ trigger: rs, start: "top 88%", onEnter: () => rise.restart(), onLeaveBack: () => rise.pause(0) });
-    // then the section holds still while the scroll slides the row toward the start, for as far as the row overflows
+    // then the section holds still while the scroll slides the row toward the start, for as far as the row overflows.
+    // On phones the last screen stops in the middle; the pin holds a little longer so the scrub settles before the page moves on.
     const reel = $(".reel"); reel.classList.add("pin");
     const over = () => {
-      const a = rs.firstElementChild.getBoundingClientRect(), b = rs.lastElementChild.getBoundingClientRect();
-      return Math.max(0, Math.max(a.right, b.right) - Math.min(a.left, b.left) + 2 * parseFloat(getComputedStyle(rs).paddingInlineStart) - rs.clientWidth);
+      const a = rs.firstElementChild.getBoundingClientRect(), b = rs.lastElementChild.getBoundingClientRect(), pad = parseFloat(getComputedStyle(rs).paddingInlineStart);
+      const o = Math.max(a.right, b.right) - Math.min(a.left, b.left) + 2 * pad - rs.clientWidth;
+      return Math.max(0, b.width * 2 > rs.clientWidth ? o + (rs.clientWidth - b.width) / 2 - pad : o);
     };
-    gsap.fromTo(rs, { x: 0 }, { x: () => (rtl ? 1 : -1) * over(), ease: "none", scrollTrigger: { trigger: reel, start: "top top", end: () => "+=" + over(), pin: true, scrub: .5, invalidateOnRefresh: true } });
+    gsap.timeline({ scrollTrigger: { trigger: reel, start: "top top", end: () => "+=" + over() * 1.2, pin: true, scrub: .5, invalidateOnRefresh: true } })
+      .fromTo(rs, { x: 0 }, { x: () => (rtl ? 1 : -1) * over(), ease: "none", duration: 1 }).to({}, { duration: .2 });
   }
   addEventListener("DOMContentLoaded", deck);
 
@@ -1579,22 +1175,11 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   // ---------- theme: light paper by default, a tap switches to dark ----------
   const root = document.documentElement, themeBtn = $("#theme");
   const mode = () => root.dataset.theme || "light";
-  // Real captures: <lang>-<theme>-<key>, falling back to the light set; the drawn screen stays if neither exists.
-  function shots() {
-    const box = $(".shots"); if (!box) return;
-    $$(".shot", box).forEach(img => {
-      const k = img.className.match(/k-([\w-]+)/)[1], tries = [lang() + "-" + mode() + "-" + k, lang() + "-light-" + k];
-      const next = () => { const n = tries.shift(); if (!n) { img.removeAttribute("src"); img.classList.remove("ok"); return; } img.src = "/img/app/" + n + ".webp"; };
-      img.onload = () => { img.classList.add("ok"); box.classList.add("on"); };
-      img.onerror = () => { img.classList.remove("ok"); next(); };
-      img.classList.remove("ok"); next();
-    });
-  }
   function syncTheme() {
     const m = mode(); root.dataset.mode = m;
-    shots(); waveTheme();
+    waveTheme();
     // the Arabic screens exist in both themes; the English set is light only
-    if (lang() === "ar") $$(".rs img").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
+    if (lang() === "ar") $$(".rs img, .shot").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
     themeBtn.dataset.iAria = m === "dark" ? "to-light" : "to-dark";
     themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
     $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
@@ -1622,7 +1207,8 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   // ---------- start ----------
   // Fonts first, so the headline lines rise as they will stay (capped, never blocks).
   Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 300))]).then(() => document.documentElement.classList.add("ready"));
-  layout(); if (still) wires(1);
+  if (!still) desk.classList.add("live");
+  layout();
   let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
   if (!still) {
     addEventListener("scroll", () => { if (!pending) pending = requestAnimationFrame(onDesk); }, { passive: true });
