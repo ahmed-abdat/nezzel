@@ -33,6 +33,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.ThumbnailKind
@@ -42,7 +45,8 @@ import kotlinx.coroutines.delay
 /**
  * One video page: the platform VideoView, its poster until the first frame, and play/pause, seek and mute.
  * Audio plays in the same view over its cover, once through and without mute (pause does that).
- * Plays only while [current]; swiping away pauses it, and leaving the pager releases the player.
+ * Plays only while [current] and the app is in front; swiping away or leaving the app pauses it, and coming back
+ * carries on from there (a finished track stays finished). Leaving the pager releases the player.
  */
 @Composable
 internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
@@ -55,15 +59,19 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
     var duration by remember { mutableLongStateOf(item.durationMillis ?: 0L) }
     var seeking by remember { mutableStateOf<Float?>(null) }
     var muted by rememberSaveable { mutableStateOf(false) }
-    val latestCurrent by rememberUpdatedState(current)
+    var finished by remember { mutableStateOf(false) }
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val active = current && lifecycle.isAtLeast(Lifecycle.State.RESUMED)
+    val latestActive by rememberUpdatedState(active)
     val latestMuted by rememberUpdatedState(muted)
 
     fun play(on: Boolean) {
         val view = video ?: return
+        if (on) finished = false
         if (on && player != null) view.start() else view.pause()
         playing = on && player != null
     }
-    LaunchedEffect(current, player) { play(current) }
+    LaunchedEffect(active, player) { play(active && !finished) }
     LaunchedEffect(muted, player) { player?.setVolume(if (muted) 0f else 1f, if (muted) 0f else 1f) }
     LaunchedEffect(playing) {
         while (playing) {
@@ -80,11 +88,12 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean) {
                     prepared.isLooping = !item.isAudio
                     prepared.setVolume(if (latestMuted) 0f else 1f, if (latestMuted) 0f else 1f)
                     duration = prepared.duration.toLong().takeIf { it > 0 } ?: duration
+                    // Back from the background the view prepares afresh: carry on where it paused.
+                    if (!finished && position > 0) prepared.seekTo(position.toInt())
                     player = prepared
-                    if (latestCurrent) { start(); playing = true }
                 }
                 setOnInfoListener { _, what, _ -> if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) rendering = true; false }
-                setOnCompletionListener { playing = false }
+                setOnCompletionListener { playing = false; finished = true }
                 setOnErrorListener { _, _, _ -> playing = false; player = null; true }
                 setOnClickListener { play(!playing) }
                 setVideoURI(item.uri)
