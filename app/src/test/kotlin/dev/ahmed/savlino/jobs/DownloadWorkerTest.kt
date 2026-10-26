@@ -187,6 +187,200 @@ class DownloadWorkerTest {
         }
     }
 
+    // Real accounting boundary: restoring the old scrub/re-read or SAVING-speed logic breaks these JSON assertions.
+    @Test fun completedTransferCountsSourceAndMeasuredBytesAfterMergeInRealDailyJson() = runBlocking {
+        for (merged in listOf(false, true)) {
+            val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+            val usage = actualUsage(posts)
+            val clock = java.util.concurrent.atomic.AtomicLong()
+            fixture(FakeEngine(), usage = usage, clock = clock::get, nextTick = { awaitCancellation() },
+                script = { _, dir, emit ->
+                    emit(EngineEvent.Progress(9_000_000, Size.Unknown)) // resumed baseline is not this attempt's work
+                    clock.set(3_000)
+                    emit(EngineEvent.Progress(9_600_000, Size.Unknown)) // 200 KB/s, not the cumulative 3.2 MB/s
+                    if (merged) emit(EngineEvent.Merging)
+                    clock.set(60_000) // merge/save time must not turn this into the slowest bucket
+                    val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                    TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+                }).use { f ->
+                val id = if (merged) "daily-merged" else "daily-direct"
+                assertTrue(f.coordinator.enqueue(command(id)))
+                f.coordinator.execute(id, {}, {})
+                assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+                assertNull(f.store.get(id)!!.sourceUrl)
+                usage.sendDaily()
+                val json = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second)
+                val counts = json.getJSONObject("counts")
+                assertEquals(1, counts.getInt("dl.finished.video.hd"))
+                assertEquals(1, counts.getInt("site:example.com"))
+                assertEquals(1, counts.getInt("speed.s100k-1m"))
+                assertEquals(1, counts.keys().asSequence().count { it.startsWith("speed.") })
+                assertFalse(json.toString().contains("https://"))
+            }
+        }
+    }
+
+    @Test fun nonretryableFailureStillReportsConfirmedLinkAfterJournalScrubAndOptOutDropsIt() = runBlocking {
+        for (on in listOf(true, false)) {
+            val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+            val usage = actualUsage(posts, on)
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Unsupported))), usage = usage).use { f ->
+                val id = if (on) "daily-unsupported" else "daily-off"
+                val confirmed = command(id)
+                f.coordinator.enqueue(confirmed)
+                f.coordinator.execute(id, {}, {})
+                assertEquals(JobStage.FAILED, f.store.get(id)!!.stage)
+                assertNull(f.store.get(id)!!.sourceUrl)
+                usage.sendDaily()
+                if (on) {
+                    val failure = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
+                    assertEquals(confirmed.source.link.rawUrl, failure.getString("link"))
+                    assertEquals("Unsupported", failure.getString("code"))
+                    val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+                    assertEquals(1, counts.getInt("site:example.com"))
+                    assertEquals(1, counts.getInt("dl.failed.video.hd"))
+                    assertFalse(counts.keys().asSequence().any { it.startsWith("speed.") })
+                } else assertTrue(posts.isEmpty())
+            }
+        }
+    }
+
+    @Test fun audioWebmPublishesWithCorrectMimeAndSingleWebaExtension() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.webm", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            f.provider.normalizeAudioWebmNames = true
+            val source = command("audio-weba").source
+            val format = Format("audio-webm", "webm", false, true, size = Size.Exact(4))
+            val confirmed = (DownloadCommand.confirm("audio-weba", Inspection(source, "engine-42", listOf(format)), source,
+                format.id, "Sound") as ConfirmResult.Confirmed).command
+            f.coordinator.enqueue(confirmed)
+            f.coordinator.execute("audio-weba", {}, {})
+            val saved = f.store.get("audio-weba")!!
+            assertEquals(JobStage.COMPLETED, saved.stage)
+            val published = f.provider.rows.values.single()
+            assertEquals("audio/webm", published.getAsString(MediaStore.Downloads.MIME_TYPE))
+            assertEquals("Sound.weba", published.getAsString(MediaStore.Downloads.DISPLAY_NAME))
+            assertEquals("Sound.weba", saved.displayName)
+            assertEquals("webm", saved.format.container)
+        }
+    }
+
+    @Test fun foregroundAndEngineExceptionsUseBoundedFailureReportReasonsAndNeutralLocalizedCopy() = runBlocking {
+        for (foregroundFailure in listOf(true, false)) {
+            val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+            fixture(FakeEngine(), usage = actualUsage(posts),
+                downloadFailure = if (foregroundFailure) null else IllegalStateException("private details")).use { f ->
+                val id = if (foregroundFailure) "fg-denied-reason" else "engine-run-reason"
+                f.coordinator.enqueue(command(id))
+                f.coordinator.execute(id, { if (foregroundFailure) throw IllegalStateException("denied") }, {})
+                assertEquals(DownloadError.ExecutionRestricted, f.store.get(id)!!.error)
+                val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
+                assertEquals(if (foregroundFailure) "ExecutionRestricted_FOREGROUND_DENIED" else "ExecutionRestricted_ENGINE_RUN", report.getString("code"))
+                assertFalse(report.toString().contains("private details"))
+            }
+        }
+        for (lang in listOf("en", "ar", "fr")) {
+            val localized = app.createConfigurationContext(android.content.res.Configuration(app.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(lang))
+            })
+            val text = localized.getString(dev.ahmed.savlino.R.string.download_restricted_error)
+            assertFalse(text, text.contains("Android", ignoreCase = true) || text.contains("أندرويد"))
+            assertTrue(text.isNotBlank())
+        }
+    }
+
+    @Test fun audioCountsItsSiteAndOnlyMeasurableTransferSpeed() = runBlocking {
+        for (duration in listOf(500L, 3000L)) {
+            val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+            val usage = actualUsage(posts)
+            val clock = java.util.concurrent.atomic.AtomicLong()
+            fixture(FakeEngine(), usage = usage, clock = clock::get, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+                emit(EngineEvent.Progress(0, Size.Exact(4)))
+                clock.set(duration); emit(EngineEvent.Progress(4, Size.Exact(4)))
+                val output = dir.resolve("output.m4a").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }).use { f ->
+                val source = command("audio-count-$duration").source
+                val format = Format("audio", "m4a", false, true, size = Size.Exact(4))
+                val confirmed = (DownloadCommand.confirm("audio-count-$duration", Inspection(source, "engine-42", listOf(format)),
+                    source, format.id, "Sound") as ConfirmResult.Confirmed).command
+                f.coordinator.enqueue(confirmed); f.coordinator.execute(confirmed.jobId, {}, {})
+                assertNull(f.store.get(confirmed.jobId)!!.sourceUrl)
+                usage.sendDaily()
+                val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+                assertEquals(1, counts.getInt("dl.finished.audio.original"))
+                assertEquals(1, counts.getInt("site:example.com"))
+                assertEquals(if (duration == 500L) 0 else 1, counts.keys().asSequence().count { it.startsWith("speed.") })
+            }
+        }
+    }
+
+    @Test fun engineRestartCannotReuseItsOldSpeedAndRetryCountsItsOwnOutcome() = runBlocking {
+        val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+        val usage = actualUsage(posts)
+        val clock = java.util.concurrent.atomic.AtomicLong()
+        var attempts = 0
+        fixture(FakeEngine(), usage = usage, clock = clock::get, nextTick = { awaitCancellation() }, script = { _, dir, emit ->
+            if (++attempts == 1) return@fixture TransferResult.Failure(DownloadError.Failed)
+            emit(EngineEvent.Progress(0, Size.Unknown))
+            clock.set(3000); emit(EngineEvent.Progress(3_000_000, Size.Unknown))
+            emit(EngineEvent.Restarting(1))
+            emit(EngineEvent.Progress(0, Size.Unknown, restartEpoch = 1))
+            clock.set(3500); emit(EngineEvent.Progress(4, Size.Unknown, restartEpoch = 1))
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            // This test drives execute directly; no dummy WorkManager request may remain unfinished during Retry.
+            f.coordinator.initialize(); f.store.enqueue(command("retry-count"))
+            f.coordinator.execute("retry-count", {}, {})
+            assertEquals(JobStage.FAILED, f.store.get("retry-count")!!.stage)
+            assertTrue(f.coordinator.retry("retry-count"))
+            f.coordinator.execute("retry-count", {}, {})
+            assertEquals(JobStage.COMPLETED, f.store.get("retry-count")!!.stage)
+            usage.sendDaily()
+            val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+            assertEquals(1, counts.getInt("dl.failed.video.hd"))
+            assertEquals(1, counts.getInt("dl.finished.video.hd"))
+            assertEquals(2, counts.getInt("site:example.com"))
+            assertFalse(counts.keys().asSequence().any { it.startsWith("speed.") || it.startsWith("dl.cancelled.") })
+        }
+    }
+
+    @Test fun agedOutConfirmationsDoNotCountAsSiteFailuresOrSendLinks() = runBlocking {
+        for (state in listOf("queued", "paused", "waiting-network")) {
+            val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+            val usage = actualUsage(posts)
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Network))), usage = usage).use { f ->
+                val id = "age-out-$state"
+                assertTrue(f.coordinator.enqueue(command(id)))
+                if (state == "paused") assertTrue(f.coordinator.pause(id))
+                if (state == "waiting-network") {
+                    f.coordinator.execute(id, {}, {})
+                    assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+                }
+                f.store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?", arrayOf<Any>(
+                    System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, id))
+                val expired = f.store.get(id)!! // Real automatic expiry/scrub and observer delivery.
+                assertEquals(JobStage.FAILED, expired.stage)
+                assertEquals(DownloadError.FormatExpired, expired.error)
+                assertNull(expired.sourceUrl)
+                f.coordinator.execute(id, {}, {}) // A stale worker delivery cannot report it afterwards either.
+                usage.sendDaily()
+                assertTrue(posts.none { it.first == dev.ahmed.savlino.report.InboxClient.REPORT })
+                val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+                assertFalse(counts.keys().asSequence().any { it.startsWith("dl.failed.") || it.startsWith("site:") || it == "funnel.failed" })
+            }
+        }
+    }
+
+    private fun actualUsage(posts: MutableList<Pair<String, String>>, on: Boolean = true) = dev.ahmed.savlino.usage.Usage(
+        app.getSharedPreferences("coordinator-counts", Context.MODE_PRIVATE).apply { edit().clear().commit() }, { on },
+        { path, json -> posts += path to json; true }, CoroutineScope(Dispatchers.Unconfined), "0.5.1", 800, 35,
+        { emptyList() }, object : dev.ahmed.savlino.usage.Usage.Crashes {
+            override fun pending(): String? = null
+            override fun delete() = Unit
+            override fun engineVersion(): String? = null
+        })
+
     private class UsageRecorder : UsageEvents {
         val keys = java.util.concurrent.CopyOnWriteArrayList<String>()
         override fun count(key: String) { keys += key }
@@ -1816,13 +2010,19 @@ class DownloadWorkerTest {
 internal class TestDownloadsProvider(val file: File, private val owner: String) : ContentProvider() {
     val rows = linkedMapOf<Long, ContentValues>()
     var onOpen: () -> Unit = {}
+    var normalizeAudioWebmNames = false
     var onCommit: () -> Unit = {}
     private var nextId = 0L
     override fun onCreate() = true
     override fun getType(uri: Uri) = "video/mp4"
     override fun insert(uri: Uri, values: ContentValues?): Uri {
         val id = ++nextId
-        rows[id] = ContentValues(values!!).apply { put(MediaStore.Downloads.OWNER_PACKAGE_NAME, owner) }
+        rows[id] = ContentValues(values!!).apply {
+            put(MediaStore.Downloads.OWNER_PACKAGE_NAME, owner)
+            val name = getAsString(MediaStore.Downloads.DISPLAY_NAME)
+            if (normalizeAudioWebmNames && getAsString(MediaStore.Downloads.MIME_TYPE) == "audio/webm" && !name.endsWith(".weba"))
+                put(MediaStore.Downloads.DISPLAY_NAME, "$name.weba")
+        }
         return ContentUris.withAppendedId(uri, id)
     }
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, order: String?): MatrixCursor {

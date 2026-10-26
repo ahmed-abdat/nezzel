@@ -282,7 +282,8 @@ internal fun matchesYtdlpChild(row: ProcProcess, parent: Int, python: String, sc
 
 internal class YtdlpExecutionFailure(val error: DownloadError, val expiredUrl: Boolean = false,
     val resumeAllowed: Boolean = true, val failureCause: DownloadFailureCause = error.cause,
-    val reextractionBlocked: Boolean = false) : Exception()
+    val reextractionBlocked: Boolean = false,
+    val reason: ExecutionFailureReason = ExecutionFailureReason.UNKNOWN) : Exception()
 internal class YtdlpDiagnostics {
     private val error = AtomicReference(DownloadError.Failed)
     private val cause = AtomicReference(DownloadFailureCause.OTHER)
@@ -342,7 +343,8 @@ internal class YtdlpDiagnostics {
             if (httpFailure.get() && cause.get() == DownloadFailureCause.HTTP &&
                 it in setOf(DownloadError.Network, DownloadError.Offline)) DownloadError.Failed else it
         }
-        return YtdlpExecutionFailure(mapped, expired.get(), !httpFailure.get(), cause.get(), reextractionBlocked.get())
+        return YtdlpExecutionFailure(mapped, expired.get(), !httpFailure.get(), cause.get(), reextractionBlocked.get(),
+            (fallback as? YtdlpExecutionFailure)?.reason ?: ExecutionFailureReason.UNKNOWN)
     }
     companion object {
         fun blocksResume(message: String): Boolean = errorLines(message).any(HTTP_NO_RESUME::containsMatchIn)

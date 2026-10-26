@@ -49,6 +49,17 @@ class RecentInspectionsTest {
     private fun confirm(inspection: Inspection, at: LinkRevision = source, id: String = "job") =
         assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(id, inspection, at, "18", "title")).command
 
+    @Test fun actualExtractionAndReaderPrefetchedHitCarryExplicitWinnerProvenance() = runBlocking {
+        val runtime = Runtime(json())
+        val engine = engine(runtime)
+        assertEquals(InspectionProvenance.YTDLP, assertIs<InspectResult.Success>(engine.inspect(source, "fresh-path")).provenance)
+        assertEquals(InspectionProvenance.CACHE, assertIs<InspectResult.Success>(engine.inspect(source, "cache-path")).provenance)
+        engine.clearRecentLinks()
+        engine.prefetched(link, json())
+        assertEquals(InspectionProvenance.CACHE, assertIs<InspectResult.Success>(engine.inspect(source, "reader-cache-path")).provenance)
+        assertEquals(1, runtime.inspections.size)
+    }
+
     @Test fun hitRemapsWithoutArgvAndKeepsTheExtractionAge() = runBlocking {
         val runtime = Runtime(json())
         val cache = YtdlpInfoCache(temp.newFolder()) { now }

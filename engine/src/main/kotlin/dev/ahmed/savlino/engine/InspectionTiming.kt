@@ -4,6 +4,9 @@ import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.asContextElement
 
+/** Which result supplied usable options, not whether a speculative process happened to start. */
+enum class InspectionProvenance { NPE, YTDLP, OWN, CACHE }
+
 /** Fixed vocabulary only: no source, operation id, title or engine output can enter the journal. */
 enum class InspectionPhase(val label: String) {
     INTAKE_ACCEPTED("intake_accepted"), ENGINE_GATE_PASSED("engine_gate_passed"),

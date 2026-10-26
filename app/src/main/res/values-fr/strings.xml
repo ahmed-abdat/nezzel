@@ -228,7 +228,7 @@
     <string name="recent_files">Récents</string>
     <string name="see_all">Tout voir</string>
     <string name="download_merge_error">Impossible de fusionner l’audio et la vidéo</string>
-    <string name="download_restricted_error">Android a arrêté ce téléchargement</string>
+    <string name="download_restricted_error">Impossible de terminer ce téléchargement</string>
     <plurals name="downloads_running">
         <item quantity="one">%1$s téléchargement en cours</item>
         <item quantity="many">%1$s téléchargements en cours</item>

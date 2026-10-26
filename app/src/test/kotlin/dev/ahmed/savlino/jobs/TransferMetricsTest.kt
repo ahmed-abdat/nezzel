@@ -182,4 +182,30 @@ class TransferMetricsTest {
         assertEquals(100, event.copy(bytes = 100).percent)
         assertNull(event.copy(total = Size.Estimated(100)).percent)
     }
+    @Test fun attemptSummarySurvivesDisplayResetAndExcludesResumeBaselineAndPostprocessing() {
+        var time = 0L
+        val summary = AttemptTransferSummary { time }
+        summary.observe(8_000_000)
+        time = 3000; summary.observe(8_600_000)
+        time = 60_000
+        assertEquals(200_000.0, summary.bytesPerSecond()!!, 0.01)
+        summary.reset()
+        summary.observe(20)
+        time += 500; summary.observe(50)
+        assertNull(summary.bytesPerSecond())
+        time += 3000; summary.observe(-1)
+        assertNull(summary.bytesPerSecond())
+    }
+    @Test fun attemptSummaryCounterResetAndInvalidClockCannotManufactureThroughput() {
+        var time = 0L
+        val summary = AttemptTransferSummary { time }
+        summary.observe(1000)
+        time = 3000; summary.observe(900)
+        assertNull(summary.bytesPerSecond())
+        time = 2000; summary.observe(2000)
+        assertNull(summary.bytesPerSecond())
+        time = 5000; summary.observe(8000)
+        assertEquals(2000.0, summary.bytesPerSecond()!!, 0.01)
+    }
+
 }

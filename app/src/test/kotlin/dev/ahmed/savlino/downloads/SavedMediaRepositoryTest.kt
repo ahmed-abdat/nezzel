@@ -26,6 +26,17 @@ class SavedMediaRepositoryTest {
         ShadowContentResolver.registerProviderInternal("media", provider)
         try { check(SavedMediaRepository(context.contentResolver, context.packageName), provider) } finally { provider.db.close() }
     }
+    @Test fun historicalUnambiguousAudioExtensionsRouteAsAudioWithoutChangingProviderMime() = fixture { repo, _ ->
+        val row = repo.query().single()
+        for (extension in listOf("opus", "ogg", "m4a", "mp3", "weba", "flac")) {
+            val legacy = row.copy(filename = "Song.$extension", mimeType = "video/mp4")
+            assertTrue(extension, legacy.audio)
+            assertEquals(listOf(legacy), filterMedia(listOf(legacy), MediaFilter.AUDIO))
+            assertEquals("video/mp4", legacy.mimeType) // no MediaStore rewrite
+        }
+        assertEquals(SavedMediaKind.VIDEO, row.copy(filename = "Clip.mkv", mimeType = "application/octet-stream").kind)
+        assertFalse(row.copy(filename = "Ambiguous.webm", mimeType = "video/webm").audio)
+    }
     @Test fun queryExcludesPendingOtherFoldersAndNonMediaAndOrdersNewestFirst() = fixture { repo, provider ->
         provider.insertRow(2, "audio/mpeg", 200)
         provider.insertRow(3, "video/mp4", 300, pending = 1)
@@ -53,7 +64,8 @@ class SavedMediaRepositoryTest {
     }
     @Test fun searchCombinesFilterChipWithLatinCaseAndAccents() = fixture { repo, provider ->
         provider.insertRow(2, "audio/mpeg", 200)
-        provider.db.execSQL("UPDATE media SET _display_name = ?, title = ?", arrayOf("été.mp3", "Summer"))
+        provider.db.execSQL("UPDATE media SET _display_name = CASE WHEN mime_type LIKE 'audio/%' THEN ? ELSE ? END, title = ?",
+            arrayOf("été.mp3", "été.mp4", "Summer"))
         val items = repo.query()
         assertEquals(items, filterMedia(items, MediaFilter.ALL, "SUMMER ETE"))
         assertEquals(listOf("MP3"), filterMedia(items, MediaFilter.AUDIO, "ETE").map { it.format })

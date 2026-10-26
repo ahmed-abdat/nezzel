@@ -239,10 +239,10 @@ class StoragePublicationTest {
     }
 
     @Test fun vp9MkvPublishesWithMatroskaMimeAndSuffixedDuplicate() {
-        val mime = dev.ahmed.savlino.jobs.mimeTypeFor("mkv")
+        val mime = dev.ahmed.savlino.jobs.mimeTypeFor(dev.ahmed.savlino.domain.Format("video", "mkv", true, true))
         assertEquals("video/x-matroska", mime)
-        assertEquals("video/webm", dev.ahmed.savlino.jobs.mimeTypeFor("webm"))
-        assertEquals("video/mp4", dev.ahmed.savlino.jobs.mimeTypeFor("mp4"))
+        assertEquals("video/webm", dev.ahmed.savlino.jobs.mimeTypeFor(dev.ahmed.savlino.domain.Format("video", "webm", true, true)))
+        assertEquals("video/mp4", dev.ahmed.savlino.jobs.mimeTypeFor(dev.ahmed.savlino.domain.Format("video", "mp4", true, true)))
         fun publish(id: String): PublishedFile {
             val job = jobs.create(id)
             provider.onWrite = { row -> assertEquals("video/x-matroska", row.getAsString(MediaStore.Downloads.MIME_TYPE)) }
@@ -255,7 +255,7 @@ class StoragePublicationTest {
     }
 
     @Test fun directMovKeepsItsExtensionAndQuickTimeMimeWhenPublished() {
-        val mime = dev.ahmed.savlino.jobs.mimeTypeFor("mov")
+        val mime = dev.ahmed.savlino.jobs.mimeTypeFor(dev.ahmed.savlino.domain.Format("video", "mov", true, true))
         assertEquals("video/quicktime", mime)
         val job = jobs.create("mov")
         val result = publisher.publish(job, job.file("Sample clip", "mov").apply { writeBytes(bytes) },

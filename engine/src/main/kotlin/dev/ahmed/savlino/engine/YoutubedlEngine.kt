@@ -212,7 +212,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         catch (_: LinkageError) { null }
         if (inspection == null) { recent.remove(source.link); return null }
         infoCache?.remember(inspection, entry.json, entry.trimToChosen, entry.createdAt, entry.signedUntil)
-        return InspectResult.Success(inspection)
+        return InspectResult.Success(inspection, InspectionProvenance.CACHE)
     }
 
     private fun signedUntil(json: String): Long? = try { RecentInspections.signedUntil(json) } catch (_: Exception) { null }
@@ -252,7 +252,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 val signed = signedUntil(json)
                 infoCache?.remember(inspection, json, trimToChosen = true, expiresAt = signed)
                 recent.put(source.link, json, RecentInspections.Provenance.NPE, null, signed, epoch)
-                return InspectResult.Success(inspection)
+                return InspectResult.Success(inspection, InspectionProvenance.NPE)
             }
             // yt-dlp gets a full inspection budget from its own start, including after a cap skip.
             current.expireIn(limits.inspectMs)
@@ -330,7 +330,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val signed = signedUntil(json)
             infoCache?.remember(inspection, json, expiresAt = signed)
             recent.put(source.link, json, RecentInspections.Provenance.YTDLP, version, signed, epoch)
-            InspectResult.Success(inspection)
+            InspectResult.Success(inspection, InspectionProvenance.YTDLP)
         }
     }
 
@@ -419,12 +419,14 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override suspend fun download(command: DownloadCommand, directory: File,
         progress: (EngineEvent) -> Unit): TransferResult {
         var resumeAllowed = true
-        return operation(command.jobId, { error, cause -> TransferResult.Failure(error, resumeAllowed, cause) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+        var failureReason = ExecutionFailureReason.UNKNOWN
+        return operation(command.jobId, { error, cause -> TransferResult.Failure(error, resumeAllowed, cause, failureReason) }, lockTimeoutMs = limits.maintenanceWaitMs,
+            executionFailure = { failureReason = it }) { current ->
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
             if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
             // Both paths validate before any staging write. Caller owns staging cleanup/publication.
             try { YtdlpCommand.validateStaging(directory) }
-            catch (_: IllegalArgumentException) { return@operation TransferResult.Failure(DownloadError.ExecutionRestricted) }
+            catch (_: IllegalArgumentException) { return@operation TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING) }
             prepareDownload(command)
             var infoJson = infoCache?.freshFile(command.jobId)
             val transferEngine = resumeEngine(command, directory)
@@ -437,13 +439,13 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             }
             fun discardInfo() {
                 if (infoCache?.remove(command.jobId) == false)
-                    throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                    throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
             }
             var bytes = -1L
             var restartEpoch = 0L
             // Without the inspection's info JSON yt-dlp extracts new signed URLs: never continue older bytes.
             if (infoJson == null && directory.listFiles().orEmpty().isNotEmpty()) {
-                if (!clearStaging(directory)) return@operation TransferResult.Failure(DownloadError.ExecutionRestricted)
+                if (!clearStaging(directory)) return@operation TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
                 restartEpoch++
                 progress(EngineEvent.Restarting(restartEpoch))
             }
@@ -529,7 +531,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                                 it.name.matches(Regex("output\\.(?:jpg|jpeg|png|webp|avif|gif|temp\\.(?:m4a|mp3))"))
                         }.forEach {
                             if (java.nio.file.Files.isSymbolicLink(it.toPath()) || !it.isFile || !it.delete())
-                                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
                         }
                         args = untaggedArgs
                     }
@@ -572,7 +574,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     else -> {
                         nativeExpired = result == DirectResult.Expired
                         checkCancelled(current)
-                        if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                        if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
                         restartEpoch++; bytes = -1; progress(EngineEvent.Restarting(restartEpoch))
                         if (nativeExpired) {
                             discardInfo(); infoJson = verifiedInfo(current, command); fromPage = true
@@ -583,7 +585,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // A changed eligibility/policy cannot hand native bytes to yt-dlp.
             val changingToYtdlp = !nativeComplete && DirectResume.read(directory)?.native == true
             if (changingToYtdlp) {
-                if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
                 restartEpoch++; bytes = -1; progress(EngineEvent.Restarting(restartEpoch))
             }
             // Only fallback jobs need a marker; ordinary yt-dlp jobs keep their previous staging contract.
@@ -634,7 +636,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.byteWatchdog = false
             checkCancelled(current)
             val marker = File(directory, DirectResume.NAME)
-            if (marker.exists() && !marker.delete()) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+            if (marker.exists() && !marker.delete()) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
             val output = try {
                 val root = directory.canonicalFile
                 val manifest = File(root, "result-path.txt")
@@ -661,7 +663,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 require(output.file.parentFile == root)
                 output
             } catch (_: IllegalArgumentException) {
-                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted)
+                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
             }
             // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
             // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
@@ -818,7 +820,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private class EngineError(cause: Throwable) : Exception(cause.javaClass.name, cause)
 
     private suspend fun <T> operation(id: String, failure: (DownloadError, DownloadFailureCause) -> T, lockTimeoutMs: Long? = null,
-        exclusive: Boolean = false, gated: Boolean = true, body: suspend (Operation) -> T): T = coroutineScope {
+        executionFailure: (ExecutionFailureReason) -> Unit = {}, exclusive: Boolean = false, gated: Boolean = true, body: suspend (Operation) -> T): T = coroutineScope {
         val current = Operation()
         synchronized(lifecycleLock) {
             if (operations.containsKey(id)) return@coroutineScope failure(DownloadError.ExecutionRestricted, DownloadFailureCause.OTHER)
@@ -906,6 +908,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 current.cancelled.get() -> DownloadFailureCause.OTHER
                 else -> diagnostic.failureCause
             }
+            executionFailure(diagnostic.reason.takeUnless { it == ExecutionFailureReason.UNKNOWN }
+                ?: if (mapped in setOf(DownloadError.ExecutionRestricted, DownloadError.Failed)) ExecutionFailureReason.ENGINE_RUN else ExecutionFailureReason.UNKNOWN)
             failure(mapped, cause)
         } finally {
             synchronized(lifecycleLock) {

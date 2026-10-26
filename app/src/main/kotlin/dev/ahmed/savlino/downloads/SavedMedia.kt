@@ -52,6 +52,9 @@ data class SavedMedia(
     }
     val searchKey: String by lazy { SearchText.fold("$title $filename") }
     val kind: SavedMediaKind? get() = when {
+        // Historical releases labelled these audio files as video/mp4. Extension is decisive only when unambiguous.
+        filename.substringAfterLast('.', "").lowercase(Locale.ROOT) in setOf("mp3", "m4a", "m4b", "ogg", "oga", "opus", "weba", "flac", "wav", "aac") -> SavedMediaKind.AUDIO
+        filename.endsWith(".mkv", ignoreCase = true) && !mimeType.startsWith("audio/") -> SavedMediaKind.VIDEO
         mimeType.startsWith("image/") -> SavedMediaKind.IMAGE
         mimeType.startsWith("video/") -> SavedMediaKind.VIDEO
         mimeType.startsWith("audio/") -> SavedMediaKind.AUDIO
