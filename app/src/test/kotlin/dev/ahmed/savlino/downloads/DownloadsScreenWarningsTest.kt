@@ -41,6 +41,59 @@ class DownloadsScreenWarningsTest {
     private fun click(a: ComponentActivity, label: String) =
         assertEquals(true, (clickable(a, label) ?: error("Missing $label")).config[SemanticsActions.OnClick].action?.invoke())
 
+    @Test fun lateProblemFromRealCoordinatorAppearsInNeedsALookAfterCompletion() = kotlinx.coroutines.runBlocking {
+        val app = context
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(app, androidx.work.Configuration.Builder()
+            .setWorkerFactory(object : androidx.work.WorkerFactory() {
+                override fun createWorker(context: android.content.Context, name: String, params: androidx.work.WorkerParameters) =
+                    object : androidx.work.Worker(context, params) { override fun doWork() = Result.success() }
+            }).build())
+        val provider = dev.ahmed.savlino.jobs.TestDownloadsProvider(java.io.File(app.cacheDir, "late-warning-provider"), app.packageName)
+        provider.attachInfo(app, android.content.pm.ProviderInfo().apply { authority = "media" })
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("media", provider)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val space = dev.ahmed.savlino.storage.SpaceBudget(app.filesDir, app.cacheDir,
+            dev.ahmed.savlino.storage.FreeSpace { Long.MAX_VALUE })
+        // Robolectric has no AndroidKeyStore: a memory key keeps Try again (reopen) working, like DownloadCoordinatorCheckTest.
+        dev.ahmed.savlino.jobs.JobStore(app, null, dev.ahmed.savlino.storage.AesGcmLinkCipher(dev.ahmed.savlino.jobs.MemoryLinkKeys())).also { it.all() }.use { store ->
+            val coordinator = dev.ahmed.savlino.jobs.DownloadCoordinator(app,
+                dev.ahmed.savlino.engine.FakeEngine(steps = listOf(dev.ahmed.savlino.engine.FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))),
+                store, dev.ahmed.savlino.storage.MediaStorePublisher(app.contentResolver, space, app.packageName) { }, space = space,
+                probe = { release.await(5, java.util.concurrent.TimeUnit.SECONDS); dev.ahmed.savlino.domain.ProbeFacts(1, 0, 5000, 4) })
+            try {
+                // Known audio codec: the shared command() leaves it unreported, which judges as NoSoundExpected, not a Problem.
+                val source = dev.ahmed.savlino.domain.LinkRevision(dev.ahmed.savlino.domain.LinkInput.parse("https://example.com/clip?token=private")!!, 7)
+                val format = dev.ahmed.savlino.domain.Format("f720", "mp4", true, true, videoCodec = "avc1", audioCodec = "mp4a", width = 1280, height = 720,
+                    size = dev.ahmed.savlino.domain.Size.Exact(4))
+                store.enqueue((dev.ahmed.savlino.domain.DownloadCommand.confirm("late-ui-problem",
+                    dev.ahmed.savlino.domain.Inspection(source, "engine-42", listOf(format)), source, format.id, "clip")
+                    as dev.ahmed.savlino.domain.ConfirmResult.Confirmed).command)
+                renderThemed({ nodes(it) }, {
+                    val warnings by coordinator.warnings.collectAsState()
+                    DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {},
+                        libraryLoad = LibraryLoadState.Ready(listOf(video)), warnings = warnings)
+                }) { activity ->
+                    // Settle the real UI before starting the 4s probe budget; rendering is not part of that check.
+                    var completed: dev.ahmed.savlino.jobs.DownloadProgress? = null
+                    kotlinx.coroutines.runBlocking {
+                        coordinator.execute("late-ui-problem", {}, { if (it.terminal) completed = it })
+                    }
+                    assertNull(completed!!.check)
+                    assertTrue(coordinator.warnings.value.isEmpty())
+                    release.countDown()
+                    kotlinx.coroutines.runBlocking {
+                        kotlinx.coroutines.withTimeout(2000) {
+                            while (coordinator.warnings.value.isEmpty()) kotlinx.coroutines.delay(10)
+                        }
+                    }
+                    click(activity, context.getString(R.string.dl_tab_running))
+                    assertTrue(texts(nodes(activity)).contains(context.getString(R.string.check_problem_no_sound)))
+                    assertTrue(texts(nodes(activity)).contains(context.getString(R.string.check_needs_look)))
+                }
+            } finally { release.countDown() }
+        }
+    }
+
     @Test fun warningRowShowsProblemTryAgainAndDismissRemovesIt() {
         val tried = mutableListOf<String>()
         val warnings = mutableStateOf(listOf(

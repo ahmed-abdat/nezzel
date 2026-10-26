@@ -31,6 +31,12 @@ class ImageInspectionFlowTest {
     private val fetch = FakeFetch()
     private lateinit var saver: ImageSaver
     private var legacyInspections = 0
+    private val usageKeys = mutableListOf<String>()
+    private val usageSites = mutableListOf<String?>()
+    private val usage = object : dev.ahmed.savlino.usage.UsageEvents {
+        override fun count(key: String) { usageKeys += key }
+        override fun site(link: String?) { usageSites += link }
+    }
     private val video = Inspection(LinkRevision(LinkInput.parse(linkedIn)!!, 1), "fixture-v1",
         listOf(Format("720", "mp4", true, true, height = 720)), listOf(PresetChoice(Preset.BALANCED, "720")))
 
@@ -49,7 +55,7 @@ class ImageInspectionFlowTest {
     }
     private fun model(images: FakeImages, engine: EngineAdapter = engine()) = LinkViewModel(SavedStateHandle(), engine = engine,
         currentEngineVersion = { "fixture-v1" }, images = images, imageSaver = saver,
-        previewDispatcher = kotlinx.coroutines.Dispatchers.Unconfined, previewImage = ::testBitmap)
+        previewDispatcher = kotlinx.coroutines.Dispatchers.Unconfined, previewImage = ::testBitmap, usage = usage)
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
     private fun check(vm: LinkViewModel, url: String) { vm.edit(url); vm.checkLink(); idle() }
     private fun settle() { runBlocking { withTimeout(10_000) { saver.awaitIdle() } }; idle() }
@@ -176,6 +182,61 @@ class ImageInspectionFlowTest {
         }
     }
 
+    @Test fun photoCountsUseConfirmationSourceAndOneSiteForEveryPublishedItem() {
+        val vm = model(FakeImages { imageSuccess(it, found = 3) })
+        check(vm, linkedIn)
+        fetch.gate = CompletableDeferred()
+        vm.saveImage()
+        vm.edit("https://elsewhere.example.org/another-post")
+        fetch.gate!!.complete(Unit)
+        settle()
+        assertEquals(3, publisher.published.get())
+        assertEquals(3, usageKeys.count { it == "dl.finished.photo.any" })
+        assertEquals(0, usageKeys.count { it == "dl.failed.photo.any" })
+        assertEquals(List(3) { linkedIn }, usageSites)
+    }
+
+    @Test fun cancellingBetweenPhotosCountsTheCancelWithoutInventingFailedOrAttemptedItems() {
+        val cancellingPublisher = object : dev.ahmed.savlino.storage.Publisher by publisher {
+            override fun publish(job: dev.ahmed.savlino.storage.JobDirectory.Job, stagedFile: File, title: String,
+                extension: String, mimeType: String, cancellation: android.os.CancellationSignal): dev.ahmed.savlino.storage.PublicationResult {
+                val saved = publisher.publish(job, stagedFile, title, extension, mimeType, cancellation)
+                saver.cancel() // Commit already won; the next item has not been attempted.
+                return saved
+            }
+        }
+        saver = ImageSaver(fetch, cancellingPublisher, staging, noSpaceCheck, scope)
+        val vm = model(FakeImages { imageSuccess(it, found = 2) })
+        check(vm, linkedIn)
+        vm.saveImage(); settle()
+        val result = saver.outcome.value as ImageSaveState.BatchFinished
+        assertTrue(result.cancelled)
+        assertEquals(1, result.saved.size)
+        assertEquals(0, result.cancelledCount)
+        assertEquals(1, result.attemptedCount)
+        assertEquals(1, result.unattemptedCount)
+        assertEquals(1, usageKeys.count { it == "dl.finished.photo.any" })
+        assertEquals(1, usageKeys.count { it == "dl.cancelled.photo.any" })
+        assertEquals(0, usageKeys.count { it == "dl.failed.photo.any" })
+        assertEquals(1, fetch.calls.get())
+        assertEquals(listOf(linkedIn), usageSites)
+    }
+
+    @Test fun cancellationCountsOnlyAttemptedPhotoAndNeverTheUnattemptedTail() {
+        val vm = model(FakeImages { imageSuccess(it, found = 4) })
+        check(vm, linkedIn)
+        fetch.gate = CompletableDeferred()
+        vm.saveImage()
+        runBlocking { withTimeout(5000) { while (fetch.calls.get() == 0) delay(10) } }
+        vm.cancelImageSave()
+        fetch.gate!!.complete(Unit)
+        settle()
+        assertEquals(0, usageKeys.count { it == "dl.failed.photo.any" })
+        assertEquals(1, usageKeys.count { it == "dl.cancelled.photo.any" })
+        assertEquals(0, usageKeys.count { it == "dl.finished.photo.any" })
+        assertTrue(usageSites.isEmpty())
+    }
+
     @Test fun partialCarouselSaveLeavesOnlyFailedPhotosSelectedAndReportsActualPublications() {
         val vm = model(FakeImages { imageSuccess(it, found = 3) })
         check(vm, linkedIn)
@@ -187,6 +248,9 @@ class ImageInspectionFlowTest {
         assertEquals(setOf(ready.photos[1].ref), vm.selectedImageRefs)
         assertTrue(vm.imageSaveEnabled)
         assertEquals(2, publisher.published.get())
+        assertEquals(2, usageKeys.count { it == "dl.finished.photo.any" })
+        assertEquals(1, usageKeys.count { it == "dl.failed.photo.any" })
+        assertEquals(List(3) { linkedIn }, usageSites)
         runBlocking { withTimeout(1000) { vm.imageEvents.take(1).collect { event ->
             assertEquals(2, (event as ImageSaveState.BatchFinished).saved.size)
             assertEquals(3, event.total)

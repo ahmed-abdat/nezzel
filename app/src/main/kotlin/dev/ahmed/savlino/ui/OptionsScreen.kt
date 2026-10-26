@@ -91,7 +91,7 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
             }
             // The share sheet says "saved before" first, from intake on; the app keeps it at the end of the choices.
             if (share != null && !failed && !links.confirmed) (links.savedBefore ?: links.savedLink)?.let { saved ->
-                SavedBeforeNotice(saved, links.selectedFormat?.container?.takeIf { links.savedBefore != null }, language,
+                SavedBeforeNotice(saved, links.selectedFormat?.takeIf { links.savedBefore != null }, language,
                     onOpened = share.onFinish)
             }
             playlistNotice(links.text)?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium,

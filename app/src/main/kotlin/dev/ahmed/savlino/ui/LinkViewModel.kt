@@ -341,6 +341,7 @@ class LinkViewModel(
     private var inspectionJob: Job? = null
     private var earlyPreviewJob: Job? = null
     private var inspectionTiming: InspectionTiming? = null
+    private var optionsProvenance: UsageKeys.Path? = null
     private var inspectionStartedAt = 0L
     /** The options sheet drew the preview image (timing journal only). */
     fun thumbnailShown() { inspectionTiming?.record(InspectionPhase.THUMBNAIL_SHOWN) }
@@ -349,8 +350,8 @@ class LinkViewModel(
         if (optionsState !is OptionsState.Ready && optionsState !is OptionsState.ImageReady || timing == null) return
         if (timing.has(InspectionPhase.OPTIONS_SHOWN)) return
         timing.record(InspectionPhase.OPTIONS_SHOWN)
-        // Which reader produced the options: yt-dlp ran, else the app's own reader, else YouTube's fast path.
-        val path = when {
+        // Winner metadata is adopted only after staleness/ownership checks, never from a speculative loser.
+        val path = optionsProvenance ?: when {
             timing.has(InspectionPhase.YTDLP_SPAWNED) -> UsageKeys.Path.YTDLP
             optionsState is OptionsState.ImageReady || timing.has(InspectionPhase.NATIVE_READER_DONE) -> UsageKeys.Path.OWN
             else -> UsageKeys.Path.NPE
@@ -662,6 +663,7 @@ class LinkViewModel(
             optionsState = OptionsState.Error(DownloadError.Unsupported)
             return
         }
+        optionsProvenance = null
         inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }
         inspectionStartedAt = now()
         usage.count(UsageKeys.FUNNEL_LINK)
@@ -764,6 +766,7 @@ class LinkViewModel(
                     if (selectedPositions != null) selectedImageRefs = result.inspection.items
                         .filter { it.position in selectedPositions }.flatMap { it.renditions }.map { it.ref }.toSet()
                     operationId = null; imageOperation = false
+                    optionsProvenance = UsageKeys.Path.OWN
                     val rendition = result.inspection.items.firstOrNull()?.renditions?.firstOrNull() as? MediaRendition.Image
                     optionsState = when {
                         !result.inspection.source.matches(source) -> OptionsState.Error(DownloadError.FormatExpired)
@@ -954,6 +957,13 @@ class LinkViewModel(
                 failedReadGeneration = read.readGeneration
             }
             is InspectResult.Success -> {
+                optionsProvenance = when (result.provenance) {
+                    dev.ahmed.savlino.engine.InspectionProvenance.CACHE -> UsageKeys.Path.CACHE
+                    dev.ahmed.savlino.engine.InspectionProvenance.NPE -> UsageKeys.Path.NPE
+                    dev.ahmed.savlino.engine.InspectionProvenance.YTDLP -> UsageKeys.Path.YTDLP
+                    dev.ahmed.savlino.engine.InspectionProvenance.OWN -> UsageKeys.Path.OWN
+                    null -> null
+                }
                 val returned = result.inspection
                 when {
                     !returned.source.matches(source) -> optionsState = OptionsState.Error(DownloadError.FormatExpired)
@@ -1091,6 +1101,7 @@ class LinkViewModel(
         inspectionJob?.cancel(); inspectionJob = null
         earlyPreviewJob?.cancel(); earlyPreviewJob = null
         inspectionTiming = null
+        optionsProvenance = null
         old?.let { if (image) images?.cancel(it) else engine.cancel(it) }
         endRace()
         selectedId = null; selectedPreset = null; command = null; submissionId = null; submitted = false; moreFormats = false
@@ -1375,7 +1386,7 @@ class LinkViewModel(
         imageSaveProgress = null
         val ready = optionsState as? OptionsState.ImageReady
         val showing = ready?.photos?.any { it.ref == selection.renditionRef } == true
-        countPhotos(outcome, currentSource()?.link?.rawUrl)
+        countPhotos(outcome, selection.source.link.rawUrl)
         when {
             outcome is ImageSaveState.BatchFinished -> {
                 if (showing && outcome.saved.size == outcome.total) { dismissOptions(); clearField() }
@@ -1409,17 +1420,18 @@ class LinkViewModel(
     }
 
     private fun countPhotos(outcome: ImageSaveState, link: String?) {
-        val (saved, failed) = when (outcome) {
-            is ImageSaveState.BatchFinished -> outcome.saved.size to outcome.total - outcome.saved.size
-            is ImageSaveState.Saved -> 1 to 0
-            is ImageSaveState.Failed -> if (outcome.image == ImageFailure.CANCELLED) {
-                usage.count(UsageKeys.photo(UsageKeys.Download.CANCELLED)); return
-            } else 0 to 1
+        val (saved, failed, cancelled) = when (outcome) {
+            is ImageSaveState.BatchFinished -> Triple(outcome.saved.size, outcome.failedCount,
+                // A cancel between items ends the batch without attempting another photo.
+                if (outcome.cancelled && outcome.cancelledCount == 0) 1 else outcome.cancelledCount)
+            is ImageSaveState.Saved -> Triple(1, 0, 0)
+            is ImageSaveState.Failed -> if (outcome.image == ImageFailure.CANCELLED) Triple(0, 0, 1) else Triple(0, 1, 0)
             else -> return
         }
         repeat(saved) { usage.count(UsageKeys.photo(UsageKeys.Download.FINISHED)); usage.count(UsageKeys.FUNNEL_FINISHED) }
         repeat(failed) { usage.count(UsageKeys.photo(UsageKeys.Download.FAILED)); usage.count(UsageKeys.FUNNEL_FAILED) }
-        if (saved + failed > 0) usage.site(link)
+        repeat(cancelled) { usage.count(UsageKeys.photo(UsageKeys.Download.CANCELLED)) }
+        repeat(saved + failed) { usage.site(link) }
     }
     private fun failConfirmation(error: DownloadError) {
         selectedId = null; selectedPreset = null; moreFormats = false

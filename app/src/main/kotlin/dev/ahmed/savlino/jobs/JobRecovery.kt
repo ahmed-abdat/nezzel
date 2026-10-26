@@ -107,7 +107,7 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
         try {
             cancellation.throwIfCanceled()
             val source = job.requireOutput(stagedFile)
-            val pending = publisher.insertPending(job, row.filename, mimeType)
+            val pending = publisher.insertPending(job, publicationName(row.filename, row.format), mimeType)
             try {
                 check(store.recordPending(id, pending))
             } catch (failure: Exception) {

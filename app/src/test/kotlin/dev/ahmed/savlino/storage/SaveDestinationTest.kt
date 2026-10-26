@@ -23,6 +23,27 @@ import java.io.File
 @Config(sdk = [29, 35], manifest = Config.NONE)
 class SaveDestinationTest {
     private val context get() = RuntimeEnvironment.getApplication()
+    @Test fun audioWebmJournalPublishesSingleWebaNameThroughFolderProvider() {
+        val provider = provider().apply { normalizeAudioWebmNames = true }
+        SaveDestinations(context).choose(tree)
+        JobStore(context).use { store ->
+            val source = LinkRevision(LinkInput.parse("https://example.org/audio")!!, 1)
+            val format = Format("audio", "webm", false, true, size = Size.Exact(4))
+            val command = (DownloadCommand.confirm("folder-weba", Inspection(source, "engine", listOf(format)), source,
+                format.id, "Sound") as ConfirmResult.Confirmed).command
+            assertTrue(store.enqueue(command)); assertTrue(store.startTransfer(command.jobId))
+            val job = JobDirectory(context.filesDir).create(command.jobId)
+            val file = job.file("output", "webm").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            assertTrue(store.markStaged(command.jobId))
+            val recovery = JobRecovery(store, DestinationPublisher(context, space), File(context.filesDir, "downloads"))
+            val saved = recovery.publish(job, file, mimeTypeFor(format)) as PublishedFile
+            assertEquals("audio/webm", provider.lastCreatedMime)
+            assertEquals("Sound.weba", provider.names.values.single())
+            assertEquals("Sound.weba", saved.displayName)
+            assertEquals("Sound.weba", store.get(command.jobId)!!.displayName)
+            assertEquals("webm", store.get(command.jobId)!!.format.container)
+        }
+    }
     @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
     fun customFolderImageUsesStemAndCachesActualBounds() {
         val provider = provider()
@@ -661,6 +682,8 @@ class SaveDestinationTest {
         val files = linkedMapOf<String, File>()
         private var nextId = 0
         val names = mutableMapOf<String, String>()
+        var normalizeAudioWebmNames = false
+        var lastCreatedMime: String? = null
         var denied = false
         var failOpen = false
         var onOpen: (() -> Unit)? = null
@@ -690,7 +713,8 @@ class SaveDestinationTest {
             if (denied) throw SecurityException()
             val id = (++nextId).toString()
             files[id] = File(context!!.cacheDir, "document-$id").apply { writeBytes(byteArrayOf()) }
-            names[id] = displayName
+            lastCreatedMime = mimeType
+            names[id] = if (normalizeAudioWebmNames && mimeType == "audio/webm" && !displayName.endsWith(".weba")) "$displayName.weba" else displayName
             onCreateDocument?.invoke(id)
             return id
         }

@@ -118,6 +118,16 @@ class DownloadCoordinator(
         active.isNotEmpty() || store.all().any { !it.stage.terminal && it.stage != JobStage.PAUSED } ||
             batches.all().any { it.state == BatchState.ACTIVE || it.state == BatchState.WAITING_NETWORK }
     }
+    /** No generated toString: the report link exists only until terminal accounting consumes this attempt. */
+    private class AttemptAccounting(link: String?, clock: () -> Long) {
+        val siteKey = UsageKeys.site(link)
+        @Volatile var reportLink: String? = link
+        @Volatile var reason = ExecutionFailureReason.UNKNOWN
+        val transfer = AttemptTransferSummary(clock)
+    }
+    private val accounting = ConcurrentHashMap<String, AttemptAccounting>()
+    private val savedProbes = SavedProbeExecutor()
+
     private val recovery = JobRecovery(store, publisher ?: DestinationPublisher(context, space), File(context.filesDir, "downloads"))
     private val startup = Mutex()
     private val transfer = TransferSlots(parallelDownloads, thermalStatus)
@@ -145,11 +155,20 @@ class DownloadCoordinator(
     val error: StateFlow<DownloadError?> = mutableError.asStateFlow()
 
     init {
+        store.onTerminalSource = { row, stage ->
+            // Startup replay has no live predecessor and must neither count nor retain its sources.
+            if (active.containsKey(row.jobId) || mutableProgress.value.any { it.jobId == row.jobId && (!it.terminal || it.awaitingSchedule) }) {
+                val attempt = accounting.getOrPut(row.jobId) { AttemptAccounting(row.sourceUrl, monotonicMillis) }
+                if (stage != JobStage.FAILED) attempt.reportLink = null
+            }
+        }
         store.onExpired = { row ->
             transfer.removeWaiting(row.jobId)
             // Scrub holds the store monitor. Publish without the coordinator's update monitor:
             // update() reads the store in the opposite order on native callback threads.
             val expired = fromRecord(row)
+            // Aging out is a local confirmation timeout, not a failed site/transfer or a reportable link.
+            if (row.error == DownloadError.FormatExpired) accounting.remove(row.jobId)?.reportLink = null
             mutableProgress.update { old ->
                 if (old.any { it.jobId == row.jobId && it.restartEpoch > row.restartEpoch }) old
                 else if (old.any { it.jobId == row.jobId }) old.map { if (it.jobId == row.jobId) expired else it }
@@ -353,11 +372,35 @@ class DownloadCoordinator(
         activeDone[id]?.await()
         val row = queuedRow(id) ?: return@withContext null
         if (row.stage != JobStage.ENQUEUED) return@withContext waitingResult(id, finished)
-        transfer.withSlot(id, row.createdAt, eligible = { queuedRow(id)?.stage == JobStage.ENQUEUED }) {
+        var completion: Pair<JobRecord, DownloadProgress>? = null
+        val attempt = AttemptAccounting(row.sourceUrl, monotonicMillis)
+        try {
+            transfer.withSlot(id, row.createdAt, eligible = { queuedRow(id)?.stage == JobStage.ENQUEUED }) {
+                try {
+                    maintenance.withDownload {
+                        executeWithMaintenanceGate(id, stopReason, foreground, report, finished, attempt) { saved, progress ->
+                            completion = saved to progress
+                        }
+                    }
+                } finally { withContext(NonCancellable) { spaceLedger.release(id) } }
+            } ?: waitingResult(id, finished)
+        } finally {
             try {
-                maintenance.withDownload { executeWithMaintenanceGate(id, stopReason, foreground, report, finished) }
-            } finally { withContext(NonCancellable) { spaceLedger.release(id) } }
-        } ?: waitingResult(id, finished)
+                completion?.let { (saved, progress) -> withContext(NonCancellable) {
+                    // Writer ownership, native maintenance and the transfer slot are already free.
+                    val verdict = try {
+                        val check = checkSavedAsync(saved, progress.bytes)
+                        withTimeoutOrNull(minOf(CHECK_GRACE_MS, checkTimeoutMs)) { check.await() }
+                    } catch (_: Exception) { null } // Optional verification cannot undo committed completion.
+                    val final = progress.copy(check = verdict)
+                    update(final)
+                    finished(final)
+                } }
+            } finally {
+                accounting.remove(id, attempt)
+                attempt.reportLink = null
+            }
+        }
     }
 
     private fun queuedRow(id: String): JobRecord? = synchronized(userCancellation) {
@@ -379,7 +422,8 @@ class DownloadCoordinator(
 
     private suspend fun executeWithMaintenanceGate(id: String, stopReason: () -> Int,
         foreground: suspend (DownloadProgress) -> Unit, report: suspend (DownloadProgress) -> Unit,
-        finished: suspend (DownloadProgress) -> Unit): JobRecord? = withContext(Dispatchers.IO) {
+        finished: suspend (DownloadProgress) -> Unit, attempt: AttemptAccounting,
+        committed: (JobRecord, DownloadProgress) -> Unit): JobRecord? = withContext(Dispatchers.IO) {
         initializeUnderMaintenanceGate()
         val signal = CancellationSignal()
         // Register before reading the row: a later pause/cancel reaches this attempt and resume waits for it.
@@ -419,6 +463,7 @@ class DownloadCoordinator(
                 }
                 return@withContext row
             }
+            accounting[id] = attempt
             // Connectivity retries may outlive startup recovery in the same process.
             if (System.currentTimeMillis() - row.createdAt > JobStore.CONFIRMATION_LIFETIME_MS) {
                 // Linearize cancellation with expiry's terminal write. A received user cancel wins.
@@ -462,6 +507,7 @@ class DownloadCoordinator(
                 var outputBytes: Long? = null
                 try {
                     var command = row.command() ?: error("Invalid job command")
+                    attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
                     val baseRecipe = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:$engineVersion:${YtdlpCommand.ARGV_VERSION}"
                     val transferEngine = engine.resumeEngine(command, stagingRoot(id))
@@ -478,6 +524,7 @@ class DownloadCoordinator(
                     val compatibleRecipe = row.resumeRecipe == recipe ||
                         (transferEngine == "ytdlp" && (legacyRecipe || nativeFallback))
                     val adopting = row.restartEpoch > 0 || row.hasPartial
+                    attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     if (adopting && !compatibleRecipe) {
                         check(cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id))
                         check(store.discardInfoJson(id))
@@ -499,7 +546,9 @@ class DownloadCoordinator(
                         restartEpoch = epoch, hasPartial = hasPartial,
                         mimeType = mime(command.format), qualityHeight = VideoQuality.of(command.format.width, command.format.height))
                     emit(initial)
+                    attempt.reason = ExecutionFailureReason.FOREGROUND_DENIED
                     foreground(initial) // Foreground promotion must succeed before any transfer.
+                    attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     signal.throwIfCanceled()
                     currentCoroutineContext().ensureActive()
                     val job = if (adopting) directories.createOrAdopt(id) else directories.create(id)
@@ -513,6 +562,7 @@ class DownloadCoordinator(
                         check(store.get(id)?.stage == JobStage.TRANSFERRING)
                         downloading += id
                     }
+                    attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val result = try { engine.download(command, job.directory) { event ->
                         synchronized(delivery) {
                             // Late callbacks from a finished attempt never reach the next one.
@@ -536,6 +586,7 @@ class DownloadCoordinator(
                                 transferOpen = true
                                 postProcessing -= id
                                 metrics.clear()
+                                attempt.transfer.reset()
                                 emit(initial.copy(restartEpoch = epoch, hasPartial = false))
                                 return@synchronized
                             }
@@ -550,6 +601,7 @@ class DownloadCoordinator(
                             signal.throwIfCanceled()
                             emit(when (event) {
                                 is EngineEvent.Progress -> {
+                                    attempt.transfer.observe(event.bytesDownloaded)
                                     val measured = metrics.observe(event.bytesDownloaded, event.total)
                                     initial.copy(phase = DownloadPhase.DOWNLOADING, restartEpoch = epoch, hasPartial = hasPartial,
                                         bytes = event.bytesDownloaded.takeIf { it >= 0 }, total = event.total,
@@ -563,11 +615,13 @@ class DownloadCoordinator(
                             })
                         }
                     } } finally { synchronized(delivery) { engineReturned = true }; downloading.remove(id) }
+                    if (result is TransferResult.Failure) attempt.reason = result.reason
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
                             else finishStopped(id, result.error, resumeAllowed = result.resumeAllowed,
                                 startBytes = startBytes, cause = result.cause)
                         is TransferResult.Success -> {
+                            attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                             // Single-stream output has no Merging event: close pause here so a resume never drops a finished file.
                             synchronized(delivery) { transferOpen = false; postProcessing += id }
                             currentCoroutineContext().ensureActive()
@@ -616,11 +670,14 @@ class DownloadCoordinator(
                             val savedBytes = outputBytes
                             val sized = if (row.stage == JobStage.COMPLETED && savedBytes != null)
                                 result.copy(bytes = savedBytes, total = Size.Exact(savedBytes)) else result
-                            val final = if (row.stage == JobStage.COMPLETED) sized.copy(check = checkSaved(row, savedBytes)) else sized
-                            update(final)
-                            // The worker's event consumer is already cancelled on a system stop.
-                            // Deliver the result directly while this context is NonCancellable.
-                            finished(final)
+                            if (row.stage == JobStage.COMPLETED) {
+                                accounting[id]?.reportLink = null
+                                committed(row, sized)
+                            } else {
+                                update(sized)
+                                // Deliver directly even when WorkManager cancelled its event consumer.
+                                finished(sized)
+                            }
                         }
                     }
                 }
@@ -722,7 +779,7 @@ class DownloadCoordinator(
         if (newlyTerminal) {
             if (event.phase == DownloadPhase.COMPLETED) finishedEvents.tryEmit(event)
             if (event.phase == DownloadPhase.CANCELLED) cancellationEvents.tryEmit(event)
-            countTerminal(event, previous.bytesPerSecond)
+            countTerminal(event)
         }
         mutableProgress.update { old ->
             // An expiry callback can win after the journal check above; never resurrect that confirmation.
@@ -734,7 +791,7 @@ class DownloadCoordinator(
         }
     }
     /** One count per job end; a failure also goes out as a report with its exact link (only while Help improve is on). */
-    private fun countTerminal(event: DownloadProgress, lastSpeed: Double?) {
+    private fun countTerminal(event: DownloadProgress) {
         val row = store.get(event.jobId) ?: return
         val outcome = when (event.phase) {
             DownloadPhase.COMPLETED -> UsageKeys.Download.FINISHED
@@ -742,12 +799,19 @@ class DownloadCoordinator(
             DownloadPhase.CANCELLED -> UsageKeys.Download.CANCELLED
             else -> return
         }
+        val attempt = accounting.remove(event.jobId) ?: return
         usage.count(UsageKeys.download(outcome, row.format))
-        if (outcome == UsageKeys.Download.CANCELLED) return
+        if (outcome == UsageKeys.Download.CANCELLED) { attempt.reportLink = null; return }
         usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
-        usage.site(row.sourceUrl)
-        if (outcome == UsageKeys.Download.FINISHED) lastSpeed?.takeIf { it > 0 }?.let { usage.count(UsageKeys.speed(it)) }
-        else usage.failed(Report.DOWNLOAD, (event.error ?: row.error ?: DownloadError.Failed).name, row.sourceUrl, row.engineVersion)
+        val siteKey = attempt.siteKey ?: UsageKeys.site(row.sourceUrl)
+        siteKey?.let(usage::count)
+        if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
+        else {
+            val error = event.error ?: row.error ?: DownloadError.Failed
+            val code = error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
+            usage.failed(Report.DOWNLOAD, code, attempt.reportLink ?: row.sourceUrl, row.engineVersion)
+        }
+        attempt.reportLink = null
     }
     /** Explicit retry of the original confirmation only; scheduling never substitutes the editor URL. */
     suspend fun retry(id: String): Boolean = retryOne(id).also { if (it) usage.count(UsageKeys.RETRY) }
@@ -815,25 +879,19 @@ class DownloadCoordinator(
         engine.clearRecentLinks()
         store.clearShareLinks()
     }
-    /**
-     * Opens the file just published and judges it (R2). Never throws, never touches the row: the job is COMPLETED
-     * whatever this says. The platform readers cannot be interrupted, so they run on their own thread and a late
-     * answer is ignored after [checkTimeoutMs]. Unchecked is returned as null (claims nothing).
-     */
-    private suspend fun checkSaved(row: JobRecord, stagedBytes: Long?): ResultCheck? {
-        val uri = row.pendingUri ?: return null
-        val answer = CompletableDeferred<ProbeFacts?>()
-        try {
-            Thread({ answer.complete(try { probe.probe(uri) } catch (_: Throwable) { null }) }, "nezzel-check").apply { isDaemon = true }.start()
-        } catch (_: Throwable) { return null }
-        val facts = withTimeoutOrNull(checkTimeoutMs) { answer.await() }
-        val verdict = ResultJudge.judge(row.format, stagedBytes, facts)
-        if (verdict is ResultCheck.Problem) {
-            val canRetry = try { store.reopen(row.jobId) != null } catch (_: Exception) { false }
-            val warning = CheckWarning(row.jobId, row.displayName ?: row.filename, uri, verdict, canRetry)
-            mutableWarnings.update { old -> listOf(warning) + old.filterNot { it.jobId == row.jobId } }
+    /** Optional checks run after commit and outside all writer/transfer permits. Late problems use the warning list. */
+    private fun checkSavedAsync(row: JobRecord, stagedBytes: Long?): Deferred<ResultCheck?> {
+        val uri = row.pendingUri ?: return CompletableDeferred(null)
+        val ticket = savedProbes.submit(checkTimeoutMs) { probe.probe(uri) }
+        return artworkScope.async {
+            val verdict = ResultJudge.judge(row.format, stagedBytes, ticket.await())
+            if (verdict is ResultCheck.Problem) {
+                val canRetry = try { store.reopen(row.jobId) != null } catch (_: Exception) { false }
+                val warning = CheckWarning(row.jobId, row.displayName ?: row.filename, uri, verdict, canRetry)
+                mutableWarnings.update { old -> (listOf(warning) + old.filterNot { it.jobId == row.jobId }).take(100) }
+            }
+            verdict.takeUnless { it == ResultCheck.Unchecked }
         }
-        return verdict.takeUnless { it == ResultCheck.Unchecked }
     }
 
     fun dismissWarning(jobId: String) { mutableWarnings.update { old -> old.filterNot { it.jobId == jobId } } }
@@ -866,7 +924,7 @@ class DownloadCoordinator(
         paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch)
     private fun scheduleFailed(row: JobRecord) = fromRecord(row).copy(phase = DownloadPhase.FAILED,
         error = DownloadError.ExecutionRestricted, awaitingSchedule = true, waiting = true)
-    private fun mime(format: Format) = mimeTypeFor(format.container)
+    private fun mime(format: Format) = mimeTypeFor(format)
 }
 
 /** MediaStore MIME for the saved container; mkv is the VP9 + AAC merge (playback-compatible codecs, 2026-10-19). */
@@ -876,14 +934,36 @@ private fun publishedFileExists(context: Context, uri: android.net.Uri): Boolean
         ?.use { it.moveToFirst() } == true
 } catch (_: Exception) { false }
 
-internal fun mimeTypeFor(container: String) = when (container) {
-    "m4a" -> "audio/mp4"
-    "mp3" -> "audio/mpeg"
-    "mkv" -> "video/x-matroska"
-    "webm" -> "video/webm"
-    "mov" -> "video/quicktime"
-    else -> "video/mp4"
+/** Role is authoritative for ambiguous containers. Unknown bytes are never advertised as MP4. */
+internal fun mimeTypeFor(format: Format): String {
+    val container = format.container.lowercase(java.util.Locale.ROOT)
+    val audio = !format.hasVideo && format.hasAudio
+    return when (container) {
+        "webm" -> if (audio) "audio/webm" else "video/webm"
+        "mkv" -> if (audio) "audio/x-matroska" else "video/x-matroska"
+        "ogg", "opus", "oga" -> if (format.hasVideo) "video/ogg" else "audio/ogg"
+        "m4a", "m4b" -> "audio/mp4"
+        "mp3" -> "audio/mpeg"
+        "flac" -> "audio/flac"
+        "wav" -> "audio/wav"
+        "aac" -> "audio/aac"
+        "mp4" -> if (audio) "audio/mp4" else "video/mp4"
+        "mov" -> "video/quicktime"
+        "3gp", "3gpp" -> if (audio) "audio/3gpp" else "video/3gpp"
+        "flv" -> "video/x-flv"
+        else -> android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(container)
+            ?.takeIf { it.startsWith(if (audio) "audio/" else "video/") }
+            ?: "application/octet-stream"
+    }
 }
+
+/** Android providers associate audio/webm with .weba; a .webm hint can acquire a second extension. */
+internal fun publicationName(filename: String, format: Format): String =
+    if (!format.hasVideo && format.hasAudio && format.container.equals("webm", ignoreCase = true))
+        filename.substringBeforeLast('.') + ".weba" else filename
 
 /** Result check watchdog: past this the saved file is simply "Saved". */
 internal const val CHECK_TIMEOUT_MS = 4000L
+
+/** Quick verdicts preserve completion copy without holding transfer capacity. */
+internal const val CHECK_GRACE_MS = 300L

@@ -33,6 +33,14 @@ class YoutubedlEngineTest {
         override fun update() { updates++; version = "2026.08.19" }
         override fun destroy(processId: String): Boolean { destroys.incrementAndGet(); return true }
     }
+    @Test fun genericExecutionFailureHasOnlyABoundedEngineRunReason() = runBlocking {
+        val runtime = Runtime().apply { action = { _, _ -> throw IllegalStateException("private diagnostics must not escape") } }
+        val failure = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), temp.newFolder()) {})
+        assertEquals(DownloadError.Failed, failure.error)
+        assertEquals(ExecutionFailureReason.ENGINE_RUN, failure.reason)
+        assertFalse(failure.toString().contains("private diagnostics"))
+    }
+
     @Test fun concurrentDownloadsHaveIndependentProcessesCancellationAndProgress() = runBlocking {
         val entered = CountDownLatch(2)
         val releases = java.util.concurrent.ConcurrentHashMap<String, CountDownLatch>()
@@ -329,7 +337,7 @@ class YoutubedlEngineTest {
         val engine = YoutubedlEngine(runtime)
         assertEquals(TransferResult.Failure(DownloadError.FormatExpired), engine.download(command("old"), dir) {})
         assertTrue(runtime.calls.none { it.contains("--no-simulate") })
-        assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted), engine.download(command(), dir) {})
+        assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING), engine.download(command(), dir) {})
         assertEquals("outside", outside.readText())
     }
     @Test fun exactSingleStreamRejectsTruncatedOutputBeforeReturningItForPublication() = runBlocking {
@@ -379,7 +387,7 @@ class YoutubedlEngineTest {
                 File(dir, "result-path.txt").writeText(File(dir, names.first()).path)
                 ""
             } }
-            assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted), YoutubedlEngine(runtime).download(command(), dir) {})
+            assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING), YoutubedlEngine(runtime).download(command(), dir) {})
             names.forEach { assertEquals("preserve", File(dir, it).readText()) }
         }
     }
@@ -400,7 +408,7 @@ class YoutubedlEngineTest {
                 }
                 ""
             } }
-            assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted),
+            assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING),
                 YoutubedlEngine(runtime).download(command(), dir) {})
             assertEquals(if (symlinkManifest) File(dir, "output.mp4").path else "preserve", outside.readText())
         }

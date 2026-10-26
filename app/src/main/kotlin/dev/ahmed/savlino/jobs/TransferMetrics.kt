@@ -4,6 +4,32 @@ import dev.ahmed.savlino.domain.Size
 import java.util.ArrayDeque
 import kotlin.math.ceil
 
+/** Terminal accounting, independent of display ticks. The first counter is a baseline, including resume bytes. */
+internal class AttemptTransferSummary(private val clock: () -> Long) {
+    private var firstTime: Long? = null
+    private var lastTime: Long? = null
+    private var firstBytes = 0L
+    private var lastBytes = 0L
+
+    @Synchronized fun observe(bytes: Long) {
+        val now = clock()
+        if (bytes < 0) { reset(); return }
+        if (firstTime == null || bytes < lastBytes || lastTime?.let { now < it } == true) {
+            firstTime = now; firstBytes = bytes
+        }
+        lastTime = now; lastBytes = bytes
+    }
+
+    @Synchronized fun bytesPerSecond(): Double? {
+        val duration = elapsed(lastTime ?: return null, firstTime ?: return null) ?: return null
+        val received = lastBytes - firstBytes
+        return if (duration >= 2000 && received > 0)
+            (received.toDouble() / duration * 1000).takeIf { it.isFinite() && it > 0 } else null
+    }
+
+    @Synchronized fun reset() { firstTime = null; lastTime = null; firstBytes = 0; lastBytes = 0 }
+}
+
 /** In-memory measurements for one execute attempt. Counts are cumulative across all transfer streams. */
 internal class TransferMetrics(private val clock: () -> Long) {
     data class Snapshot(val bytesPerSecond: Double? = null,

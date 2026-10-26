@@ -243,7 +243,7 @@
     <string name="recent_files">الملفات الأخيرة</string>
     <string name="see_all">عرض الكل</string>
     <string name="download_merge_error">تعذّر دمج الصوت والفيديو</string>
-    <string name="download_restricted_error">أوقف \u2066Android\u2069 هذا التنزيل</string>
+    <string name="download_restricted_error">تعذّر إكمال التنزيل</string>
     <plurals name="downloads_running">
         <item quantity="zero">لا توجد تنزيلات جارية</item>
         <item quantity="one">تنزيل واحد جارٍ</item>

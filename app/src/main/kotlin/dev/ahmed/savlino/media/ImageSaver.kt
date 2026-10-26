@@ -44,7 +44,12 @@ sealed interface ImageSaveState {
     class Saving(val selection: MediaSelection, val current: Int = 1, val total: Int = 1) : ImageSaveState
     class Saved(val selection: MediaSelection, val uri: Uri, val displayName: String) : ImageSaveState
     class BatchFinished(val selection: MediaSelection, val saved: List<Saved>, val total: Int,
-        val cancelled: Boolean, val failure: Failed?, val failures: List<Failed> = listOfNotNull(failure)) : ImageSaveState
+        val cancelled: Boolean, val failure: Failed?, val failures: List<Failed> = listOfNotNull(failure)) : ImageSaveState {
+        val failedCount get() = failures.count { it.image != ImageFailure.CANCELLED }
+        val cancelledCount get() = failures.count { it.image == ImageFailure.CANCELLED }
+        val attemptedCount get() = saved.size + failures.size
+        val unattemptedCount get() = (total - attemptedCount).coerceAtLeast(0)
+    }
     class Failed(val selection: MediaSelection, val image: ImageFailure? = null, val statusCode: Int? = null,
         val storage: StorageError? = null) : ImageSaveState
 }

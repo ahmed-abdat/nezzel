@@ -33,7 +33,7 @@ import androidx.compose.material.icons.outlined.Notifications
  */
 @Composable
 internal fun ConfirmationDetails(links: LinkViewModel, language: String, savedNotice: Boolean = true) {
-    if (savedNotice && !links.confirmed) links.savedBefore?.let { SavedBeforeNotice(it, links.selectedFormat?.container, language) }
+    if (savedNotice && !links.confirmed) links.savedBefore?.let { SavedBeforeNotice(it, links.selectedFormat, language) }
     SavesTo()
 }
 
@@ -159,7 +159,7 @@ internal fun largeOnMobileData(format: Format, roughBytes: Long?, metered: Boole
  * another copy; this never blocks.
  */
 @Composable
-internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language: String, onOpened: () -> Unit = {}) {
+internal fun SavedBeforeNotice(saved: SavedBefore, format: Format?, language: String, onOpened: () -> Unit = {}) {
     val context = LocalContext.current
     // Plain note: a leading glyph, the sentence, a text action. No box around one row.
     Row(Modifier.fillMaxWidth().testTag("saved_before"), verticalAlignment = Alignment.CenterVertically,
@@ -171,7 +171,7 @@ internal fun SavedBeforeNotice(saved: SavedBefore, container: String?, language:
             TextButton(onClick = {
                 try {
                     // Before a format is picked only the file knows its type; MediaStore keeps it for our own rows.
-                    val type = container?.let(::mimeTypeFor) ?: context.contentResolver.getType(saved.uri)
+                    val type = format?.let(::mimeTypeFor) ?: context.contentResolver.getType(saved.uri)
                     context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(saved.uri, type)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                     onOpened()

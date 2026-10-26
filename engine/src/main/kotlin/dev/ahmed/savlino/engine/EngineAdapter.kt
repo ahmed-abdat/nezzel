@@ -62,7 +62,7 @@ private val notWaiting:StateFlow<Set<String>> = MutableStateFlow<Set<String>>(em
 private val notPreparing: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
 
 sealed interface InspectResult {
-    data class Success(val inspection: Inspection) : InspectResult
+    data class Success(val inspection: Inspection, val provenance: InspectionProvenance? = null) : InspectResult
     data class Failure(val error: DownloadError) : InspectResult
 }
 
@@ -77,10 +77,14 @@ sealed interface EngineEvent {
     data object Merging : EngineEvent
 }
 
+/** Bounded attribution only, never exception text or a platform-cause guess. Not persisted or sent as a dynamic key. */
+enum class ExecutionFailureReason { FOREGROUND_DENIED, STORAGE_STAGING, ENGINE_RUN, UNKNOWN }
+
 sealed interface TransferResult {
     data class Success(val output: StagedOutput) : TransferResult
     data class Failure(val error: DownloadError, val resumeAllowed: Boolean = true,
-        val cause: DownloadFailureCause = error.cause) : TransferResult
+        val cause: DownloadFailureCause = error.cause,
+        val reason: ExecutionFailureReason = ExecutionFailureReason.UNKNOWN) : TransferResult
 }
 
 /** A single nonempty staged file, not a published/saved download. */

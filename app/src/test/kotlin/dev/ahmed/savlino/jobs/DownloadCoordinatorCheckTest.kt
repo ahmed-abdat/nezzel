@@ -56,7 +56,8 @@ class DownloadCoordinatorCheckTest {
         lateinit var fixture: Fixture
         val engine = FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))
         val coordinator = DownloadCoordinator(app, engine, store, MediaStorePublisher(app.contentResolver, space, app.packageName) { },
-            space = space, probe = { uri -> probe(fixture).probe(uri) }, checkTimeoutMs = timeoutMs)
+            space = space, probe = { uri -> probe(fixture).probe(uri) }, checkTimeoutMs = timeoutMs,
+            parallelDownloads = kotlinx.coroutines.flow.MutableStateFlow(1))
         fixture = Fixture(store, coordinator, mutableListOf())
         return fixture
     }
@@ -66,6 +67,70 @@ class DownloadCoordinatorCheckTest {
         store.enqueue(command(id))
         assertEquals(JobStage.COMPLETED, withTimeout(10_000) { coordinator.execute(id, {}, {}) }!!.stage)
         withTimeout(5000) { event.await() }
+    }
+
+    @Test fun slowProbeReleasesTransferSlotAndCompletionPrecedesItsLateWarning() = runBlocking {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val probes = java.util.concurrent.atomic.AtomicInteger()
+        fixture(timeoutMs = 4000) { MediaProbe {
+            if (probes.incrementAndGet() == 1) {
+                entered.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)); ProbeFacts(1, 0, 5000, 4)
+            } else ProbeFacts(1, 1, 5000, 4)
+        } }.use { f ->
+            try {
+                val first = async(Dispatchers.Default) { f.finish("late-problem") }
+                assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                val next = withTimeout(1500) { f.finish("next-while-check-blocked") }
+                assertEquals(ResultCheck.Verified(true, true), next.check)
+                val done = withTimeout(1500) { first.await() }
+                assertNull(done.check)
+                assertTrue(f.coordinator.warnings.value.isEmpty())
+                release.countDown()
+                val warning = withTimeout(2000) { f.coordinator.warnings.first { it.any { w -> w.jobId == "late-problem" } } }.single()
+                assertEquals(ResultCheck.Problem.NO_SOUND, warning.problem)
+                assertTrue(warning.canRetry)
+                assertEquals(JobStage.COMPLETED, f.store.get("late-problem")!!.stage)
+            } finally { release.countDown() }
+        }
+    }
+
+    @Test fun cancelAndRemoveDuringCommittedGraceStillDeliverOneCompletedAndNoCancellation() = runBlocking {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        fixture { MediaProbe { entered.countDown(); release.await(5, java.util.concurrent.TimeUnit.SECONDS); ProbeFacts(1, 1, 5000, 4) } }.use { f ->
+            val events = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
+            val cancelled = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
+            val callbacks = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
+            val completedCollector = launch(start = CoroutineStart.UNDISPATCHED) { f.coordinator.completed.collect { events += it } }
+            val cancelledCollector = launch(start = CoroutineStart.UNDISPATCHED) { f.coordinator.cancelled.collect { cancelled += it } }
+            try {
+                val id = "cancel-committed-grace"
+                f.store.enqueue(command(id))
+                val executing = async(Dispatchers.Default) {
+                    f.coordinator.execute(id, { androidx.work.WorkInfo.STOP_REASON_NOT_STOPPED }, {}, {}, { callbacks += it })
+                }
+                assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                // Probe admission happens only after commit and transfer/writer release, while its grace is pending.
+                assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+                assertTrue("Cancel must interleave with the pending completion grace",
+                    f.coordinator.progress.value.any { it.jobId == id && it.phase == DownloadPhase.SAVING })
+                f.coordinator.cancel(id)
+                f.coordinator.removeFailed(id)
+                assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+                assertEquals(JobStage.COMPLETED, withTimeout(1500) { executing.await() }!!.stage)
+                release.countDown()
+                withTimeout(1000) { while (events.isEmpty()) delay(1) }
+                yield()
+                completedCollector.cancelAndJoin(); cancelledCollector.cancelAndJoin()
+                assertEquals(listOf(DownloadPhase.COMPLETED), events.map { it.phase })
+                assertEquals(listOf(DownloadPhase.COMPLETED), callbacks.map { it.phase })
+                assertTrue(cancelled.isEmpty())
+                assertNull(f.store.get(id)!!.sourceUrl)
+            } finally {
+                release.countDown(); completedCollector.cancelAndJoin(); cancelledCollector.cancelAndJoin()
+            }
+        }
     }
 
     @Test fun matchingFileIsVerifiedOnTheCompletedEventAndStagingWasGoneOnlyAfterSizeWasTaken() = runBlocking {
@@ -99,7 +164,8 @@ class DownloadCoordinatorCheckTest {
             assertEquals(JobStage.COMPLETED, f.store.get("throws")!!.stage)
         }
         app.deleteDatabase(JobStore.DATABASE_NAME)
-        fixture(timeoutMs = 200) { MediaProbe { Thread.sleep(10_000); ProbeFacts(0, 0) } }.use { f ->
+        val slowRelease = java.util.concurrent.CountDownLatch(1)
+        fixture(timeoutMs = 200) { MediaProbe { slowRelease.await(5, java.util.concurrent.TimeUnit.SECONDS); ProbeFacts(0, 0) } }.use { f ->
             val started = System.nanoTime()
             val done = f.finish("slow")
             assertTrue((System.nanoTime() - started) / 1_000_000 < 5000)
@@ -109,6 +175,7 @@ class DownloadCoordinatorCheckTest {
             // A cancel after the check changes nothing: the row stays COMPLETED.
             f.coordinator.cancel("slow")
             assertEquals(JobStage.COMPLETED, f.store.get("slow")!!.stage)
+            slowRelease.countDown()
         }
     }
 

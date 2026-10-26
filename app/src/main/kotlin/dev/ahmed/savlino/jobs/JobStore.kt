@@ -538,18 +538,26 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         artwork.retainOnly(kept)
     }
 
+    /** In-memory handoff of the pre-scrub source after a successful terminal write; never persisted. */
+    internal var onTerminalSource: (JobRecord, JobStage) -> Unit = { _, _ -> }
+
     private fun transition(id: String, from: Set<JobStage>, to: JobStage, values: ContentValues = ContentValues()): Boolean {
         values.put("stage", to.name)
         values.put("updated_at", System.currentTimeMillis())
         if (to !in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED)) values.put("has_partial", 0)
+        // Capture accounting data without running expiry: a received cancellation must win before any scrub.
+        val source = if (to.terminal) readableDatabase.query("jobs", null, "job_id = ?", arrayOf(id), null, null, null)
+            .use { if (it.moveToFirst()) read(it) else null } else null
         if (to.terminal) {
             val retain = to == JobStage.FAILED && values.getAsInteger("retryable") == 1 &&
                 get(id)?.createdAt?.let { System.currentTimeMillis() - it <= CONFIRMATION_LIFETIME_MS } == true
             if (!retain) { values.putNull("source_url"); values.put("retryable", 0) }
         }
         val placeholders = from.joinToString(",") { "?" }
-        return writableDatabase.update("jobs", values, "job_id = ? AND stage IN ($placeholders)",
+        val changed = writableDatabase.update("jobs", values, "job_id = ? AND stage IN ($placeholders)",
             arrayOf(id, *from.map { it.name }.toTypedArray())) == 1
+        if (changed && source != null) onTerminalSource(source, to)
+        return changed
     }
 
     private fun scrubExpiredSources() {
@@ -568,7 +576,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                             put("stage", JobStage.FAILED.name); put("error", DownloadError.FormatExpired.name)
                             putNull("source_url"); put("retryable", 0); put("has_partial", 0)
                             put("updated_at", System.currentTimeMillis())
-                        }, "job_id = ? AND $live", arrayOf(id, cutoff)) == 1) changed += id
+                        }, "job_id = ? AND $live", arrayOf(id, cutoff)) == 1) {
+                        changed += id
+                    }
                 }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
