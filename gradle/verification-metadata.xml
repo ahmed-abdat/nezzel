@@ -2177,6 +2177,9 @@
          </artifact>
       </component>
       <component group="com.android.tools.build" name="aapt2" version="9.1.1-14792394">
+         <artifact name="aapt2-9.1.1-14792394-linux.jar">
+            <sha256 value="e7ae17af6e4093c771243e82d66462353de87befaac206bfb43e557ac1c34440" origin="Reviewed against primary metadata"/>
+         </artifact>
          <artifact name="aapt2-9.1.1-14792394-osx.jar">
             <sha256 value="b58cb80ac24aa343d02316fa50a662e2710b2f9ea14fc7da6d08d9cd801cafa3" origin="Reviewed against primary metadata"/>
          </artifact>
@@ -5797,6 +5800,9 @@
          </artifact>
       </component>
       <component group="org.junit" name="junit-bom" version="5.11.0-M2">
+         <artifact name="junit-bom-5.11.0-M2.module">
+            <sha256 value="86477abcf490d6ca059aa9973cb108d22a506f49d1a5569bb32cc6cbf43c2cce" origin="Reviewed against primary metadata"/>
+         </artifact>
          <artifact name="junit-bom-5.11.0-M2.pom">
             <sha256 value="4a3ffc4a4edcfec2cb5d619922706a9407161798571939f854dfda73e4e17cc8" origin="Reviewed against primary metadata"/>
          </artifact>
