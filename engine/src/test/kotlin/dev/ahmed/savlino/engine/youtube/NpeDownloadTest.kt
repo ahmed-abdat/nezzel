@@ -532,4 +532,45 @@ class NpeDownloadTest {
             assertEquals(1L, release.count)
         } finally { release.countDown() }
     }
+
+    @Test fun formatExpiredAfterExpiryDropsTheRecentReadSoTheSameLinkIsReadAgain() = runBlocking {
+        val run = Run()
+        val inspection = assertIs<InspectResult.Success>(run.engine.inspect(source, "first")).inspection
+        val chosen = inspection.formats.first { it.requiresMerge }
+        run.cmd = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, chosen.id, "Fixture")).command
+        run.engine.prepareDownload(run.cmd)
+        // Before the failure a repaste is served from memory.
+        assertIs<InspectResult.Success>(run.engine.inspect(source, "hit"))
+        assertEquals(1, run.fast!!.calls.size)
+        run.fast.action = { null }
+        val page = ObjectMapper().readTree(json()) as com.fasterxml.jackson.databind.node.ObjectNode
+        val formats = page.path("formats") as com.fasterxml.jackson.databind.node.ArrayNode
+        for (i in formats.size() - 1 downTo 0) if (formats[i].path("format_id").asText() == chosen.sourceFormatId) formats.remove(i)
+        run.runtime.page = { page.toString() }
+        run.runtime.action = { _, line -> run.failAttempt(line) }
+        assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(run.download()).error)
+        assertEquals(1, run.runtime.transfers.size)
+        // The dead read is gone: the same link reads YouTube again.
+        val calls = run.fast.calls.size
+        run.fast.action = { json() }
+        assertIs<InspectResult.Success>(run.engine.inspect(source, "repaste"))
+        assertEquals(calls + 1, run.fast.calls.size)
+    }
+
+    @Test fun aFinal403OnThePagePathStillDropsTheRecentRead() = runBlocking {
+        val run = Run()
+        val inspection = assertIs<InspectResult.Success>(run.engine.inspect(source, "first")).inspection
+        val chosen = inspection.formats.first { it.requiresMerge }
+        run.cmd = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, chosen.id, "Fixture")).command
+        assertIs<InspectResult.Success>(run.engine.inspect(source, "hit"))
+        assertEquals(1, run.fast!!.calls.size)
+        // No confirmed info file: the page path, where a 403 with no bytes is final.
+        run.runtime.action = { _, line -> line("ERROR: [youtube] x: Unable to download webpage: HTTP Error 403: Forbidden"); throw IllegalStateException() }
+        assertIs<TransferResult.Failure>(run.download())
+        // Final at the first attempt: no restart removed the read on the way.
+        assertEquals(1, run.runtime.transfers.size)
+        val calls = run.fast!!.calls.size
+        assertIs<InspectResult.Success>(run.engine.inspect(source, "repaste"))
+        assertEquals(calls + 1, run.fast.calls.size)
+    }
 }

@@ -674,6 +674,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 checkCancelled(current)
             }
             TransferResult.Success(output)
+        }.also {
+            // A refused or expired transfer means the recent read holds dead URLs: a repaste must read the link again.
+            if (it is TransferResult.Failure && it.error in DEAD_READ) recent.remove(command.source.link)
         }
     }
 
@@ -927,6 +930,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         /** Lets the source's own end-of-budget verdict win over the engine timer. */
         const val NPE_GRACE_MS = 1_000L
         const val FAST_FAILED_MAX = 16
+        val DEAD_READ = setOf(DownloadError.FormatExpired, DownloadError.SourceRefused)
         val NPE_REJECTIONS = setOf(DownloadError.FormatExpired, DownloadError.Failed, DownloadError.Unsupported, DownloadError.NoFormats)
         val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
