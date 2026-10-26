@@ -265,6 +265,11 @@ class BatchStoreTest {
         assertTrue(PlaylistBatch(batches.get("links")!!, rows).links)
     }
 
+    @Test fun onlyOurOwnLinkItemIdsCountAsPastedLinksNeverAYouTubeIdThatStartsTheSame() {
+        assertTrue(BatchStore.isLinkItem("link-0")); assertTrue(BatchStore.isLinkItem("link-199"))
+        assertFalse(BatchStore.isLinkItem("link-a1B2c3")); assertFalse(BatchStore.isLinkItem("link-123456"))
+        assertFalse(BatchStore.isLinkItem("dQw4w9WgXcQ"))
+    }
     @Test fun playlistCreateStillTakesOnlyYouTubeVideos() {
         assertFalse(batches.create("p", "P", Preset.BEST, listOf(PlaylistItem("t", "https://www.tiktok.com/@a/video/1", "T", 60))))
         assertTrue(batches.create("p", "P", Preset.BEST, batchItems(1)))

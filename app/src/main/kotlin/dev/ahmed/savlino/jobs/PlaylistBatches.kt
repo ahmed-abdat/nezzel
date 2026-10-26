@@ -18,7 +18,7 @@ class PlaylistBatch(val record: BatchRecord, val items: List<BatchItemRecord>) {
     val terminal get() = record.state in setOf(BatchState.COMPLETED, BatchState.STOPPED, BatchState.EXPIRED)
     val paused get() = record.state in setOf(BatchState.PAUSED, BatchState.WAITING_NETWORK)
     /** Created from pasted/shared links (not a playlist listing); counts-only wording differs. */
-    val links get() = items.firstOrNull()?.itemId?.startsWith(BatchStore.LINK_ITEM) == true
+    val links get() = items.firstOrNull()?.itemId?.let(BatchStore::isLinkItem) == true
     val slowed get() = paused && record.error in setOf(DownloadError.SourceRefused, DownloadError.LoginRequired)
     internal val signature get() = listOf(record.id, record.title, record.state, record.error,
         items.map { listOf(it.position, it.title, it.state, it.jobId, it.error, it.retryable, it.hasSource, it.fallback) })

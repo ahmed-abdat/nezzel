@@ -93,7 +93,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     }
 
     @Synchronized internal fun canRefresh(item: BatchItemRecord): Boolean {
-        if (item.itemId.startsWith(LINK_ITEM) || item.jobId.endsWith(FRESH_SUFFIX)) return false
+        if (isLinkItem(item.itemId) || item.jobId.endsWith(FRESH_SUFFIX)) return false
         val batch = get(item.batchId) ?: return false
         if (batch.state in setOf(BatchState.STOPPED, BatchState.EXPIRED) || now() - batch.createdAt >= 2 * LIFETIME_MS) return false
         return db.query("batch_items", arrayOf("job_id"),
@@ -320,6 +320,9 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
         internal const val LIFETIME_MS = 86_400_000L
         internal const val RETENTION_MS = 30L * LIFETIME_MS
         internal const val LINK_ITEM = "link-"
+        // "link-" + a position up to 199: at most 8 characters, so an 11-character YouTube video id never matches.
+        private val LINK_ITEM_ID = Regex("link-\\d{1,3}")
+        internal fun isLinkItem(itemId: String) = LINK_ITEM_ID.matches(itemId)
         internal const val FRESH_SUFFIX = "-fresh"
         private val USER_RETRY = Regex("(-u\\d+)?(-fresh)?$")
         private val REPLACEMENT = Regex("-u\\d+-fresh")

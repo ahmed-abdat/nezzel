@@ -129,7 +129,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                 if (current?.state != BatchItemState.WAITING || current.jobId != item.jobId) continue
                 when (result) {
                     // A link batch says why a photo post is skipped: photos are saved from the single-link sheet only.
-                    is InspectResult.Failure -> if (result.error == DownloadError.NoVideo && item.itemId.startsWith(BatchStore.LINK_ITEM))
+                    is InspectResult.Failure -> if (result.error == DownloadError.NoVideo && BatchStore.isLinkItem(item.itemId))
                         batches.finish(item, BatchItemState.SKIPPED, DownloadError.PhotoPost)
                     else batches.finish(item,
                         if (result.error in setOf(DownloadError.Unavailable, DownloadError.NoVideo, DownloadError.NotAPost, DownloadError.Unsupported))
@@ -174,7 +174,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
 
     // An expired confirmation says nothing about whether the site's current formats changed.
     private suspend fun batchError(item: BatchItemRecord, job: JobRecord?): DownloadError? {
-        if (item.itemId.startsWith(BatchStore.LINK_ITEM) || job?.error != DownloadError.FormatExpired) return job?.error
+        if (BatchStore.isLinkItem(item.itemId) || job?.error != DownloadError.FormatExpired) return job?.error
         if (System.currentTimeMillis() - job.createdAt > JobStore.CONFIRMATION_LIFETIME_MS) return DownloadError.Interrupted
         val version = try { engine.installedVersion() }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -189,7 +189,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
             for (item in batches.items(batch.id)) {
                 if (item.state !in setOf(BatchItemState.WAITING, BatchItemState.QUEUED, BatchItemState.FAILED)) continue
                 val job = jobs.get(item.jobId)
-                if (item.state == BatchItemState.FAILED && !item.hasSource && !item.itemId.startsWith(BatchStore.LINK_ITEM))
+                if (item.state == BatchItemState.FAILED && !item.hasSource && !BatchStore.isLinkItem(item.itemId))
                     job?.sourceUrl?.let { batches.adoptSource(item, it) }
                 if (job == null) {
                     if (item.state == BatchItemState.QUEUED && batches.canRefresh(item) &&
@@ -201,7 +201,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                         batches.finish(item, BatchItemState.FAILED, DownloadError.Interrupted)
                     continue
                 }
-                val needsFresh = job.stage == JobStage.FAILED && !item.itemId.startsWith(BatchStore.LINK_ITEM) &&
+                val needsFresh = job.stage == JobStage.FAILED && !BatchStore.isLinkItem(item.itemId) &&
                     (job.error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.FormatExpired) ||
                         System.currentTimeMillis() - job.createdAt > JobStore.CONFIRMATION_LIFETIME_MS)
                 // Do not discard the source or consume the fresh attempt while batch controls defer it.
