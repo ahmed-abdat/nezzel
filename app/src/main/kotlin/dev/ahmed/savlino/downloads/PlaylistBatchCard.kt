@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextDirection
@@ -64,9 +65,12 @@ private fun batchMeta(batch: PlaylistBatch, language: String): String =
         .takeIf { !batch.terminal }, batchStatus(batch, language)).joinToString(" · ")
 
 @Composable
-private fun batchTitle(batch: PlaylistBatch, language: String): String = batch.record.title.ifBlank {
-    stringResource(R.string.playlist_progress, NezzelFormat.count(batch.saved, language), NezzelFormat.count(batch.total, language))
-}
+private fun batchTitle(batch: PlaylistBatch, language: String): String =
+    // Link batches stored their title in the language of the day they were made; build "N links" now instead.
+    if (batch.links) pluralStringResource(R.plurals.multi_link_title, batch.total, NezzelFormat.count(batch.total, language))
+    else batch.record.title.ifBlank {
+        stringResource(R.string.playlist_progress, NezzelFormat.count(batch.saved, language), NezzelFormat.count(batch.total, language))
+    }
 
 @Composable
 private fun PauseResumeButton(batch: PlaylistBatch, busy: Boolean, onAction: (PlaylistBatchAction) -> Unit) {

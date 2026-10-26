@@ -159,6 +159,16 @@ class PlaylistBatchCardTest {
         compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
         compose.onNodeWithTag("playlist_retry").assertDoesNotExist()
     }
+    /** A link batch made while the app was Arabic keeps «روابط 6» in the database; English shows "6 links". */
+    private val arabicMadeLinks = PlaylistBatch(BatchRecord("links", "روابط 6", Preset.BALANCED, BatchState.ACTIVE, 0, null),
+        (0 until 6).map { i -> BatchItemRecord("links", i, "${BatchStore.LINK_ITEM}$i", "example.com", BatchItemState.WAITING, "job-l$i", null, false, false) })
+    @Test fun linkBatchTitleFollowsTheCurrentLanguage() {
+        row(arabicMadeLinks) {
+            compose.onAllNodesWithText("6 links", substring = true).onFirst().assertExists()
+            compose.onNodeWithText("روابط 6", substring = true).assertDoesNotExist()
+        }
+        sheet(arabicMadeLinks) { compose.onAllNodesWithText("6 links", substring = true).onFirst().assertExists() }
+    }
     @Test @Config(qualifiers = "ar-w384dp-h1600dp-mdpi") fun arabicRowPointsItsChevronToTheEnd() = row(playlistMixedFixture(), language = "ar") {
         compose.onNodeWithText(context.getString(R.string.dl_batch_saved_of, "2", "8"), substring = true).assertExists()
         // RTL: the end side is the left, so the chevron sits left of the title.
