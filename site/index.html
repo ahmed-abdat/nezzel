@@ -480,8 +480,8 @@ html:not(.js) .amk{display:none}
 .tg::after{content:"";position:absolute;top:50%;inset-inline-start:24px;width:24px;height:24px;margin-top:-12px;border-radius:50%;background:var(--on-primary);transition:all .45s var(--spring) .7s}
 .js .adlg:not(.in) .tg{background:var(--c-highest);border-color:var(--outline)}
 .js .adlg:not(.in) .tg::after{inset-inline-start:6px;width:16px;height:16px;margin-top:-8px;background:var(--outline)}
-.strip{list-style:none;margin:56px 0 0;padding:0;display:grid;gap:40px;position:relative}
-@media (min-width:900px){.strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding-top:32px}.strip::before{content:"";position:absolute;top:0;inset-inline:0;height:2px;border-radius:1px;background:var(--primary);transform-origin:left}[dir=rtl] .strip::before{transform-origin:right}}
+.strip{list-style:none;margin:32px 0 0;padding:0;display:grid;gap:24px;position:relative}
+@media (min-width:900px){.strip{margin-top:56px;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding-top:32px}.strip::before{content:"";position:absolute;top:0;inset-inline:0;height:2px;border-radius:1px;background:var(--primary);transform-origin:left}[dir=rtl] .strip::before{transform-origin:right}}
 .strip li{padding-top:20px;border-top:1px solid var(--outline-v)}
 @media (min-width:900px){.strip li{padding-top:0;border:0}}
 .strip b{display:block;font-size:20px;line-height:1.4}
@@ -490,16 +490,9 @@ html:not(.js) .amk{display:none}
   @supports (animation-timeline:view()){
     .js .strip{view-timeline:--st}
     .js .strip::before{animation:grow linear both;animation-timeline:--st;animation-range:entry 60% cover 45%}
-    .js .strip li{animation:slide linear both;animation-timeline:view();animation-range:entry 10% cover 35%}
-    @media (min-width:900px){.js .strip li{animation-timeline:--st;animation-range:entry calc(60% + var(--k) * 10%) cover calc(30% + var(--k) * 5%)}}
-  }
-  @supports not (animation-timeline:view()){
-    .js .strip li{transition:opacity .5s var(--ease) calc(var(--k) * 90ms),transform .6s var(--ease) calc(var(--k) * 90ms)}
-    .js .strip:not(.in) li{opacity:0;transform:translateX(calc(var(--x) * -40px))}
   }
 }
 @keyframes grow{from{transform:scaleX(0)}}
-@keyframes slide{from{opacity:0;transform:translateX(calc(var(--x) * -48px))}}
 
 /* faq */
 .faqs{padding-top:clamp(104px,12vw,150px)}
@@ -1116,7 +1109,7 @@ html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
   const io = new IntersectionObserver(es => es.forEach(e => {
     if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   }), { threshold: .15, rootMargin: "0px 0px -6% 0px" });
-  $$("[data-r], .adlg, .strip, .end").forEach(el => io.observe(el));
+  $$("[data-r], .adlg, .end").forEach(el => io.observe(el));
   new IntersectionObserver(([e]) => {
     const past = !e.isIntersecting && e.boundingClientRect.top < 0;
     document.body.classList.toggle("past", past); $(".mini").tabIndex = past ? 0 : -1;
