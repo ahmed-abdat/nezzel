@@ -524,7 +524,9 @@ class SaveDestinationTest {
             }
             JobRecovery(store, uncertain, File(context.filesDir, "downloads")).recover()
             assertEquals(1, abandonments)
-            assertEquals(JobStage.PUBLISHING, store.get("owned")!!.stage)
+            // Ended, but the journal still owns the URI: the sweep must not touch it.
+            assertEquals(JobStage.FAILED, store.get("owned")!!.stage)
+            assertEquals(pending.uri, store.get("owned")!!.pendingUri)
             assertTrue(provider.files.containsKey(DocumentsContract.getDocumentId(pending.uri)))
         }
     }

@@ -239,7 +239,10 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     /** Data-side explicit retry. The caller schedules it; no network or WorkManager call occurs here. */
     fun retry(jobId: String): Boolean = synchronized(terminalLock) {
         val row = get(jobId) ?: return@synchronized false
+        // A still-owned MediaStore row could become a second copy of the file: recovery must resolve it first.
+        // A tree receipt outlives the row (detached folder), so its orphan sweep covers a Retry.
         if (row.stage != JobStage.FAILED || !row.retryable || row.sourceUrl == null ||
+            row.pendingUri?.let { !android.provider.DocumentsContract.isTreeUri(it) } == true ||
             !(keepsPartial(row) || cleanupJobStaging(jobRoot, jobId))) return@synchronized false
         if (!infoCache.remove(jobId)) return@synchronized false
         synchronized(this) {
@@ -385,7 +388,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         // Copy link: only the reviewed intake link, sealed in the same UPDATE that scrubs source_url.
         val link = if (row?.pendingUri == published.uri) row.sourceUrl?.let { links?.seal(it) } else null
         row?.pendingUri == published.uri &&
-            transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.COMPLETED,
+            // FAILED: an unresolved publication (still owning this URI) turned out committed.
+            transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.FAILED), JobStage.COMPLETED,
                 ContentValues().apply {
                     put("display_name", published.displayName); key?.let { put("source_key", it) }; link?.let { put("share_link", it) }
                 }).also { if (it) supersede(jobId, published.uri) }
@@ -429,11 +433,19 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     @Synchronized internal fun clearFailedPublication(jobId: String, uri: Uri) {
         writableDatabase.update("jobs", ContentValues().apply { putNull("pending_uri") },
-            "job_id = ? AND stage = 'FAILED' AND pending_uri = ?", arrayOf(jobId, uri.toString()))
+            "job_id = ? AND stage IN ('FAILED','CANCELLED') AND pending_uri = ?", arrayOf(jobId, uri.toString()))
     }
 
     /** Only call after the publisher confirms absence; retain the URI until that acknowledgement. */
-    internal fun publicationAbandoned(jobId: String): Boolean = finishTerminal(jobId) {
+    internal fun publicationAbandoned(jobId: String): Boolean = endPublication(jobId, keepUri = false)
+
+    /**
+     * The provider threw or did not acknowledge the delete: end the job anyway (Retry, playlist slot, engine
+     * maintenance), keeping the URI so recovery deletes or adopts it later. Retry waits for that (see [retry]).
+     */
+    internal fun publicationUnresolved(jobId: String): Boolean = endPublication(jobId, keepUri = true)
+
+    private fun endPublication(jobId: String, keepUri: Boolean): Boolean = finishTerminal(jobId) {
         val reason = get(jobId)?.error
         val cancelled = reason == DownloadError.Cancelled
         transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING),
@@ -441,7 +453,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 put("error", if (cancelled) DownloadError.Cancelled.name
                     else if (reason in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
                         DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)) reason!!.name else DownloadError.SaveFailed.name)
-                put("retryable", if (!cancelled) 1 else 0); putNull("pending_uri")
+                put("retryable", if (!cancelled) 1 else 0); if (!keepUri) putNull("pending_uri")
             })
     }
 

@@ -37,8 +37,9 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
                 JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row, startup = true)
                 JobStage.STAGED -> if (!requeueFinished(row)) store.fail(row.jobId, DownloadError.SaveFailed)
                 JobStage.TRANSFERRING -> recoverTransfer(row)
-                JobStage.FAILED -> { cleanupFailedTree(row); if (!JobStore.keepsPartial(row)) cleanup(row.jobId) }
-                JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(row.jobId)
+                JobStage.FAILED -> { cleanupUnresolved(row); if (!JobStore.keepsPartial(row)) cleanup(row.jobId) }
+                JobStage.CANCELLED -> { cleanupUnresolved(row); cleanup(row.jobId) }
+                JobStage.COMPLETED -> cleanup(row.jobId)
                 JobStage.ENQUEUED -> if (row.hasPartial) recoverTransfer(row)
                 JobStage.PAUSED -> Unit
             }
@@ -154,8 +155,9 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
             JobStage.STAGED -> if (cancellationRequested && cancellationError == DownloadError.Cancelled) store.cancel(jobId)
                 else store.fail(jobId, if (cancellationRequested) cancellationError else publicationError)
-            JobStage.FAILED -> { cleanupFailedTree(row); if (!JobStore.keepsPartial(row)) cleanup(jobId) }
-            JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(jobId)
+            JobStage.FAILED -> { cleanupUnresolved(row); if (!JobStore.keepsPartial(row)) cleanup(jobId) }
+            JobStage.CANCELLED -> { cleanupUnresolved(row); cleanup(jobId) }
+            JobStage.COMPLETED -> cleanup(jobId)
             else -> Unit
         }
     }
@@ -189,21 +191,27 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
                 MissingPublication -> if (!(startup && row.error !in setOf(DownloadError.Cancelled,
                         DownloadError.InsufficientSpace, DownloadError.FolderUnavailable) && requeueFinished(row)))
                     store.publicationAbandoned(row.jobId)
-                is PendingPublication -> Unit // Delete not acknowledged: retain URI for reconciliation.
+                // Delete not acknowledged: end the job, retain the URI for [cleanupUnresolved].
+                is PendingPublication -> store.publicationUnresolved(row.jobId)
             }
         } catch (failure: Exception) {
+            // Permission/provider failure is not evidence of absence or ownership. Keep recorded URI.
             if (failure is StorageException && failure.error == StorageError.FolderUnavailable &&
                 android.provider.DocumentsContract.isTreeUri(uri)) store.folderUnavailable(row.jobId)
-            // Permission/provider failure is not evidence of absence or ownership. Keep recorded URI.
+            else store.publicationUnresolved(row.jobId)
         }
     }
 
-    private fun cleanupFailedTree(row: JobRecord) {
+    /** A terminal row still owning its URI: delete it now, or adopt it if the commit landed after all. */
+    private fun cleanupUnresolved(row: JobRecord) {
         val uri = row.pendingUri ?: return
-        if (!android.provider.DocumentsContract.isTreeUri(uri)) return
         try {
-            if (publisher.abandon(uri) == MissingPublication) store.clearFailedPublication(row.jobId, uri)
-        } catch (_: Exception) { /* Retain ownership until the user restores access. */ }
+            when (val result = publisher.abandon(uri)) {
+                MissingPublication -> store.clearFailedPublication(row.jobId, uri)
+                is PublishedFile -> if (row.stage == JobStage.FAILED) store.complete(row.jobId, result)
+                is PendingPublication -> Unit
+            }
+        } catch (_: Exception) { /* Retain ownership until the provider or the user's grant is back. */ }
     }
 
     private fun safeRoot(): Boolean = jobRoot.absoluteFile == jobRoot.canonicalFile &&
