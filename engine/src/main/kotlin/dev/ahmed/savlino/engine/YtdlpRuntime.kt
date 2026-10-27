@@ -73,6 +73,10 @@ internal interface YtdlpRuntime {
     /** Best-effort local container polish. Never sees inspection JSON or source URLs. */
     fun rewriteTitle(file: File, title: String, processId: String) = Unit
     fun cancelTitleRewrite(processId: String): Boolean = false
+    /** A direct FFmpeg child for the MP3 encoder (stdout discarded, stderr to [stderr]); null where there is none. */
+    fun startFfmpeg(args: List<String>, stdin: Boolean, stderr: File): Process? = null
+    /** Thermal MODERATE or worse, or a low-RAM phone: MP3 rows then take one pass. */
+    fun constrained(): Boolean = false
     fun observe(processId: String) = Unit
     fun destroy(processId: String): Boolean
     fun update()
@@ -155,7 +159,7 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     private val app = context.applicationContext
     private val base get() = File(app.noBackupFilesDir, YoutubeDL.baseName)
     private val prefs get() = app.getSharedPreferences(YtdlpRelease.PREFS, Context.MODE_PRIVATE)
-    private val titleFfmpeg = TitleFfmpegProcess { args ->
+    private fun ffmpeg(args: List<String>) =
         ProcessBuilder(listOf(File(app.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath) + args)
             .apply {
                 // Pinned 0.18.1 FFmpeg.init unpacks the libraries here; no new executable or dependency.
@@ -164,8 +168,19 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
                     .joinToString(":") { File(base, "packages/$it/usr/lib").absolutePath }
                 environment()["TMPDIR"] = app.cacheDir.absolutePath
                 redirectOutput(ProcessBuilder.Redirect.to(File("/dev/null")))
-                redirectError(ProcessBuilder.Redirect.to(File("/dev/null")))
-            }.start()
+            }
+    private val titleFfmpeg = TitleFfmpegProcess { args ->
+        ffmpeg(args).redirectError(ProcessBuilder.Redirect.to(File("/dev/null"))).start()
+    }
+    override fun startFfmpeg(args: List<String>, stdin: Boolean, stderr: File): Process = ffmpeg(args).apply {
+        if (!stdin) redirectInput(ProcessBuilder.Redirect.from(File("/dev/null")))
+        redirectError(ProcessBuilder.Redirect.to(stderr))
+    }.start()
+    override fun constrained(): Boolean {
+        val power = app.getSystemService(android.os.PowerManager::class.java)
+        val activity = app.getSystemService(android.app.ActivityManager::class.java)
+        return (power?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_MODERATE ||
+            activity?.isLowRamDevice == true
     }
     // 0.18.1 keeps `initialized` private per wrapper; track which half completed so a retry never
     // deletes files the already-initialized half is using.

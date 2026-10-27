@@ -7,7 +7,7 @@ import java.io.File
 /** Arguments passed directly to ProcessBuilder by the wrapper, never a shell. */
 object YtdlpCommand {
     // Bump whenever download argv changes: partials from a different recipe must restart.
-    const val ARGV_VERSION = 3
+    const val ARGV_VERSION = 4
     internal const val SQUARE_COVER = "ThumbnailsConvertor+ffmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 1 -vf \"crop=min(iw\\,ih):min(iw\\,ih)\""
     const val PROGRESS_TEMPLATE = "download:nezzel-v2:%(info.format_id)s:%(progress.downloaded_bytes)s:%(progress.total_bytes)s:%(progress.total_bytes_estimate)s:%(progress.fragment_index)s:%(progress.fragment_count)s"
     // Pinned yt-dlp grammar treats these names/extensions as selectors, even without operators.
@@ -40,7 +40,8 @@ object YtdlpCommand {
         extractsAudio(format) -> null
         format.conversion == null && !format.hasVideo && format.container in setOf("m4a", "mp3") -> null
         format.conversion == null -> "output.${format.container}"
-        format.sourceContainer != null && format.sourceContainer != "mp3" -> "output.${format.sourceContainer}"
+        format.sourceContainer == "mp3" -> "output"
+        format.sourceContainer != null -> "output.${format.sourceContainer}"
         else -> null
     }
     private fun extractsAudio(row: Format) = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
@@ -80,34 +81,43 @@ object YtdlpCommand {
             if (row.requiresMerge && row.container in setOf("mp4", "mkv")) addAll(listOf("--merge-output-format", row.container))
             if (extractsAudio(row))
                 addAll(listOf("--extract-audio", "--audio-format", "m4a"))
-            row.conversion?.let { conversion ->
-                // Output-scoped options follow yt-dlp's generated copy/quality options.
-                // Use one scoped value so encoder, bitrate and resampling apply together.
-                val resample = if (conversion == AudioConversion.MP3_320) " -ar 44100" else ""
-                addAll(listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "${conversion.bitrateKbps}K",
-                    "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a ${conversion.bitrateKbps}k$resample"))
-            }
-            if (embedAudioTags && !row.hasVideo && row.container in setOf("m4a", "mp3"))
+            // MP3 rows: yt-dlp only downloads; Mp3Encoder encodes and writes the tags and cover these files carry.
+            if (row.conversion != null && embedAudioTags) addAll(mp3SourceArgs(root))
+            else if (embedAudioTags && !row.hasVideo && row.container in setOf("m4a", "mp3"))
                 addAll(audioTagArgs(infoJson))
             if (infoJson != null) addAll(listOf("--load-info-json", infoJson.absolutePath))
             else addAll(listOf("--", command.source.link.rawUrl))
         }
     }
 
+    /** Whether the info JSON names a real artist; without one yt-dlp's uploader/channel fallback is blanked. */
+    internal fun realArtist(infoJson: File?): Boolean = try {
+        infoJson?.let { ObjectMapper().readTree(it)?.get("artist") }
+            ?.takeIf { it.isTextual }?.asText()?.isNotBlank() == true
+    } catch (_: Exception) { false }
+
+    /** yt-dlp fields FFmpegMetadataPP would read for the kept tags; Mp3Tags applies its rules to them. */
+    private const val MP3_TAGS = "%(.{title,track,track_number,artist,artists,creator,creators,uploader,uploader_id," +
+        "composer,composers,album,album_artist,album_artists,disc_number,series,season_number,episode,episode_id,episode_number})j"
+
+    /** The square jpg cover as output.temp.jpg, the tag fields as output.temp.tags, and today's title cleanup. */
+    private fun mp3SourceArgs(root: File): List<String> = listOf(
+        "-o", "thumbnail:" + File(root, "output.temp.%(ext)s").path, "--write-thumbnail", "--convert-thumbnails", "jpg",
+        "--postprocessor-args", SQUARE_COVER,
+        "--print-to-file", "after_move:$MP3_TAGS", File(root, Mp3Encoder.TAGS).path) + TITLE_CLEANUP
+
+    // Python regex syntax: preserve BMP Arabic, strip supplementary/zero-width characters in tags only.
+    private val TITLE_CLEANUP = listOf("--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]", "",
+        "--replace-in-metadata", "title", "\\s+$", "")
+
     /** Only real artist metadata is trusted; yt-dlp otherwise falls back to the uploader/channel. */
     private fun audioTagArgs(infoJson: File?): List<String> = buildList {
         addAll(listOf("--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg"))
         // Square cover (players crop 16:9 art). yt-dlp shlex-splits the value; the escaped commas reach ffmpeg's filter parser.
         addAll(listOf("--postprocessor-args", SQUARE_COVER))
-        val artist = try {
-            infoJson?.let { ObjectMapper().readTree(it)?.get("artist") }
-                ?.takeIf { it.isTextual }?.asText()?.takeIf { it.isNotBlank() }
-        } catch (_: Exception) { null }
         val blank = listOf("comment", "purl", "description", "synopsis", "genre", "date") +
-            if (artist == null) listOf("artist") else emptyList()
+            if (!realArtist(infoJson)) listOf("artist") else emptyList()
         blank.forEach { addAll(listOf("--parse-metadata", ":(?P<meta_$it>)")) }
-        // Python regex syntax: preserve BMP Arabic, strip supplementary/zero-width characters in tags only.
-        addAll(listOf("--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]", "",
-            "--replace-in-metadata", "title", "\\s+$", ""))
+        addAll(TITLE_CLEANUP)
     }
 }

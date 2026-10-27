@@ -79,6 +79,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private val operations = mutableMapOf<String, Operation>()
     private val pendingCancellation = mutableMapOf<String, PendingCancellation>()
     private val recentlyFinished = linkedMapOf<String, Unit>()
+    private val mp3 = Mp3Encoder({ args, stdin, stderr -> runtime.startFfmpeg(args, stdin, stderr) }, runtime::constrained)
     private val waitingState = MutableStateFlow<Set<String>>(emptySet())
     override val waitingOperations = waitingState.asStateFlow()
     override val isAvailable get() = runtime.initialization.isAvailable
@@ -644,6 +645,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             checkCancelled(current)
             val marker = File(directory, DirectResume.NAME)
             if (marker.exists() && !marker.delete()) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
+            encodeMp3(current, command, directory, infoJson, progress)
             val output = try {
                 val root = directory.canonicalFile
                 val manifest = File(root, "result-path.txt")
@@ -687,6 +689,38 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // A refused or expired transfer means the recent read holds dead URLs: a repaste must read the link again.
             if (it is TransferResult.Failure && it.error in DEAD_READ) recent.remove(command.source.link)
         }
+    }
+
+    /**
+     * MP3 rows: yt-dlp leaves the source (its path in result-path.txt), the cover and the tags; the encoder turns them
+     * into output.mp3 and rewrites the manifest. A manifest that already names output.mp3 needs nothing.
+     */
+    private fun encodeMp3(current: Operation, command: DownloadCommand, directory: File, infoJson: File?,
+        progress: (EngineEvent) -> Unit) {
+        val conversion = command.format.conversion ?: return
+        val root = directory.canonicalFile
+        val manifest = File(root, "result-path.txt")
+        if (java.nio.file.Files.isSymbolicLink(manifest.toPath()) || !manifest.isFile) return
+        // yt-dlp appends on a retry over a kept source; the last line is this run's.
+        val source = manifest.readLines().lastOrNull { it.isNotBlank() }?.let { File(it).canonicalFile } ?: return
+        if (source.parentFile != root || source.name == "output.mp3" || !source.isFile) return
+        progress(EngineEvent.Merging)
+        val job = Mp3Job(root, source, File(root, Mp3Encoder.COVER).takeIf { it.isFile },
+            // --print-to-file appends too: on a retry the last line is this run's.
+            Mp3Tags.metadata(File(root, Mp3Encoder.TAGS).takeIf { it.isFile }?.readLines()?.lastOrNull { it.isNotBlank() },
+                YtdlpCommand.realArtist(infoJson)),
+            conversion.bitrateKbps, resample = conversion == AudioConversion.MP3_320)
+        // The canceller re-invokes this every 50 ms while cancelled, so a cancel before the encode registers still lands.
+        synchronized(current) { checkCancelled(current); current.directCancel = { mp3.cancel(current.processId) } }
+        try {
+            mp3.encode(job, current.processId)
+            checkCancelled(current)
+        } catch (failure: Mp3Failure) {
+            checkCancelled(current)
+            throw if (failure.error == DownloadError.ExecutionRestricted)
+                YtdlpExecutionFailure(failure.error, reason = ExecutionFailureReason.STORAGE_STAGING)
+            else YtdlpExecutionFailure(failure.error)
+        } finally { synchronized(current) { current.directCancel = null } }
     }
 
     private fun clearStaging(directory: File): Boolean = try {

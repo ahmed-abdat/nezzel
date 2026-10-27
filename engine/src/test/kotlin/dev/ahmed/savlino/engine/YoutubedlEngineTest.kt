@@ -102,10 +102,7 @@ class YoutubedlEngineTest {
 
     @Test fun runtimeReceivesExactConversionSourceAndScopedEncodingOptions() = runBlocking {
         for (container in listOf("mp3", "m4a", "webm", "mp4", null)) {
-            for ((conversion, scoped) in listOf(
-                AudioConversion.MP3_128 to "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 128k",
-                AudioConversion.MP3_192 to "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 192k",
-                AudioConversion.MP3_320 to "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 320k -ar 44100")) {
+            for (conversion in AudioConversion.entries) {
                 val dir = temp.newFolder().canonicalFile
                 val selected = Format("conversion", "mp3", false, true, conversion = conversion,
                     sourceFormatId = "exact-source", sourceContainer = container)
@@ -119,7 +116,9 @@ class YoutubedlEngineTest {
                 assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, dir) {})
                 val args = runtime.calls.single { "--no-simulate" in it }
                 assertEquals("exact-source", args[args.indexOf("-f") + 1])
-                assertEquals(listOf(scoped, squareCover), args.indices.filter { args[it] == "--postprocessor-args" }.map { args[it + 1] })
+                // yt-dlp only downloads; Mp3Encoder runs LAME (Mp3EncoderTest).
+                assertTrue(args.none { it == "--extract-audio" || "libmp3lame" in it })
+                assertEquals(listOf(squareCover), args.indices.filter { args[it] == "--postprocessor-args" }.map { args[it + 1] })
                 assertEquals(File(dir, if (container == "mp3") "output" else "output.%(ext)s").path, args[args.indexOf("-o") + 1])
                 assertEquals("converted-job", command.jobId)
             }
@@ -592,12 +591,7 @@ class YoutubedlEngineTest {
             val conversion = format.conversion
             val post = when {
                 format.requiresMerge -> listOf("--merge-output-format", "mp4")
-                conversion == AudioConversion.MP3_128 -> listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "128K",
-                    "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 128k")
-                conversion == AudioConversion.MP3_192 -> listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K",
-                    "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 192k")
-                conversion == AudioConversion.MP3_320 -> listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "320K",
-                    "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 320k -ar 44100")
+                conversion != null -> mp3SourceArgs(dir)
                 else -> listOf("--extract-audio", "--audio-format", "m4a")
             }
             val selector = if (format.requiresMerge) "136+140" else format.sourceFormatId
@@ -605,7 +599,7 @@ class YoutubedlEngineTest {
                 "--abort-on-unavailable-fragments", "--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:16", "-N", "4", "--no-simulate", "--newline",
                 "--progress-template", YtdlpCommand.PROGRESS_TEMPLATE, "-f", selector, "-o", File(dir, "output.%(ext)s").path,
                 "--print-to-file", "after_move:filepath", File(dir, "result-path.txt").path) + post +
-                (if (format.hasVideo) emptyList() else audioTagsWithoutArtist) + listOf("--", source.link.rawUrl), runtime.calls.last())
+                (if (format.hasVideo || conversion != null) emptyList() else audioTagsWithoutArtist) + listOf("--", source.link.rawUrl), runtime.calls.last())
             assertFalse(selector.contains('/')); assertTrue(selector.split('+').none { it in setOf("best", "b") })
             assertEquals(EngineEvent.Progress(10, Size.Unknown), events.first())
             assertEquals(EngineEvent.Merging, events.last())

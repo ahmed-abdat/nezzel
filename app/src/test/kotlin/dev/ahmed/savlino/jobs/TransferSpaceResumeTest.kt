@@ -15,6 +15,8 @@ class TransferSpaceResumeTest {
             Format("convert", "mp3", false, true, size = Size.Exact(100), conversion = AudioConversion.MP3_128) to 360L,
             Format("estimate", "mp4", true, true, size = Size.Estimated(100)) to 85L,
             Format("unknown", "mp4", true, true) to 1_073_741_784L,
+            // MP3 rows have no size: the 1 GiB reserve covers the source, chunks and encode, no intermediate doubling.
+            Format("unknown-mp3", "mp3", false, true, conversion = AudioConversion.MP3_320) to 1_073_741_784L,
         )
         for ((format, required) in cases) {
             val fits = SpaceBudget(File("stage"), File("public"), FreeSpace { required }, marginBytes = 0)
