@@ -76,8 +76,8 @@ class MiniPlayerCaptureTest {
         return bitmap
     }
     private fun save(bitmap: Bitmap, name: String) {
-        dir!!.mkdirs()
-        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val file = File(dir!!, "$name.png").also { it.parentFile!!.mkdirs() }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     /** Opens the song over the Downloads tab, starts it, then runs [shots] with the host to pose it. */
@@ -131,18 +131,28 @@ class MiniPlayerCaptureTest {
         }
     }
 
-    /** Five steps of the drag side by side, for reading the hand-off at a glance. */
+    /** Six steps of the drag side by side, for reading the hand-off at a glance. */
     @Test fun motionStrip() {
         assumeTrue(dir != null)
-        for (lang in listOf("en", "ar")) scene(lang, false, "Morning walk.m4a") { activity, host ->
-            val frames = listOf(0f, .25f, .5f, .75f, 1f).map { pose(host, it); frame(activity) }
+        for (lang in listOf("en", "ar")) for (dark in listOf(false, true)) scene(lang, dark, "Morning walk.m4a") { activity, host ->
+            val frames = listOf(0f, .25f, .5f, .75f, .9f, 1f).map { pose(host, it); frame(activity) }
             val gap = 24
             val strip = Bitmap.createBitmap(frames.sumOf { it.width } + gap * (frames.size - 1), frames[0].height, Bitmap.Config.ARGB_8888)
             Canvas(strip).apply {
                 drawColor(0xFF808080.toInt())
                 frames.forEachIndexed { i, f -> drawBitmap(f, (i * (f.width + gap)).toFloat(), 0f, null) }
             }
-            save(strip, "motion-strip-$lang")
+            save(strip, "motion-strip-$lang-${if (dark) "dark" else "light"}")
+        }
+    }
+
+    /** A slow drag down and back up, one frame per step, for a clip. */
+    @Test fun slowDrag() {
+        assumeTrue(dir != null)
+        for (lang in listOf("en", "ar")) scene(lang, false, "Morning walk.m4a") { activity, host ->
+            val steps = 48
+            val path = (0..steps).map { it / steps.toFloat() } + List(8) { 1f } + (steps downTo 0).map { it / steps.toFloat() } + List(8) { 0f }
+            path.forEachIndexed { i, p -> pose(host, p); save(frame(activity), "clip-$lang/%03d".format(i)) }
         }
     }
 }

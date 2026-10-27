@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.viewer
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -18,10 +19,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -32,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -45,20 +56,54 @@ import dev.ahmed.savlino.ui.theme.Space
 import androidx.media3.session.R as Media3
 
 /**
- * Where everything sits at progress [p] (0 = full screen, 1 = the bar). Controls go first, the page's black goes next,
- * and the bar arrives last, so only the cover is seen travelling from [from] (the page's cover) to [to] (the bar's).
+ * Where everything sits at progress [p] (0 = full screen, 1 = the bar). The page is one opaque sheet that follows the
+ * finger down with everything on it; late in the move it narrows into the bar's own rect, the cover settles into the
+ * bar's cover, and the sheet fades over the bar drawn under it. A pure function of [p], so expanding retraces collapsing.
  */
-internal data class MiniPlayerLayout(val chrome: Float, val title: Float, val page: Float, val bar: Float, val tabs: Float,
-                                     val cover: Rect, val corner: Dp) {
+internal data class MiniPlayerLayout(val sheet: Rect, val corner: Dp, val content: Float, val fade: Float, val tabs: Float) {
     companion object {
-        fun at(p: Float, from: Rect = Rect.Zero, to: Rect = Rect.Zero) = MiniPlayerLayout(
-            chrome = 1f - span(p, 0f, .3f), title = 1f - span(p, 0f, .2f), page = 1f - span(p, .3f, .9f),
-            bar = span(p, .75f, 1f), tabs = 1f - p, cover = lerp(from, to, p), corner = lerp(16.dp, 8.dp, p))
+        /** The sheet in window pixels, for a page of [page] size and the bar at [bar]. */
+        fun at(p: Float, page: Size, bar: Rect): MiniPlayerLayout {
+            val narrow = FastOutSlowInEasing.transform(span(p, NARROW, 1f))
+            val top = p * bar.top
+            return MiniPlayerLayout(Rect(lerp(0f, bar.left, narrow), top, lerp(page.width, bar.right, narrow), lerp(page.height, bar.bottom, narrow)),
+                lerp(0.dp, CORNER, narrow), content(p), fade(p), tabs(p))
+        }
+        /** The name, seek bar, controls and top bar ride on the sheet and only fade near the end. */
+        fun content(p: Float) = 1f - span(p, .55f, .8f)
+        /** The sheet itself, over the bar under it. */
+        fun fade(p: Float) = 1f - span(p, .85f, 1f)
+        /** The tabs come up last, from under the sheet. */
+        fun tabs(p: Float) = 1f - FastOutSlowInEasing.transform(span(p, NARROW, 1f))
+        /** The cover rides on the sheet (from [from], its place on the still page) and then settles into the bar's [to]. */
+        fun cover(p: Float, from: Rect, to: Rect, travel: Float) =
+            lerp(from.translate(0f, p * travel), to, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
+        fun coverCorner(p: Float, from: Dp) = lerp(from, 8.dp, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
         private fun span(p: Float, start: Float, end: Float) = ((p - start) / (end - start)).coerceIn(0f, 1f)
+        private const val NARROW = .6f
         val BAR = 64.dp
         val COVER = 48.dp
         val INSET = 8.dp
+        /** The bar's corners, which the sheet's become. */
+        val CORNER = 16.dp
     }
+}
+
+private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
+
+/** Name and controls riding on the sheet: once faded out, TalkBack skips them and a new press doesn't reach them. */
+internal fun Modifier.fadesWithSheet(host: ViewerHostState?): Modifier =
+    if (host?.faded != true) this else clearAndSetSemantics {}.pointerInput(Unit) {
+        awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { if (it.changedToDown()) it.consume() } }
+    }
+
+/** The music page's colour, the sheet that shrinks into the bar. */
+internal val SHEET_COLOR = Color.Black
+
+/** The sheet's outline inside the page's own layer, which already sits [MiniPlayerLayout.sheet] top pixels down. */
+internal data class SheetShape(val rect: Rect, val corner: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density) =
+        Outline.Rounded(RoundRect(rect, CornerRadius(corner)))
 }
 
 /** The bar's cover in window pixels: inset at the start side of the slot, centred vertically. */
@@ -86,7 +131,7 @@ fun Modifier.miniPlayerTabs(): Modifier {
     val density = LocalDensity.current
     val below = WindowInsets.navigationBars.getBottom(density) + with(density) { Space.m.toPx() }
     return graphicsLayer {
-        if (host.mini != null && host.request != null) translationY = MiniPlayerLayout.at(host.progress).tabs * (size.height + below)
+        if (host.mini != null && host.request != null) translationY = MiniPlayerLayout.tabs(host.progress) * (size.height + below)
     }
 }
 
@@ -111,8 +156,8 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     val open = stringResource(R.string.mini_open_player)
     val playLabel = stringResource(if (playing) R.string.viewer_pause else R.string.viewer_play)
     val closeLabel = stringResource(R.string.viewer_close)
-    Surface(modifier.graphicsLayer { alpha = MiniPlayerLayout.at(host.progress).bar }
-        .anchoredDraggable(host.size, Orientation.Vertical,
+    // Drawn under the sheet, which fades over it at the end.
+    Surface(modifier.anchoredDraggable(host.size, Orientation.Vertical,
             flingBehavior = AnchoredDraggableDefaults.flingBehavior(host.size, { it * .5f }, if (host.reduced) snap() else ViewerHostState.SETTLE))
         .clickable { host.expand() }
         // One TalkBack stop that says what plays, with its actions; a double tap opens the player.
@@ -126,7 +171,7 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
                 CustomAccessibilityAction(closeLabel) { host.close(); true },
                 CustomAccessibilityAction(open) { host.expand(); true })
         },
-        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(MiniPlayerLayout.CORNER), color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 1.dp) {
         Row(Modifier.fillMaxSize().padding(horizontal = MiniPlayerLayout.INSET), verticalAlignment = Alignment.CenterVertically) {
             Surface(Modifier.size(MiniPlayerLayout.COVER), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer,

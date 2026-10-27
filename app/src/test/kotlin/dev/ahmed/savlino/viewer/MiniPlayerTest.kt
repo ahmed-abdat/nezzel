@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -128,23 +130,130 @@ class MiniPlayerTest {
     private fun collapse() { node(R.string.viewer_minimize).performClick(); advance(600) }
     private fun back() { compose.runOnIdle { activity.onBackPressedDispatcher.onBackPressed() }; advance(600) }
 
-    @Test fun layoutHandsOffFromPageToBar() {
-        val from = Rect(0f, 100f, 300f, 400f)
-        val to = Rect(20f, 700f, 68f, 748f)
-        MiniPlayerLayout.at(0f, from, to).run {
-            assertEquals(1f, chrome); assertEquals(1f, page); assertEquals(0f, bar); assertEquals(1f, tabs); assertEquals(from, cover)
+    @Test fun theSheetSlidesWithEverythingOnItAndBecomesTheBar() {
+        val page = Size(384f, 832f)
+        val slot = Rect(16f, 680f, 368f, 744f)
+        MiniPlayerLayout.at(0f, page, slot).run {
+            assertEquals(Rect(0f, 0f, 384f, 832f), sheet); assertEquals(0.dp, corner)
+            assertEquals(1f, content); assertEquals(1f, fade); assertEquals(1f, tabs)
         }
-        MiniPlayerLayout.at(.5f, from, to).run {
-            assertEquals("Controls are gone first", 0f, chrome); assertEquals(0f, title)
-            assertEquals(1f - .2f / .6f, page, .001f); assertEquals("The bar is not there yet", 0f, bar); assertEquals(.5f, tabs)
+        MiniPlayerLayout.at(.5f, page, slot).run {
+            assertEquals("The whole page follows the finger, full width and opaque", Rect(0f, 340f, 384f, 832f), sheet)
+            assertEquals("Name and controls are still readable", 1f, content); assertEquals(1f, fade); assertEquals(1f, tabs)
         }
-        MiniPlayerLayout.at(1f, from, to).run {
-            assertEquals(0f, page); assertEquals(1f, bar); assertEquals(0f, tabs); assertEquals(to, cover); assertEquals(8.dp, corner)
+        MiniPlayerLayout.at(.8f, page, slot).run {
+            assertTrue("Narrowing into the bar", sheet.left > 0f && sheet.right < 384f && sheet.bottom < 832f && sheet.bottom > slot.bottom)
+            assertEquals(0f, content); assertEquals(1f, fade); assertTrue(tabs in 0f..1f)
         }
+        MiniPlayerLayout.at(1f, page, slot).run {
+            assertEquals(slot, sheet); assertEquals(MiniPlayerLayout.CORNER, corner); assertEquals(0f, fade); assertEquals(0f, tabs)
+        }
+        // The cover rides on the sheet first, then settles exactly onto the bar's cover.
+        val from = Rect(24f, 120f, 360f, 456f)
+        val to = Rect(24f, 688f, 72f, 736f)
+        assertEquals(from, MiniPlayerLayout.cover(0f, from, to, 680f))
+        assertEquals(from.translate(0f, 340f), MiniPlayerLayout.cover(.5f, from, to, 680f))
+        assertEquals(to, MiniPlayerLayout.cover(1f, from, to, 680f))
         // The bar's cover sits at the start: right in Arabic.
-        val slot = Rect(16f, 700f, 368f, 764f)
         assertEquals(24f, MiniSlot(slot, false).cover(8f, 48f).left)
         assertEquals(368f - 8f - 48f, MiniSlot(slot, true).cover(8f, 48f).left)
+    }
+
+    /** Collapsed, the sheet is the bar's own rect, and the cover lands on the bar's start side. */
+    private fun sheetEndsAsTheBar(rtl: Boolean) {
+        playSong()
+        collapse()
+        assertTrue(host.collapsed)
+        val bar = bar().boundsInRoot
+        val sheet = compose.runOnIdle { host.motion()!!.sheet }
+        assertEquals(bar.left, sheet.left, .5f); assertEquals(bar.top, sheet.top, .5f)
+        assertEquals(bar.right, sheet.right, .5f); assertEquals(bar.bottom, sheet.bottom, .5f)
+        val slot = compose.runOnIdle { host.slot!! }
+        assertEquals(rtl, slot.rtl)
+        val cover = slot.cover(8f, 48f)
+        if (rtl) assertEquals(bar.right - 8f, cover.right, .5f) else assertEquals(bar.left + 8f, cover.left, .5f)
+    }
+    @Test fun theSheetEndsAsTheBar() = sheetEndsAsTheBar(false)
+    @Config(qualifiers = "ar-w384dp-h832dp")
+    @Test fun theSheetEndsAsTheBarInArabic() = sheetEndsAsTheBar(true)
+
+    private fun moveTo(p: Float) {
+        compose.runOnIdle { host.size.dispatchRawDelta(p * host.travel - host.size.offset) }
+        compose.waitForIdle()
+    }
+    @Test fun expandingRetracesCollapsing() {
+        playSong()
+        val down = listOf(.2f, .5f, .7f, .9f).map { moveTo(it); compose.runOnIdle { host.motion()!! } }
+        moveTo(1f)
+        assertTrue(host.collapsed)
+        val up = listOf(.9f, .7f, .5f, .2f).map { moveTo(it); compose.runOnIdle { host.motion()!! } }.reversed()
+        assertEquals(down, up)
+        moveTo(0f)
+    }
+
+    @Test fun tapsAroundTheCollapsedBarReachTheApp() {
+        playSong(); collapse()
+        val bar = bar().boundsInRoot
+        val slot = compose.runOnIdle { host.slot!!.rect }
+        assertEquals("The bar's touch and TalkBack node is only the bar", slot.width, bar.width, 1f)
+        assertEquals(slot.height, bar.height, 1f)
+        compose.onRoot().performTouchInput { click(Offset(bar.center.x, bar.top - 24f)) }
+        advance(400)
+        assertEquals("Just above the bar", 1, taps)
+        compose.onRoot().performTouchInput { click(Offset(bar.left + 4f, bar.top / 2)) }
+        advance(400)
+        assertEquals("Far from the bar: ${bar}", 2, taps)
+        assertTrue(players.last().playWhenReady)
+    }
+
+    @Test fun aPageRestoredInTheBarStillShrinksItsCover() {
+        saved = true
+        playSong(); collapse()
+        val state = android.os.Bundle()
+        controller.saveInstanceState(state).pause().stop().destroy()
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).create(state).start().postCreate(state).resume().visible()
+        players.clear(); audio = CountingAudio(players)
+        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
+        show(); advance(600)
+        assertFalse(host.moving)
+        start(); playback.audioState.value = PlaybackState.Ready; advance(300)
+        val still = compose.onNodeWithTag(AUDIO_COVER_TAG).fetchSemanticsNode().boundsInRoot
+        moveTo(.75f)
+        val shrinking = compose.onNodeWithTag(AUDIO_COVER_TAG).fetchSemanticsNode().boundsInRoot
+        assertTrue("The cover heads for the bar", shrinking.width < still.width * .6f)
+        moveTo(0f)
+    }
+
+    @Test fun fadedControlsCanNotBeFocusedOrPressed() {
+        playSong()
+        moveTo(.79f)
+        val chevron = shownNode(R.string.viewer_minimize).fetchSemanticsNode().boundsInRoot.center
+        moveTo(.85f)
+        val placedOnly = SemanticsMatcher("placed") { it.layoutInfo.isPlaced }
+        for (id in listOf(R.string.viewer_minimize, R.string.viewer_pause))
+            assertTrue("TalkBack can reach a faded control", compose.onAllNodes(hasContentDescription(text(id)) and placedOnly).fetchSemanticsNodes().isEmpty())
+        val at = Offset(chevron.x, chevron.y + .06f * compose.runOnIdle { host.travel })
+        compose.onRoot().performTouchInput { click(at) }
+        advance(600)
+        assertEquals("The faded chevron took the press", .85f, compose.runOnIdle { host.progress }, .01f)
+        moveTo(0f)
+        shownNode(R.string.viewer_minimize).assertExists()
+    }
+
+    private fun recompositions() = Recomposer.runningRecomposers.value.sumOf { it.changeCount }
+    @Test fun aDragRecomposesNothing() {
+        playSong()
+        val page = compose.onNodeWithTag(VIEWER_TAG)
+        page.performTouchInput { down(Offset(centerX, height * .35f)); repeat(6) { moveBy(Offset(0f, 30f)) } }
+        compose.waitForIdle()
+        assertTrue(host.moving)
+        val before = recompositions()
+        val start = host.progress
+        repeat(24) { page.performTouchInput { moveBy(Offset(0f, 5f)) }; compose.waitForIdle() }
+        assertTrue("The page followed the finger", host.progress > start + .05f)
+        assertEquals("A drag step recomposed something", before, recompositions())
+        page.performTouchInput { up() }
+        advance(600)
     }
 
     @Test fun videoHasNoMinimizeAndNoBar() {
