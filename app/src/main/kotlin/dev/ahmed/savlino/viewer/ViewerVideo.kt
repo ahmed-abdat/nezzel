@@ -67,6 +67,7 @@ import dev.ahmed.savlino.usage.UsageKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.media3.session.R as Media3
 
 /** A double tap's brief answer: which way it skipped, or null when the file can't skip yet. */
@@ -95,6 +96,9 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     var ratio by remember(item.uri) { mutableFloatStateOf(1f) }
     var wide by remember(item.uri) { mutableStateOf(false) }
     var seekable by remember(item.uri) { mutableStateOf(false) }
+    // Once a file has seeked, a passing gap (a relayout, a buffer) never calls it unseekable; a press made then waits a moment instead.
+    var everSeekable by remember(item.uri) { mutableStateOf(false) }
+    var queued by remember(item.uri) { mutableStateOf<Pair<Boolean, Boolean>?>(null) }
     var speed by remember(item.uri) { mutableFloatStateOf(1f) }
     var speedFailed by remember(item.uri) { mutableLongStateOf(0) }
     var skip by remember(item.uri) { mutableStateOf<Skip?>(null) }
@@ -114,12 +118,13 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         if (value.width > 0 && value.height > 0) ratio = value.width * value.pixelWidthHeightRatio / value.height
         wide = !item.isAudio && isWide(value)
     }
+    fun seekableNow(player: Player) { seekable = ViewerSeek.seekable(player); if (seekable) everSeekable = true }
     fun read(player: Player) {
         playing = player.playWhenReady; running = player.isPlaying
         position = player.currentPosition.coerceAtLeast(0)
         held?.let { if (kotlin.math.abs(position - it) < HELD_CLOSE) held = null }
         duration = player.duration.takeIf { it > 0 } ?: item.durationMillis ?: 0
-        seekable = ViewerSeek.seekable(player); speed = player.playbackParameters.speed
+        seekableNow(player); speed = player.playbackParameters.speed
         size(player.videoSize)
     }
     LaunchedEffect(player) {
@@ -133,7 +138,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
             override fun onIsPlayingChanged(isPlaying: Boolean) { running = isPlaying }
             override fun onPlaybackParametersChanged(parameters: PlaybackParameters) { speed = parameters.speed }
             override fun onVideoSizeChanged(videoSize: VideoSize) { size(videoSize) }
-            override fun onEvents(player: Player, events: Player.Events) { seekable = ViewerSeek.seekable(player) }
+            override fun onEvents(player: Player, events: Player.Events) { seekableNow(player) }
         }
         player?.addListener(listener)
         onDispose { player?.removeListener(listener); ViewerScrub.set(player, false) }
@@ -162,13 +167,26 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     }
     LaunchedEffect(skip) { skip?.let { delay(if (it.forward == null) 1_500 else 600); skip = null } }
 
-    fun seekBy(forward: Boolean, gesture: Boolean) {
-        controls.touched()
-        val target = ViewerSeek.target(player, forward)
-        if (target == null) { skip = Skip(null); return }
+    fun skipBy(forward: Boolean, gesture: Boolean): Boolean {
+        // The coordinator's player right now, not the one this frame was drawn with.
+        val live = owner.player.value.takeIf { owner.item?.uri == item.uri }
+        val target = ViewerSeek.target(live, forward) ?: return false
         owner.seek(target); position = target; held = target
         usage.count(UsageKeys.PLAYER_SEEK)
         if (gesture) skip = Skip(forward)
+        return true
+    }
+    fun seekBy(forward: Boolean, gesture: Boolean) {
+        controls.touched()
+        if (skipBy(forward, gesture)) return
+        // Only a file that is ready and has never seeked is called unseekable.
+        if (state == PlaybackState.Ready && !everSeekable) skip = Skip(null) else queued = forward to gesture
+    }
+    val latestSkip by rememberUpdatedState(::skipBy)
+    LaunchedEffect(queued) {
+        val (forward, gesture) = queued ?: return@LaunchedEffect
+        withTimeoutOrNull(QUEUE_MAX) { while (!latestSkip(forward, gesture)) delay(100) }
+        queued = null
     }
     fun chooseSpeed(value: Float) {
         val attached = player ?: return
@@ -193,13 +211,17 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val failure = (state as? PlaybackState.Failed)?.failure?.takeIf { current }
     val loading = state == PlaybackState.Loading
     val ring = loading && slow
-    val notes: @Composable () -> Unit = {
-        if (resumedAt > 0 && showResume) Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.viewer_resumed_at, "⁦${NezzelFormat.duration(resumedAt / 1000)}⁩"), Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium)
+    val resume: @Composable (Modifier) -> Unit = { modifier ->
+        if (resumedAt > 0 && showResume) Row(modifier.padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.viewer_resumed_at, "\u2066${NezzelFormat.duration(resumedAt / 1000)}\u2069"), Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             TextButton({ controls.touched(); owner.startOver() }, Modifier.heightIn(min = 48.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = colors.accent)) { Text(stringResource(R.string.viewer_start_over)) }
         }
+    }
+    // Landscape puts the resume note in the button row instead, so the bar stays short and clear of the centre buttons.
+    val notes: @Composable (Boolean) -> Unit = { inline ->
+        if (!inline) resume(Modifier.fillMaxWidth())
         if (speedFailed != 0L) Text(stringResource(R.string.viewer_speed_failed), Modifier.padding(horizontal = Space.s, vertical = Space.xs)
             .semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
     }
@@ -234,7 +256,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 Spacer(Modifier.height(Space.l))
                 if (failure != null) FailureCard(failure, owner::retry, onOpenWith, onClose)
                 else {
-                    notes()
+                    notes(false)
                     seekRow()
                     PlayCluster(true, playing, ring, seekable, colors, { seekBy(it, false) }, togglePlay, Modifier.padding(vertical = Space.s))
                     AnimatedContent(controls.volumeOpen && volume.device.adjustable, Modifier.fillMaxWidth().height(52.dp),
@@ -273,6 +295,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 CustomAccessibilityAction(backLabel) { seekBy(false, false); true }.takeIf { seekable },
                 CustomAccessibilityAction(forwardLabel) { seekBy(true, false); true }.takeIf { seekable })
         }, contentAlignment = Alignment.Center) {
+        val landscape = maxWidth > maxHeight
         if (player != null && failure == null) {
             val width = minOf(maxWidth, maxHeight * ratio)
             PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)))
@@ -308,13 +331,14 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 // Taps on the bar's own background keep it up rather than falling through to the canvas.
                 .pointerInput(Unit) { detectTapGestures { controls.touched() } }
                 .padding(start = Space.s, end = Space.s, top = Space.xl, bottom = Space.xs)) {
-                notes()
+                notes(landscape)
                 seekRow()
                 AnimatedContent(controls.volumeOpen && volume.device.adjustable, Modifier.fillMaxWidth().height(52.dp),
                     transitionSpec = { fadeIn(easeOut(reduced)) togetherWith fadeOut(easeOut(reduced)) }, label = "volume") { open ->
                     if (open) VolumePanel(muted, true, volume, controls, colors) { muted = it; controls.touched() }
                     else Box(Modifier.fillMaxSize()) {
                         SpeedMenu(speed, player != null, controls, colors, language, direction, Modifier.align(Alignment.CenterStart), ::chooseSpeed)
+                        if (landscape) resume(Modifier.align(Alignment.Center).padding(horizontal = 112.dp))
                         Row(Modifier.align(Alignment.CenterEnd)) {
                             VolumeButton(muted, true, volume, controls) { muted = it; controls.touched() }
                             if (wide || fullscreen) IconButton(onClick = { controls.touched(); onFullscreen(!fullscreen) }, Modifier.size(48.dp)) {
@@ -361,6 +385,7 @@ private fun FailureCard(failure: PlaybackFailure, onRetry: () -> Unit, onOpenWit
 private const val HELD_CLOSE = 1_000L
 private const val HELD_MAX = 1_500L
 private const val RING_AFTER = 500L
+private const val QUEUE_MAX = 1_500L
 
 /** Back 10 · Play/Pause · Forward 10. Big and centred on video, compact under the cover for audio. Always LTR. */
 @Composable

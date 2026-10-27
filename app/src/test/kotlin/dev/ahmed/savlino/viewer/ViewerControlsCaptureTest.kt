@@ -25,6 +25,8 @@ import dev.ahmed.savlino.playback.PlayerFactory
 import android.media.AudioManager
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import dev.ahmed.savlino.windowViews
+import dev.ahmed.savlino.playback.ResumePolicy
+import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -68,7 +70,8 @@ class ViewerControlsCaptureTest {
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun shoot(name: String, item: ViewerItem = video, qualifiers: String = "", act: ComposeTestRule.(ComponentActivity) -> Unit = {}) {
+    private fun shoot(name: String, item: ViewerItem = video, qualifiers: String = "", resumeAt: Long = 0,
+                      act: ComposeTestRule.(ComponentActivity) -> Unit = {}) {
         assumeTrue(dir != null)
         val app = RuntimeEnvironment.getApplication()
         app.getSystemService(AudioManager::class.java).setStreamVolume(AudioManager.STREAM_MUSIC, 9, 0)
@@ -79,10 +82,14 @@ class ViewerControlsCaptureTest {
             val activity = controller.get()
             val playback = PlaybackEnvironment(activity, PlayerFactory { _, _ ->
                 ViewerTestPlayer().also { it.size = VideoSize(1920, 1080) } }, sizeOf = { 10L })
+            // A resumed file between two neighbours, as in a real folder.
+            val saved = item.copy(resumePolicy = ResumePolicy.SAVED)
+            if (resumeAt > 0) runBlocking { playback.resume.save(saved, 10, resumeAt, 100_000) }
+            val items = if (resumeAt > 0) listOf(neighbour(1), saved, neighbour(3)) else listOf(item)
             try {
                 activity.setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                     CompositionLocalProvider(LocalMediaPictures provides pictures, LocalPlaybackEnvironment provides playback) {
-                        MediaViewer(listOf(item), 0, lang, {}, onShare = {}, onOpenWith = {})
+                        MediaViewer(items, items.indexOf(saved).coerceAtLeast(0), lang, {}, onShare = {}, onOpenWith = {})
                     }
                 } }
                 idle(); compose.waitForIdle()
@@ -120,6 +127,13 @@ class ViewerControlsCaptureTest {
     }
 
     @Test fun volumePanel() = shoot("5-volume") { a -> at32(a); node(a, R.string.viewer_volume).performClick(); idle(); waitForIdle() }
+
+    private fun neighbour(n: Int) = ViewerItem(Uri.parse("content://media/external/images/media/$n"), false, "image/jpeg")
+
+    @Test fun fullscreenShortWithResume() = shoot("8-fullscreen-short-resume", qualifiers = "-w800dp-h360dp-land", resumeAt = 41_000) { a ->
+        node(a, R.string.viewer_fullscreen).performClick(); idle(); waitForIdle()
+        node(a, R.string.viewer_pause).performClick(); idle(); waitForIdle()
+    }
 
     @Test fun fullscreen() = shoot("6-fullscreen-landscape", qualifiers = "-w832dp-h384dp-land") { a ->
         at32(a); node(a, R.string.viewer_fullscreen).performClick(); idle(); waitForIdle()

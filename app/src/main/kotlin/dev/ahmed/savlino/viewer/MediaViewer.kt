@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -113,8 +114,14 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
         Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = Color.White) {
             Box(Modifier.fillMaxSize()) {
                 // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
-                HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding()),
+                // A rotation or hidden bars resize the pager without recreating it: settle back on the page so no neighbour peeks in.
+                var width by remember { mutableIntStateOf(0) }
+                LaunchedEffect(width) { if (!pager.isScrollInProgress && pager.currentPageOffsetFraction != 0f) pager.scrollToPage(pager.currentPage) }
+                HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding())
+                    .onSizeChanged { width = it.width },
                     key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen) { page ->
+                    // Full screen shows the playing file alone.
+                    if (controls.fullscreen && page != pager.currentPage) return@HorizontalPager
                     val item = items[page]
                     val description = stringResource(when { item.isVideo -> R.string.viewer_video_n; item.isAudio -> R.string.viewer_audio_n; else -> R.string.viewer_image_n },
                         NezzelFormat.count(page + 1, language), NezzelFormat.count(items.size, language))

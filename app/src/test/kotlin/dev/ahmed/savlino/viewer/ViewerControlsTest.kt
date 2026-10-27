@@ -27,6 +27,8 @@ import dev.ahmed.savlino.playback.PlayerFactory
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import dev.ahmed.savlino.usage.UsageEvents
 import dev.ahmed.savlino.usage.UsageKeys
+import dev.ahmed.savlino.playback.ResumePolicy
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Rule
@@ -283,6 +285,41 @@ class ViewerControlsTest {
         assertTrue(counts.none { it == UsageKeys.PLAYER_SEEK })
     }
 
+    @Test fun aSeekableFileThatBlinksKeepsTheSkipAndNeverSaysItCannotSeek() {
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.seekable = false }
+        doubleTapPhysical(forward = true)
+        compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertDoesNotExist()
+        assertEquals(0, player.currentPosition)
+        compose.runOnIdle { player.seekable = true }; advance(300)
+        assertEquals("The press waited for the file to come back", 10_000, player.currentPosition)
+        compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertDoesNotExist()
+    }
+
+    @Test fun aPageSwipedToAttachesItsPlayerLateAndStillSkips() {
+        // Opened on a picture: the video page is drawn first with no player, which arrives only once it settles.
+        show(start = 0); advance(300)
+        assertTrue(players.isEmpty())
+        compose.onNodeWithContentDescription(text(R.string.viewer_image_n, "1", "3")).performTouchInput { swipeLeft() }
+        advance(1_000)
+        compose.runOnIdle { player.playWhenReady = false; player.inner.at(30_000) }; advance(300)
+        doubleTapPhysical(forward = true)
+        compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertDoesNotExist()
+        assertEquals(40_000, player.currentPosition)
+        tapCanvas(); if (!shown()) tapCanvas()
+        node(R.string.viewer_seek_back_10).performClick(); advance(300)
+        assertEquals(30_000, player.currentPosition)
+    }
+
+    @Test fun aGapThatLastsDropsThePressQuietly() {
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.seekable = false }
+        doubleTapPhysical(forward = true); advance(2_000)
+        compose.runOnIdle { player.seekable = true }; advance(300)
+        assertEquals(0, player.currentPosition)
+        compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertDoesNotExist()
+    }
+
     // A drag lets go where the finger left, and quick seek buffers pass without a ring.
     private fun seekBar() = compose.onNodeWithContentDescription(text(R.string.viewer_position))
     private fun dragTo(millis: Float) = seekBar().performSemanticsAction(SemanticsActions.SetProgress) { it(millis) }
@@ -494,6 +531,49 @@ class ViewerControlsTest {
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
         ViewerFullscreen.resume(activity, ViewerControls())
         assertEquals("A viewer outside fullscreen never rotates", ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+    }
+
+    @Test fun aResizedWindowSettlesBackOnThePageAndFullScreenShowsItAlone() {
+        prepare = { it.size = VideoSize(1920, 1080) }
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.inner.at(30_000) }
+        node(R.string.viewer_fullscreen).performClick(); advance(300)
+        val dialog = ShadowDialog.getLatestDialog() as ComponentDialog
+        // Hidden bars or a rotation resize the window under a live pager.
+        for ((w, h) in listOf(2400 to 1080, 2280 to 1080, 1080 to 2400)) {
+            compose.runOnIdle { dialog.window!!.setLayout(w, h) }; advance(300)
+            val bounds = page(2).fetchSemanticsNode().boundsInRoot
+            assertEquals("page lines up with the window at ${w}x$h", 0f, bounds.left, 1f)
+            assertEquals(w.toFloat(), bounds.right, 1f)
+            for (n in listOf(1, 3)) compose.onNodeWithContentDescription(text(R.string.viewer_image_n, "$n", "3")).assertDoesNotExist()
+            // A double-tap anywhere still skips: it lands on the playing page.
+            val before = player.currentPosition
+            for (x in listOf(.2f, .8f)) { page(2).performTouchInput { doubleClick(Offset(width * x, height * .3f)) }; advance(400) }
+            compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertDoesNotExist()
+            assertEquals(before, player.currentPosition)
+            page(2).performTouchInput { doubleClick(Offset(width * .8f, height * .3f)) }; advance(400)
+            assertEquals(before + 10_000, player.currentPosition)
+        }
+    }
+
+    @Test fun landscapeKeepsTheResumeNoteInTheButtonRow() {
+        RuntimeEnvironment.setQualifiers("w832dp-h360dp-land")
+        val saved = video(2).copy(resumePolicy = ResumePolicy.SAVED)
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer().also { it.size = VideoSize(1920, 1080); players += it } },
+            sizeOf = { 10L })
+        runBlocking { playback.resume.save(saved, 10, 40_000, 100_000) }
+        content(listOf(image(1), saved, image(3)), 1, "en")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(text(R.string.viewer_start_over)).fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { player.playWhenReady = false }; advance(300)
+        val again = compose.onNodeWithText(text(R.string.viewer_start_over)).fetchSemanticsNode().boundsInRoot
+        val speed = node(R.string.viewer_speed).fetchSemanticsNode().boundsInRoot
+        val bar = seekBar().fetchSemanticsNode().boundsInRoot
+        val play = node(R.string.viewer_play).fetchSemanticsNode().boundsInRoot
+        assertTrue("same row as speed", again.center.y in speed.top..speed.bottom)
+        assertTrue("below the seek bar", again.top >= bar.bottom)
+        assertTrue("clear of the centre buttons", bar.top > play.bottom)
     }
 
     @Test fun picturesKeepTheirChrome() {
