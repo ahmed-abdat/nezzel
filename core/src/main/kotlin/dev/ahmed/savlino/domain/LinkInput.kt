@@ -63,7 +63,7 @@ object LinkInput {
         if (host == "fb.com" || host == "www.fb.com")
             return "https://www.facebook.com" + raw.substring(raw.indexOf(uri.rawAuthority) + uri.rawAuthority.length)
         // A Mix shared as /playlist?list=RD<video id> has no v=: it becomes the watch link of its seed video.
-        if (host in setOf("youtube.com", "www.youtube.com", "m.youtube.com") && uri.rawPath == "/playlist") {
+        if (host in setOf("youtube.com", "www.youtube.com", "m.youtube.com") && uri.rawPath.trimEnd('/') == "/playlist") {
             val params = uri.rawQuery.orEmpty().split('&')
             val list = params.filter { it.startsWith("list=") }.singleOrNull()?.substring(5) ?: return raw
             val seed = Regex("RD([A-Za-z0-9_-]{11})").matchEntire(list)?.groupValues?.get(1) ?: return raw
