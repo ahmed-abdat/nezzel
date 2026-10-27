@@ -104,6 +104,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal val moving by derivedStateOf { progress > 0f }
     /** The sheet has drawn back far enough to uncover the bar's row riding on its top edge. */
     internal val barShown by derivedStateOf { MiniPlayerLayout.bar(progress) }
+    /** Placed only for the drag that started on it, and unseen: nothing on it answers a tap, a second finger or TalkBack. */
+    internal val barHidden by derivedStateOf { barDragging && !barShown }
     /** What the bar grows over while it moves (the paste field, the footer): out as it leaves the slot, in once it settles. */
     internal val reveal = Animatable(1f)
     /** The sheet has left the status bar: the app's own status bar icons are back. */

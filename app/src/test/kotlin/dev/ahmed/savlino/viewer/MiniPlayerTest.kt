@@ -424,6 +424,39 @@ class MiniPlayerTest {
         assertFalse(host.barDragging)
     }
 
+    /**
+     * Mid-drag from the bar, past where it fades out, the bar stays placed for that drag only: a second finger where its Close and
+     * Pause were does nothing, and TalkBack has no bar to land on.
+     */
+    @Test fun theUnseenBarMidDragAnswersNoSecondFingerAndNoTalkBack() {
+        playSong(); collapse()
+        val dp = activity.resources.displayMetrics.density
+        val (close, pause) = bar().boundsInRoot.let { Offset(it.right - 32 * dp, it.center.y) to Offset(it.right - 80 * dp, it.center.y) }
+        dragFromBar(*FloatArray(15) { -.03f })
+        for (step in 0 until 4) {
+            assertTrue("p=${host.progress}: the bar is unseen", compose.runOnIdle { host.barHidden })
+            assertTrue("p=${host.progress}: no bar for TalkBack", compose.onAllNodesWithTag(MINI_PLAYER_TAG, useUnmergedTree = true).fetchSemanticsNodes(false).isEmpty())
+            for (at in listOf(close, pause)) { compose.onRoot().performTouchInput { down(1, at); up(1) }; compose.waitForIdle() }
+            assertEquals("p=${host.progress}: Close did nothing", 0, audio.closes)
+            assertNotNull(compose.runOnIdle { host.request })
+            assertTrue("p=${host.progress}: Pause did nothing", players.last().playWhenReady)
+            repeat(4) { compose.onRoot().performTouchInput { moveBy(Offset(0f, -.03f * host.travel)) }; compose.waitForIdle() }
+        }
+        release()
+        assertEquals("The drag that started on the bar went on to the end", 0f, compose.runOnIdle { host.progress })
+    }
+
+    /** A drag from the bar that the system cancels mid-way (a call, a gesture of its own) still settles; nothing is left stuck. */
+    @Test fun aCancelledDragFromTheBarSettles() {
+        playSong(); collapse()
+        dragFromBar(*FloatArray(15) { -.03f })
+        compose.onRoot().performTouchInput { cancel() }; advance(800)
+        val p = compose.runOnIdle { host.progress }
+        assertTrue("Settled at an end, not at $p", p == 0f || p == 1f)
+        assertFalse(host.barDragging)
+        assertTrue("The bar for TalkBack again, or the page", p == 0f || placed(MINI_PLAYER_TAG))
+    }
+
     @Test fun aDragFromTheBarThatTurnsBackLandsInTheBar() {
         playSong(); collapse()
         dragFromBar(*FloatArray(25) { -.03f })

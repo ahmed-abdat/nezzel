@@ -38,6 +38,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.ObserverModifierNode
+import androidx.compose.ui.node.SemanticsModifierNode
+import androidx.compose.ui.node.invalidateSemantics
+import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -211,7 +216,9 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     val reduced = LocalReducedMotion.current || rememberReducedMotion()
     // Name and controls as one layer alpha: they come in under the landing cover, no recomposition per frame.
     val row = remember(host) { Modifier.graphicsLayer { alpha = MiniPlayerLayout.row(host.progress) } }
-    val toggle = { if (playing) session.owner.pause() else session.owner.play() }
+    // Unseen mid-drag, the bar's own taps do nothing: only the drag that started on it goes on.
+    val toggle = { if (!host.barHidden) { if (playing) session.owner.pause() else session.owner.play() } }
+    val close = { if (!host.barHidden) host.close() }
     val label = stringResource(if (playing) R.string.mini_playing else R.string.mini_paused, title)
     val open = stringResource(R.string.mini_open_player)
     val playLabel = stringResource(if (playing) R.string.viewer_pause else R.string.viewer_play)
@@ -222,16 +229,16 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     // The sheet's surface once the sheet has narrowed into it, under the page's cover until that lands.
     Surface(modifier.anchoredDraggable(host.size, Orientation.Vertical, interactionSource = drags,
             flingBehavior = AnchoredDraggableDefaults.flingBehavior(host.size, { it * .5f }, if (host.reduced) snap() else ViewerHostState.SETTLE))
-        .clickable { host.expand() }
-        // One TalkBack stop that says what plays, with its actions; a double tap opens the player.
-        .clearAndSetSemantics {
+        .clickable { if (!host.barHidden) host.expand() }
+        // One TalkBack stop that says what plays, with its actions; a double tap opens the player. None while it is unseen.
+        .barSemantics(host) {
             testTag = MINI_PLAYER_TAG
             contentDescription = label
             role = Role.Button
             onClick(open) { host.expand(); true }
             expand { host.expand(); true }
             customActions = listOf(CustomAccessibilityAction(playLabel) { toggle(); true },
-                CustomAccessibilityAction(closeLabel) { host.close(); true },
+                CustomAccessibilityAction(closeLabel) { close(); true },
                 CustomAccessibilityAction(open) { host.expand(); true })
         },
         shape = Dock.SHAPE, color = Dock.color, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = Dock.SHADOW) {
@@ -248,9 +255,31 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
             IconButton(toggle, Modifier.size(48.dp).then(row)) {
                 Icon(painterResource(if (playing) Media3.drawable.media3_icon_pause else Media3.drawable.media3_icon_play), playLabel, Modifier.size(24.dp))
             }
-            IconButton({ host.close() }, Modifier.size(48.dp).then(row)) { Icon(Icons.Default.Close, closeLabel) }
+            IconButton(close, Modifier.size(48.dp).then(row)) { Icon(Icons.Default.Close, closeLabel) }
         }
     }
+}
+
+/**
+ * [clearAndSetSemantics] that drops the bar from TalkBack while it is unseen ([ViewerHostState.barHidden]). The node reads that
+ * itself, so a drag passing it changes the semantics without recomposing the bar.
+ */
+private fun Modifier.barSemantics(host: ViewerHostState, properties: SemanticsPropertyReceiver.() -> Unit) = this then BarSemantics(host, properties)
+
+private data class BarSemantics(val host: ViewerHostState, val properties: SemanticsPropertyReceiver.() -> Unit) : ModifierNodeElement<BarSemanticsNode>() {
+    override fun create() = BarSemanticsNode(host, properties)
+    override fun update(node: BarSemanticsNode) { node.host = host; node.properties = properties; node.invalidateSemantics() }
+}
+
+private class BarSemanticsNode(var host: ViewerHostState, var properties: SemanticsPropertyReceiver.() -> Unit) :
+    Modifier.Node(), SemanticsModifierNode, ObserverModifierNode {
+    override val shouldClearDescendantSemantics get() = true
+    override fun SemanticsPropertyReceiver.applySemantics() {
+        var hidden = false
+        observeReads { hidden = host.barHidden }
+        if (!hidden) properties()
+    }
+    override fun onObservedReadsChanged() = invalidateSemantics()
 }
 
 /** The bar's name. Its own scope: the bar settling starts the scroll without recomposing the rest of the bar. */
