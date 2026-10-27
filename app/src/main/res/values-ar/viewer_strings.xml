@@ -13,4 +13,8 @@
     <string name="viewer_exit_fullscreen">الخروج من ملء الشاشة</string>
     <string name="viewer_volume">الصوت</string>
     <string name="viewer_volume_muted">الصوت مكتوم</string>
+    <string name="viewer_minimize">تصغير المشغّل</string>
+    <string name="mini_open_player">فتح المشغّل</string>
+    <string name="mini_playing">%1$s، يعمل الآن</string>
+    <string name="mini_paused">%1$s، متوقف مؤقتًا</string>
 </resources>

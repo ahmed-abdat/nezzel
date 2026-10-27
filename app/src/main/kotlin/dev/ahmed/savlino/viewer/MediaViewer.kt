@@ -5,6 +5,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.semantics.collapse
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -77,9 +82,12 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     val id = androidx.compose.runtime.saveable.rememberSaveable { java.util.UUID.randomUUID().toString() }
     val request = remember(id) { ViewerRequest(id) }
     val locals = currentCompositionLocalContext
-    val content: @Composable () -> Unit = { ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions) }
+    // Another file opened from the same screen while its music sits in the bar: that file opens, full screen, instead.
+    val content: @Composable () -> Unit = { key(start) { ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions) } }
     SideEffect { request.locals = locals; request.content = content; request.onClose = onClose }
     DisposableEffect(host, request) { host.show(request); onDispose { host.dismiss(request) } }
+    var opened by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(start) }
+    LaunchedEffect(start) { if (start != opened) { opened = start; host.expand() } }
 }
 
 @Composable
@@ -98,28 +106,35 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         else if (!on) ViewerFullscreen.exit(activity, controls)
     }
     val close = { fullscreen(false); playback.close(); onClose() }
+    val host = LocalViewerHost.current
+    val ownedPlayer by playback.player.collectAsState()
+    val ownedState by playback.state.collectAsState()
     // Rotation recreates the activity mid-fullscreen: only a real dismissal puts the old orientation back.
     DisposableEffect(activity) { onDispose { if (activity?.isChangingConfigurations != true) ViewerFullscreen.exit(activity, controls) } }
     LaunchedEffect(activity) { ViewerFullscreen.resume(activity, controls) }
-    // Back leaves fullscreen first, then closes.
-    BackHandler { if (controls.fullscreen) fullscreen(false) else close() }
+    val collapsed = host?.collapsed == true
+    // Back leaves fullscreen first, then closes; on music it shrinks the player into the bar instead.
+    BackHandler(!collapsed) { if (controls.fullscreen) fullscreen(false) else close() }
     // Black page: light status and navigation icons whatever the app theme. Fullscreen hides the bars; a swipe shows them
     // briefly. The activity window is shared with the app, so closing puts its bars back as they were.
     val view = LocalView.current
     val window = activity?.window
+    val appBars = remember(window, view) {
+        window?.let { WindowCompat.getInsetsController(it, view).run { isAppearanceLightStatusBars to isAppearanceLightNavigationBars } } ?: (false to false)
+    }
     if (window != null) DisposableEffect(window, view) {
         val bars = WindowCompat.getInsetsController(window, view)
-        val lightStatus = bars.isAppearanceLightStatusBars
-        val lightNavigation = bars.isAppearanceLightNavigationBars
         val behavior = bars.systemBarsBehavior
         onDispose {
-            bars.isAppearanceLightStatusBars = lightStatus; bars.isAppearanceLightNavigationBars = lightNavigation
+            bars.isAppearanceLightStatusBars = appBars.first; bars.isAppearanceLightNavigationBars = appBars.second
             bars.show(WindowInsetsCompat.Type.systemBars()); bars.systemBarsBehavior = behavior
         }
     }
-    LaunchedEffect(window, view, controls.fullscreen) {
+    // Shrinking past halfway uncovers the app, so its own bar icons come back.
+    val away = host?.away == true
+    LaunchedEffect(window, view, controls.fullscreen, away) {
         if (window != null) WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = false; isAppearanceLightNavigationBars = false
+            isAppearanceLightStatusBars = away && appBars.first; isAppearanceLightNavigationBars = away && appBars.second
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             if (controls.fullscreen) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
         }
@@ -127,6 +142,30 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
     val pager = rememberPagerState(start.coerceIn(0, items.lastIndex)) { items.size }
     val zooms = remember(items) { items.associate { it.uri to ZoomState() } }
     val current = items[pager.currentPage.coerceIn(0, items.lastIndex)]
+    // The settled music page with its player can shrink into the bar; a player that attaches late registers it then.
+    val shrinkable = items.getOrNull(pager.settledPage)?.takeIf { host != null && it.isAudio && ownedPlayer != null && playback.item?.uri == it.uri }
+    val latestClose by rememberUpdatedState(close)
+    if (host != null) DisposableEffect(host, shrinkable) {
+        val session = shrinkable?.let { MiniSession(it, playback) { latestClose() } }
+        if (session != null) host.mini = session
+        onDispose { if (session != null && host.mini === session) host.mini = null }
+    }
+    // In the bar: the track ending or the service stopping takes the bar away; a failure opens the page with its card.
+    LaunchedEffect(collapsed, ownedPlayer == null, ownedState) {
+        if (!collapsed || host == null) return@LaunchedEffect
+        if (ownedPlayer == null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Ended) host.close()
+        else if (ownedState is dev.ahmed.savlino.playback.PlaybackState.Failed) host.expand()
+    }
+    val minimize = host != null && shrinkable != null && host.mini?.owner === playback && host.slot != null
+    // The music page's Back shrinks it, following the finger on Android 14+; a cancelled gesture puts it back.
+    PredictiveBackHandler(minimize && !controls.fullscreen && !collapsed) { events ->
+        val target = host ?: return@PredictiveBackHandler
+        try {
+            target.size.anchoredDrag { _ -> events.collect { dragTo(it.progress * .4f * target.travel) } }
+            target.collapse()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { target.expand(); throw cancelled }
+    }
+    val moving = host?.moving == true
     // A page swiped away comes back unzoomed, and every newly settled page starts with its controls showing.
     LaunchedEffect(pager.settledPage, items) {
         val settledItem = items.getOrNull(pager.settledPage)
@@ -136,7 +175,12 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         val settled = settledItem?.uri
         zooms.forEach { (uri, zoom) -> if (uri != settled) zoom.reset() }
     }
-    Surface(Modifier.fillMaxSize().testTag(VIEWER_TAG), color = Color.Black, contentColor = Color.White) {
+    // The black page slides and fades with the player as it shrinks; without the app host it is simply black.
+    Surface(Modifier.fillMaxSize().testTag(VIEWER_TAG).drawBehind {
+        val p = host?.progress ?: 0f
+        drawRect(Color.Black.copy(alpha = MiniPlayerLayout.at(p).page), Offset(0f, p * (host?.travel ?: 0f)))
+    }.then(if (minimize) Modifier.semantics { collapse { host?.collapse(); true } } else Modifier),
+        color = Color.Transparent, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
             // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
             // A rotation or hidden bars resize the pager without recreating it: settle back on the page so no neighbour peeks in.
@@ -147,13 +191,14 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
             }
             HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding())
                 .onSizeChanged { width = it.width },
-                key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen) { page ->
-                // Full screen shows the playing file alone.
+                key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen && !moving) { page ->
+                // Full screen shows the playing file alone, and so does a page shrinking into the bar.
                 if (controls.fullscreen && page != pager.currentPage) return@HorizontalPager
                 val item = items[page]
                 val description = stringResource(when { item.isVideo -> R.string.viewer_video_n; item.isAudio -> R.string.viewer_audio_n; else -> R.string.viewer_image_n },
                     NezzelFormat.count(page + 1, language), NezzelFormat.count(items.size, language))
-                Box(Modifier.fillMaxSize().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize().drawWithContent { if (host?.moving != true || page == pager.currentPage) drawContent() }
+                    .semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
                     if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page, playback, controls, language,
                         controls.fullscreen, fullscreen, onOpenWith = { onOpenWith(item) }, onClose = close)
                     // Pictures sit below the bar, as before; only playing media runs under its fading chrome.
@@ -162,11 +207,18 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
             }
             AnimatedVisibility(controls.shown, Modifier.align(Alignment.TopCenter),
                 enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
-                Row(Modifier.fillMaxWidth().then(if (controls.shown) Modifier else Modifier.clearAndSetSemantics {}).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
+                // The shade fades and travels with the controls it sits behind.
+                Row(Modifier.fillMaxWidth().then(if (controls.shown) Modifier else Modifier.clearAndSetSemantics {})
+                    .graphicsLayer { val p = host?.progress ?: 0f; alpha = MiniPlayerLayout.at(p).chrome; translationY = p * (host?.travel ?: 0f) }
+                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .onFocusChanged { controls.focus("top", it.hasFocus) }
-                    .height(TOP_BAR).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = close, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
+                    .height(TOP_BAR).padding(horizontal = Space.xs),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    // Playing music shrinks into the bar, which has its own Close; anything else closes here.
+                    if (minimize) IconButton(onClick = { host?.collapse() }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.viewer_minimize))
+                    } else IconButton(onClick = close, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
                     Spacer(Modifier.weight(1f))
                     actions(current)
                     IconButton(onClick = { controls.touched(); onShare(current) }, modifier = Modifier.size(48.dp)) {

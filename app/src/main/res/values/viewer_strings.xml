@@ -13,4 +13,8 @@
     <string name="viewer_exit_fullscreen">Exit full screen</string>
     <string name="viewer_volume">Volume</string>
     <string name="viewer_volume_muted">Muted</string>
+    <string name="viewer_minimize">Minimize player</string>
+    <string name="mini_open_player">Open player</string>
+    <string name="mini_playing">%1$s, playing</string>
+    <string name="mini_paused">%1$s, paused</string>
 </resources>

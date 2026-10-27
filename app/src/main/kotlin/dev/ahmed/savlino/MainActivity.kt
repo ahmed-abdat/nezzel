@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private var onboarding by mutableStateOf(false)
     private var replayingOnboarding = false
     private var resumed = false
+    private var viewer: dev.ahmed.savlino.viewer.ViewerHostState? = null
     private var clipboardReadThisEntry = false
     private var pasteRequested = false
     private var openSavedUri by mutableStateOf<String?>(null)
@@ -117,7 +118,10 @@ class MainActivity : AppCompatActivity() {
             NezzelTheme(theme, wallpaper) {
                 if (onboarding) dev.ahmed.savlino.ui.OnboardingScreen(::finishOnboarding)
                 // The viewer is drawn above the whole app in this window, so the tabs can move with the player.
-                else dev.ahmed.savlino.viewer.ViewerHost { NezzelApp(links, language, theme, wallpaper, suggestions,
+                else {
+                    val host = dev.ahmed.savlino.viewer.rememberViewerHost()
+                    SideEffect { viewer = host }
+                    dev.ahmed.savlino.viewer.ViewerHost(host) { NezzelApp(links, language, theme, wallpaper, suggestions,
                     statusLibrary = media.statusLibrary,
                     openSavedUri = openSavedUri, onSavedOpened = { openSavedUri = null },
                     onPaste = ::pasteClipboard,
@@ -135,6 +139,7 @@ class MainActivity : AppCompatActivity() {
                         preferences.suggestionsEnabled = it; suggestions = it; links.suggestionsEnabled = it
                         if (!it) links.dismissSuggestion()
                     }) }
+                }
                 if (showNotificationRationale) androidx.compose.material3.AlertDialog(
                     onDismissRequest = { notificationRationaleDecision(false) },
                     title = { androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.notification_rationale_title)) },
@@ -163,6 +168,8 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Anything but the launcher (its icon, or the playback notification) brings the app forward: music shrinks into the bar, other viewers close.
+        if (!(intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER))) viewer?.yieldToApp()
         if (intent.action == ShortcutActions.OPEN_SAVED) {
             pasteRequested = false
             openSavedUri = ShortcutActions.savedUri(intent)
