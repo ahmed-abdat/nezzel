@@ -1,7 +1,11 @@
 package dev.ahmed.savlino.viewer
 
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -22,7 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -34,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -42,14 +49,20 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.ThumbnailKind
+import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.easeOut
+import dev.ahmed.savlino.usage.UsageKeys
 
 /**
  * Full-screen swipe viewer over [items], opening at [start]. Images zoom (pinch, double tap) and the pager only swipes at 1x;
- * videos play with Media3 while their page is the settled one. Back or Close dismisses.
+ * videos play with Media3 while their page is the settled one; a tap on them shows or hides the chrome, a double tap skips 10 s.
+ * Back leaves fullscreen first, then dismisses, as does Close.
  * [actions] adds screen-specific buttons (Statuses: Save) before Share and Open with.
  */
 @Composable
@@ -60,53 +73,80 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     val playback = rememberViewerPlayback()
     val openedBefore = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val restored = remember { openedBefore.value }
-    val close = { playback.close(); onClose() }
-    Dialog(close, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        // Black page: light status and navigation icons whatever the app theme.
+    val controls = androidx.compose.runtime.saveable.rememberSaveable(saver = ViewerControls.Saver) { ViewerControls() }
+    val activity = LocalContext.current.findActivity()
+    val reduced = LocalReducedMotion.current
+    val usage = (LocalPlaybackEnvironment.current ?: dev.ahmed.savlino.playback.PlaybackEnvironment.get(LocalContext.current)).usage
+    val fullscreen = { on: Boolean ->
+        if (on && !controls.fullscreen) { ViewerFullscreen.enter(activity, controls); usage.count(UsageKeys.PLAYER_FULLSCREEN) }
+        else if (!on) ViewerFullscreen.exit(activity, controls)
+    }
+    val close = { fullscreen(false); playback.close(); onClose() }
+    // Rotation recreates the activity mid-fullscreen: only a real dismissal puts the old orientation back.
+    DisposableEffect(activity) { onDispose { if (activity?.isChangingConfigurations != true) ViewerFullscreen.exit(activity, controls) } }
+    // Back leaves fullscreen first, then closes.
+    Dialog({ if (controls.fullscreen) fullscreen(false) else close() }, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        // Black page: light status and navigation icons whatever the app theme. Fullscreen hides the bars; a swipe shows them briefly.
         val view = LocalView.current
-        LaunchedEffect(view) {
+        LaunchedEffect(view, controls.fullscreen) {
             (view.parent as? DialogWindowProvider)?.window?.let { window ->
-                WindowCompat.getInsetsController(window, view).apply { isAppearanceLightStatusBars = false; isAppearanceLightNavigationBars = false }
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = false; isAppearanceLightNavigationBars = false
+                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    if (controls.fullscreen) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
         val pager = rememberPagerState(start.coerceIn(0, items.lastIndex)) { items.size }
         val zooms = remember(items) { items.associate { it.uri to ZoomState() } }
         val current = items[pager.currentPage.coerceIn(0, items.lastIndex)]
-        // A page swiped away comes back unzoomed.
+        // A page swiped away comes back unzoomed, and every newly settled page starts with its controls showing.
         LaunchedEffect(pager.settledPage, items) {
             val settledItem = items.getOrNull(pager.settledPage)
             settledItem?.let { playback.settle(it, initiallyTapped = playback.item == null && pager.settledPage == start.coerceIn(0, items.lastIndex), restoreOnly = restored && playback.item == null) }
+            if (openedBefore.value) controls.show()
             openedBefore.value = true
             val settled = settledItem?.uri
             zooms.forEach { (uri, zoom) -> if (uri != settled) zoom.reset() }
         }
         Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = Color.White) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().padding(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = close, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
-                    Spacer(Modifier.weight(1f))
-                    actions(current)
-                    IconButton(onClick = { onShare(current) }, modifier = Modifier.size(48.dp)) {
-                        Icon(painterResource(R.drawable.ic_ms_share), stringResource(R.string.share_file))
-                    }
-                    IconButton(onClick = { onOpenWith(current) }, modifier = Modifier.size(48.dp)) {
-                        Icon(painterResource(R.drawable.ic_ms_open_in_new), stringResource(R.string.saved_open_with))
-                    }
-                }
-                HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { items[it].uri.toString() },
-                    userScrollEnabled = zooms[current.uri]?.zoomed != true) { page ->
+            Box(Modifier.fillMaxSize()) {
+                // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
+                HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding()),
+                    key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen) { page ->
                     val item = items[page]
                     val description = stringResource(when { item.isVideo -> R.string.viewer_video_n; item.isAudio -> R.string.viewer_audio_n; else -> R.string.viewer_image_n },
                         NezzelFormat.count(page + 1, language), NezzelFormat.count(items.size, language))
                     Box(Modifier.fillMaxSize().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
-                        if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page, playback, onOpenWith = { onOpenWith(item) }, onClose = close)
-                        else ZoomableImage(item, zooms.getValue(item.uri))
+                        if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page, playback, controls, language,
+                            controls.fullscreen, fullscreen, onOpenWith = { onOpenWith(item) }, onClose = close)
+                        // Pictures sit below the bar, as before; only playing media runs under its fading chrome.
+                        else Box(Modifier.padding(top = TOP_BAR)) { ZoomableImage(item, zooms.getValue(item.uri)) }
+                    }
+                }
+                AnimatedVisibility(controls.shown, Modifier.align(Alignment.TopCenter),
+                    enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
+                    Row(Modifier.fillMaxWidth().then(if (controls.shown) Modifier else Modifier.clearAndSetSemantics {}).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                        .onFocusChanged { controls.focus("top", it.hasFocus) }
+                        .height(TOP_BAR).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = close, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
+                        Spacer(Modifier.weight(1f))
+                        actions(current)
+                        IconButton(onClick = { controls.touched(); onShare(current) }, modifier = Modifier.size(48.dp)) {
+                            Icon(painterResource(R.drawable.ic_ms_share), stringResource(R.string.share_file))
+                        }
+                        IconButton(onClick = { controls.touched(); onOpenWith(current) }, modifier = Modifier.size(48.dp)) {
+                            Icon(painterResource(R.drawable.ic_ms_open_in_new), stringResource(R.string.saved_open_with))
+                        }
                     }
                 }
             }
         }
     }
 }
+
+private val TOP_BAR = 56.dp
 
 /** Longest screen side in pixels: decode no larger than the screen can show. */
 @Composable
