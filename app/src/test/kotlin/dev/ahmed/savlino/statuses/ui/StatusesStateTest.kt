@@ -183,15 +183,59 @@ class StatusesStateTest {
     }
 
     @Test fun aStatusWithoutALastingMarkStillShowsSavedThisSession() = runTest {
-        val items = mixed()
+        val items = mixed().mapIndexed { i, it -> if (i == 0) it.copy(sizeBytes = null) else it }
         val library = FakeStatusLibrary(ready(items)).apply { marks = false }
         val state = loaded(library)
         state.preview = items[0]
         state.save(listOf(items[0])); advanceUntilIdle()
+        state.refresh(); advanceUntilIdle()
         assertTrue(state.visible.first { it.uri == items[0].uri }.saved)
         assertTrue(state.previewItems.first { it.uri == items[0].uri }.saved)
         state.save(listOf(items[0])); advanceUntilIdle()
         assertEquals(1, library.saved.size)
+    }
+
+    @Test fun aCopyDeletedAfterSavingShowsUnsavedOnTheNextRescan() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items))
+        val state = loaded(library)
+        state.openPreview(items[0])
+        state.save(listOf(items[0])); advanceUntilIdle()
+        assertTrue(state.visible.first { it.uri == items[0].uri }.saved)
+        // The saved copy was deleted from Downloads: the library's next load no longer marks it.
+        library.access = ready(items)
+        state.refresh(); advanceUntilIdle()
+        assertFalse(state.visible.first { it.uri == items[0].uri }.saved)
+        assertFalse(state.previewItems.first { it.uri == items[0].uri }.saved)
+        state.save(listOf(items[0])); advanceUntilIdle()
+        assertEquals("it can be saved again", 2, library.saved.size)
+    }
+
+    @Test fun aRescanThatStartedBeforeASaveFinishedKeepsItSaved() = runTest {
+        val items = mixed()
+        val library = FakeStatusLibrary(ready(items))
+        val state = loaded(library)
+        val second = kotlinx.coroutines.CompletableDeferred<Unit>()
+        library.gate = { if (it.uri == items[1].uri) second.await() }
+        val load = kotlinx.coroutines.CompletableDeferred<Unit>().also { library.loadGate = it }
+        state.refresh(); advanceUntilIdle()
+        state.save(listOf(items[0], items[1])); advanceUntilIdle()
+        load.complete(Unit); advanceUntilIdle()
+        assertTrue("the older scan can't know about the save", state.visible.first { it.uri == items[0].uri }.saved)
+        second.complete(Unit); advanceUntilIdle()
+        assertTrue(state.visible.filter { it.uri in setOf(items[0].uri, items[1].uri) }.all { it.saved })
+    }
+
+    @Test fun lostAccessKeepsTheMarksOfThisVisit() = runTest {
+        val items = mixed().mapIndexed { i, it -> if (i == 0) it.copy(lastModifiedMillis = null) else it }
+        val library = FakeStatusLibrary(ready(items)).apply { marks = false }
+        val state = loaded(library)
+        state.save(listOf(items[0])); advanceUntilIdle()
+        library.access = StatusAccess.NeedsGrant(listOf(FakeStatusLibrary.APP))
+        state.refresh(); advanceUntilIdle()
+        library.access = ready(items)
+        state.refresh(); advanceUntilIdle()
+        assertTrue(state.visible.first { it.uri == items[0].uri }.saved)
     }
 
     @Test fun selectAllTakesOnlyWhatIsShownAndAFilterChangeDropsTheRest() = runTest {
