@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -154,12 +155,12 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
             destinations.forEachIndexed { i, destination -> item(destination, i, destination.route == selected) }
         }
     }
-    Box(modifier.fillMaxWidth().windowInsetsPadding(insets).padding(start = Space.m, end = Space.m, top = Space.s, bottom = Space.m)) {
+    Box(modifier.fillMaxWidth().windowInsetsPadding(insets).padding(start = Dock.INSET, end = Dock.INSET, top = Dock.GAP, bottom = Space.m)) {
         // Shrunk music sits just above the tabs.
         Column {
             dev.ahmed.savlino.viewer.MiniPlayerSlot()
             // Bound the corners: a growing capsule cuts off large labels near its outer edges.
-            Surface(Modifier.fillMaxWidth().miniPlayerTabs(), shape = RoundedCornerShape(31.dp), color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
+            Surface(Modifier.fillMaxWidth().miniPlayerTabs(), shape = Dock.SHAPE, color = Dock.color, shadowElevation = Dock.SHADOW) {
                 Box(Modifier.padding(Space.xs)) { tabs() }
             }
         }

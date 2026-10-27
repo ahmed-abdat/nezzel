@@ -39,6 +39,7 @@ import dev.ahmed.savlino.ui.EngineUnavailableNote
 import dev.ahmed.savlino.ui.OptionsScreen
 import dev.ahmed.savlino.ui.OptionsState
 import dev.ahmed.savlino.media.ImageSaveState
+import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -480,7 +481,8 @@ internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>
                     }
                 }
             }
-            Box(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.xs)) {
+            // The tabs' own top gap sits under it, so paste, music and tabs are evenly apart.
+            Box(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = Dock.INSET, end = Dock.INSET, top = Space.xs)) {
                 HomeLinkCard(links, copiedHost, onAccept, onDismiss, onPaste)
             }
         }

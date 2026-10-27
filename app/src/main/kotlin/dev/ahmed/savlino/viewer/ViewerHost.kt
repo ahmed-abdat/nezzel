@@ -28,18 +28,22 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
+import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -106,7 +110,13 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     /** The page's size, as last measured. */
     internal var page = Size.Zero
     /** Where the sheet is right now; null while there is no bar to shrink into. Read it only in layout, layer and draw lambdas. */
-    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let { MiniPlayerLayout.at(progress, page, it.rect) }
+    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let {
+        MiniPlayerLayout.at(progress, page, it.rect, if (lightBar && mini != null) it.cover(coverInset, coverSide) else null)
+    }
+    /** A light bar under the black sheet: the sheet draws back into the cover rather than fading to grey over it. No bar, no cover to draw into. */
+    internal var lightBar = false
+    internal var coverInset = 0f
+    internal var coverSide = 0f
 
     internal fun show(next: ViewerRequest) {
         val old = request
@@ -135,6 +145,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         wantBar = true; settle(PlayerSize.Bar)
     }
     internal fun expand() { wantBar = false; settle(PlayerSize.Full) }
+    /** The music left mid-collapse (its player gone, another page settled): there is no bar to become, so the page goes back up. */
+    internal fun lost() { if (request != null && mini == null && moving && !collapsed) expand() }
     /** A screen's tap on a file: with its viewer in the bar, the music there opens again, or the tapped file opens instead. */
     fun reopen(uri: android.net.Uri) { if (request != null) tapped = ViewerTap(uri) }
     /** A new intent brings the app forward: music shrinks into the bar, anything else closes. */
@@ -201,11 +213,18 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     // The app's own reduced motion is provided below this host, so read the system setting here too.
     val reduced = LocalReducedMotion.current || rememberReducedMotion()
     val scope = rememberCoroutineScope()
-    SideEffect { state.scope = scope; state.reduced = reduced }
+    val lightBar = Dock.color.luminance() > .5f
+    val density = LocalDensity.current
+    SideEffect {
+        state.scope = scope; state.reduced = reduced; state.lightBar = lightBar
+        with(density) { state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx() }
+    }
     val covered = request != null && !state.collapsed
     LaunchedEffect(covered) { if (covered) { focus.clearFocus(force = true); keyboard?.hide() } }
     // Collapsing leaves nothing focused inside the page that is no longer placed.
     LaunchedEffect(state.collapsed) { if (state.collapsed) focus.clearFocus(force = true) }
+    // Only a session that goes away: one swapped for the next in the same frame, or not yet attached, never reads as gone.
+    LaunchedEffect(state) { snapshotFlow { state.mini != null }.drop(1).collect { if (!it) state.lost() } }
     // Opening grows the page in from slightly smaller; closing fades it out. Both draw-only.
     val appear = remember { Animatable(if (request != null) 1f else 0f) }
     LaunchedEffect(request?.id) {
