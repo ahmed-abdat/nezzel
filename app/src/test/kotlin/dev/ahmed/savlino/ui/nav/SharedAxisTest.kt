@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
@@ -13,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.NezzelTheme
@@ -115,6 +117,29 @@ class SharedAxisTest {
             compose.runOnIdle { deep = false }
             compose.runOnIdle { assertFalse(activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
         }
+    }
+
+    @Test fun aTallerPageResizesWithTheAxisAndEndsWithIt() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        activity = controller.get()
+        activity.setContent {
+            NezzelTheme(ThemePref.Light, false) {
+                rememberSharedAxis(deep, backTo = false, back = null, "test")
+                    .SharedAxisContent({ if (it) 1 else 0 }, Modifier.testTag("slot")) { page ->
+                        Box(Modifier.size(100.dp, if (page) 400.dp else 100.dp))
+                    }
+            }
+        }
+        compose.waitForIdle()
+        try {
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread { deep = true; Snapshot.sendApplyNotifications() }
+            compose.mainClock.advanceTimeBy(150)
+            val mid = compose.onNodeWithTag("slot").getUnclippedBoundsInRoot().let { it.bottom - it.top }.value
+            assertTrue("mid $mid", mid > 100f && mid < 400f)
+            compose.mainClock.advanceTimeBy(166)
+            assertEquals(400f, compose.onNodeWithTag("slot").getUnclippedBoundsInRoot().let { it.bottom - it.top }.value)
+        } finally { compose.mainClock.autoAdvance = true; controller.pause().stop().destroy() }
     }
 
     private fun left(tag: String) = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().left.value

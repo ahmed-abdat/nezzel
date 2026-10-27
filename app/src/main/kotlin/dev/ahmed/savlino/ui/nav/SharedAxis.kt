@@ -7,9 +7,11 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -83,13 +85,15 @@ internal fun <T> Transition<T>.SharedAxisContent(
     val shift = with(LocalDensity.current) { Motion.AxisShift.roundToPx() }
     val end = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1 else -1
     AnimatedContent(modifier, transitionSpec = {
-        if (reduced) EnterTransition.None togetherWith ExitTransition.None
+        if (reduced) EnterTransition.None togetherWith ExitTransition.None using SizeTransform { _, _ -> snap() }
         else {
             val along = if (depth(targetState) >= depth(initialState)) end * shift else -end * shift
             (slideInHorizontally(tween(Motion.AXIS, easing = Motion.EaseOut)) { along } +
                 fadeIn(tween(Motion.AXIS - Motion.FADE_OUT, Motion.FADE_OUT, Motion.EaseOut))) togetherWith
                 (slideOutHorizontally(tween(Motion.AXIS, easing = Motion.EaseOut)) { -along } +
-                    fadeOut(tween(Motion.FADE_OUT, easing = Motion.EaseOut)))
+                    fadeOut(tween(Motion.FADE_OUT, easing = Motion.EaseOut))) using
+                // A taller or shorter page resizes with the same motion and ends with it, instead of springing on after.
+                SizeTransform(clip = false) { _, _ -> tween(Motion.AXIS, easing = Motion.EaseOut) }
         }
     }, content = content)
 }
