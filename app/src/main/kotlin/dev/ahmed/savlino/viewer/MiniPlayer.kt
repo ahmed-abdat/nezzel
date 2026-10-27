@@ -64,11 +64,11 @@ import androidx.media3.session.R as Media3
  * Where everything sits at progress [p] (0 = full screen, 1 = the bar), as YouTube Music does it. The page is one opaque
  * sheet, always full width while it travels: its top follows the finger, its bottom rises with the tabs onto the bar's bottom,
  * so it only gets shorter, and its colour turns from black into the bar's. The cover rides on it, shrinking to fit and moving to
- * the start edge; the sheet then draws back into the cover, so only the cover lands on the bar's own.
- * A pure function of [p], so expanding retraces collapsing.
+ * the start edge; the sheet then narrows into [surface], the bar itself at full bar width around the cover, which shrinks with
+ * the cover until it is the bar. A pure function of [p], so expanding retraces collapsing.
  */
 internal data class MiniPlayerLayout(val sheet: Rect, val topCorner: Dp, val corner: Dp, val art: Rect, val content: Float, val fade: Float,
-    val tabs: Float, val tint: Float) {
+    val tabs: Float, val tint: Float, val surface: Rect) {
     companion object {
         /**
          * In window pixels, for a page of [page] size, its cover at [from] on the still page, and the bar at [bar] with its cover
@@ -78,23 +78,29 @@ internal data class MiniPlayerLayout(val sheet: Rect, val topCorner: Dp, val cor
             val rise = FastOutSlowInEasing.transform(span(p, 0f, RISE))
             val band = Rect(0f, p * bar.top, page.width, lerp(page.height, bar.bottom, rise))
             // On the sheet until LAND, then straight onto the bar's cover: it never sits bigger than the bar over the bar.
-            val art = lerp(cover(minOf(p, LAND), page, bar, from, rtl, inset, Rect(0f, 0f, page.width, 0f)), cover(1f, page, bar, from, rtl, inset, bar),
+            val art = lerp(cover(minOf(p, LAND), page, bar, from, rtl, inset), cover(1f, page, bar, from, rtl, inset),
                 FastOutSlowInEasing.transform(span(p, LAND, 1f)))
             val crown = lerp(0.dp, SHEET_CORNER, FastOutSlowInEasing.transform(span(p, 0f, .1f)))
-            val tint = FastOutSlowInEasing.transform(span(p, .3f, LAND))
+            val draw = FastOutSlowInEasing.transform(span(p, .3f, RISE))
+            // The bar's own colour by the time it is the bar.
+            val tint = draw
             // No bar to land on: the cover stays where it sits on the page and the sheet fades.
-            if (!landing) return MiniPlayerLayout(band, crown, 0.dp, from.translate(0f, band.top), content(p), 1f - span(p, LAND, 1f), tabs(p), tint)
-            // Drawn back into the cover before it lands: from LAND on, nothing but the cover moves into the bar.
-            val draw = FastOutSlowInEasing.transform(span(p, RISE, LAND))
-            return MiniPlayerLayout(lerp(band, art, draw), lerp(crown, COVER_CORNER, draw), lerp(0.dp, COVER_CORNER, draw), art, content(p), 1f, tabs(p), tint)
+            if (!landing) return MiniPlayerLayout(band, crown, 0.dp, from.translate(0f, band.top), content(p), 1f - span(p, LAND, 1f), tabs(p), tint, band)
+            // One surface from the start edge of the bar to its end: the cover with its inset all round, never shorter than the bar.
+            val surface = Rect(bar.left, art.top - inset, bar.right, maxOf(art.bottom + inset, art.top - inset + bar.height))
+            // Narrowed into the surface while the name and controls are gone; then the bar is the surface and the sheet only the
+            // cover on it, so nothing from the page shows between the cover and the bar.
+            if (p > RISE) return MiniPlayerLayout(art, COVER_CORNER, COVER_CORNER, art, content(p), 1f, tabs(p), tint, surface)
+            return MiniPlayerLayout(lerp(band, surface, draw), lerp(crown, Dock.CORNER, draw), lerp(0.dp, Dock.CORNER, draw), art, content(p), 1f,
+                tabs(p), tint, surface)
         }
         /** The cover on the sheet at [p]: as big as it was while it fits, then as tall as the band allows (48dp in the 64dp bar), at
-         * the start edge [inset] in from [sides]' start side. */
-        private fun cover(p: Float, page: Size, bar: Rect, from: Rect, rtl: Boolean, inset: Float, sides: Rect): Rect {
+         * the start edge [inset] in from the bar's start side, so it always fits on the bar's surface. */
+        private fun cover(p: Float, page: Size, bar: Rect, from: Rect, rtl: Boolean, inset: Float): Rect {
             val top = p * bar.top
             val height = lerp(page.height, bar.bottom, FastOutSlowInEasing.transform(span(p, 0f, RISE))) - top
-            val side = minOf(from.width, height - 2 * inset).coerceAtLeast(0f)
-            val edge = if (rtl) sides.right - inset - side else sides.left + inset
+            val side = minOf(from.width, height - 2 * inset, bar.width - 2 * inset).coerceAtLeast(0f)
+            val edge = if (rtl) bar.right - inset - side else bar.left + inset
             val left = lerp(from.center.x - side / 2, edge, FastOutSlowInEasing.transform(span(p, .3f, .7f)))
             val y = top + minOf(from.top, (height - side) / 2)
             return Rect(left, y, left + side, y + side)
@@ -103,19 +109,15 @@ internal data class MiniPlayerLayout(val sheet: Rect, val topCorner: Dp, val cor
         fun content(p: Float) = 1f - span(p, 0f, .3f)
         /** The tabs rise from under the sheet with its bottom edge. */
         fun tabs(p: Float) = 1f - FastOutSlowInEasing.transform(span(p, 0f, RISE))
-        /** The bar's row rides the sheet's top edge, on the finger: [slotTop] pixels up at full screen, in its slot at the bar. */
-        fun barOffset(p: Float, slotTop: Float) = (p - 1f) * slotTop
-        /** The bar's row is under the sheet until the sheet draws back from over it: only then is it placed. */
+        /** The bar is the sheet's surface from when the sheet has narrowed into it: only then is it placed. */
         fun bar(p: Float) = p > RISE
-        /** The name and controls fade in together from when the row is placed, under the cover that is still landing on them. */
+        /** The name and controls fade in together from when the bar is placed, under the cover that is still landing on them. */
         fun row(p: Float) = FastOutSlowInEasing.transform(span(p, RISE, 1f))
         /** A long name scrolls only in the settled bar, and never with animations off. */
         fun marquee(p: Float, reduced: Boolean) = p >= 1f && !reduced
         /** The name scrolls this long after the bar settles. */
         const val MARQUEE_DELAY = 3000
         val MARQUEE_SPEED = 24.dp
-        /** What the sheet uncovers late (the paste field, the footer) fades in over the last third instead of appearing at once. */
-        fun home(p: Float) = span(p, 2f / 3f, 1f)
         private fun span(p: Float, start: Float, end: Float) = ((p - start) / (end - start)).coerceIn(0f, 1f)
         private const val RISE = .6f
         private const val LAND = .85f
@@ -179,11 +181,11 @@ fun Modifier.miniPlayerTabs(): Modifier {
     }
 }
 
-/** The paste field and the footer: the sheet uncovers them late, so they fade in over the end of the collapse. */
+/** The paste field and the footer: the bar grows over them while it moves, so they fade out as it leaves and back in once it settles. */
 @Composable
 fun Modifier.miniPlayerReveal(): Modifier {
     val host = LocalViewerHost.current ?: return this
-    return graphicsLayer { if (host.request != null && (host.mini != null || host.moving)) alpha = MiniPlayerLayout.home(host.progress) }
+    return graphicsLayer { if (host.request != null && (host.mini != null || host.moving)) alpha = host.reveal.value }
 }
 
 /** The shrunk player: cover, name, Play/Pause and Close. A tap or an upward drag opens the full page again. */
@@ -212,7 +214,7 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     val open = stringResource(R.string.mini_open_player)
     val playLabel = stringResource(if (playing) R.string.viewer_pause else R.string.viewer_play)
     val closeLabel = stringResource(R.string.viewer_close)
-    // Drawn under the sheet, which fades over it at the end.
+    // The sheet's surface once the sheet has narrowed into it, under the page's cover until that lands.
     Surface(modifier.anchoredDraggable(host.size, Orientation.Vertical,
             flingBehavior = AnchoredDraggableDefaults.flingBehavior(host.size, { it * .5f }, if (host.reduced) snap() else ViewerHostState.SETTLE))
         .clickable { host.expand() }
@@ -228,7 +230,9 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
                 CustomAccessibilityAction(open) { host.expand(); true })
         },
         shape = Dock.SHAPE, color = Dock.color, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = Dock.SHADOW) {
-        Row(Modifier.fillMaxSize().padding(horizontal = MiniPlayerLayout.INSET), verticalAlignment = Alignment.CenterVertically) {
+        // The row keeps the settled bar's height at the surface's top, beside the cover's top while the surface is taller.
+        Row(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).height(MiniPlayerLayout.BAR)
+            .padding(horizontal = MiniPlayerLayout.INSET), verticalAlignment = Alignment.CenterVertically) {
             // While it moves, the page's own cover is the cover: it lands exactly here.
             Surface(Modifier.size(MiniPlayerLayout.COVER).graphicsLayer { alpha = if (host.progress < 1f) 0f else 1f }, shape = RoundedCornerShape(MiniPlayerLayout.COVER_CORNER), color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {

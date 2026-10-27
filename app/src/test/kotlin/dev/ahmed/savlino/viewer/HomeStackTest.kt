@@ -191,27 +191,26 @@ class HomeStackTest {
     @Test fun theStackFitsInArabicAtTwiceTheText() = fits("ar", false, 2f)
 
     /**
-     * Over the light bar every pixel of the bar's top band (past the cover) is either the black sheet or the bar itself, at every step
-     * down and back up: the sheet draws back into the cover instead of fading through grey.
+     * Over the light bar no pixel of the bar's top band (past the cover) is grey, at every step down and back up: the sheet turns the
+     * bar's colour before it becomes the bar's surface instead of fading through grey.
      */
     @Test fun aLightBarNeverShowsGrey() = scene("en", false) { activity, host ->
         pose(host, 1f)
         val (_, bar, _) = bounds(activity)
         val dp = activity.resources.displayMetrics.density
-        val surface = android.graphics.Color.luminance(frame(activity).getPixel(bar.center.x.toInt(), (bar.top + 4 * dp).toInt()))
-        assertTrue("The bar is light", surface > .5f)
-        // From .8 the name and controls are long gone: the sheet is plain black apart from the cover, which sits at the start.
-        val steps = (40..50).map { it / 50f }
+        val light = android.graphics.Color.luminance(frame(activity).getPixel(bar.center.x.toInt(), (bar.top + 4 * dp).toInt()))
+        assertTrue("The bar is light", light > .5f)
+        // From .6 the bar is the sheet's surface: past the cover, its top band is the bar's own colour at every step down and back up.
+        val steps = (31..50).map { it / 50f }
         for (p in steps + steps.reversed()) {
             pose(host, p)
             val f = frame(activity)
-            // On the bar's row, which rides the sheet's top edge.
-            val y = (bar.top + MiniPlayerLayout.barOffset(p, bar.top) + 4 * dp).toInt()
-            // Past the cover, which now rides over the bar band on its way in.
-            val art = compose.runOnIdle { host.motion()!!.art }
+            // Along the top of the bar's surface, past the cover on it.
+            val (art, surface) = compose.runOnIdle { host.motion()!!.run { art to surface } }
+            val y = (surface.top + 4 * dp).toInt()
             val mixed = (maxOf(bar.left + 120 * dp, art.right + 2 * dp).toInt() until (bar.right - 40 * dp).toInt()).count { x ->
                 val l = android.graphics.Color.luminance(f.getPixel(x, y))
-                l > .06f && kotlin.math.abs(l - surface) > .06f
+                l > .06f && kotlin.math.abs(l - light) > .06f
             }
             assertTrue("p=$p: $mixed grey pixels on the bar", mixed <= 2)
         }
@@ -237,6 +236,19 @@ class HomeStackTest {
                     }
                 }
                 save(strip, "$tag-$name-$lang-${if (dark) "dark" else "light"}")
+            }
+        }
+    }
+
+    /** Owner review: the bar as one surface around the cover, over Home with its paste field, in both languages. */
+    @Test fun oneSurface() {
+        assumeTrue(dir != null)
+        for (lang in listOf("en", "ar")) scene(lang, false) { activity, host ->
+            for (pct in listOf(15, 30, 50, 70, 90, 100)) {
+                pose(host, pct / 100f)
+                // Settled, the paste field fades back in.
+                if (pct == 100) idle(400)
+                save(frame(activity), "one-surface-$lang-$pct")
             }
         }
     }

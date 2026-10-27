@@ -102,6 +102,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal val moving by derivedStateOf { progress > 0f }
     /** The sheet has drawn back far enough to uncover the bar's row riding on its top edge. */
     internal val barShown by derivedStateOf { MiniPlayerLayout.bar(progress) }
+    /** What the bar grows over while it moves (the paste field, the footer): out as it leaves the slot, in once it settles. */
+    internal val reveal = Animatable(1f)
     /** The sheet has left the status bar: the app's own status bar icons are back. */
     internal val uncovered by derivedStateOf { progress > .05f }
     /** The sheet has left the navigation bar too. */
@@ -245,6 +247,12 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     LaunchedEffect(covered) { if (covered) { focus.clearFocus(force = true); keyboard?.hide() } }
     // Collapsing leaves nothing focused inside the page that is no longer placed.
     LaunchedEffect(state.collapsed) { if (state.collapsed) focus.clearFocus(force = true) }
+    LaunchedEffect(state) {
+        snapshotFlow { state.collapsed }.collect { settled ->
+            if (state.reduced) state.reveal.snapTo(if (settled) 1f else 0f)
+            else state.reveal.animateTo(if (settled) 1f else 0f, tween(if (settled) Motion.TAB else 100, easing = Motion.EaseOut))
+        }
+    }
     // Only a session that goes away: one swapped for the next in the same frame, or not yet attached, never reads as gone.
     LaunchedEffect(state) { snapshotFlow { state.mini != null }.drop(1).collect { if (!it) state.lost() } }
     // Opening grows the page in from slightly smaller; closing fades it out. Both draw-only.
@@ -270,15 +278,14 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
             val slot = state.slot
             if (request != null && mini != null && slot != null) request.locals?.let { locals ->
                 CompositionLocalProvider(locals) {
-                    // Placed only once the sheet draws back from over it: a hidden bar must not take the page's touches.
-                    // Its row rides the sheet's top edge, so name and controls travel with the cover instead of waiting in the slot;
-                    // the sheet, turning the bar's colour, uncovers it.
+                    // Placed only once the sheet has narrowed into it: a hidden bar must not take the page's touches.
+                    // Then it is the sheet's surface around the cover, so name and controls travel with the cover instead of
+                    // waiting in the slot, and it shrinks with the cover into the slot.
                     MiniPlayerBar(state, mini, Modifier.layout { measurable, constraints ->
-                        val bar = measurable.measure(Constraints.fixed(slot.rect.width.roundToInt(), slot.rect.height.roundToInt()))
+                        val surface = state.motion()?.surface?.takeIf { state.barShown } ?: slot.rect
+                        val bar = measurable.measure(Constraints.fixed(slot.rect.width.roundToInt(), surface.height.roundToInt()))
                         layout(constraints.maxWidth, constraints.maxHeight) {
-                            if (state.barShown) bar.placeWithLayer(slot.rect.left.roundToInt(), slot.rect.top.roundToInt()) {
-                                translationY = MiniPlayerLayout.barOffset(state.progress, slot.rect.top)
-                            }
+                            if (state.barShown) bar.place(slot.rect.left.roundToInt(), surface.top.roundToInt())
                         }
                     })
                 }
