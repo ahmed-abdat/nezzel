@@ -340,17 +340,19 @@ class EngineTimeoutRecoveryTest {
     }
 
     @Test fun steadyBytesAndLongPostProcessingAreNotStalls() = runBlocking {
+        // Real-time stall clock: the window is 25x the longest gap the fake process leaves, so a loaded machine can't open it.
+        val steady = EngineLimits(inspectMs = 300, updateMs = 300, stallMs = 1500)
         for (tail in listOf("[Merger] Merging formats into output.mp4", "[FixupM3u8] Fixing MPEG-TS in MP4 container",
             "[EmbedThumbnail] Adding thumbnail", "[ThumbnailsConvertor] Converting thumbnail",
             "[ExtractAudio] Destination: output.m4a", "[MetadataParser] Parsed title")) {
             val dir = temp.newFolder()
             val runtime = Runtime()
             runtime.action = { args, line ->
-                for (bytes in 1..6) { line("nezzel:18:$bytes:6:NA"); Thread.sleep(120) } // 720 ms > 300 ms window
-                line(tail); line("nezzel:18:7:9:NA"); Thread.sleep(700)
+                for (bytes in 1..26) { line("nezzel:18:$bytes:26:NA"); Thread.sleep(60) } // 1560 ms > 1500 ms window
+                line(tail); line("nezzel:18:27:35:NA"); Thread.sleep(1600)
                 download(dir)(args, line)
             }
-            assertIs<TransferResult.Success>(withTimeout(5000) { YoutubedlEngine(runtime, fast).download(command(), dir) {} })
+            assertIs<TransferResult.Success>(withTimeout(20_000) { YoutubedlEngine(runtime, steady).download(command(), dir) {} })
             assertEquals(0, runtime.destroys.get())
         }
     }
