@@ -61,8 +61,12 @@ The wrapper maintainer edited Python's `usr/lib/python3.12/tempfile.py` to use
 records the wrapper modification. Mutagen 1.47.0 matches its PyPI sdist except
 for omitted `py.typed`. Pycryptodomex 3.23.0 includes 40 `.abi3.so` modules built
 on-device with Termux clang 20.1.8; the exact build command was not recorded.
-Bundled yt-dlp is 2025.11.12 (Unlicense), commit
-`335653be82d5ef999cfc2879d005397402eebec1`; its hash is recorded below.
+Bundled yt-dlp is 2026.10.26 (Unlicense), tag commit
+`f264a6cbd1f630894da0f368df00f8aae50140e0` (its `RELEASE_GIT_HEAD` reads
+`c91f8de0bfb3577894abad716eaaa01659e6bd14`). It is the upstream release asset
+`yt-dlp`, unchanged, in `engine/src/main/res/raw/ytdlp`, which replaces the
+wrapper's 2025.11.12 copy; the engine build fails unless its hash, recorded below,
+matches. It includes yt-dlp-ejs 0.8.0.
 
 ## Component source inputs
 
@@ -223,5 +227,5 @@ new source/notice review and an explicit inventory update.
 | `lib/arm64-v8a/libffprobe.so` | `a4d4a6d1562aa87934e99ee1a43f8090ec1040659cedb667d6edf3aa08408c5e` |
 | `lib/arm64-v8a/libpython.so` | `58ba29cfc5a6d88281c07b2b480fb1d8cce1b78f280b002347f792cfd9cf5901` |
 | `lib/arm64-v8a/libqjs.so` | `a0fe160a8cd76eec34132f945664856e96687d701e3b1ff28dff44ea1fad13bc` |
-| `res/raw/ytdlp` | `89a0d9058ea9018e380b7771898ff46e393a1986dcd13fef331693c87ce1fca4` |
+| `res/raw/ytdlp` | `e51e69e89489f199530f13d32a4342da3ddb2cf34842f364603a066db05afbf3` |
 <!-- END APK PAYLOAD HASHES -->

@@ -87,6 +87,23 @@ class YtdlpUpdateStageTest {
         assertTrue(cache.listFiles()!!.isEmpty())
     }
 
+    @Test fun bundledTagWithNoRecordedUpdateDownloadsNothing() = runBlocking {
+        val cache = temp.newFolder()
+        val staged = assertIs<StagedYtdlp>(fetcher(github(releaseJson = release(YtdlpRelease.BUNDLED_TAG)), cache).fetch())
+        assertNull(staged.file)
+        assertEquals(listOf(YtdlpRelease.API_URL), requests)
+        assertTrue(cache.listFiles()!!.isEmpty())
+    }
+
+    @Test fun onlyAStableTagOlderThanTheBundledOneIsOlder() {
+        assertTrue(YtdlpStagedInstall.olderThanBundled("2025.11.12", "2026.10.26"))
+        assertTrue(YtdlpStagedInstall.olderThanBundled("2026.10.21.3", "2026.10.26"))
+        assertTrue(YtdlpStagedInstall.olderThanBundled("2026.10.26", "2026.10.26.1"))
+        for (kept in listOf("2026.10.26", "2026.10.26.1", "2026.11.02", "2027.01.01", "updated", "", "2026.10",
+            "2026.10.21-nightly", "v2026.10.21", "2026.10.21.1.2", "2026..21", "99999999999.1.1"))
+            assertFalse(YtdlpStagedInstall.olderThanBundled(kept, "2026.10.26"), kept)
+    }
+
     @Test fun hashMismatchOrMissingEntryFailsAndKeepsNoFile() = runBlocking {
         val failed = PreparedUpdate.Failed(EngineUpdateResult.Failure(DownloadError.Failed))
         for (sums in listOf("${"0".repeat(64)}  yt-dlp\n", "$sha  yt-dlp.exe\n", "not a sums file")) {

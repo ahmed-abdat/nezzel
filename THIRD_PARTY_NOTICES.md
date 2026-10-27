@@ -9,8 +9,8 @@ Source inventory and offline release-asset tooling are in [SOURCES.md](SOURCES.m
 | Component | Pinned input / bundled version | License / source |
 |---|---|---|
 | youtubedl-android `library`, `common`, `ffmpeg` | `io.github.junkfood02.youtubedl-android:*:0.18.1` | GPL-3.0, [upstream](https://github.com/yausername/youtubedl-android); GPL text in `app/src/main/assets/licenses/youtubedl-android-GPL-3.0.txt` |
-| yt-dlp | Bundled **2025.11.12**, commit `335653be82d5ef999cfc2879d005397402eebec1` | [Unlicense](https://github.com/yt-dlp/yt-dlp/blob/2025.11.12/LICENSE); bundled executable/dependency terms must also be retained |
-| yt-dlp-ejs | **0.3.1**, bundled inside the yt-dlp zip in `youtubedl-android:library:0.18.1` | Unlicense, with MIT (astring) and ISC (meriyah) parts; [upstream](https://github.com/yt-dlp/ejs) |
+| yt-dlp | Bundled **2026.10.26**, commit `f264a6cbd1f630894da0f368df00f8aae50140e0`, upstream asset unchanged in `engine/src/main/res/raw/ytdlp` (replaces the wrapper's 2025.11.12) | [Unlicense](https://github.com/yt-dlp/yt-dlp/blob/2026.10.26/LICENSE); bundled executable/dependency terms must also be retained |
+| yt-dlp-ejs | **0.8.0**, bundled inside the yt-dlp 2026.10.26 zip | Unlicense, with MIT (astring 1.9.0) and ISC (meriyah 6.1.4) parts, as the headers of its bundled `.min.js` files state; [upstream](https://github.com/yt-dlp/ejs) |
 | Python | **3.12.11**, Termux 3.12.11-1; bundled in the hashed library 0.18.1 runtime | [Python Software Foundation License Version 2 and historical licenses](https://docs.python.org/3.12/license.html), plus embedded third-party modules |
 | FFmpeg | **7.1.1**, Termux 7.1.1-6, bundled in `ffmpeg:0.18.1`; observed `libavcodec.so.61.19.101` and `libavutil.so.59.39.100` | [GPL-3.0-or-later build](https://ffmpeg.org/legal.html); embedded `libavutil` reports that license and `--enable-gpl --enable-version3`; matching sources, Termux recipes and patches are selected by `scripts/source-bundle.sh`; see SOURCES.md |
 | libwebp / SharpYUV | **1.6.0 / 0.4.2**, five libraries nested in the pinned FFmpeg payload | BSD-3-Clause, Copyright (c) 2010 Google Inc.; [tagged source](https://chromium.googlesource.com/webm/libwebp/+/refs/tags/v1.6.0/), full notice in `app/src/main/assets/licenses/libwebp-BSD-3-Clause.txt`; retain upstream AUTHORS and PATENTS with rebuilt artifacts |
@@ -43,7 +43,7 @@ SHA-256 pins match the inspected artifacts and Gradle verification metadata:
 | `library-0.18.1.aar` | `579b5fb480892b1abc2b218c2089699d52759cc8d7ba256bf876453f0365faef` |
 | `ffmpeg-0.18.1.aar` | `0a87ffa6cf912b0fe76c1a99b9107f543ee2f247935fae2c71f0822eb7bc5f49` |
 | `common-0.18.1.aar` | `e0c0530bdbdf203e1598e900085d3582e27360731872872f3a67f23a9b24c0b5` |
-| Bundled `res/raw/ytdlp` | `89a0d9058ea9018e380b7771898ff46e393a1986dcd13fef331693c87ce1fca4` |
+| Bundled `res/raw/ytdlp` | `e51e69e89489f199530f13d32a4342da3ddb2cf34842f364603a066db05afbf3` |
 | `library-0.18.1-sources.jar` (review input) | `26e94f33de0ba802f3507862d509f80d100c1c9065ded7556d16ff51249c4a9a` |
 | `NewPipeExtractor-v0.26.5.jar` (JitPack; equals the 2026-10-23 spike download) | `923bf0a60938d570ad176ed7b08fa9fec7d0772d7a386ca89a2dd3b9212979c7` |
 | `nanojson-e9d656ddb49a412a5a0a5d5ef20ca7ef09549996.jar` | `d495881a322b3c72e5d43284afd7d7021520028ca8b7c6ba861e3fd8d90614d5` |

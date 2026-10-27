@@ -32,7 +32,7 @@ The first build needs network access for the pinned Gradle distribution and depe
 
 The legacy package name `dev.ahmed.savlino` is intentional. Nezzel uses pinned **youtubedl-android 0.18.1** to run yt-dlp locally with bundled Python and FFmpeg. yt-dlp extracts media information and downloads selected streams; FFmpeg merges/converts when required. Public-photo readers handle supported post layouts separately. Only real engine results are offered; test fakes are not shipped.
 
-The APK targets Android 10+ (API 29) on `arm64-v8a` only. Native libraries are 16 KB page-aligned; device testing so far is on 4 KB-page phones. The bundled yt-dlp version is 2025.11.12; the app updates it as described in [PRIVACY.md](PRIVACY.md). Every GitHub Release carries the source for the native components (FFmpeg, Python, QuickJS and their libraries): see [SOURCES.md](SOURCES.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The APK targets Android 10+ (API 29) on `arm64-v8a` only. Native libraries are 16 KB page-aligned; device testing so far is on 4 KB-page phones. The bundled yt-dlp version is 2026.10.26; the app updates it as described in [PRIVACY.md](PRIVACY.md). Every GitHub Release carries the source for the native components (FFmpeg, Python, QuickJS and their libraries): see [SOURCES.md](SOURCES.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Checks
 

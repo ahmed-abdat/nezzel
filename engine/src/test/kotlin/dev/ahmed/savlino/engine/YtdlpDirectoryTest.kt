@@ -114,6 +114,60 @@ class YtdlpDirectoryTest {
         }
     }
 
+    /** Like the real native: repair size from the recorded install or the bundle, and the recorded tag. */
+    private fun upgradingRuntime(native: Native, bundledSize: Long, enabled: Boolean, recordedSize: Long? = null) =
+        DirectoryYtdlpRuntime(object : YtdlpRuntime by native {
+            override fun bundledYtdlpSizeForRepair() =
+                YtdlpStagedInstall.expectedSize(native.prefs["dlpVersion"], recordedSize, { bundledSize })
+            override fun updatedYtdlpVersion() = native.prefs["dlpVersion"]
+        }, dir, enabled)
+
+    @Test fun olderAppsBundledCopyIsReplacedOfflineWhetherPlainOrMaterialized() = runBlocking {
+        val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)
+        val old = File(temporary.root, "old-bundle.zip"); zip(old, "2025.11.12")
+        assertNotEquals(bundle.length(), old.length())
+        for (materialize in listOf(false, true)) {
+            dir.deleteRecursively(); zip(executable, "2025.11.12")
+            // The previous app version's start: its own bundle, possibly already materialized.
+            upgradingRuntime(Native(), old.length(), materialize).initialize()
+            assertEquals(materialize, executable.isDirectory)
+            val native = Native()
+            assertEquals("bundled", YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize))
+                .installedVersion(), "materialize=$materialize")
+            // Fixture zips carry their creation second; the bundled copy is identified by size, as on the phone.
+            assertEquals(bundle.length(), (if (materialize) archive else executable).length())
+            assertTrue(native.prefs.isEmpty())
+        }
+    }
+
+    @Test fun recordedUpdateOlderThanTheBundleIsDroppedButNewerOrUnknownOnesStay() = runBlocking {
+        val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)
+        for (materialize in listOf(false, true)) {
+            for ((tag, kept) in listOf("2026.10.21" to false, "2026.10.21.1" to false, YtdlpRelease.BUNDLED_TAG to true,
+                "2099.01.01" to true, "updated" to true)) {
+                dir.deleteRecursively(); zip(executable, tag)
+                val update = executable.readBytes()
+                val native = Native(mutableMapOf("dlpVersion" to tag, "dlpVersionName" to "stable"))
+                // The archive differs from the bundle: the bundle-size check must never touch a recorded update.
+                val engine = YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize, update.size.toLong()))
+                val label = "$tag materialize=$materialize"
+                assertEquals(if (kept) tag else "bundled", engine.installedVersion(), label)
+                val installed = if (materialize) archive else executable
+                if (kept) assertContentEquals(update, installed.readBytes(), label)
+                else assertEquals(bundle.length(), installed.length(), label)
+                assertEquals(if (kept) tag else null, native.prefs["dlpVersion"], label)
+                assertEquals(if (kept) "stable" else null, native.prefs["dlpVersionName"], label)
+            }
+        }
+    }
+
+    @Test fun bundledRawResourceIsTheTaggedRelease() {
+        val raw = File("src/main/res/raw/ytdlp")
+        val version = ZipFile(raw).use { zip -> zip.getInputStream(zip.getEntry("yt_dlp/version.py")).reader().readText() }
+        assertTrue("__version__ = '${YtdlpRelease.BUNDLED_TAG}'" in version)
+        assertTrue("CHANNEL = 'stable'" in version)
+    }
+
     @Test fun bundledRepairPreservesRecordedUpdatesAndValidPlainOrMaterializedBundles() {
         val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)
         val native = Native()
