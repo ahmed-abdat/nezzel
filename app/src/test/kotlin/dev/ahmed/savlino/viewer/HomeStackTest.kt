@@ -169,6 +169,27 @@ class HomeStackTest {
     @Test fun pasteMusicAndTabsShareWidthAndGaps() = oneFamily("en")
     @Test fun pasteMusicAndTabsShareWidthAndGapsInArabic() = oneFamily("ar")
 
+    /** Dark, and Arabic at 2x text: the stack keeps one width and its order, nothing leaves the screen, every target is at least 48dp
+     * (the bar is one TalkBack stop; its own buttons are fixed 48dp). */
+    private fun fits(lang: String, dark: Boolean, scale: Float) = scene(lang, dark, scale) { activity, host ->
+        pose(host, 1f)
+        assertTrue(host.collapsed)
+        val (paste, bar, tabs) = bounds(activity)
+        val dp = activity.resources.displayMetrics.density
+        val root = activity.window.decorView
+        for (r in listOf(paste, bar, tabs)) {
+            assertTrue("$r inside the screen", r.left >= 0f && r.top >= 0f && r.right <= root.width && r.bottom <= root.height)
+            assertEquals("Same start edge", paste.left, r.left, 1.5f); assertEquals("Same end edge", paste.right, r.right, 1.5f)
+        }
+        assertTrue("Paste, music, tabs in order, not overlapping", paste.bottom <= bar.top && bar.bottom <= tabs.top)
+        assertEquals("Paste, music and tabs are evenly apart", bar.top - paste.bottom, tabs.top - bar.bottom, 1.5f)
+        val targets = listOf(paste, bar) + compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
+            .fetchSemanticsNodes().map { it.boundsInRoot }
+        for (t in targets) assertTrue("$t is at least 48dp", t.width >= 48 * dp - 1 && t.height >= 48 * dp - 1)
+    }
+    @Test fun theStackFitsInDark() = fits("en", true, 1f)
+    @Test fun theStackFitsInArabicAtTwiceTheText() = fits("ar", false, 2f)
+
     /**
      * Over the light bar every pixel of the bar's top band (past the cover) is either the black sheet or the bar itself, at every step
      * down and back up: the sheet draws back into the cover instead of fading through grey.

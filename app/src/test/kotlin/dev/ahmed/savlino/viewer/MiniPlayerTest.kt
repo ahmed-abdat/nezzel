@@ -84,9 +84,9 @@ class MiniPlayerTest {
     private var mounted by mutableStateOf(true)
     private var taps = 0
 
-    private fun show(reduced: Boolean = false) {
+    private fun show(reduced: Boolean = false, dark: Boolean = false) {
         activity.setContent {
-            NezzelTheme(ThemePref.Light, false) {
+            NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                 CompositionLocalProvider(dev.ahmed.savlino.ui.theme.LocalReducedMotion provides reduced) {
                     val kept = if (saved) rememberViewerHost() else host
                     SideEffect { host = kept }
@@ -117,8 +117,8 @@ class MiniPlayerTest {
         if (compose.onAllNodesWithContentDescription(text(R.string.viewer_pause)).fetchSemanticsNodes().isEmpty()) node(R.string.viewer_play).performClick()
     }
     /** Opens the song and starts it, so the page can shrink. */
-    private fun playSong() {
-        show(); open = true; compose.waitForIdle()
+    private fun playSong(dark: Boolean = false) {
+        show(dark = dark); open = true; compose.waitForIdle()
         start()
         playback.audioState.value = PlaybackState.Ready
         advance(300)
@@ -154,6 +154,13 @@ class MiniPlayerTest {
         assertEquals(MiniPlayerLayout.at(.85f, page, slot).sheet, MiniPlayerLayout.at(.85f, page, slot, reveal).sheet)
         MiniPlayerLayout.at(.95f, page, slot, reveal).sheet.run { assertTrue(left in slot.left..reveal.left && right < slot.right && right > reveal.right) }
         MiniPlayerLayout.at(1f, page, slot, reveal).run { assertEquals(reveal, sheet); assertEquals(MiniPlayerLayout.COVER_CORNER, corner) }
+        // Over a dark bar (no reveal) the sheet still fades and ends as the whole bar, never the cover.
+        MiniPlayerLayout.at(.85f, page, slot).run { assertEquals(1f, fade); assertTrue(sheet.width > slot.width) }
+        MiniPlayerLayout.at(.95f, page, slot).run {
+            assertTrue(fade in .01f..(.99f)); assertTrue(sheet.left < slot.left + 1f && sheet.right > slot.right - 1f)
+            assertTrue(sheet != MiniPlayerLayout.at(.95f, page, slot, reveal).sheet)
+        }
+        MiniPlayerLayout.at(1f, page, slot).run { assertEquals(0f, fade); assertEquals(slot, sheet) }
         // The cover rides on the sheet first, then settles exactly onto the bar's cover.
         val from = Rect(24f, 120f, 360f, 456f)
         val to = Rect(24f, 688f, 72f, 736f)
@@ -188,6 +195,29 @@ class MiniPlayerTest {
         compose.runOnIdle { host.size.dispatchRawDelta(p * host.travel - host.size.offset) }
         compose.waitForIdle()
     }
+    @Test fun aDarkBarStillFadesTheSheet() {
+        playSong(dark = true)
+        for (p in listOf(.85f, .95f, 1f)) {
+            moveTo(p)
+            compose.runOnIdle { assertEquals("p=$p", MiniPlayerLayout.at(host.progress, host.page, host.slot!!.rect), host.motion()) }
+        }
+        assertTrue(compose.runOnIdle { host.motion()!!.fade } == 0f)
+    }
+
+    @Test fun musicThatEndsMidCollapseLeavesNoCoverBehind() {
+        playSong()
+        moveTo(.95f)
+        val reveal = compose.runOnIdle { host.motion()!! }
+        assertEquals("Over the light bar the sheet is drawing into the cover", 1f, reveal.fade)
+        // The frame it goes, before the bar's slot is gone too: no bar, no cover to draw into, so the sheet fades instead.
+        assertTrue(compose.runOnIdle { host.mini = null; host.motion()!!.fade } < 1f)
+        advance(600)
+        assertTrue(host.open)
+        assertEquals("The page went back up", 0f, compose.runOnIdle { host.progress })
+        assertFalse(host.collapsed)
+        compose.onNodeWithTag(MINI_PLAYER_TAG).assertDoesNotExist()
+    }
+
     @Test fun expandingRetracesCollapsing() {
         playSong()
         val down = listOf(.2f, .5f, .7f, .9f).map { moveTo(it); compose.runOnIdle { host.motion()!! } }
