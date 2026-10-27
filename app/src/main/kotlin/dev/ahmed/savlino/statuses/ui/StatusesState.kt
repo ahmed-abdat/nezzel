@@ -64,8 +64,12 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
     private var previewOrder by mutableStateOf<List<Uri>>(emptyList())
     /** Queued or copying now; a tile in here shows Saving. */
     var pending by mutableStateOf<Set<Uri>>(emptySet()); private set
-    /** Saved since this state was made: also covers files whose unknown size/time can't carry a lasting mark. */
-    private var savedNow by mutableStateOf<Set<Uri>>(emptySet())
+    /**
+     * Saved since this state was made, with the save count at that moment: covers files whose unknown size/time can't
+     * carry a lasting mark. A rescan that starts after the save answers for a marked file, so a deleted copy shows unsaved.
+     */
+    private var savedNow by mutableStateOf<Map<Uri, Int>>(emptyMap())
+    private var savesDone = 0
     /** Files finished and in total for the copies running now; both reset when the queue empties. */
     var progress by mutableStateOf(0 to 0); private set
     val saving get() = pending.isNotEmpty()
@@ -135,6 +139,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
         val library = library ?: return
         loading?.cancel()
         loading = scope.launch {
+            val savesBefore = savesDone
             val loaded = library.load()
             loadedAt = android.os.SystemClock.elapsedRealtime()
             access = loaded
@@ -144,6 +149,13 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
             // Items can vanish at any time (statuses expire after about a day): drop selections that went with them.
             keepSelectionShown()
             val items = (loaded as? StatusAccess.Ready)?.items.orEmpty()
+            if (loaded is StatusAccess.Ready) {
+                val byUri = items.associateBy { it.uri }
+                savedNow = savedNow.filter { (uri, at) ->
+                    val item = byUri[uri] ?: return@filter false
+                    at > savesBefore || item.saved || item.sizeBytes == null || item.lastModifiedMillis == null
+                }
+            }
             preview = preview?.let { shown -> items.firstOrNull { it.uri == shown.uri } }
             countReady()
         }
@@ -225,7 +237,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) { StatusSaveResult.Failed }
                     run.add(item, result)
-                    if (result is StatusSaveResult.Saved) { savedNow = savedNow + item.uri; selection = selection - item.uri }
+                    if (result is StatusSaveResult.Saved) { savedNow = savedNow + (item.uri to ++savesDone); selection = selection - item.uri }
                     pending = pending - item.uri
                     progress = progress.first + 1 to progress.second
                 }
