@@ -209,7 +209,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             is MediaHttpResult.Success -> result.response
         }
         val target = page.target
-        val landing = MediaHttpPolicy.parse(target.url())?.let(MediaHttpPolicy::withoutQuery)
+        val landing = HttpsUrl.parse(target.url())?.let(HttpsUrl::withoutQuery)
         val (html, resolved) = try {
             val bytes = page.takeBody()
             bytes to (landing ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE)))
@@ -318,12 +318,12 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
         val carousel = parsed.candidates.size > 1 || parsed.discovery.unavailableCount > 0 || parsed.discovery.cappedCount > 0
         val originals = if (carousel) parsed.candidates.map {
-            MediaHttpPolicy.parse(it)!!.newBuilder().setQueryParameter("name", "orig").build().toString()
+            HttpsUrl.parse(it)!!.newBuilder().setQueryParameter("name", "orig").build().toString()
         } else parsed.candidates
         return fetchCarousel(operation, originals,
             if (carousel) parsed.discovery.copy(previewQuality = false) else parsed.discovery, MediaHostRule.X_MEDIA,
             MediaMetadata(parsed.title, parsed.author), parsed.candidates.map {
-                MediaHttpPolicy.parse(it)!!.newBuilder().setQueryParameter("name", "small").build().toString()
+                HttpsUrl.parse(it)!!.newBuilder().setQueryParameter("name", "small").build().toString()
             })
     }
 
@@ -426,7 +426,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             is MediaHttpResult.Success -> result.response
         }
         val (body, postId) = try {
-            page.takeBody() to MediaHttpPolicy.parse(page.target.url())?.let(RedditPostIdentity::postHop)?.postId
+            page.takeBody() to HttpsUrl.parse(page.target.url())?.let(RedditPostIdentity::postHop)?.postId
         } catch (_: java.io.IOException) { return handOff() } finally { page.close() }
         val photos = postId?.let { RedditPostParser.parse(body.bytes, body.length, it) } as? RedditPost.Photos
             ?: return handOff()
@@ -813,7 +813,7 @@ internal fun mapTransport(reason: MediaHttpFailure): ImageFailure = when (reason
 
 /** Original candidates have already passed the CDN policy; their format may differ from the thumbnail. */
 internal fun originalImageMetadata(url: String, preview: MediaImageMetadata): MediaImageMetadata {
-    val original = MediaHttpPolicy.parse(url)
+    val original = HttpsUrl.parse(url)
     val encoding = if (original?.host == "pbs.twimg.com") original.queryParameter("format")
         else original?.encodedPath?.substringAfterLast('.')
     val format = when (encoding?.lowercase()) {

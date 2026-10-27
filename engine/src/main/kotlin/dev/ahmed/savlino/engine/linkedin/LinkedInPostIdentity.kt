@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.engine.linkedin
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
+import okhttp3.HttpUrl
 
 /**
  * Public post identity from the exact accepted URL shapes. A shortlink has no post identity until the
@@ -14,8 +15,39 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
     internal val activityId: String? get() = ids[ACTIVITY]
 
     companion object {
+        /**
+         * A post slug exactly as LinkedIn serves it: `[A-Za-z0-9_-]` plus percent-escapes (non-Latin names arrive
+         * encoded), never an escaped `#`, `%`, `.`, `/`, `?`, `\` or control character.
+         */
+        internal const val LINKEDIN_SLUG = "(?:[A-Za-z0-9_-]|%(?![01][0-9A-Fa-f]|2[35EeFf]|3[Ff]|5[Cc]|7[Ff])[0-9A-Fa-f]{2})+"
+
+        internal fun isLinkedInPost(url: HttpUrl): Boolean = url.host == "www.linkedin.com" &&
+            (Regex("/posts/$LINKEDIN_SLUG/?").matches(url.encodedPath) ||
+                Regex("/feed/update/urn:li:(?:activity|share|ugcPost):[0-9]+/?").matches(url.encodedPath))
+
+        internal fun isLinkedInEntryHost(host: String): Boolean = host == "linkedin.com" || host == "www.linkedin.com" ||
+            Regex("[a-z]{2}\\.linkedin\\.com").matches(host)
+
+        /** www host; an `/embed/` or `%3A`-encoded update link becomes its plain `/feed/update/urn:li:…/` page. */
+        internal fun normalizeLinkedInEntry(url: HttpUrl): HttpUrl {
+            if (!isLinkedInEntryHost(url.host)) return url
+            val path = LinkedInPostIdentity.updatePath(url.encodedPath).removePrefix("/embed")
+                .takeIf { it.startsWith("/feed/update/") } ?: url.encodedPath
+            return url.newBuilder().host("www.linkedin.com").encodedPath(path).build()
+        }
+
+        internal fun isLinkedInPageEntry(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) && isLinkedInPost(normalizeLinkedInEntry(url)) ||
+            (url.host == "lnkd.in" && Regex("/p/[A-Za-z0-9_-]+/?").matches(url.encodedPath))
+
+        /** LinkedIn's own sign-up or login wall; never followed, only named. */
+        internal fun isLinkedInLoginWall(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) &&
+            Regex("/(?:signup(?:/[a-z-]+)?|authwall|login|uas/login|checkpoint/[a-z/-]+)/?").matches(url.encodedPath)
+
+        /** A www redirect target in its plain `/feed/update/urn:li:…/` form; other hosts stay as sent (and are refused). */
+        internal fun linkedInHopTarget(to: HttpUrl): HttpUrl = if (to.host == "www.linkedin.com") normalizeLinkedInEntry(to) else to
+
         private const val ACTIVITY = "activity"
-        private val post = Regex("/posts/(${MediaHttpPolicy.LINKEDIN_SLUG})/?")
+        private val post = Regex("/posts/(${LINKEDIN_SLUG})/?")
         /** `/feed/update/<urn>` or its `/embed/` form, for an activity, share or ugcPost URN. */
         private val update = Regex("(?:/embed)?/feed/update/urn:li:(activity|share|ugcPost):([0-9]+)/?")
         /** Apps percent-encode the URN's colons (`urn%3Ali%3Ashare%3A…`); only that escape is decoded. */
@@ -25,8 +57,8 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
         private val attributed = Regex("urn:li:(share|ugcPost):([0-9]+)")
 
         fun parse(url: String): LinkedInPostIdentity? {
-            val parsed = MediaHttpPolicy.parse(url) ?: return null
-            if (!MediaHttpPolicy.isLinkedInPageEntry(parsed)) return null
+            val parsed = HttpsUrl.parse(url) ?: return null
+            if (!isLinkedInPageEntry(parsed)) return null
             if (parsed.host == "lnkd.in") return LinkedInPostIdentity(true, null, emptyMap())
             post.matchEntire(parsed.encodedPath)?.let { match ->
                 val slug = match.groupValues[1]

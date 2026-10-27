@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.instagram
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
@@ -129,14 +130,14 @@ class InstagramPostParser {
         val candidates = list.map { candidate ->
             val entry = candidate as? Map<*, *> ?: return null
             val url = entry["url"] as? String ?: return null
-            if (MediaHttpPolicy.parse(url)?.let(MediaHttpPolicy::isInstagramImage) != true) return null
+            if (HttpsUrl.parse(url)?.let(MediaHttpPolicy::isInstagramImage) != true) return null
             Triple(url, dimension(entry["width"]), dimension(entry["height"]))
         }
         val full = candidates.maxByOrNull { it.second * it.third }?.takeIf { it.second * it.third > 0 } ?: candidates.first()
         // Some logged-out payloads omit width/height; their CDN stp still declares the rendition size.
         val preview = candidates.map { candidate ->
             if (candidate.second > 0 && candidate.third > 0) candidate else {
-                val size = MediaHttpPolicy.parse(candidate.first)?.queryParameter("stp")?.let { renditionSize.find(it) }
+                val size = HttpsUrl.parse(candidate.first)?.queryParameter("stp")?.let { renditionSize.find(it) }
                 if (size == null) candidate else Triple(candidate.first, size.groupValues[1].toLong(), size.groupValues[2].toLong())
             }
         }.filter { it.second > 0 && it.third > 0 && maxOf(it.second, it.third) >= 256 }

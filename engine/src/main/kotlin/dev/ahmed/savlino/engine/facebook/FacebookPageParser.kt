@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.facebook
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
@@ -259,7 +260,7 @@ class FacebookPageParser {
 
     private fun dimension(value: Any?): Long = (value as? String)?.takeIf { it.length <= 6 && it.all(Char::isDigit) }?.toLong() ?: 0
 
-    private fun allowedCdn(url: String): Boolean = MediaHttpPolicy.parse(url)?.let(MediaHttpPolicy::isFacebookImageCdn) == true
+    private fun allowedCdn(url: String): Boolean = HttpsUrl.parse(url)?.let(MediaHttpPolicy::isFacebookImageCdn) == true
 
     private fun failure(reason: ImageFailure) = FacebookParseResult.Failure(reason)
 

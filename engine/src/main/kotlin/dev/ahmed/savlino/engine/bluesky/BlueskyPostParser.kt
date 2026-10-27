@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.bluesky
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -58,7 +59,7 @@ class BlueskyPostParser {
         }
     }
     private fun jpegUrl(raw: String, did: String, thumbnail: Boolean): String? {
-        val url = MediaHttpPolicy.parse(raw) ?: return null
+        val url = HttpsUrl.parse(raw) ?: return null
         if (!MediaHttpPolicy.isBlueskyImage(url)) return null
         val kind = if (thumbnail) "feed_thumbnail" else "feed_fullsize"
         if (!url.encodedPath.startsWith("/img/$kind/plain/$did/")) return null

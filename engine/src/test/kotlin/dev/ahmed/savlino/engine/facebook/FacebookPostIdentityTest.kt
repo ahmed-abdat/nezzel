@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.facebook
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import org.junit.Test
 import kotlin.test.*
@@ -106,10 +107,10 @@ class FacebookPostIdentityTest {
     @Test fun loginWallPathsAreExact() {
         for (url in listOf("https://www.facebook.com/login", "https://www.facebook.com/login/", "https://m.facebook.com/login.php?next=x",
                 "https://www.facebook.com/checkpoint/", "https://web.facebook.com/checkpoint"))
-            assertTrue(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse(url))), "login wall")
+            assertTrue(FacebookPostIdentity.isLoginWall(assertNotNull(HttpsUrl.parse(url))), "login wall")
         for (url in listOf("https://www.facebook.com/login.evil", "https://www.facebook.com/loginx/", "https://www.facebook.com/checkpoint.evil/",
                 "https://www.facebook.com/login/evil/", "https://evil.example/login/"))
-            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse(url))), "not a login wall")
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(HttpsUrl.parse(url))), "not a login wall")
     }
 
     @Test fun identityNeverRendersItsUrl() {
@@ -120,7 +121,7 @@ class FacebookPostIdentityTest {
     @Test fun imageCdnAllowlistIsHttpsScontentOnFbcdnOnly() {
         for (url in listOf("https://scontent.example.fbcdn.net/1.jpg", "https://scontent-iad3-1.xx.fbcdn.net/v/t39/1.jpg?x=1",
                 "https://scontent.fnkc1-1.fna.fbcdn.net/v/1.jpg", "https://z-p3-scontent.fnkc1-1.fna.fbcdn.net/v/1.jpg")) {
-            assertTrue(MediaHttpPolicy.isFacebookImageCdn(assertNotNull(MediaHttpPolicy.parse(url))), "allowed CDN")
+            assertTrue(MediaHttpPolicy.isFacebookImageCdn(assertNotNull(HttpsUrl.parse(url))), "allowed CDN")
         }
         for (url in listOf("https://external.example.fbcdn.net/1.jpg", "https://video.example.fbcdn.net/1.mp4",
                 "https://scontent.example.fbcdn.net.evil.example/1.jpg", "https://fbcdn.net/1.jpg",
@@ -128,9 +129,9 @@ class FacebookPostIdentityTest {
                 "https://z-p3-video.example.fbcdn.net/1.mp4", "https://z-p3-xscontent.example.fbcdn.net/1.jpg",
                 "https://zz-p3-scontent.example.fbcdn.net/1.jpg", "https://z-p3-scontent.example.fbcdn.net.evil.example/1.jpg",
                 "https://www.facebook.com/1.jpg")) {
-            assertFalse(MediaHttpPolicy.isFacebookImageCdn(assertNotNull(MediaHttpPolicy.parse(url))), "rejected CDN")
+            assertFalse(MediaHttpPolicy.isFacebookImageCdn(assertNotNull(HttpsUrl.parse(url))), "rejected CDN")
         }
-        assertNull(MediaHttpPolicy.parse("http://scontent.example.fbcdn.net/1.jpg"), "https only")
+        assertNull(HttpsUrl.parse("http://scontent.example.fbcdn.net/1.jpg"), "https only")
     }
 
     /** url-shapes: mobile/locale hosts and a group feed opened on one post reach the reader as the www post. */
@@ -170,12 +171,12 @@ class FacebookPostIdentityTest {
             assertTrue(FacebookPostIdentity.isStoryLink("https://$host/stories/123/"), host)
             assertTrue(FacebookPostIdentity.isEventLink("https://$host/events/900000000000001/"), host)
             for (path in listOf("/login", "/login/", "/login.php?next=x", "/checkpoint/"))
-                assertTrue(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host$path"))), "$host$path")
-            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host/loginx/"))), host)
+                assertTrue(FacebookPostIdentity.isLoginWall(assertNotNull(HttpsUrl.parse("https://$host$path"))), "$host$path")
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(HttpsUrl.parse("https://$host/loginx/"))), host)
         }
         for (host in listOf("ar.facebook.com", "ar-ar.facebook.com.evil.test", "arab-ar.facebook.com")) {
             assertFalse(FacebookPostIdentity.isStoryLink("https://$host/stories/123/"), host)
-            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(MediaHttpPolicy.parse("https://$host/login"))), host)
+            assertFalse(FacebookPostIdentity.isLoginWall(assertNotNull(HttpsUrl.parse("https://$host/login"))), host)
         }
     }
 }

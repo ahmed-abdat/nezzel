@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.engine.x
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
+
 
 /**
  * A public X/Twitter post link: `x.com|twitter.com|mobile.twitter.com/<user>/status/<id>` or `/i/status/<id>`,
@@ -26,7 +27,7 @@ class XPostIdentity private constructor(val postId: String, val legacyUrl: Strin
         private val query = Regex("id=([1-9][0-9]{0,18})&token=([0-9a-z]{1,32})")
 
         fun parse(url: String): XPostIdentity? {
-            val parsed = MediaHttpPolicy.parse(url) ?: return null
+            val parsed = HttpsUrl.parse(url) ?: return null
             if (parsed.host.lowercase() !in hosts) return null
             val mirror = parsed.host.lowercase().removePrefix("www.") in mirrors
             val encodedPath = if (mirror) translated.matchEntire(parsed.encodedPath)?.groupValues?.get(1) ?: parsed.encodedPath

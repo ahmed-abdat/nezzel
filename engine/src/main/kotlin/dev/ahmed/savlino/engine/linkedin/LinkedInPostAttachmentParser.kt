@@ -1,10 +1,10 @@
 package dev.ahmed.savlino.engine.linkedin
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
 import dev.ahmed.savlino.engine.mediahttp.MediaPageLimits
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import dev.ahmed.savlino.engine.mediaimage.*
 import java.io.IOException
 import org.jsoup.Jsoup
@@ -362,12 +362,12 @@ class LinkedInPostAttachmentParser {
     private fun imageAttribute(key: String, value: String): Boolean = when (key) {
         in IMAGE_ATTRIBUTES -> true
         "data-ghost-url" -> value.startsWith("https://static.licdn.com/") &&
-            MediaHttpPolicy.parse(value)?.host == "static.licdn.com"
+            HttpsUrl.parse(value)?.host == "static.licdn.com"
         else -> false
     }
 
     private fun allowedAsset(url: String): Boolean {
-        val parsed = MediaHttpPolicy.parse(url) ?: return false
+        val parsed = HttpsUrl.parse(url) ?: return false
         return parsed.host == "media.licdn.com" && url.startsWith("https://media.licdn.com/")
     }
 

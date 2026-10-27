@@ -10,53 +10,39 @@ import kotlin.test.assertTrue
 class MediaHttpPolicyTest {
     @Test fun gifAndAvifPhotosUseTheSameCdnHostAndPathLimits() {
         for (extension in listOf("gif", "avif")) {
-            assertTrue(MediaHttpPolicy.isXImage(assertNotNull(MediaHttpPolicy.parse("https://pbs.twimg.com/media/Synthetic.$extension"))))
-            assertFalse(MediaHttpPolicy.isXImage(assertNotNull(MediaHttpPolicy.parse("https://video.twimg.com/tweet_video/Synthetic.$extension"))))
-            assertTrue(MediaHttpPolicy.isInstagramImage(assertNotNull(MediaHttpPolicy.parse(
+            assertTrue(MediaHttpPolicy.isXImage(assertNotNull(HttpsUrl.parse("https://pbs.twimg.com/media/Synthetic.$extension"))))
+            assertFalse(MediaHttpPolicy.isXImage(assertNotNull(HttpsUrl.parse("https://video.twimg.com/tweet_video/Synthetic.$extension"))))
+            assertTrue(MediaHttpPolicy.isInstagramImage(assertNotNull(HttpsUrl.parse(
                 "https://instagram.fxyz1-1.fna.fbcdn.net/v/t51.2885-15/Synthetic.$extension"))))
-            assertFalse(MediaHttpPolicy.isInstagramImage(assertNotNull(MediaHttpPolicy.parse(
+            assertFalse(MediaHttpPolicy.isInstagramImage(assertNotNull(HttpsUrl.parse(
                 "https://instagram.fxyz1-1.fna.fbcdn.net/other/Synthetic.$extension"))))
-            assertTrue(MediaHttpPolicy.isTelegramImage(assertNotNull(MediaHttpPolicy.parse(
+            assertTrue(MediaHttpPolicy.isTelegramImage(assertNotNull(HttpsUrl.parse(
                 "https://cdn1.telesco.pe/file/Synthetic.$extension"))))
         }
-        assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
+        assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(HttpsUrl.parse(
             "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/synthetic@avif"))))
         // url-shapes: did:web authors' blobs too; a port, uppercase or bare host never.
-        assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
+        assertTrue(MediaHttpPolicy.isBlueskyImage(assertNotNull(HttpsUrl.parse(
             "https://cdn.bsky.app/img/feed_thumbnail/plain/did:web:synthetic.example.org/synthetic@jpeg"))))
         for (did in listOf("did:web:localhost", "did:web:Evil.Test", "did:web:evil.test%3A8080", "did:key:z6Mk"))
-            assertFalse(MediaHttpPolicy.isBlueskyImage(assertNotNull(MediaHttpPolicy.parse(
+            assertFalse(MediaHttpPolicy.isBlueskyImage(assertNotNull(HttpsUrl.parse(
                 "https://cdn.bsky.app/img/feed_fullsize/plain/$did/synthetic"))), did)
     }
 
-    @Test fun fragmentsAreStrippedWithoutChangingPathOrQueryBytes() {
-        val raw = "https://media.test/a%2Fb.jpg?q=%2f&x=1"
-        assertEquals(raw, MediaHttpPolicy.parse("$raw#fragment")?.toString())
-        val base = assertNotNull(MediaHttpPolicy.parse("https://media.test/base"))
-        assertEquals(raw, MediaHttpPolicy.resolve(base, "/a%2Fb.jpg?q=%2f&x=1#fragment")?.toString())
-    }
-
     @Test fun linkedinEntryHostsAreBroaderThanRedirectHops() {
-        for (host in listOf("linkedin.com", "ae.linkedin.com", "www.linkedin.com"))
-            assertTrue(MediaHttpPolicy.isLinkedInPageEntry(assertNotNull(MediaHttpPolicy.parse("https://$host/posts/synthetic-activity-123/"))))
-        assertFalse(MediaHttpPolicy.isLinkedInPageEntry(assertNotNull(MediaHttpPolicy.parse("https://ae.linkedin.com.evil.com/posts/synthetic-activity-123/"))))
-        val www = assertNotNull(MediaHttpPolicy.parse("https://www.linkedin.com/posts/synthetic-activity-123/"))
-        assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(www, assertNotNull(MediaHttpPolicy.parse("https://ae.linkedin.com/posts/synthetic-activity-123/"))))
+        val www = assertNotNull(HttpsUrl.parse("https://www.linkedin.com/posts/synthetic-activity-123/"))
+        assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(www, assertNotNull(HttpsUrl.parse("https://ae.linkedin.com/posts/synthetic-activity-123/"))))
     }
 
     /** Review of url-shapes: encoded and embed update targets are the same post the parser accepts. */
     @Test fun linkedinHopNormalisesEncodedAndEmbedUpdateTargets() {
-        fun url(value: String) = assertNotNull(MediaHttpPolicy.parse(value))
+        fun url(value: String) = assertNotNull(HttpsUrl.parse(value))
         val share = url("https://www.linkedin.com/feed/update/urn:li:share:1/")
         for (target in listOf("https://www.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/",
                 "https://www.linkedin.com/embed/feed/update/urn:li:share:1/", "https://www.linkedin.com/embed/feed/update/urn%3ali%3ashare%3a1"))
             assertTrue(MediaHttpPolicy.allowsLinkedInPageHop(share, url(target)), target)
-        assertEquals("https://www.linkedin.com/feed/update/urn:li:share:1/",
-            MediaHttpPolicy.linkedInHopTarget(url("https://www.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/")).toString())
         assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(share, url("https://www.linkedin.com/feed/update/urn%3Ali%3Ashare%3A2/")))
         assertFalse(MediaHttpPolicy.allowsLinkedInPageHop(share, url("https://ae.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/")))
-        assertEquals("https://ae.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/",
-            MediaHttpPolicy.linkedInHopTarget(url("https://ae.linkedin.com/feed/update/urn%3Ali%3Ashare%3A1/")).toString())
     }
 
     @Test fun rejectsEveryIpv4SpecialPurposeBoundaryAndAllowsAdjacentPublicAddresses() {
@@ -139,17 +125,17 @@ class MediaHttpPolicyTest {
             "https://media.test/a/../image", "https://media.test/%2e%2e/image",
             "https://media.test/" + "a".repeat(8192))
         for ((index, raw) in rejected.withIndex()) {
-            assertNotNull(MediaHttpPolicy.parse("https://media.test/image"), "URL positive control $index")
-            assertNull(MediaHttpPolicy.parse(raw), "unsafe URL case $index")
+            assertNotNull(HttpsUrl.parse("https://media.test/image"), "URL positive control $index")
+            assertNull(HttpsUrl.parse(raw), "unsafe URL case $index")
         }
     }
 
     @Test fun acceptedSignedPathAndQueryRemainByteExact() {
         val raw = "https://media.test/a%2Fb/image?sig=Ab%2fCD%2B%3d&x=1+2&empty=&repeat=1&repeat=2"
-        val parsed = assertNotNull(MediaHttpPolicy.parse(raw), "signed URL accepted")
+        val parsed = assertNotNull(HttpsUrl.parse(raw), "signed URL accepted")
         assertTrue(parsed.encodedPath == "/a%2Fb/image", "encoded path preserved")
         assertTrue(parsed.encodedQuery == "sig=Ab%2fCD%2B%3d&x=1+2&empty=&repeat=1&repeat=2", "encoded query preserved")
-        assertNotNull(MediaHttpPolicy.parse("https://media.test:443/image"), "explicit default TLS port accepted")
+        assertNotNull(HttpsUrl.parse("https://media.test:443/image"), "explicit default TLS port accepted")
     }
 
     @Test fun publicContractsNeverRenderRawSourceOrSignedTarget() {

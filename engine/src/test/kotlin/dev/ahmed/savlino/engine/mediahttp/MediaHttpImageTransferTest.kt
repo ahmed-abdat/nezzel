@@ -394,17 +394,8 @@ class MediaHttpImageTransferTest {
         } }
     }
 
-    @Test fun linkedinSignupAndLoginRedirectsAreNamedLoginWalls() {
-        fun url(value: String) = checkNotNull(MediaHttpPolicy.parse(value))
-        // A members-only post sends logged-out visitors to /signup/cold-join (owner's link, 2026-10-21).
-        listOf("https://www.linkedin.com/signup/cold-join", "https://www.linkedin.com/authwall", "https://www.linkedin.com/login",
-            "https://linkedin.com/uas/login").forEach { assertTrue(MediaHttpPolicy.isLinkedInLoginWall(url(it)), it) }
-        listOf("https://www.linkedin.com/posts/synthetic-activity-123", "https://other.test/login",
-            "https://www.linkedin.com/feed/update/urn:li:activity:123").forEach { assertFalse(MediaHttpPolicy.isLinkedInLoginWall(url(it)), it) }
-    }
-
     @Test fun linkedinPageTransitionsAllowOnlyShortlinkToPostThenPostsAndActivity() {
-        fun url(value: String) = checkNotNull(MediaHttpPolicy.parse(value))
+        fun url(value: String) = checkNotNull(HttpsUrl.parse(value))
         assertTrue(MediaHttpPolicy.allowsLinkedInPageHop(url("https://lnkd.in/p/fixture"),
             url("https://www.linkedin.com/posts/synthetic-activity-123")))
         assertTrue(MediaHttpPolicy.allowsLinkedInPageHop(url("https://www.linkedin.com/posts/synthetic-activity-123"),

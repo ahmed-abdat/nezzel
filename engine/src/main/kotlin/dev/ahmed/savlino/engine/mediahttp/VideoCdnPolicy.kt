@@ -5,7 +5,7 @@ import java.net.InetAddress
 import okhttp3.HttpUrl
 
 internal object VideoCdnPolicy {
-    fun allows(site: Host, raw: String): HttpUrl? = MediaHttpPolicy.parse(raw)?.takeIf { hostPath(site, it.host, it.encodedPath) }
+    fun allows(site: Host, raw: String): HttpUrl? = HttpsUrl.parse(raw)?.takeIf { hostPath(site, it.host, it.encodedPath) }
     fun hostPath(site: Host, host: String, path: String): Boolean {
         if (!path.startsWith("/") || path.contains("..") || path.contains('\\')) return false
         return when (site) {

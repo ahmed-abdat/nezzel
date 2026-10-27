@@ -26,7 +26,7 @@ object ShortLinks {
         else -> false
     }
 
-    fun isShortLink(link: ValidatedLink): Boolean = MediaHttpPolicy.parse(link.rawUrl)?.let(::isShortLink) == true
+    fun isShortLink(link: ValidatedLink): Boolean = HttpsUrl.parse(link.rawUrl)?.let(::isShortLink) == true
 }
 
 /** What a short link's redirect named. */
@@ -73,7 +73,7 @@ class ShortLinkResolver internal constructor(private val http: MediaHttpClient,
         val landing = failure.takeIf { it.reason == MediaHttpFailure.LANDED }?.landing ?: return ShortLinkOutcome.Unresolved
         // An IP literal, localhost or malformed destination is never handed on, not even through the short link.
         val resolved = LinkInput.parse(landing) ?: return ShortLinkOutcome.Blocked
-        val url = MediaHttpPolicy.parse(resolved.rawUrl) ?: return ShortLinkOutcome.Blocked
+        val url = HttpsUrl.parse(resolved.rawUrl) ?: return ShortLinkOutcome.Blocked
         if (ShortLinks.isShortLink(url)) return ShortLinkOutcome.Unresolved
         requirePublic(token, url)
         return ShortLinkOutcome.Resolved(resolved)

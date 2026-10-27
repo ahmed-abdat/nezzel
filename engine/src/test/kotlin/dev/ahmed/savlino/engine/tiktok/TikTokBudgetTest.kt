@@ -26,8 +26,8 @@ class TikTokBudgetTest {
     }
     @Test fun signedHostSuffixesAreBoundedAndNeverMatchLookalikes() {
         for (host in listOf("p16-sign.example.tiktokcdn.com", "p19-sign.example.tiktokcdn-us.com", "p16-sign-va.tiktokcdn.com"))
-            assertTrue(MediaHttpPolicy.isTikTokImage(assertNotNull(MediaHttpPolicy.parse("https://$host/synthetic.jpeg?sig=fake"))))
+            assertTrue(MediaHttpPolicy.isTikTokImage(assertNotNull(HttpsUrl.parse("https://$host/synthetic.jpeg?sig=fake"))))
         for (host in listOf("tiktokcdn.com.evil.example", "evil-tiktokcdn.com", "p16-sign.evil.example", "tiktok.com"))
-            assertFalse(MediaHttpPolicy.isTikTokImage(assertNotNull(MediaHttpPolicy.parse("https://$host/synthetic.jpeg"))))
+            assertFalse(MediaHttpPolicy.isTikTokImage(assertNotNull(HttpsUrl.parse("https://$host/synthetic.jpeg"))))
     }
 }

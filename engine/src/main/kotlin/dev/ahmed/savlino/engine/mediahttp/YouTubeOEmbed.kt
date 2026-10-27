@@ -36,7 +36,7 @@ class YouTubeOEmbed internal constructor(private val http: MediaHttpClient,
                             val title = PreviewMetadata.text(root.get("title")?.takeIf { it.isTextual }?.asText(), 300)
                             val thumbnail = root.get("thumbnail_url")?.takeIf { it.isTextual }?.asText()
                                 ?.let(PreviewMetadata::thumbnail)?.takeIf { raw ->
-                                    MediaHttpPolicy.parse(raw)?.let { url -> url.host in THUMBNAIL_HOSTS } == true
+                                    HttpsUrl.parse(raw)?.let { url -> url.host in THUMBNAIL_HOSTS } == true
                                 }
                             if (title == null && thumbnail == null) null else EarlyPreview(title, thumbnail)
                         }
@@ -54,7 +54,7 @@ class YouTubeOEmbed internal constructor(private val http: MediaHttpClient,
         private val THUMBNAIL_HOSTS = setOf("i.ytimg.com", "img.youtube.com")
         private val ID = Regex("[A-Za-z0-9_-]{11}")
         private fun videoId(source: String): String? {
-            val url = MediaHttpPolicy.parse(source) ?: return null
+            val url = HttpsUrl.parse(source) ?: return null
             if (url.host !in HOSTS) return null
             val id = when {
                 url.host == "youtu.be" || url.host == "www.youtu.be" -> url.pathSegments.singleOrNull()

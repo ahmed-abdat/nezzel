@@ -1,9 +1,9 @@
 package dev.ahmed.savlino.engine.reddit
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpClient
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpFailure
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpResult
 import dev.ahmed.savlino.engine.mediahttp.OperationToken
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +45,7 @@ internal class RedditPostReader(private val http: MediaHttpClient,
             is MediaHttpResult.Success -> result.response
         }
         return response.use {
-            val postId = MediaHttpPolicy.parse(it.target.url())?.let(RedditPostIdentity::postHop)?.postId ?: return@use null
+            val postId = HttpsUrl.parse(it.target.url())?.let(RedditPostIdentity::postHop)?.postId ?: return@use null
             val body = try { it.takeBody() } catch (_: java.io.IOException) { return@use RedditTarget.Failed(DownloadError.Network) }
             when (val post = RedditPostParser.parse(body.bytes, body.length, postId, identity.videoId)) {
                 is RedditPost.Video -> RedditTarget.Read(post.manifestUrl, post)

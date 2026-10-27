@@ -4,50 +4,12 @@ import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import java.net.InetAddress
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal object MediaHttpPolicy {
-    // Same literal grammar as OkHttp5.5 canParseAsIpAddress, plus numeric final DNS-label rejection.
-    private val literal = Regex("([0-9a-fA-F]*:[0-9a-fA-F:.]*)|([\\d.]+)")
-    private val numericLabel = Regex("(?:[0-9]+|0[xX][0-9a-fA-F]+)")
-    private val scheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
-    private val hex = "0123456789abcdefABCDEF"
-
-    /**
-     * A post slug exactly as LinkedIn serves it: `[A-Za-z0-9_-]` plus percent-escapes (non-Latin names arrive
-     * encoded), never an escaped `#`, `%`, `.`, `/`, `?`, `\` or control character.
-     */
-    internal const val LINKEDIN_SLUG = "(?:[A-Za-z0-9_-]|%(?![01][0-9A-Fa-f]|2[35EeFf]|3[Ff]|5[Cc]|7[Ff])[0-9A-Fa-f]{2})+"
-
-    internal fun isLinkedInPost(url: HttpUrl): Boolean = url.host == "www.linkedin.com" &&
-        (Regex("/posts/$LINKEDIN_SLUG/?").matches(url.encodedPath) ||
-            Regex("/feed/update/urn:li:(?:activity|share|ugcPost):[0-9]+/?").matches(url.encodedPath))
-
-    internal fun isLinkedInEntryHost(host: String): Boolean = host == "linkedin.com" || host == "www.linkedin.com" ||
-        Regex("[a-z]{2}\\.linkedin\\.com").matches(host)
-
-    /** www host; an `/embed/` or `%3A`-encoded update link becomes its plain `/feed/update/urn:li:…/` page. */
-    internal fun normalizeLinkedInEntry(url: HttpUrl): HttpUrl {
-        if (!isLinkedInEntryHost(url.host)) return url
-        val path = LinkedInPostIdentity.updatePath(url.encodedPath).removePrefix("/embed")
-            .takeIf { it.startsWith("/feed/update/") } ?: url.encodedPath
-        return url.newBuilder().host("www.linkedin.com").encodedPath(path).build()
-    }
-
-    internal fun isLinkedInPageEntry(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) && isLinkedInPost(normalizeLinkedInEntry(url)) ||
-        (url.host == "lnkd.in" && Regex("/p/[A-Za-z0-9_-]+/?").matches(url.encodedPath))
-
-    /** LinkedIn's own sign-up or login wall; never followed, only named. */
-    internal fun isLinkedInLoginWall(url: HttpUrl): Boolean = isLinkedInEntryHost(url.host) &&
-        Regex("/(?:signup(?:/[a-z-]+)?|authwall|login|uas/login|checkpoint/[a-z/-]+)/?").matches(url.encodedPath)
-
-    /** A www redirect target in its plain `/feed/update/urn:li:…/` form; other hosts stay as sent (and are refused). */
-    internal fun linkedInHopTarget(to: HttpUrl): HttpUrl = if (to.host == "www.linkedin.com") normalizeLinkedInEntry(to) else to
-
     /** Only a shortlink may establish the post; every later post/activity hop must keep that identity. */
     internal fun allowsLinkedInPageHop(from: HttpUrl, to: HttpUrl): Boolean {
-        val hop = linkedInHopTarget(to)
-        if (!isLinkedInPageEntry(from) || !isLinkedInPost(hop)) return false
+        val hop = LinkedInPostIdentity.linkedInHopTarget(to)
+        if (!LinkedInPostIdentity.isLinkedInPageEntry(from) || !LinkedInPostIdentity.isLinkedInPost(hop)) return false
         if (from.host == "lnkd.in") return true
         val source = LinkedInPostIdentity.parse(from.toString()) ?: return false
         val target = LinkedInPostIdentity.parse(hop.toString()) ?: return false
@@ -104,45 +66,6 @@ internal object MediaHttpPolicy {
     internal fun isTikTokImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 &&
         (url.host.endsWith(".tiktokcdn.com") || url.host.endsWith(".tiktokcdn-us.com")) &&
         url.encodedPath != "/"
-
-    internal fun withoutQuery(url: HttpUrl): String = url.newBuilder().query(null).fragment(null).build().toString()
-
-    internal fun safeText(raw: String): Boolean = raw.length in 1..8192 && raw.none {
-        it <= ' ' || Character.isISOControl(it) || it == '\\' || Character.getType(it) == Character.FORMAT.toInt() ||
-            Character.isSurrogate(it)
-    }
-
-    fun parse(value: String): HttpUrl? {
-        if (!safeText(value)) return null
-        val raw = value.substringBefore('#')
-        if (!raw.startsWith("https://", ignoreCase = true)) return null
-        val authority = raw.substringAfter("://").substringBefore('/').substringBefore('?')
-        if ('@' in authority) return null // Includes empty userinfo, which HttpUrl otherwise erases.
-        val parsed = raw.toHttpUrlOrNull() ?: return null
-        if (!parsed.isHttps || parsed.port != 443 || parsed.username.isNotEmpty() || parsed.password.isNotEmpty()) return null
-        val host = parsed.host.trimEnd('.')
-        if (literal.matches(host) || numericLabel.matches(host.substringAfterLast('.'))) return null
-        val afterAuthority = raw.substringAfter("://").drop(authority.length)
-        val rawPath = afterAuthority.substringBefore('?').ifEmpty { "/" }
-        val rawQuery = if ('?' in afterAuthority) afterAuthority.substringAfter('?') else null
-        if (rawPath != parsed.encodedPath || rawQuery != parsed.encodedQuery) return null
-        var index = 0
-        while (index < raw.length) {
-            if (raw[index] == '%' && (index + 2 >= raw.length || raw[index + 1] !in hex || raw[index + 2] !in hex)) return null
-            index++
-        }
-        return parsed
-    }
-
-    internal fun resolve(base: HttpUrl, value: String): HttpUrl? {
-        if (!safeText(value)) return null
-        val location = value.substringBefore('#')
-        if (scheme.containsMatchIn(location)) return parse(location)
-        if (location.startsWith("//")) return parse("https:$location")
-        // Relative dot-segment resolution is intentional HTTP Location semantics.
-        val resolved = base.resolve(location) ?: return null
-        return parse(resolved.toString())
-    }
 
     // Conservative policy from IANA special-purpose registries, reviewed for this boundary:
     // https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml

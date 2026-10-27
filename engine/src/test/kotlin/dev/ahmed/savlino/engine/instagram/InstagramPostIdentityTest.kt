@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.instagram
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import org.junit.Test
 import kotlin.test.*
@@ -54,31 +55,31 @@ class InstagramPostIdentityTest {
     @Test fun loginWallIsExactlyTheLoginAndChallengePaths() {
         for (path in listOf("/accounts/login", "/accounts/login/", "/accounts/login/?next=%2Fp%2FSynthPost01%2F",
             "/challenge", "/challenge/", "/challenge/action/Synthetic/"))
-            assertTrue(InstagramPostIdentity.isLoginWall(MediaHttpPolicy.parse("https://www.instagram.com$path")!!), path)
+            assertTrue(InstagramPostIdentity.isLoginWall(HttpsUrl.parse("https://www.instagram.com$path")!!), path)
         for (path in listOf("/accounts/login-evil/", "/accounts/loginx", "/challenge-x/", "/challenges/", "/x/accounts/login/",
             "/accounts/", "/p/SynthPost01/"))
-            assertFalse(InstagramPostIdentity.isLoginWall(MediaHttpPolicy.parse("https://www.instagram.com$path")!!), path)
-        assertFalse(InstagramPostIdentity.isLoginWall(MediaHttpPolicy.parse("https://evil.example/accounts/login/")!!))
+            assertFalse(InstagramPostIdentity.isLoginWall(HttpsUrl.parse("https://www.instagram.com$path")!!), path)
+        assertFalse(InstagramPostIdentity.isLoginWall(HttpsUrl.parse("https://evil.example/accounts/login/")!!))
     }
 
     @Test fun onlyTheCanonicalPostPageIsAPageRequest() {
-        assertTrue(InstagramPostIdentity.isPageRequest(MediaHttpPolicy.parse(IG_POST)!!))
+        assertTrue(InstagramPostIdentity.isPageRequest(HttpsUrl.parse(IG_POST)!!))
         for (url in listOf("https://www.instagram.com/p/SynthPost01", "https://instagram.com/p/SynthPost01/",
             "https://www.instagram.com/p/SynthPost01/?x=1", "https://www.instagram.com/reel/SynthPost01/",
             "https://www.instagram.com/api/graphql/", "https://www.instagram.com/p/SynthPost01/embed/"))
-            assertFalse(InstagramPostIdentity.isPageRequest(MediaHttpPolicy.parse(url)!!), url)
+            assertFalse(InstagramPostIdentity.isPageRequest(HttpsUrl.parse(url)!!), url)
     }
 
     @Test fun cdnAllowlistIsTheObservedInstagramImageHostsAndPathsOnly() {
         for (url in listOf(igImageUrl(1), igImageUrl(2, host = "scontent-xyz1-1.cdninstagram.com"),
             igImageUrl(3, host = "scontent.cdninstagram.com"), "https://instagram.fabc2-1.fna.fbcdn.net/v/t51.2885-15/e35/1_n.jpg"))
-            assertTrue(MediaHttpPolicy.isInstagramImage(MediaHttpPolicy.parse(url)!!), url)
+            assertTrue(MediaHttpPolicy.isInstagramImage(HttpsUrl.parse(url)!!), url)
         for (url in listOf("https://scontent.xx.fbcdn.net${igImagePath(1)}", "https://instagram.com${igImagePath(1)}",
             "https://www.instagram.com${igImagePath(1)}", "https://evil.cdninstagram.com.example${igImagePath(1)}",
             "https://instagram.fxyz1-1.fna.fbcdn.net.evil.example${igImagePath(1)}", "https://static.cdninstagram.com${igImagePath(1)}",
             "https://$IG_CDN/o1/v/t16/f2/m86/Synthetic.mp4", "https://$IG_CDN/v/t51.82787-15/1_n.mp4",
             "https://$IG_CDN/rsrc.php/v3/x.png", "https://${IG_CDN}:8443${igImagePath(1)}"))
-            assertFalse(MediaHttpPolicy.parse(url)?.let(MediaHttpPolicy::isInstagramImage) == true, url)
+            assertFalse(HttpsUrl.parse(url)?.let(MediaHttpPolicy::isInstagramImage) == true, url)
     }
 
     /** url-shapes: a share id is not a shortcode, so /share/ (and other reserved first segments) never parse as a post. */

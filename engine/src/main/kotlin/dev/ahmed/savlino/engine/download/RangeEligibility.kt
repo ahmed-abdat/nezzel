@@ -1,8 +1,8 @@
 package dev.ahmed.savlino.engine.download
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.domain.*
 import com.fasterxml.jackson.databind.ObjectMapper
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 
 internal object RangeEligibility {
     fun select(site: Host, row: Format, json: String, allows: (String) -> Boolean): DirectRequest? = try {
@@ -13,7 +13,7 @@ internal object RangeEligibility {
             val candidates = root.path("formats").takeIf { it.isArray }?.toList() ?: listOf(root)
             val selected = candidates.singleOrNull { it.path("format_id").asText() == row.sourceFormatId }
             val url = selected?.path("url")?.asText()
-            if (selected == null || url == null || MediaHttpPolicy.parse(url) == null || !allows(url) ||
+            if (selected == null || url == null || HttpsUrl.parse(url) == null || !allows(url) ||
                 selected.path("protocol").asText() != "https" || selected.path("ext").asText() != "mp4" ||
                 selected.has("fragments") || selected.has("manifest_url") || selected.path("vcodec").asText() == "none" ||
                 (row.hasAudio && selected.path("acodec").asText() == "none")) null
@@ -30,7 +30,7 @@ internal object RangeEligibility {
                 val cookies = selected.get("cookies") ?: root.get("cookies")
                 if (cookies != null) {
                     if (!cookies.isTextual) throw IllegalArgumentException()
-                    val cookieHeader = InfoCookies.header(cookies.asText(), requireNotNull(MediaHttpPolicy.parse(url)))
+                    val cookieHeader = InfoCookies.header(cookies.asText(), requireNotNull(HttpsUrl.parse(url)))
                         ?: throw IllegalArgumentException()
                     headers.keys.firstOrNull { it.equals("Cookie", true) }?.let { headers.remove(it) }
                     if (cookieHeader.isNotEmpty()) headers["Cookie"] = cookieHeader

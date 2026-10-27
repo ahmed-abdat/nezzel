@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.reddit
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import okhttp3.HttpUrl
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
@@ -27,7 +27,7 @@ internal object RedditJsChallenge {
             val seed = seeds.singleOrNull() ?: return null
             val form = document.select("form").singleOrNull() ?: return null
             if (!form.attr("method").equals("get", ignoreCase = true)) return null
-            val action = MediaHttpPolicy.resolve(page, form.attr("action")) ?: return null
+            val action = HttpsUrl.resolve(page, form.attr("action")) ?: return null
             // The form goes back to the page that was asked for, never anywhere else.
             if (action.host != page.host || action.encodedPath != page.encodedPath || action.encodedQuery != null) return null
             val inputs = form.select("input")
