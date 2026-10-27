@@ -41,6 +41,7 @@ class DownloadCoordinator(
     private val checkTimeoutMs: Long = CHECK_TIMEOUT_MS,
     private val previewArtwork: suspend (String) -> android.graphics.Bitmap? = { dev.ahmed.savlino.ui.ThumbnailLoader().load(it) },
     private val checkGraceMs: Long = CHECK_GRACE_MS,
+    private val network: NetworkWatch = NetworkWatch.Android(context),
     probeThreads: java.util.concurrent.ThreadPoolExecutor? = null, // tests: a pool no other coordinator can starve
 ) {
     /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
@@ -144,6 +145,8 @@ class DownloadCoordinator(
     private val postProcessing = ConcurrentHashMap.newKeySet<String>()
     /** Requeued with more bytes on disk than this attempt started with. */
     private val progressed = ConcurrentHashMap.newKeySet<String>()
+    /** Requeued because the network went away: the next attempt waits behind the network gate, never a retry. */
+    private val networkWait = ConcurrentHashMap.newKeySet<String>()
     private val mutableProgress = MutableStateFlow<List<DownloadProgress>>(emptyList())
     val progress: StateFlow<List<DownloadProgress>> = mutableProgress.asStateFlow()
     private val finishedEvents = kotlinx.coroutines.flow.MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 100)
@@ -241,25 +244,36 @@ class DownloadCoordinator(
         catch (_: Exception) { emptyMap() }
     }
 
-    private fun request(id: String) = OneTimeWorkRequestBuilder<DownloadWorker>()
-        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS)
-        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setInputData(workDataOf(DownloadWorker.JOB_ID to id)).build()
+    /**
+     * A gate that waits for the network, then a runner without constraints: a network loss can no longer make
+     * WorkManager stop a convert or a save. Cancelling the unique work cancels both links.
+     */
+    private fun enqueueChain(id: String, policy: ExistingWorkPolicy) {
+        val gate = OneTimeWorkRequestBuilder<NetworkGateWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        val runner = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS)
+            .setInputData(workDataOf(DownloadWorker.JOB_ID to id)).build()
+        workManager().beginUniqueWork(id, policy, gate).then(runner).enqueue().result.get()
+    }
 
     private fun schedule(id: String) {
         if (store.get(id)?.stage != JobStage.ENQUEUED) return
-        workManager().enqueueUniqueWork(id, ExistingWorkPolicy.KEEP, request(id)).result.get()
+        enqueueChain(id, ExistingWorkPolicy.KEEP)
         // A pause can win while an already-admitted scheduler is waiting on WorkManager.
         if (store.get(id)?.stage == JobStage.PAUSED) workManager().cancelUniqueWork(id).result.get()
     }
 
     /**
      * A requeue that kept more bytes than its attempt started with continues as fresh work after this one
-     * succeeds, so exponential backoff only grows across attempts without progress. False: use Result.retry().
+     * succeeds, so exponential backoff only grows across attempts without progress. A network requeue always
+     * continues behind the gate: an unconstrained retry would spin while offline. False: use Result.retry().
      */
     internal fun continueAfterProgress(id: String): Boolean {
-        if (!progressed.remove(id) || store.get(id)?.stage != JobStage.ENQUEUED) return false
+        val waitsForNetwork = networkWait.remove(id)
+        if (!(progressed.remove(id) || waitsForNetwork) || store.get(id)?.stage != JobStage.ENQUEUED) return false
         return try {
-            workManager().enqueueUniqueWork(id, ExistingWorkPolicy.APPEND_OR_REPLACE, request(id)).result.get()
+            enqueueChain(id, ExistingWorkPolicy.APPEND_OR_REPLACE)
             true
         } catch (_: Exception) { false }
     }
@@ -436,11 +450,14 @@ class DownloadCoordinator(
             if (id in userCancellation) store.cancelEnqueued(id)
             if (id in userCancellation || id in pauseRequests) signal.cancel()
         }
-        progressed.remove(id)
+        progressed.remove(id); networkWait.remove(id)
         var startBytes = Long.MAX_VALUE
         var schedulerStopped = false
+        // This attempt's own network watch stopped the transfer: the same outcome as a connectivity stop.
+        val networkStopped = java.util.concurrent.atomic.AtomicBoolean()
         fun stoppedError(): DownloadError {
             if (id in userCancellation) return DownloadError.Cancelled
+            if (networkStopped.get()) return DownloadError.Network
             val reason = stopReason()
             return when {
                 connectivityStopped(reason) -> DownloadError.Network
@@ -451,6 +468,7 @@ class DownloadCoordinator(
         fun finishStopped() {
             schedulerStopped = stopReason() != WorkInfo.STOP_REASON_NOT_STOPPED
             finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes)
+            if (networkStopped.get() && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
         }
         try {
             // A pause cancelled this WorkManager attempt before it registered; resume scheduled a new one.
@@ -506,8 +524,20 @@ class DownloadCoordinator(
                     if (event.phase != DownloadPhase.DOWNLOADING) metrics.clear()
                     delivery.offer(event)
                 }
+                // Loss while transferring stops this attempt once; loss while converting or saving is ignored.
+                val networkLost = network.watch {
+                    synchronized(delivery) {
+                        if (transferOpen && networkStopped.compareAndSet(false, true)) stopEngine(id, cancelUnregistered = false)
+                    }
+                }
                 var outputBytes: Long? = null
                 try {
+                    // Old retries and backoff reruns can start while offline: wait behind the gate instead.
+                    if (!network.online()) {
+                        networkStopped.set(true)
+                        finishStopped()
+                        return@coroutineScope
+                    }
                     var command = row.command() ?: error("Invalid job command")
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
@@ -661,6 +691,7 @@ class DownloadCoordinator(
                     }
                 } finally {
                     withContext(NonCancellable) {
+                        networkLost.close()
                         stop.cancelAndJoin()
                         ticker.cancelAndJoin()
                         metrics.clear()

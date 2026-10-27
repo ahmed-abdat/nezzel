@@ -41,9 +41,9 @@ class DownloadCoordinatorTest {
                 // The running job leads; the queue follows in run order.
                 assertEquals(listOf("running", "queued"),
                     dev.ahmed.savlino.downloads.visibleJobs(f.coordinator.progress.value).map { it.jobId })
-                val scheduled = WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get().single().id
+                val scheduled = downloadRuns(app, "queued").single().id
                 assertFalse(withTimeout(5000) { f.coordinator.retry("queued") })
-                assertEquals(scheduled, WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get().single().id)
+                assertEquals(scheduled, downloadRuns(app, "queued").single().id)
                 f.beforeSchedule = { error("Scheduler unavailable") }
                 assertTrue(withTimeout(5000) { f.coordinator.enqueue(command("retry-queued")) })
                 assertTrue(f.coordinator.progress.value.single { it.jobId == "retry-queued" }.awaitingSchedule)
@@ -53,7 +53,7 @@ class DownloadCoordinatorTest {
                 assertEquals(DownloadPhase.PREPARING, retried.phase)
                 assertTrue(retried.waiting)
                 assertFalse(retried.awaitingSchedule)
-                assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork("retry-queued").get().size)
+                assertEquals(1, downloadRuns(app, "retry-queued").size)
                 assertEquals(JobStage.ENQUEUED, f.store.get("queued")!!.stage)
                 assertFalse(running.isCompleted)
             } finally { f.release.complete(Unit); running.cancelAndJoin() }
@@ -117,9 +117,12 @@ class DownloadCoordinatorTest {
             f.coordinator.initialize()
             assertEquals(JobStage.PAUSED, f.store.get("paused")!!.stage)
             assertTrue(f.coordinator.progress.value.single { it.jobId == "paused" }.paused)
-            assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("paused").get().isEmpty())
-            val queued = WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get().single()
-            assertEquals(NetworkType.CONNECTED, queued.constraints.requiredNetworkType)
+            assertTrue(downloadRuns(app, "paused").isEmpty())
+            // The network waits in the gate; the run itself has no constraint a lost network could stop.
+            val chain = WorkManager.getInstance(app).getWorkInfosForUniqueWork("queued").get()
+            assertEquals(2, chain.size)
+            assertEquals(NetworkType.CONNECTED, chain.single { NetworkGateWorker::class.java.name in it.tags }.constraints.requiredNetworkType)
+            assertEquals(NetworkType.NOT_REQUIRED, downloadRuns(app, "queued").single().constraints.requiredNetworkType)
             assertFalse("a queued row is not paused-only", f.coordinator.onlyPausedWaiting())
             assertFalse(f.coordinator.maintenance.updateNow(includePaused = true))
             f.coordinator.cancel("queued")
@@ -460,7 +463,7 @@ class DownloadCoordinatorTest {
             assertTrue(coordinator.enqueue(command("double")))
             assertFalse(coordinator.enqueue(command("double")))
             assertEquals(1, store.all().size)
-            val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("double").get()
+            val work = downloadRuns(app, "double")
             assertEquals(1, work.size)
             val restored = store.get("double")!!.command()!!
             assertEquals("exact/source", restored.format.sourceFormatId)
@@ -484,7 +487,7 @@ class DownloadCoordinatorTest {
             assertTrue(coordinator.retry("schedule-failure"))
             assertEquals(DownloadPhase.PREPARING, coordinator.progress.value.single().phase)
             assertEquals(1, store.all().size)
-            assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork("schedule-failure").get().size)
+            assertEquals(1, downloadRuns(app, "schedule-failure").size)
         } finally { store.close() }
     }
 
@@ -511,7 +514,7 @@ class DownloadCoordinatorTest {
             assertFalse(staging.exists())
             assertEquals(JobStage.ENQUEUED, store.get("epoch-schedule")!!.stage)
             assertFalse(store.get("epoch-schedule")!!.hasPartial)
-            assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork("epoch-schedule").get().size)
+            assertEquals(1, downloadRuns(app, "epoch-schedule").size)
         } finally { store.close() }
     }
 
@@ -617,7 +620,7 @@ class DownloadCoordinatorTest {
             assertEquals(Preset.BALANCED, retried.preset)
             assertEquals(created, retried.createdAt)
             assertFalse(staging.exists())
-            assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork(original.jobId).get().size)
+            assertEquals(1, downloadRuns(app, original.jobId).size)
         } finally { store.close() }
     }
     @Test fun retryWaitsForOldWorkerToFinishFailureBeforeChangingJournal() = runBlocking {
@@ -655,7 +658,7 @@ class DownloadCoordinatorTest {
             assertTrue(withTimeout(6000) { retry.await() })
             assertEquals(JobStage.ENQUEUED, store.get("finishing")!!.stage)
             assertFalse(staging.exists())
-            assertEquals(1, wm.getWorkInfosForUniqueWork("finishing").get().count { !it.state.isFinished })
+            assertEquals(1, downloadRuns(app, "finishing").count { !it.state.isFinished })
         } finally { release.countDown(); store.close() }
     }
     @Test fun unfinishedOldWorkTimeoutPreservesFailedJournalAndStaging() = runBlocking {

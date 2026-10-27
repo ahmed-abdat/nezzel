@@ -867,8 +867,8 @@ class DownloadWorkerTest {
             assertEquals(1, f.store.all().size)
             assertFalse(File(app.filesDir, "downloads/network-zero").exists())
             val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("network-zero").get()
-            assertEquals(1, work.size)
-            assertEquals(NetworkType.CONNECTED, work.single().constraints.requiredNetworkType)
+            assertEquals(2, work.size)
+            assertEquals(NetworkType.CONNECTED, work.single { NetworkGateWorker::class.java.name in it.tags }.constraints.requiredNetworkType)
             fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { rerun ->
                 assertEquals(ListenableWorker.Result.success(), rerun.worker("network-zero").doWork())
                 assertEquals(JobStage.COMPLETED, rerun.store.get("network-zero")!!.stage)
@@ -963,9 +963,10 @@ class DownloadWorkerTest {
             assertEquals(ListenableWorker.Result.success(), f.worker("transport").doWork())
             // Startup scheduled this job; the continuation is chained behind that pending work.
             val work = WorkManager.getInstance(app).getWorkInfosForUniqueWork("transport").get()
-            assertEquals(2, work.size)
-            val next = work.single { it.state == WorkInfo.State.BLOCKED }
-            assertEquals(NetworkType.CONNECTED, next.constraints.requiredNetworkType)
+            assertEquals(4, work.size)
+            assertEquals(2, downloadRuns(app, "transport").size)
+            assertTrue(work.filter { NetworkGateWorker::class.java.name in it.tags }
+                .all { it.constraints.requiredNetworkType == NetworkType.CONNECTED })
             val row = f.store.get("transport")!!
             assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
             assertNotNull(row.sourceUrl); assertEquals(1L, row.restartEpoch)
@@ -1547,22 +1548,23 @@ class DownloadWorkerTest {
         }).use { f ->
             assertTrue(f.coordinator.enqueue(command("chain")))
             val wm = WorkManager.getInstance(app)
-            val pending = wm.getWorkInfosForUniqueWork("chain").get().single()
-            assertEquals(WorkInfo.State.ENQUEUED, pending.state)
+            val pending = downloadRuns(app, "chain").single()
+            assertEquals(WorkInfo.State.BLOCKED, pending.state) // behind its network gate
             assertEquals(ListenableWorker.Result.success(), f.worker("chain").doWork())
-            val chain = wm.getWorkInfosForUniqueWork("chain").get()
-            assertEquals(2, chain.size)
-            val next = chain.single { it.id != pending.id }
-            // APPEND_OR_REPLACE: the continuation waits for the current (still unfinished) work.
+            val runs = downloadRuns(app, "chain")
+            assertEquals(2, runs.size)
+            val next = runs.single { it.id != pending.id }
+            // APPEND_OR_REPLACE: the continuation (its own gate, then the run) waits for the current work.
             assertEquals(WorkInfo.State.BLOCKED, next.state)
-            assertEquals(NetworkType.CONNECTED, next.constraints.requiredNetworkType)
-            WorkManagerTestInitHelper.getTestDriver(app)!!.setAllConstraintsMet(pending.id)
-            withTimeout(5000) { while (wm.getWorkInfoById(next.id).get()!!.state != WorkInfo.State.ENQUEUED) yield() }
+            assertEquals(NetworkType.NOT_REQUIRED, next.constraints.requiredNetworkType)
+            val gates = wm.getWorkInfosForUniqueWork("chain").get().filter { NetworkGateWorker::class.java.name in it.tags }
+            assertTrue(gates.all { it.constraints.requiredNetworkType == NetworkType.CONNECTED })
+            gates.forEach { WorkManagerTestInitHelper.getTestDriver(app)!!.setAllConstraintsMet(it.id) }
+            withTimeout(5000) { while (wm.getWorkInfoById(next.id).get()!!.state != WorkInfo.State.SUCCEEDED) yield() }
             assertEquals(WorkInfo.State.SUCCEEDED, wm.getWorkInfoById(pending.id).get()!!.state)
-            assertEquals(0, wm.getWorkInfoById(next.id).get()!!.runAttemptCount)
             // Same bytes again: no continuation; Result.retry() keeps the exponential backoff growing.
             assertEquals(ListenableWorker.Result.retry(), f.worker("chain").doWork())
-            assertEquals(2, wm.getWorkInfosForUniqueWork("chain").get().size)
+            assertEquals(2, downloadRuns(app, "chain").size)
             val row = f.store.get("chain")!!
             assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial)
             assertEquals("keep", File(app.filesDir, "downloads/chain/output.mp4.part").readText())
@@ -1680,7 +1682,7 @@ class DownloadWorkerTest {
             assertEquals("keep", File(app.filesDir, "downloads/flip/output.mp4.part").readText())
             assertFalse(endings.any { it.phase in setOf(DownloadPhase.FAILED, DownloadPhase.CANCELLED) })
             assertFalse(f.coordinator.isRunning("flip"))
-            assertEquals(WorkInfo.State.ENQUEUED, WorkManager.getInstance(app).getWorkInfosForUniqueWork("flip").get().single().state)
+            assertEquals(WorkInfo.State.BLOCKED, downloadRuns(app, "flip").single().state)
         }
     }
 
@@ -1822,7 +1824,7 @@ class DownloadWorkerTest {
                 assertEquals(JobStage.FAILED, f.store.get(id)!!.stage)
                 assertTrue(f.store.get(id)!!.retryable); assertFalse(f.store.get(id)!!.hasPartial)
                 assertFalse(File(app.filesDir, "downloads/$id").exists())
-                assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork(id).get().size)
+                assertEquals(1, downloadRuns(app, id).size)
                 assertEquals(1, f.phases.count { it == "FAILED" })
             }
         }
@@ -1949,11 +1951,122 @@ class DownloadWorkerTest {
             notification.actions.map { it.title.toString() })
     }
 
+    @Test fun networkLossWhileConvertingNeverStopsTheJob() = runBlocking {
+        val network = TestNetwork()
+        val converting = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+        val stops = java.util.concurrent.atomic.AtomicInteger()
+        fixture(FakeEngine(), network = network, cancelHook = { stops.incrementAndGet() }, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(4, Size.Exact(4)))
+            emit(EngineEvent.Merging)
+            converting.complete(Unit); release.await()
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("net-convert")))
+            val running = async(Dispatchers.Default) { f.worker("net-convert").doWork() }
+            try {
+                withTimeout(5000) { converting.await() }
+                network.lose(); network.lose()
+                release.complete(Unit)
+                assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { running.await() })
+                assertEquals(JobStage.COMPLETED, f.store.get("net-convert")!!.stage)
+                assertEquals(0, stops.get())
+                assertEquals(1, f.attempts.get())
+                assertTrue(network.listeners.isEmpty())
+            } finally { release.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun networkLossWhileDownloadingRequeuesOnceBehindTheGateAndResumes() = runBlocking {
+        val network = TestNetwork()
+        val entered = CompletableDeferred<Unit>(); val stopped = CompletableDeferred<Unit>()
+        val stops = java.util.concurrent.atomic.AtomicInteger()
+        fixture(FakeEngine(), network = network, cancelHook = { stops.incrementAndGet(); stopped.complete(Unit) },
+            script = { _, dir, emit ->
+                emit(EngineEvent.Progress(2, Size.Exact(4)))
+                if (!entered.isCompleted) {
+                    dir.resolve("output.mp4.part").writeText("keep")
+                    entered.complete(Unit)
+                    stopped.await()
+                    TransferResult.Failure(DownloadError.Cancelled)
+                } else {
+                    val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                    TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+                }
+            }).use { f ->
+            f.store.enqueue(command("net-transfer"))
+            val running = async(Dispatchers.Default) { f.worker("net-transfer").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                // A flapping network stops the attempt once.
+                network.lose(); network.connected = true; network.lose()
+                // Never Result.retry(): an unconstrained retry would spin while offline.
+                assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { running.await() })
+                assertEquals(1, stops.get())
+                // Same row as a WorkManager connectivity stop (connectivityStopAfterBytesRequeuesAndKeepsPartial).
+                val row = f.store.get("net-transfer")!!
+                assertEquals(JobStage.ENQUEUED, row.stage)
+                assertNull(row.error); assertFalse(row.retryable); assertTrue(row.hasPartial)
+                assertEquals("keep", File(app.filesDir, "downloads/net-transfer/output.mp4.part").readText())
+                assertTrue(network.listeners.isEmpty())
+                // Startup's chain plus one continuation, each run behind a CONNECTED gate.
+                assertEquals(2, downloadRuns(app, "net-transfer").size)
+                assertTrue(downloadRuns(app, "net-transfer").all { it.constraints.requiredNetworkType == NetworkType.NOT_REQUIRED })
+                network.connected = true
+                assertEquals(ListenableWorker.Result.success(), f.worker("net-transfer").doWork())
+                assertEquals(JobStage.COMPLETED, f.store.get("net-transfer")!!.stage)
+                assertEquals(2, f.attempts.get())
+            } finally { stopped.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun runStartingOfflineWaitsBehindTheGateWithoutTransfer() = runBlocking {
+        val network = TestNetwork(connected = false)
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))), network = network).use { f ->
+            f.store.enqueue(command("net-offline"))
+            File(app.filesDir, "downloads/net-offline").apply { mkdirs(); resolve("output.mp4.part").writeText("keep") }
+            f.store.requeue("net-offline", true)
+            assertEquals(ListenableWorker.Result.success(), f.worker("net-offline").doWork())
+            assertEquals(0, f.attempts.get())
+            val row = f.store.get("net-offline")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial); assertNull(row.error)
+            assertEquals("keep", File(app.filesDir, "downloads/net-offline/output.mp4.part").readText())
+            assertTrue(network.listeners.isEmpty())
+            network.connected = true
+            assertEquals(ListenableWorker.Result.success(), f.worker("net-offline").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("net-offline")!!.stage)
+        }
+    }
+
+    @Test fun cancelWhileWaitingForNetworkCancelsTheGateAndTheRun() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            assertTrue(f.coordinator.enqueue(command("net-cancel")))
+            val chain = WorkManager.getInstance(app).getWorkInfosForUniqueWork("net-cancel").get()
+            assertEquals(2, chain.size)
+            f.coordinator.cancel("net-cancel")
+            assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("net-cancel").get()
+                .all { it.state == WorkInfo.State.CANCELLED })
+            assertEquals(JobStage.CANCELLED, f.store.get("net-cancel")!!.stage)
+            assertEquals(0, f.attempts.get())
+        }
+    }
+
+    @Test fun networkWatchIsReleasedWhenTheRunFails() = runBlocking {
+        val network = TestNetwork()
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Unsupported))), network = network).use { f ->
+            f.store.enqueue(command("net-failed"))
+            assertEquals(ListenableWorker.Result.failure(), f.worker("net-failed").doWork())
+            assertEquals(JobStage.FAILED, f.store.get("net-failed")!!.stage)
+            assertTrue(network.listeners.isEmpty())
+        }
+    }
+
     private fun fixture(engine: FakeEngine, freeBytes: Long = Long.MAX_VALUE,
         downloadFailure: Exception? = null, cancelHook: () -> Unit = {},
         clock: () -> Long = { android.os.SystemClock.elapsedRealtime() }, nextTick: suspend () -> Unit = { delay(250) },
         version: suspend () -> String? = { null },
         usage: UsageEvents = UsageEvents.None,
+        network: TestNetwork = TestNetwork(),
         script: (suspend (DownloadCommand, File, (EngineEvent) -> Unit) -> TransferResult)? = null): Fixture {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
@@ -1981,7 +2094,7 @@ class DownloadWorkerTest {
             }
         }
         val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick,
-            probe = { null }, usage = usage) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
+            probe = { null }, usage = usage, network = network) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
         (app as IsolatedTestApplication).coordinatorOverride = coordinator
         return Fixture(engine, provider, store, coordinator, engineStopped, attempts)
     }

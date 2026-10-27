@@ -42,13 +42,13 @@ class EngineMaintenanceIntegrationTest {
             assertNull("Enqueue must wait for maintenance", withTimeoutOrNull(250) { enqueuing.await() })
             assertNull(store.get("enqueue-update"))
             assertTrue(coordinator.progress.value.isEmpty())
-            assertTrue(WorkManager.getInstance(app).getWorkInfosForUniqueWork("enqueue-update").get().isEmpty())
+            assertTrue(downloadRuns(app, "enqueue-update").isEmpty())
             engine.release.complete(Unit)
             assertTrue(updating.await())
             assertTrue(withTimeout(5000) { enqueuing.await() })
             assertEquals(JobStage.ENQUEUED, store.get("enqueue-update")!!.stage)
             assertTrue(coordinator.progress.value.single().waiting)
-            assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork("enqueue-update").get().size)
+            assertEquals(1, downloadRuns(app, "enqueue-update").size)
         } finally { engine.release.complete(Unit); updating.cancelAndJoin(); enqueuing.cancelAndJoin(); store.close() }
     }
     @Test fun startupRecoveryWaitsForUpdaterBeforeTouchingFailedStaging() = runBlocking {
@@ -94,7 +94,7 @@ class EngineMaintenanceIntegrationTest {
             assertEquals(original.engineVersion, restored.engineVersion)
             assertEquals(original.format, restored.format)
             assertEquals(original.filename, restored.filename)
-            assertEquals(1, WorkManager.getInstance(app).getWorkInfosForUniqueWork(original.jobId).get().size)
+            assertEquals(1, downloadRuns(app, original.jobId).size)
         } finally { engine.release.complete(Unit); updating.cancelAndJoin(); retrying.cancelAndJoin(); store.close() }
     }
     @Test fun enqueueCannotScheduleUntilMaintenanceReleasesGate() = runBlocking {
