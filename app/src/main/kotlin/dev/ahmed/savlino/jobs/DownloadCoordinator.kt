@@ -481,7 +481,8 @@ class DownloadCoordinator(
         }
         fun finishStopped() {
             schedulerStopped = stopReason() != WorkInfo.STOP_REASON_NOT_STOPPED
-            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes, keepOutput = id in postProcessing)
+            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes, keepOutput = id in postProcessing,
+                schedulerStop = schedulerStopped)
             if (networkStopped.get() && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
         }
         try {
@@ -760,7 +761,7 @@ class DownloadCoordinator(
                     if (store.get(id)?.stage?.terminal != false) offlineStarts.remove(id) // A reused id starts its count over.
                     // Expiry skipped this staging while the writer was live; the writer has exited now.
                     JobStore.liveWriters.remove(id)
-                    if (store.get(id)?.stage?.terminal == true) {
+                    if (store.get(id)?.let { it.stage.terminal && !JobStore.keepsPartial(it) } == true) {
                         cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)
                         // Expiry removed the info file while the engine still ran; a rebuild may have stored a new one.
                         store.discardInfoJson(id)
@@ -790,7 +791,7 @@ class DownloadCoordinator(
     private fun finishStopped(id: String, error: DownloadError,
         systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
         cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false,
-        staleWriter: Boolean = false) = synchronized(userCancellation) {
+        staleWriter: Boolean = false, schedulerStop: Boolean = false) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         store.resetAutomaticResumes(id, bytes)
@@ -817,6 +818,21 @@ class DownloadCoordinator(
             if (store.requeueAutomatic(id, cause, hasPartial = bytes > 0)) {
                 if (bytes > startBytes) progressed += id
             } else store.fail(id, error)
+        } else if (schedulerStop && error == DownloadError.Interrupted &&
+            row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
+            // A system stop (foreground-service timeout, preemption, quota; any stop below API 31) is not the
+            // download's fault: resume from the partial. It shares the stall budget, reset by real progress.
+            if (store.requeueAutomatic(id, DownloadFailureCause.STALL, hasPartial = bytes > 0)) {
+                if (bytes > startBytes) progressed += id
+            } else {
+                store.fail(id, error)
+                recovery.reconcile(id, cancellationRequested = true, cancellationError = error)
+            }
+        } else if (systemStopped && error == DownloadError.StoppedByBattery &&
+            row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
+            // Battery limits stop it again on every rerun: fail now with the battery hint, keep the partial for Retry.
+            store.fail(id, error, keepPartial = bytes > 0)
+            recovery.reconcile(id, cancellationRequested = true, cancellationError = error)
         } else {
             store.fail(id, error)
             val stopped = error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,

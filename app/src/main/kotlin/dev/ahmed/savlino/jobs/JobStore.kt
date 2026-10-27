@@ -30,7 +30,7 @@ class JobRecord internal constructor(
     val engineVersion: String, val format: Format, val filename: String, val preset: Preset?,
     val pendingUri: Uri?, val displayName: String?, val createdAt: Long, val updatedAt: Long,
     val error: DownloadError?,
-    /** Explicit fresh transfer only; terminal staging is always deleted. */
+    /** Explicit fresh transfer only; terminal staging is deleted, except a battery stop's partial (JobStore.keepsPartial). */
     val retryable: Boolean,
     val hasPartial: Boolean, val resumeRecipe: String?, val restartEpoch: Long,
     val transportResumes: Int, val stallRestarts: Int, val resumeResetBytes: Long,
@@ -240,7 +240,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     fun retry(jobId: String): Boolean = synchronized(terminalLock) {
         val row = get(jobId) ?: return@synchronized false
         if (row.stage != JobStage.FAILED || !row.retryable || row.sourceUrl == null ||
-            !cleanupJobStaging(jobRoot, jobId)) return@synchronized false
+            !(keepsPartial(row) || cleanupJobStaging(jobRoot, jobId))) return@synchronized false
         if (!infoCache.remove(jobId)) return@synchronized false
         synchronized(this) {
             // CAS also protects calls through another SQLite helper. Keep created_at: formats expire.
@@ -397,10 +397,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             ContentValues().apply { put("error", DownloadError.Cancelled.name) })
     }
 
-    /** Retry keeps only a still-confirmed URL; partial bytes are never resumed. */
-    fun fail(jobId: String, error: DownloadError, retryable: Boolean = retryableError(error)): Boolean = finishTerminal(jobId) {
+    /** Retry keeps only a still-confirmed URL; partial bytes are resumed only when [keepPartial] (see [keepsPartial]). */
+    fun fail(jobId: String, error: DownloadError, retryable: Boolean = retryableError(error),
+        keepPartial: Boolean = false): Boolean = finishTerminal(jobId, keepStaging = keepPartial && error == DownloadError.StoppedByBattery) {
         transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED, JobStage.STAGED), JobStage.FAILED,
-            ContentValues().apply { put("error", error.name); put("retryable", if (retryable && retryableError(error)) 1 else 0) })
+            ContentValues().apply {
+                put("error", error.name); put("retryable", if (retryable && retryableError(error)) 1 else 0)
+            })
     }
 
     /** Persist the failure reason if provider reconciliation must be deferred. */
@@ -436,11 +439,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     // SQLite's lock ends before filesystem work. Cleanup failure is retried at startup.
-    private fun finishTerminal(jobId: String, update: () -> Boolean): Boolean = synchronized(terminalLock) {
+    private fun finishTerminal(jobId: String, keepStaging: Boolean = false, update: () -> Boolean): Boolean = synchronized(terminalLock) {
         val changed = synchronized(this) { update() }
         if (changed) {
             infoCache.remove(jobId)
-            cleanupJobStaging(jobRoot, jobId)
+            if (!keepStaging) cleanupJobStaging(jobRoot, jobId)
         }
         changed
     }
@@ -613,6 +616,14 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
         internal const val RESUME_PROGRESS_STEP_BYTES = 1024L * 1024
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
+        /**
+         * A battery stop fails at once but keeps its partial so Retry resumes (has_partial stays 0 on FAILED rows: the
+         * staging bytes are the record; a stop before any byte keeps nothing). Remove, Clear failed and the
+         * confirmation lifetime (startup cleanup once Retry is gone) delete it.
+         */
+        internal fun keepsPartial(row: JobRecord) = row.stage == JobStage.FAILED &&
+            row.error == DownloadError.StoppedByBattery && row.retryable && row.sourceUrl != null &&
+            System.currentTimeMillis() - row.createdAt <= CONFIRMATION_LIFETIME_MS
         /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
         internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,

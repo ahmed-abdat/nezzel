@@ -36,7 +36,7 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
                 JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
                 JobStage.STAGED -> store.fail(row.jobId, DownloadError.SaveFailed)
                 JobStage.TRANSFERRING -> recoverTransfer(row)
-                JobStage.FAILED -> { cleanupFailedTree(row); cleanup(row.jobId) }
+                JobStage.FAILED -> { cleanupFailedTree(row); if (!JobStore.keepsPartial(row)) cleanup(row.jobId) }
                 JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(row.jobId)
                 JobStage.ENQUEUED -> if (row.hasPartial) recoverTransfer(row)
                 JobStage.PAUSED -> Unit
@@ -153,7 +153,7 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
             JobStage.STAGED -> if (cancellationRequested && cancellationError == DownloadError.Cancelled) store.cancel(jobId)
                 else store.fail(jobId, if (cancellationRequested) cancellationError else publicationError)
-            JobStage.FAILED -> { cleanupFailedTree(row); cleanup(jobId) }
+            JobStage.FAILED -> { cleanupFailedTree(row); if (!JobStore.keepsPartial(row)) cleanup(jobId) }
             JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(jobId)
             else -> Unit
         }
