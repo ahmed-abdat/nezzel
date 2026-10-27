@@ -74,6 +74,7 @@ import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.usage.UsageKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.media3.session.R as Media3
@@ -137,10 +138,12 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     }
     // Moving or in the bar, nobody reads the position: no ticking, so a drag recomposes nothing; the bar follows the player itself.
     val host = LocalViewerHost.current
-    val hidden = host?.moving == true
-    LaunchedEffect(player, hidden) {
-        if (hidden && player != null) return@LaunchedEffect
-        while (player != null) { if (owner.player.value === player) read(player); delay(250) }
+    LaunchedEffect(player) {
+        while (player != null) {
+            // Read here, not in the body: the sheet starting to move recomposes nothing.
+            if (host != null) snapshotFlow { host.moving }.first { !it }
+            if (owner.player.value === player) read(player); delay(250)
+        }
         playing = false; running = false; seekable = false
     }
     // The poll above refreshes position; these follow the player at once so buttons never lag a tap. A closed viewer's

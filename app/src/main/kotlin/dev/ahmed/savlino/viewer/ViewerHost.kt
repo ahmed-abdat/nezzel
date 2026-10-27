@@ -86,6 +86,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal var tapped by mutableStateOf<ViewerTap?>(null)
     /** A finger is down on a slider or scroll inside the page: the page's own drag waits. */
     internal var held by mutableStateOf(false)
+    /** A drag that started on the bar is still going: the bar stays placed (unseen) so it gets the rest of that drag. */
+    internal var barDragging by mutableStateOf(false)
     internal var scope: CoroutineScope? = null
     internal var reduced = false
     // Set the moment a collapse starts: a screen disposing in the same frame must not take the music with it.
@@ -233,8 +235,6 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     val back = LocalOnBackPressedDispatcherOwner.current
     val navigation = LocalNavigationEventDispatcherOwner.current
     val registry = LocalSaveableStateRegistry.current
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
     // The app's own reduced motion is provided below this host, so read the system setting here too.
     val reduced = LocalReducedMotion.current || rememberReducedMotion()
     val scope = rememberCoroutineScope()
@@ -243,10 +243,6 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
         state.scope = scope; state.reduced = reduced
         with(density) { state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx() }
     }
-    val covered = request != null && !state.collapsed
-    LaunchedEffect(covered) { if (covered) { focus.clearFocus(force = true); keyboard?.hide() } }
-    // Collapsing leaves nothing focused inside the page that is no longer placed.
-    LaunchedEffect(state.collapsed) { if (state.collapsed) focus.clearFocus(force = true) }
     LaunchedEffect(state) {
         snapshotFlow { state.collapsed }.collect { settled ->
             if (state.reduced) state.reveal.snapTo(if (settled) 1f else 0f)
@@ -268,12 +264,7 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     }
     CompositionLocalProvider(LocalViewerHost provides state) {
         Box(Modifier.fillMaxSize()) {
-            // A keyboard or D-pad can't move into the covered app, and focus never leaves the viewer for it.
-            // Fully covered and still, the app isn't drawn at all.
-            Box(Modifier.fillMaxSize()
-                .graphicsLayer { alpha = if (state.request != null && !state.moving && appear.value >= 1f) 0f else 1f }
-                .then(if (covered) Modifier.clearAndSetSemantics {} else Modifier)
-                .focusProperties { if (covered) onEnter = { cancelFocusChange() } }.focusGroup()) { app() }
+            CoveredApp(state, appear, app)
             val mini = state.mini
             val slot = state.slot
             if (request != null && mini != null && slot != null) request.locals?.let { locals ->
@@ -286,6 +277,8 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                         val bar = measurable.measure(Constraints.fixed(slot.rect.width.roundToInt(), surface.height.roundToInt()))
                         layout(constraints.maxWidth, constraints.maxHeight) {
                             if (state.barShown) bar.place(slot.rect.left.roundToInt(), surface.top.roundToInt())
+                            // A drag from the bar that has pulled the sheet past it keeps going to its end, or the sheet would stop there.
+                            else if (state.barDragging) bar.placeWithLayer(slot.rect.left.roundToInt(), slot.rect.top.roundToInt()) { alpha = 0f }
                         }
                     })
                 }
@@ -330,4 +323,22 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
             }
         }
     }
+}
+
+/** The app under the viewer. Its own scope: the page covering or uncovering it recomposes only this, not the host. */
+@Composable
+private fun CoveredApp(state: ViewerHostState, appear: Animatable<Float, *>, app: @Composable () -> Unit) {
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val collapsed = state.collapsed
+    val covered = state.request != null && !collapsed
+    LaunchedEffect(covered) { if (covered) { focus.clearFocus(force = true); keyboard?.hide() } }
+    // Collapsing leaves nothing focused inside the page that is no longer placed.
+    LaunchedEffect(collapsed) { if (collapsed) focus.clearFocus(force = true) }
+    // A keyboard or D-pad can't move into the covered app, and focus never leaves the viewer for it.
+    // Fully covered and still, the app isn't drawn at all.
+    Box(Modifier.fillMaxSize()
+        .graphicsLayer { alpha = if (state.request != null && !state.moving && appear.value >= 1f) 0f else 1f }
+        .then(if (covered) Modifier.clearAndSetSemantics {} else Modifier)
+        .focusProperties { if (covered) onEnter = { cancelFocusChange() } }.focusGroup()) { app() }
 }

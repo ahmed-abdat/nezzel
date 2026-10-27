@@ -392,6 +392,49 @@ class MiniPlayerTest {
         advance(600)
     }
 
+    /** A drag that starts on the bar, through the root: the bar itself is no longer drawn once the sheet passes it. */
+    private fun dragFromBar(vararg moves: Float) {
+        val travel = compose.runOnIdle { host.travel }
+        val root = compose.onRoot()
+        root.performTouchInput { down(bar().boundsInRoot.center) }
+        moves.forEach { root.performTouchInput { moveBy(Offset(0f, it * travel)) }; compose.waitForIdle() }
+    }
+    private fun release() { compose.onRoot().performTouchInput { up() }; advance(800) }
+
+    @Test fun aSlowDragFromTheBarOpensThePageAllTheWay() {
+        playSong(); collapse()
+        dragFromBar(*FloatArray(40) { -.03f })
+        assertEquals("The page followed the finger past the bar", 0f, compose.runOnIdle { host.progress }, .01f)
+        release()
+        assertEquals(0f, compose.runOnIdle { host.progress })
+        assertFalse(host.barDragging)
+        assertFalse("A hidden bar stayed placed", placed(MINI_PLAYER_TAG))
+        // The page's own drag still works: no drag from the bar is left holding the sheet.
+        compose.onNodeWithTag(VIEWER_TAG).performTouchInput { down(Offset(centerX, height * .35f)); repeat(20) { moveBy(Offset(0f, 30f)) }; up() }
+        advance(600)
+        assertTrue(host.collapsed)
+    }
+
+    @Test fun aFastFlingFromTheBarOpensThePage() {
+        playSong(); collapse()
+        val from = bar().boundsInRoot.center
+        compose.onRoot().performTouchInput { swipe(from, from - Offset(0f, 300f), 60) }
+        advance(800)
+        assertEquals(0f, compose.runOnIdle { host.progress })
+        assertFalse(host.barDragging)
+    }
+
+    @Test fun aDragFromTheBarThatTurnsBackLandsInTheBar() {
+        playSong(); collapse()
+        dragFromBar(*FloatArray(25) { -.03f })
+        assertTrue("The page followed the finger past the bar", compose.runOnIdle { host.progress } < .4f)
+        repeat(25) { compose.onRoot().performTouchInput { moveBy(Offset(0f, .03f * host.travel)) }; compose.waitForIdle() }
+        release()
+        assertTrue(host.collapsed)
+        assertFalse(host.barDragging)
+        assertTrue(placed(MINI_PLAYER_TAG))
+    }
+
     @Test fun videoHasNoMinimizeAndNoBar() {
         items = listOf(clip); show(); open = true; compose.waitForIdle()
         node(R.string.viewer_minimize).assertDoesNotExist()

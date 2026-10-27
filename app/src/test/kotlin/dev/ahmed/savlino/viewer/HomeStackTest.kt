@@ -10,18 +10,27 @@ import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composer
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.CompositionTracer
+import androidx.compose.runtime.InternalComposeTracingApi
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.SavedStateHandle
@@ -58,6 +67,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.time.Duration
+import kotlin.math.roundToInt
 
 /** Home's bottom stack as one family (paste field, music bar, tabs), and music shrinking into it with no grey frame. */
 @RunWith(RobolectricTestRunner::class)
@@ -96,33 +106,39 @@ class HomeStackTest {
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** Home with its library, the song opened over it and playing; [shots] poses it through the host. */
-    private fun scene(lang: String, dark: Boolean, fontScale: Float = 1f, shots: (ComponentActivity, ViewerHostState) -> Unit) {
+    /** Set by [scene] with `saved`: recreates the activity (as on rotation) and returns the new one with its restored host. */
+    private var recreate: () -> Pair<ComponentActivity, ViewerHostState> = { error("scene(saved = true) only") }
+
+    /**
+     * Home with its library, the song opened over it and playing; [shots] poses it through the host. With [saved] the host is the
+     * app's own saveable one, so [recreate] restores it.
+     */
+    private fun scene(lang: String, dark: Boolean, fontScale: Float = 1f, saved: Boolean = false, shots: (ComponentActivity, ViewerHostState) -> Unit) {
         RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
         Robolectric.setupContentProvider(DisplayNames::class.java, "media")
         Robolectric.setupContentProvider(FixtureThumbnails::class.java, "nezzel.fixture")
         DisplayNames.name = "Morning walk.m4a"
         InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
-        val activity = controller.get()
         val audio = object : AudioConnection {
             override fun open(item: ViewerItem, onPlayer: (Player) -> Unit, onFailure: () -> Unit) =
                 onPlayer(ViewerTestPlayer().also { it.setMediaItem(MediaItem.fromUri(item.uri)); it.prepare() })
             override fun close() {}
         }
-        val playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
-        val host = ViewerHostState()
-        try {
+        var host = ViewerHostState()
+        fun show(activity: ComponentActivity) {
+            val playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
             activity.setContent {
+                val state = if (saved) rememberViewerHost().also { SideEffect { host = it } } else host
                 val density = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                     NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
-                        ViewerHost(host) {
+                        ViewerHost(state) {
                             val links = remember { LinkViewModel(SavedStateHandle(), engine = dev.ahmed.savlino.engine.FakeEngine()).apply { automaticOptions = false } }
-                            val state = remember { LibraryState(LibraryLoadState.Ready(library), {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
+                            val files = remember { LibraryState(LibraryLoadState.Ready(library), {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
                             NavigationScaffold("Home", { emptyList() }, lang, {}) {
                                 TabContent("Home") {
-                                    HomeScreen(links, { emptyList() }, state, lang, {}, {}, {}, {})
+                                    HomeScreen(links, { emptyList() }, files, lang, {}, {}, {}, {})
                                     CompositionLocalProvider(LocalMediaPictures provides cover, LocalPlaybackEnvironment provides playback,
                                         LocalAudioConnection provides { audio }) {
                                         MediaViewer(listOf(song), 0, lang, {}, onShare = {}, onOpenWith = {})
@@ -139,7 +155,11 @@ class HomeStackTest {
                 compose.onNodeWithContentDescription(play).performClick()
             playback.audioState.value = PlaybackState.Ready
             Thread.sleep(200); idle(500); compose.waitForIdle()
-            shots(activity, host)
+        }
+        recreate = { controller.recreate(); show(controller.get()); controller.get() to host }
+        try {
+            show(controller.get())
+            shots(controller.get(), host)
         } finally { controller.pause().stop().destroy() }
     }
     private fun pose(host: ViewerHostState, p: Float) {
@@ -238,6 +258,114 @@ class HomeStackTest {
                 save(strip, "$tag-$name-$lang-${if (dark) "dark" else "light"}")
             }
         }
+    }
+
+    /**
+     * Over Home with its paste field: a drag up from the bar and back down from the page recomposes nothing on its frames,
+     * except where the sheet passes a threshold (it leaves or reaches the bar, the page's controls fade), and those stay small.
+     */
+    @OptIn(InternalComposeTracingApi::class)
+    @Test fun aDragRecomposesOnlyWhereItPassesAThreshold() = scene("en", false) { _, host ->
+        pose(host, 1f); idle(400)
+        var scopes = 0
+        Composer.setTracer(object : CompositionTracer {
+            override fun isTraceInProgress() = true
+            override fun traceEventStart(key: Int, dirty1: Int, dirty2: Int, info: String) { scopes++ }
+            override fun traceEventEnd() {}
+        })
+        try {
+            for (up in listOf(true, false)) {
+                val travel = compose.runOnIdle { host.travel }
+                val root = compose.onRoot()
+                val start = if (up) compose.onNodeWithTag(MINI_PLAYER_TAG).fetchSemanticsNode().boundsInRoot.center
+                    else compose.onNodeWithTag(VIEWER_TAG).fetchSemanticsNode().boundsInRoot.let { Offset(it.center.x, it.top + it.height * .2f) }
+                root.performTouchInput { down(start) }
+                val frames = List(40) {
+                    scopes = 0
+                    root.performTouchInput { moveBy(Offset(0f, (if (up) -.024f else .024f) * travel)) }; compose.waitForIdle()
+                    scopes
+                }
+                root.performTouchInput { up() }; idle(800)
+                val drag = if (up) "Up from the bar" else "Down from the page"
+                assertEquals("$drag: the sheet followed the finger and settled", if (up) 0f else 1f, compose.runOnIdle { host.progress })
+                assertTrue("$drag: frames that recomposed $frames", frames.count { it > 0 } <= 2)
+                assertTrue("$drag: a threshold frame recomposed too much $frames", frames.max() <= 40)
+            }
+        } finally { Composer.setTracer(null) }
+    }
+
+    /** The Paste pill and the footer, where the bar grows over them while it moves. */
+    private fun revealed(activity: ComponentActivity) = listOf(
+        compose.onNodeWithContentDescription(activity.getString(R.string.link_field_label)).fetchSemanticsNode().boundsInRoot,
+        compose.onNodeWithText(activity.getString(R.string.privacy)).fetchSemanticsNode().boundsInRoot)
+    /**
+     * How much of what [reference] shows in [r] (its pixels unlike the page at the rect's corner) [now] shows too, within 8 a channel,
+     * at [at] (the same thing, maybe moved): 1 = all of it, 0 = none (faded out).
+     */
+    private fun shown(reference: Bitmap, now: Bitmap, r: Rect, at: Rect = r): Float {
+        assertEquals("Same size", r.size.width, at.size.width, 1.5f); assertEquals("Same size", r.size.height, at.size.height, 1.5f)
+        val dx = (at.left - r.left).roundToInt(); val dy = (at.top - r.top).roundToInt()
+        val xs = r.left.toInt() + 2 until r.right.toInt() - 2
+        val ys = r.top.toInt() + 2 until r.bottom.toInt() - 2
+        fun like(a: Int, b: Int) = (0..24 step 8).all { kotlin.math.abs((a shr it and 0xFF) - (b shr it and 0xFF)) <= 8 }
+        val page = reference.getPixel(xs.first, ys.first)
+        val ink = xs.flatMap { x -> ys.map { y -> x to y } }.filterNot { (x, y) -> like(reference.getPixel(x, y), page) }
+        assertTrue("$r shows something to compare (${ink.size} px)", ink.size >= 100)
+        return ink.count { (x, y) -> like(reference.getPixel(x, y), now.getPixel(x + dx, y + dy)) } / ink.size.toFloat()
+    }
+    private fun assertShown(what: String, reference: Bitmap, now: Bitmap, rects: List<Rect>, at: List<Rect> = rects) = rects.zip(at).forEach { (r, a) ->
+        val part = shown(reference, now, r, a)
+        assertTrue("$what: $a shows ${"%.2f".format(part)} of itself", part >= .95f)
+    }
+    private fun minimize(activity: ComponentActivity, host: ViewerHostState) {
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_minimize)).performClick()
+        idle(800); compose.waitForIdle()
+        assertTrue(compose.runOnIdle { host.collapsed })
+    }
+    private fun dragFromBar(steps: Int, by: Float, host: ViewerHostState) {
+        val travel = compose.runOnIdle { host.travel }
+        val root = compose.onRoot()
+        root.performTouchInput { down(compose.onNodeWithTag(MINI_PLAYER_TAG).fetchSemanticsNode().boundsInRoot.center) }
+        repeat(steps) { root.performTouchInput { moveBy(Offset(0f, by * travel)) }; compose.waitForIdle() }
+    }
+
+    /** A drag up from the bar that turns back: Paste and the footer fade out while it moves and are fully back once it lands. */
+    @Test fun aDragThatTurnsBackBringsPasteAndTheFooterBack() = scene("en", false) { activity, host ->
+        minimize(activity, host)
+        val reference = frame(activity)
+        val rects = revealed(activity)
+        dragFromBar(6, -.025f, host)
+        assertTrue("Out while the bar moves", rects.all { shown(reference, frame(activity), it) < .5f })
+        repeat(10) { compose.onRoot().performTouchInput { moveBy(Offset(0f, .025f * host.travel)) }; compose.waitForIdle() }
+        compose.onRoot().performTouchInput { up() }; idle(800); compose.waitForIdle()
+        assertTrue(compose.runOnIdle { host.collapsed })
+        assertShown("Landed again", reference, frame(activity), rects)
+    }
+
+    /** Rotated mid-drag from the bar (no finger up ever arrives): music comes back in the bar, and Paste and the footer with it. */
+    @Test fun recreatedMidDragPasteAndTheFooterComeBack() = scene("en", false, saved = true) { activity, host ->
+        minimize(activity, host)
+        val reference = frame(activity)
+        val rects = revealed(activity)
+        dragFromBar(4, -.025f, host)
+        assertTrue("Mid-drag", compose.runOnIdle { host.progress } < 1f)
+        val (again, restored) = recreate()
+        idle(800); compose.waitForIdle()
+        assertTrue("Back in the bar", compose.runOnIdle { restored.collapsed })
+        assertShown("Recreated", reference, frame(again), rects, revealed(again))
+    }
+
+    /** The bar's Close: music stops and the bar goes, and Paste and the footer are there. */
+    @Test fun closingTheBarLeavesPasteAndTheFooterShown() = scene("en", false) { activity, host ->
+        minimize(activity, host)
+        val reference = frame(activity)
+        val rects = revealed(activity)
+        val dp = activity.resources.displayMetrics.density
+        compose.onNodeWithTag(MINI_PLAYER_TAG).performTouchInput { click(centerRight - Offset(32 * dp, 0f)) }
+        idle(500); compose.waitForIdle()
+        assertTrue("Closed", compose.runOnIdle { host.request == null })
+        // Without the bar, Paste may move down into its place.
+        assertShown("Closed", reference, frame(activity), rects, revealed(activity))
     }
 
     /** Owner review: the bar as one surface around the cover, over Home with its paste field, in both languages. */
