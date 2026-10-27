@@ -3,7 +3,6 @@ package dev.ahmed.savlino.statuses.ui
 import android.os.Bundle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.core.os.bundleOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,8 +20,13 @@ class StatusesHost(handle: SavedStateHandle) : ViewModel() {
 
     init {
         handle.setSavedStateProvider(KEY) {
-            state?.let { bundleOf(ACCOUNT to it.account?.let { source -> "${source.accountIndex}/${source.packageName}" },
-                FILTER to it.filter.name, HIDE_SAVED to it.hideSaved) } ?: Bundle()
+            Bundle().apply {
+                state?.let {
+                    putString(ACCOUNT, it.account?.let { source -> "${source.accountIndex}/${source.packageName}" })
+                    putString(FILTER, it.filter.name)
+                    putBoolean(HIDE_SAVED, it.hideSaved)
+                }
+            }
         }
     }
 
