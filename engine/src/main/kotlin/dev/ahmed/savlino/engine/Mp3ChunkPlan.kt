@@ -32,7 +32,7 @@ internal fun statsLine(line: String): Triple<Long, Long, Long>? {
 
 /**
  * What decides between chunks and one pass. Rates are Hz; the output rate is the encoder's (44.1k for 320k).
- * [durationMicros] is the container's, only for sizing chunks. [constrained]: thermal MODERATE or worse, or low RAM.
+ * [durationMicros] is the container's, only for sizing chunks. [constrained]: thermal SEVERE or worse, or low RAM (a charging phone sits at MODERATE).
  */
 internal data class Mp3Source(
     val movFamily: Boolean,

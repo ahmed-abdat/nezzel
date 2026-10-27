@@ -75,7 +75,7 @@ internal interface YtdlpRuntime {
     fun cancelTitleRewrite(processId: String): Boolean = false
     /** A direct FFmpeg child for the MP3 encoder (stdout discarded, stderr to [stderr]); null where there is none. */
     fun startFfmpeg(args: List<String>, stdin: Boolean, stderr: File): Process? = null
-    /** Thermal MODERATE or worse, or a low-RAM phone: MP3 rows then take one pass. */
+    /** Thermal SEVERE or worse, or a low-RAM phone: MP3 rows then take one pass. A charging phone sits at MODERATE. */
     fun constrained(): Boolean = false
     fun observe(processId: String) = Unit
     fun destroy(processId: String): Boolean
@@ -179,7 +179,7 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     override fun constrained(): Boolean {
         val power = app.getSystemService(android.os.PowerManager::class.java)
         val activity = app.getSystemService(android.app.ActivityManager::class.java)
-        return (power?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_MODERATE ||
+        return (power?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_SEVERE ||
             activity?.isLowRamDevice == true
     }
     // 0.18.1 keeps `initialized` private per wrapper; track which half completed so a retry never
