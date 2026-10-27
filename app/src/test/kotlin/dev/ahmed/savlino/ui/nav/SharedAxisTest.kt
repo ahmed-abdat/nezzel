@@ -2,13 +2,23 @@ package dev.ahmed.savlino.ui.nav
 
 import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.content.pm.ApplicationInfo
+import android.graphics.Color
+import android.os.Build
+import android.window.BackEvent
+import android.window.OnBackAnimationCallback
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -24,7 +34,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], qualifiers = "en-w400dp-h800dp-mdpi")
@@ -107,6 +119,34 @@ class SharedAxisTest {
         }
     }
 
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Test fun aFingerRestingAnywhereInABackSwipeStillSeesAPage() {
+        deep = true
+        // Opaque pages on white: the green channel is what neither page covers.
+        pages(paint = true).use {
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread {
+                activity.onBackPressedDispatcher.dispatchOnBackStarted(BackEventCompat(0f, 400f, 0f, BackEventCompat.EDGE_LEFT))
+            }
+            compose.mainClock.advanceTimeByFrame()
+            for (progress in listOf(.1f, .25f, .4f, .6f, .9f)) {
+                compose.runOnUiThread {
+                    activity.onBackPressedDispatcher.dispatchOnBackProgressed(BackEventCompat(400f * progress, 400f, progress, BackEventCompat.EDGE_LEFT))
+                }
+                repeat(6) { compose.mainClock.advanceTimeByFrame() }
+                val view = activity.window.decorView
+                val frame = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(frame))
+                val uncovered = Color.green(frame.getPixel(view.width / 2, view.height / 2)) / 255f
+                assertTrue("at $progress ${(uncovered * 100).toInt()}% of the screen shows neither page", uncovered < .4f)
+            }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled() }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            assertTrue(deep)
+        }
+    }
+
     @Test fun aHiddenTabTakesNoBackAndTheTopPageNone() {
         deep = true
         shown.value = false
@@ -144,17 +184,77 @@ class SharedAxisTest {
 
     private fun left(tag: String) = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().left.value
 
-    private fun pages(rtl: Boolean = false, reduced: Boolean = false): AutoCloseable {
+    /** The platform's own back callback (Android 14+), as the system reaches it: the top one in the window's dispatcher. */
+    private fun systemBack(): OnBackAnimationCallback {
+        // The window hands out a proxy; the view root's real dispatcher behind it ranks the callbacks.
+        val proxy = activity.window.onBackInvokedDispatcher
+        val dispatcher = proxy.javaClass.getDeclaredField("mActualDispatcher").apply { isAccessible = true }.get(proxy)
+        val top = checkNotNull(dispatcher) { "no window dispatcher behind the proxy" }
+            .let { it.javaClass.getMethod("getTopCallback").invoke(it) }
+        return checkNotNull(top) { "no back callback registered with the window" } as OnBackAnimationCallback
+    }
+
+    private fun swipe(progress: Float) = BackEvent(400f * progress, 400f, progress, BackEvent.EDGE_LEFT)
+
+    @Config(sdk = [35])
+    @Test fun theSystemBackGestureFollowsTheFingerCancelsAndCommits() {
+        deep = true
+        pages().use {
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread { systemBack().run { onBackStarted(swipe(0f)); onBackProgressed(swipe(.5f)) } }
+            repeat(6) { compose.mainClock.advanceTimeByFrame() }
+            assertTrue(deep)
+            assertTrue("below at ${left("page-false")}", left("page-false") < 0f && left("page-false") > -30f)
+            compose.runOnUiThread { systemBack().onBackCancelled() }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            assertTrue(deep)
+            compose.onNodeWithTag("page-false").assertDoesNotExist()
+            assertEquals(0f, left("page-true"))
+
+            compose.runOnUiThread { systemBack().run { onBackStarted(swipe(0f)); onBackProgressed(swipe(.5f)); onBackInvoked() } }
+            compose.waitForIdle()
+            assertFalse(deep)
+            compose.onNodeWithTag("page-true").assertDoesNotExist()
+            assertEquals(0f, left("page-false"))
+        }
+    }
+
+    @Config(sdk = [35])
+    @Test fun somethingOpenOverThePageTakesTheSystemBackFirst() {
+        deep = true
+        val overlay = mutableStateOf(true)
+        pages(overlay = overlay).use {
+            compose.runOnIdle { systemBack().onBackInvoked() }
+            compose.waitForIdle()
+            assertFalse(overlay.value)
+            assertTrue(deep)
+            compose.runOnIdle { systemBack().onBackInvoked() }
+            compose.waitForIdle()
+            assertFalse(deep)
+        }
+    }
+
+    private fun pages(rtl: Boolean = false, reduced: Boolean = false, paint: Boolean = false,
+                      overlay: MutableState<Boolean>? = null): AutoCloseable {
+        // Robolectric doesn't carry the manifest's enableOnBackInvokedCallback into ApplicationInfo; the device does.
+        if (Build.VERSION.SDK_INT >= 33) ApplicationInfo::class.java.getMethod("setEnableOnBackInvokedCallback", Boolean::class.java)
+            .invoke(RuntimeEnvironment.getApplication().applicationInfo, true)
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         activity = controller.get()
         activity.setContent {
             NezzelTheme(ThemePref.Light, false) {
                 CompositionLocalProvider(LocalReducedMotion provides reduced, LocalTabShown provides shown,
                     LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
-                    rememberSharedAxis(deep, backTo = false, back = if (deep) ({ deep = false }) else null, "test")
-                        .SharedAxisContent({ if (it) 1 else 0 }, Modifier.fillMaxSize()) { page ->
-                            Box(Modifier.fillMaxSize().testTag("page-$page"))
-                        }
+                    Box(Modifier.fillMaxSize().then(if (paint) Modifier.background(ComposeColor.White) else Modifier)) {
+                        rememberSharedAxis(deep, backTo = false, back = if (deep) ({ deep = false }) else null, "test")
+                            .SharedAxisContent({ if (it) 1 else 0 }, Modifier.fillMaxSize()) { page ->
+                                Box(Modifier.fillMaxSize().testTag("page-$page")
+                                    .then(if (paint) Modifier.background(if (page) ComposeColor.Red else ComposeColor.Blue) else Modifier))
+                            }
+                        // Composed after the page, like a sheet or search open over it.
+                        if (overlay != null) BackHandler(overlay.value) { overlay.value = false }
+                    }
                 }
             }
         }
