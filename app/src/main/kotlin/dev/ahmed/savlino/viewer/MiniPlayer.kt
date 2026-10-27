@@ -29,6 +29,9 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -87,6 +90,12 @@ internal data class MiniPlayerLayout(val sheet: Rect, val corner: Dp, val conten
 }
 
 private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
+
+/** Name and controls riding on the sheet: once faded out, TalkBack skips them and a new press doesn't reach them. */
+internal fun Modifier.fadesWithSheet(host: ViewerHostState?): Modifier =
+    if (host?.faded != true) this else clearAndSetSemantics {}.pointerInput(Unit) {
+        awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { if (it.changedToDown()) it.consume() } }
+    }
 
 /** The music page's colour, the sheet that shrinks into the bar. */
 internal val SHEET_COLOR = Color.Black

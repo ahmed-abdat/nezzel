@@ -99,6 +99,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal val uncovered by derivedStateOf { progress > .05f }
     /** The sheet has left the navigation bar too. */
     internal val away by derivedStateOf { progress > .6f }
+    /** The name and controls have faded out: nothing on them can be focused or pressed until they come back. */
+    internal val faded by derivedStateOf { MiniPlayerLayout.content(progress) <= 0f }
     internal val collapsed by derivedStateOf { progress >= 1f }
     internal val canCollapse get() = mini != null && slot != null
     /** The page's size, as last measured. */

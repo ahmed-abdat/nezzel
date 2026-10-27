@@ -191,6 +191,55 @@ class MiniPlayerTest {
         moveTo(0f)
     }
 
+    @Test fun tapsAroundTheCollapsedBarReachTheApp() {
+        playSong(); collapse()
+        val bar = bar().boundsInRoot
+        val slot = compose.runOnIdle { host.slot!!.rect }
+        assertEquals("The bar's touch and TalkBack node is only the bar", slot.width, bar.width, 1f)
+        assertEquals(slot.height, bar.height, 1f)
+        compose.onRoot().performTouchInput { click(Offset(bar.center.x, bar.top - 24f)) }
+        advance(400)
+        assertEquals("Just above the bar", 1, taps)
+        compose.onRoot().performTouchInput { click(Offset(bar.left + 4f, bar.top / 2)) }
+        advance(400)
+        assertEquals("Far from the bar: ${bar}", 2, taps)
+        assertTrue(players.last().playWhenReady)
+    }
+
+    @Test fun aPageRestoredInTheBarStillShrinksItsCover() {
+        saved = true
+        playSong(); collapse()
+        val state = android.os.Bundle()
+        controller.saveInstanceState(state).pause().stop().destroy()
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).create(state).start().postCreate(state).resume().visible()
+        players.clear(); audio = CountingAudio(players)
+        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
+        show(); advance(600)
+        assertFalse(host.moving)
+        start(); playback.audioState.value = PlaybackState.Ready; advance(300)
+        val still = compose.onNodeWithTag(AUDIO_COVER_TAG).fetchSemanticsNode().boundsInRoot
+        moveTo(.75f)
+        val shrinking = compose.onNodeWithTag(AUDIO_COVER_TAG).fetchSemanticsNode().boundsInRoot
+        assertTrue("The cover heads for the bar", shrinking.width < still.width * .6f)
+        moveTo(0f)
+    }
+
+    @Test fun fadedControlsCanNotBeFocusedOrPressed() {
+        playSong()
+        moveTo(.79f)
+        val chevron = shownNode(R.string.viewer_minimize).fetchSemanticsNode().boundsInRoot.center
+        moveTo(.85f)
+        val placedOnly = SemanticsMatcher("placed") { it.layoutInfo.isPlaced }
+        for (id in listOf(R.string.viewer_minimize, R.string.viewer_pause))
+            assertTrue("TalkBack can reach a faded control", compose.onAllNodes(hasContentDescription(text(id)) and placedOnly).fetchSemanticsNodes().isEmpty())
+        val at = Offset(chevron.x, chevron.y + .06f * compose.runOnIdle { host.travel })
+        compose.onRoot().performTouchInput { click(at) }
+        advance(600)
+        assertEquals("The faded chevron took the press", .85f, compose.runOnIdle { host.progress }, .01f)
+        moveTo(0f)
+        shownNode(R.string.viewer_minimize).assertExists()
+    }
+
     private fun recompositions() = Recomposer.runningRecomposers.value.sumOf { it.changeCount }
     @Test fun aDragRecomposesNothing() {
         playSong()

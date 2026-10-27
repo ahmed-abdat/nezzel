@@ -39,7 +39,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -262,7 +265,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         // Music: the cover, the file's name and controls that stay put. Nothing to uncover, so nothing hides.
         // Shrinking into the bar: the name and controls ride down on the sheet and fade near the end, the cover settles into the bar.
         val details: @Composable () -> Unit = {
-            Column(Modifier.widthIn(max = 480.dp).graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }, horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.widthIn(max = 480.dp).graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }.fadesWithSheet(host), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(title.orEmpty(), Modifier.fillMaxWidth().padding(horizontal = Space.m).semantics { heading() },
                     style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Ltr),
                     textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -366,13 +369,19 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     }
 }
 
+/** The music page's cover, for tests. */
+internal const val AUDIO_COVER_TAG = "audio_cover"
+
 /** The file's own cover, or the library's music tile, rounded like the app's cards. */
 @Composable
 private fun AudioCover(poster: Bitmap?, host: ViewerHostState?, modifier: Modifier) {
     var bounds by remember { mutableStateOf(Rect.Zero) }
     val corner = 16.dp
-    // Its place on the still page: the sheet's own slide is not part of it.
-    Surface(modifier.then(if (host == null) Modifier else Modifier.onPlaced { if (!host.moving) bounds = it.boundsInRoot() }.graphicsLayer {
+    // Its place on the still page, wherever the sheet is when it is placed (a page restored in the bar is first placed moving).
+    Surface(modifier.then(if (host == null) Modifier else Modifier.onPlaced {
+        val at = it.positionInRoot()
+        bounds = Rect(Offset(at.x, at.y - host.progress * host.travel), it.size.toSize())
+    }.graphicsLayer {
         val p = host.progress
         val slot = host.slot
         if (p > 0f && slot != null && bounds.width > 0f) {
@@ -385,7 +394,7 @@ private fun AudioCover(poster: Bitmap?, host: ViewerHostState?, modifier: Modifi
             translationX = cover.left - bounds.left; translationY = cover.top - bounds.top - p * host.travel
             shape = RoundedCornerShape(MiniPlayerLayout.coverCorner(p, corner) / scale); clip = true
         }
-    }), shape = RoundedCornerShape(corner), color = MaterialTheme.colorScheme.secondaryContainer,
+    }).testTag(AUDIO_COVER_TAG), shape = RoundedCornerShape(corner), color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
         if (poster != null) Image(poster.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.3f)) }

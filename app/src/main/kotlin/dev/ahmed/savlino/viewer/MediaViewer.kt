@@ -234,7 +234,7 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
                 enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
                 // The shade rides on the sheet with the controls it sits behind and fades with them near the end.
                 Row(Modifier.fillMaxWidth().then(if (controls.shown) Modifier else Modifier.clearAndSetSemantics {})
-                    .graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }
+                    .graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }.fadesWithSheet(host)
                     .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .onFocusChanged { controls.focus("top", it.hasFocus) }
