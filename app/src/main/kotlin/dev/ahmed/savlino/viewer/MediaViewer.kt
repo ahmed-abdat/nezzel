@@ -59,6 +59,7 @@ import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.usage.UsageKeys
+import kotlinx.coroutines.flow.first
 
 /**
  * Full-screen swipe viewer over [items], opening at [start]. Images zoom (pinch, double tap) and the pager only swipes at 1x;
@@ -116,7 +117,10 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
                 // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
                 // A rotation or hidden bars resize the pager without recreating it: settle back on the page so no neighbour peeks in.
                 var width by remember { mutableIntStateOf(0) }
-                LaunchedEffect(width) { if (!pager.isScrollInProgress && pager.currentPageOffsetFraction != 0f) pager.scrollToPage(pager.currentPage) }
+                LaunchedEffect(width) {
+                    snapshotFlow { pager.isScrollInProgress }.first { !it }
+                    if (pager.currentPageOffsetFraction != 0f) pager.scrollToPage(pager.currentPage)
+                }
                 HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding())
                     .onSizeChanged { width = it.width },
                     key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen) { page ->

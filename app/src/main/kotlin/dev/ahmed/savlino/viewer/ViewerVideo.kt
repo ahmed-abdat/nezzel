@@ -179,11 +179,14 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     fun seekBy(forward: Boolean, gesture: Boolean) {
         controls.touched()
         if (skipBy(forward, gesture)) return
-        // Only a file that is ready and has never seeked is called unseekable.
-        if (state == PlaybackState.Ready && !everSeekable) skip = Skip(null) else queued = forward to gesture
+        // Only a file that is ready and has never seeked is called unseekable. Read now, like the player: this may run from an old frame.
+        val ready = owner.item?.uri == item.uri && owner.state.value == PlaybackState.Ready
+        if (ready && !everSeekable) skip = Skip(null) else queued = forward to gesture
     }
     val latestSkip by rememberUpdatedState(::skipBy)
-    LaunchedEffect(queued) {
+    // A press waiting out a gap belongs to this page: leaving it drops the press.
+    LaunchedEffect(queued, current) {
+        if (!current) { queued = null; return@LaunchedEffect }
         val (forward, gesture) = queued ?: return@LaunchedEffect
         withTimeoutOrNull(QUEUE_MAX) { while (!latestSkip(forward, gesture)) delay(100) }
         queued = null
@@ -251,7 +254,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         val details: @Composable () -> Unit = {
             Column(Modifier.widthIn(max = 480.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(title.orEmpty(), Modifier.fillMaxWidth().padding(horizontal = Space.m).semantics { heading() },
-                    style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content),
+                    style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Ltr),
                     textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(Space.l))
                 if (failure != null) FailureCard(failure, owner::retry, onOpenWith, onClose)

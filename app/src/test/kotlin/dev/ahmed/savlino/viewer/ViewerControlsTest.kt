@@ -311,6 +311,28 @@ class ViewerControlsTest {
         assertEquals(30_000, player.currentPosition)
     }
 
+    @Test fun aLateAttachedFileThatCannotSeekStillSaysSo() {
+        prepare = { it.seekable = false }
+        show(start = 0); advance(300)
+        compose.onNodeWithContentDescription(text(R.string.viewer_image_n, "1", "3")).performTouchInput { swipeLeft() }
+        advance(1_000)
+        compose.runOnIdle { player.playWhenReady = false; player.inner.at(30_000) }; advance(300)
+        doubleTapPhysical(forward = true)
+        compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertExists()
+        assertEquals(30_000, player.currentPosition)
+    }
+
+    @Test fun leavingThePageDropsAWaitingPress() {
+        show(); advance(300)
+        val left = player
+        compose.runOnIdle { left.playWhenReady = false; left.seekable = false }
+        doubleTapPhysical(forward = true)
+        page(2).performTouchInput { swipeLeft() }; advance(1_000)
+        compose.onNodeWithContentDescription(text(R.string.viewer_image_n, "3", "3")).assertExists()
+        compose.runOnIdle { left.seekable = true }; advance(500)
+        assertEquals("the old file never moves", 0, left.currentPosition)
+    }
+
     @Test fun aGapThatLastsDropsThePressQuietly() {
         show(); advance(300)
         compose.runOnIdle { player.playWhenReady = false; player.seekable = false }
