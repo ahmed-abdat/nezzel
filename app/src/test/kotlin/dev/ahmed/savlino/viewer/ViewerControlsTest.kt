@@ -116,6 +116,30 @@ class ViewerControlsTest {
         hiddenEverywhere()
     }
 
+    /** Any view in the window asking to keep the screen on. */
+    private fun screenOn(): Boolean {
+        fun on(view: android.view.View): Boolean =
+            view.keepScreenOn || (view as? android.view.ViewGroup)?.let { group -> (0 until group.childCount).any { on(group.getChildAt(it)) } } == true
+        compose.waitForIdle()
+        return on(activity.window.decorView)
+    }
+
+    @Test fun theScreenStaysOnOnlyWhileAVideoPlays() {
+        show()
+        assertTrue(player.isPlaying)
+        assertTrue("Playing keeps the screen on", screenOn())
+        node(R.string.viewer_pause).performClick(); advance(100)
+        assertFalse("Paused lets it sleep", screenOn())
+        node(R.string.viewer_play).performClick(); advance(100)
+        assertTrue("Playing again keeps it on", screenOn())
+        controller.pause().stop(); advance(100)
+        assertFalse("Home pauses the video and lets it sleep", player.isPlaying || screenOn())
+        controller.start().resume(); advance(100)
+        assertTrue("Back from Home plays and keeps it on", player.isPlaying && screenOn())
+        open = false; advance(100)
+        assertFalse("Closed lets it sleep", screenOn())
+    }
+
     @Test fun volumePanelMutesSetsPhoneVolumeAndHoldsTheControls() {
         show()
         val audio = activity.getSystemService(android.media.AudioManager::class.java)

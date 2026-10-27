@@ -118,6 +118,15 @@ class ViewerAudioTest {
         assertFalse(players.last().playWhenReady)
     }
 
+    @Test fun musicNeverKeepsTheScreenOn() {
+        show()
+        playing()
+        assertTrue(players.last().isPlaying)
+        fun on(view: android.view.View): Boolean =
+            view.keepScreenOn || (view as? android.view.ViewGroup)?.let { group -> (0 until group.childCount).any { on(group.getChildAt(it)) } } == true
+        assertFalse(on(activity.window.decorView))
+    }
+
     @Test fun unnamedFileUsesThePlainAudioTitle() {
         DisplayNames.name = null
         show()
