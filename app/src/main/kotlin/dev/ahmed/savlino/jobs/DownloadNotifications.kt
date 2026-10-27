@@ -342,7 +342,7 @@ class DownloadNotifications(private val base: Context,
             DownloadError.Interrupted -> R.string.download_interrupted_error
             DownloadError.StoppedByBattery -> BatterySettings.errorText
             DownloadError.MergeFailed -> R.string.download_merge_error
-            DownloadError.ExecutionRestricted -> R.string.download_restricted_error
+            DownloadError.ExecutionRestricted, DownloadError.ForegroundDenied -> R.string.download_restricted_error
             DownloadError.LoginRequired -> R.string.private_title
             DownloadError.SourceRefused -> R.string.source_refused_title
             DownloadError.DrmProtected -> R.string.protected_title

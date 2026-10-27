@@ -720,11 +720,12 @@ class DownloadCoordinator(
                                 else -> DownloadError.SaveFailed
                             }
                             failure is ArithmeticException -> DownloadError.InsufficientSpace
+                            attempt.reason == ExecutionFailureReason.FOREGROUND_DENIED -> DownloadError.ForegroundDenied
                             else -> DownloadError.ExecutionRestricted
                         }
                         // A refused foreground (dataSync after its timeout cannot restart in the background) is not the
                         // download's fault: keep the partial so Retry, from the opened app, resumes it.
-                        finishStopped(id, error, keepPartial = attempt.reason == ExecutionFailureReason.FOREGROUND_DENIED)
+                        finishStopped(id, error, keepPartial = error == DownloadError.ForegroundDenied)
                     }
                 } finally {
                     withContext(NonCancellable) {
@@ -901,13 +902,17 @@ class DownloadCoordinator(
         if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
         else {
             val error = event.error ?: row.error ?: DownloadError.Failed
-            val code = error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
+            // ForegroundDenied keeps the code it was reported under before it had its own value.
+            val code = if (error == DownloadError.ForegroundDenied) "ExecutionRestricted_FOREGROUND_DENIED"
+                else error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
             usage.failed(Report.DOWNLOAD, code, attempt.reportLink ?: row.sourceUrl, row.engineVersion)
         }
         attempt.reportLink = null
     }
     /** Explicit retry of the original confirmation only; scheduling never substitutes the editor URL. */
     suspend fun retry(id: String): Boolean = retryOne(id).also { if (it) usage.count(UsageKeys.RETRY) }
+    /** A refused Retry still waiting on the provider to finish the last save (a new link would save a 2nd copy). */
+    fun retryWaitsForSave(id: String): Boolean = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
     private suspend fun retryOne(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
         val row = store.get(id) ?: return@withContext false
@@ -943,7 +948,15 @@ class DownloadCoordinator(
             // Wait above without the gate: an old worker must be able to finish and release it.
             maintenance.withDownload {
                 // CAS rechecks eligibility/expiry after waiting; duplicate taps cannot reset twice.
-                recovery.reconcile(id) // Re-picked trees can now discard a previously inaccessible partial document.
+                // Re-picked trees can now discard a previously inaccessible partial document. A MediaStore save
+                // the provider now confirms gone requeues its kept finished file: schedule that instead.
+                val owned = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
+                recovery.reconcile(id, retrying = true)
+                if (owned && store.get(id)?.stage == JobStage.ENQUEUED) {
+                    mutableError.value = null
+                    rescheduleUnderMaintenanceGate(id)
+                    return@withDownload true
+                }
                 if (!store.retry(id)) {
                     store.get(id)?.let { updateQueue(fromRecord(it)) }
                     return@withDownload false
@@ -961,6 +974,7 @@ class DownloadCoordinator(
 
     suspend fun removeFailed(id: String) = withContext(Dispatchers.IO) {
         initialize()
+        recovery.release(id)
         val row = store.get(id)
         val removed = row?.stage == JobStage.FAILED && store.remove(id)
         if (removed) offlineStarts.remove(id)

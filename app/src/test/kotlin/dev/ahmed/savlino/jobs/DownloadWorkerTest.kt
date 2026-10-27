@@ -283,7 +283,7 @@ class DownloadWorkerTest {
                 val id = if (foregroundFailure) "fg-denied-reason" else "engine-run-reason"
                 f.coordinator.enqueue(command(id))
                 f.coordinator.execute(id, { if (foregroundFailure) throw IllegalStateException("denied") }, {})
-                assertEquals(DownloadError.ExecutionRestricted, f.store.get(id)!!.error)
+                assertEquals(if (foregroundFailure) DownloadError.ForegroundDenied else DownloadError.ExecutionRestricted, f.store.get(id)!!.error)
                 val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
                 assertEquals(if (foregroundFailure) "ExecutionRestricted_FOREGROUND_DENIED" else "ExecutionRestricted_ENGINE_RUN", report.getString("code"))
                 assertFalse(report.toString().contains("private details"))
@@ -1042,7 +1042,7 @@ class DownloadWorkerTest {
             assertEquals(JobStage.ENQUEUED, f.store.get("fgs-timeout")!!.stage)
             f.coordinator.execute("fgs-timeout", { throw IllegalStateException("dataSync limit") }, {})
             val row = f.store.get("fgs-timeout")!!
-            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.ExecutionRestricted, row.error)
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.ForegroundDenied, row.error)
             assertTrue(row.retryable)
             val part = File(app.filesDir, "downloads/fgs-timeout/output.mp4.part")
             assertEquals("keep", part.readText())

@@ -242,7 +242,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         // A still-owned MediaStore row could become a second copy of the file: recovery must resolve it first.
         // A tree receipt outlives the row (detached folder), so its orphan sweep covers a Retry.
         if (row.stage != JobStage.FAILED || !row.retryable || row.sourceUrl == null ||
-            row.pendingUri?.let { !android.provider.DocumentsContract.isTreeUri(it) } == true ||
+            ownsMediaStoreSave(row) ||
             !(keepsPartial(row) || cleanupJobStaging(jobRoot, jobId))) return@synchronized false
         if (!infoCache.remove(jobId)) return@synchronized false
         synchronized(this) {
@@ -305,8 +305,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     // A death during every save (low memory on a big copy) must not loop: it spends the stall budget.
     @Synchronized internal fun requeueFinished(jobId: String): Boolean {
         val stalls = get(jobId)?.stallRestarts ?: return false
-        return stalls < 3 && transition(jobId, setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.ENQUEUED,
-            ContentValues().apply { put("has_partial", 1); putNull("error"); putNull("pending_uri"); putNull("display_name")
+        // FAILED: an unresolved save whose pending row is now confirmed gone (it kept its finished file).
+        return stalls < 3 && transition(jobId, setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.FAILED), JobStage.ENQUEUED,
+            ContentValues().apply { put("has_partial", 1); putNull("error"); put("retryable", 0); putNull("pending_uri"); putNull("display_name")
                 put("stall_restarts", stalls + 1) })
     }
     /** Persist the reset position so trickles accumulate across attempts without reopening the budget. */
@@ -392,8 +393,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         // Copy link: only the reviewed intake link, sealed in the same UPDATE that scrubs source_url.
         val link = if (row?.pendingUri == published.uri) row.sourceUrl?.let { links?.seal(it) } else null
         row?.pendingUri == published.uri &&
-            // FAILED: an unresolved publication (still owning this URI) turned out committed.
-            transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.FAILED), JobStage.COMPLETED,
+            // FAILED/CANCELLED: an unresolved publication (still owning this URI) turned out committed; a
+            // committed file wins a late cancellation.
+            transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.FAILED, JobStage.CANCELLED), JobStage.COMPLETED,
                 ContentValues().apply {
                     put("display_name", published.displayName); key?.let { put("source_key", it) }; link?.let { put("share_link", it) }
                 }).also { if (it) supersede(jobId, published.uri) }
@@ -449,7 +451,9 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
      */
     internal fun publicationUnresolved(jobId: String): Boolean = endPublication(jobId, keepUri = true)
 
-    private fun endPublication(jobId: String, keepUri: Boolean): Boolean = finishTerminal(jobId) {
+    // An unresolved MediaStore save keeps its staging (see [keepsPartial]): once the row is gone it saves again.
+    private fun endPublication(jobId: String, keepUri: Boolean): Boolean = finishTerminal(jobId,
+        keepStaging = keepUri && get(jobId)?.let { ownsMediaStoreSave(it) && it.error != DownloadError.Cancelled } == true) {
         val reason = get(jobId)?.error
         val cancelled = reason == DownloadError.Cancelled
         transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING),
@@ -553,6 +557,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             db.execSQL("""
             DELETE FROM jobs WHERE rowid IN (
                 SELECT rowid FROM jobs WHERE stage IN ('COMPLETED','FAILED','CANCELLED')
+                -- No sweep finds an orphaned MediaStore pending row: keep its owner until recovery resolves it.
+                AND NOT (stage IN ('FAILED','CANCELLED') AND pending_uri IS NOT NULL AND pending_uri NOT LIKE '%/tree/%')
                 ORDER BY updated_at DESC, rowid DESC LIMIT -1 OFFSET 100
             )
             """.trimIndent())
@@ -645,16 +651,18 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
          * confirmation lifetime (startup cleanup once Retry is gone) delete it.
          */
         internal fun keepsPartial(row: JobRecord) = row.stage == JobStage.FAILED &&
-            row.error in KEEPS_PARTIAL && row.retryable && row.sourceUrl != null &&
+            (row.error in KEEPS_PARTIAL || ownsMediaStoreSave(row)) && row.retryable && row.sourceUrl != null &&
             System.currentTimeMillis() - row.createdAt <= CONFIRMATION_LIFETIME_MS
         /** Stops that are not the download's fault and recur on a background rerun: battery, a refused foreground. */
-        private val KEEPS_PARTIAL = setOf(DownloadError.StoppedByBattery, DownloadError.ExecutionRestricted)
+        private val KEEPS_PARTIAL = setOf(DownloadError.StoppedByBattery, DownloadError.ForegroundDenied)
+        /** A MediaStore row the provider has not let go of yet; tree receipts outlive their rows. */
+        internal fun ownsMediaStoreSave(row: JobRecord) = row.pendingUri?.let { !android.provider.DocumentsContract.isTreeUri(it) } == true
         /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
         internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,
             DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
             DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
-            DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
+            DownloadError.StoppedByBattery, DownloadError.ForegroundDenied, DownloadError.Failed, DownloadError.EngineUnavailable)
         const val DATABASE_VERSION = 8
         private const val SHARE_LINK_COLUMN = "share_link BLOB CHECK(share_link IS NULL OR stage = 'COMPLETED')"
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))

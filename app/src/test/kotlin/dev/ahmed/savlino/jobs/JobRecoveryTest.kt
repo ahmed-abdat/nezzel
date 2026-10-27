@@ -376,7 +376,8 @@ class JobRecoveryTest {
         assertFailed("delete-fails")
         val uri = store.get("delete-fails")!!.pendingUri
         assertNotNull(uri)
-        assertFalse(staged.exists())
+        assertTrue(staged.exists()) // Kept until the provider lets go: a finished file would save again.
+        assertTrue(JobStore.ownsMediaStoreSave(store.get("delete-fails")!!)) // Retry says "still saving", not "share again".
         // Retry waits for that delete: no second pending row, no duplicate file.
         assertFalse(store.retry("delete-fails"))
         assertEquals(1, publisher.inserts)
@@ -385,6 +386,7 @@ class JobRecoveryTest {
         recoverTwice()
         assertFailed("delete-fails")
         assertNull(store.get("delete-fails")!!.pendingUri)
+        assertFalse(staged.exists())
         assertTrue(publisher.files.isEmpty())
         assertTrue(store.retry("delete-fails"))
         assertEquals(JobStage.ENQUEUED, store.get("delete-fails")!!.stage)
@@ -408,6 +410,84 @@ class JobRecoveryTest {
         assertTrue(publisher.files.isEmpty())
         assertTrue(store.retry("abandon-throws"))
         assertEquals(1, publisher.inserts)
+    }
+
+    // G1: a death mid-copy, then a provider error at startup, still keeps the finished file: once the pending row is
+    // gone it saves again without a download.
+    @Test fun unresolvedSaveOfAFinishedSourceKeepsItAndRequeuesOnceThePendingRowIsGone() {
+        val (job, output) = finished("unresolved-finished")
+        publisher.boundary = "copy"
+        die { JobRecovery(store, publisher, root).publish(job, output, "video/mp4") }
+        publisher.boundary = "delete-fails"
+        reopen()
+        recoverTwice()
+        assertEquals(JobStage.FAILED, store.get("unresolved-finished")!!.stage)
+        assertTrue(output.isFile)
+        publisher.boundary = ""
+        reopen()
+        JobRecovery(store, publisher, root).recover()
+        assertRequeued("unresolved-finished", output)
+        assertTrue(publisher.files.isEmpty())
+    }
+
+    // G1, Retry: the reconcile Retry runs first requeues the kept finished file too.
+    @Test fun retryReconcileRequeuesAKeptFinishedSource() {
+        val (job, output) = finished("retry-finished")
+        publisher.boundary = "copy"
+        die { JobRecovery(store, publisher, root).publish(job, output, "video/mp4") }
+        publisher.boundary = "delete-fails"
+        reopen()
+        JobRecovery(store, publisher, root).recover()
+        publisher.boundary = ""
+        JobRecovery(store, publisher, root).reconcile("retry-finished", retrying = true)
+        assertRequeued("retry-finished", output)
+    }
+
+    // G2: pruning keeps the only owner of a MediaStore pending row; Remove first lets go of it.
+    @Test fun pruningKeepsAndRemoveReleasesAnUnresolvedMediaStoreSave() {
+        val (job, staged) = staged("owner")
+        publisher.boundary = "copy"
+        die { JobRecovery(store, publisher, root).publish(job, staged, "video/mp4") }
+        publisher.boundary = "delete-fails"
+        reopen()
+        JobRecovery(store, publisher, root).recover()
+        store.writableDatabase.execSQL("UPDATE jobs SET updated_at = 0 WHERE job_id = 'owner'")
+        repeat(101) { index -> store.enqueue(command("terminal-$index")); store.fail("terminal-$index", DownloadError.Network) }
+        store.pruneTerminal()
+        assertNotNull(store.get("owner")!!.pendingUri)
+        publisher.boundary = ""
+        JobRecovery(store, publisher, root).release("owner")
+        assertNull(store.get("owner")!!.pendingUri)
+        assertTrue(publisher.files.isEmpty())
+        assertTrue(store.remove("owner"))
+    }
+
+    // G3: a cancel during a provider outage whose save committed anyway keeps the saved file (commit wins a late cancel).
+    @Test fun cancelledUnresolvedSaveThatCommittedIsAdopted() {
+        val (job, staged) = staged("cancel-commit")
+        val cancel = CancellationSignal()
+        publisher.copyEnd = { publisher.unavailable = true; cancel.cancel(); throw java.io.IOException("copy failed") }
+        expectFailure { JobRecovery(store, publisher, root).publish(job, staged, "video/mp4", cancel) }
+        val uri = store.get("cancel-commit")!!.pendingUri!!
+        assertEquals(JobStage.CANCELLED, store.get("cancel-commit")!!.stage)
+        publisher.unavailable = false
+        publisher.commitLate(uri)
+        reopen()
+        recoverTwice()
+        assertEquals(JobStage.COMPLETED, store.get("cancel-commit")!!.stage)
+        assertEquals(uri, store.get("cancel-commit")!!.pendingUri)
+    }
+
+    // G4: only the recorded intent keeps staging; the ExecutionRestricted catch-all never does.
+    @Test fun onlyAForegroundDenialKeepsItsPartial() {
+        for (error in listOf(DownloadError.ExecutionRestricted, DownloadError.ForegroundDenied)) {
+            val id = "keep-${error.name}"
+            store.enqueue(command(id)); check(store.startTransfer(id))
+            File(directories.create(id).directory, "output.mp4.part").writeBytes(bytes)
+            assertTrue(store.fail(id, error, keepPartial = true))
+            assertEquals(error.name, error == DownloadError.ForegroundDenied, File(root, id).exists())
+            assertEquals(error.name, error == DownloadError.ForegroundDenied, JobStore.keepsPartial(store.get(id)!!))
+        }
     }
 
     @Test fun anUnresolvedPublicationThatCommittedAfterAllIsAdopted() {
@@ -480,11 +560,12 @@ class JobRecoveryTest {
         JobRecovery(store, publisher, root).recover()
         assertFailed("unavailable")
         assertNotNull(store.get("unavailable")!!.pendingUri)
-        assertFalse(staged.exists())
+        assertTrue(staged.exists())
         publisher.unavailable = false
         recoverTwice()
         assertFailed("unavailable")
         assertNull(store.get("unavailable")!!.pendingUri)
+        assertFalse(staged.exists())
         assertTrue(publisher.files.isEmpty())
         assertEquals(1, publisher.inserts)
     }
@@ -634,7 +715,7 @@ class JobRecoveryTest {
         assertEquals(JobStage.FAILED, store.get("deferred-full")!!.stage)
         assertEquals(DownloadError.InsufficientSpace, store.get("deferred-full")!!.error)
         assertNotNull(store.get("deferred-full")!!.pendingUri)
-        assertFalse(staged.exists())
+        assertTrue(staged.exists())
         reopen()
         publisher.unavailable = false
         recoverTwice()
