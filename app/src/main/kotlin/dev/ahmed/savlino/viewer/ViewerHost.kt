@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.viewer
 
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.snap
@@ -207,6 +208,7 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     val request = state.request
     val shown = request ?: state.leaving
     val back = LocalOnBackPressedDispatcherOwner.current
+    val navigation = LocalNavigationEventDispatcherOwner.current
     val registry = LocalSaveableStateRegistry.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -287,8 +289,8 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                     // tab's state holder must not own the viewer.
                     CompositionLocalProvider(locals) {
                         CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
-                            if (back != null) CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides back) { open.content() }
-                            else open.content()
+                            CompositionLocalProvider(*listOfNotNull(back?.let { LocalOnBackPressedDispatcherOwner provides it },
+                                navigation?.let { LocalNavigationEventDispatcherOwner provides it }).toTypedArray()) { open.content() }
                         }
                     }
                 } }
