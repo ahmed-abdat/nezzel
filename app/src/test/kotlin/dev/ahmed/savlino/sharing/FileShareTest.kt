@@ -3,10 +3,8 @@ package dev.ahmed.savlino.sharing
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
-import android.content.pm.ResolveInfo
 import android.database.Cursor
 import android.net.Uri
 import android.os.ParcelFileDescriptor
@@ -97,7 +95,10 @@ class FileShareTest {
     }
 
     @Test fun intentGrantsOnlyThisFileReadOnlyWithItsTrueType() {
-        val direct = FileShare.intent(file, "video/x-matroska", ShareTarget(FileShare.WHATSAPP, "WhatsApp"))
+        // WhatsApp goes through a chooser limited to it: a direct start breaks with a second copy of the app on Android 16.
+        val toWhatsApp = FileShare.intent(file, "video/x-matroska", ShareTarget(FileShare.WHATSAPP, "WhatsApp"))
+        assertEquals(Intent.ACTION_CHOOSER, toWhatsApp.action)
+        @Suppress("DEPRECATION") val direct = toWhatsApp.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
         assertEquals(Intent.ACTION_SEND, direct.action)
         assertEquals("video/x-matroska", direct.type)
         assertEquals(FileShare.WHATSAPP, direct.`package`)
@@ -118,10 +119,12 @@ class FileShareTest {
     @Test fun whatsAppLaunchCountsOnceAndTheChooserNever() = withActivity { activity ->
         install(FileShare.WHATSAPP, "WhatsApp")
         runBlocking { sharer(activity).launch(file, "video/x-matroska", ShareTarget(FileShare.WHATSAPP, "WhatsApp")) }
-        assertEquals(FileShare.WHATSAPP, shadowOf(activity).nextStartedActivity.`package`)
+        @Suppress("DEPRECATION") val sent = shadowOf(activity).nextStartedActivity.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertEquals(FileShare.WHATSAPP, sent.`package`)
         assertEquals(listOf(UsageKeys.SHARE_WHATSAPP), counted)
         runBlocking { sharer(activity).launch(file, "video/x-matroska", null) }
-        assertEquals(Intent.ACTION_CHOOSER, shadowOf(activity).nextStartedActivity.action)
+        @Suppress("DEPRECATION") val any = shadowOf(activity).nextStartedActivity.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertNull(any.`package`)
         assertEquals(listOf(UsageKeys.SHARE_WHATSAPP), counted)
         assertEquals(emptyList<Int>(), messages)
     }
@@ -134,14 +137,12 @@ class FileShareTest {
         assertEquals(emptyList<String>(), counted)
     }
 
-    @Test fun whatsAppGoneSinceTheListFallsBackToTheChooser() = withActivity { activity ->
+    @Test fun noChooserOnThePhoneSaysShareUnavailable() = withActivity { activity ->
         shadowOf(app).checkActivities(true)
-        pm.addResolveInfoForIntent(Intent(Intent.ACTION_CHOOSER),
-            ResolveInfo().apply { activityInfo = ActivityInfo().apply { packageName = "android"; name = "Chooser" } })
         runBlocking { sharer(activity).launch(file, "video/x-matroska", ShareTarget(FileShare.WHATSAPP, "WhatsApp")) }
-        assertEquals(Intent.ACTION_CHOOSER, shadowOf(activity).nextStartedActivity.action)
+        assertNull(shadowOf(activity).nextStartedActivity)
         assertEquals(emptyList<String>(), counted)
-        assertEquals(emptyList<Int>(), messages)
+        assertEquals(listOf(R.string.share_unavailable), messages)
     }
 
     @Test fun aRunOfSeveralFilesOffersViewFilesNotShare() {

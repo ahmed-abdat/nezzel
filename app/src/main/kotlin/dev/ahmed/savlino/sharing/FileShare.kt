@@ -44,9 +44,13 @@ object FileShare {
     fun send(uri: Uri, mime: String): Intent = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = ClipData.newRawUri("", uri) }
 
-    /** Straight to [target], or the Android chooser when there is none. */
+    /**
+     * Through the Android chooser, limited to [target] when there is one: with a single copy of the app it opens straight away.
+     * A direct start breaks with a second copy (Samsung Dual Messenger, clone apps): the phone wraps it in its own
+     * profile picker, and Android 16 blocks that picker's launch (IntentRedirect hardening, no creator token).
+     */
     fun intent(uri: Uri, mime: String, target: ShareTarget?): Intent =
-        if (target != null) send(uri, mime).setPackage(target.packageName) else Intent.createChooser(send(uri, mime), null)
+        Intent.createChooser(send(uri, mime).apply { target?.let { setPackage(it.packageName) } }, null)
 }
 
 /** Launches shares from an Activity context; failures come back as a message id for the screen's snackbar. */
@@ -71,12 +75,8 @@ class FileSharer(
         try {
             context.startActivity(FileShare.intent(uri, mime, target))
             if (target != null) usage.count(UsageKeys.SHARE_WHATSAPP)
-        } catch (_: ActivityNotFoundException) {
-            // WhatsApp went away (or stopped taking this type) since the targets were read: the chooser still works.
-            if (target == null) return message(R.string.share_unavailable)
-            try { context.startActivity(FileShare.intent(uri, mime, null)) }
-            catch (_: Exception) { message(R.string.share_unavailable) }
-        } catch (_: SecurityException) { message(R.string.share_unavailable) }
+        } catch (_: ActivityNotFoundException) { message(R.string.share_unavailable) }
+        catch (_: SecurityException) { message(R.string.share_unavailable) }
     }
 }
 
