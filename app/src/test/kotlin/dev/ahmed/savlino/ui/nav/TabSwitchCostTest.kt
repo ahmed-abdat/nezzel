@@ -54,6 +54,7 @@ class TabSwitchCostTest {
                         compose.runOnUiThread { links.navigate(destination); Snapshot.sendApplyNotifications() }
                         frame()
                     }
+                    val appScopes = probe.detailed.filterKeys { it.startsWith("NezzelAppKt.NezzelApp") }
                     val invalid = RecompositionProbe.describe(probe.invalidations)
                     val readers = RecompositionProbe.describe(probe.readers)
                     val rest = probe.record { repeat(60) { frame() } }
@@ -62,6 +63,7 @@ class TabSwitchCostTest {
                     println("PROBE lap$lap $destination tap=${RecompositionProbe.total(tap)} rest=${RecompositionProbe.total(rest)}")
                     if (lap == 2) {
                         println("PROBE   tap: ${RecompositionProbe.describe(tap)}")
+                        println("PROBE   app: ${RecompositionProbe.describe(appScopes)}")
                         println("PROBE   invalid: $invalid")
                         println("PROBE   readers: $readers")
                         println("PROBE   rest: ${RecompositionProbe.describe(rest)}")

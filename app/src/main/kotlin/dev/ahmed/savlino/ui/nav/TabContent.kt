@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 
 /** Events, rather than a remembered counter: returning to a tab must never replay an old scroll request. */
 @Stable
@@ -50,6 +51,21 @@ private val LocalTabReselections = staticCompositionLocalOf<Flow<Unit>> { emptyF
 private val AlwaysActive: State<Boolean> = mutableStateOf(true)
 /** Read only inside effects: animation state never invalidates the scaffold or navigation. */
 val LocalTabActive = staticCompositionLocalOf { AlwaysActive }
+/** True from the frame a tab is chosen until another one is (no wait for the fade, unlike [LocalTabActive]). */
+private val LocalTabShown = staticCompositionLocalOf { AlwaysActive }
+
+/**
+ * [source] while this tab is shown; a hidden tab keeps the last value it showed and gets the current one in the frame it
+ * is chosen again. So a download tick recomposes, measures and draws nothing in a hidden tab.
+ */
+@Composable
+fun <T> rememberWhileShown(source: State<T>): State<T> {
+    val shown = LocalTabShown.current
+    return remember(source, shown) {
+        var last = source.value
+        derivedStateOf { if (shown.value) source.value.also { last = it } else last }
+    }
+}
 
 @Composable
 fun ScrollOnTabReselect(scrollToTop: suspend () -> Unit) {
@@ -106,6 +122,12 @@ fun <T> rememberTabResource(initial: T, vararg keys: Any?, load: suspend () -> T
 /** Off-window tabs refuse keyboard focus and leave the semantics tree. */
 private val HiddenTab = Modifier.focusProperties { onEnter = { cancelFocusChange() } }.focusGroup().clearAndSetSemantics {}
 
+/** Kept composed and placed (its layers survive) just outside the window, with no touch, keyboard focus or semantics. */
+internal val OffWindow = Modifier.layout { measurable, constraints ->
+    val content = measurable.measure(constraints)
+    layout(content.width, content.height) { content.place(-2 * content.width, 0) }
+}.then(HiddenTab)
+
 /** A pre-warm step needs this long without a touch or switch (so 400-800 ms after the last one), then an idle main thread. */
 private const val PREWARM_QUIET_MS = 400L
 
@@ -138,6 +160,9 @@ private suspend fun awaitMainIdle() { while (!Looper.getMainLooper().queue.isIdl
  *
  * Once the app reported fully drawn, [prewarm] tabs not visited yet are composed the same way, hidden and inactive (so
  * none of their loads start), one per idle window; a touch or a switch puts the next one off.
+ *
+ * While [covered] (a full page in front, the tabs kept [OffWindow] behind it) every tab is inactive, none handles back
+ * and pre-warming waits.
  */
 @Composable
 fun TabContent(
@@ -145,6 +170,7 @@ fun TabContent(
     reselections: TabReselections = remember { TabReselections() },
     stateHolder: SaveableStateHolder = rememberSaveableStateHolder(),
     prewarm: List<String> = emptyList(),
+    covered: Boolean = false,
     content: @Composable (String) -> Unit,
 ) {
     val reduced = LocalReducedMotion.current
@@ -163,14 +189,17 @@ fun TabContent(
         warm.interrupt()
         if (switched) focus.clearFocus() else switched = true
     }
+    val coveredNow = rememberUpdatedState(covered)
+    LaunchedEffect(covered) { if (covered) focus.clearFocus() }
     val fullyDrawn = LocalFullyDrawnReporterOwner.current?.fullyDrawnReporter
     LaunchedEffect(fullyDrawn, prewarm) {
         fullyDrawn?.awaitReported() ?: return@LaunchedEffect
         for (route in prewarm) while (route !in visited) {
+            snapshotFlow { coveredNow.value }.first { !it }
             val seen = warm.interruptions
             delay(PREWARM_QUIET_MS)
             awaitMainIdle()
-            if (seen != warm.interruptions || route in visited) continue
+            if (seen != warm.interruptions || route in visited || coveredNow.value) continue
             warm.pending.value = route
             // The next frame composes it; a touch before then withdraws it.
             withFrameNanos {}
@@ -210,9 +239,10 @@ fun TabContent(
             // One State per tab for its whole life: effects keyed on it never restart on a switch.
             val shownNow = rememberUpdatedState(shown)
             val reducedNow = rememberUpdatedState(reduced)
+            val inFront = remember { derivedStateOf { shownNow.value && !coveredNow.value } }
             val active = remember {
                 derivedStateOf {
-                    shownNow.value && (reducedNow.value || (alpha.value == 1f && scale.value == 1f && !alpha.isRunning && !scale.isRunning))
+                    shownNow.value && !coveredNow.value && (reducedNow.value || (alpha.value == 1f && scale.value == 1f && !alpha.isRunning && !scale.isRunning))
                 }
             }
             Box(Modifier.zIndex(if (shown) 1f else 0f)
@@ -234,7 +264,8 @@ fun TabContent(
                 .then(if (shown) Modifier else HiddenTab)) {
                 stateHolder.SaveableStateProvider(route) {
                     CompositionLocalProvider(LocalTabReselections provides reselections.events(route), LocalTabActive provides active,
-                        LocalOnBackPressedDispatcherOwner provides if (shown && backOwner != null) backOwner else detachedBack) {
+                        LocalTabShown provides inFront,
+                        LocalOnBackPressedDispatcherOwner provides if (shown && !covered && backOwner != null) backOwner else detachedBack) {
                         content(route)
                     }
                 }

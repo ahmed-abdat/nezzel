@@ -97,7 +97,7 @@ class NavigationLayoutTest {
                 CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
                     LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                     NezzelTheme(if (rtl) ThemePref.Dark else ThemePref.Light, false) {
-                        NavigationScaffold(route, jobs, if (rtl) "ar" else "en", { route = it }) {
+                        NavigationScaffold(route, { jobs }, if (rtl) "ar" else "en", { route = it }) {
                             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                                 .testTag("screen_content"))
                         }

@@ -104,13 +104,13 @@ private fun HomeShell(lang: String, dark: Boolean, withDownloads: Boolean, copie
     CompositionLocalProvider(LocalLayoutDirection provides if (lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr,
         androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, fontScale)) {
         NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
-            NavigationScaffold(route, jobs, lang, onRoute, updateAvailable = withDownloads) {
+            NavigationScaffold(route, { jobs }, lang, onRoute, updateAvailable = withDownloads) {
                 TabContent(route) { r ->
                     when (r) {
                         "Downloads" -> DownloadsScreen(jobs, lang, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(media))
                         "Settings" -> SettingsScreen(vm, lang, if (dark) ThemePref.Dark else ThemePref.Light, false, true, {}, {}, {}, {}, {}, {}, updates = null)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(null, lang)
-                        else -> HomeScreen(vm, jobs, library, lang, onPaste, {}, {}, {})
+                        else -> HomeScreen(vm, { jobs }, library, lang, onPaste, {}, {}, {})
                     }
                 }
             }

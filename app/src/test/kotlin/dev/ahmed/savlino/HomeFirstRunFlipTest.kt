@@ -47,7 +47,7 @@ class HomeFirstRunFlipTest {
                 val holder = rememberSaveableStateHolder()
                 val library = remember(load) { LibraryState(load, {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
                 NezzelTheme(ThemePref.Light, false) {
-                    if (tabs) TabContent("Home", stateHolder = holder) { HomeScreen(vm, jobs, library, "en", {}, {}, {}, {}) }
+                    if (tabs) TabContent("Home", stateHolder = holder) { HomeScreen(vm, { jobs }, library, "en", {}, {}, {}, {}) }
                 }
             }
             compose.waitForIdle()

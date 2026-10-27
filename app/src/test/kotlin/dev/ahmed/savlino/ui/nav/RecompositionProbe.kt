@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.findViewTreeCompositionContext
 @OptIn(ExperimentalComposeRuntimeApi::class)
 class RecompositionProbe private constructor(recomposer: Recomposer) : AutoCloseable {
     private val counts = linkedMapOf<String, Int>()
+    /** The same scopes with the lambda kept in the name (`NezzelApp$lambda$12`), to tell a body from its lambdas. */
+    val detailed = linkedMapOf<String, Int>()
     /** State objects that invalidated a scope during the last [record], by their description. */
     val invalidations = linkedMapOf<String, Int>()
     /** While set, reads of matching states are attributed to the app line that read them. */
@@ -29,12 +31,15 @@ class RecompositionProbe private constructor(recomposer: Recomposer) : AutoClose
         override fun onBeginComposition(composition: ObservableComposition) {}
         override fun onScopeEnter(scope: RecomposeScope) {
             if (!recording) return
-            val owner = Thread.currentThread().stackTrace.firstOrNull { frame ->
+            val frame = Thread.currentThread().stackTrace.firstOrNull { frame ->
                 val c = frame.className
                 !c.startsWith("java.") && !c.startsWith("androidx.compose.runtime.") && !c.startsWith("dev.ahmed.savlino.ui.nav.RecompositionProbe") &&
                     !c.startsWith("kotlin.") && !c.startsWith("androidx.collection.")
-            }?.let { "${it.className.substringAfterLast('.').substringBefore('$')}.${it.methodName.substringBefore('$')}" } ?: "?"
+            }
+            val owner = frame?.let { "${it.className.substringAfterLast('.').substringBefore('$')}.${it.methodName.substringBefore('$')}" } ?: "?"
             counts[owner] = (counts[owner] ?: 0) + 1
+            val full = frame?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "?"
+            detailed[full] = (detailed[full] ?: 0) + 1
         }
         override fun onReadInScope(scope: RecomposeScope, value: Any) {
             val filter = readFilter ?: return
@@ -62,7 +67,7 @@ class RecompositionProbe private constructor(recomposer: Recomposer) : AutoClose
 
     /** Scopes run inside [block], by owner. */
     fun record(block: () -> Unit): Map<String, Int> {
-        counts.clear(); invalidations.clear(); readers.clear(); recording = true
+        counts.clear(); detailed.clear(); invalidations.clear(); readers.clear(); recording = true
         try { block() } finally { recording = false }
         return LinkedHashMap(counts)
     }

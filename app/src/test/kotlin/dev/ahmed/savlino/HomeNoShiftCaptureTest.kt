@@ -93,7 +93,7 @@ class HomeNoShiftCaptureTest {
                     CompositionLocalProvider(LocalLayoutDirection provides if (lang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr,
                         LocalJobArtwork provides artwork) {
                         NezzelTheme(ThemePref.Light, false) {
-                            NavigationScaffold("Home", jobs, lang, {}) { TabContent("Home") { HomeScreen(vm, jobs, state, lang, {}, {}, {}, {}) } }
+                            NavigationScaffold("Home", { jobs }, lang, {}) { TabContent("Home") { HomeScreen(vm, { jobs }, state, lang, {}, {}, {}, {}) } }
                         }
                     }
                 }

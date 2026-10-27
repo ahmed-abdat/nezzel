@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -309,7 +311,7 @@ class TabContentTest {
         var route by mutableStateOf("Home")
         var barCompositions = 0
         render {
-            NavigationScaffold(route, emptyList(), "en", { route = it }, navigation = { selected, badges, onSelect, onReselect ->
+            NavigationScaffold(route, { emptyList() }, "en", { route = it }, navigation = { selected, badges, onSelect, onReselect ->
                 SideEffect { barCompositions++ }
                 NezzelNavigation(TopLevelDestinations, selected, badges, onSelect, onReselect)
             }) { TabContent(route) { Text(it) } }
@@ -340,6 +342,108 @@ class TabContentTest {
             settings.assertIsNotSelected()
             settings.performClick()
             assertEquals("Settings", selected)
+        }
+    }
+
+    // A hidden tab's own requestFocus (a restored search field, say) neither takes focus nor raises the keyboard.
+    @Test fun hiddenTabRefusesARequestedFocusAndTheKeyboard() {
+        var route by mutableStateOf("Downloads")
+        var ask by mutableIntStateOf(0)
+        var focused = false
+        render {
+            TabContent(route) { destination ->
+                if (destination == "Downloads") {
+                    val requester = remember { androidx.compose.ui.focus.FocusRequester() }
+                    LaunchedEffect(ask) { if (ask > 0) requester.requestFocus() }
+                    var text by remember { mutableStateOf("") }
+                    androidx.compose.material3.TextField(text, { text = it }, Modifier.focusRequester(requester)
+                        .onFocusChanged { focused = it.isFocused })
+                } else Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { route = "Home" }
+            compose.waitForIdle()
+            compose.runOnIdle { ask++ }
+            compose.waitForIdle()
+            val ime = shadowOf(activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java))
+            compose.runOnIdle {
+                assertFalse("hidden field took focus", focused)
+                assertFalse("keyboard shown for a hidden tab", ime.isSoftInputVisible)
+            }
+            // Shown again, the same request works.
+            compose.runOnIdle { route = "Downloads" }
+            compose.waitForIdle()
+            compose.runOnIdle { ask++ }
+            compose.waitForIdle()
+            compose.runOnIdle { assertTrue(focused) }
+        }
+    }
+
+    // Lead finding: a full page in front (update page, Other versions) must not drop the tabs or restart pre-warming.
+    @Test fun aCoveringPageKeepsTabsComposedInactiveWithoutBackOrPrewarm() {
+        var covered by mutableStateOf(false)
+        val composed = mutableListOf<String>()
+        val disposed = mutableListOf<String>()
+        val active = mutableMapOf<String, State<Boolean>>()
+        var backs = 0
+        render {
+            TabContent("Home", prewarm = listOf("Home", "Downloads"), covered = covered) { destination ->
+                DisposableEffect(Unit) { composed += destination; onDispose { disposed += destination } }
+                active[destination] = LocalTabActive.current
+                androidx.activity.compose.BackHandler { backs++ }
+                Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { covered = true }
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+            fullyDrawn()
+            repeat(4) { idleWindow() }
+            compose.runOnIdle {
+                assertEquals(listOf("Home"), composed)
+                assertFalse(active.getValue("Home").value)
+                assertFalse(activity.onBackPressedDispatcher.hasEnabledCallbacks())
+            }
+            compose.mainClock.autoAdvance = true
+            compose.runOnIdle { covered = false }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertTrue(active.getValue("Home").value)
+                assertEquals(emptyList<String>(), disposed)
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
+            assertEquals(1, backs)
+            compose.mainClock.autoAdvance = false
+            repeat(2) { idleWindow() }
+            compose.runOnIdle { assertEquals(listOf("Home", "Downloads"), composed) }
+        }
+    }
+
+    // A download tick reaches a hidden tab only when it is chosen again.
+    @Test fun aHiddenTabSeesItsSourceOnlyOnceShownAgain() {
+        var route by mutableStateOf("Downloads")
+        val source = mutableStateOf(0)
+        val seen = mutableListOf<Int>()
+        render {
+            TabContent(route) { destination ->
+                if (destination == "Downloads") {
+                    val value by rememberWhileShown(source)
+                    SideEffect { seen += value }
+                    Text("$value")
+                } else Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { route = "Home" }
+            compose.waitForIdle()
+            val before = seen.size
+            compose.runOnIdle { source.value = 1 }
+            compose.waitForIdle()
+            compose.runOnIdle { source.value = 2 }
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals("hidden tab recomposed on a tick", before, seen.size) }
+            compose.runOnIdle { route = "Downloads" }
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(2, seen.last()) }
         }
     }
 

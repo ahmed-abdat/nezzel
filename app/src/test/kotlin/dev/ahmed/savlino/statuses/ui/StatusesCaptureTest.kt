@@ -86,7 +86,7 @@ class StatusesCaptureTest {
                 scope.launch { state.setup() }
                 controller.get().setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                     CompositionLocalProvider(LocalStatusMedia provides FakeStatusMedia()) {
-                        NavigationScaffold("Statuses", emptyList(), lang, {}) { StatusesScreen(fake, lang, state) }
+                        NavigationScaffold("Statuses", { emptyList() }, lang, {}) { StatusesScreen(fake, lang, state) }
                     }
                 } }
                 idle()
