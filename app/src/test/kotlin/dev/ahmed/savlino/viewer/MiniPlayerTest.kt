@@ -236,6 +236,59 @@ class MiniPlayerTest {
         compose.onNodeWithTag(MINI_PLAYER_TAG).assertDoesNotExist()
     }
 
+    @Test fun theBarsRowRidesTheSheetsTopEdge() {
+        val page = Size(384f, 832f)
+        val slot = Rect(16f, 680f, 368f, 744f)
+        val from = Rect(24f, 120f, 360f, 456f)
+        for (p in (1..99).map { it / 100f }) {
+            val sheet = MiniPlayerLayout.at(p, page, slot, from, false, 8f)
+            assertEquals("p=$p: on the sheet's top edge", p * slot.top - slot.top, MiniPlayerLayout.barOffset(p, slot.top), .01f)
+            assertEquals("p=$p: the row rides the sheet's top edge", p * slot.top, slot.top + MiniPlayerLayout.barOffset(p, slot.top), .01f)
+            // Hidden (and untouchable) while the sheet still covers it; placed once the sheet draws back.
+            assertEquals("p=$p", p > .6f, MiniPlayerLayout.bar(p))
+            if (p > .6f) assertTrue("p=$p: the sheet has drawn back from the row", sheet.sheet.width < page.width)
+        }
+        assertEquals(0f, MiniPlayerLayout.barOffset(1f, slot.top)); assertTrue(MiniPlayerLayout.bar(1f))
+        // Name and controls come in together from when the row is placed, already partly there under the landing cover.
+        assertEquals(0f, MiniPlayerLayout.row(.6f)); assertEquals(1f, MiniPlayerLayout.row(1f))
+        assertTrue(MiniPlayerLayout.row(.8f) in .2f..(.8f)); assertTrue(MiniPlayerLayout.row(.85f) > MiniPlayerLayout.row(.8f))
+        (60..100).map { it / 100f }.zipWithNext().forEach { (p, q) -> assertTrue(MiniPlayerLayout.row(q) >= MiniPlayerLayout.row(p)) }
+    }
+
+    @Test fun aLongNameScrollsOnlyInTheSettledBarWithAnimationsOn() {
+        for (p in listOf(0f, .6f, .9f, .999f)) assertFalse("p=$p", MiniPlayerLayout.marquee(p, reduced = false))
+        assertTrue(MiniPlayerLayout.marquee(1f, reduced = false))
+        assertFalse("Animations off", MiniPlayerLayout.marquee(1f, reduced = true))
+    }
+
+    @Test fun theBarMovesWithTheSheetWhileDragged() {
+        playSong()
+        moveTo(.3f)
+        assertFalse("Under the sheet, the bar is not placed", placed(MINI_PLAYER_TAG))
+        for (p in listOf(.7f, .8f, .9f)) {
+            moveTo(p)
+            // The anchors are the slot's top: the row can't drift from the sheet's edge.
+            val (travel, top) = compose.runOnIdle { host.travel to host.slot!!.rect.top }
+            assertEquals(top, travel, .01f)
+            assertEquals("p=$p", p * travel, bar().boundsInRoot.top, 1f)
+        }
+        moveTo(1f)
+        assertEquals(compose.runOnIdle { host.slot!!.rect.top }, bar().boundsInRoot.top, .5f)
+        // Back up mid-way, then a tap that opens it with no drag: the row stays on the sheet's edge all the way.
+        moveTo(.8f); moveTo(.95f)
+        assertEquals(.95f * compose.runOnIdle { host.travel }, bar().boundsInRoot.top, 1f)
+        moveTo(1f)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag(MINI_PLAYER_TAG).performClick()
+        compose.mainClock.advanceTimeBy(32)
+        val (p, travel) = compose.runOnIdle { host.progress to host.travel }
+        assertTrue("Opening: p=$p", p > .6f && p < 1f)
+        assertEquals(p * travel, bar().boundsInRoot.top, 1f)
+        compose.mainClock.autoAdvance = true
+        advance(600)
+        assertFalse(placed(MINI_PLAYER_TAG))
+    }
+
     @Test fun expandingRetracesCollapsing() {
         playSong()
         val down = listOf(.2f, .5f, .7f, .9f).map { moveTo(it); compose.runOnIdle { host.motion()!! } }

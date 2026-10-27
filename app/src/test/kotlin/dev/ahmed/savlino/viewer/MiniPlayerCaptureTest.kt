@@ -131,6 +131,28 @@ class MiniPlayerCaptureTest {
         }
     }
 
+    /** The bar's row riding the sheet: each step of the drag, in both languages. */
+    @Test fun barRidesTheSheet() {
+        assumeTrue(dir != null)
+        for (lang in listOf("en", "ar")) scene(lang, false, "Summer mix 2024.mp3") { activity, host ->
+            for (p in listOf(0f, .15f, .3f, .5f, .7f, .8f, .9f, 1f)) { pose(host, p); save(frame(activity), "ride-$lang-${(p * 100).toInt()}") }
+        }
+    }
+
+    /** A long name in the settled bar: before it scrolls, then twice while it scrolls. */
+    @Test fun marqueeStrip() {
+        assumeTrue(dir != null)
+        for ((lang, name) in listOf("en" to "Summer evening mix live from the rooftop 2024.mp3", "ar" to "أغنية الصيف الطويلة جدا من الحفلة المباشرة.mp3"))
+            scene(lang, false, name) { activity, host ->
+                pose(host, 1f)
+                val frames = listOf(500L, 4500L, 3000L).map { idle(it); frame(activity) }
+                val crop = frames.map { Bitmap.createBitmap(it, 0, it.height * 5 / 8, it.width, it.height * 3 / 8) }
+                val strip = Bitmap.createBitmap(crop[0].width, crop.sumOf { it.height } + 24 * 2, Bitmap.Config.ARGB_8888)
+                Canvas(strip).apply { drawColor(0xFF808080.toInt()); crop.forEachIndexed { i, f -> drawBitmap(f, 0f, (i * (f.height + 24)).toFloat(), null) } }
+                save(strip, "marquee-$lang")
+            }
+    }
+
     /** Six steps of the drag side by side, for reading the hand-off at a glance. */
     @Test fun motionStrip() {
         assumeTrue(dir != null)

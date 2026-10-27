@@ -205,7 +205,8 @@ class HomeStackTest {
         for (p in steps + steps.reversed()) {
             pose(host, p)
             val f = frame(activity)
-            val y = (bar.top + 4 * dp).toInt()
+            // On the bar's row, which rides the sheet's top edge.
+            val y = (bar.top + MiniPlayerLayout.barOffset(p, bar.top) + 4 * dp).toInt()
             // Past the cover, which now rides over the bar band on its way in.
             val art = compose.runOnIdle { host.motion()!!.art }
             val mixed = (maxOf(bar.left + 120 * dp, art.right + 2 * dp).toInt() until (bar.right - 40 * dp).toInt()).count { x ->
