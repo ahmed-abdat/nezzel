@@ -57,44 +57,42 @@ import dev.ahmed.savlino.ui.theme.Space
 import androidx.media3.session.R as Media3
 
 /**
- * Where everything sits at progress [p] (0 = full screen, 1 = the bar). The page is one opaque sheet that follows the
- * finger down with everything on it; late in the move it narrows into the bar's own rect, the cover settles into the
- * bar's cover, and the sheet fades over the bar drawn under it. A pure function of [p], so expanding retraces collapsing.
+ * Where everything sits at progress [p] (0 = full screen, 1 = the bar), as YouTube Music does it. The page is one opaque
+ * sheet, always full width: its top follows the finger, its bottom rises with the tabs onto the bar's bottom, so it only
+ * gets shorter. The cover rides on it, shrinking to fit and moving to the start edge. At the end the black sheet draws back
+ * into the cover, which lands on the bar's own, uncovering the bar around it: no pixel ever mixes black with the bar.
+ * A pure function of [p], so expanding retraces collapsing.
  */
-internal data class MiniPlayerLayout(val sheet: Rect, val corner: Dp, val content: Float, val fade: Float, val tabs: Float) {
+internal data class MiniPlayerLayout(val sheet: Rect, val corner: Dp, val art: Rect, val content: Float, val fade: Float, val tabs: Float) {
     companion object {
         /**
-         * The sheet in window pixels, for a page of [page] size and the bar at [bar]. With [reveal] (the bar's cover, for
-         * a light bar) the black sheet never fades: it draws back into the cover instead, so no pixel is ever a grey mix.
+         * In window pixels, for a page of [page] size, its cover at [from] on the still page, and the bar at [bar] with its cover
+         * [inset] from the start edge ([rtl]: the right). With no bar to land on ([landing] false) the sheet fades out instead.
          */
-        fun at(p: Float, page: Size, bar: Rect, reveal: Rect? = null): MiniPlayerLayout {
-            val narrow = FastOutSlowInEasing.transform(span(p, NARROW, 1f))
-            val top = p * bar.top
-            val sheet = Rect(lerp(0f, bar.left, narrow), top, lerp(page.width, bar.right, narrow), lerp(page.height, bar.bottom, narrow))
-            val corner = lerp(0.dp, CORNER, narrow)
-            if (reveal == null) return MiniPlayerLayout(sheet, corner, content(p), fade(p), tabs(p))
-            val back = FastOutSlowInEasing.transform(span(p, FADE, 1f))
-            return MiniPlayerLayout(lerp(sheet, reveal, back), lerp(corner, COVER_CORNER, back), content(p), 1f, tabs(p))
+        fun at(p: Float, page: Size, bar: Rect, from: Rect, rtl: Boolean, inset: Float, landing: Boolean = true): MiniPlayerLayout {
+            val rise = FastOutSlowInEasing.transform(span(p, 0f, RISE))
+            val band = Rect(0f, p * bar.top, page.width, lerp(page.height, bar.bottom, rise))
+            val back = FastOutSlowInEasing.transform(span(p, LAND, 1f))
+            // As big as it was while it fits, then exactly as tall as the band allows: 48dp in the 64dp bar.
+            val side = minOf(from.width, band.height - 2 * inset).coerceAtLeast(0f)
+            val edge = if (rtl) lerp(page.width, bar.right, back) - inset - side else lerp(0f, bar.left, back) + inset
+            val left = lerp(from.center.x - side / 2, edge, FastOutSlowInEasing.transform(span(p, .3f, .7f)))
+            val top = band.top + minOf(from.top, (band.height - side) / 2)
+            val art = Rect(left, top, left + side, top + side)
+            if (!landing) return MiniPlayerLayout(band, 0.dp, art, content(p), 1f - span(p, LAND, 1f), tabs(p))
+            return MiniPlayerLayout(lerp(band, art, back), lerp(0.dp, COVER_CORNER, back), art, content(p), 1f, tabs(p))
         }
-        /** The name, seek bar, controls and top bar ride on the sheet and only fade near the end. */
-        fun content(p: Float) = 1f - span(p, .55f, .8f)
-        /** The sheet itself, over the bar under it. */
-        fun fade(p: Float) = 1f - span(p, FADE, 1f)
-        /** The tabs come up last, from under the sheet. */
-        fun tabs(p: Float) = 1f - FastOutSlowInEasing.transform(span(p, NARROW, 1f))
-        /** The cover rides on the sheet (from [from], its place on the still page) and then settles into the bar's [to]. */
-        fun cover(p: Float, from: Rect, to: Rect, travel: Float) =
-            lerp(from.translate(0f, p * travel), to, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
-        fun coverCorner(p: Float, from: Dp) = lerp(from, COVER_CORNER, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
+        /** The name, seek bar, controls and top bar ride on the sheet and fade early, as the finger starts. */
+        fun content(p: Float) = 1f - span(p, 0f, .3f)
+        /** The tabs rise from under the sheet with its bottom edge. */
+        fun tabs(p: Float) = 1f - FastOutSlowInEasing.transform(span(p, 0f, RISE))
         private fun span(p: Float, start: Float, end: Float) = ((p - start) / (end - start)).coerceIn(0f, 1f)
-        private const val NARROW = .6f
-        private const val FADE = .85f
+        private const val RISE = .6f
+        private const val LAND = .85f
         val BAR = 64.dp
         val COVER = 48.dp
         val INSET = 8.dp
-        /** The bar's corners, which the sheet's become. */
-        val CORNER = Dock.CORNER
-        /** Inside the bar's round end: the cover's corner arc stays within the bar's. */
+        /** Inside the bar's round end: the cover's corner arc stays within the bar's; the page's cover has it too. */
         val COVER_CORNER = 16.dp
     }
 }

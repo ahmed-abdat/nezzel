@@ -376,23 +376,22 @@ internal const val AUDIO_COVER_TAG = "audio_cover"
 @Composable
 private fun AudioCover(poster: Bitmap?, host: ViewerHostState?, modifier: Modifier) {
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    val corner = 16.dp
+    val corner = MiniPlayerLayout.COVER_CORNER
     // Its place on the still page, wherever the sheet is when it is placed (a page restored in the bar is first placed moving).
     Surface(modifier.then(if (host == null) Modifier else Modifier.onPlaced {
         val at = it.positionInRoot()
         bounds = Rect(Offset(at.x, at.y - host.progress * host.travel), it.size.toSize())
+        host.art = bounds
     }.graphicsLayer {
         val p = host.progress
-        val slot = host.slot
-        if (p > 0f && slot != null && bounds.width > 0f) {
-            // Inside the sliding sheet, mapped onto the bar's own cover: at 1 it sits exactly where the bar draws it.
-            val target = slot.cover(MiniPlayerLayout.INSET.toPx(), MiniPlayerLayout.COVER.toPx())
-            val cover = MiniPlayerLayout.cover(p, bounds, target, host.travel)
-            val scale = cover.width / bounds.width
+        val motion = host.motion()
+        if (p > 0f && motion != null && bounds.width > 0f) {
+            // Inside the sliding page, mapped onto where the sheet carries it: at 1 exactly where the bar draws its cover.
+            val scale = motion.art.width / bounds.width
             transformOrigin = TransformOrigin(0f, 0f)
             scaleX = scale; scaleY = scale
-            translationX = cover.left - bounds.left; translationY = cover.top - bounds.top - p * host.travel
-            shape = RoundedCornerShape(MiniPlayerLayout.coverCorner(p, corner) / scale); clip = true
+            translationX = motion.art.left - bounds.left; translationY = motion.art.top - bounds.top - p * host.travel
+            shape = RoundedCornerShape(corner / scale); clip = true
         }
     }).testTag(AUDIO_COVER_TAG), shape = RoundedCornerShape(corner), color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {

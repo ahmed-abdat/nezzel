@@ -28,7 +28,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.layout
@@ -37,7 +36,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
-import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
@@ -111,10 +109,12 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal var page = Size.Zero
     /** Where the sheet is right now; null while there is no bar to shrink into. Read it only in layout, layer and draw lambdas. */
     internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let {
-        MiniPlayerLayout.at(progress, page, it.rect, if (lightBar && mini != null) it.cover(coverInset, coverSide) else null)
+        // Before the page's cover is placed, it is already the bar's.
+        val from = art ?: it.cover(coverInset, coverSide)
+        MiniPlayerLayout.at(progress, page, it.rect, from, it.rtl, coverInset, landing = mini != null)
     }
-    /** A light bar under the black sheet: the sheet draws back into the cover rather than fading to grey over it. No bar, no cover to draw into. */
-    internal var lightBar = false
+    /** The page's cover on the still page, in window pixels: what lands on the bar's cover. */
+    internal var art by mutableStateOf<Rect?>(null)
     internal var coverInset = 0f
     internal var coverSide = 0f
 
@@ -154,7 +154,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
 
     private fun clear(fade: Boolean) {
         leaving = request.takeIf { fade && !reduced }
-        request = null; mini = null; wantBar = false; tapped = null
+        request = null; mini = null; wantBar = false; tapped = null; art = null
         settle(PlayerSize.Full, instant = true)
     }
     private fun settle(to: PlayerSize, instant: Boolean = false) {
@@ -213,10 +213,9 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     // The app's own reduced motion is provided below this host, so read the system setting here too.
     val reduced = LocalReducedMotion.current || rememberReducedMotion()
     val scope = rememberCoroutineScope()
-    val lightBar = Dock.color.luminance() > .5f
     val density = LocalDensity.current
     SideEffect {
-        state.scope = scope; state.reduced = reduced; state.lightBar = lightBar
+        state.scope = scope; state.reduced = reduced
         with(density) { state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx() }
     }
     val covered = request != null && !state.collapsed
@@ -272,9 +271,11 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                                 // Shrinking music: the whole page is one sheet that slides down and narrows into the bar.
                                 val motion = state.motion()?.takeIf { state.progress > 0f }
                                 alpha = appear.value * (motion?.fade ?: 1f)
-                                translationY = motion?.sheet?.top ?: 0f
+                                // The page slides with the finger; the sheet's outline (shorter, then drawing into the cover) clips it.
+                                val top = if (motion != null) state.progress * state.travel else 0f
+                                translationY = top
                                 clip = motion != null
-                                shape = motion?.run { SheetShape(sheet.translate(0f, -sheet.top), corner.toPx()) } ?: RectangleShape
+                                shape = motion?.run { SheetShape(sheet.translate(0f, -top), corner.toPx()) } ?: RectangleShape
                             }
                         }
                     }

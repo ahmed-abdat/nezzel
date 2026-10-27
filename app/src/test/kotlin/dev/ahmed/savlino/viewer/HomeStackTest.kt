@@ -200,17 +200,43 @@ class HomeStackTest {
         val dp = activity.resources.displayMetrics.density
         val surface = android.graphics.Color.luminance(frame(activity).getPixel(bar.center.x.toInt(), (bar.top + 4 * dp).toInt()))
         assertTrue("The bar is light", surface > .5f)
-        // From .8 the name and controls are gone: the sheet is plain black apart from the cover, which stays at the start.
+        // From .8 the name and controls are long gone: the sheet is plain black apart from the cover, which sits at the start.
         val steps = (40..50).map { it / 50f }
         for (p in steps + steps.reversed()) {
             pose(host, p)
             val f = frame(activity)
             val y = (bar.top + 4 * dp).toInt()
-            val mixed = ((bar.left + 120 * dp).toInt() until (bar.right - 40 * dp).toInt()).count { x ->
+            // Past the cover, which now rides over the bar band on its way in.
+            val art = compose.runOnIdle { host.motion()!!.art }
+            val mixed = (maxOf(bar.left + 120 * dp, art.right + 2 * dp).toInt() until (bar.right - 40 * dp).toInt()).count { x ->
                 val l = android.graphics.Color.luminance(f.getPixel(x, y))
                 l > .06f && kotlin.math.abs(l - surface) > .06f
             }
             assertTrue("p=$p: $mixed grey pixels on the bar", mixed <= 2)
+        }
+    }
+
+    /**
+     * Owner review against YouTube Music's collapse strip: the same 14 moments, each p read off that strip's sheet top over its bar
+     * top. [NEZZEL_CAPTURE_TAG] names the set (before/after).
+     */
+    @Test fun ytmStrips() {
+        assumeTrue(dir != null)
+        val tag = System.getenv("NEZZEL_CAPTURE_TAG") ?: "now"
+        val points = listOf(0f, .03f, .10f, .16f, .25f, .34f, .39f, .46f, .52f, .59f, .68f, .95f, .99f, 1f)
+        for (lang in listOf("en", "ar")) for (dark in listOf(false, true)) scene(lang, dark) { activity, host ->
+            for ((name, path) in listOf("collapse" to points, "expand" to points.reversed())) {
+                val frames = path.map { pose(host, it); frame(activity) }
+                val w = frames[0].width / 2; val h = frames[0].height / 2; val gap = 12; val row = 7
+                val strip = Bitmap.createBitmap(row * w + (row - 1) * gap, 2 * h + gap, Bitmap.Config.ARGB_8888)
+                Canvas(strip).apply {
+                    drawColor(0xFF808080.toInt())
+                    frames.forEachIndexed { i, f ->
+                        drawBitmap(Bitmap.createScaledBitmap(f, w, h, true), (i % row * (w + gap)).toFloat(), (i / row * (h + gap)).toFloat(), null)
+                    }
+                }
+                save(strip, "$tag-$name-$lang-${if (dark) "dark" else "light"}")
+            }
         }
     }
 
