@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.semantics.collapse
 import androidx.compose.foundation.Image
@@ -152,11 +151,12 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
             bars.show(WindowInsetsCompat.Type.systemBars()); bars.systemBarsBehavior = behavior
         }
     }
-    // Shrinking past halfway uncovers the app, so its own bar icons come back.
+    // The shrinking sheet uncovers the app's top first, then its bottom, so its own bar icons come back in that order.
+    val uncovered = host?.uncovered == true
     val away = host?.away == true
-    LaunchedEffect(window, view, controls.fullscreen, away) {
+    LaunchedEffect(window, view, controls.fullscreen, uncovered, away) {
         if (window != null) WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = away && appBars.first; isAppearanceLightNavigationBars = away && appBars.second
+            isAppearanceLightStatusBars = uncovered && appBars.first; isAppearanceLightNavigationBars = away && appBars.second
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             if (controls.fullscreen) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
         }
@@ -202,12 +202,10 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         val settled = settledItem?.uri
         zooms.forEach { (uri, zoom) -> if (uri != settled) zoom.reset() }
     }
-    // The black page slides and fades with the player as it shrinks; without the app host it is simply black.
-    Surface(Modifier.fillMaxSize().testTag(VIEWER_TAG).drawBehind {
-        val p = host?.progress ?: 0f
-        drawRect(Color.Black.copy(alpha = MiniPlayerLayout.at(p).page), Offset(0f, p * (host?.travel ?: 0f)))
-    }.then(if (minimize) Modifier.semantics { collapse { host?.collapse(); true } } else Modifier),
-        color = Color.Transparent, contentColor = Color.White) {
+    // An opaque black page; shrinking music, the host slides and narrows all of it as one sheet.
+    Surface(Modifier.fillMaxSize().testTag(VIEWER_TAG)
+        .then(if (minimize) Modifier.semantics { collapse { host?.collapse(); true } } else Modifier),
+        color = SHEET_COLOR, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
             // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
             // A rotation or hidden bars resize the pager without recreating it: settle back on the page so no neighbour peeks in.
@@ -234,9 +232,9 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
             }
             AnimatedVisibility(controls.shown, Modifier.align(Alignment.TopCenter),
                 enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
-                // The shade fades and travels with the controls it sits behind.
+                // The shade rides on the sheet with the controls it sits behind and fades with them near the end.
                 Row(Modifier.fillMaxWidth().then(if (controls.shown) Modifier else Modifier.clearAndSetSemantics {})
-                    .graphicsLayer { val p = host?.progress ?: 0f; alpha = MiniPlayerLayout.at(p).chrome; translationY = p * (host?.travel ?: 0f) }
+                    .graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }
                     .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .onFocusChanged { controls.focus("top", it.hasFocus) }

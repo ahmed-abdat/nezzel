@@ -25,6 +25,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -93,10 +95,16 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         return if (offset.isNaN() || bar <= 0f) (if (size.currentValue == PlayerSize.Bar) 1f else 0f) else (offset / bar).coerceIn(0f, 1f)
     }
     internal val moving by derivedStateOf { progress > 0f }
-    /** Past halfway: the app's own bar icons are back. */
-    internal val away by derivedStateOf { progress > .5f }
+    /** The sheet has left the status bar: the app's own status bar icons are back. */
+    internal val uncovered by derivedStateOf { progress > .05f }
+    /** The sheet has left the navigation bar too. */
+    internal val away by derivedStateOf { progress > .6f }
     internal val collapsed by derivedStateOf { progress >= 1f }
     internal val canCollapse get() = mini != null && slot != null
+    /** The page's size, as last measured. */
+    internal var page = Size.Zero
+    /** Where the sheet is right now; null while there is no bar to shrink into. Read it only in layout, layer and draw lambdas. */
+    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let { MiniPlayerLayout.at(progress, page, it.rect) }
 
     internal fun show(next: ViewerRequest) {
         val old = request
@@ -235,10 +243,17 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                     // Collapsed, the page stays composed (same player, same page) but is not placed: no drawing, touches or TalkBack.
                     .layout { measurable, constraints ->
                         val page = measurable.measure(constraints)
+                        state.page = Size(page.width.toFloat(), page.height.toFloat())
                         layout(page.width, page.height) {
                             if (!state.collapsed) page.placeWithLayer(0, 0) {
                                 val grown = .96f + .04f * appear.value
-                                alpha = appear.value; scaleX = grown; scaleY = grown
+                                scaleX = grown; scaleY = grown
+                                // Shrinking music: the whole page is one sheet that slides down and narrows into the bar.
+                                val motion = state.motion()?.takeIf { state.progress > 0f }
+                                alpha = appear.value * (motion?.fade ?: 1f)
+                                translationY = motion?.sheet?.top ?: 0f
+                                clip = motion != null
+                                shape = motion?.run { SheetShape(sheet.translate(0f, -sheet.top), corner.toPx()) } ?: RectangleShape
                             }
                         }
                     }
