@@ -12,6 +12,7 @@ import org.gradle.api.tasks.TaskAction
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.baselineprofile)
 }
 
 @CacheableTask
@@ -114,10 +115,33 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
+        // Baseline profile generation installs these, and the test run uninstalls them afterwards: a fixed .demo
+        // suffix keeps the real app and its data out of reach even when no -P suffix is passed. The baselineprofile
+        // plugin reuses build types the app declares under these names.
+        for (name in listOf("nonMinifiedRelease", "benchmarkRelease")) create(name) {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".demo"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            isProfileable = true
+            if (name == "nonMinifiedRelease") {
+                isMinifyEnabled = false
+                isShrinkResources = false
+            }
+        }
     }
 }
 
+baselineProfile {
+    // Profiles are generated on a device by hand (:app:generateReleaseBaselineProfile), never during a build.
+    automaticGenerationDuringBuild = false
+    dexLayoutOptimization = true
+}
+
 androidComponents.onVariants { variant ->
+    if (variant.buildType in setOf("nonMinifiedRelease", "benchmarkRelease")) {
+        check(variant.applicationId.get().endsWith(".demo")) { "${variant.name} must install as the .demo copy" }
+    }
     val notes = tasks.register<GenerateWhatsNewAssets>("generate${variant.name.replaceFirstChar { it.uppercaseChar() }}WhatsNewAssets") {
         versionCode.set(variant.outputs.single().versionCode)
         englishChangelogs.set(rootProject.layout.projectDirectory.dir("fastlane/metadata/android/en-US/changelogs"))
@@ -143,7 +167,7 @@ val generateDebugKey by tasks.registering(Exec::class) {
         "-dname", "CN=Android Debug,O=Android,C=US",
     )
 }
-tasks.matching { it.name == "validateSigningDebug" }.configureEach {
+tasks.matching { it.name in setOf("validateSigningDebug", "validateSigningNonMinifiedRelease", "validateSigningBenchmarkRelease") }.configureEach {
     dependsOn(generateDebugKey)
 }
 
@@ -190,6 +214,9 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.ui.compose)
+    // Installs the bundled baseline profile on sideloaded installs, where no store does it.
+    implementation(libs.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 
     // Resolve test Android jars through Gradle locking + SHA-256 verification; no runtime fetches.
     robolectricSdk29("org.robolectric:android-all-instrumented:10-robolectric-5803371-i7")
