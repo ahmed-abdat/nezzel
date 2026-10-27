@@ -193,6 +193,7 @@ class ImageInspectionFlowTest {
         assertEquals(3, publisher.published.get())
         assertEquals(3, usageKeys.count { it == "dl.finished.photo.any" })
         assertEquals(0, usageKeys.count { it == "dl.failed.photo.any" })
+        assertEquals("One tap is one funnel end, however many photos it saved", listOf("funnel.finished"), usageKeys.filter { it == "funnel.finished" || it == "funnel.failed" })
         assertEquals(List(3) { linkedIn }, usageSites)
     }
 

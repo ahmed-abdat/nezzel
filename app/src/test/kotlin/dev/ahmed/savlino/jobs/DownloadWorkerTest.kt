@@ -325,7 +325,7 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun engineRestartCannotReuseItsOldSpeedAndRetryCountsItsOwnOutcome() = runBlocking {
+    @Test fun engineRestartCannotReuseItsOldSpeedAndRetryAddsNoSecondEnd() = runBlocking {
         val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
         val usage = actualUsage(posts)
         val clock = java.util.concurrent.atomic.AtomicLong()
@@ -349,10 +349,12 @@ class DownloadWorkerTest {
             assertEquals(JobStage.COMPLETED, f.store.get("retry-count")!!.stage)
             usage.sendDaily()
             val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+            // One job counts one end: the first one. A Retry that finishes adds no second end.
             assertEquals(1, counts.getInt("dl.failed.video.hd"))
-            assertEquals(1, counts.getInt("dl.finished.video.hd"))
-            assertEquals(2, counts.getInt("site:example.com"))
-            assertFalse(counts.keys().asSequence().any { it.startsWith("speed.") || it.startsWith("dl.cancelled.") })
+            assertEquals(1, counts.getInt("funnel.failed"))
+            assertEquals(1, counts.getInt("site:example.com"))
+            assertFalse(counts.keys().asSequence().any { it.startsWith("speed.") || it.startsWith("dl.cancelled.") ||
+                it.startsWith("dl.finished.") || it == "funnel.finished" })
         }
     }
 

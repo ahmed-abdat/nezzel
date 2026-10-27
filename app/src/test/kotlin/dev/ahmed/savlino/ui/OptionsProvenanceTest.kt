@@ -33,6 +33,7 @@ class OptionsProvenanceTest {
             assertTrue(vm.optionsState is OptionsState.Ready)
             vm.optionsShown(); vm.optionsShown()
             assertEquals(listOf("options.$path.t0-2"), keys.filter { it.startsWith("options.") })
+            assertEquals(listOf("opt:t0-2:example.org"), keys.filter { it.startsWith("opt:") })
             vm.dismissOptions()
         }
     }

@@ -290,6 +290,14 @@ class UsageTest {
         assertEquals("options.npe.t0-2", UsageKeys.options(UsageKeys.Path.NPE, 1_999))
         assertEquals("speed.s1m-5m", UsageKeys.speed(2_000_000.0))
         assertEquals("age.day0", UsageKeys.age(0)); assertEquals("age.d31up", UsageKeys.age(31))
+        // Time until options per site: the domain only, never a path, query or whole link.
+        assertEquals("opt:t2-5:example.com", UsageKeys.optionsSite("https://www.example.com/watch/v1?id=secret&t=9", 3_000))
+        assertNull(UsageKeys.optionsSite(null, 3_000))
+        assertNull(UsageKeys.optionsSite("content://media/1", 3_000))
+        assertFalse(UsageKeys.allowed("opt:t2-5:example.com/watch"))
+        assertFalse(UsageKeys.allowed("opt:t2-5:example.com?id=1"))
+        assertFalse(UsageKeys.allowed("opt:t9:example.com"))
+        assertTrue(UsageKeys.allowed(UsageKeys.FUNNEL_BATCH))
     }
 
     @Test fun pickComparesTheConfirmedRowWithNezzelsPick() {

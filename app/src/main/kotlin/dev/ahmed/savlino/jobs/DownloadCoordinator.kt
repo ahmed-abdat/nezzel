@@ -911,8 +911,9 @@ class DownloadCoordinator(
             if (!batches.containsJob(event.jobId))
                 usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
             (attempt.siteKey ?: UsageKeys.site(row.sourceUrl))?.let(usage::count)
-            if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
         }
+        // Speed belongs to the transfer, not the job: a Retry that finishes still measures one.
+        if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
         if (outcome == UsageKeys.Download.FAILED) {
             val error = event.error ?: row.error ?: DownloadError.Failed
             // ForegroundDenied keeps the code it was reported under before it had its own value.
