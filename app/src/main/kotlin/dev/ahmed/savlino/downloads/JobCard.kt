@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import dev.ahmed.savlino.ui.nav.LocalTabShown
 import dev.ahmed.savlino.ui.nav.rememberTabLoop
 import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.R
@@ -82,12 +83,14 @@ internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List
     val flashing = remember { mutableStateMapOf<String, DownloadProgress>() }
     // Ids whose end came from [completed]: the list may still hold their last live row for a moment.
     val ended = remember { mutableSetOf<String>() }
+    // A hidden tab isn't watching: a job that ends meanwhile leaves without a Saved moment.
+    val shown = LocalTabShown.current
     // The coordinator drops a finished job from its list instead of showing it COMPLETED: its end arrives here.
     LaunchedEffect(completed) {
         completed?.collect { job ->
             ended += job.jobId
             val before = seen.put(job.jobId, DownloadPhase.COMPLETED)
-            if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
+            if (shown.value && job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
                 before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
         }
     }
