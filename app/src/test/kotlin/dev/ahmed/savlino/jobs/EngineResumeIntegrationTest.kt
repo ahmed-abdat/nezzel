@@ -91,7 +91,7 @@ class EngineResumeIntegrationTest {
                 assertEquals("keep", f.part.readText())
                 assertEquals(1, f.store.get(f.id)!!.transportResumes)
                 assertEquals(0, f.store.get(f.id)!!.stallRestarts)
-                assertTrue(f.work().all { it.state == WorkInfo.State.ENQUEUED })
+                assertTrue(f.work().all { it.state == WorkInfo.State.BLOCKED }) // each run waits behind its network gate
             }
             assertTrue(f.runtime.destroys.get() >= 2)
         }
@@ -224,7 +224,7 @@ class EngineResumeIntegrationTest {
             val running = launch(Dispatchers.Default) { worker.doWork() }
             try {
                 withTimeout(5000) { f.runtime.entered.receive() }
-                assertEquals(WorkInfo.State.ENQUEUED, f.work().single().state)
+                assertEquals(WorkInfo.State.BLOCKED, f.work().single().state)
                 worker.stop(WorkInfo.STOP_REASON_QUOTA)
             } finally { running.cancelAndJoin() }
             assertEquals(JobStage.FAILED, f.store.get(f.id)!!.stage)
@@ -288,7 +288,7 @@ class EngineResumeIntegrationTest {
                 phases += data.getString("phase")!!
                 com.google.common.util.concurrent.SettableFuture.create<Void>().apply { set(null) }
             }.build()
-        fun work() = WorkManager.getInstance(app).getWorkInfosForUniqueWork(id).get()
+        fun work() = downloadRuns(app, id)
         fun assertQueued(partial: Boolean) {
             val row = store.get(id)!!
             assertEquals(JobStage.ENQUEUED, row.stage); assertEquals(partial, row.hasPartial)

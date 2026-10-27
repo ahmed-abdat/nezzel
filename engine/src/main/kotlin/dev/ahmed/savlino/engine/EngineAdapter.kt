@@ -48,6 +48,8 @@ interface EngineAdapter {
     fun resumeEngine(command: DownloadCommand, directory: File): String = "ytdlp"
     suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult
     fun cancel(operationId: String)
+    /** Blocking: stop native processes a previous attempt left writing into [directory]; how many are still alive. */
+    fun stopStaleProcesses(directory: File): Int = 0
 }
 
 /** Result of [EngineAdapter.prepareYtdlpUpdate]; engine-staged releases stay internal to the engine. */

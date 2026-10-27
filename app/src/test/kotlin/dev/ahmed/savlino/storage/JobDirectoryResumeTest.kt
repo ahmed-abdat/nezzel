@@ -19,6 +19,16 @@ class JobDirectoryResumeTest {
         partials.forEach { assertEquals(it, dir.resolve(it).readText()) }
         try { jobs.create("owned"); fail("new jobs must stay exclusive") } catch (_: StorageException) { }
     }
+    @Test fun adoptionKeepsOnlyTheNamedFinishedSourceAndStillDeletesTheConversionTarget() {
+        val jobs = JobDirectory(temp.root)
+        val dir = jobs.create("owned").directory
+        listOf("output.m4a", "output.mp3", "result-path.txt", "output.f140.m4a.part").forEach { dir.resolve(it).writeText(it) }
+        jobs.createOrAdopt("owned", keep = "output.m4a")
+        assertEquals(setOf("output.m4a", "output.f140.m4a.part"), dir.list()!!.toSet())
+        assertEquals("output.m4a", dir.resolve("output.m4a").readText())
+        jobs.createOrAdopt("owned") // Without a compatible recipe the source goes too.
+        assertEquals(setOf("output.f140.m4a.part"), dir.list()!!.toSet())
+    }
     @Test fun nativeSidecarAdoptsOnlyItsOwnPartialAndRejectsStrayOrMalformedRecords() {
         for (record in listOf("native-v1\nETag\n\"a\"\n6\n", "ytdlp-v1\n", "broken", "native-v1\nETag\nhttps://example.com/private\n6\n")) {
             val jobs = JobDirectory(temp.newFolder())

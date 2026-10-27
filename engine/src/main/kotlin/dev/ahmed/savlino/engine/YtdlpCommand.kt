@@ -28,17 +28,33 @@ object YtdlpCommand {
             "--dump-single-json", "--skip-download", "--playlist-items", "$start:$end") + NETWORK +
             listOf("--", source.link.rawUrl)
     }
+    /**
+     * The finished file yt-dlp reuses instead of downloading again ("has already been downloaded"): the source of an
+     * MP3 conversion, or the final merged/single file. A stop in convert, merge or save keeps it for a compatible retry.
+     * Kept only when its writer creates it complete by a rename: the download (.part), yt-dlp's merger and fixups
+     * (.temp), the title rewrite and the native engine (atomic move). ExtractAudio writes its target directly, so an
+     * extracted M4A or an MP3 target is never kept; nor is a native M4A/MP3, whose cover EmbedThumbnail saves in place
+     * with mutagen. An "mp3" source has no extension (see [download]'s template).
+     */
+    fun finishedSource(format: Format): String? = when {
+        extractsAudio(format) -> null
+        format.conversion == null && !format.hasVideo && format.container in setOf("m4a", "mp3") -> null
+        format.conversion == null -> "output.${format.container}"
+        format.sourceContainer != null && format.sourceContainer != "mp3" -> "output.${format.sourceContainer}"
+        else -> null
+    }
+    private fun extractsAudio(row: Format) = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
     /** Shared by both transfer engines before any staging write. */
-    internal fun validateStaging(directory: File): File {
+    internal fun validateStaging(directory: File, kept: String? = null): File {
         val root = directory.canonicalFile
         require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory &&
             root.listFiles()?.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile &&
-                PartialFileNames.matches(it.name) } == true) { "Invalid staging directory" }
+                (PartialFileNames.matches(it.name) || it.name == kept) } == true) { "Invalid staging directory" }
         return root
     }
     fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
         embedAudioTags: Boolean = true): List<String> {
-        val root = validateStaging(directory)
+        val root = validateStaging(directory, finishedSource(command.format))
         val row = command.format
         // Generic direct-file IDs can equal a MIME subtype/container. A bare "mp4" is an extension selector,
         // not an exact ID; filter by the actual returned ID so it cannot silently choose a different format.
@@ -62,7 +78,7 @@ object YtdlpCommand {
             // yt-dlp's ffmpeg postprocessors already add `-movflags +faststart` to every output they write.
             // The mapper chooses MP4 for supported codec pairs, otherwise MKV.
             if (row.requiresMerge && row.container in setOf("mp4", "mkv")) addAll(listOf("--merge-output-format", row.container))
-            if (!row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id)
+            if (extractsAudio(row))
                 addAll(listOf("--extract-audio", "--audio-format", "m4a"))
             row.conversion?.let { conversion ->
                 // Output-scoped options follow yt-dlp's generated copy/quality options.

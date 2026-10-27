@@ -13,7 +13,8 @@ import java.nio.file.attribute.BasicFileAttributes
 
 interface JobDirectories {
     fun create(jobId: String): JobDirectory.Job
-    fun createOrAdopt(jobId: String): JobDirectory.Job = create(jobId)
+    /** [keep]: a finished source the retry reuses (YtdlpCommand.finishedSource); every other output is deleted. */
+    fun createOrAdopt(jobId: String, keep: String? = null): JobDirectory.Job = create(jobId)
 }
 
 /** Job IDs are opaque identifiers, never remote titles. New jobs always create exclusively. */
@@ -31,7 +32,7 @@ class JobDirectory(filesDir: File) : JobDirectories {
     }
 
     /** The caller must own this ID in the journal and have stopped its previous writer. */
-    @Synchronized override fun createOrAdopt(jobId: String): Job {
+    @Synchronized override fun createOrAdopt(jobId: String, keep: String?): Job {
         if (!jobId.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))) invalidPath()
         if (root.canonicalFile != root || Files.isSymbolicLink(root.toPath())) invalidPath()
         val directory = File(root, jobId)
@@ -44,8 +45,8 @@ class JobDirectory(filesDir: File) : JobDirectories {
         val job = Job(root, directory)
         val files = directory.listFiles() ?: throw StorageException(StorageError.SaveFailed)
         for (file in files) {
-            if (file.name == "result-path.txt" ||
-                (file.name.matches(Regex("output\\.[^.]+")) && !PartialFileNames.matches(file.name))) {
+            if (file.name == "result-path.txt" || (file.name != keep &&
+                    file.name.matches(Regex("output\\.[^.]+")) && !PartialFileNames.matches(file.name))) {
                 if (Files.isSymbolicLink(file.toPath()) || file.isFile) Files.delete(file.toPath())
             }
         }
@@ -57,7 +58,7 @@ class JobDirectory(filesDir: File) : JobDirectories {
             } == true && (record.total?.let { File(directory, DirectResume.PART).length() <= it } != false) &&
                 (record.syncedBytes?.let { it <= File(directory, DirectResume.PART).length() } != false))))
         if (!validRecord || directory.listFiles()?.all {
-                !Files.isSymbolicLink(it.toPath()) && it.isFile && PartialFileNames.matches(it.name)
+                !Files.isSymbolicLink(it.toPath()) && it.isFile && (PartialFileNames.matches(it.name) || it.name == keep)
             } != true) {
             job.cleanup()
             return create(jobId)

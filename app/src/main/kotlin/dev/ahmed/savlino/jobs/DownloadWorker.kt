@@ -43,6 +43,8 @@ class DownloadWorker(context: Context, params: WorkerParameters,
         // A stopped worker's result is ignored; WorkManager reschedules it.
         if (row?.stage == JobStage.ENQUEUED)
             return if (!isStopped && coordinator.continueAfterProgress(id)) Result.success() else Result.retry()
+        // Another attempt still saves this job: never fail the chain; a later run reads its outcome.
+        if (row?.stage in setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING)) return Result.retry()
         return if (row?.stage in setOf(JobStage.COMPLETED, JobStage.CANCELLED, JobStage.PAUSED)) Result.success() else Result.failure()
     }
     /** What the notification says in words; a percent step alone is posted, not re-promoted. */

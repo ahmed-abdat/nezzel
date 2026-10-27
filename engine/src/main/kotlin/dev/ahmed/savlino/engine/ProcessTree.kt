@@ -24,7 +24,9 @@ internal class FileProcTable(private val root: File = File("/proc"),
         val end = stat.lastIndexOf(')')
         require(end > 0 && stat.substringBefore(' ').toInt() == pid)
         val fields = stat.substring(end + 1).trim().split(Regex("\\s+"))
-        val command = try { File(directory, "cmdline").readText().split('\u0000').filter { it.isNotEmpty() } }
+        // Each argv entry ends in NUL; an empty argument ("" in --replace-in-metadata) is a real entry.
+        val command = try { File(directory, "cmdline").readText().takeIf { it.isNotEmpty() }
+            ?.removeSuffix("\u0000")?.split('\u0000').orEmpty() }
             catch (_: Exception) { emptyList() }
         ProcProcess(pid, fields[1].toInt(), fields[19].toLong(), command, fields[0].single())
     } catch (_: Exception) { null } // Process may disappear between directory/stat/cmdline reads.
@@ -103,3 +105,40 @@ internal class ProcessTree(private val proc: ProcTable,
         return true
     }
 }
+
+/**
+ * Native processes a stopped, crashed or replaced attempt left writing into staging (an orphan ffmpeg after an
+ * airplane toggle, or after the app was killed or updated). Only this app's uid, and only argv that names a path
+ * inside [kill]'s directory: "downloads/job-1/" never matches job-10.
+ */
+internal class StaleProcesses(private val proc: ProcTable = FileProcTable(),
+    private val uidOf: (Int) -> Int? = ::procUid, private val myUid: () -> Int = android.os.Process::myUid,
+    private val myPid: () -> Int = android.os.Process::myPid,
+    private val nanoTime: () -> Long = System::nanoTime, private val pause: (Long) -> Unit = Thread::sleep) {
+    /** Blocking: TERM, a short grace, then KILL. Returns how many targets are still alive (0 = staging is free). */
+    fun kill(directory: File): Int {
+        val path = directory.canonicalFile.path.trimEnd('/')
+        // Whole arguments only (ffmpeg gets "file:" paths): a URL or title that merely contains the path never matches.
+        fun names(row: ProcProcess) = row.command.any { arg ->
+            arg.removePrefix("file:").let { it == path || it.startsWith("$path/") }
+        }
+        val uid = myUid(); val pid = myPid()
+        val targets = proc.snapshot().filter { it.pid != pid && it.state != 'Z' && names(it) && uidOf(it.pid) == uid }
+            .map { it.pid to it.startTicks }
+        if (targets.isEmpty()) return 0
+        fun alive(target: Pair<Int, Long>) = proc.read(target.first)?.let { it.startTicks == target.second && it.state != 'Z' } == true
+        fun signalAll(signal: Int) = targets.filter(::alive).forEach { proc.signal(it.first, signal) }
+        signalAll(15)
+        val started = nanoTime()
+        while (targets.any(::alive) && nanoTime() - started < 500_000_000) pause(20)
+        signalAll(9)
+        while (targets.any(::alive) && nanoTime() - started < 800_000_000) pause(20)
+        return targets.count(::alive)
+    }
+}
+
+/** Real uid from /proc/<pid>/status; null when the process is gone or unreadable. */
+private fun procUid(pid: Int): Int? = try {
+    File("/proc/$pid/status").useLines { lines -> lines.firstOrNull { it.startsWith("Uid:") } }
+        ?.substringAfter(':')?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.toInt()
+} catch (_: Exception) { null }

@@ -47,7 +47,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         RangeEligibility.select(command.source.link.host, command.format, file.readText()) {
             VideoCdnPolicy.allows(command.source.link.host, it) != null
         }
-    }) : EngineAdapter {
+    },
+    private val staleProcesses: StaleProcesses = StaleProcesses()) : EngineAdapter {
     constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
         fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime))
     private val unavailable = UnavailableEngine()
@@ -425,7 +426,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
             if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
             // Both paths validate before any staging write. Caller owns staging cleanup/publication.
-            try { YtdlpCommand.validateStaging(directory) }
+            try { YtdlpCommand.validateStaging(directory, YtdlpCommand.finishedSource(command.format)) }
             catch (_: IllegalArgumentException) { return@operation TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING) }
             prepareDownload(command)
             var infoJson = infoCache?.freshFile(command.jobId)
@@ -525,9 +526,15 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                         currentCoroutineContext().ensureActive()
                         checkCancelled(current)
                         retriedWithoutTags = true
-                        // Keep downloaded audio. Remove only known artwork and the append-only path manifest.
+                        // Keep downloaded audio. Remove only known artwork and the append-only path manifest,
+                        // plus a half-written conversion target while its source remains: yt-dlp would reuse it.
+                        val format = command.format
+                        val source = if (format.sourceContainer == "mp3") "output" else YtdlpCommand.finishedSource(format)
+                        val target = "output.${format.container}".takeIf {
+                            format.conversion != null && source != null && File(directory, source).isFile
+                        }
                         directory.listFiles().orEmpty().filter {
-                            it.name == "result-path.txt" ||
+                            it.name == "result-path.txt" || it.name == target ||
                                 it.name.matches(Regex("output\\.(?:jpg|jpeg|png|webp|avif|gif|temp\\.(?:m4a|mp3))"))
                         }.forEach {
                             if (java.nio.file.Files.isSymbolicLink(it.toPath()) || !it.isFile || !it.delete())
@@ -750,6 +757,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private suspend fun probe(): String? = operation("probe-${UUID.randomUUID()}", { _, _ -> null }, gated = false) { current ->
         executeVersion(current).trim().takeIf { it.isNotBlank() }?.also(runtime::rememberWarmedVersion)
     }
+
+    override fun stopStaleProcesses(directory: File) = staleProcesses.kill(directory)
 
     override fun cancel(operationId: String) {
         var stopDirect: (() -> Unit)? = null
