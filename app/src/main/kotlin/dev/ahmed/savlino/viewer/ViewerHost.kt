@@ -28,13 +28,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
+import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
@@ -106,7 +109,13 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     /** The page's size, as last measured. */
     internal var page = Size.Zero
     /** Where the sheet is right now; null while there is no bar to shrink into. Read it only in layout, layer and draw lambdas. */
-    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let { MiniPlayerLayout.at(progress, page, it.rect) }
+    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let {
+        MiniPlayerLayout.at(progress, page, it.rect, if (lightBar) it.cover(coverInset, coverSide) else null)
+    }
+    /** A light bar under the black sheet: the sheet draws back into the cover rather than fading to grey over it. */
+    internal var lightBar = false
+    internal var coverInset = 0f
+    internal var coverSide = 0f
 
     internal fun show(next: ViewerRequest) {
         val old = request
@@ -201,7 +210,12 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     // The app's own reduced motion is provided below this host, so read the system setting here too.
     val reduced = LocalReducedMotion.current || rememberReducedMotion()
     val scope = rememberCoroutineScope()
-    SideEffect { state.scope = scope; state.reduced = reduced }
+    val lightBar = Dock.color.luminance() > .5f
+    val density = LocalDensity.current
+    SideEffect {
+        state.scope = scope; state.reduced = reduced; state.lightBar = lightBar
+        with(density) { state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx() }
+    }
     val covered = request != null && !state.collapsed
     LaunchedEffect(covered) { if (covered) { focus.clearFocus(force = true); keyboard?.hide() } }
     // Collapsing leaves nothing focused inside the page that is no longer placed.

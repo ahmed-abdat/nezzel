@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.LinkViewModel
+import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -73,9 +75,10 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
             shownHost?.let { host -> CopiedChip(host, onUseCopied, onDismissCopied) }
         }
         OutlinedTextField(value = links.text, onValueChange = links::edit,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).onFocusChanged { links.editorFocused = it.isFocused }
-                .semantics { contentDescription = fieldLabel },
-            shape = CircleShape,
+            // Same shape, colour and shadow as the music bar and the tabs below it.
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).shadow(Dock.SHADOW, Dock.SHAPE)
+                .onFocusChanged { links.editorFocused = it.isFocused }.semantics { contentDescription = fieldLabel },
+            shape = Dock.SHAPE,
             leadingIcon = { Icon(painterResource(R.drawable.ic_link), null, Modifier.padding(start = Space.s)) },
             trailingIcon = {
                 if (links.text.isEmpty()) PasteButton(paste, Modifier.padding(end = Space.s))
@@ -89,14 +92,15 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
             keyboardActions = KeyboardActions(onDone = { if (links.text.isNotEmpty()) check() }),
             singleLine = true, isError = links.invalid,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = colors.surfaceContainerHigh,
-                unfocusedContainerColor = colors.surfaceContainerHigh,
-                errorContainerColor = colors.surfaceContainerHigh,
+                focusedContainerColor = Dock.color,
+                unfocusedContainerColor = Dock.color,
+                errorContainerColor = Dock.color,
                 focusedBorderColor = colors.primary,
                 unfocusedBorderColor = Color.Transparent,
-                unfocusedLeadingIconColor = colors.onSurfaceVariant),
-            supportingText = if (links.invalid) { { Text(stringResource(R.string.invalid_link),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) } } else null)
+                unfocusedLeadingIconColor = colors.onSurfaceVariant))
+        // Under the field rather than inside it, so the field's shadow stays the pill's.
+        if (links.invalid) Text(stringResource(R.string.invalid_link), Modifier.padding(horizontal = Space.l)
+            .semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = MaterialTheme.typography.bodySmall)
         // Fade only: the action keeps its full 56dp from the first frame, so it is never a sliver to tap.
         AnimatedVisibility(links.text.isNotEmpty(),
             enter = fadeIn(easeOut(reduced, Motion.FADE_IN)), exit = fadeOut(easeOut(reduced, Motion.FADE_OUT))) {

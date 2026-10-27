@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.media3.common.Player
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.ui.ThumbnailKind
+import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.Space
 import androidx.media3.session.R as Media3
 
@@ -62,30 +63,39 @@ import androidx.media3.session.R as Media3
  */
 internal data class MiniPlayerLayout(val sheet: Rect, val corner: Dp, val content: Float, val fade: Float, val tabs: Float) {
     companion object {
-        /** The sheet in window pixels, for a page of [page] size and the bar at [bar]. */
-        fun at(p: Float, page: Size, bar: Rect): MiniPlayerLayout {
+        /**
+         * The sheet in window pixels, for a page of [page] size and the bar at [bar]. With [reveal] (the bar's cover, for
+         * a light bar) the black sheet never fades: it draws back into the cover instead, so no pixel is ever a grey mix.
+         */
+        fun at(p: Float, page: Size, bar: Rect, reveal: Rect? = null): MiniPlayerLayout {
             val narrow = FastOutSlowInEasing.transform(span(p, NARROW, 1f))
             val top = p * bar.top
-            return MiniPlayerLayout(Rect(lerp(0f, bar.left, narrow), top, lerp(page.width, bar.right, narrow), lerp(page.height, bar.bottom, narrow)),
-                lerp(0.dp, CORNER, narrow), content(p), fade(p), tabs(p))
+            val sheet = Rect(lerp(0f, bar.left, narrow), top, lerp(page.width, bar.right, narrow), lerp(page.height, bar.bottom, narrow))
+            val corner = lerp(0.dp, CORNER, narrow)
+            if (reveal == null) return MiniPlayerLayout(sheet, corner, content(p), fade(p), tabs(p))
+            val back = FastOutSlowInEasing.transform(span(p, FADE, 1f))
+            return MiniPlayerLayout(lerp(sheet, reveal, back), lerp(corner, COVER_CORNER, back), content(p), 1f, tabs(p))
         }
         /** The name, seek bar, controls and top bar ride on the sheet and only fade near the end. */
         fun content(p: Float) = 1f - span(p, .55f, .8f)
         /** The sheet itself, over the bar under it. */
-        fun fade(p: Float) = 1f - span(p, .85f, 1f)
+        fun fade(p: Float) = 1f - span(p, FADE, 1f)
         /** The tabs come up last, from under the sheet. */
         fun tabs(p: Float) = 1f - FastOutSlowInEasing.transform(span(p, NARROW, 1f))
         /** The cover rides on the sheet (from [from], its place on the still page) and then settles into the bar's [to]. */
         fun cover(p: Float, from: Rect, to: Rect, travel: Float) =
             lerp(from.translate(0f, p * travel), to, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
-        fun coverCorner(p: Float, from: Dp) = lerp(from, 8.dp, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
+        fun coverCorner(p: Float, from: Dp) = lerp(from, COVER_CORNER, FastOutSlowInEasing.transform(span(p, .5f, 1f)))
         private fun span(p: Float, start: Float, end: Float) = ((p - start) / (end - start)).coerceIn(0f, 1f)
         private const val NARROW = .6f
+        private const val FADE = .85f
         val BAR = 64.dp
         val COVER = 48.dp
         val INSET = 8.dp
         /** The bar's corners, which the sheet's become. */
-        val CORNER = 16.dp
+        val CORNER = Dock.CORNER
+        /** Inside the bar's round end: the cover's corner arc stays within the bar's. */
+        val COVER_CORNER = 16.dp
     }
 }
 
@@ -119,7 +129,7 @@ fun MiniPlayerSlot(modifier: Modifier = Modifier) {
     val host = LocalViewerHost.current ?: return
     if (host.mini == null) return
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    Spacer(modifier.fillMaxWidth().padding(bottom = Space.s).height(MiniPlayerLayout.BAR)
+    Spacer(modifier.fillMaxWidth().padding(bottom = Dock.GAP).height(MiniPlayerLayout.BAR)
         .onGloballyPositioned { host.slot = MiniSlot(it.boundsInRoot(), rtl) })
     DisposableEffect(host) { onDispose { host.slot = null } }
 }
@@ -171,10 +181,9 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
                 CustomAccessibilityAction(closeLabel) { host.close(); true },
                 CustomAccessibilityAction(open) { host.expand(); true })
         },
-        shape = RoundedCornerShape(MiniPlayerLayout.CORNER), color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 1.dp) {
+        shape = Dock.SHAPE, color = Dock.color, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = Dock.SHADOW) {
         Row(Modifier.fillMaxSize().padding(horizontal = MiniPlayerLayout.INSET), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.size(MiniPlayerLayout.COVER), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer,
+            Surface(Modifier.size(MiniPlayerLayout.COVER), shape = RoundedCornerShape(MiniPlayerLayout.COVER_CORNER), color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
                 cover?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                     ?: Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.5f)) }

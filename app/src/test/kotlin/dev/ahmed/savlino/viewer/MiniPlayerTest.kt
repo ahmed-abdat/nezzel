@@ -148,6 +148,12 @@ class MiniPlayerTest {
         MiniPlayerLayout.at(1f, page, slot).run {
             assertEquals(slot, sheet); assertEquals(MiniPlayerLayout.CORNER, corner); assertEquals(0f, fade); assertEquals(0f, tabs)
         }
+        // Over a light bar the sheet never fades (no grey): it stays opaque and draws back into the bar's cover.
+        val reveal = Rect(24f, 688f, 72f, 736f)
+        for (p in listOf(0f, .5f, .85f, .9f, .95f, 1f)) assertEquals(1f, MiniPlayerLayout.at(p, page, slot, reveal).fade)
+        assertEquals(MiniPlayerLayout.at(.85f, page, slot).sheet, MiniPlayerLayout.at(.85f, page, slot, reveal).sheet)
+        MiniPlayerLayout.at(.95f, page, slot, reveal).sheet.run { assertTrue(left in slot.left..reveal.left && right < slot.right && right > reveal.right) }
+        MiniPlayerLayout.at(1f, page, slot, reveal).run { assertEquals(reveal, sheet); assertEquals(MiniPlayerLayout.COVER_CORNER, corner) }
         // The cover rides on the sheet first, then settles exactly onto the bar's cover.
         val from = Rect(24f, 120f, 360f, 456f)
         val to = Rect(24f, 688f, 72f, 736f)
@@ -159,19 +165,20 @@ class MiniPlayerTest {
         assertEquals(368f - 8f - 48f, MiniSlot(slot, true).cover(8f, 48f).left)
     }
 
-    /** Collapsed, the sheet is the bar's own rect, and the cover lands on the bar's start side. */
+    /** Collapsed over the light bar, the black sheet has drawn back into the bar's cover, on the bar's start side. */
     private fun sheetEndsAsTheBar(rtl: Boolean) {
         playSong()
         collapse()
         assertTrue(host.collapsed)
         val bar = bar().boundsInRoot
-        val sheet = compose.runOnIdle { host.motion()!!.sheet }
-        assertEquals(bar.left, sheet.left, .5f); assertEquals(bar.top, sheet.top, .5f)
-        assertEquals(bar.right, sheet.right, .5f); assertEquals(bar.bottom, sheet.bottom, .5f)
         val slot = compose.runOnIdle { host.slot!! }
+        assertEquals(bar.left, slot.rect.left, .5f); assertEquals(bar.top, slot.rect.top, .5f)
+        assertEquals(bar.right, slot.rect.right, .5f); assertEquals(bar.bottom, slot.rect.bottom, .5f)
         assertEquals(rtl, slot.rtl)
         val cover = slot.cover(8f, 48f)
         if (rtl) assertEquals(bar.right - 8f, cover.right, .5f) else assertEquals(bar.left + 8f, cover.left, .5f)
+        val sheet = compose.runOnIdle { host.motion()!! }
+        assertEquals(cover, sheet.sheet); assertEquals(MiniPlayerLayout.COVER_CORNER, sheet.corner); assertEquals(1f, sheet.fade)
     }
     @Test fun theSheetEndsAsTheBar() = sheetEndsAsTheBar(false)
     @Config(qualifiers = "ar-w384dp-h832dp")
