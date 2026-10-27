@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Looper
 import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
-import androidx.activity.ComponentDialog
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -40,7 +39,6 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowDialog
 import androidx.test.platform.app.InstrumentationRegistry
 import java.time.Duration
 
@@ -76,8 +74,11 @@ class ViewerControlsTest {
     private fun content(items: List<ViewerItem>, start: Int, language: String) {
         activity.setContent {
             NezzelTheme(ThemePref.Dark, false) {
-                CompositionLocalProvider(LocalMediaPictures provides pictures, LocalPlaybackEnvironment provides playback) {
-                    if (open) MediaViewer(items, start, language, { open = false }, onShare = {}, onOpenWith = {})
+                // The app's host draws the viewer; the screen's locals travel with it.
+                ViewerHost {
+                    CompositionLocalProvider(LocalMediaPictures provides pictures, LocalPlaybackEnvironment provides playback) {
+                        if (open) MediaViewer(items, start, language, { open = false }, onShare = {}, onOpenWith = {})
+                    }
                 }
             }
         }
@@ -516,14 +517,27 @@ class ViewerControlsTest {
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
 
         node(R.string.viewer_fullscreen).performClick()
-        val dialog = ShadowDialog.getLatestDialog() as ComponentDialog
-        compose.runOnIdle { dialog.onBackPressedDispatcher.onBackPressed() }
+        compose.runOnIdle { activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
         assertTrue("Back leaves fullscreen first", open)
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
-        compose.runOnIdle { dialog.onBackPressedDispatcher.onBackPressed() }
+        compose.runOnIdle { activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
         assertFalse(open)
+    }
+
+    @Suppress("DEPRECATION")
+    @Config(sdk = [29])
+    @Test fun fullscreenHidesTheBarsOnTheAppWindowAndExitShowsThem() {
+        prepare = { it.size = VideoSize(1920, 1080) }
+        show()
+        advance(300)
+        val hidden = { activity.window.decorView.systemUiVisibility and android.view.View.SYSTEM_UI_FLAG_FULLSCREEN != 0 }
+        assertFalse(hidden())
+        node(R.string.viewer_fullscreen).performClick(); advance(300)
+        assertTrue("Fullscreen hides the bars of the window the viewer shares with the app", hidden())
+        node(R.string.viewer_exit_fullscreen).performClick(); advance(300)
+        assertFalse(hidden())
     }
 
     @Test fun closingInFullscreenRestoresOrientation() {
@@ -560,10 +574,9 @@ class ViewerControlsTest {
         show(); advance(300)
         compose.runOnIdle { player.playWhenReady = false; player.inner.at(30_000) }
         node(R.string.viewer_fullscreen).performClick(); advance(300)
-        val dialog = ShadowDialog.getLatestDialog() as ComponentDialog
         // Hidden bars or a rotation resize the window under a live pager.
         for ((w, h) in listOf(2400 to 1080, 2280 to 1080, 1080 to 2400)) {
-            compose.runOnIdle { dialog.window!!.setLayout(w, h) }; advance(300)
+            compose.runOnIdle { activity.window.setLayout(w, h) }; advance(300)
             val bounds = page(2).fetchSemanticsNode().boundsInRoot
             assertEquals("page lines up with the window at ${w}x$h", 0f, bounds.left, 1f)
             assertEquals(w.toFloat(), bounds.right, 1f)

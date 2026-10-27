@@ -116,7 +116,8 @@ class MainActivity : AppCompatActivity() {
             if (!onboarding) ClipboardEntryEffect(links, ::suggestClipboard)
             NezzelTheme(theme, wallpaper) {
                 if (onboarding) dev.ahmed.savlino.ui.OnboardingScreen(::finishOnboarding)
-                else NezzelApp(links, language, theme, wallpaper, suggestions,
+                // The viewer is drawn above the whole app in this window, so the tabs can move with the player.
+                else dev.ahmed.savlino.viewer.ViewerHost { NezzelApp(links, language, theme, wallpaper, suggestions,
                     statusLibrary = media.statusLibrary,
                     openSavedUri = openSavedUri, onSavedOpened = { openSavedUri = null },
                     onPaste = ::pasteClipboard,
@@ -133,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                     onSuggestions = {
                         preferences.suggestionsEnabled = it; suggestions = it; links.suggestionsEnabled = it
                         if (!it) links.dismissSuggestion()
-                    })
+                    }) }
                 if (showNotificationRationale) androidx.compose.material3.AlertDialog(
                     onDismissRequest = { notificationRationaleDecision(false) },
                     title = { androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.notification_rationale_title)) },

@@ -48,14 +48,15 @@ class StatusesScreenTest {
     private fun show(library: StatusLibrary?) {
         activity.setContent {
             NezzelTheme(ThemePref.Light, false) {
-                CompositionLocalProvider(LocalStatusMedia provides media) { StatusesScreen(library, "en") }
+                dev.ahmed.savlino.viewer.ViewerHost { CompositionLocalProvider(LocalStatusMedia provides media) { StatusesScreen(library, "en") } }
             }
         }
         compose.waitForIdle()
     }
 
-    private fun viewerSave() = hasText(s(R.string.statuses_save)) and hasClickAction() and hasAnyAncestor(isDialog())
-    private fun gridSaves() = hasContentDescription(s(R.string.statuses_save)) and hasClickAction() and !hasAnyAncestor(isDialog())
+    private fun viewerSave() = hasText(s(R.string.statuses_save)) and hasClickAction() and hasAnyAncestor(viewer())
+    private fun gridSaves() = hasContentDescription(s(R.string.statuses_save)) and hasClickAction() and !hasAnyAncestor(viewer())
+    private fun viewer() = hasTestTag(dev.ahmed.savlino.viewer.VIEWER_TAG)
     private fun tiles(kind: Int) = compose.onAllNodes(hasContentDescription(s(kind), substring = true) and hasClickAction())
 
     @Test fun grantScreenShowsFoundAppsOneButtonAndOpensThePicker() {
@@ -170,7 +171,7 @@ class StatusesScreenTest {
         activity.setContent {
             if (shown) CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
                 NezzelTheme(ThemePref.Light, false) {
-                    CompositionLocalProvider(LocalStatusMedia provides media) { StatusesScreen(library, "en") }
+                    dev.ahmed.savlino.viewer.ViewerHost { CompositionLocalProvider(LocalStatusMedia provides media) { StatusesScreen(library, "en") } }
                 }
             }
         }
@@ -215,10 +216,10 @@ class StatusesScreenTest {
         compose.onNodeWithContentDescription(s(R.string.viewer_close)).performClick()
         compose.waitForIdle()
         tiles(R.string.statuses_video).assertCountEquals(2)
-        // System Back goes to the viewer's own window and closes only the viewer as well.
+        // System Back closes only the viewer as well.
         tiles(R.string.statuses_video).onFirst().performClick()
         compose.waitForIdle()
-        (org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.activity.ComponentDialog).onBackPressedDispatcher.onBackPressed()
+        activity.onBackPressedDispatcher.onBackPressed()
         compose.waitForIdle()
         tiles(R.string.statuses_video).assertCountEquals(2)
         tiles(R.string.statuses_video).onFirst().performClick()
@@ -242,7 +243,7 @@ class StatusesScreenTest {
         assertFalse(library.saved.single().isVideo)
         // The viewer stays on the same status and says it is saved.
         compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertExists()
-        compose.onNode(hasText(s(R.string.statuses_saved)) and hasAnyAncestor(isDialog())).assertExists()
+        compose.onNode(hasText(s(R.string.statuses_saved)) and hasAnyAncestor(viewer())).assertExists()
     }
 
     @Test fun viewerSwipesWithinTheFilterAndSaveMarksTheStatusSaved() {
@@ -264,7 +265,10 @@ class StatusesScreenTest {
         compose.onNode(viewerSave()).performClick()
         compose.waitForIdle()
         assertEquals("status-7", library.saved.single().uri.lastPathSegment)
-        compose.onNodeWithContentDescription(s(R.string.viewer_close)).assertExists()
+        compose.onNode(hasText(s(R.string.statuses_saved)) and hasAnyAncestor(viewer())).assertExists()
+        // The screen's Open file message waits under the viewer, out of reach as it was under the Dialog.
+        compose.onNodeWithContentDescription(s(R.string.viewer_close)).performClick()
+        compose.waitForIdle()
         compose.onNodeWithText(s(R.string.open_file)).assertExists()
     }
 
