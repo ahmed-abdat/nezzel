@@ -102,6 +102,36 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun aPlaylistVideoMovedToItsRetryIdBeforeItsEndCountsStillCountsOneEnd() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), usage = usage, script = { command, _, _ ->
+            if (command.jobId == "batch-race") { entered.complete(Unit); release.await() }
+            TransferResult.Failure(DownloadError.Failed)
+        }).use { f ->
+            val db = f.store.writableDatabase
+            f.coordinator.batches // creates the batch tables
+            db.execSQL("INSERT INTO batches(batch_id,title,preset,state,created_at) VALUES('race','R','BEST','ACTIVE',?)",
+                arrayOf<Any>(System.currentTimeMillis()))
+            db.execSQL("INSERT INTO batch_items(batch_id,position,item_id,title,state,job_id) VALUES('race',0,'v1','V','QUEUED','batch-race')")
+            assertTrue(f.coordinator.enqueue(command("batch-race")))
+            val running = async(Dispatchers.Default) { f.worker("batch-race").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                // The row moves to the retry's id while the old attempt has not counted its end yet.
+                db.execSQL("UPDATE batch_items SET job_id='batch-race-fresh' WHERE batch_id='race'")
+                release.complete(Unit)
+                withTimeout(5000) { running.await() }
+                assertTrue(f.coordinator.enqueue(command("batch-race-fresh")))
+                f.worker("batch-race-fresh").doWork()
+                assertEquals(JobStage.FAILED, f.store.get("batch-race-fresh")!!.stage)
+                assertEquals(mapOf("dl.failed.video.hd" to 1), usage.ends())
+                assertFalse("A playlist video adds no single-link funnel end", "funnel.failed" in usage.keys)
+            } finally { release.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
     @Test fun repeatedFailedJobDeliveryCountsOneEnd() = runBlocking {
         val usage = UsageRecorder()
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.FormatExpired))), usage = usage).use { f ->

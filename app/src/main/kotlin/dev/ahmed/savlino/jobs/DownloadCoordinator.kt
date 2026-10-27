@@ -131,7 +131,7 @@ class DownloadCoordinator(
             batches.all().any { it.state == BatchState.ACTIVE || it.state == BatchState.WAITING_NETWORK }
     }
     /** No generated toString: the report link exists only until terminal accounting consumes this attempt. */
-    private class AttemptAccounting(link: String?, clock: () -> Long) {
+    private class AttemptAccounting(link: String?, clock: () -> Long, val countKey: String?) {
         val siteKey = UsageKeys.site(link)
         @Volatile var reportLink: String? = link
         @Volatile var reason = ExecutionFailureReason.UNKNOWN
@@ -174,7 +174,7 @@ class DownloadCoordinator(
         store.onTerminalSource = { row, stage ->
             // Startup replay has no live predecessor and must neither count nor retain its sources.
             if (active.containsKey(row.jobId) || mutableProgress.value.any { it.jobId == row.jobId && (!it.terminal || it.awaitingSchedule) }) {
-                val attempt = accounting.getOrPut(row.jobId) { AttemptAccounting(row.sourceUrl, monotonicMillis) }
+                val attempt = accounting.getOrPut(row.jobId) { AttemptAccounting(row.sourceUrl, monotonicMillis, null) } // no batch query inside a store write
                 if (stage != JobStage.FAILED) attempt.reportLink = null
             }
         }
@@ -412,7 +412,8 @@ class DownloadCoordinator(
         val row = queuedRow(id) ?: return@withContext null
         if (row.stage != JobStage.ENQUEUED) return@withContext waitingResult(id, finished)
         var completion: Pair<JobRecord, DownloadProgress>? = null
-        val attempt = AttemptAccounting(row.sourceUrl, monotonicMillis)
+        // Resolved while the job is live: a playlist refresh or Retry may move its row to a new id before this end counts.
+        val attempt = AttemptAccounting(row.sourceUrl, monotonicMillis, countKey(id))
         try {
             transfer.withSlot(id, row.createdAt, eligible = { queuedRow(id)?.stage == JobStage.ENQUEUED }) {
                 try {
@@ -911,14 +912,15 @@ class DownloadCoordinator(
         }
         val asked = cancelAsked.remove(event.jobId)
         if (outcome == UsageKeys.Download.CANCELLED) {
-            accounting.remove(event.jobId)?.reportLink = null
-            if (asked && countedEnds.first(countKey(event.jobId))) usage.count(UsageKeys.download(outcome, row.format))
+            val key = accounting.remove(event.jobId)?.also { it.reportLink = null }?.countKey ?: countKey(event.jobId)
+            if (asked && countedEnds.first(key)) usage.count(UsageKeys.download(outcome, row.format))
             return
         }
         val attempt = accounting.remove(event.jobId) ?: return
-        if (countedEnds.first(countKey(event.jobId))) {
+        val key = attempt.countKey ?: countKey(event.jobId)
+        if (countedEnds.first(key)) {
             usage.count(UsageKeys.download(outcome, row.format))
-            if (!batches.containsJob(event.jobId))
+            if (!key.startsWith("b:"))
                 usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
             (attempt.siteKey ?: UsageKeys.site(row.sourceUrl))?.let(usage::count)
         }
