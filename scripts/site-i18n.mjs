@@ -122,8 +122,11 @@ try {
   const alternates = [...locales, 'x-default'].map(l => `<link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}">`).join('\n');
   if (!source.includes(alternates)) throw new Error('site/index.html must contain all four hreflang links');
   const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + translate(source, nodes, dictionaries[l], meta[l], l)]));
+  // lastmod = the page's ld+json dateModified, so the sitemap stays reproducible
+  const lastmod = /"dateModified":"(\d{4}-\d{2}-\d{2})"/.exec(source)?.[1];
+  if (!lastmod) throw new Error('site/index.html ld+json needs dateModified (YYYY-MM-DD)');
   const sitemapLinks = [...locales, 'x-default'].map(l => `    <xhtml:link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}"/>`).join('\n');
-  outputs.set('site/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' + locales.map(l => `  <url>\n    <loc>${base}${paths[l]}</loc>\n${sitemapLinks}\n  </url>`).join('\n') + '\n</urlset>\n');
+  outputs.set('site/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' + locales.map(l => `  <url>\n    <loc>${base}${paths[l]}</loc>\n    <lastmod>${lastmod}</lastmod>\n${sitemapLinks}\n  </url>`).join('\n') + '\n</urlset>\n');
   const stale = [];
   for (const [path, expected] of outputs) {
     const url = new URL(path, root);
