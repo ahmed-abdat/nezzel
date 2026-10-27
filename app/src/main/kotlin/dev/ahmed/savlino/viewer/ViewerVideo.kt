@@ -1,5 +1,9 @@
 package dev.ahmed.savlino.viewer
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -284,8 +288,14 @@ private fun VolumeButton(muted: Boolean, canMute: Boolean, controls: ViewerContr
     val context = LocalContext.current
     val volume = remember(context) { DeviceVolume(context) }
     var level by remember { mutableIntStateOf(volume.level) }
-    // Follows the volume keys while the panel is open.
-    LaunchedEffect(controls.volumeOpen) { while (controls.volumeOpen) { level = volume.level; delay(250) } }
+    // Follows the volume keys and other apps: Android reports volume changes as system setting changes.
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(self: Boolean) { level = volume.level } }
+        context.contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    LaunchedEffect(lifecycle) { if (lifecycle == Lifecycle.State.RESUMED) level = volume.level }
     val silent = muted || volume.adjustable && level == 0
     val title = stringResource(R.string.viewer_volume)
     val mutedLabel = stringResource(R.string.viewer_volume_muted)

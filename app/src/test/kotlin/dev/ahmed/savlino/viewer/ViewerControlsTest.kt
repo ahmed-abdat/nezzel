@@ -127,6 +127,18 @@ class ViewerControlsTest {
         assertEquals("Raising the volume turns sound back on", 1f, player.volume)
     }
 
+    @Test fun volumeKeysUpdateTheIconWithoutOpeningThePanel() {
+        val audio = RuntimeEnvironment.getApplication().getSystemService(android.media.AudioManager::class.java)
+        audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 9, 0)
+        show()
+        val muted = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, text(R.string.viewer_volume_muted))
+        node(R.string.viewer_volume).assert(!muted)
+        audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 0, 0)
+        activity.contentResolver.notifyChange(android.provider.Settings.System.CONTENT_URI, null)
+        advance(100)
+        node(R.string.viewer_volume).assert(muted)
+    }
+
     @Test fun bigCentreControlsOnVideoPauseAndSkip() {
         show()
         compose.runOnIdle { player.seekTo(30_000) }
