@@ -11,6 +11,7 @@ import dev.ahmed.savlino.NezzelApp
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.LinkViewModel
 import dev.ahmed.savlino.ui.theme.NezzelTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -64,9 +65,26 @@ class TabSwitchCostTest {
                         println("PROBE   invalid: $invalid")
                         println("PROBE   readers: $readers")
                         println("PROBE   rest: ${RecompositionProbe.describe(rest)}")
+                        // 101-128 scopes before the app body and hidden Home stopped re-running on a switch.
+                        assertTrue("$destination tap frame: ${RecompositionProbe.total(tap)}", RecompositionProbe.total(tap) <= TAP_BUDGET)
+                        // Screen roots are entered and skip: no screen's body runs, shown or hidden.
+                        val bodies = tap.keys.filter { owner -> owner !in SCREEN_ROOTS && SCREEN_FILES.any { owner.startsWith(it) } }
+                        assertTrue("$destination re-ran $bodies", bodies.isEmpty())
+                        // The tab settling (or hiding) recomposes nothing: active is read in effects and draw only.
+                        assertTrue("$destination settle: ${RecompositionProbe.describe(rest)}",
+                            rest.keys.none { !it.startsWith("TestMonotonicFrameClock") })
                     }
                 }
             }
         } finally { controller.pause().stop().destroy() }
+    }
+
+    private companion object {
+        const val TAP_BUDGET = 85
+        val SCREEN_ROOTS = setOf("NezzelAppKt.HomeScreen", "DownloadsScreenKt.DownloadsScreen", "StatusesScreenKt.StatusesScreen",
+            "SettingsScreenKt.SettingsScreen")
+        // Owners inside a screen's body; NezzelApp's own lambdas stay out (they hand the tab its destination).
+        val SCREEN_FILES = listOf("NezzelAppKt.Home", "HomeLinkCardKt.", "UpdateHeroKt.", "DownloadsScreenKt.",
+            "StatusesScreenKt.", "SettingsScreenKt.")
     }
 }

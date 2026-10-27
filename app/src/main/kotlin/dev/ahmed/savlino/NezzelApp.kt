@@ -60,9 +60,8 @@ fun NezzelApp(
     statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary? = null,
     openSavedUri: String? = null, onSavedOpened: () -> Unit = {},
 ) {
-    var updateBack by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
-    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack = links.destination }
-    BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack else "Home") }
+    val updateBack = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
+    DestinationBack(links, updateBack)
     val reduced = rememberReducedMotion()
     val tabStateHolder = rememberSaveableStateHolder()
     val reselections = remember { TabReselections() }
@@ -304,7 +303,7 @@ fun NezzelApp(
         if (updates != null) AppUpdateSheets(updates, updateState, links, language, notificationRationaleShowing)
         if (links.destination == "AppUpdate" && updates != null) {
             Box(Modifier.fillMaxSize()) {
-                AppUpdateRoute(updates, language) { links.navigate(updateBack) }
+                AppUpdateRoute(updates, language) { links.navigate(updateBack.value) }
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
             }
         } else if (links.moreFormats && !links.hasPendingShare) {
@@ -349,6 +348,13 @@ fun NezzelApp(
     }
 }
 
+/** Its own scope: a tab switch recomposes these lines, not the whole app body. */
+@Composable
+private fun DestinationBack(links: LinkViewModel, updateBack: MutableState<String>) {
+    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack.value = links.destination }
+    BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack.value else "Home") }
+}
+
 /** A short window trades bottom chrome for a start rail; nested screens keep their vertical insets. */
 @Composable
 internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, language: String,
@@ -380,10 +386,11 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
     val scroll = rememberScrollState()
     ScrollOnTabReselect { scroll.scrollTo(0) }
     // The copied link is offered inline only while nothing else is in front of the person.
-    val copiedHost = links.suggestionHost.takeIf {
+    // Derived: a tab switch changes it only while a link is offered, so hidden Home doesn't re-run on every switch.
+    val copiedHost by remember(links) { derivedStateOf { links.suggestionHost.takeIf {
         links.hasSuggestion && links.destination == "Home" && links.optionsState == dev.ahmed.savlino.ui.OptionsState.Hidden &&
             !links.hasPendingNotificationChoice
-    }
+    } } }
     // First run: the library loaded and nothing is saved or running yet, so the page says what Nezzel is for.
     // While loading or after a failed query the saved list is unknown, not empty.
     val firstRun = jobs.isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty()
