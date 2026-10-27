@@ -29,6 +29,11 @@ internal class RecordingPlayer : SimpleBasePlayer(Looper.getMainLooper()) {
     override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> = Futures.immediateVoidFuture()
     override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> = Futures.immediateVoidFuture()
     fun at(position: Long) { this.position = position }
+    fun tags(metadata: MediaMetadata, timed: Metadata = Metadata(emptyList())) {
+        value = value.buildUpon().setPlaylist(value.timeline, value.currentTracks, metadata)
+            .setPlaylistMetadata(metadata).setTimedMetadata(timed).build()
+        invalidateState()
+    }
     fun loop() { position = 0; value = value.buildUpon().setPositionDiscontinuity(Player.DISCONTINUITY_REASON_AUTO_TRANSITION, 0).build(); invalidateState() }
     fun interrupt(reason: Int) { value = value.buildUpon().setPlayWhenReady(false, reason).build(); invalidateState() }
     fun suppress() { value = value.buildUpon().setPlaybackSuppressionReason(Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS).build(); invalidateState() }

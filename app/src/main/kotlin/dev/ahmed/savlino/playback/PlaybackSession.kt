@@ -15,6 +15,7 @@ internal class PlaybackSession(val player: Player, private val environment: Play
     val state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     var resumedAt = 0L; private set
     private var item: ViewerItem? = null
+    private var metadata = MediaMetadata.EMPTY
     private var size: Long? = null
     private var version = 0
     private var closed = false
@@ -51,8 +52,10 @@ internal class PlaybackSession(val player: Player, private val environment: Play
         val bytes = environment.sizeOf(next)
         val position = if (next.resumePolicy == ResumePolicy.SAVED && bytes != null) environment.resume.position(next, bytes, next.durationMillis ?: 0)
             else environment.sessionPositions[next.uri]?.takeUnless { PlaybackResumeStore.finished(it, next.durationMillis ?: 0) } ?: 0
+        val resolvedMetadata = if (next.isAudio) PlaybackMetadata(environment.context).load(next.uri) else
+            MediaMetadata.Builder().setTitle(dev.ahmed.savlino.locale.AppLocale.localized(environment.context).getString(R.string.playback_audio)).build()
         if (closed || version != expected) throw CancellationException()
-        item = next; size = bytes; resumedAt = position; finished = false; failureCounted = false
+        item = next; metadata = resolvedMetadata; size = bytes; resumedAt = position; finished = false; failureCounted = false
         return position
     }
     suspend fun open(next: ViewerItem) {
@@ -65,10 +68,12 @@ internal class PlaybackSession(val player: Player, private val environment: Play
         } catch (error: CancellationException) { throw error }
         catch (error: Exception) { failure(error) }
     }
-    fun mediaItem(next: ViewerItem, position: Long): MediaItem = MediaItem.Builder()
-        .setMediaId(UUID.randomUUID().toString()).setUri(next.uri).setMimeType(next.mimeType)
-        .setMediaMetadata(MediaMetadata.Builder().setTitle(dev.ahmed.savlino.locale.AppLocale.localized(environment.context).getString(R.string.playback_audio))
-            .setExtras(Bundle().apply { putBoolean(SAVED, next.resumePolicy == ResumePolicy.SAVED); putLong(RESUMED_AT, position) }).build()).build()
+    fun mediaItem(next: ViewerItem, position: Long): MediaItem {
+        check(!closed && item == next)
+        return MediaItem.Builder().setMediaId(UUID.randomUUID().toString()).setUri(next.uri).setMimeType(next.mimeType)
+            .setMediaMetadata(metadata.buildUpon()
+                .setExtras(Bundle().apply { putBoolean(SAVED, next.resumePolicy == ResumePolicy.SAVED); putLong(RESUMED_AT, position) }).build()).build()
+    }
     fun checkpoint() {
         if (closed || finished) return
         val current = item ?: return

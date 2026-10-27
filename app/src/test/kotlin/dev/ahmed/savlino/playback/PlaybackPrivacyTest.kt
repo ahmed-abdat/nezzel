@@ -4,7 +4,10 @@ import android.app.Notification
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.extractor.metadata.id3.CommentFrame
+import androidx.media3.extractor.metadata.id3.Id3Decoder
 import androidx.media3.session.*
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,10 +43,13 @@ class PlaybackPrivacyTest {
             assertEquals(0, player.mediaItemCount)
         } finally { session.release(); player.release() }
     }
-    @Test fun notificationIgnoresTitleUriAndArtwork() {
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE) fun notificationUsesOnlyAppBuiltTitleArtistAndCover() = runBlocking {
         val context = RuntimeEnvironment.getApplication()
-        val player = RecordingPlayer()
-        player.setMediaItem(MediaItem.Builder().setUri("content://test/private/1").setMediaMetadata(MediaMetadata.Builder().setTitle("private title").build()).build())
+        val raw = RecordingPlayer()
+        val metadata = PlaybackMetadata(context).load(Uri.parse("content://test/private/1")).buildUpon().setTitle("Saved track").build()
+        raw.setMediaItem(MediaItem.Builder().setUri("content://test/private/1").setMediaMetadata(metadata).build())
+        raw.tags(MediaMetadata.Builder().setTitle("private title").setArtist("private artist").setDescription("private comment").build())
+        val player = PrivateAudioPlayer(raw, "Audio")
         player.prepare()
         val session = MediaSession.Builder(context, player).build()
         val pending = android.app.PendingIntent.getService(context, 0, android.content.Intent("transport"), android.app.PendingIntent.FLAG_IMMUTABLE)
@@ -58,22 +64,49 @@ class PlaybackPrivacyTest {
         }
         try {
             val notification = PlaybackNotification(context, null).createNotification(session, com.google.common.collect.ImmutableList.of(), actions) {}.notification
-            assertEquals(context.getString(dev.ahmed.savlino.R.string.playback_audio), notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertEquals("Saved track", notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            assertEquals(metadata.artist, notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+            assertNotNull(notification.getLargeIcon())
             assertFalse(notification.extras.toString().contains("private"))
             assertFalse(notification.extras.toString().contains("content://"))
             assertEquals(4, notification.actions.size)
         } finally { session.release(); player.release() }
     }
-    @Test fun sessionMetadataDoesNotExposeEmbeddedTitleOrArtwork() {
+    @Test fun aFileWithSourceUrlInCommentCannotReplaceSafeSessionMetadata() {
+        val context = RuntimeEnvironment.getApplication()
+        val link = "https://invalid.test/comment"
+        // A real ID3v2.3 COMM tag, decoded by the same Media3 extractor as playback.
+        val comment = byteArrayOf(0) + "eng".toByteArray() + byteArrayOf(0) + link.toByteArray()
+        val frame = "COMM".toByteArray() + java.nio.ByteBuffer.allocate(4).putInt(comment.size).array() + byteArrayOf(0, 0) + comment
+        val tag = "ID3".toByteArray() + byteArrayOf(3, 0, 0, 0, 0, 0, frame.size.toByte()) + frame
+        val file = java.io.File(context.cacheDir, "comment-tag.mp3").apply { writeBytes(tag) }
+        val bytes = file.readBytes()
+        val timed = requireNotNull(Id3Decoder().decode(bytes, bytes.size))
+        assertEquals(link, (timed[0] as CommentFrame).text)
         val raw = RecordingPlayer()
+        val artwork = byteArrayOf(1, 2, 3)
         raw.setMediaItem(MediaItem.Builder().setUri("content://test/private/1").setMediaMetadata(MediaMetadata.Builder()
-            .setTitle("private title").setArtist("private artist").setArtworkUri(Uri.parse("https://invalid.test/art")).build()).build())
+            .setTitle("Saved track").setArtist("Nezzel").setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            .setDescription(link).setArtworkUri(Uri.parse(link)).setExtras(android.os.Bundle().apply { putString("comment", link) }).build()).build())
+        raw.tags(MediaMetadata.Builder().setTitle(link).setArtist(link).setDescription(link).setArtworkUri(Uri.parse(link)).build(), timed)
         raw.prepare()
         val safe = PrivateAudioPlayer(raw, "Audio")
-        assertEquals("Audio", safe.mediaMetadata.title)
-        assertNull(safe.mediaMetadata.artist)
-        assertNull(safe.mediaMetadata.artworkUri)
-        safe.release()
+        try {
+            assertEquals("Saved track", safe.mediaMetadata.title)
+            assertEquals("Nezzel", safe.mediaMetadata.artist)
+            assertArrayEquals(artwork, safe.mediaMetadata.artworkData)
+            assertNull(safe.mediaMetadata.artworkUri)
+            assertNull(safe.mediaMetadata.description)
+            assertNull(safe.mediaMetadata.extras)
+            assertEquals(MediaMetadata.EMPTY, safe.playlistMetadata)
+            var timedEvents = 0
+            safe.addListener(object : androidx.media3.common.Player.Listener {
+                override fun onMetadata(metadata: androidx.media3.common.Metadata) { timedEvents++ }
+            })
+            raw.tags(MediaMetadata.Builder().setDescription(link).build(), timed)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertEquals(0, timedEvents)
+        } finally { safe.release(); file.delete() }
         assertTrue(raw.released)
     }
 }

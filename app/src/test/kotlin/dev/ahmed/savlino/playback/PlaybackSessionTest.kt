@@ -59,6 +59,32 @@ class PlaybackSessionTest {
         assertEquals(20_000, second.resumedAt)
         second.close()
     }
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE) fun audioOpenAndServiceMediaItemBuilderCarryTheSameSafeMetadata() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val uri = Uri.parse("content://playback.metadata/saved/2")
+        val provider = NameProvider().apply {
+            name = "Saved recording.mp3"
+            attachInfo(context, android.content.pm.ProviderInfo().apply { authority = uri.authority })
+        }
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal(uri.authority!!, provider)
+        val env = PlaybackEnvironment(context, sizeOf = { 10L })
+        val player = RecordingPlayer()
+        val session = PlaybackSession(player, env)
+        val audio = ViewerItem(uri, false, "audio/mpeg", isAudio = true)
+        try {
+            session.open(audio)
+            val opened = requireNotNull(player.currentMediaItem).mediaMetadata
+            // AudioPlaybackService.onSetMediaItems calls this same builder after resolving resume.
+            val serviceItem = session.mediaItem(audio, 23_000).mediaMetadata
+            assertEquals("Saved recording", opened.title)
+            assertEquals(opened.title, serviceItem.title)
+            assertEquals(dev.ahmed.savlino.locale.AppLocale.localized(context).getString(dev.ahmed.savlino.R.string.app_name), opened.artist)
+            assertEquals(opened.artist, serviceItem.artist)
+            assertNotNull(opened.artworkData)
+            assertArrayEquals(opened.artworkData, serviceItem.artworkData)
+            assertEquals(23_000, serviceItem.extras!!.getLong(PlaybackSession.RESUMED_AT))
+        } finally { session.close() }
+    }
 }
 internal class ManualPlaybackScheduler : PlaybackScheduler {
     private data class Task(val at: Long, val action: () -> Unit, var cancelled: Boolean = false)

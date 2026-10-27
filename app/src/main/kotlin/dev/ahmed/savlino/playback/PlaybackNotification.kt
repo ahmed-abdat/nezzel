@@ -2,6 +2,7 @@ package dev.ahmed.savlino.playback
 
 import android.app.PendingIntent
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -10,18 +11,23 @@ import androidx.media3.session.*
 import com.google.common.collect.ImmutableList
 import dev.ahmed.savlino.R
 
-/** Deliberately ignores track metadata/artwork and never invokes an artwork data source. */
+/** Uses the private player's allowlisted metadata; no artwork URI or network data source. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class PlaybackNotification(private val base: Context, private val launcher: PendingIntent?) : MediaNotification.Provider {
     private val context: Context get() = dev.ahmed.savlino.locale.AppLocale.localized(base)
+    // Decoded once per cover: the notification is rebuilt on every player state change, and Media3 copies the bytes.
+    private var art: Pair<ByteArray, android.graphics.Bitmap?>? = null
     override fun getNotificationChannelInfo() = MediaNotification.Provider.NotificationChannelInfo(
         AudioPlaybackService.CHANNEL, context.getString(R.string.playback_channel))
     override fun handleCustomCommand(session: MediaSession, action: String, extras: Bundle) = false
     override fun createNotification(session: MediaSession, mediaButtonPreferences: ImmutableList<CommandButton>,
         actionFactory: MediaNotification.ActionFactory, onNotificationChangedCallback: MediaNotification.Provider.Callback): MediaNotification {
         val player = session.player
+        val metadata = player.mediaMetadata
         val builder = NotificationCompat.Builder(context, AudioPlaybackService.CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_nezzel).setContentTitle(context.getString(R.string.playback_audio))
+            .setSmallIcon(R.drawable.ic_stat_nezzel).setContentTitle(metadata.title ?: context.getString(R.string.playback_audio))
+            .setContentText(metadata.artist ?: context.getString(R.string.app_name))
+            .setLargeIcon(metadata.artworkData?.let(::artwork))
             .setContentIntent(launcher).setOnlyAlertOnce(true).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT).setOngoing(player.playWhenReady)
             .setDeleteIntent(actionFactory.createMediaActionPendingIntent(session, Player.COMMAND_STOP))
@@ -36,4 +42,6 @@ internal class PlaybackNotification(private val base: Context, private val launc
         builder.setStyle(MediaStyleNotificationHelper.MediaStyle(session).setShowActionsInCompactView(0, 1, 2))
         return MediaNotification(AudioPlaybackService.NOTIFICATION, builder.build())
     }
+    private fun artwork(bytes: ByteArray): android.graphics.Bitmap? = art?.takeIf { it.first.contentEquals(bytes) }?.second
+        ?: BitmapFactory.decodeByteArray(bytes, 0, bytes.size).also { art = bytes to it }
 }

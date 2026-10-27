@@ -11,7 +11,11 @@ internal class PrivateAudioPlayer(player: Player, label: String) : ForwardingSim
     private val generic = MediaMetadata.Builder().setTitle(label).build()
     override fun getState(): State {
         val current = super.getState()
-        return current.buildUpon().setPlaylist(current.timeline, current.currentTracks, generic)
+        // currentMetadata includes extractor/file tags. Only the app-built item's allowlist is public.
+        val source = player.currentMediaItem?.mediaMetadata
+        val safe = source?.let { MediaMetadata.Builder().setTitle(it.title).setArtist(it.artist)
+            .setArtworkData(it.artworkData, it.artworkDataType).build() } ?: generic
+        return current.buildUpon().setPlaylist(current.timeline, current.currentTracks, safe)
             .setPlaylistMetadata(MediaMetadata.EMPTY).setTimedMetadata(Metadata(emptyList())).build()
     }
 }
