@@ -147,6 +147,8 @@ class DownloadCoordinator(
     private val progressed = ConcurrentHashMap.newKeySet<String>()
     /** Requeued because the network went away: the next attempt waits behind the network gate, never a retry. */
     private val networkWait = ConcurrentHashMap.newKeySet<String>()
+    /** Consecutive attempts that passed the network gate but found no usable network. */
+    private val offlineStarts = ConcurrentHashMap<String, Int>()
     private val mutableProgress = MutableStateFlow<List<DownloadProgress>>(emptyList())
     val progress: StateFlow<List<DownloadProgress>> = mutableProgress.asStateFlow()
     private val finishedEvents = kotlinx.coroutines.flow.MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 100)
@@ -387,7 +389,14 @@ class DownloadCoordinator(
         finished: suspend (DownloadProgress) -> Unit): JobRecord? = withContext(Dispatchers.IO) {
         initialize()
         // WorkManager may rerun this id while the stopped attempt still unwinds; its row returns to ENQUEUED first.
-        activeDone[id]?.await()
+        activeDone[id]?.let { done ->
+            // A stop in SAVING lets the copy finish: this rerun holds the foreground so the copy is not frozen or killed.
+            store.get(id)?.takeIf { it.stage in setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING) }?.let {
+                try { foreground(fromRecord(it).copy(phase = DownloadPhase.SAVING, waiting = false)) }
+                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { /* Best effort. */ }
+            }
+            done.await()
+        }
         val row = queuedRow(id) ?: return@withContext null
         if (row.stage != JobStage.ENQUEUED) return@withContext waitingResult(id, finished)
         var completion: Pair<JobRecord, DownloadProgress>? = null
@@ -536,12 +545,17 @@ class DownloadCoordinator(
                 }
                 var outputBytes: Long? = null
                 try {
-                    // Old retries and backoff reruns can start while offline: wait behind the gate instead.
+                    // Old retries and backoff reruns can start while offline: wait behind the gate instead. A gate that
+                    // keeps passing while this process sees no network (background restriction) would spin: after
+                    // OFFLINE_GATE_PASSES the runner backs off through WorkManager's retry instead.
                     if (!network.online()) {
-                        networkStopped.set(true)
-                        finishStopped()
+                        if (offlineStarts.merge(id, 1, Int::plus)!! <= OFFLINE_GATE_PASSES) {
+                            networkStopped.set(true)
+                            finishStopped()
+                        } else finishStopped(id, DownloadError.Network, systemStopped = true)
                         return@coroutineScope
                     }
+                    offlineStarts.remove(id)
                     var command = row.command() ?: error("Invalid job command")
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
@@ -561,6 +575,12 @@ class DownloadCoordinator(
                         (transferEngine == "ytdlp" && (legacyRecipe || nativeFallback))
                     val adopting = row.restartEpoch > 0 || row.hasPartial
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
+                    // A stopped attempt's ffmpeg must not outlive any cleanup or adopt of its staging: one that
+                    // survives KILL defers this attempt and leaves the directory alone.
+                    if (engine.stopStaleProcesses(stagingRoot(id)) > 0) {
+                        finishStopped(id, DownloadError.Interrupted, systemStopped = true, keepOutput = true)
+                        return@coroutineScope
+                    }
                     if (adopting && !compatibleRecipe) {
                         check(cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id))
                         check(store.discardInfoJson(id))
@@ -587,7 +607,6 @@ class DownloadCoordinator(
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     signal.throwIfCanceled()
                     currentCoroutineContext().ensureActive()
-                    engine.stopStaleProcesses(stagingRoot(id)) // A stopped attempt's ffmpeg must not outlive its adopt.
                     val job = if (adopting) directories.createOrAdopt(id, YtdlpCommand.finishedSource(command.format).takeIf { compatibleRecipe })
                         else directories.create(id)
                     val partialBytes = stagingBytes(job.directory)
@@ -652,7 +671,11 @@ class DownloadCoordinator(
                                 is EngineEvent.Restarting -> error("Restart handled above")
                             })
                         }
-                    } } finally { synchronized(delivery) { engineReturned = true }; downloading.remove(id) }
+                    } } finally {
+                        // Closed with the engine: a network loss after this never stops (and requeues) finished work.
+                        synchronized(delivery) { engineReturned = true; transferOpen = false }
+                        downloading.remove(id)
+                    }
                     if (result is TransferResult.Failure) attempt.reason = result.reason
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
@@ -698,6 +721,8 @@ class DownloadCoordinator(
                     }
                 } finally {
                     withContext(NonCancellable) {
+                        // A callback already queued when the watch closes must not stop the next attempt (stopEngine is per id).
+                        synchronized(delivery) { transferOpen = false }
                         networkLost.close()
                         stop.cancelAndJoin()
                         ticker.cancelAndJoin()
@@ -1009,3 +1034,6 @@ internal const val CHECK_TIMEOUT_MS = 4000L
 
 /** Quick verdicts preserve completion copy without holding transfer capacity. */
 internal const val CHECK_GRACE_MS = 300L
+
+/** Gate passes without a usable network before the runner backs off (WorkManager retry) instead of re-gating. */
+internal const val OFFLINE_GATE_PASSES = 3
