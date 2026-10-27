@@ -25,11 +25,14 @@
 # No application DTO is parsed via reflection; do not keep com.yausername.**,
 # com.fasterxml.jackson.**, okhttp3.** or okio.** wholesale.
 
-# youtubedl-android unpacks Python/FFmpeg with commons-compress 1.12, whose
+# youtubedl-android unpacks Python/FFmpeg with commons-compress (1.12 then, 1.28.0 now), whose
 # ExtraFieldUtils creates zip extra fields via Class.newInstance(). R8 removed
 # those no-arg constructors, so first-run extraction failed and the release
 # engine stayed unavailable (device, 2026-10-19). Keep only the constructors.
 -keep class * implements org.apache.commons.compress.archivers.zip.ZipExtraField { <init>(); }
+# 1.28.0 links optional zstd and xz codecs; the payloads are plain zip, so neither library is bundled.
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.tukaani.xz.**
 
 # NewPipeExtractor v0.26.5 (YouTube options; rules mirror the NewPipe app's).
 # TimeAgoPatternsManager loads the per-language pattern classes by name.
