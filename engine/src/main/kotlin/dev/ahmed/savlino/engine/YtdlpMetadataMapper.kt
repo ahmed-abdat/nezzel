@@ -191,9 +191,14 @@ object YtdlpMetadataMapper {
     private val facebookCounts = Regex("^$N views? · $N reactions? \\| |^$N reactions? · $N shares? \\| ")
     internal fun withoutFacebookCounts(title: String): String =
         facebookCounts.find(title)?.let { title.substring(it.range.last + 1).trim() }?.ifEmpty { null } ?: title
-    /** Some extractors (Facebook) return HTML-escaped titles; decode once, then clean as before. */
-    private fun displayText(value: String?, maxCodePoints: Int): String? =
-        PreviewMetadata.text(value?.let { Parser.unescapeEntities(it, false) }, maxCodePoints)
+    /**
+     * Some extractors (Facebook) return HTML-escaped titles; decode once, then clean as before. TikTok can escape its
+     * emoji twice (`&amp;#128558;`, phone 2026-10-27), so a numeric reference left after that is decoded too.
+     */
+    private fun displayText(value: String?, maxCodePoints: Int): String? = PreviewMetadata.text(value
+        ?.let { Parser.unescapeEntities(it, false) }
+        ?.let { once -> numericReference.replace(once) { Parser.unescapeEntities(it.value, false) } }, maxCodePoints)
+    private val numericReference = Regex("&#(?:[0-9]{1,7}|[xX][0-9a-fA-F]{1,6});")
     private fun thumbnail(root: JsonNode): String? = PreviewMetadata.thumbnail(root.text("thumbnail"))
         ?: root.get("thumbnails")?.takeIf { it.isArray }?.mapNotNull { node ->
             PreviewMetadata.thumbnail(node.text("url"))?.let { it to (node.positiveInt("width") ?: 0) }

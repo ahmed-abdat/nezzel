@@ -14,9 +14,13 @@ class PreviewMappingTest {
     }
     @Test fun htmlEntitiesInTitleAndUploaderAreDecodedOnceAndStillCleaned() {
         val result = map(""""title":"commence!! &#128074;&#128075; | Beast Camp Training",
-            "uploader":"A &amp; B &quot;x&quot; &#39;y&#39; &lt;z&gt; &#x1F44B;&#7; &amp;#128074;"""")
+            "uploader":"A &amp; B &quot;x&quot; &#39;y&#39; &lt;z&gt; &#x1F44B;&#7; &amp;amp; &amp;#7;"""")
         assertEquals("commence!! \uD83D\uDC4A\uD83D\uDC4B | Beast Camp Training", result.title)
-        assertEquals("A & B \"x\" 'y' <z> \uD83D\uDC4B &#128074;", result.uploader)
+        assertEquals("A & B \"x\" 'y' <z> \uD83D\uDC4B &amp;", result.uploader)
+    }
+    @Test fun tiktokEmojiEscapedTwiceShowAsEmoji() {
+        val result = map(""""extractor_key":"TikTok","title":"warrior &amp;#128558;\u200d&amp;#128168;&amp;#x1F602; #fyp"""")
+        assertEquals("warrior \uD83D\uDE2E\u200D\uD83D\uDCA8\uD83D\uDE02 #fyp", result.title)
     }
     @Test fun facebookEngagementPrefixIsStrippedOnlyForFacebookExactShape() {
         fun fb(title: String) = map(""""extractor_key":"Facebook","title":"$title"""").title
