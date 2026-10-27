@@ -105,12 +105,12 @@ internal class PlaybackSession(val player: Player, private val environment: Play
         tick?.cancel(); tick = null
         if (!closed && player.isPlaying) tick = environment.scheduler.after(5_000) { checkpoint(); scheduleTick() }
     }
-    fun close() {
+    fun close(release: (Player) -> Unit = Player::release) {
         if (closed) return
         checkpoint(); closed = true; version++
         tick?.cancel(); tick = null
         player.removeListener(listener)
-        player.release()
+        release(player)
     }
     companion object {
         const val OPEN_ID = "playback_open"
