@@ -1,9 +1,8 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-androidx.activity:activity-compose:1.10.1=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
-androidx.activity:activity-ktx:1.10.1=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
-androidx.activity:activity:1.10.1=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
+androidx.activity:activity-compose:1.13.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
+androidx.activity:activity:1.13.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.annotation:annotation-experimental:1.4.1=benchmarkReleaseCompileClasspath,benchmarkReleaseLintChecksClasspath,benchmarkReleaseRuntimeClasspath,benchmarkReleaseTestedApks,nonMinifiedReleaseCompileClasspath,nonMinifiedReleaseLintChecksClasspath,nonMinifiedReleaseRuntimeClasspath,nonMinifiedReleaseTestedApks
 androidx.annotation:annotation-jvm:1.10.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.annotation:annotation-jvm:1.8.1=benchmarkReleaseCompileClasspath,benchmarkReleaseLintChecksClasspath,benchmarkReleaseRuntimeClasspath,nonMinifiedReleaseCompileClasspath,nonMinifiedReleaseLintChecksClasspath,nonMinifiedReleaseRuntimeClasspath
@@ -84,15 +83,12 @@ androidx.lifecycle:lifecycle-process:2.11.0=benchmarkReleaseTestedApks,nonMinifi
 androidx.lifecycle:lifecycle-runtime-compose-desktop:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-runtime-compose:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-runtime-desktop:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
-androidx.lifecycle:lifecycle-runtime-ktx-android:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
-androidx.lifecycle:lifecycle-runtime-ktx:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-runtime:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-runtime:2.3.1=benchmarkReleaseLintChecksClasspath,benchmarkReleaseRuntimeClasspath,nonMinifiedReleaseLintChecksClasspath,nonMinifiedReleaseRuntimeClasspath
 androidx.lifecycle:lifecycle-service:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-viewmodel-compose-desktop:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-viewmodel-desktop:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
-androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-viewmodel-savedstate-desktop:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-viewmodel-savedstate:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.lifecycle:lifecycle-viewmodel:2.11.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
@@ -108,6 +104,10 @@ androidx.media3:media3-extractor:1.11.1=benchmarkReleaseTestedApks,nonMinifiedRe
 androidx.media3:media3-session:1.11.1=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.media3:media3-ui-compose:1.11.1=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.media:media:1.7.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
+androidx.navigationevent:navigationevent-compose-jvmstubs:1.0.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
+androidx.navigationevent:navigationevent-compose:1.0.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
+androidx.navigationevent:navigationevent-desktop:1.0.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
+androidx.navigationevent:navigationevent:1.0.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.profileinstaller:profileinstaller:1.4.1=benchmarkReleaseLintChecksClasspath,benchmarkReleaseRuntimeClasspath,benchmarkReleaseTestedApks,nonMinifiedReleaseLintChecksClasspath,nonMinifiedReleaseRuntimeClasspath,nonMinifiedReleaseTestedApks
 androidx.resourceinspection:resourceinspection-annotation:1.0.1=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.room:room-common-jvm:2.7.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
@@ -117,7 +117,6 @@ androidx.room:room-runtime:2.7.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTe
 androidx.savedstate:savedstate-compose-desktop:1.4.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.savedstate:savedstate-compose:1.4.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.savedstate:savedstate-desktop:1.4.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
-androidx.savedstate:savedstate-ktx:1.4.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.savedstate:savedstate:1.4.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.sqlite:sqlite-jvm:2.5.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks
 androidx.sqlite:sqlite:2.5.0=benchmarkReleaseTestedApks,nonMinifiedReleaseTestedApks

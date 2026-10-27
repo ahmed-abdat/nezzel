@@ -27,6 +27,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigationevent.NavigationEventDispatcher
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -215,6 +218,8 @@ fun TabContent(
             override val lifecycle = lifecycle
         }
     }
+    // Back handlers read this first and fall back to the dispatcher owner above only without it.
+    val navigation = LocalNavigationEventDispatcherOwner.current
     Box(Modifier.fillMaxSize().pointerInput(warm) {
         // Watches without consuming: every touch on the shown tab puts pre-warming off.
         awaitPointerEventScope { while (true) { awaitPointerEvent(PointerEventPass.Initial); warm.interrupt() } }
@@ -236,6 +241,11 @@ fun TabContent(
                 }
             }
             val placed = remember { derivedStateOf { alpha.value > 0f } }
+            // Each tab's back handlers sit under a child dispatcher, on only while the tab is in front; set in the same
+            // frame as the switch, so the next back never reaches the tab that just left.
+            val tabNavigation = remember(navigation) { navigation?.let { TabNavigation(it.navigationEventDispatcher) } }
+            DisposableEffect(tabNavigation) { onDispose { tabNavigation?.navigationEventDispatcher?.dispose() } }
+            SideEffect { tabNavigation?.navigationEventDispatcher?.isEnabled = shown && !covered }
             // One State per tab for its whole life: effects keyed on it never restart on a switch.
             val shownNow = rememberUpdatedState(shown)
             val reducedNow = rememberUpdatedState(reduced)
@@ -265,7 +275,8 @@ fun TabContent(
                 stateHolder.SaveableStateProvider(route) {
                     CompositionLocalProvider(LocalTabReselections provides reselections.events(route), LocalTabActive provides active,
                         LocalTabShown provides inFront,
-                        LocalOnBackPressedDispatcherOwner provides if (shown && !covered && backOwner != null) backOwner else detachedBack) {
+                        LocalOnBackPressedDispatcherOwner provides if (shown && !covered && backOwner != null) backOwner else detachedBack,
+                        *tabNavigation?.let { arrayOf(LocalNavigationEventDispatcherOwner provides it) }.orEmpty()) {
                         content(route)
                     }
                 }
@@ -274,3 +285,6 @@ fun TabContent(
     }
 }
 
+private class TabNavigation(parent: NavigationEventDispatcher) : NavigationEventDispatcherOwner {
+    override val navigationEventDispatcher = NavigationEventDispatcher(parent)
+}

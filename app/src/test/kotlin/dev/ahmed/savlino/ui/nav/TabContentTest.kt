@@ -232,6 +232,60 @@ class TabContentTest {
         }
     }
 
+    @Test fun aBackInTheFrameRightAfterASwitchGoesToTheNewTab() {
+        var route by mutableStateOf("Downloads")
+        val backs = mutableListOf<String>()
+        render {
+            TabContent(route) { destination ->
+                androidx.activity.compose.BackHandler { backs += destination }
+                Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { route = "Home" }
+            compose.waitForIdle()
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread { route = "Downloads"; androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
+            shadowOf(Looper.getMainLooper()).idle()
+            // The frame that composes the switch.
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            assertEquals(listOf("Downloads"), backs)
+        }
+    }
+
+    @Test fun aHiddenTabsPredictiveBackSeesNoGesture() {
+        var route by mutableStateOf("Downloads")
+        val events = mutableListOf<String>()
+        render {
+            TabContent(route) { destination ->
+                if (destination == "Downloads") androidx.activity.compose.PredictiveBackHandler { progress ->
+                    try {
+                        progress.collect { events += "progress" }
+                        events += "back"
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        events += "cancel"
+                        throw cancelled
+                    }
+                }
+                Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { route = "Home" }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                activity.onBackPressedDispatcher.run {
+                    dispatchOnBackStarted(androidx.activity.BackEventCompat(10f, 400f, 0f, androidx.activity.BackEventCompat.EDGE_LEFT))
+                    dispatchOnBackProgressed(androidx.activity.BackEventCompat(100f, 400f, .3f, androidx.activity.BackEventCompat.EDGE_LEFT))
+                    dispatchOnBackCancelled()
+                    dispatchOnBackStarted(androidx.activity.BackEventCompat(10f, 400f, 0f, androidx.activity.BackEventCompat.EDGE_LEFT))
+                    onBackPressed()
+                }
+            }
+            compose.waitForIdle()
+            assertEquals(emptyList<String>(), events)
+        }
+    }
+
     @Test fun automaticLoadsWaitForSettledTabAndCancelForOutgoingTab() {
         var route by mutableStateOf("Home")
         val loads = mutableListOf<String>()
