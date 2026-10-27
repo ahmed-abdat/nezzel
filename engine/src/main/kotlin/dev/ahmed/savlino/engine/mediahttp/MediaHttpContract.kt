@@ -39,8 +39,9 @@ enum class MediaHttpFailure {
 /**
  * Extra host allowlist enforced on the first URL and on every redirect hop. X_MEDIA: `https://pbs.twimg.com/media/` only.
  * INSTAGRAM_CDN: `instagram.f<pop>.fna.fbcdn.net` / `scontent[-<pop>].cdninstagram.com` image paths only.
+ * REDDIT_MEDIA: `i.redd.it` originals and signed `preview.redd.it` copies only.
  */
-enum class MediaHostRule { ANY, FACEBOOK_CDN, X_MEDIA, INSTAGRAM_CDN, TELEGRAM_CDN, BLUESKY_CDN, TIKTOK_CDN }
+enum class MediaHostRule { ANY, FACEBOOK_CDN, X_MEDIA, INSTAGRAM_CDN, TELEGRAM_CDN, BLUESKY_CDN, TIKTOK_CDN, REDDIT_MEDIA }
 
 class PublicMediaRequest(val url: String, val purpose: MediaHttpPurpose,
     val pageContext: MediaHttpTarget? = null, val hostRule: MediaHostRule = MediaHostRule.ANY) {

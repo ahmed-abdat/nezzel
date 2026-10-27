@@ -12,6 +12,7 @@ import dev.ahmed.savlino.engine.mediaimage.MediaInspectResult
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
+import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
@@ -35,6 +36,9 @@ object ImageRoute {
         dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity.parse(link.rawUrl)?.isPhoto == true -> MediaSourceRoute.TIKTOK
         TelegramPostIdentity.parse(link.rawUrl) != null -> MediaSourceRoute.TELEGRAM
         BlueskyPostIdentity.parse(link.rawUrl) != null -> MediaSourceRoute.BLUESKY
+        // Reddit post links read their photos first; anything else is handed back to yt-dlp. v.redd.it is always video.
+        RedditPostIdentity.parse(link.rawUrl)?.videoId == null && RedditPostIdentity.parse(link.rawUrl) != null ->
+            MediaSourceRoute.REDDIT
         isImagePath(link.rawUrl) || isKnownImageCdn(link.rawUrl) -> MediaSourceRoute.DIRECT_IMAGE
         else -> MediaSourceRoute.LEGACY
     }

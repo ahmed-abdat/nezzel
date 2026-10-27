@@ -50,7 +50,8 @@ internal class RedditPostReader(private val http: MediaHttpClient,
             when (val post = RedditPostParser.parse(body.bytes, body.length, postId, identity.videoId)) {
                 is RedditPost.Video -> RedditTarget.Read(post.manifestUrl, post)
                 is RedditPost.Link -> RedditTarget.Read(post.url, null)
-                RedditPost.NoVideo -> RedditTarget.Failed(DownloadError.NoVideo)
+                // Photos are the image reader's; yt-dlp has no video to read here.
+                is RedditPost.Photos, RedditPost.NoVideo -> RedditTarget.Failed(DownloadError.NoVideo)
                 RedditPost.LoginRequired -> RedditTarget.Failed(DownloadError.LoginRequired)
                 RedditPost.Unknown -> null
             }

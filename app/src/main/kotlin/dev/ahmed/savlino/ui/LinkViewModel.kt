@@ -98,7 +98,7 @@ internal const val SHEET_FRESH_MS = YtdlpInfoCache.TTL_MS - 5 * 60 * 1000L
 private val CANONICAL_WATCH = Regex("https://www\\.facebook\\.com/watch/\\?v=[0-9]{1,25}")
 /** Readers that hand a proven video post back as the user's own link. */
 private val HANDOFF_ROUTES = setOf(MediaSourceRoute.X, MediaSourceRoute.INSTAGRAM,
-    MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY)
+    MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.REDDIT)
 /** Slug as LinkedIn serves it (percent-escaped non-Latin names allowed; no escaped #, %, ., /, ?, \\ or controls). */
 private val CANONICAL_LINKEDIN_POST = Regex("https://www\\.linkedin\\.com/(?:posts/" +
     "(?:[A-Za-z0-9_-]|%(?![01][0-9A-Fa-f]|2[35EeFf]|3[Ff]|5[Cc]|7[Ff])[0-9A-Fa-f]{2}){1,600}/" +
@@ -711,7 +711,8 @@ class LinkViewModel(
         when (val route = ImageRoute.of(input.link)) {
             MediaSourceRoute.LEGACY -> startLegacyInspection(input, readerOrigin)
             MediaSourceRoute.DIRECT_IMAGE, MediaSourceRoute.LINKEDIN, MediaSourceRoute.FACEBOOK, MediaSourceRoute.X,
-            MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK ->
+            MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK,
+            MediaSourceRoute.REDDIT ->
                 startImageInspection(images, input, route, origin)
         }
     }

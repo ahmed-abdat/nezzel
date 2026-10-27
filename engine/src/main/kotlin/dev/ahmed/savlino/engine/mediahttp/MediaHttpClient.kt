@@ -203,7 +203,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             (if (token.operation == MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL)
                 request.pageContext == null || request.hostRule != MediaHostRule.ANY
             else request.hostRule !in setOf(MediaHostRule.FACEBOOK_CDN, MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN,
-                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN, MediaHostRule.TIKTOK_CDN)))
+                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN, MediaHostRule.TIKTOK_CDN, MediaHostRule.REDDIT_MEDIA)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
         else fetchInternal(token, request, null, optional = true, imageCap = cap)
 
@@ -466,7 +466,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     !TikTokPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (!tiktokPage && request.purpose == MediaHttpPurpose.PAGE && url.host in setOf("www.tiktok.com", "tiktok.com", "m.tiktok.com"))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-            if (redditPage && (request.purpose != MediaHttpPurpose.PAGE || token.operation != MediaHttpOperation.PAGE_AND_IMAGE ||
+            if (redditPage && (request.purpose != MediaHttpPurpose.PAGE ||
+                    token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||
                     RedditPostIdentity.parse(url)?.fetchUrl != url.toString())) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             requireHostRule(request, url)
             val entry = if (linkedInPage) MediaHttpPolicy.withoutQuery(url) else null
@@ -655,6 +656,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             MediaHostRule.TELEGRAM_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isTelegramImage(url)
             MediaHostRule.BLUESKY_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isBlueskyImage(url)
             MediaHostRule.TIKTOK_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isTikTokImage(url)
+            MediaHostRule.REDDIT_MEDIA -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isRedditImage(url)
         }
         if (!allowed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
     }
