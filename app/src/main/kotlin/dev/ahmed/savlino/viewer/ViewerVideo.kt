@@ -371,7 +371,7 @@ private fun SpeedMenu(speed: Float, enabled: Boolean, controls: ViewerControls, 
                 ViewerSpeed.choices.forEach { choice ->
                     val selected = ViewerSpeed.same(choice, speed)
                     DropdownMenuItem(
-                        text = { Text(if (choice == 1f) normal else stringResource(R.string.viewer_speed_value, ViewerSpeed.number(choice, language)),
+                        text = { Text(if (choice == 1f) normal else ViewerSpeed.label(stringResource(R.string.viewer_speed_value, ViewerSpeed.number(choice, language))),
                             fontWeight = if (selected) FontWeight.SemiBold else null) },
                         onClick = { controls.menuOpen = false; controls.touched(); onChoose(choice) },
                         modifier = Modifier.semantics { this.selected = selected },
@@ -391,7 +391,8 @@ private fun BoxScope.SkipFeedback(skip: Skip?, reduced: Boolean) {
             .align(if (forward) AbsoluteAlignment.CenterRight else AbsoluteAlignment.CenterLeft),
             enter = fadeIn(easeOut(reduced, 120)), exit = fadeOut(easeOut(reduced, 240))) {
             Box(contentAlignment = Alignment.Center) {
-                Box(Modifier.size(88.dp).background(Color.Black.copy(alpha = .45f), CircleShape), contentAlignment = Alignment.Center) {
+                // Light and see-through, so it reads on dark frames and bright ones alike.
+                Box(Modifier.size(88.dp).background(Color.White.copy(alpha = .2f), CircleShape), contentAlignment = Alignment.Center) {
                     Icon(painterResource(if (forward) Media3.drawable.media3_icon_skip_forward_10 else Media3.drawable.media3_icon_skip_back_10),
                         null, Modifier.size(40.dp), tint = Color.White)
                 }

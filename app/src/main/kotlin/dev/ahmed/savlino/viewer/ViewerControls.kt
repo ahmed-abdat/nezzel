@@ -83,6 +83,8 @@ internal object ViewerSeek {
 internal object ViewerSpeed {
     val choices = listOf(.5f, .75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
     fun number(speed: Float, language: String) = NezzelFormat.number(speed.toDouble(), language, 2)
+    /** "1.5×" kept in one piece: an LTR isolate stops Arabic text from moving the × to the other side. */
+    fun label(text: String) = "\u2066$text\u2069"
     fun same(a: Float, b: Float) = abs(a - b) < .01f
     /** True when the player took [speed]; a refused change leaves the old speed in place. */
     fun apply(player: Player, speed: Float): Boolean {
