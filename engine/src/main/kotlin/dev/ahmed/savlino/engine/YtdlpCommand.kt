@@ -20,8 +20,9 @@ object YtdlpCommand {
     /** Bounded network waits (lead 2026-10-19, OPEN_DECISIONS): a dead socket ends in 20 s, transient errors retry. */
     val NETWORK = listOf("--socket-timeout", "20", "--retries", "5", "--fragment-retries", "10")
     internal fun isYouTube(source: LinkRevision): Boolean = source.link.host == Host.YOUTUBE
-    fun inspect(source: LinkRevision) = listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") + NETWORK +
-        listOf("--dump-json", "--skip-download", "--", source.link.rawUrl)
+    /** [target]: what yt-dlp reads in place of the post link (a Reddit post's own video), never user input. */
+    fun inspect(source: LinkRevision, target: String? = null) = listOf("--ignore-config", "--no-playlist", "--playlist-items", "1") +
+        NETWORK + listOf("--dump-json", "--skip-download", "--", target ?: source.link.rawUrl)
     fun playlist(source: LinkRevision, start: Int, end: Int): List<String> {
         require(isYouTube(source) && start > 0 && end >= start && end - start < 100)
         return listOf("--ignore-config", "--yes-playlist", "--flat-playlist", "--lazy-playlist",
@@ -53,8 +54,9 @@ object YtdlpCommand {
                 (PartialFileNames.matches(it.name) || it.name == kept) } == true) { "Invalid staging directory" }
         return root
     }
+    /** [target]: read in place of the post link when there is no info JSON, as in [inspect]. */
     fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
-        embedAudioTags: Boolean = true): List<String> {
+        embedAudioTags: Boolean = true, target: String? = null): List<String> {
         val root = validateStaging(directory, finishedSource(command.format))
         val row = command.format
         // Generic direct-file IDs can equal a MIME subtype/container. A bare "mp4" is an extension selector,
@@ -86,7 +88,7 @@ object YtdlpCommand {
             else if (embedAudioTags && !row.hasVideo && row.container in setOf("m4a", "mp3"))
                 addAll(audioTagArgs(infoJson))
             if (infoJson != null) addAll(listOf("--load-info-json", infoJson.absolutePath))
-            else addAll(listOf("--", command.source.link.rawUrl))
+            else addAll(listOf("--", target ?: command.source.link.rawUrl))
         }
     }
 

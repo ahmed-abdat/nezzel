@@ -4,7 +4,12 @@ import android.content.Context
 import android.os.SystemClock
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.download.*
+import dev.ahmed.savlino.engine.mediahttp.MediaHttpClient
 import dev.ahmed.savlino.engine.mediahttp.VideoCdnPolicy
+import dev.ahmed.savlino.engine.reddit.RedditInfo
+import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
+import dev.ahmed.savlino.engine.reddit.RedditPostReader
+import dev.ahmed.savlino.engine.reddit.RedditTarget
 import dev.ahmed.savlino.engine.youtube.FastResult
 import dev.ahmed.savlino.engine.youtube.NpeFastSource
 import dev.ahmed.savlino.engine.youtube.NpeInfoJson
@@ -48,9 +53,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             VideoCdnPolicy.allows(command.source.link.host, it) != null
         }
     },
-    private val staleProcesses: StaleProcesses = StaleProcesses()) : EngineAdapter {
+    private val staleProcesses: StaleProcesses = StaleProcesses(),
+    private val reddit: RedditPostReader? = null) : EngineAdapter {
     constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
-        fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime))
+        fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime),
+        reddit = RedditPostReader(MediaHttpClient.create()))
     private val unavailable = UnavailableEngine()
     /** At most one NPE call in flight; the app holds one engine, so this caps the process. */
     private val fastSourceInFlight = AtomicBoolean()
@@ -314,10 +321,27 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
 
+    /** A Reddit post's own video (or linked page) in place of its post page; null keeps the post link. */
+    private suspend fun redditTarget(current: Operation, source: LinkRevision): RedditTarget? {
+        val reader = reddit ?: return null
+        if (RedditPostIdentity.parse(source.link.rawUrl) == null) return null
+        return coroutineScope {
+            val read = async { reader.resolve(source.link.rawUrl) }
+            select {
+                current.cancellation.onAwait { read.cancel(); throw OperationCancelled() }
+                read.onAwait { it }
+            }
+        }
+    }
+
     private suspend fun inspectOnce(current: Operation, source: LinkRevision, version: String, epoch: Long): InspectResult {
         val empty = YtdlpErrorMapper.EmptyInspection()
+        val target = redditTarget(current, source)
+        if (target is RedditTarget.Failed) return InspectResult.Failure(target.error)
+        val read = target as? RedditTarget.Read
         val json = try {
-            execute(current, YtdlpCommand.inspect(source), empty::accept)
+            execute(current, YtdlpCommand.inspect(source, read?.url), empty::accept)
+                .let { json -> read?.video?.let { RedditInfo.patch(json, it) } ?: json }
         } catch (error: Exception) {
             if (error is CancellationException || error is YtdlpExecutionFailure) throw error
             val message = error.message.orEmpty()
@@ -386,7 +410,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.expireIn(limits.inspectMs)
         }
         val diagnostics = YtdlpDiagnostics()
-        val json = try { execute(current, YtdlpCommand.inspect(command.source), diagnostics::accept) }
+        val target = redditTarget(current, command.source)
+        if (target is RedditTarget.Failed) throw YtdlpExecutionFailure(target.error)
+        val read = target as? RedditTarget.Read
+        val json = try { execute(current, YtdlpCommand.inspect(command.source, read?.url), diagnostics::accept)
+            .let { json -> read?.video?.let { RedditInfo.patch(json, it) } ?: json } }
         catch (error: Exception) {
             // A timeout stays the operation's TRANSPORT wait; any other failure keeps its read's diagnostics.
             if (error is CancellationException || error is YtdlpExecutionFailure || current.cancelled.get()) throw error
@@ -467,12 +495,25 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             }
             var retriedWithoutTags = false
             var preProcessingBytes: Long? = null
+            // Without an info JSON a Reddit post is still read through its own video, never its post link.
+            var postRead = false
+            var postUrl: String? = null
+            suspend fun urlTarget(): String? {
+                if (!postRead) when (val target = redditTarget(current, command.source)) {
+                    is RedditTarget.Failed -> throw YtdlpExecutionFailure(target.error)
+                    is RedditTarget.Read -> postUrl = target.url
+                    null -> Unit
+                }
+                postRead = true
+                return postUrl
+            }
             suspend fun transfer(info: File?) {
                 val attemptEpoch = restartEpoch
+                val target = if (info == null) urlTarget() else null
                 // Build both while staging still contains only valid partials. A postprocessor failure
                 // leaves completed audio here, which must not be cleared or revalidated as a partial.
-                val untaggedArgs = YtdlpCommand.download(command, directory, info, embedAudioTags = false)
-                var args = YtdlpCommand.download(command, directory, info, embedAudioTags = !retriedWithoutTags)
+                val untaggedArgs = YtdlpCommand.download(command, directory, info, embedAudioTags = false, target = target)
+                var args = YtdlpCommand.download(command, directory, info, embedAudioTags = !retriedWithoutTags, target = target)
                 var reextractionBlocked = false
                 while (true) {
                     val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)
