@@ -9,7 +9,8 @@ import kotlin.test.*
 class PlaybackCodecMappingTest {
     @get:Rule val temp = TemporaryFolder()
     private val source = LinkRevision(assertNotNull(LinkInput.parse("https://example.org/123")), 1)
-    private fun map(formats: String) = YtdlpMetadataMapper.map("""{"title":"Clip","formats":[$formats]}""", source, "v1")
+    private fun map(formats: String, extractor: String? = null) = YtdlpMetadataMapper.map(
+        """{"title":"Clip",${extractor?.let { "\"extractor_key\":\"$it\"," } ?: ""}"formats":[$formats]}""", source, "v1")
     private fun args(inspection: Inspection, id: String): List<String> {
         val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job-1", inspection, source, id, "Clip")).command
         return YtdlpCommand.download(command, temp.newFolder().canonicalFile)
@@ -124,11 +125,14 @@ class PlaybackCodecMappingTest {
         fun muxed(id: String, codec: String, height: Int?, size: Long) = """{"format_id":"$id","ext":"mp4","vcodec":"$codec","acodec":"aac",""" +
             (height?.let { "\"height\":$it," } ?: "") + """"tbr":900,"filesize":$size}"""
         val download = muxed("download", "h264", null, 900)
-        val tiktok = map(listOf(download, muxed("h264_540p", "h264", 1024, 1800), muxed("bytevc1_540p", "h265", 1024, 700),
-            muxed("bytevc1_720p", "h265", 1280, 930)).joinToString())
+        val rows = listOf(download, muxed("h264_540p", "h264", 1024, 1800), muxed("bytevc1_540p", "h265", 1024, 700),
+            muxed("bytevc1_720p", "h265", 1280, 930)).joinToString()
+        val tiktok = map(rows, extractor = "TikTok")
         assertEquals("bytevc1_720p", tiktok.presets.single { it.preset == Preset.BEST }.formatId)
         // With no H.264 height known at all, nothing climbs.
-        val unknown = map(listOf(download, muxed("bytevc1_720p", "h265", 1280, 930)).joinToString())
+        val unknown = map(listOf(download, muxed("bytevc1_720p", "h265", 1280, 930)).joinToString(), extractor = "TikTok")
         assertNotEquals("bytevc1_720p", unknown.presets.single { it.preset == Preset.BEST }.formatId)
+        // Elsewhere an H.264 row of unknown height may be the tallest, so the shorter HEVC stays out.
+        assertNotEquals("bytevc1_720p", map(rows).presets.single { it.preset == Preset.BEST }.formatId)
     }
 }
