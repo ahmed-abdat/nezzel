@@ -12,6 +12,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -75,6 +76,15 @@ fun rememberTabLoop(from: Float, to: Float, spec: DurationBasedAnimationSpec<Flo
         }
     }
     return value.asState()
+}
+
+/**
+ * An indeterminate bar that holds still while its tab is hidden or settling, so a kept tab asks for no frames. Its own
+ * scope reads the tab state: the tab settling recomposes this bar only.
+ */
+@Composable
+fun TabProgressBar(modifier: Modifier = Modifier) {
+    if (LocalTabActive.current.value) LinearProgressIndicator(modifier) else LinearProgressIndicator({ 0f }, modifier)
 }
 
 /** Holds the current image when inactive, cancels pending IO, and starts automatic work only after the tab settles. */

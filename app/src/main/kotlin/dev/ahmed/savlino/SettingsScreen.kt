@@ -230,11 +230,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                             EngineUpdateStatus.FAILED -> R.string.engine_update_failed
                             EngineUpdateStatus.BUSY -> R.string.engine_update_busy
                         }), enabled = !updating, chevron = false, liveNote = true, onClick = onUpdateEngine)
-                    // A kept-but-hidden tab must not keep asking for frames.
-                    if (updating) {
-                        if (dev.ahmed.savlino.ui.nav.LocalTabActive.current.value) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = Space.l))
-                        else LinearProgressIndicator({ 0f }, Modifier.fillMaxWidth().padding(horizontal = Space.l))
-                    }
+                    if (updating) dev.ahmed.savlino.ui.nav.TabProgressBar(Modifier.fillMaxWidth().padding(horizontal = Space.l))
                 }
             }
             SettingsGroup(stringResource(R.string.settings_updates_heading)) {

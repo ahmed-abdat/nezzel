@@ -609,9 +609,7 @@ fun LibraryLoadStatus(load: LibraryLoadState, onRetry: () -> Unit) {
     when (load) {
         is LibraryLoadState.Loading -> Column(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             Text(stringResource(R.string.saved_loading), style = MaterialTheme.typography.bodyMedium)
-            // A kept-but-hidden tab must not keep asking for frames.
-            if (dev.ahmed.savlino.ui.nav.LocalTabActive.current.value) LinearProgressIndicator(Modifier.fillMaxWidth())
-            else LinearProgressIndicator({ 0f }, Modifier.fillMaxWidth())
+            dev.ahmed.savlino.ui.nav.TabProgressBar(Modifier.fillMaxWidth())
         }
         is LibraryLoadState.Error -> Column(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             Text(stringResource(R.string.saved_load_failed), color = MaterialTheme.colorScheme.error,

@@ -28,6 +28,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** How long a folder check stays good for a quick return to Settings. */
+private const val FOLDER_STALE_MS = 60_000L
+
 @Composable
 internal fun SaveFolderSetting() {
     val context = LocalContext.current
@@ -56,9 +59,19 @@ internal fun SaveFolderSetting() {
         if (uri != null) choose(uri)
     }
     val active = LocalTabActive.current
+    val checkedAt = remember { longArrayOf(Long.MIN_VALUE) }
     LaunchedEffect(lifecycle, active) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            snapshotFlow { active.value }.collectLatest { if (it) refresh() }
+            // Every resume re-checks the folder; a quick return to the tab keeps the last check unless it is a minute old.
+            var resumed = true
+            snapshotFlow { active.value }.collectLatest {
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (it && (resumed || checkedAt[0] == Long.MIN_VALUE || now - checkedAt[0] > FOLDER_STALE_MS)) {
+                    refresh()
+                    checkedAt[0] = now
+                    resumed = false
+                }
+            }
         }
     }
     // Emits rows straight into the Settings group: the folder, then a reset row only for a custom folder.
