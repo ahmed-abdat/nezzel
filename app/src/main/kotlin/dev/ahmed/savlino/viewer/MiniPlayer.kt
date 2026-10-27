@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -214,8 +216,11 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     val open = stringResource(R.string.mini_open_player)
     val playLabel = stringResource(if (playing) R.string.viewer_pause else R.string.viewer_play)
     val closeLabel = stringResource(R.string.viewer_close)
+    val drags = remember { MutableInteractionSource() }
+    LaunchedEffect(drags) { drags.interactions.collect { host.barDragging = it is DragInteraction.Start } }
+    DisposableEffect(host) { onDispose { host.barDragging = false } }
     // The sheet's surface once the sheet has narrowed into it, under the page's cover until that lands.
-    Surface(modifier.anchoredDraggable(host.size, Orientation.Vertical,
+    Surface(modifier.anchoredDraggable(host.size, Orientation.Vertical, interactionSource = drags,
             flingBehavior = AnchoredDraggableDefaults.flingBehavior(host.size, { it * .5f }, if (host.reduced) snap() else ViewerHostState.SETTLE))
         .clickable { host.expand() }
         // One TalkBack stop that says what plays, with its actions; a double tap opens the player.

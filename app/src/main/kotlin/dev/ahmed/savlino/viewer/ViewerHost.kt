@@ -86,6 +86,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal var tapped by mutableStateOf<ViewerTap?>(null)
     /** A finger is down on a slider or scroll inside the page: the page's own drag waits. */
     internal var held by mutableStateOf(false)
+    /** A drag that started on the bar is still going: the bar stays placed (unseen) so it gets the rest of that drag. */
+    internal var barDragging by mutableStateOf(false)
     internal var scope: CoroutineScope? = null
     internal var reduced = false
     // Set the moment a collapse starts: a screen disposing in the same frame must not take the music with it.
@@ -286,6 +288,8 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                         val bar = measurable.measure(Constraints.fixed(slot.rect.width.roundToInt(), surface.height.roundToInt()))
                         layout(constraints.maxWidth, constraints.maxHeight) {
                             if (state.barShown) bar.place(slot.rect.left.roundToInt(), surface.top.roundToInt())
+                            // A drag from the bar that has pulled the sheet past it keeps going to its end, or the sheet would stop there.
+                            else if (state.barDragging) bar.placeWithLayer(slot.rect.left.roundToInt(), slot.rect.top.roundToInt()) { alpha = 0f }
                         }
                     })
                 }
