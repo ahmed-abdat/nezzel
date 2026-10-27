@@ -155,10 +155,11 @@ object YtdlpMetadataMapper {
         val tier = mp4Video.filter { VideoCodecs.rank(it.videoCodec) == bestTier }
         // Owner 2026-10-27: HEVC taller than every H.264 row joins the presets (TikTok: 1080p HEVC over 540p H.264).
         // Every usable H.264 row counts, also one the per-height pick dropped for an mp4 (an Opus mkv merge).
+        // A row with no height (TikTok's watermarked "download" copy) can't be compared; at least one known height must remain.
         val avcHeights = videos.filter { VideoCodecs.family(it.videoCodec) == "avc" && (it.hasAudio || it.requiresMerge) }
-            .takeIf { bestTier == VideoCodecs.rank("avc") }?.map { it.height }
-        val tallerHevc = if (avcHeights == null || null in avcHeights) emptyList() else mp4Video.filter {
-            VideoCodecs.family(it.videoCodec) == "hevc" && (it.height ?: 0) > avcHeights.maxOf { h -> h ?: 0 } }
+            .takeIf { bestTier == VideoCodecs.rank("avc") }?.mapNotNull { it.height }
+        val tallerHevc = if (avcHeights.isNullOrEmpty()) emptyList() else mp4Video.filter {
+            VideoCodecs.family(it.videoCodec) == "hevc" && (it.height ?: 0) > avcHeights.max() }
         val playable = (tier + tallerHevc).ifEmpty { availableVideo }
         val rank = compareBy<Format> { it.height ?: 0 }.thenBy { VideoCodecs.rank(it.videoCodec) }.thenBy { sizeRank(it.size) }.thenBy { it.bitrateKbps ?: 0 }
         val roughSizes = RoughSizeEstimator.estimate(root, candidates.associate { it.first.id to it }, rows)

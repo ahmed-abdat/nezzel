@@ -118,4 +118,17 @@ class PlaybackCodecMappingTest {
             """{"format_id":"m","ext":"mp4","vcodec":"avc1.4d401f","acodec":"mp4a.40.2","height":720,"tbr":900,"filesize":900}""").joinToString())
         assertNotEquals("hevc-1080", avcMkv.presets.single { it.preset == Preset.BEST }.formatId, "an H.264 1080 merge exists")
     }
+
+    @Test fun tiktoksHeightlessDownloadRowDoesNotStopTheTallerHevc() {
+        // Real TikTok answer (muxed rows): a watermarked H.264 "download" copy with no height next to the sized rows.
+        fun muxed(id: String, codec: String, height: Int?, size: Long) = """{"format_id":"$id","ext":"mp4","vcodec":"$codec","acodec":"aac",""" +
+            (height?.let { "\"height\":$it," } ?: "") + """"tbr":900,"filesize":$size}"""
+        val download = muxed("download", "h264", null, 900)
+        val tiktok = map(listOf(download, muxed("h264_540p", "h264", 1024, 1800), muxed("bytevc1_540p", "h265", 1024, 700),
+            muxed("bytevc1_720p", "h265", 1280, 930)).joinToString())
+        assertEquals("bytevc1_720p", tiktok.presets.single { it.preset == Preset.BEST }.formatId)
+        // With no H.264 height known at all, nothing climbs.
+        val unknown = map(listOf(download, muxed("bytevc1_720p", "h265", 1280, 930)).joinToString())
+        assertNotEquals("bytevc1_720p", unknown.presets.single { it.preset == Preset.BEST }.formatId)
+    }
 }
