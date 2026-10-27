@@ -847,13 +847,16 @@ class LinkViewModel(
     /** Only pre-verdict post-page failures get one legacy inspection; media verdicts stay terminal.
      *  yt-dlp cannot read a Facebook /share/ link, so a failed share-page read shows its own error (with Retry). */
     private fun readerFallsBack(route: MediaSourceRoute, result: MediaInspectResult.Failure, source: LinkRevision): Boolean =
-        route != MediaSourceRoute.DIRECT_IMAGE && result.phase == ImagePhase.PAGE && when (result.reason) {
+        route != MediaSourceRoute.DIRECT_IMAGE && result.phase == ImagePhase.PAGE && !tikTokPhotoLink(route, source) && when (result.reason) {
             ImageFailure.HTTP -> result.statusCode != 404 && result.statusCode != 410 && !facebookShare(route, source)
             ImageFailure.SOURCE_REFUSED, ImageFailure.BUDGET, ImageFailure.UNAVAILABLE, ImageFailure.NETWORK -> !facebookShare(route, source)
             ImageFailure.NO_MEDIA -> route in setOf(MediaSourceRoute.FACEBOOK, MediaSourceRoute.LINKEDIN,
                 MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK)
             else -> false
         }
+    /** yt-dlp reads only a photo post's sound: a failed photo read shows its own error (with Retry), never sound alone. */
+    private fun tikTokPhotoLink(route: MediaSourceRoute, source: LinkRevision) = route == MediaSourceRoute.TIKTOK &&
+        TikTokPostIdentity.parse(source.link.rawUrl)?.isPhoto == true
     private fun facebookShare(route: MediaSourceRoute, source: LinkRevision) = route == MediaSourceRoute.FACEBOOK &&
         FacebookPostIdentity.parse(source.link.rawUrl)?.kind == FacebookLinkKind.SHARE
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */

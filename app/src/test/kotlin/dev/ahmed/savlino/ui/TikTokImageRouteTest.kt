@@ -120,13 +120,16 @@ class TikTokImageRouteTest {
         assertEquals(listOf(video, video), reads)
         assertEquals(listOf(MediaSourceRoute.TIKTOK), images.routes)
     }
-    @Test fun photoPageFailureHandsOffToAudioOnlyOnce() {
-        val images = FakeImages { MediaInspectResult.Failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE) }
-        val vm = model(images)
-        check(vm, photo)
-        assertIs<OptionsState.Ready>(vm.optionsState)
-        assertEquals(listOf(video), reads)
-        assertEquals(listOf(MediaSourceRoute.TIKTOK), images.routes)
+    @Test fun photoPageFailureShowsItsErrorAndNeverFallsBackToTheSoundAlone() {
+        for (reason in listOf(ImageFailure.SOURCE_REFUSED, ImageFailure.NO_MEDIA, ImageFailure.NETWORK)) {
+            reads.clear()
+            val images = FakeImages { MediaInspectResult.Failure(reason, ImagePhase.PAGE) }
+            val vm = model(images)
+            check(vm, photo)
+            assertEquals(reason, assertIs<OptionsState.ImageError>(vm.optionsState).failure)
+            assertEquals(emptyList(), reads)
+            assertEquals(listOf(MediaSourceRoute.TIKTOK), images.routes)
+        }
     }
     @Test fun actualVideoOrUnrelatedAudioNeverTriggersAPhotoPageRead() {
         for (formats in listOf(listOf(Format("720", "mp4", true, true, height = 720)),

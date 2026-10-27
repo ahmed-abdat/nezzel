@@ -67,6 +67,30 @@ class TikTokInspectionTest : PublicImageTestBase() {
         assertTrue(f.server.requests.none { it.target.contains("synthetic-sound") })
     } }
 
+    @Test fun aWafChallengeIsAnsweredOnceWithItsCookieAndTheRefetchedPageIsRead() = fixture(respond = { request, socket ->
+        when {
+            request.headers["host"] != "www.tiktok.com" -> socket.reply(body = raster(40, 30, "jpg"), headers = mapOf("Content-Type" to "image/jpeg"))
+            request.headers["cookie"] == null -> socket.reply(body = wafPage(), headers = mapOf("Content-Type" to "text/html"))
+            else -> socket.reply(body = tikTokPage(), headers = mapOf("Content-Type" to "text/html"))
+        }
+    }) { f -> inspected(f.inspectPost()).use { result ->
+        assertEquals(2, result.inspection.items.size)
+        val pages = f.server.requests.filter { it.headers["host"] == "www.tiktok.com" }
+        assertEquals(listOf("/@synthetic/video/900000001", "/@synthetic/video/900000001"), pages.map { it.target })
+        assertNull(pages[0].headers["cookie"])
+        assertTrue(pages[1].headers["cookie"].orEmpty().startsWith("_wafchallengeid="))
+        // The answer is for this page only: photo requests never carry it.
+        assertTrue(f.server.requests.filter { it.headers["host"] != "www.tiktok.com" }.all { it.headers["cookie"] == null })
+    } }
+
+    @Test fun aSecondChallengeIsNotAnsweredAgain() = fixture(respond = { request, socket ->
+        socket.reply(body = if (request.headers["host"] == "www.tiktok.com") wafPage() else raster(40, 30, "jpg"),
+            headers = mapOf("Content-Type" to "text/html"))
+    }) { f ->
+        failed(f.inspectPost(), ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE)
+        assertEquals(2, f.server.requests.count { it.headers["host"] == "www.tiktok.com" })
+    }
+
     @Test fun saveTriesTheSecondMirrorAndExpiredMirrorsAreTypedWithoutPublishingBytes() {
         for (bothExpired in listOf(false, true)) {
             val saving = AtomicBoolean()

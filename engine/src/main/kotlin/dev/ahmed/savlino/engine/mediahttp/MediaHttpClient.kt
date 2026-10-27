@@ -35,6 +35,7 @@ import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
+import dev.ahmed.savlino.engine.tiktok.TikTokWafChallenge
 import okhttp3.Authenticator
 import okhttp3.Call
 import okhttp3.ConnectionPool
@@ -459,6 +460,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             entered = true
             val configured = configuredClient(token) ?: throw MediaHttpException(MediaHttpFailure.CLOSED)
             val seen = hashSetOf(url.toString())
+            // TikTok's «Please wait…» answer: sent only on the one refetch of this same page read.
+            var tikTokChallenge: String? = null
             while (true) {
                 if (linkedInPage && MediaHttpPolicy.isLinkedInPost(url)) landing = MediaHttpPolicy.withoutQuery(url)
                 token.requireActive()
@@ -471,6 +474,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     .apply {
                         // Facebook answers 400 without Sec-Fetch-Mode and a data-less shell without text/html.
                         if (browserPage) BROWSER_NAVIGATION_HEADERS.forEach { (name, value) -> header(name, value) }
+                        tikTokChallenge?.let { header("Cookie", it) }
                     }
                     .tag(MediaHttpAttempt::class.java, MediaHttpAttempt())
                     .apply {
@@ -547,6 +551,16 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN
                                 else imageCap?.let { minOf(it, token.budget.imageLimit()) })
+                            if (tiktokPage && tikTokChallenge == null) {
+                                val answer = try {
+                                    complete.peek { bytes, length -> TikTokWafChallenge.solve(bytes, length, token::requireActive) }
+                                } catch (failure: Exception) { complete.close(); throw failure }
+                                if (answer != null) {
+                                    complete.close()
+                                    tikTokChallenge = answer
+                                    continue
+                                }
+                            }
                             try {
                                 token.admit(complete)
                                 token.requireActive()

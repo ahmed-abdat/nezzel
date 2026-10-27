@@ -89,6 +89,8 @@ class MediaHttpResponse internal constructor(val mimeType: String?, val measured
     internal var onClose: () -> Unit = {}
     /** Transfer the exact measured representation once; retirement closes every other access path. */
     internal fun takeBody(): MediaHttpBody = try { body.take() } finally { close() }
+    /** Read the body in place without taking it; null once closed. */
+    internal fun <T> peek(block: (ByteArray, Int) -> T): T? = body.peek(block)
     override fun close() {
         if (closed.compareAndSet(false, true)) { body.release(); onClose() }
     }
@@ -103,5 +105,6 @@ private class OwnedMediaBody(bytes: ByteArray, private val length: Int) {
         data = null
         return result
     }
+    @Synchronized fun <T> peek(block: (ByteArray, Int) -> T): T? = data?.let { block(it, length) }
     @Synchronized fun release() { data = null }
 }
