@@ -195,7 +195,6 @@ dependencies {
         implementation(libs.coroutines.core)
         testImplementation(libs.okio)
         testImplementation(libs.androidx.tracing)
-        androidTestImplementation(libs.androidx.tracing)
     }
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.work.runtime)
@@ -231,9 +230,4 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(testFixtures(project(":engine")))
-    androidTestImplementation(platform(libs.compose.bom))
-    androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.androidx.test.junit)
-    androidTestImplementation(libs.espresso.core)
-    androidTestImplementation(libs.compose.ui.test.junit4)
 }

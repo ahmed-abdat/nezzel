@@ -4,10 +4,10 @@
 -renamesourcefileattribute SourceFile
 
 # Audited against cached AGP 9.1.1 and the locked runtime dependencies:
-# - WorkManager 2.10.1 keeps ListenableWorker subclass names and constructors.
+# - WorkManager 2.12.0 keeps ListenableWorker subclass names and constructors.
 #   This covers DownloadWorker's persisted name; its custom Factory calls the
 #   three-argument constructor directly. Do not duplicate these consumer rules.
-# - Room 2.6.1 keeps RoomDatabase subclass names, but its memberless rule does
+# - Room 2.7.0 keeps RoomDatabase subclass names, but its memberless rule does
 #   not retain constructors in R8 strict full mode. Room reflectively calls
 #   WorkDatabase_Impl.getDeclaredConstructor().newInstance() during WorkManager
 #   initialization; usage.txt from the failing release lists public <init>() as

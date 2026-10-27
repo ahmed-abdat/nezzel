@@ -20,7 +20,7 @@
 # them to shrink. Re-audit this boundary before adopting getInfo/readValue.
 # Gson is test-tooling-only; kotlinx-serialization is absent.
 #
-# OkHttp Android 5.5.0 ships proguard.txt for optional TLS providers/annotations;
+# OkHttp Android 5.5.1 ships proguard.txt for optional TLS providers/annotations;
 # use those rules. Okio JVM 3.18.2 ships no rules and needs no model keeps here.
 # No application DTO is parsed via reflection; do not keep com.yausername.**,
 # com.fasterxml.jackson.**, okhttp3.** or okio.** wholesale.
