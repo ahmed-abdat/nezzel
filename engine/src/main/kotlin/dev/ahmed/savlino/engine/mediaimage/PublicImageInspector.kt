@@ -13,9 +13,7 @@ import dev.ahmed.savlino.engine.linkedin.LinkedInParseResult
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostAttachmentParser
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import dev.ahmed.savlino.engine.mediahttp.*
-import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
-import dev.ahmed.savlino.engine.telegram.TelegramPostParser
-import dev.ahmed.savlino.engine.telegram.TelegramParseResult
+import dev.ahmed.savlino.engine.telegram.TelegramReader
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostParser
 import dev.ahmed.savlino.engine.bluesky.BlueskyParseResult
@@ -77,7 +75,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             FacebookPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
             XPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             InstagramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
-            TelegramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
+            TelegramReader.accepts(source.link.rawUrl) -> TelegramReader.operation
             BlueskyPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
             TikTokPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL
             RedditPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
@@ -120,7 +118,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     ImageSourceType.FACEBOOK -> fetchFacebook(operation)
                     ImageSourceType.X -> fetchX(operation)
                     ImageSourceType.INSTAGRAM -> fetchInstagram(operation)
-                    ImageSourceType.TELEGRAM -> fetchTelegram(operation)
+                    ImageSourceType.TELEGRAM -> {
+                        val reader = TelegramReader(operation.source.link)
+                        mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, TelegramReader.imageRule)
+                    }
                     ImageSourceType.BLUESKY -> fetchBluesky(operation)
                     ImageSourceType.TIKTOK -> fetchTikTok(operation)
                     ImageSourceType.REDDIT -> fetchReddit(operation)
@@ -353,27 +354,31 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             MediaMetadata(parsed.title, parsed.author), parsed.previewCandidates)
     }
 
-    private fun fetchTelegram(operation: ImageInspectionOperation): Fetched {
-        val identity = TelegramPostIdentity.parse(operation.source.link.rawUrl)
-            ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
-        val page = when (val result = http.fetchTelegramPost(operation.token, identity)) {
-            is MediaHttpResult.Failure -> return Fetched.Failed(
-                if (result.reason == MediaHttpFailure.HTTP_STATUS && result.statusCode in setOf(401, 403, 404, 410))
-                    failure(ImageFailure.PRIVATE, ImagePhase.PAGE)
-                else transportFailure(operation, result, ImagePhase.PAGE))
+    /** One page body on the operation's token; site verdicts precede the shared transport mapping. */
+    private fun readPage(operation: ImageInspectionOperation, result: MediaHttpResult): ImagePageRead {
+        val page = when (result) {
+            is MediaHttpResult.Failure -> return ImagePageRead.Failed(transportFailure(operation, result, ImagePhase.PAGE).let {
+                ImageReadPlan.Failure(it.reason, it.phase, it.statusCode, it.fallback?.link)
+            })
             is MediaHttpResult.Success -> result.response
         }
         val body = try { page.takeBody() }
-            catch (_: java.io.IOException) { return Fetched.Failed(failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE)) }
+            catch (_: java.io.IOException) { return ImagePageRead.Failed(
+                ImageReadPlan.Failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE)) }
             finally { page.close() }
-        val parsed = when (val result = TelegramPostParser().parse(body.bytes, identity, body.length)) {
-            is TelegramParseResult.Failure -> return Fetched.Failed(failure(result.reason, result.phase))
-            TelegramParseResult.Video -> return redirectTo(operation, operation.source.link)
-            is TelegramParseResult.Success -> result
+        return ImagePageRead.Body(body)
+    }
+
+    /** Keep preview/Save ownership and mixed-photo fallback in the shared pipeline. */
+    private fun mapPlan(operation: ImageInspectionOperation, plan: ImageReadPlan, rule: MediaHostRule): Fetched = when (plan) {
+        is ImageReadPlan.Photos -> {
+            operation.fetchPhase = ImagePhase.IMAGE
+            fetchCarousel(operation, plan.candidates, plan.discovery, rule, plan.metadata, plan.previewCandidates,
+                plan.pageContext, plan.videoTarget?.let { LinkRevision(it, operation.source.revision) })
         }
-        operation.fetchPhase = ImagePhase.IMAGE
-        return fetchCarousel(operation, parsed.candidates, parsed.discovery, MediaHostRule.TELEGRAM_CDN,
-            MediaMetadata(title = parsed.title), parsed.candidates)
+        is ImageReadPlan.Video -> redirectTo(operation, plan.target, plan.photosUnavailable)
+        is ImageReadPlan.Failure -> Fetched.Failed(MediaInspectResult.Failure(plan.reason, plan.phase, plan.statusCode,
+            plan.fallback?.let { LinkRevision(it, operation.source.revision) }))
     }
 
     private fun fetchBluesky(operation: ImageInspectionOperation): Fetched {

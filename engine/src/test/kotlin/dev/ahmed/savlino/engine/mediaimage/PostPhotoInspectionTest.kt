@@ -94,6 +94,11 @@ class PostPhotoInspectionTest : PublicImageTestBase() {
                 val pages = f.server.requests.filter { it.target.startsWith("/xrpc/") || it.headers["host"] == "t.me" }
                 assertEquals(if (site == "bluesky" && !directDid) 2 else 1, pages.size)
                 if (site == "telegram") {
+                    assertEquals("Synthetic caption", result.inspection.items.single().metadata.title)
+                    assertEquals(ImageDiscovery(1, DiscoveryCompleteness.COMPLETE), result.discovery)
+                    assertIs<ImageSaveAvailability.Available>(result.saveAvailability)
+                    assertEquals(1, result.previews.size)
+                    assertNull(result.videoSource)
                     assertEquals("/synthetic_channel/123?embed=1&mode=tme", pages.single().target)
                     assertTrue(pages.single().headers["user-agent"].orEmpty().contains("Mozilla"))
                 } else assertTrue(pages.last().target.endsWith("&depth=0"))
@@ -122,6 +127,7 @@ class PostPhotoInspectionTest : PublicImageTestBase() {
         for (site in listOf("telegram", "bluesky")) {
             fixturePost(site, "video") { f ->
                 val redirect = assertIs<MediaInspectResult.VideoRedirect>(f.inspect(site))
+                assertFalse(redirect.photosUnavailable)
                 assertTrue(redirect.source.matches(imageSource(if (site == "telegram") telegram else bluesky)))
                 assertTrue(f.server.requests.none { it.headers["host"] in setOf("cdn1.telesco.pe", "cdn.bsky.app") })
             }
@@ -137,6 +143,43 @@ class PostPhotoInspectionTest : PublicImageTestBase() {
             fixturePost(site, "single", redirectImage = true) { f ->
                 failed(f.inspect(site), ImageFailure.SOURCE_REFUSED, ImagePhase.IMAGE)
                 assertTrue(f.server.requests.none { it.headers["host"] == "example.org" })
+            }
+        }
+    }
+    @Test fun telegramPrivateStatusesDropStatusAndOtherHttpFailuresPreserveIt() {
+        for (status in listOf(401, 403, 404, 410, 500)) fixture(respond = { _, socket -> socket.reply(status) }) { f ->
+            val result = failed(f.inspect("telegram"), if (status == 500) ImageFailure.HTTP else ImageFailure.PRIVATE, ImagePhase.PAGE)
+            assertEquals(if (status == 500) 500 else null, result.statusCode)
+            assertNull(result.fallback)
+            assertEquals(1, f.server.requests.size)
+        }
+    }
+    @Test fun telegramRefusedPhotoKeepsParserImagePhaseAndMakesNoAssetRequest() = fixture(respond = { _, socket ->
+        socket.reply(body = page("telegram", "single").toString(Charsets.UTF_8)
+            .replace("cdn1.telesco.pe", "example.org").toByteArray(), headers = mapOf("Content-Type" to "text/html"))
+    }) { f ->
+        val result = failed(f.inspect("telegram"), ImageFailure.SOURCE_REFUSED, ImagePhase.IMAGE)
+        assertNull(result.statusCode)
+        assertNull(result.fallback)
+        assertEquals(1, f.server.requests.size)
+    }
+    @Test fun telegramMixedPhotosFallBackAfterAssetOrDecodeFailure() {
+        val mixed = page("telegram", "single").toString(Charsets.UTF_8)
+            .replace("Synthetic caption</div>", "Synthetic caption</div><div class='tgme_widget_message_video_player'></div>")
+            .toByteArray()
+        for (decodeFailure in listOf(false, true)) {
+            val decoder = if (decodeFailure) ImagePreviewDecoder { _, _, _, _ -> ImageDecodeResult.Failure(ImageFailure.DECODE) }
+                else JdkPreviewDecoder()
+            fixture(decoder = decoder, respond = { request, socket ->
+                if (request.headers["host"] == "t.me")
+                    socket.reply(body = mixed, headers = mapOf("Content-Type" to "text/html"))
+                else if (decodeFailure) socket.reply(body = raster(), headers = mapOf("Content-Type" to "image/png"))
+                else socket.reply(404)
+            }) { f ->
+                val redirect = assertIs<MediaInspectResult.VideoRedirect>(f.inspect("telegram"))
+                assertTrue(redirect.source.matches(imageSource(telegram)))
+                assertTrue(redirect.photosUnavailable)
+                assertEquals(2, f.server.requests.size)
             }
         }
     }
