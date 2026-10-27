@@ -293,6 +293,28 @@ class BatchStoreTest {
         assertFalse(batches.replaced(retried.jobId))
         assertFalse(batches.replaced(failed.jobId + "9"))
     }
+
+    @Test fun aPlaylistVideoKeepsOneCountKeyAcrossTheFreshAttemptAndAPersonsRetry() {
+        batches.create("k", "K", Preset.BEST, batchItems(2))
+        val first = batches.items("k")[1]
+        val key = batches.countKey(first.jobId)!!
+        val ends = dev.ahmed.savlino.usage.CountedEnds(app.getSharedPreferences("count-key-test", 0), batches::hasCountKey)
+        assertTrue(ends.first(key)) // the first attempt fails and counts its end
+        assertTrue(batches.refresh(first))
+        val fresh = batches.items("k")[1]
+        assertNotEquals(first.jobId, fresh.jobId)
+        assertEquals(key, batches.countKey(fresh.jobId))
+        assertTrue(batches.finish(fresh, BatchItemState.FAILED, DownloadError.Failed, retryable = false))
+        batches.requestUserRetries("k", position = 1)
+        val retried = batches.items("k")[1]
+        assertNotEquals(fresh.jobId, retried.jobId)
+        assertEquals(key, batches.countKey(retried.jobId))
+        assertFalse("Neither retry counts a second end", ends.first(batches.countKey(retried.jobId)!!))
+        assertNotEquals(key, batches.countKey(batches.items("k")[0].jobId))
+        assertNull(batches.countKey(first.jobId))
+        assertTrue(batches.hasCountKey(key))
+        assertFalse(batches.hasCountKey("b:k:9"))
+    }
 }
 
 internal fun batchItems(count: Int) = (0 until count).map {

@@ -46,6 +46,14 @@ class DownloadCoordinator(
 ) {
     /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
     val batches by lazy { BatchStore(store) }
+    private val countedEnds = dev.ahmed.savlino.usage.CountedEnds(
+        context.getSharedPreferences(dev.ahmed.savlino.usage.CountedEnds.PREFS, Context.MODE_PRIVATE)) {
+        if (it.startsWith("b:")) batches.hasCountKey(it) else store.get(it) != null
+    }
+    /** A playlist video keeps one key across the new job ids its retries get. */
+    private fun countKey(jobId: String) = batches.countKey(jobId) ?: jobId
+    /** Cancels the person asked for; [countTerminal] counts one only if the job really ends cancelled. */
+    private val cancelAsked = ConcurrentHashMap.newKeySet<String>()
     val batchFeeder by lazy { BatchFeeder(batches, engine, object : BatchJobActions {
         override suspend fun enqueue(command: DownloadCommand, preset: Preset) = this@DownloadCoordinator.enqueue(command, preset)
         override suspend fun pause(id: String) = this@DownloadCoordinator.pause(id)
@@ -65,6 +73,7 @@ class DownloadCoordinator(
         initialize()
         batches.create(id, title, preset, items).also {
             if (it) {
+                usage.count(UsageKeys.FUNNEL_BATCH)
                 playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake()
                 artworkScope.launch { saveBatchArtwork(store.artwork, batches.items(id), items, previewArtwork) }
             }
@@ -74,7 +83,7 @@ class DownloadCoordinator(
     suspend fun confirmLinks(id: String, title: String, preset: Preset, links: List<ValidatedLink>): Boolean = withContext(Dispatchers.IO) {
         initialize()
         batches.createLinks(id, title, links, preset).also {
-            if (it) { playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
+            if (it) { usage.count(UsageKeys.FUNNEL_BATCH); playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
         }
     }
     /** Playlist rows never pass through an options sheet; their artwork follows the confirm, off the feeder's path. */
@@ -122,7 +131,7 @@ class DownloadCoordinator(
             batches.all().any { it.state == BatchState.ACTIVE || it.state == BatchState.WAITING_NETWORK }
     }
     /** No generated toString: the report link exists only until terminal accounting consumes this attempt. */
-    private class AttemptAccounting(link: String?, clock: () -> Long) {
+    private class AttemptAccounting(link: String?, clock: () -> Long, val countKey: String?) {
         val siteKey = UsageKeys.site(link)
         @Volatile var reportLink: String? = link
         @Volatile var reason = ExecutionFailureReason.UNKNOWN
@@ -165,7 +174,7 @@ class DownloadCoordinator(
         store.onTerminalSource = { row, stage ->
             // Startup replay has no live predecessor and must neither count nor retain its sources.
             if (active.containsKey(row.jobId) || mutableProgress.value.any { it.jobId == row.jobId && (!it.terminal || it.awaitingSchedule) }) {
-                val attempt = accounting.getOrPut(row.jobId) { AttemptAccounting(row.sourceUrl, monotonicMillis) }
+                val attempt = accounting.getOrPut(row.jobId) { AttemptAccounting(row.sourceUrl, monotonicMillis, null) } // no batch query inside a store write
                 if (stage != JobStage.FAILED) attempt.reportLink = null
             }
         }
@@ -309,6 +318,8 @@ class DownloadCoordinator(
     }
 
     suspend fun cancel(id: String) = withContext(Dispatchers.IO) {
+        // The person's cancel is the count; a job the system stops, expires or restarts counts no cancel.
+        if (store.get(id)?.stage?.terminal == false) cancelAsked += id
         requestCancellation(id)
         initialize()
         // Running work owns its cleanup after engine exit. WorkManager also interrupts its coroutine.
@@ -401,7 +412,8 @@ class DownloadCoordinator(
         val row = queuedRow(id) ?: return@withContext null
         if (row.stage != JobStage.ENQUEUED) return@withContext waitingResult(id, finished)
         var completion: Pair<JobRecord, DownloadProgress>? = null
-        val attempt = AttemptAccounting(row.sourceUrl, monotonicMillis)
+        // Resolved while the job is live: a playlist refresh or Retry may move its row to a new id before this end counts.
+        val attempt = AttemptAccounting(row.sourceUrl, monotonicMillis, countKey(id))
         try {
             transfer.withSlot(id, row.createdAt, eligible = { queuedRow(id)?.stage == JobStage.ENQUEUED }) {
                 try {
@@ -884,7 +896,12 @@ class DownloadCoordinator(
             else old + event
         }
     }
-    /** One count per job end; a failure also goes out as a report with its exact link (only while Help improve is on). */
+    /**
+     * One count per job (per playlist video across the new ids its retries get), at its first end: later ends count
+     * nothing (Retry has its own key); a cancel counts only when the person asked ([cancel]) and the job ends cancelled.
+     * funnel.* only for a single link's job; playlist videos count under dl.*. Every failed attempt still goes out
+     * as a report with its exact link (only while Help improve is on).
+     */
     private fun countTerminal(event: DownloadProgress) {
         val row = store.get(event.jobId) ?: return
         val outcome = when (event.phase) {
@@ -893,14 +910,23 @@ class DownloadCoordinator(
             DownloadPhase.CANCELLED -> UsageKeys.Download.CANCELLED
             else -> return
         }
+        val asked = cancelAsked.remove(event.jobId)
+        if (outcome == UsageKeys.Download.CANCELLED) {
+            val key = accounting.remove(event.jobId)?.also { it.reportLink = null }?.countKey ?: countKey(event.jobId)
+            if (asked && countedEnds.first(key)) usage.count(UsageKeys.download(outcome, row.format))
+            return
+        }
         val attempt = accounting.remove(event.jobId) ?: return
-        usage.count(UsageKeys.download(outcome, row.format))
-        if (outcome == UsageKeys.Download.CANCELLED) { attempt.reportLink = null; return }
-        usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
-        val siteKey = attempt.siteKey ?: UsageKeys.site(row.sourceUrl)
-        siteKey?.let(usage::count)
+        val key = attempt.countKey ?: countKey(event.jobId)
+        if (countedEnds.first(key)) {
+            usage.count(UsageKeys.download(outcome, row.format))
+            if (!key.startsWith("b:"))
+                usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
+            (attempt.siteKey ?: UsageKeys.site(row.sourceUrl))?.let(usage::count)
+        }
+        // Speed belongs to the transfer, not the job: a Retry that finishes still measures one.
         if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
-        else {
+        if (outcome == UsageKeys.Download.FAILED) {
             val error = event.error ?: row.error ?: DownloadError.Failed
             // ForegroundDenied keeps the code it was reported under before it had its own value.
             val code = if (error == DownloadError.ForegroundDenied) "ExecutionRestricted_FOREGROUND_DENIED"
@@ -915,6 +941,7 @@ class DownloadCoordinator(
     fun retryWaitsForSave(id: String): Boolean = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
     private suspend fun retryOne(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
+        cancelAsked.remove(id) // A cancel that never reached an end is not this attempt's.
         val row = store.get(id) ?: return@withContext false
         if (row.stage == JobStage.ENQUEUED) return@withContext maintenance.withDownload {
             if (store.get(id)?.stage != JobStage.ENQUEUED ||

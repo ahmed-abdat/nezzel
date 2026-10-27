@@ -51,11 +51,16 @@ class Usage(
     /** Bumped by [clear]: a send or queue write begun before the switch went off never lands after it. */
     private var generation = 0L
 
-    /** Unknown keys are dropped (a hook must never break a download); at most [MAX_SITES] sites, the rest as one. */
+    /**
+     * Unknown keys are dropped (a hook must never break a download); at most [MAX_SITES] sites, the rest as one, and at
+     * most [MAX_SITES] per-site option times, the rest dropped (their path key still counts).
+     */
     override fun count(key: String) {
         if (!UsageKeys.allowed(key) || !enabled()) return
         synchronized(lock) {
             if (!enabled()) return
+            if (key.startsWith(UsageKeys.OPTIONS_SITE) && !prefs.contains(COUNT + key) &&
+                prefs.all.keys.count { it.startsWith(COUNT + UsageKeys.OPTIONS_SITE) } >= MAX_SITES) return
             val stored = if (key.startsWith(UsageKeys.SITE) && !prefs.contains(COUNT + key) &&
                 prefs.all.keys.count { it.startsWith(COUNT + UsageKeys.SITE) } >= MAX_SITES) UsageKeys.SITE_OTHER else key
             val edit = prefs.edit()
@@ -147,10 +152,10 @@ class Usage(
 
     private fun on(started: Long) = synchronized(lock) { generation == started && enabled() }
 
-    /** Counted keys plus once-per-ping keys, at most [MAX_KEYS]: fixed keys first, then the most counted sites. */
+    /** Counted keys plus once-per-ping keys, at most [MAX_KEYS]: fixed keys first, then the most counted site keys. */
     internal fun payload(counts: Map<String, Int>): Pair<Map<String, Int>, String> {
         val once = (listOf(UsageKeys.ACTIVE) + snapshot.keys()).filter(UsageKeys::allowed).distinct()
-        val (sites, rest) = counts.entries.partition { it.key.startsWith(UsageKeys.SITE) }
+        val (sites, rest) = counts.entries.partition { it.key.startsWith(UsageKeys.SITE) || it.key.startsWith(UsageKeys.OPTIONS_SITE) }
         val room = MAX_KEYS - once.size
         val sent = (rest.sortedBy { it.key } + sites.sortedByDescending { it.value }).take(room.coerceAtLeast(0))
             .associate { it.key to it.value }

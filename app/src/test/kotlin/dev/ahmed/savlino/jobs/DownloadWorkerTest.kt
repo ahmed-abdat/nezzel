@@ -77,6 +77,61 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun aCancelTheFinishOutranCountsOnlyTheFinish() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), usage = usage, cancelHook = { stopped.complete(Unit) }, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(2, Size.Exact(4)))
+            entered.complete(Unit)
+            stopped.await()
+            // The transfer was already done: the engine returns its file despite the cancel.
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-late-cancel")))
+            val running = async(Dispatchers.Default) { f.worker("usage-late-cancel").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                f.coordinator.cancel("usage-late-cancel")
+                withTimeout(5000) { running.await() }
+                val stage = f.store.get("usage-late-cancel")!!.stage
+                assertEquals("One end, matching how the job really ended", mapOf(
+                    (if (stage == JobStage.COMPLETED) "dl.finished.video.hd" else "dl.cancelled.video.hd") to 1), usage.ends())
+            } finally { stopped.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
+    @Test fun aPlaylistVideoMovedToItsRetryIdBeforeItsEndCountsStillCountsOneEnd() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), usage = usage, script = { command, _, _ ->
+            if (command.jobId == "batch-race") { entered.complete(Unit); release.await() }
+            TransferResult.Failure(DownloadError.Failed)
+        }).use { f ->
+            val db = f.store.writableDatabase
+            f.coordinator.batches // creates the batch tables
+            db.execSQL("INSERT INTO batches(batch_id,title,preset,state,created_at) VALUES('race','R','BEST','ACTIVE',?)",
+                arrayOf<Any>(System.currentTimeMillis()))
+            db.execSQL("INSERT INTO batch_items(batch_id,position,item_id,title,state,job_id) VALUES('race',0,'v1','V','QUEUED','batch-race')")
+            assertTrue(f.coordinator.enqueue(command("batch-race")))
+            val running = async(Dispatchers.Default) { f.worker("batch-race").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                // The row moves to the retry's id while the old attempt has not counted its end yet.
+                db.execSQL("UPDATE batch_items SET job_id='batch-race-fresh' WHERE batch_id='race'")
+                release.complete(Unit)
+                withTimeout(5000) { running.await() }
+                assertTrue(f.coordinator.enqueue(command("batch-race-fresh")))
+                f.worker("batch-race-fresh").doWork()
+                assertEquals(JobStage.FAILED, f.store.get("batch-race-fresh")!!.stage)
+                assertEquals(mapOf("dl.failed.video.hd" to 1), usage.ends())
+                assertFalse("A playlist video adds no single-link funnel end", "funnel.failed" in usage.keys)
+            } finally { release.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
     @Test fun repeatedFailedJobDeliveryCountsOneEnd() = runBlocking {
         val usage = UsageRecorder()
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.FormatExpired))), usage = usage).use { f ->
@@ -325,7 +380,7 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun engineRestartCannotReuseItsOldSpeedAndRetryCountsItsOwnOutcome() = runBlocking {
+    @Test fun engineRestartCannotReuseItsOldSpeedAndRetryAddsNoSecondEnd() = runBlocking {
         val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
         val usage = actualUsage(posts)
         val clock = java.util.concurrent.atomic.AtomicLong()
@@ -349,10 +404,12 @@ class DownloadWorkerTest {
             assertEquals(JobStage.COMPLETED, f.store.get("retry-count")!!.stage)
             usage.sendDaily()
             val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+            // One job counts one end: the first one. A Retry that finishes adds no second end.
             assertEquals(1, counts.getInt("dl.failed.video.hd"))
-            assertEquals(1, counts.getInt("dl.finished.video.hd"))
-            assertEquals(2, counts.getInt("site:example.com"))
-            assertFalse(counts.keys().asSequence().any { it.startsWith("speed.") || it.startsWith("dl.cancelled.") })
+            assertEquals(1, counts.getInt("funnel.failed"))
+            assertEquals(1, counts.getInt("site:example.com"))
+            assertFalse(counts.keys().asSequence().any { it.startsWith("speed.") || it.startsWith("dl.cancelled.") ||
+                it.startsWith("dl.finished.") || it == "funnel.finished" })
         }
     }
 

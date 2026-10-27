@@ -32,6 +32,8 @@ object UsageKeys {
     const val FUNNEL_TAPPED = "funnel.tapped"
     const val FUNNEL_FINISHED = "funnel.finished"
     const val FUNNEL_FAILED = "funnel.failed"
+    /** One Download tap on a playlist or several links; its videos count under dl.* only, never funnel.*. */
+    const val FUNNEL_BATCH = "funnel.batch"
     /** A confirmed video link against the quality Nezzel had picked: kept it, went higher, lower, or took audio. */
     const val PICK_KEPT = "pick.kept"
     const val PICK_UP = "pick.up"
@@ -60,11 +62,11 @@ object UsageKeys {
     private val optionTimes = listOf("t0-2", "t2-5", "t5-10", "t10up")
     private val speeds = listOf("s0-100k", "s100k-1m", "s1m-5m", "s5mup")
 
-    /** Every fixed key; [SITE], [SDK] and [BRAND] are the only patterned ones. */
+    /** Every fixed key; [SITE], [OPTIONS_SITE], [SDK] and [BRAND] are the only patterned ones. */
     val fixed: Set<String> = buildSet {
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
             STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
-            FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO,
+            FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, FUNNEL_BATCH, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO,
             PLAYER_OPEN_VIDEO, PLAYER_OPEN_AUDIO, PLAYER_SEEK, PLAYER_SPEED, PLAYER_FULLSCREEN, PLAYER_BACKGROUND, PLAYER_FAILED,
             STATUSES_READY, STATUSES_SAVE_FAILED, SHARE_WHATSAPP))
         for (event in events) for ((kind, names) in tiers) for (tier in names) add("dl.$event.$kind.$tier")
@@ -80,6 +82,8 @@ object UsageKeys {
     }
 
     const val SITE = "site:"
+    /** Time until options per site: `opt:<bucket>:<registrable name>`. */
+    const val OPTIONS_SITE = "opt:"
     const val SDK = "sdk:"
     const val BRAND = "brand:"
     private val domain = Regex("[a-z0-9-]{1,63}(\\.[a-z0-9-]{1,63})+")
@@ -87,6 +91,9 @@ object UsageKeys {
 
     fun allowed(key: String): Boolean = key in fixed ||
         key.startsWith(SITE) && key.length <= SITE.length + 64 && domain.matches(key.removePrefix(SITE)) ||
+        key.startsWith(OPTIONS_SITE) && key.length <= 80 && key.removePrefix(OPTIONS_SITE).let { rest ->
+            rest.substringBefore(':') in optionTimes && domain.matches(rest.substringAfter(':', ""))
+        } ||
         key.startsWith(SDK) && key.removePrefix(SDK).toIntOrNull()?.takeIf { it in 21..99 }?.toString() == key.removePrefix(SDK) ||
         key.startsWith(BRAND) && brandName.matches(key.removePrefix(BRAND))
 
@@ -124,7 +131,13 @@ object UsageKeys {
 
     fun photo(event: Download) = "dl.${event.name.lowercase()}.photo.any"
 
-    fun options(path: Path, millis: Long) = "options.${path.key}." + when {
+    fun options(path: Path, millis: Long) = "options.${path.key}." + optionTime(millis)
+
+    /** Null for anything that is not a web link; never more of the link than [site] keeps. */
+    fun optionsSite(link: String?, millis: Long): String? =
+        link?.let(Report::site)?.let { OPTIONS_SITE + optionTime(millis) + ":" + it }?.takeIf(::allowed)
+
+    private fun optionTime(millis: Long) = when {
         millis < 2_000 -> "t0-2"; millis < 5_000 -> "t2-5"; millis < 10_000 -> "t5-10"; else -> "t10up"
     }
 
