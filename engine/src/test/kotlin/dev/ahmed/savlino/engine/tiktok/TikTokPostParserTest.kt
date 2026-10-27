@@ -67,4 +67,9 @@ class TikTokPostParserTest {
         assertFalse(assertNotNull(TikTokPostIdentity.parse(photo.videoUrl)).isPhoto)
         assertNull(TikTokPostIdentity.parse("https://www.tiktok.com.evil.example/@synthetic/photo/900000001"))
     }
+
+    @Test fun postTextDecodesEmojiEscapedTwice() {
+        assertEquals("a \uD83D\uDE2E & b &#1114112;",
+            dev.ahmed.savlino.engine.mediaimage.PostText.tiktokUnescaped("a &amp;#128558; &amp; b &amp;#1114112;"))
+    }
 }

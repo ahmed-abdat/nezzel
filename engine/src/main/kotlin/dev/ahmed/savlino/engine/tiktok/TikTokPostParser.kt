@@ -78,12 +78,13 @@ class TikTokPostParser {
             val capped = (images.size() - MAX_PHOTOS).coerceAtLeast(0)
             val music = item.path("music")
             val sound = if (music.isObject && music.path("playUrl").asText().isNotBlank()) TikTokSound(
-                PostText.firstLine(music.path("title").asText(null)), PostText.firstLine(music.path("authorName").asText(null)),
+                PostText.firstLine(PostText.tiktokUnescaped(music.path("title").asText(null))),
+                PostText.firstLine(PostText.tiktokUnescaped(music.path("authorName").asText(null))),
                 music.path("duration").takeIf { it.isIntegralNumber && it.canConvertToInt() }?.asInt()?.takeIf { it > 0 }) else null
             TikTokParseResult.Success(photos, ImageDiscovery(photos.size,
                 if (unavailable + capped == 0) DiscoveryCompleteness.COMPLETE else DiscoveryCompleteness.PARTIAL,
                 claimedCount = images.size(), unavailableCount = unavailable, cappedCount = capped),
-                PostText.firstLine(item.path("desc").asText(null)), sound)
+                PostText.firstLine(PostText.tiktokUnescaped(item.path("desc").asText(null))), sound)
         } catch (_: Exception) { TikTokParseResult.Failure(ImageFailure.SOURCE_REFUSED) }
         catch (_: StackOverflowError) { TikTokParseResult.Failure(ImageFailure.BUDGET) }
     }

@@ -17,7 +17,7 @@ internal val audioTagsWithoutArtist = listOf(
     "--parse-metadata", ":(?P<meta_description>)", "--parse-metadata", ":(?P<meta_synopsis>)",
     "--parse-metadata", ":(?P<meta_genre>)", "--parse-metadata", ":(?P<meta_date>)",
     "--parse-metadata", ":(?P<meta_artist>)",
-    "--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]", "",
+    "--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]|&(?:amp;)?#(?:[0-9]+|[xX][0-9a-fA-F]+);", "",
     "--replace-in-metadata", "title", "\\s+$", "")
 
 /** MP3 rows: yt-dlp writes the square cover and the tag fields; Mp3Encoder applies them. */

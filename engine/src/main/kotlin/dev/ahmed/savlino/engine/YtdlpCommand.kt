@@ -109,7 +109,7 @@ object YtdlpCommand {
         "--print-to-file", "after_move:$MP3_TAGS", File(root, Mp3Encoder.TAGS).path) + TITLE_CLEANUP
 
     // Python regex syntax: preserve BMP Arabic, strip supplementary/zero-width characters in tags only.
-    private val TITLE_CLEANUP = listOf("--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]", "",
+    private val TITLE_CLEANUP = listOf("--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]|&(?:amp;)?#(?:[0-9]+|[xX][0-9a-fA-F]+);", "",
         "--replace-in-metadata", "title", "\\s+$", "")
 
     /** Only real artist metadata is trusted; yt-dlp otherwise falls back to the uploader/channel. */

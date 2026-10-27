@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.engine.mediaimage
 
 import dev.ahmed.savlino.domain.PreviewMetadata
+import org.jsoup.parser.Parser
 
 /**
  * Display/file-name text a fetched page already proves (post text, author name): the first non-blank
@@ -24,6 +25,20 @@ internal object PostText {
         Regex("(?i)^(?:www\\.)?[a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.[a-z]{2,63}\\.?$tail$"), // domain[:port][/path]
         Regex("(?i)^(?=[^:]*[a-z])[a-z0-9-]+(?:\\.[a-z0-9-]+)*:\\d{1,5}(?:[/?#].*)?$"), // host:port[/path], not "10:30"
     )
+
+    private val numericReference = Regex("&#([0-9]{1,7}|[xX][0-9a-fA-F]{1,6});")
+
+    /**
+     * TikTok can escape its emoji twice (`&amp;#128558;`, phone 2026-10-27): decode HTML once, then any numeric
+     * reference left. A reference to no valid code point stays as written.
+     */
+    fun tiktokUnescaped(raw: String?): String? = raw?.let { Parser.unescapeEntities(it, false) }?.let { once ->
+        numericReference.replace(once) { match ->
+            val digits = match.groupValues[1]
+            val cp = if (digits[0] == 'x' || digits[0] == 'X') digits.drop(1).toIntOrNull(16) else digits.toIntOrNull()
+            cp?.takeIf { Character.isValidCodePoint(it) && it !in 0xD800..0xDFFF }?.let { String(Character.toChars(it)) } ?: match.value
+        }
+    }
 
     fun firstLine(raw: String?): String? {
         if (raw == null) return null

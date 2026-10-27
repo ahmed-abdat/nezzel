@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine
 
+import dev.ahmed.savlino.engine.mediaimage.PostText
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.ahmed.savlino.domain.*
@@ -175,10 +176,11 @@ object YtdlpMetadataMapper {
         (aac ?: extractedM4a)?.let { presets += PresetChoice(Preset.AUDIO_M4A, it.id) }
         rows.firstOrNull { it.conversion == AudioConversion.MAIN }
             ?.let { presets += PresetChoice(Preset.AUDIO_MP3, it.id) }
+        val tiktok = root.text("extractor_key") == "TikTok"
         return Inspection(source, engineVersion, rows, presets,
-            title = (displayText(root.text("title"), 300) ?: displayText(root.text("fulltitle"), 300))
+            title = (displayText(root.text("title"), 300, tiktok) ?: displayText(root.text("fulltitle"), 300, tiktok))
                 ?.let { if (root.text("extractor_key")?.startsWith("Facebook") == true) withoutFacebookCounts(it) else it },
-            uploader = displayText(root.text("uploader"), 120) ?: displayText(root.text("channel"), 120),
+            uploader = displayText(root.text("uploader"), 120, tiktok) ?: displayText(root.text("channel"), 120, tiktok),
             durationSeconds = root.get("duration")?.takeIf { it.isNumber }?.doubleValue()
                 ?.takeIf { it.isFinite() && it >= 1 && it <= PreviewMetadata.MAX_DURATION_SECONDS }?.toLong(),
             thumbnailUrl = thumbnail(root),
@@ -191,14 +193,9 @@ object YtdlpMetadataMapper {
     private val facebookCounts = Regex("^$N views? · $N reactions? \\| |^$N reactions? · $N shares? \\| ")
     internal fun withoutFacebookCounts(title: String): String =
         facebookCounts.find(title)?.let { title.substring(it.range.last + 1).trim() }?.ifEmpty { null } ?: title
-    /**
-     * Some extractors (Facebook) return HTML-escaped titles; decode once, then clean as before. TikTok can escape its
-     * emoji twice (`&amp;#128558;`, phone 2026-10-27), so a numeric reference left after that is decoded too.
-     */
-    private fun displayText(value: String?, maxCodePoints: Int): String? = PreviewMetadata.text(value
-        ?.let { Parser.unescapeEntities(it, false) }
-        ?.let { once -> numericReference.replace(once) { Parser.unescapeEntities(it.value, false) } }, maxCodePoints)
-    private val numericReference = Regex("&#(?:[0-9]{1,7}|[xX][0-9a-fA-F]{1,6});")
+    /** Some extractors (Facebook) return HTML-escaped titles; decode once (TikTok: see [PostText.tiktokUnescaped]), then clean as before. */
+    private fun displayText(value: String?, maxCodePoints: Int, tiktok: Boolean = false): String? = PreviewMetadata.text(
+        if (tiktok) PostText.tiktokUnescaped(value) else value?.let { Parser.unescapeEntities(it, false) }, maxCodePoints)
     private fun thumbnail(root: JsonNode): String? = PreviewMetadata.thumbnail(root.text("thumbnail"))
         ?: root.get("thumbnails")?.takeIf { it.isArray }?.mapNotNull { node ->
             PreviewMetadata.thumbnail(node.text("url"))?.let { it to (node.positiveInt("width") ?: 0) }
