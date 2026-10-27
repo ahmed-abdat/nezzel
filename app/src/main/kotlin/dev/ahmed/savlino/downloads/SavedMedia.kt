@@ -24,6 +24,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.transformLatest
 import kotlin.coroutines.EmptyCoroutineContext
@@ -221,59 +224,68 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
         }
     }
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    fun observe(ioDispatcher: CoroutineDispatcher = Dispatchers.IO) = callbackFlow {
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) { trySend(Unit) }
-        }
-        resolver.registerContentObserver(MediaStore.Downloads.EXTERNAL_CONTENT_URI, true, observer)
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }
-        destinations?.prefs?.registerOnSharedPreferenceChangeListener(listener)
-        oldDownloads?.prefs?.registerOnSharedPreferenceChangeListener(listener)
-        trySend(Unit)
-        awaitClose {
-            resolver.unregisterContentObserver(observer)
-            destinations?.prefs?.unregisterOnSharedPreferenceChangeListener(listener)
-            oldDownloads?.prefs?.unregisterOnSharedPreferenceChangeListener(listener)
-        }
-    }.conflate().transformLatest {
-        try {
-            val media = cancellableQuery(ioDispatcher, query = ::queryMediaStore)
-            val files = destinations?.recordedFiles().orEmpty().associateBy { it.uri }.toMutableMap()
-            val found = linkedMapOf<Uri, SavedMedia>()
-            fun rows() = (media + files.values + found.values).sortedByDescending { it.addedSeconds }
-            emit(Result.success(rows()))
-            // Old downloads: one listing, then rows at once with cached dimensions; probes fill in below.
-            val listed = oldDownloads?.let { old -> cancellableQuery(ioDispatcher) { signal -> old.list(signal) } }
-                ?.let { OldDownloads.dedupe(it, media + files.values) }.orEmpty()
-            fun FoundFile.withBounds(bounds: SaveDestinations.FileBounds) =
-                this.media.copy(width = bounds.width, height = bounds.height, durationMillis = bounds.durationMillis)
-            listed.forEach { file ->
-                found[file.media.uri] = destinations?.cachedBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType)
-                    ?.let { file.withBounds(it) } ?: file.media
+    fun observe(ioDispatcher: CoroutineDispatcher = Dispatchers.IO) = flow {
+        // Old downloads outlive a rescan: they stay listed until the new listing replaces them, so no row blinks out.
+        var keptListed = emptyList<FoundFile>()
+        var keptFound = emptyMap<Uri, SavedMedia>()
+        emitAll(callbackFlow {
+            val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) { trySend(Unit) }
             }
-            if (listed.isNotEmpty()) emit(Result.success(rows()))
-            for (uri in destinations?.publishedUris().orEmpty()) {
-                if (!inFlight.add(uri)) continue
-                val file = cancellableQuery(ioDispatcher, onFinished = { inFlight.remove(uri) }) { signal -> destinations?.savedFile(uri, signal) }
-                val previous = files[uri]
-                if (file == null) files.remove(uri) else files[uri] = file
-                if (file != previous) emit(Result.success(rows()))
+            resolver.registerContentObserver(MediaStore.Downloads.EXTERNAL_CONTENT_URI, true, observer)
+            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }
+            destinations?.prefs?.registerOnSharedPreferenceChangeListener(listener)
+            oldDownloads?.prefs?.registerOnSharedPreferenceChangeListener(listener)
+            trySend(Unit)
+            awaitClose {
+                resolver.unregisterContentObserver(observer)
+                destinations?.prefs?.unregisterOnSharedPreferenceChangeListener(listener)
+                oldDownloads?.prefs?.unregisterOnSharedPreferenceChangeListener(listener)
             }
-            val unprobed = listed.filter { file ->
-                file.media.kind != SavedMediaKind.AUDIO &&
-                    destinations?.cachedBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) == null
-            }
-            if (destinations != null) unprobed.chunked(FOUND_PROBE_BATCH).forEach { batch ->
-                batch.forEach { file ->
-                    val bounds = cancellableQuery(ioDispatcher) { destinations.fileBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) }
-                    found[file.media.uri] = file.withBounds(bounds)
+        }.conflate().transformLatest {
+            try {
+                val media = cancellableQuery(ioDispatcher, query = ::queryMediaStore)
+                val files = destinations?.recordedFiles().orEmpty().associateBy { it.uri }.toMutableMap()
+                val found = linkedMapOf<Uri, SavedMedia>()
+                OldDownloads.dedupe(keptListed, media + files.values).forEach { file -> keptFound[file.media.uri]?.let { found[it.uri] = it } }
+                fun rows() = (media + files.values + found.values).sortedByDescending { it.addedSeconds }.also { keptFound = found.toMap() }
+                emit(Result.success(rows()))
+                // Old downloads: one listing, then rows at once with cached dimensions; probes fill in below.
+                val listed = oldDownloads?.let { old -> cancellableQuery(ioDispatcher) { signal -> old.list(signal) } }
+                    ?.let { OldDownloads.dedupe(it, media + files.values) }.orEmpty()
+                keptListed = listed
+                found.clear()
+                fun FoundFile.withBounds(bounds: SaveDestinations.FileBounds) =
+                    this.media.copy(width = bounds.width, height = bounds.height, durationMillis = bounds.durationMillis)
+                listed.forEach { file ->
+                    found[file.media.uri] = destinations?.cachedBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType)
+                        ?.let { file.withBounds(it) } ?: file.media
                 }
                 emit(Result.success(rows()))
-            }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (cancelled: OperationCanceledException) { throw cancelled }
-        catch (_: Exception) { emit(Result.failure<List<SavedMedia>>(IllegalStateException())) }
-    }.flowOn(ioDispatcher)
+                for (uri in destinations?.publishedUris().orEmpty()) {
+                    if (!inFlight.add(uri)) continue
+                    val file = cancellableQuery(ioDispatcher, onFinished = { inFlight.remove(uri) }) { signal -> destinations?.savedFile(uri, signal) }
+                    val previous = files[uri]
+                    if (file == null) files.remove(uri) else files[uri] = file
+                    if (file != previous) emit(Result.success(rows()))
+                }
+                val unprobed = listed.filter { file ->
+                    file.media.kind != SavedMediaKind.AUDIO &&
+                        destinations?.cachedBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) == null
+                }
+                if (destinations != null) unprobed.chunked(FOUND_PROBE_BATCH).forEach { batch ->
+                    batch.forEach { file ->
+                        val bounds = cancellableQuery(ioDispatcher) { destinations.fileBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) }
+                        found[file.media.uri] = file.withBounds(bounds)
+                    }
+                    emit(Result.success(rows()))
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (cancelled: OperationCanceledException) { throw cancelled }
+            catch (_: Exception) { emit(Result.failure<List<SavedMedia>>(IllegalStateException())) }
+        })
+        // A rescan that finds the same rows emits nothing: no new state, no re-sort or re-group downstream.
+    }.distinctUntilChanged().flowOn(ioDispatcher)
 
     private companion object { const val FOUND_PROBE_BATCH = 24 }
 

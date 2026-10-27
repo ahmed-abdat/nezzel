@@ -139,6 +139,34 @@ class SavedMediaRepositoryTest {
             assertTrue(withTimeout(5000) { results.receive() }.isEmpty())
         } finally { observer.cancelAndJoin() }
     } }
+    @Test fun unchangedRescanOfALargeLibraryEmitsNothingAndOneNewRowEmitsOnce() = fixture { repo, provider -> runBlocking {
+        provider.db.beginTransaction()
+        try { (2..2000).forEach { provider.insertRow(it, "video/mp4", 100L + it) }; provider.db.setTransactionSuccessful() }
+        finally { provider.db.endTransaction() }
+        val results = Channel<List<SavedMedia>>(Channel.UNLIMITED)
+        val observer = launch { repo.observe().collect { results.send(it.getOrThrow()) } }
+        fun rescan() {
+            context.contentResolver.notifyChange(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+        }
+        try {
+            val first = withTimeout(5000) { results.receive() }
+            assertEquals(2000, first.size)
+            rescan()
+            rescan()
+            provider.insertRow(2001, "video/mp4", 5000)
+            rescan()
+            // Identical rescans emit nothing, so the next snapshot is the one with the new row.
+            val next = withTimeout(5000) { results.receive() }
+            assertEquals(2001, next.size)
+            assertEquals(next.first().uri.toString(), "content://media/external/downloads/2001")
+            assertEquals(first, next.drop(1))
+            rescan()
+            delay(300)
+            assertTrue("An unchanged rescan must not emit", results.tryReceive().isFailure)
+        } finally { observer.cancelAndJoin() }
+    } }
+
     @Test fun initialMediaStoreAndRecordedRowsArriveBeforeSlowFolderValidation() = folderFixture { repo, folder, _ -> runBlocking {
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
