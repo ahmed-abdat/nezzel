@@ -33,10 +33,12 @@ object YtdlpCommand {
      * MP3 conversion, or the final merged/single file. A stop in convert, merge or save keeps it for a compatible retry.
      * Kept only when its writer creates it complete by a rename: the download (.part), yt-dlp's merger and fixups
      * (.temp), the title rewrite and the native engine (atomic move). ExtractAudio writes its target directly, so an
-     * extracted M4A or an MP3 target is never kept. An "mp3" source has no extension (see [download]'s template).
+     * extracted M4A or an MP3 target is never kept; nor is a native M4A/MP3, whose cover EmbedThumbnail saves in place
+     * with mutagen. An "mp3" source has no extension (see [download]'s template).
      */
     fun finishedSource(format: Format): String? = when {
         extractsAudio(format) -> null
+        format.conversion == null && !format.hasVideo && format.container in setOf("m4a", "mp3") -> null
         format.conversion == null -> "output.${format.container}"
         format.sourceContainer != null && format.sourceContainer != "mp3" -> "output.${format.sourceContainer}"
         else -> null

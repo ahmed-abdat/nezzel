@@ -491,6 +491,10 @@ class YtdlpMappingTest {
         // ExtractAudio writes output.m4a in place: a stopped extract leaves it half written, so nothing is kept.
         val extracted = Format("nezzel:m4a:18", "m4a", false, true, audioCodec = "mp4a.40.2", sourceFormatId = "18")
         assertNull(YtdlpCommand.finishedSource(extracted))
+        // A native M4A/MP3 gets its cover saved in place (EmbedThumbnail, mutagen): a stop there leaves it corrupt.
+        assertNull(YtdlpCommand.finishedSource(Format("140", "m4a", false, true, audioCodec = "mp4a.40.2", sourceFormatId = "140")))
+        assertNull(YtdlpCommand.finishedSource(Format("251", "mp3", false, true, sourceFormatId = "251")))
+        assertEquals("output.webm", YtdlpCommand.finishedSource(Format("251", "webm", false, true, audioCodec = "opus")))
         val extractDir = temp.newFolder()
         File(extractDir, "output.m4a").writeText("half")
         assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command(extracted), extractDir) }
