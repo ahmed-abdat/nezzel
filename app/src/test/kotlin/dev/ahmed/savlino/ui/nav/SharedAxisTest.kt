@@ -12,6 +12,7 @@ import android.os.Build
 import android.window.BackEvent
 import android.window.OnBackAnimationCallback
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -45,6 +46,7 @@ class SharedAxisTest {
 
     private lateinit var activity: ComponentActivity
     private var deep by mutableStateOf(false)
+    private var tapped: Boolean? = null
     private val shown = mutableStateOf(true)
 
     @Test fun aDeeperPageComesInFromTheEndAndTheOldOneLeavesTowardTheStartMirroredInRtl() {
@@ -96,10 +98,9 @@ class SharedAxisTest {
                 activity.onBackPressedDispatcher.dispatchOnBackProgressed(BackEventCompat(200f, 400f, .5f, BackEventCompat.EDGE_LEFT))
             }
             repeat(3) { compose.mainClock.advanceTimeByFrame() }
-            // Half way under the finger: the page lifts off toward the finger, the one below waits in place; nothing is committed yet.
+            // Half way under the finger: the page lifts off toward the finger, the one below waits behind it; nothing is committed yet.
             assertTrue(deep)
-            assertEquals(0f, left("page-false"))
-            assertTrue("leaving at ${left("page-true")}", left("page-true") > 0f)
+            assertLifted()
             compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled() }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
@@ -150,6 +151,75 @@ class SharedAxisTest {
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
             assertTrue(deep)
+        }
+    }
+
+    /** Mid-swipe: the page moved toward the finger, and the page below it is out of TalkBack's reach. */
+    private fun assertLifted() {
+        assertTrue("leaving at ${left("page-true")}", left("page-true") > 0f)
+        compose.onNodeWithTag("page-false").assertDoesNotExist()
+    }
+
+    private fun startSwipe(progress: Float) = activity.onBackPressedDispatcher.run {
+        dispatchOnBackStarted(BackEventCompat(0f, 400f, 0f, BackEventCompat.EDGE_LEFT))
+        dispatchOnBackProgressed(BackEventCompat(400f * progress, 400f, progress, BackEventCompat.EDGE_LEFT))
+    }
+
+    @Test fun theOtherPageTakesNoTouchOrTalkBackFocusWhileAFingerHoldsTheSwipe() {
+        deep = true
+        pages().use {
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread { startSwipe(.5f) }
+            repeat(6) { compose.mainClock.advanceTimeByFrame() }
+            assertLifted()
+            // Beside the shrunken card, where the page below shows.
+            compose.onRoot().performTouchInput { click(androidx.compose.ui.geometry.Offset(3f, height / 2f)) }
+            repeat(6) { compose.mainClock.advanceTimeByFrame() }
+            assertNull(tapped)
+            compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled() }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            compose.onNodeWithTag("page-true").performClick()
+            assertEquals(true, tapped)
+        }
+    }
+
+    @Test fun aSecondSwipeRightAfterACancelledOneFollowsTheFinger() {
+        deep = true
+        pages().use {
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread { startSwipe(.5f) }
+            repeat(3) { compose.mainClock.advanceTimeByFrame() }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled(); startSwipe(.5f) }
+            // Longer than the first swipe's way back.
+            compose.mainClock.advanceTimeBy(500)
+            assertTrue(deep)
+            assertLifted()
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            assertFalse(deep)
+            compose.onNodeWithTag("page-true").assertDoesNotExist()
+        }
+    }
+
+    @Test fun aSwipeStartedWhileThePageIsStillComingInStaysUnderTheFinger() {
+        deep = false
+        pages().use {
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread { deep = true; Snapshot.sendApplyNotifications() }
+            repeat(4) { compose.mainClock.advanceTimeByFrame() }
+            compose.runOnUiThread { startSwipe(.5f) }
+            // Past the end of the page's way in.
+            compose.mainClock.advanceTimeBy(500)
+            assertTrue(deep)
+            assertLifted()
+            compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled() }
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+            assertTrue(deep)
+            compose.onNodeWithTag("page-false").assertDoesNotExist()
+            assertEquals(0f, left("page-true"))
         }
     }
 
@@ -210,8 +280,7 @@ class SharedAxisTest {
             compose.runOnUiThread { systemBack().run { onBackStarted(swipe(0f)); onBackProgressed(swipe(.5f)) } }
             repeat(6) { compose.mainClock.advanceTimeByFrame() }
             assertTrue(deep)
-            assertEquals(0f, left("page-false"))
-            assertTrue("leaving at ${left("page-true")}", left("page-true") > 0f)
+            assertLifted()
             compose.runOnUiThread { systemBack().onBackCancelled() }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
@@ -256,7 +325,7 @@ class SharedAxisTest {
                     Box(Modifier.fillMaxSize().then(if (paint) Modifier.background(ComposeColor.White) else Modifier)) {
                         rememberSharedAxis(deep, backTo = false, back = if (deep) ({ deep = false }) else null, "test")
                             .SharedAxisContent({ if (it) 1 else 0 }, Modifier.fillMaxSize()) { page ->
-                                Box(Modifier.fillMaxSize().testTag("page-$page")
+                                Box(Modifier.fillMaxSize().testTag("page-$page").clickable { tapped = page }
                                     .then(if (paint) Modifier.background(if (page) ComposeColor.Red else ComposeColor.Blue) else Modifier))
                             }
                         // Composed after the page, like a sheet or search open over it.

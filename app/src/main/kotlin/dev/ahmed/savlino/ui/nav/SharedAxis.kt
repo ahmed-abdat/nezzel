@@ -36,6 +36,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -43,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -57,14 +61,16 @@ internal fun <T> rememberSharedAxis(page: T, backTo: T, back: (() -> Unit)?, lab
     val seek = remember { SeekableTransitionState(page) }
     val dragging = remember { mutableStateOf(false) }
     val edge = remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+    val gesture = remember { Gesture() }
     val reduced = LocalReducedMotion.current
     LaunchedEffect(page) {
         // A committed back gesture already chose its motion for this page; any other move goes along the axis.
         if (page != seek.targetState) dragging.value = false
         if (reduced) seek.snapTo(page) else seek.animateTo(page)
-        dragging.value = false
+        // A swipe that began while this page moved in holds the motion until it lets go.
+        if (!gesture.held) dragging.value = false
     }
-    SharedAxisBack(seek, dragging, edge, page, backTo, back, reduced)
+    SharedAxisBack(seek, dragging, edge, gesture, page, backTo, back, reduced)
     val transition = rememberTransition(seek, label)
     return remember(transition) { SharedAxis(transition, dragging, edge) }
 }
@@ -75,14 +81,17 @@ internal class SharedAxis<T>(val transition: Transition<T>, val dragging: State<
 /** Where a slot meets the slot drawn by the other [SharedAxisContent] call, so both lift off as one page. */
 internal enum class Joined { Nowhere, Bottom, Top }
 
+/** Whether a finger holds a back swipe now, and the way back of the last one it let go of. */
+private class Gesture(var held: Boolean = false, var returning: Job? = null)
+
 /** The finger holds this share of a back gesture's motion; the rest plays only once it lets go. */
 private const val HELD = .5f
 
 /** Its own scope: a tab being shown or hidden recomposes only this, and only while a page has its own back. */
 @Composable
 private fun <T> SharedAxisBack(
-    seek: SeekableTransitionState<T>, dragging: MutableState<Boolean>, edge: MutableIntState, page: T, backTo: T,
-    back: (() -> Unit)?, reduced: Boolean,
+    seek: SeekableTransitionState<T>, dragging: MutableState<Boolean>, edge: MutableIntState, gesture: Gesture, page: T,
+    backTo: T, back: (() -> Unit)?, reduced: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     val shown = LocalTabShown.current
@@ -91,6 +100,9 @@ private fun <T> SharedAxisBack(
     // Hidden tabs never take back, whichever dispatcher delivers it.
     val enabled by remember { derivedStateOf { backNow.value != null && shown.value } }
     PredictiveBackHandler(enabled) { events ->
+        // A new swipe takes the pages from wherever the last one's way back had got to.
+        gesture.returning?.cancel()
+        gesture.held = true
         try {
             // A back without a gesture (button, older Android) sends no progress and keeps the axis motion.
             events.collect {
@@ -99,10 +111,12 @@ private fun <T> SharedAxisBack(
                 dragging.value = true
                 seek.seekTo(it.progress * HELD, backTo)
             }
+            gesture.held = false
             backNow.value?.invoke()
         } catch (cancelled: CancellationException) {
+            gesture.held = false
             // Back to where the finger started, as quickly as it got there.
-            scope.launch {
+            gesture.returning = scope.launch {
                 val from = seek.fraction
                 val nanos = (from * Motion.AXIS * 1_000_000L).toLong()
                 if (nanos > 0) {
@@ -188,10 +202,12 @@ private fun <T> SharedAxis<T>.lifted(scope: AnimatedContentScope, joined: Joined
     val dark = colors.background.luminance() < .5f
     if (scope.transition.targetState != EnterExitState.PostExit) {
         val dim = if (dark) DIM_DARK else DIM
-        return Modifier.drawWithContent { drawContent(); if (lift.value < 0f) drawRect(colors.scrim, alpha = -lift.value * dim) }
+        // Seen but not there yet: TalkBack and touches reach it only once the swipe commits.
+        return Modifier.clearAndSetSemantics { }.then(NoTouch)
+            .drawWithContent { drawContent(); if (lift.value < 0f) drawRect(colors.scrim, alpha = -lift.value * dim) }
     }
     val corner = MaterialTheme.shapes.extraLarge.topStart
-    val card = Modifier.graphicsLayer {
+    val card = NoTouch.graphicsLayer {
         shape = cardShape(corner.toPx(size, this) * lift.value.coerceIn(0f, 1f), joined)
         clip = true
     }.background(colors.background)
@@ -207,6 +223,11 @@ private fun <T> SharedAxis<T>.lifted(scope: AnimatedContentScope, joined: Joined
                 .createOutline(Size(size.width, size.height + seam), layoutDirection, this), edge, style = Stroke(width))
         }
     }
+}
+
+/** Swallows every touch before the page sees it. */
+private val NoTouch = Modifier.pointerInput(Unit) {
+    awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
 }
 
 private fun cardShape(radius: Float, joined: Joined): RoundedCornerShape {
