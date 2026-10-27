@@ -163,6 +163,31 @@ class PlaybackCoordinatorTest {
         looper.idleFor(Duration.ofSeconds(5))
         assertTrue(players.all { it.releases == 1 && it.afterRelease == 0 })
     }
+    @Test fun theUiLetsGoOfThePlayerBeforeItsStopEventsArrive() {
+        val players = mutableListOf<RecordingPlayer>()
+        val owner = PlaybackCoordinator(videoEnvironment(players), NoAudioConnection)
+        owner.settle(item(1), true)
+        looper.idle()
+        // ViewerVideo follows the player only while the owner still exposes it.
+        val exposedDuringStop = mutableListOf<androidx.media3.common.Player?>()
+        players[0].onStop = { exposedDuringStop += owner.player.value }
+        owner.close()
+        assertEquals(listOf<androidx.media3.common.Player?>(null), exposedDuringStop)
+    }
+    @Test fun aFlushCancelsTheDelayedReleases() {
+        val pending = mutableListOf<() -> Unit>()
+        var cancelled = 0
+        val players = mutableListOf<RecordingPlayer>()
+        val environment = PlaybackEnvironment(RuntimeEnvironment.getApplication(), PlayerFactory { _, _ -> RecordingPlayer().also(players::add) },
+            sizeOf = { 10L }, scheduler = PlaybackScheduler { _, action -> pending += action; PlaybackCancellation { cancelled++; pending -= action } })
+        environment.releaseLater(RecordingPlayer().also(players::add))
+        environment.releaseLater(RecordingPlayer().also(players::add))
+        assertEquals(2, pending.size)
+        environment.releaseStopped()
+        assertTrue(pending.isEmpty())
+        assertEquals(2, cancelled)
+        assertTrue(players.all { it.releases == 1 })
+    }
 }
 internal object NoAudioConnection : AudioConnection {
     override fun open(item: ViewerItem, onPlayer: (androidx.media3.common.Player) -> Unit, onFailure: () -> Unit) {}

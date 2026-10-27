@@ -12,6 +12,8 @@ internal class RecordingPlayer : SimpleBasePlayer(Looper.getMainLooper()) {
     /** Commands that reached the player after release(): a released player must not be touched. */
     var afterRelease = 0
     var surfaceCleared = false
+    /** Runs inside stop(), where ExoPlayer delivers its stop events synchronously. */
+    var onStop: () -> Unit = {}
     var prepared = 0
     private var position = 0L
     private var value = State.Builder().setAvailableCommands(Player.Commands.Builder().addAllCommands().build())
@@ -27,7 +29,7 @@ internal class RecordingPlayer : SimpleBasePlayer(Looper.getMainLooper()) {
     @Suppress("OVERRIDE_DEPRECATION")
     override fun handleSetVolume(volume: Float): ListenableFuture<*> = update(value.buildUpon().setVolume(volume).build())
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> { touch(); position = positionMs.coerceAtLeast(0); return update(value.buildUpon().setContentPositionMs(position).build()) }
-    override fun handleStop(): ListenableFuture<*> = touch().update(value.buildUpon().setPlaybackState(Player.STATE_IDLE).setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST).build())
+    override fun handleStop(): ListenableFuture<*> = touch().also { onStop() }.update(value.buildUpon().setPlaybackState(Player.STATE_IDLE).setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST).build())
     override fun handleRelease(): ListenableFuture<*> { released = true; releases++; return Futures.immediateVoidFuture() }
     private fun touch() = also { if (released) afterRelease++ }
     // PlayerSurface attaches a surface on every video page; all commands are advertised, so accept it.

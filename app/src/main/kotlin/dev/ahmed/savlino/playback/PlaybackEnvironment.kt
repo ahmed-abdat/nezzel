@@ -89,14 +89,15 @@ class PlaybackEnvironment(
     internal var stopAudio: (() -> Unit)? = null
     // release() waits on the playback thread while it frees the codec (40-60 ms on a phone): a closed viewer's player is
     // stopped at once (frees the codec, drops audio focus) and released once that's done, off the close frame.
-    private val stopped = mutableListOf<Player>()
+    private val stopped = linkedMapOf<Player, PlaybackCancellation?>()
     internal fun releaseLater(player: Player) {
         player.clearVideoSurface(); player.stop()
-        stopped += player
-        scheduler.after(RELEASE_DELAY_MS) { if (stopped.remove(player)) player.release() }
+        stopped[player] = null
+        val timer = scheduler.after(RELEASE_DELAY_MS) { if (stopped.containsKey(player)) { stopped.remove(player); player.release() } }
+        if (stopped.containsKey(player)) stopped[player] = timer
     }
     /** Releases every stopped player now: a new video opens, the app leaves the foreground, or the viewer's activity ends. */
-    internal fun releaseStopped() { while (stopped.isNotEmpty()) stopped.removeAt(0).release() }
+    internal fun releaseStopped() { stopped.keys.toList().forEach { stopped.remove(it)?.cancel(); it.release() } }
     private val activities = mutableSetOf<Activity>()
     private var owner: Any? = null
     private var stopOwner: (() -> Unit)? = null

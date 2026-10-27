@@ -60,7 +60,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
-import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.compose.PlayerSurface
@@ -140,17 +139,21 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val hidden = host?.moving == true
     LaunchedEffect(player, hidden) {
         if (hidden && player != null) return@LaunchedEffect
-        while (player != null) { read(player); delay(250) }
+        while (player != null) { if (owner.player.value === player) read(player); delay(250) }
         playing = false; running = false; seekable = false
     }
-    // The poll above refreshes position; these follow the player at once so buttons never lag a tap.
+    // The poll above refreshes position; these follow the player at once so buttons never lag a tap. A closed viewer's
+    // player is stopped before this effect is disposed: the owner lets go of it first, and its stop events are ignored.
     DisposableEffect(player) {
         val listener = object : Player.Listener {
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { playing = playWhenReady }
-            override fun onIsPlayingChanged(isPlaying: Boolean) { running = isPlaying }
-            override fun onPlaybackParametersChanged(parameters: PlaybackParameters) { speed = parameters.speed }
-            override fun onVideoSizeChanged(videoSize: VideoSize) { size(videoSize) }
-            override fun onEvents(player: Player, events: Player.Events) { seekableNow(player) }
+            override fun onEvents(source: Player, events: Player.Events) {
+                if (owner.player.value !== player) return
+                if (events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED)) playing = source.playWhenReady
+                if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) running = source.isPlaying
+                if (events.contains(Player.EVENT_PLAYBACK_PARAMETERS_CHANGED)) speed = source.playbackParameters.speed
+                if (events.contains(Player.EVENT_VIDEO_SIZE_CHANGED)) size(source.videoSize)
+                seekableNow(source)
+            }
         }
         player?.addListener(listener)
         onDispose { player?.removeListener(listener); ViewerScrub.set(player, false) }
