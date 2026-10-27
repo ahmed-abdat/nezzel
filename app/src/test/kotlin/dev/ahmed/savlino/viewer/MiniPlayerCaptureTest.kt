@@ -98,7 +98,7 @@ class MiniPlayerCaptureTest {
         try {
             activity.setContent { NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                 ViewerHost(host) {
-                    NavigationScaffold("Downloads", emptyList(), lang, {}) {
+                    NavigationScaffold("Downloads", { emptyList() }, lang, {}) {
                         TabContent("Downloads") {
                             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {}
                             CompositionLocalProvider(LocalMediaPictures provides cover, LocalPlaybackEnvironment provides playback,

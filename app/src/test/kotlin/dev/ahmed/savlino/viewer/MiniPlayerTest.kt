@@ -91,7 +91,7 @@ class MiniPlayerTest {
                     val kept = if (saved) rememberViewerHost() else host
                     SideEffect { host = kept }
                     ViewerHost(kept) {
-                        NavigationScaffold("Downloads", emptyList(), "en", {}) {
+                        NavigationScaffold("Downloads", { emptyList() }, "en", {}) {
                             TabContent("Downloads") {
                                 Button({ taps++ }, Modifier.fillMaxSize()) { Text("Below") }
                                 CompositionLocalProvider(LocalMediaPictures provides MediaPictures { _, _, _ -> null },
