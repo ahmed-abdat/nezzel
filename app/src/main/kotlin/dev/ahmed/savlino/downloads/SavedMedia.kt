@@ -237,13 +237,13 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
         }
     }.conflate().transformLatest {
         try {
-            val media = cancellableQuery(query = ::queryMediaStore)
+            val media = cancellableQuery(ioDispatcher, query = ::queryMediaStore)
             val files = destinations?.recordedFiles().orEmpty().associateBy { it.uri }.toMutableMap()
             val found = linkedMapOf<Uri, SavedMedia>()
             fun rows() = (media + files.values + found.values).sortedByDescending { it.addedSeconds }
             emit(Result.success(rows()))
             // Old downloads: one listing, then rows at once with cached dimensions; probes fill in below.
-            val listed = oldDownloads?.let { old -> cancellableQuery { signal -> old.list(signal) } }
+            val listed = oldDownloads?.let { old -> cancellableQuery(ioDispatcher) { signal -> old.list(signal) } }
                 ?.let { OldDownloads.dedupe(it, media + files.values) }.orEmpty()
             fun FoundFile.withBounds(bounds: SaveDestinations.FileBounds) =
                 this.media.copy(width = bounds.width, height = bounds.height, durationMillis = bounds.durationMillis)
@@ -254,7 +254,7 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
             if (listed.isNotEmpty()) emit(Result.success(rows()))
             for (uri in destinations?.publishedUris().orEmpty()) {
                 if (!inFlight.add(uri)) continue
-                val file = cancellableQuery(onFinished = { inFlight.remove(uri) }) { signal -> destinations?.savedFile(uri, signal) }
+                val file = cancellableQuery(ioDispatcher, onFinished = { inFlight.remove(uri) }) { signal -> destinations?.savedFile(uri, signal) }
                 val previous = files[uri]
                 if (file == null) files.remove(uri) else files[uri] = file
                 if (file != previous) emit(Result.success(rows()))
@@ -265,7 +265,7 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
             }
             if (destinations != null) unprobed.chunked(FOUND_PROBE_BATCH).forEach { batch ->
                 batch.forEach { file ->
-                    val bounds = cancellableQuery { destinations.fileBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) }
+                    val bounds = cancellableQuery(ioDispatcher) { destinations.fileBounds(file.media.uri, file.media.size, file.modified, file.media.mimeType) }
                     found[file.media.uri] = file.withBounds(bounds)
                 }
                 emit(Result.success(rows()))
@@ -278,11 +278,11 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
     private companion object { const val FOUND_PROBE_BATCH = 24 }
 
     /** A provider may ignore cancellation: abandon its result without joining its blocking call. */
-    private suspend fun <T> cancellableQuery(onFinished: () -> Unit = {}, query: (CancellationSignal) -> T): T =
+    private suspend fun <T> cancellableQuery(dispatcher: CoroutineDispatcher, onFinished: () -> Unit = {}, query: (CancellationSignal) -> T): T =
         suspendCancellableCoroutine { continuation ->
             val signal = CancellationSignal()
             continuation.invokeOnCancellation { signal.cancel() }
-            Dispatchers.IO.dispatch(EmptyCoroutineContext) {
+            dispatcher.dispatch(EmptyCoroutineContext) {
                 try {
                     if (continuation.isActive) continuation.resume(query(signal))
                 } catch (failure: Exception) { continuation.resumeWithException(failure) }

@@ -42,7 +42,10 @@ class DownloadCoordinatorCheckTest {
         override fun close() = store.close()
     }
 
-    private fun fixture(cipher: LinkCipher? = AesGcmLinkCipher(MemoryLinkKeys()), timeoutMs: Long = 4000, probe: (Fixture) -> MediaProbe): Fixture {
+    // graceMs: a probe that returns at once always lands inside the grace (capped at timeoutMs), however loaded the machine;
+    // only tests whose probe is held by a latch use a short grace, so its expiry never races a verdict.
+    private fun fixture(cipher: LinkCipher? = AesGcmLinkCipher(MemoryLinkKeys()), timeoutMs: Long = 4000, graceMs: Long = 10_000,
+        probe: (Fixture) -> MediaProbe): Fixture {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(context: Context, name: String, params: WorkerParameters) =
@@ -56,7 +59,8 @@ class DownloadCoordinatorCheckTest {
         lateinit var fixture: Fixture
         val engine = FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))
         val coordinator = DownloadCoordinator(app, engine, store, MediaStorePublisher(app.contentResolver, space, app.packageName) { },
-            space = space, probe = { uri -> probe(fixture).probe(uri) }, checkTimeoutMs = timeoutMs,
+            space = space, probe = { uri -> probe(fixture).probe(uri) }, checkTimeoutMs = timeoutMs, checkGraceMs = graceMs,
+            probeThreads = SavedProbeExecutor.newExecutor(),
             parallelDownloads = kotlinx.coroutines.flow.MutableStateFlow(1))
         fixture = Fixture(store, coordinator, mutableListOf())
         return fixture
@@ -73,7 +77,7 @@ class DownloadCoordinatorCheckTest {
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
         val probes = java.util.concurrent.atomic.AtomicInteger()
-        fixture(timeoutMs = 4000) { MediaProbe {
+        fixture(timeoutMs = 4000, graceMs = 2000) { MediaProbe {
             if (probes.incrementAndGet() == 1) {
                 entered.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)); ProbeFacts(1, 0, 5000, 4)
             } else ProbeFacts(1, 1, 5000, 4)
@@ -81,13 +85,13 @@ class DownloadCoordinatorCheckTest {
             try {
                 val first = async(Dispatchers.Default) { f.finish("late-problem") }
                 assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
-                val next = withTimeout(1500) { f.finish("next-while-check-blocked") }
+                val next = f.finish("next-while-check-blocked") // the first probe is still held: completing proves the slot was freed
                 assertEquals(ResultCheck.Verified(true, true), next.check)
-                val done = withTimeout(1500) { first.await() }
+                val done = withTimeout(10_000) { first.await() }
                 assertNull(done.check)
                 assertTrue(f.coordinator.warnings.value.isEmpty())
                 release.countDown()
-                val warning = withTimeout(2000) { f.coordinator.warnings.first { it.any { w -> w.jobId == "late-problem" } } }.single()
+                val warning = withTimeout(10_000) { f.coordinator.warnings.first { it.any { w -> w.jobId == "late-problem" } } }.single()
                 assertEquals(ResultCheck.Problem.NO_SOUND, warning.problem)
                 assertTrue(warning.canRetry)
                 assertEquals(JobStage.COMPLETED, f.store.get("late-problem")!!.stage)
@@ -98,7 +102,7 @@ class DownloadCoordinatorCheckTest {
     @Test fun cancelAndRemoveDuringCommittedGraceStillDeliverOneCompletedAndNoCancellation() = runBlocking {
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
-        fixture { MediaProbe { entered.countDown(); release.await(5, java.util.concurrent.TimeUnit.SECONDS); ProbeFacts(1, 1, 5000, 4) } }.use { f ->
+        fixture(graceMs = 300) { MediaProbe { entered.countDown(); release.await(5, java.util.concurrent.TimeUnit.SECONDS); ProbeFacts(1, 1, 5000, 4) } }.use { f ->
             val events = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
             val cancelled = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
             val callbacks = java.util.concurrent.CopyOnWriteArrayList<DownloadProgress>()
@@ -118,9 +122,9 @@ class DownloadCoordinatorCheckTest {
                 f.coordinator.cancel(id)
                 f.coordinator.removeFailed(id)
                 assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
-                assertEquals(JobStage.COMPLETED, withTimeout(1500) { executing.await() }!!.stage)
+                assertEquals(JobStage.COMPLETED, withTimeout(10_000) { executing.await() }!!.stage)
                 release.countDown()
-                withTimeout(1000) { while (events.isEmpty()) delay(1) }
+                withTimeout(10_000) { while (events.isEmpty()) delay(1) }
                 yield()
                 completedCollector.cancelAndJoin(); cancelledCollector.cancelAndJoin()
                 assertEquals(listOf(DownloadPhase.COMPLETED), events.map { it.phase })

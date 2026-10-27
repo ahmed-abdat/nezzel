@@ -40,6 +40,8 @@ class DownloadCoordinator(
     private val probe: dev.ahmed.savlino.media.MediaProbe = dev.ahmed.savlino.media.AndroidMediaProbe(context),
     private val checkTimeoutMs: Long = CHECK_TIMEOUT_MS,
     private val previewArtwork: suspend (String) -> android.graphics.Bitmap? = { dev.ahmed.savlino.ui.ThumbnailLoader().load(it) },
+    private val checkGraceMs: Long = CHECK_GRACE_MS,
+    probeThreads: java.util.concurrent.ThreadPoolExecutor? = null, // tests: a pool no other coordinator can starve
 ) {
     /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
     val batches by lazy { BatchStore(store) }
@@ -126,7 +128,7 @@ class DownloadCoordinator(
         val transfer = AttemptTransferSummary(clock)
     }
     private val accounting = ConcurrentHashMap<String, AttemptAccounting>()
-    private val savedProbes = SavedProbeExecutor()
+    private val savedProbes = probeThreads?.let(::SavedProbeExecutor) ?: SavedProbeExecutor()
 
     private val recovery = JobRecovery(store, publisher ?: DestinationPublisher(context, space), File(context.filesDir, "downloads"))
     private val startup = Mutex()
@@ -390,7 +392,7 @@ class DownloadCoordinator(
                     // Writer ownership, native maintenance and the transfer slot are already free.
                     val verdict = try {
                         val check = checkSavedAsync(saved, progress.bytes)
-                        withTimeoutOrNull(minOf(CHECK_GRACE_MS, checkTimeoutMs)) { check.await() }
+                        withTimeoutOrNull(minOf(checkGraceMs, checkTimeoutMs)) { check.await() }
                     } catch (_: Exception) { null } // Optional verification cannot undo committed completion.
                     val final = progress.copy(check = verdict)
                     update(final)
