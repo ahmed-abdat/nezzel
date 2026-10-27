@@ -255,7 +255,7 @@ class ViewerControlsTest {
     // A3
     private fun pickSpeed(label: String) {
         node(R.string.viewer_speed).performClick()
-        compose.onNodeWithText(label).performClick()
+        compose.onNodeWithText(label, substring = true).performClick()
         compose.waitForIdle()
     }
 
@@ -270,7 +270,7 @@ class ViewerControlsTest {
         node(R.string.viewer_speed).performClick()
         val selected = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Selected, true)
         compose.onAllNodes(selected).assertCountEquals(1)
-        compose.onNode(selected).assert(hasAnyDescendant(hasText("1.5×")) or hasText("1.5×"))
+        compose.onNode(selected).assert(hasAnyDescendant(hasText("1.5×", substring = true)) or hasText("1.5×", substring = true))
         assertEquals(listOf(UsageKeys.PLAYER_SPEED), counts.filter { it == UsageKeys.PLAYER_SPEED })
     }
 

@@ -219,7 +219,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 .pointerInput(Unit) { detectTapGestures { controls.touched() } }
                 .padding(start = Space.s, end = Space.s, top = Space.xl, bottom = Space.xs)) {
                 if (resumedAt > 0 && showResume) Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.viewer_resumed_at, "⁦${NezzelFormat.duration(resumedAt / 1000)}⁩"), Modifier.weight(1f),
+                    Text(stringResource(R.string.viewer_resumed_at, "\u2066${NezzelFormat.duration(resumedAt / 1000)}\u2069"), Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium)
                     TextButton({ controls.touched(); owner.startOver() }, Modifier.heightIn(min = 48.dp),
                         colors = ButtonDefaults.textButtonColors(contentColor = colors.accent)) { Text(stringResource(R.string.viewer_start_over)) }
