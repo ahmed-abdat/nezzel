@@ -3,6 +3,7 @@ package dev.ahmed.savlino.viewer
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.Orientation
@@ -42,6 +43,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
+import java.text.Bidi
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -53,6 +55,8 @@ import androidx.media3.common.Player
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.ui.ThumbnailKind
 import dev.ahmed.savlino.ui.theme.Dock
+import dev.ahmed.savlino.ui.theme.LocalReducedMotion
+import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import dev.ahmed.savlino.ui.theme.Space
 import androidx.media3.session.R as Media3
 
@@ -103,8 +107,13 @@ internal data class MiniPlayerLayout(val sheet: Rect, val topCorner: Dp, val cor
         fun barOffset(p: Float, slotTop: Float) = (p - 1f) * slotTop
         /** The bar's row is under the sheet until the sheet draws back from over it: only then is it placed. */
         fun bar(p: Float) = p > RISE
-        /** The name shows once the cover has shrunk off it into the row. */
-        fun title(p: Float) = FastOutSlowInEasing.transform(span(p, LAND, 1f))
+        /** The name and controls fade in together from when the row is placed, under the cover that is still landing on them. */
+        fun row(p: Float) = FastOutSlowInEasing.transform(span(p, RISE, 1f))
+        /** A long name scrolls only in the settled bar, and never with animations off. */
+        fun marquee(p: Float, reduced: Boolean) = p >= 1f && !reduced
+        /** The name scrolls this long after the bar settles. */
+        const val MARQUEE_DELAY = 3000
+        val MARQUEE_SPEED = 24.dp
         /** What the sheet uncovers late (the paste field, the footer) fades in over the last third instead of appearing at once. */
         fun home(p: Float) = span(p, 2f / 3f, 1f)
         private fun span(p: Float, start: Float, end: Float) = ((p - start) / (end - start)).coerceIn(0f, 1f)
@@ -195,6 +204,9 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     val cover = rememberMediaPicture(session.item.uri, ThumbnailKind.AUDIO, with(LocalDensity.current) { (MiniPlayerLayout.COVER * 4).roundToPx() })
     val bar = Dock.color
     SideEffect { host.barColor = bar }
+    val reduced = LocalReducedMotion.current || rememberReducedMotion()
+    // Name and controls as one layer alpha: they come in under the landing cover, no recomposition per frame.
+    val row = remember(host) { Modifier.graphicsLayer { alpha = MiniPlayerLayout.row(host.progress) } }
     val toggle = { if (playing) session.owner.pause() else session.owner.play() }
     val label = stringResource(if (playing) R.string.mini_playing else R.string.mini_paused, title)
     val open = stringResource(R.string.mini_open_player)
@@ -223,14 +235,20 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
                 cover?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                     ?: Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.5f)) }
             }
-            // A file name reads left to right inside either language.
-            Text("\u2066$title\u2069", Modifier.weight(1f).padding(horizontal = Space.m)
-                .graphicsLayer { alpha = MiniPlayerLayout.title(host.progress) }, style = MaterialTheme.typography.titleSmall,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            IconButton(toggle, Modifier.size(48.dp)) {
+            // A Latin file name reads left to right inside either language, an Arabic one right to left; it scrolls the same way.
+            val ltr = remember(title) { Bidi(title, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseIsLeftToRight() }
+            val scrolls = MiniPlayerLayout.marquee(if (host.collapsed) 1f else 0f, reduced)
+            Box(Modifier.weight(1f).padding(horizontal = Space.m).then(row), contentAlignment = Alignment.CenterStart) {
+                CompositionLocalProvider(LocalLayoutDirection provides if (ltr) LayoutDirection.Ltr else LayoutDirection.Rtl) {
+                    Text(title, if (scrolls) Modifier.basicMarquee(initialDelayMillis = MiniPlayerLayout.MARQUEE_DELAY,
+                        velocity = MiniPlayerLayout.MARQUEE_SPEED) else Modifier,
+                        style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = if (scrolls) TextOverflow.Clip else TextOverflow.Ellipsis)
+                }
+            }
+            IconButton(toggle, Modifier.size(48.dp).then(row)) {
                 Icon(painterResource(if (playing) Media3.drawable.media3_icon_pause else Media3.drawable.media3_icon_play), playLabel, Modifier.size(24.dp))
             }
-            IconButton({ host.close() }, Modifier.size(48.dp)) { Icon(Icons.Default.Close, closeLabel) }
+            IconButton({ host.close() }, Modifier.size(48.dp).then(row)) { Icon(Icons.Default.Close, closeLabel) }
         }
     }
 }

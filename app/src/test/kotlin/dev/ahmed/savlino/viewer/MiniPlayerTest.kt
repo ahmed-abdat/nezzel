@@ -249,6 +249,16 @@ class MiniPlayerTest {
             if (p > .6f) assertTrue("p=$p: the sheet has drawn back from the row", sheet.sheet.width < page.width)
         }
         assertEquals(0f, MiniPlayerLayout.barOffset(1f, slot.top)); assertTrue(MiniPlayerLayout.bar(1f))
+        // Name and controls come in together from when the row is placed, already partly there under the landing cover.
+        assertEquals(0f, MiniPlayerLayout.row(.6f)); assertEquals(1f, MiniPlayerLayout.row(1f))
+        assertTrue(MiniPlayerLayout.row(.8f) in .2f..(.8f)); assertTrue(MiniPlayerLayout.row(.85f) > MiniPlayerLayout.row(.8f))
+        (60..100).map { it / 100f }.zipWithNext().forEach { (p, q) -> assertTrue(MiniPlayerLayout.row(q) >= MiniPlayerLayout.row(p)) }
+    }
+
+    @Test fun aLongNameScrollsOnlyInTheSettledBarWithAnimationsOn() {
+        for (p in listOf(0f, .6f, .9f, .999f)) assertFalse("p=$p", MiniPlayerLayout.marquee(p, reduced = false))
+        assertTrue(MiniPlayerLayout.marquee(1f, reduced = false))
+        assertFalse("Animations off", MiniPlayerLayout.marquee(1f, reduced = true))
     }
 
     @Test fun theBarMovesWithTheSheetWhileDragged() {
