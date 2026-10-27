@@ -84,16 +84,6 @@ internal class LibraryTestWork(private val compose: ComposeTestRule) : Coroutine
         fail("Library condition did not settle after 64 Compose/IO turns")
     }
 
-    /** The default repository blocks on the real Dispatchers.IO (SavedMediaRepository.cancellableQuery), out of this dispatcher's sight. */
-    fun awaitRealIo(timeoutMillis: Long = 5_000, check: () -> Boolean) {
-        val deadline = System.nanoTime() + timeoutMillis * 1_000_000
-        while (System.nanoTime() < deadline) {
-            turn()
-            if (check()) { turn(); if (check()) return }
-        }
-        fail("Library condition did not settle within $timeoutMillis ms of real IO")
-    }
-
     override fun close() {
         if (executor.isShutdown) return
         // Activities are destroyed before teardown; do not wait for a Compose root that is gone.

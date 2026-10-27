@@ -61,7 +61,8 @@ class SavedShareSheetTest {
     private fun render(check: (ComponentActivity) -> Unit) = renderThemed({ nodes(it) }, {
         val activity = LocalContext.current
         val scope = rememberCoroutineScope()
-        val sharer = remember { FileSharer(activity, UsageEvents.None, scope, { messages += it }) }
+        // Unconfined: the WhatsApp lookup and file check run inline, so a loaded IO pool can never outlast the waits below.
+        val sharer = remember { FileSharer(activity, UsageEvents.None, scope, { messages += it }, kotlinx.coroutines.Dispatchers.Unconfined) }
         CompositionLocalProvider(LocalFileSharer provides sharer) {
             DownloadsScreen(emptyList(), "en", {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(listOf(video)))
         }
@@ -87,7 +88,6 @@ class SavedShareSheetTest {
 
     @Test fun noWhatsAppKeepsThePlainShareRow() = render { a ->
         click(a, context.getString(R.string.saved_more, video.title))
-        // A cold Robolectric start can take seconds before the sheet's lookup lands.
         waitWhile({ nodes(a) }, timeoutMs = 15_000) { clickable(a, context.getString(R.string.share_file)) == null }
         assertNull(clickable(a, context.getString(R.string.share_other_apps)))
         assertNull(clickable(a, "WhatsApp"))
