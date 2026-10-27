@@ -78,7 +78,7 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     val request = remember(id) { ViewerRequest(id) }
     val locals = currentCompositionLocalContext
     val content: @Composable () -> Unit = { ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions) }
-    SideEffect { request.locals = locals; request.content = content }
+    SideEffect { request.locals = locals; request.content = content; request.onClose = onClose }
     DisposableEffect(host, request) { host.show(request); onDispose { host.dismiss(request) } }
 }
 
