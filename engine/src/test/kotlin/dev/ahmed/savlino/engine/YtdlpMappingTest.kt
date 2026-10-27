@@ -488,6 +488,12 @@ class YtdlpMappingTest {
         assertNull(YtdlpCommand.finishedSource(mp3FromMp3)) // its template has no extension
         assertNull(YtdlpCommand.finishedSource(mp3.copy(sourceContainer = null))) // legacy row: source unknown
         assertEquals("output.mp4", YtdlpCommand.finishedSource(merged))
+        // ExtractAudio writes output.m4a in place: a stopped extract leaves it half written, so nothing is kept.
+        val extracted = Format("nezzel:m4a:18", "m4a", false, true, audioCodec = "mp4a.40.2", sourceFormatId = "18")
+        assertNull(YtdlpCommand.finishedSource(extracted))
+        val extractDir = temp.newFolder()
+        File(extractDir, "output.m4a").writeText("half")
+        assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command(extracted), extractDir) }
         for ((format, kept) in listOf(mp3 to "output.m4a", merged to "output.mp4")) {
             val dir = temp.newFolder()
             File(dir, kept).writeText("finished")
