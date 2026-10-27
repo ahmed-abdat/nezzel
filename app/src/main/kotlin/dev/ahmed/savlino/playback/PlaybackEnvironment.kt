@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import dev.ahmed.savlino.jobs.NezzelApplication
@@ -18,6 +19,21 @@ import dev.ahmed.savlino.viewer.ViewerItem
 import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+
+/**
+ * Every file is local, so a seek plays again after a quarter second of read-ahead instead of Media3's one second
+ * (two after a stall when it can't tell the source is local). The long read-ahead limits stay Media3's.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal object PlaybackBuffers {
+    const val START_MS = 250
+    const val AFTER_STALL_MS = 500
+    fun loadControl(): DefaultLoadControl = DefaultLoadControl.Builder()
+        .setBufferDurationsMs(DefaultLoadControl.DEFAULT_MIN_BUFFER_MS, DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, START_MS, AFTER_STALL_MS)
+        .setBufferDurationsMsForLocalPlayback(DefaultLoadControl.DEFAULT_MIN_BUFFER_FOR_LOCAL_PLAYBACK_MS,
+            DefaultLoadControl.DEFAULT_MAX_BUFFER_FOR_LOCAL_PLAYBACK_MS, START_MS, AFTER_STALL_MS)
+        .build()
+}
 
 fun interface PlayerFactory { fun create(context: Context, audio: Boolean): Player }
 fun interface PlaybackCancellation { fun cancel() }
@@ -30,6 +46,7 @@ class PlaybackEnvironment(
     val playerFactory: PlayerFactory = PlayerFactory { app, audio ->
         ExoPlayer.Builder(app)
             .setMediaSourceFactory(ProgressiveMediaSource.Factory(ContentPlaybackSource.Factory(app)))
+            .setLoadControl(PlaybackBuffers.loadControl())
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(if (audio) C.AUDIO_CONTENT_TYPE_MUSIC else C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000)

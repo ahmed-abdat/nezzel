@@ -71,6 +71,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A viewer closed by the recreation (its list reloads empty) would otherwise leave the app stuck in landscape.
+        if (savedInstanceState != null) dev.ahmed.savlino.viewer.ViewerFullscreen.release(this)
         preferences = AppPreferences(this)
         val openUpdate = intent.action == dev.ahmed.savlino.update.UpdateNotifications.OPEN
         val launchShare = ShareInput.from(intent)

@@ -84,6 +84,7 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     val close = { fullscreen(false); playback.close(); onClose() }
     // Rotation recreates the activity mid-fullscreen: only a real dismissal puts the old orientation back.
     DisposableEffect(activity) { onDispose { if (activity?.isChangingConfigurations != true) ViewerFullscreen.exit(activity, controls) } }
+    LaunchedEffect(activity) { ViewerFullscreen.resume(activity, controls) }
     // Back leaves fullscreen first, then closes.
     Dialog({ if (controls.fullscreen) fullscreen(false) else close() }, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         // Black page: light status and navigation icons whatever the app theme. Fullscreen hides the bars; a swipe shows them briefly.

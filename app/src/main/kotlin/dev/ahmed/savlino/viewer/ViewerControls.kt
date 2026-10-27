@@ -109,6 +109,13 @@ internal object ViewerFullscreen {
         controls.exitFullscreen()
         activity?.requestedOrientation = controls.orientationBefore
     }
+    /** A recreated activity drops any landscape left from fullscreen: a viewer that comes back in fullscreen asks again. */
+    fun release(activity: Activity) {
+        if (activity.requestedOrientation == LANDSCAPE) activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+    fun resume(activity: Activity?, controls: ViewerControls) {
+        if (controls.fullscreen && activity != null && activity.requestedOrientation != LANDSCAPE) activity.requestedOrientation = LANDSCAPE
+    }
 }
 
 /** The phone's media volume, the same one the volume keys move. Fixed-volume devices show no slider. */

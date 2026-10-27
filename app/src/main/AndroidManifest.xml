@@ -61,7 +61,9 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
         </receiver>
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+        <!-- Rotation (the viewer's full screen) re-lays out in place instead of restarting the activity and its player. -->
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

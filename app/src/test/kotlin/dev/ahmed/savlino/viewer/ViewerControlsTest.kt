@@ -377,6 +377,24 @@ class ViewerControlsTest {
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activity.requestedOrientation)
     }
 
+    @Test fun recreatedActivityDropsLeftoverLandscapeAndARestoredFullscreenAsksAgain() {
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume()
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        ViewerFullscreen.release(activity)
+        assertEquals("No viewer came back: the app is not stuck in landscape", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activity.requestedOrientation)
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        ViewerFullscreen.release(activity)
+        assertEquals("Only our landscape is dropped", ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+
+        val restored = ViewerControls(fullscreen = true, orientationBefore = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
+        ViewerFullscreen.resume(activity, restored)
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, activity.requestedOrientation)
+        ViewerFullscreen.exit(activity, restored)
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+        ViewerFullscreen.resume(activity, ViewerControls())
+        assertEquals("A viewer outside fullscreen never rotates", ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, activity.requestedOrientation)
+    }
+
     @Test fun picturesKeepTheirChrome() {
         show(middle, 0)
         advance(5_000)
