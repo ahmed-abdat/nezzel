@@ -309,5 +309,8 @@ class Mp3EncoderTest {
             Mp3Tags.metadata("""{"title":"Video","uploader":"Up"}""", realArtist = false))
         assertEquals(listOf("comment=", "purl=", "description=", "synopsis=", "genre=", "date=", "artist="),
             Mp3Tags.metadata(null, realArtist = false))
+        // No album key at all: series fills it, as current STABLE yt-dlp does.
+        assertEquals(listOf("title=Ep", "album=Show", "show=Show", "comment=", "purl=", "description=", "synopsis=",
+            "genre=", "date="), Mp3Tags.metadata("""{"title":"Ep","series":"Show"}""", realArtist = true))
     }
 }
