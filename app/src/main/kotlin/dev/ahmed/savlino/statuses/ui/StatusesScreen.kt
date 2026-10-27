@@ -146,7 +146,8 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
             pages.SharedAxisContent(AccountDepth) { page ->
                 if (state.selecting) SelectionBar(state, language)
                 else if (ready != null && page != null) AccountBar(state, ready, page, media, language)
-                else ScreenHeader(stringResource(R.string.statuses_tab)) { if (ready != null) SelectAction(state) }
+                // Decided by the page: the account cards' bar never shows the grid's Select, even while a back swipe peeks at it.
+                else ScreenHeader(stringResource(R.string.statuses_tab)) { if (ready != null && ready.sources.size <= 1) SelectAction(state) }
             }
         },
         bottomBar = { if (state.selecting) SaveBar(state, language) },
