@@ -2200,6 +2200,40 @@ class DownloadWorkerTest {
         }
     }
 
+    // R1: a survivor that has written nothing yet still owns its directory; the empty staging is not cleaned.
+    @Test fun staleWriterSurvivingKillKeepsEvenEmptyStaging() = runBlocking {
+        var survivors = 1
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))),
+            staleSurvivors = { if (it.name == "stale-empty") survivors else 0 }).use { f ->
+            f.store.enqueue(command("stale-empty"))
+            val dir = File(app.filesDir, "downloads/stale-empty").apply { mkdirs(); resolve("output.mp4.part").createNewFile() }
+            assertEquals(ListenableWorker.Result.retry(), f.worker("stale-empty").doWork())
+            val row = f.store.get("stale-empty")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertNull(row.error)
+            assertTrue(dir.resolve("output.mp4.part").isFile)
+            assertEquals(0, f.attempts.get())
+            survivors = 0
+            assertEquals(ListenableWorker.Result.success(), f.worker("stale-empty").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("stale-empty")!!.stage)
+        }
+    }
+
+    // R2: a cancel while offline drops the offline count; a reused id gets the gate again, not the backoff.
+    @Test fun cancelWhileOfflineResetsTheOfflineCountForAReusedId() = runBlocking {
+        val network = TestNetwork(connected = false)
+        fixture(FakeEngine(), network = network).use { f ->
+            f.store.enqueue(command("net-reuse"))
+            repeat(OFFLINE_GATE_PASSES) { assertEquals(ListenableWorker.Result.success(), f.worker("net-reuse").doWork()) }
+            f.coordinator.cancel("net-reuse")
+            assertEquals(JobStage.CANCELLED, f.store.get("net-reuse")!!.stage)
+            assertTrue(f.store.remove("net-reuse"))
+            assertTrue(f.store.enqueue(command("net-reuse")))
+            assertEquals(ListenableWorker.Result.success(), f.worker("net-reuse").doWork())
+            assertEquals(JobStage.ENQUEUED, f.store.get("net-reuse")!!.stage)
+            assertEquals(0, f.attempts.get())
+        }
+    }
+
     @Test fun cancelWhileWaitingForNetworkCancelsTheGateAndTheRun() = runBlocking {
         fixture(FakeEngine()).use { f ->
             assertTrue(f.coordinator.enqueue(command("net-cancel")))

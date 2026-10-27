@@ -321,6 +321,7 @@ class DownloadCoordinator(
                 store.get(id)?.let { update(fromRecord(it)) }
                 userCancellation.remove(id)
                 pauseRequests.remove(id)
+                offlineStarts.remove(id)
             }
         }
         try { workManager().cancelUniqueWork(id).result.get() }
@@ -578,7 +579,7 @@ class DownloadCoordinator(
                     // A stopped attempt's ffmpeg must not outlive any cleanup or adopt of its staging: one that
                     // survives KILL defers this attempt and leaves the directory alone.
                     if (engine.stopStaleProcesses(stagingRoot(id)) > 0) {
-                        finishStopped(id, DownloadError.Interrupted, systemStopped = true, keepOutput = true)
+                        finishStopped(id, DownloadError.Interrupted, systemStopped = true, keepOutput = true, staleWriter = true)
                         return@coroutineScope
                     }
                     if (adopting && !compatibleRecipe) {
@@ -756,6 +757,7 @@ class DownloadCoordinator(
                         store.get(id)?.let(::fromRecord)
                     } else null
                     active.remove(id, signal); userCancellation.remove(id); pauseRequests.remove(id); postProcessing.remove(id)
+                    if (store.get(id)?.stage?.terminal != false) offlineStarts.remove(id) // A reused id starts its count over.
                     // Expiry skipped this staging while the writer was live; the writer has exited now.
                     JobStore.liveWriters.remove(id)
                     if (store.get(id)?.stage?.terminal == true) {
@@ -787,7 +789,8 @@ class DownloadCoordinator(
 
     private fun finishStopped(id: String, error: DownloadError,
         systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
-        cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false) = synchronized(userCancellation) {
+        cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false,
+        staleWriter: Boolean = false) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         store.resetAutomaticResumes(id, bytes)
@@ -801,7 +804,9 @@ class DownloadCoordinator(
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             // A scheduler stop waits for its constraints; it is not an engine failure episode. A stop during a
             // convert or merge keeps the finished source, so the retry only converts again (createOrAdopt keep).
-            if (bytes > 0) {
+            // A surviving stale writer still owns its directory, even an empty one: never clean it up under it.
+            if (staleWriter) store.requeue(id, true)
+            else if (bytes > 0) {
                 if (store.requeue(id, true) && bytes > startBytes) progressed += id
             } else if (cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)) store.requeue(id)
             else store.fail(id, DownloadError.SaveFailed)
@@ -937,6 +942,7 @@ class DownloadCoordinator(
         initialize()
         val row = store.get(id)
         val removed = row?.stage == JobStage.FAILED && store.remove(id)
+        if (removed) offlineStarts.remove(id)
         if (removed || store.get(id) == null) mutableProgress.update { it.filterNot { event -> event.jobId == id } }
     }
     /** Copy link and the gone-file sweep, on this coordinator's journal. */
