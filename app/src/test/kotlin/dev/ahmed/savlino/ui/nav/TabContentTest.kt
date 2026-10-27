@@ -10,6 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.unit.dp
@@ -100,6 +103,37 @@ class TabContentTest {
                 compose.onNodeWithText(destination).assertIsDisplayed()
             }
             compose.runOnIdle { assertEquals(mapOf("Home" to 1, "Downloads" to 1, "Settings" to 1), entered) }
+        }
+    }
+
+    // Lead condition: a hidden tab stays placed (its layers survive a switch) but off the window, so no touch reaches it,
+    // keyboard focus can't enter it and TalkBack never sees it; showing it again puts it back in place.
+    @Test fun hiddenTabStaysPlacedOffWindowWithoutTouchFocusOrSemantics() {
+        var route by mutableStateOf("Home")
+        var clicks = 0
+        var home: androidx.compose.ui.layout.LayoutCoordinates? = null
+        render {
+            TabContent(route) { destination ->
+                if (destination == "Home") Box(Modifier.fillMaxSize().testTag("home")
+                    .onGloballyPositioned { home = it }.clickable { clicks++ })
+                else Text(destination)
+            }
+        }.use {
+            compose.runOnIdle { route = "Settings" }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                val coordinates = home!!
+                assertTrue("hidden tab stays placed", coordinates.isAttached)
+                assertTrue("hidden tab sits outside the window", coordinates.positionInWindow().x + coordinates.size.width <= 0f)
+            }
+            compose.onAllNodesWithTag("home").assertCountEquals(0)
+            compose.onNodeWithText("Settings").performTouchInput { click(center) }
+            compose.runOnIdle { assertEquals(0, clicks) }
+            compose.runOnIdle { route = "Home" }
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(0f, home!!.positionInWindow().x) }
+            compose.onNodeWithTag("home").performClick()
+            compose.runOnIdle { assertEquals(1, clicks) }
         }
     }
 

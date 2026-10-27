@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
@@ -83,10 +85,13 @@ fun <T> rememberTabResource(initial: T, vararg keys: Any?, load: suspend () -> T
     }
 }
 
+/** Off-window tabs refuse keyboard focus and leave the semantics tree. */
+private val HiddenTab = Modifier.focusProperties { onEnter = { cancelFocusChange() } }.focusGroup().clearAndSetSemantics {}
+
 /**
  * Peer destinations keep independent saveable state, including lazy and ordinary scroll positions. A visited tab stays
- * composed while hidden (not measured, not placed, no semantics, no back handling), so switching back to it never
- * composes a whole screen in one frame. Only draw properties animate.
+ * composed and placed while hidden (off-window and transparent, no touch, focus, semantics or back handling), so switching
+ * back to it never composes or re-records a whole screen in one frame. Only draw properties animate.
  */
 @Composable
 fun TabContent(
@@ -138,13 +143,22 @@ fun TabContent(
                 }
             }
             Box(Modifier.zIndex(if (shown) 1f else 0f)
-                // Hidden tabs keep their composition but skip measure and placement; the flag flips only twice per switch.
+                // Hidden tabs stay placed, just outside the window: Compose drops every layer of an unplaced subtree, so
+                // showing it again would re-record the whole screen in one frame. Moving it back only moves its layer.
+                // Out there no touch reaches it; the states are read while placing, so a switch never re-measures.
                 .layout { measurable, constraints ->
-                    if (!shown && (reduced || !placed.value)) layout(0, 0) {}
-                    else measurable.measure(constraints).let { layout(it.width, it.height) { it.place(0, 0) } }
+                    val tab = measurable.measure(constraints)
+                    layout(tab.width, tab.height) {
+                        val onScreen = shownNow.value || (!reducedNow.value && placed.value)
+                        tab.place(if (onScreen) 0 else -2 * tab.width, 0)
+                    }
                 }
-                .graphicsLayer { this.alpha = if (reduced) 1f else alpha.value; scaleX = scale.value; scaleY = scale.value }
-                .then(if (shown) Modifier else Modifier.clearAndSetSemantics {})) {
+                .graphicsLayer {
+                    this.alpha = if (reducedNow.value) (if (shownNow.value) 1f else 0f) else alpha.value
+                    scaleX = scale.value; scaleY = scale.value
+                }
+                // Nor does keyboard focus, and TalkBack never sees it.
+                .then(if (shown) Modifier else HiddenTab)) {
                 stateHolder.SaveableStateProvider(route) {
                     CompositionLocalProvider(LocalTabReselections provides reselections.events(route), LocalTabActive provides active,
                         LocalOnBackPressedDispatcherOwner provides if (shown && backOwner != null) backOwner else detachedBack) {
