@@ -115,10 +115,13 @@ internal class StaleProcesses(private val proc: ProcTable = FileProcTable(),
     private val uidOf: (Int) -> Int? = ::procUid, private val myUid: () -> Int = android.os.Process::myUid,
     private val myPid: () -> Int = android.os.Process::myPid,
     private val nanoTime: () -> Long = System::nanoTime, private val pause: (Long) -> Unit = Thread::sleep) {
-    /** Blocking: TERM, a short grace, then KILL. Returns how many processes were signalled. */
+    /** Blocking: TERM, a short grace, then KILL. Returns how many targets are still alive (0 = staging is free). */
     fun kill(directory: File): Int {
         val path = directory.canonicalFile.path.trimEnd('/')
-        fun names(row: ProcProcess) = row.command.any { it == path || "$path/" in it }
+        // Whole arguments only (ffmpeg gets "file:" paths): a URL or title that merely contains the path never matches.
+        fun names(row: ProcProcess) = row.command.any { arg ->
+            arg.removePrefix("file:").let { it == path || it.startsWith("$path/") }
+        }
         val uid = myUid(); val pid = myPid()
         val targets = proc.snapshot().filter { it.pid != pid && it.state != 'Z' && names(it) && uidOf(it.pid) == uid }
             .map { it.pid to it.startTicks }
@@ -130,7 +133,7 @@ internal class StaleProcesses(private val proc: ProcTable = FileProcTable(),
         while (targets.any(::alive) && nanoTime() - started < 500_000_000) pause(20)
         signalAll(9)
         while (targets.any(::alive) && nanoTime() - started < 800_000_000) pause(20)
-        return targets.size
+        return targets.count(::alive)
     }
 }
 

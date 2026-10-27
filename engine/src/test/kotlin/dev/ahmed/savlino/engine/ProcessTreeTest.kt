@@ -145,9 +145,12 @@ class ProcessTreeTest {
         add(24, "app_process")                                      // this app itself
         add(25, "libffmpeg.so", "-i", "file:$job1/output.m4a")
         proc.rows[25] = proc.rows[25]!!.copy(state = 'Z')
-        val uids = mapOf(20 to 10100, 21 to 10100, 22 to 10100, 23 to 10200, 24 to 10100, 25 to 10100)
+        // Another job's argv merely containing the path (a URL, a title, a prefix) is not ours to kill.
+        add(26, "libpython.so", "--", "https://example.com/watch?p=$job1/output.mp4")
+        add(27, "libffmpeg.so", "-metadata", "title=$job1/x", "-i", "file:/other$job1/output.m4a")
+        val uids = mapOf(20 to 10100, 21 to 10100, 22 to 10100, 23 to 10200, 24 to 10100, 25 to 10100, 26 to 10100, 27 to 10100)
         val stale = StaleProcesses(proc, uids::get, { 10100 }, { 24 }, nanoTime = { 0L }, pause = { proc.rows.remove(20); proc.rows.remove(21) })
-        assertEquals(2, stale.kill(job1))
+        assertEquals(0, stale.kill(job1)) // both targets died: staging is free
         assertEquals(listOf(20 to 15, 21 to 15), proc.signals)
     }
     @Test fun staleProcessesEscalatesToKillAndScansEveryJobUnderTheRoot() {
@@ -158,8 +161,12 @@ class ProcessTreeTest {
         proc.rows[32] = ProcProcess(32, 1, 32, listOf("libffmpeg.so", "file:${jobs.path}-old/x"))
         var now = 0L
         val stale = StaleProcesses(proc, { 1 }, { 1 }, { 2 }, nanoTime = { now }, pause = { now += 100_000_000 })
-        assertEquals(2, stale.kill(jobs))
+        assertEquals(2, stale.kill(jobs)) // ignored TERM and KILL for 800 ms: both reported as survivors
         assertEquals(listOf(30 to 15, 31 to 15, 30 to 9, 31 to 9), proc.signals)
+        proc.signals.clear()
+        val killedLate = StaleProcesses(proc, { 1 }, { 1 }, { 2 }, nanoTime = { now }, pause = { now += 100_000_000
+            if (proc.signals.any { it.second == 9 }) proc.rows.remove(30) })
+        assertEquals(1, killedLate.kill(jobs)) // only 31 outlived KILL
         assertEquals(0, StaleProcesses(proc, { 1 }, { 1 }, { 2 }).kill(File(jobs, "c")))
     }
 }
