@@ -41,7 +41,10 @@ internal object RedditPostParser {
     private val videoId = Regex("[a-z0-9]{8,24}")
     private val noVideoTypes = setOf("text", "self", "poll")
     private val photoTypes = setOf("image", "gallery")
-    /** Reddit galleries hold at most 20 items; a longer list is not a page this parser knows. */
+    /**
+     * Reddit galleries hold at most 20 items; a longer list is not a page this parser knows. Up to this many pass on,
+     * and the carousel keeps its own image cap and counts the rest as capped.
+     */
     private const val MAX_ITEMS = 40
     private const val PREVIEW_WIDTH = 320
     private val json = ObjectMapper()
@@ -54,10 +57,11 @@ internal object RedditPostParser {
             val post = document.select("shreddit-post").filter { it.attr("id") == "t3_$postId" }.singleOrNull()
                 ?: return RedditPost.Unknown
             val type = post.attr("post-type")
-            // A post with no video says so, 18+ or not; only an 18+ video asks for sign-in.
+            // A post with no media says so, 18+ or not; an 18+ photo or video asks for sign-in (logged out, it may
+            // name only blurred copies).
             if (type in noVideoTypes) return RedditPost.NoVideo
-            if (type in photoTypes) return photos(post, type == "gallery")
             if (post.attributes().any { "nsfw" in it.key.lowercase() }) return RedditPost.LoginRequired
+            if (type in photoTypes) return photos(post, type == "gallery")
             val content = MediaHttpPolicy.parse(post.attr("content-href"))
             when {
                 type == "video" -> video(post, postId, content?.takeIf { it.host == "v.redd.it" }?.pathSegments

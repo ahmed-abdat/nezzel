@@ -19,8 +19,8 @@ import kotlin.test.*
 internal fun preview(name: String, width: Int, sig: String) =
     "https://preview.redd.it/$name.jpg?width=$width&amp;format=pjpg&amp;auto=webp&amp;s=$sig"
 
-internal fun imagePage(content: String = "https://i.redd.it/synthimg0003.jpeg"): ByteArray = postPage("image", content = content,
-    extra = "", title = "A synthetic photo").let { page ->
+internal fun imagePage(content: String = "https://i.redd.it/synthimg0003.jpeg", extra: String = ""): ByteArray =
+    postPage("image", content = content, extra = extra, title = "A synthetic photo").let { page ->
     String(page).replace("<div slot=\"post-media-container\">", """<div slot="post-media-container">
         <shreddit-media-lightbox-listener><img class="preview-img" alt="" src="${preview("photo-v0-synthimg0003", 640, "04")}"
           srcset="${preview("photo-v0-synthimg0003", 320, "05")} 320w, ${preview("photo-v0-synthimg0003", 640, "04")} 640w,
@@ -29,7 +29,7 @@ internal fun imagePage(content: String = "https://i.redd.it/synthimg0003.jpeg"):
 }
 
 /** Four pages: a preview-only photo, a lazy photo whose link names its i.redd.it file, a clip and a non-Reddit image. */
-internal fun galleryPage(): ByteArray {
+internal fun galleryPage(extra: String = ""): ByteArray {
     val other = """<shreddit-post id="t3_9zzzzzz" post-type="gallery" permalink="/r/other/comments/9zzzzzz/other/">
         <gallery-carousel><ul><li slot="page-1"><figure><img src="${preview("other-v0-othergal0001", 640, "99")}"></figure></li>
         </ul></gallery-carousel></shreddit-post>"""
@@ -43,9 +43,19 @@ internal fun galleryPage(): ByteArray {
         <li slot="page-3"><shreddit-player-2 src="https://v.redd.it/synthclip001/HLSPlaylist.m3u8"></shreddit-player-2></li>
         <li slot="page-4"><figure><img src="https://example.org/elsewhere.jpg"></figure></li>
         </ul></gallery-carousel></shreddit-async-loader>"""
-    return String(postPage("gallery", content = "https://www.reddit.com/gallery/$POST_ID", title = "A synthetic gallery"))
+    return String(postPage("gallery", content = "https://www.reddit.com/gallery/$POST_ID", title = "A synthetic gallery", extra = extra))
         .replace("<shreddit-app>", "<shreddit-app>$other")
         .replace("<div slot=\"post-media-container\">", "<div slot=\"post-media-container\">$gallery").toByteArray()
+}
+
+/** A gallery of [count] i.redd.it photos, each with a 320w preview. */
+internal fun longGalleryPage(count: Int): ByteArray {
+    val pages = (1..count).joinToString("") { n ->
+        """<li slot="page-$n"><figure><a href="https://i.redd.it/long$n.jpg"><img src="${preview("long-v0-long$n", 320, "$n")}"></a></figure></li>"""
+    }
+    return String(postPage("gallery", content = "https://www.reddit.com/gallery/$POST_ID", title = "A long gallery"))
+        .replace("<div slot=\"post-media-container\">", "<div slot=\"post-media-container\"><gallery-carousel><ul>$pages</ul></gallery-carousel>")
+        .toByteArray()
 }
 
 private fun unescaped(url: String) = url.replace("&amp;", "&")
@@ -78,6 +88,18 @@ class RedditPhotosTest : PublicImageTestBase() {
         assertTrue(photos.previewQuality)
         assertEquals(2, photos.skipped)
         assertTrue(photos.originals.none { "other" in it })
+    }
+
+    @Test fun anAdultPhotoPostAsksForSignInWhileATextOneStillSaysItHoldsNothing() {
+        assertEquals(RedditPost.LoginRequired, parse(galleryPage(extra = "nsfw")))
+        assertEquals(RedditPost.LoginRequired, parse(imagePage(extra = "nsfw")))
+        assertEquals(RedditPost.NoVideo, parse(postPage("text", extra = "nsfw")))
+        assertIs<RedditPost.Photos>(parse(galleryPage()))
+    }
+
+    @Test fun aGalleryPassesUpToFortyItemsAndRefusesALongerList() {
+        assertEquals((1..40).map { "https://i.redd.it/long$it.jpg" }, assertIs<RedditPost.Photos>(parse(longGalleryPage(40))).originals)
+        assertEquals(RedditPost.Unknown, parse(longGalleryPage(41)))
     }
 
     @Test fun onlyRedditImageHostsPass() {
@@ -137,6 +159,18 @@ class RedditPhotosTest : PublicImageTestBase() {
             assertEquals(listOf("preview.redd.it", "i.redd.it"), saves.map { it.headers["host"] })
             assertTrue("width=1080" in saves[0].target)
             assertEquals("/synthgal0002.png", saves[1].target)
+        }
+    }
+
+    @Test fun aGalleryLongerThanTheImageCapShowsTheFirstTwentyAndCountsTheRestAsCapped() = fixture(respond = { request, socket ->
+        if (request.headers["host"] == "www.reddit.com") socket.reply(body = longGalleryPage(25), headers = mapOf("Content-Type" to "text/html"))
+        else socket.reply(body = raster(20, 20, "jpg", 0x101010), headers = mapOf("Content-Type" to "image/jpeg"))
+    }) { f ->
+        inspected(f.inspect()).use { result ->
+            assertEquals((0 until 20).toList(), result.inspection.items.map { it.position })
+            assertEquals(5, result.discovery.cappedCount)
+            assertEquals(DiscoveryCompleteness.PARTIAL, result.discovery.completeness)
+            assertTrue(f.server.requests.none { "long21" in it.target })
         }
     }
 

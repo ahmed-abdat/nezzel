@@ -15,7 +15,8 @@ class RedditPostIdentityTest {
             read("https://www.reddit.com/user/someone/comments/$POST_ID/a_post"))
         // Without a slug Reddit serves a shell; the bare id page redirects to the full permalink.
         for (raw in listOf("https://www.reddit.com/r/synthetic/comments/$POST_ID/", "https://www.reddit.com/comments/$POST_ID",
-            "https://redd.it/$POST_ID"))
+            "https://redd.it/$POST_ID", "https://www.reddit.com/gallery/$POST_ID", "https://reddit.com/gallery/$POST_ID/?utm_source=share",
+            "https://old.reddit.com/gallery/$POST_ID", "https://new.reddit.com/gallery/$POST_ID", "https://m.reddit.com/gallery/$POST_ID"))
             assertEquals(Triple("https://www.reddit.com/comments/$POST_ID/", POST_ID, null), read(raw), raw)
     }
 
@@ -28,7 +29,8 @@ class RedditPostIdentityTest {
     @Test fun otherHostsAndPagesAreNotPosts() {
         for (raw in listOf("http://www.reddit.com$PERMALINK", "https://www.reddit.com:8443$PERMALINK", "https://reddit.com.evil.test$PERMALINK",
             "https://evilreddit.com$PERMALINK", "https://www.reddit.com/r/synthetic/", "https://www.reddit.com/login/",
-            "https://i.redd.it/abc.jpg", "https://www.reddit.com/r/synthetic/comments/UPPER/", "not a link"))
+            "https://i.redd.it/abc.jpg", "https://www.reddit.com/r/synthetic/comments/UPPER/", "https://www.reddit.com/gallery/",
+            "https://www.reddit.com/gallery/$POST_ID/extra", "https://i.redd.it/gallery/$POST_ID", "not a link"))
             assertNull(read(raw), raw)
     }
 }

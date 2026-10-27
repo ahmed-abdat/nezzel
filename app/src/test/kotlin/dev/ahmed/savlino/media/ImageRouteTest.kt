@@ -17,7 +17,7 @@ class ImageRouteTest {
 
     @Test fun redditPostLinksReadTheirPhotosFirstWhileVideoLinksStayOnYtdlp() {
         for (url in listOf("https://www.reddit.com/r/synthetic/comments/1abcdef/synthetic_photo/", "https://redd.it/1abcdef",
-            "https://www.reddit.com/r/synthetic/s/AbC123xyz", "https://old.reddit.com/comments/1abcdef/"))
+            "https://www.reddit.com/r/synthetic/s/AbC123xyz", "https://old.reddit.com/comments/1abcdef/", "https://www.reddit.com/gallery/1abcdef"))
             assertEquals(url, MediaSourceRoute.REDDIT, route(url))
         for (url in listOf("https://v.redd.it/synthvid0001", "https://www.reddit.com/video/synthvid0001/",
             "https://www.reddit.com/r/synthetic/", "https://reddit.com.evil.example/r/synthetic/comments/1abcdef/x/"))
