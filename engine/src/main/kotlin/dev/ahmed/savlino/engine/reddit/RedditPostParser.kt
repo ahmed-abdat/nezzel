@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.reddit
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.domain.PreviewMetadata
@@ -62,7 +63,7 @@ internal object RedditPostParser {
             if (type in noVideoTypes) return RedditPost.NoVideo
             if (post.attributes().any { "nsfw" in it.key.lowercase() }) return RedditPost.LoginRequired
             if (type in photoTypes) return photos(post, type == "gallery")
-            val content = MediaHttpPolicy.parse(post.attr("content-href"))
+            val content = HttpsUrl.parse(post.attr("content-href"))
             when {
                 type == "video" -> video(post, postId, content?.takeIf { it.host == "v.redd.it" }?.pathSegments
                     ?.singleOrNull()?.takeIf(videoId::matches) ?: return RedditPost.Unknown, expectedVideoId)
@@ -126,7 +127,7 @@ internal object RedditPostParser {
 
     /** [raw] as the page names it, when it is a Reddit image URL; a preview's `width=` query counts as its width. */
     private fun rendition(raw: String, declared: Int): Named? {
-        val url = MediaHttpPolicy.parse(raw)?.takeIf(MediaHttpPolicy::isRedditImage) ?: return null
+        val url = HttpsUrl.parse(raw)?.takeIf(MediaHttpPolicy::isRedditImage) ?: return null
         val width = declared.takeIf { it > 0 } ?: url.queryParameter("width")?.toIntOrNull()?.takeIf { it in 1..20_000 } ?: 0
         return Named(url.toString(), width)
     }
@@ -139,12 +140,12 @@ internal object RedditPostParser {
         if (expectedVideoId != null && id != expectedVideoId) return RedditPost.Unknown
         // Logged-out readers get the player only for posts they may watch; without it, keep the old path.
         val player = post.select("shreddit-player, shreddit-player-2").firstOrNull {
-            it.attr("post-id") == "t3_$postId" && MediaHttpPolicy.parse(it.attr("src"))?.let { src ->
+            it.attr("post-id") == "t3_$postId" && HttpsUrl.parse(it.attr("src"))?.let { src ->
                 src.host == "v.redd.it" && src.pathSegments.firstOrNull() == id
             } == true
         } ?: return RedditPost.Unknown
         val thumbnail = PreviewMetadata.thumbnail(player.attr("poster"))?.takeIf { raw ->
-            MediaHttpPolicy.parse(raw)?.host?.let { it == "preview.redd.it" || it == "external-preview.redd.it" } == true
+            HttpsUrl.parse(raw)?.host?.let { it == "preview.redd.it" || it == "external-preview.redd.it" } == true
         }
         val duration = try {
             json.readTree(player.attr("packaged-media-json").takeIf { it.length in 1..64 * 1024 } ?: "{}")

@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.telegram
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import okhttp3.HttpUrl
 
 /**
@@ -16,7 +16,7 @@ class TelegramPostIdentity private constructor(val channel: String, val postId: 
         private val path = Regex("/(?:s/)?([A-Za-z][A-Za-z0-9_]{4,31})/(?:[1-9][0-9]{0,19}/)?([1-9][0-9]{0,19})/?")
         private val reserved = setOf("share", "proxy", "socks", "joinchat", "addstickers", "addemoji", "login", "invoice")
         fun parse(raw: String): TelegramPostIdentity? {
-            val url = MediaHttpPolicy.parse(raw) ?: return null
+            val url = HttpsUrl.parse(raw) ?: return null
             if (url.host !in setOf("t.me", "telegram.me")) return null
             val match = path.matchEntire(url.encodedPath) ?: return null
             if (match.groupValues[1].lowercase() in reserved) return null

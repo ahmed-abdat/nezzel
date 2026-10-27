@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.telegram
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import dev.ahmed.savlino.engine.mediahttp.MediaPageLimits
 import dev.ahmed.savlino.engine.mediaimage.*
@@ -35,7 +36,7 @@ class TelegramPostParser {
         if (photos.isEmpty()) return if (video) TelegramParseResult.Video else TelegramParseResult.Failure(ImageFailure.NO_MEDIA)
         val urls = photos.take(20).mapNotNull { photo ->
             val raw = background.find(photo.attr("style"))?.groupValues?.get(2) ?: return@mapNotNull null
-            MediaHttpPolicy.parse(raw)?.takeIf(MediaHttpPolicy::isTelegramImage)?.toString()
+            HttpsUrl.parse(raw)?.takeIf(MediaHttpPolicy::isTelegramImage)?.toString()
         }.distinct()
         if (urls.isEmpty()) return if (video) TelegramParseResult.Video
             else TelegramParseResult.Failure(ImageFailure.SOURCE_REFUSED, ImagePhase.IMAGE)

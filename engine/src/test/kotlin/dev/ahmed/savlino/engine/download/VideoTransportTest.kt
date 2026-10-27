@@ -1,7 +1,7 @@
 package dev.ahmed.savlino.engine.download
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.domain.Host
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Timeout
@@ -32,7 +32,7 @@ class VideoTransportTest {
 
     @Test fun crossHostRedirectStripsCookiesAndAuthorizationAndCallIsJobOwned() {
         val calls = Calls { request -> response(request, if (request.url.host == "example.com") "https://example.org/video.mp4" else null) }
-        val wire = VideoTransport(Host.X, MediaHttpPolicy::parse, calls)
+        val wire = VideoTransport(Host.X, HttpsUrl::parse, calls)
         wire.execute("https://example.com/video.mp4", mapOf("Cookie" to "secret", "Authorization" to "secret", "User-Agent" to "agent")).use {
             assertEquals("abc", it.body.bufferedReader().readText())
         }
@@ -46,7 +46,7 @@ class VideoTransportTest {
     @Test fun redirectsCannotEscapeAllowlistOrExceedThreeHops() {
         for (escape in listOf(false, true)) {
             val calls = Calls { response(it, "https://example.org/video.mp4") }
-            val wire = VideoTransport(Host.X, { raw -> MediaHttpPolicy.parse(raw)?.takeIf { !escape || it.host == "example.com" } }, calls)
+            val wire = VideoTransport(Host.X, { raw -> HttpsUrl.parse(raw)?.takeIf { !escape || it.host == "example.com" } }, calls)
             val failure = assertFailsWith<java.io.IOException> {
                 wire.execute("https://example.com/video.mp4", emptyMap())
             }
@@ -56,7 +56,7 @@ class VideoTransportTest {
         }
     }
     @Test fun dnsRejectionAndCancelledDnsNeverOpenASocketOrExposeHost() {
-        val rejected = VideoTransport(Host.X, MediaHttpPolicy::parse, resolver = {
+        val rejected = VideoTransport(Host.X, HttpsUrl::parse, resolver = {
             listOf(java.net.InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
         })
         try {
@@ -66,7 +66,7 @@ class VideoTransportTest {
         } finally { rejected.close() }
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
-        val wire = VideoTransport(Host.X, MediaHttpPolicy::parse, resolver = {
+        val wire = VideoTransport(Host.X, HttpsUrl::parse, resolver = {
             entered.countDown(); release.await(); emptyList()
         })
         var failure: Throwable? = null
@@ -83,19 +83,19 @@ class VideoTransportTest {
         } finally { release.countDown(); wire.close(); worker.join(2000) }
     }
     @Test fun nonPublicDnsAndDisallowedRedirectsAreTypedPolicyFailures() {
-        val rejected = VideoTransport(Host.X, MediaHttpPolicy::parse, resolver = {
+        val rejected = VideoTransport(Host.X, HttpsUrl::parse, resolver = {
             listOf(java.net.InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
         })
         try { assertFailsWith<DirectPolicyRejected> { rejected.execute("https://example.com/video.mp4", emptyMap()) } }
         finally { rejected.close() }
         val calls = Calls { response(it, "https://example.org/video.mp4") }
-        val wire = VideoTransport(Host.X, { raw -> MediaHttpPolicy.parse(raw)?.takeIf { it.host == "example.com" } }, calls)
+        val wire = VideoTransport(Host.X, { raw -> HttpsUrl.parse(raw)?.takeIf { it.host == "example.com" } }, calls)
         try { assertFailsWith<DirectPolicyRejected> { wire.execute("https://example.com/video.mp4", emptyMap()) } }
         finally { wire.close() }
     }
     @Test fun cancelBeforeRegistrationPreventsNetworkAndReportsNoLink() {
         val calls = Calls { response(it) }
-        val wire = VideoTransport(Host.X, MediaHttpPolicy::parse, calls)
+        val wire = VideoTransport(Host.X, HttpsUrl::parse, calls)
         wire.cancel()
         val failure = assertFailsWith<java.io.IOException> { wire.execute("https://example.com/video.mp4", emptyMap()) }
         assertTrue(calls.requests.isEmpty())

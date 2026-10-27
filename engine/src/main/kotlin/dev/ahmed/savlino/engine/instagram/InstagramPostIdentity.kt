@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.instagram
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import okhttp3.HttpUrl
 
 enum class InstagramLinkKind { POST, REEL, TV }
@@ -34,7 +34,7 @@ class InstagramPostIdentity private constructor(val kind: InstagramLinkKind, val
         private val pagePath = Regex("/p/($CODE)/")
 
         fun parse(url: String): InstagramPostIdentity? {
-            val parsed = MediaHttpPolicy.parse(url) ?: return null
+            val parsed = HttpsUrl.parse(url) ?: return null
             if (parsed.host.lowercase() !in hosts) return null
             val match = path.matchEntire(parsed.encodedPath) ?: return null
             val kind = when (match.groupValues[1]) {

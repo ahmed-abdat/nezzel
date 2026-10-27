@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.engine.tiktok
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -67,7 +68,7 @@ class TikTokPostParser {
                 if (!urls.isArray) return@mapIndexedNotNull null
                 // Preserve provider priority; only its first two candidates can authorize Save.
                 val accepted = urls.take(2).mapNotNull { node ->
-                    node.takeIf { it.isTextual }?.asText()?.let(MediaHttpPolicy::parse)
+                    node.takeIf { it.isTextual }?.asText()?.let(HttpsUrl::parse)
                         ?.takeIf(MediaHttpPolicy::isTikTokImage)?.toString()?.takeIf { format(it) != null }
                 }.distinct()
                 if (accepted.isEmpty()) null else TikTokPhoto(position, accepted, checkNotNull(format(accepted.first())))
@@ -91,7 +92,7 @@ class TikTokPostParser {
 
     companion object {
         const val MAX_PHOTOS = 40
-        private fun format(url: String): MediaImageFormat? = when (MediaHttpPolicy.parse(url)?.encodedPath?.substringAfterLast('.')?.lowercase(java.util.Locale.ROOT)) {
+        private fun format(url: String): MediaImageFormat? = when (HttpsUrl.parse(url)?.encodedPath?.substringAfterLast('.')?.lowercase(java.util.Locale.ROOT)) {
             "jpeg", "jpg" -> MediaImageFormat.JPEG
             "png" -> MediaImageFormat.PNG
             "webp" -> MediaImageFormat.WEBP

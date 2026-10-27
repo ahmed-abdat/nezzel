@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.reddit
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import org.junit.Test
 import kotlin.test.*
 
@@ -47,7 +47,7 @@ class RedditPostParserTest {
         assertEquals("A synthetic & quoted \"video\"", video.title)
         assertEquals("synthetic_author", video.author)
         assertEquals(44, video.durationSeconds)
-        assertEquals("external-preview.redd.it", MediaHttpPolicy.parse(assertNotNull(video.thumbnailUrl))?.host)
+        assertEquals("external-preview.redd.it", HttpsUrl.parse(assertNotNull(video.thumbnailUrl))?.host)
         // A v.redd.it link must land on the post holding that same video.
         assertIs<RedditPost.Video>(parse(postPage(), video = VIDEO_ID))
         assertEquals(RedditPost.Unknown, parse(postPage(), video = "othervid0001"))

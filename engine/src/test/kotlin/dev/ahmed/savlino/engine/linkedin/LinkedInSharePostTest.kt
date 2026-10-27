@@ -183,7 +183,7 @@ class LinkedInSharePostTest : PublicImageTestBase() {
         assertTrue(share.withBridgedActivity(SHARE_ACTIVITY).sameAs(canonical))
         // The transport still refuses share -> activity and activity A -> B redirects.
         fun hop(from: String, to: String) = MediaHttpPolicy.allowsLinkedInPageHop(
-            assertNotNull(MediaHttpPolicy.parse(from)), assertNotNull(MediaHttpPolicy.parse(to)))
+            assertNotNull(HttpsUrl.parse(from)), assertNotNull(HttpsUrl.parse(to)))
         assertFalse(hop(SHARE_POST, SHARE_CANONICAL))
         assertFalse(hop(SHARE_CANONICAL, "https://www.linkedin.com/feed/update/urn:li:activity:7100000000000000999"))
         assertTrue(hop("https://lnkd.in/p/synthetic", SHARE_REDIRECT))

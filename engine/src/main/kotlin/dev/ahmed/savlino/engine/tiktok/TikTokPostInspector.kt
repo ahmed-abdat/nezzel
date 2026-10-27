@@ -22,7 +22,7 @@ class TikTokPostInspector(private val http: MediaHttpClient) {
     companion object {
         /** Try only the known photo-mode template; keep its signed query verbatim. A refusal uses the original. */
         internal fun previewUrl(original: String): String {
-            val url = MediaHttpPolicy.parse(original) ?: return original
+            val url = HttpsUrl.parse(original) ?: return original
             val path = url.encodedPath
             val marker = "~tplv-photomode-image"
             if (!path.contains(marker)) return original

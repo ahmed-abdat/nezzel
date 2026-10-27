@@ -1,5 +1,7 @@
 package dev.ahmed.savlino.engine.mediahttp
 
+import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
+
 import dev.ahmed.savlino.domain.LinkRevision
 import dev.ahmed.savlino.domain.MediaAdapterIdentity
 import dev.ahmed.savlino.domain.MediaInspectionValidity
@@ -214,8 +216,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             if (closed || token.id.terminal != null) return@synchronized null
             val admission = linkedInPages[page] ?: return@synchronized null
             if (admission.operationId !== token.id) return@synchronized null
-            val source = MediaHttpPolicy.parse(binding.source.link.rawUrl) ?: return@synchronized null
-            if (MediaHttpPolicy.withoutQuery(source) != admission.entry || storedPosts.size >= 64) return@synchronized null
+            val source = HttpsUrl.parse(binding.source.link.rawUrl) ?: return@synchronized null
+            if (HttpsUrl.withoutQuery(source) != admission.entry || storedPosts.size >= 64) return@synchronized null
             MediaHttpPostContext(admission.canonicalPost, binding).also { storedPosts[it] = Unit }
         }
     }
@@ -233,8 +235,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             val save = imageSaves[token.id] ?: return@synchronized null
             if (!stored.binding.source.matches(current.source) || stored.binding.identity != current.identity ||
                 stored.binding.validity !== current.validity) return@synchronized null
-            val post = MediaHttpPolicy.parse(stored.canonicalPost) ?: return@synchronized null
-            if (!MediaHttpPolicy.isLinkedInPost(post) || post.encodedQuery != null || post.fragment != null ||
+            val post = HttpsUrl.parse(stored.canonicalPost) ?: return@synchronized null
+            if (!LinkedInPostIdentity.isLinkedInPost(post) || post.encodedQuery != null || post.fragment != null ||
                 save.contexts.isNotEmpty()) return@synchronized null
             MediaHttpTarget(stored.canonicalPost, token.id, MediaHttpPurpose.PAGE).also { save.contexts[it] = stored }
         }
@@ -250,7 +252,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             val save = synchronized(lock) { imageSaves[token.id] }
                 ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (request.purpose != MediaHttpPurpose.IMAGE) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-            var url = MediaHttpPolicy.parse(request.url) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+            var url = HttpsUrl.parse(request.url) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
             requireHostRule(request, url)
             val context = request.pageContext
             val referer = if (context == null) null else synchronized(lock) {
@@ -278,7 +280,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     try {
                         token.requireActive()
                         if (response.code in REDIRECTS) {
-                            val next = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
+                            val next = HttpsUrl.resolve(url, response.header("Location").orEmpty())
                                 ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             if (referer != null && next.host != "media.licdn.com")
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
@@ -433,14 +435,14 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             token.requireActive()
             if (synchronized(lock) { imageSaves.containsKey(token.id) })
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-            var url = MediaHttpPolicy.parse(request.url) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+            var url = HttpsUrl.parse(request.url) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
             if (oembed && (request.purpose != MediaHttpPurpose.PAGE || !YouTubeOEmbed.isRequest(url)))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (shortLink && (request.purpose != MediaHttpPurpose.PAGE || !ShortLinks.isShortLink(url)))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-            if (linkedInPage && !MediaHttpPolicy.isLinkedInPageEntry(url))
+            if (linkedInPage && !LinkedInPostIdentity.isLinkedInPageEntry(url))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-            if (linkedInPage) url = MediaHttpPolicy.normalizeLinkedInEntry(url)
+            if (linkedInPage) url = LinkedInPostIdentity.normalizeLinkedInEntry(url)
             if (facebookPage && (request.purpose != MediaHttpPurpose.PAGE ||
                     token.operation !in setOf(MediaHttpOperation.PAGES_AND_IMAGE, MediaHttpOperation.PAGES_AND_CAROUSEL) ||
                     FacebookPostIdentity.parse(request.url)?.fetchUrl != request.url))
@@ -470,7 +472,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||
                     RedditPostIdentity.parse(url)?.fetchUrl != url.toString())) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             requireHostRule(request, url)
-            val entry = if (linkedInPage) MediaHttpPolicy.withoutQuery(url) else null
+            val entry = if (linkedInPage) HttpsUrl.withoutQuery(url) else null
             validateContext(token, request, url)
             token.begin(request.purpose)
             entered = true
@@ -482,7 +484,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             var redditPost = if (redditPage) RedditPostIdentity.parse(url)?.postId else null
             var redditAnswers = 0
             while (true) {
-                if (linkedInPage && MediaHttpPolicy.isLinkedInPost(url)) landing = MediaHttpPolicy.withoutQuery(url)
+                if (linkedInPage && LinkedInPostIdentity.isLinkedInPost(url)) landing = HttpsUrl.withoutQuery(url)
                 token.requireActive()
                 token.budget.requireRequestRoom()
                 val wireRequest = Request.Builder().url(url).get()
@@ -513,7 +515,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                         if (response.code in REDIRECTS) {
                             // Keep the one-page read bound to the same post, with DNS checked again on each hop.
                             if (tiktokPage) {
-                                val next = MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
+                                val next = HttpsUrl.resolve(url, response.header("Location").orEmpty())
                                     ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                                 val identity = TikTokPostIdentity.parse(next.toString())
                                 if (identity == null || next.host != "www.tiktok.com" ||
@@ -523,20 +525,20 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                             if (telegramPage) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
                             if (xPost || blueskyPage || oembed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (instagramPage) throw MediaHttpException(
-                                if (MediaHttpPolicy.resolve(url, response.header("Location").orEmpty())
+                                if (HttpsUrl.resolve(url, response.header("Location").orEmpty())
                                         ?.let(InstagramPostIdentity::isLoginWall) == true) MediaHttpFailure.LOGIN_REQUIRED
                                 else MediaHttpFailure.INVALID_CONTEXT)
                             val location = response.header("Location").orEmpty()
-                            val located = MediaHttpPolicy.resolve(url, location)
+                            val located = HttpsUrl.resolve(url, location)
                                 // A shortener's http destination is read over HTTPS, as a pasted one is; an IP literal,
                                 // localhost or malformed destination is refused outright, so nothing hands it on.
-                                ?: if (shortLink) MediaHttpPolicy.resolve(url, location.replaceFirst(HTTP_SCHEME, "https://"))
+                                ?: if (shortLink) HttpsUrl.resolve(url, location.replaceFirst(HTTP_SCHEME, "https://"))
                                     ?: throw MediaHttpException(MediaHttpFailure.ADDRESS_REJECTED)
-                                else if (redditPage) RedditPostIdentity.asciiLocation(location)?.let { MediaHttpPolicy.resolve(url, it) }
+                                else if (redditPage) RedditPostIdentity.asciiLocation(location)?.let { HttpsUrl.resolve(url, it) }
                                     ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                                 else throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             val next = when {
-                                tiktokPage -> MediaHttpPolicy.parse(checkNotNull(TikTokPostIdentity.parse(located.toString())).videoUrl)
+                                tiktokPage -> HttpsUrl.parse(checkNotNull(TikTokPostIdentity.parse(located.toString())).videoUrl)
                                     ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                                 facebookPage -> facebookHop(url, located, seen)
                                 redditPage -> {
@@ -545,13 +547,13 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                     if (hop == null || (redditPost != null && hop.postId != redditPost))
                                         throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                                     redditPost = hop.postId
-                                    MediaHttpPolicy.parse(hop.fetchUrl) ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                                    HttpsUrl.parse(hop.fetchUrl) ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                                 }
-                                linkedInPage -> MediaHttpPolicy.linkedInHopTarget(located)
+                                linkedInPage -> LinkedInPostIdentity.linkedInHopTarget(located)
                                 else -> located
                             }
                             // A members-only post sends logged-out visitors to sign up or log in (2026-10-21).
-                            if (linkedInPage && MediaHttpPolicy.isLinkedInLoginWall(next))
+                            if (linkedInPage && LinkedInPostIdentity.isLinkedInLoginWall(next))
                                 throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
                             if (linkedInPage && !MediaHttpPolicy.allowsLinkedInPageHop(url, next))
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
@@ -568,7 +570,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                         } else {
                             if (response.code != 200) throw MediaHttpException(MediaHttpFailure.HTTP_STATUS, response.code)
                             if (shortLink) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-                            if (linkedInPage && !MediaHttpPolicy.isLinkedInPost(url))
+                            if (linkedInPage && !LinkedInPostIdentity.isLinkedInPost(url))
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (facebookPage && FacebookPostIdentity.parse(url.toString()).let { it == null || it.isShortlink })
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
@@ -612,7 +614,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 if (linkedInPage) synchronized(lock) {
                                     token.id.terminal?.let { throw MediaHttpException(it) }
                                     linkedInPages[complete.target] = LinkedInPageAdmission(token.id, checkNotNull(entry),
-                                        MediaHttpPolicy.withoutQuery(url))
+                                        HttpsUrl.withoutQuery(url))
                                 }
                                 return MediaHttpResult.Success(complete)
                             } catch (failure: Exception) {
@@ -670,7 +672,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 throw MediaHttpException(MediaHttpFailure.FACEBOOK_STORY)
             val target = nextUrl?.let(FacebookPostIdentity::parse)
                 ?.takeUnless { it.isShortlink || it.fetchUrlOn(next.host) in seen } ?: throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
-            return MediaHttpPolicy.parse(target.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+            return HttpsUrl.parse(target.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
         }
         val identity = FacebookPostIdentity.parse(next.toString())
             ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
@@ -681,7 +683,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 previous == null || previous.kind != identity.kind || previous.fetchUrl.trimEnd('/') != identity.fetchUrl.trimEnd('/'))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
         }
-        return MediaHttpPolicy.parse(identity.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
+        return HttpsUrl.parse(identity.fetchUrlOn(next.host)) ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
     }
 
     private fun validateContext(token: OperationToken, request: PublicMediaRequest, url: HttpUrl) {
@@ -689,7 +691,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         if (context.operationId !== token.id || context.purpose != MediaHttpPurpose.PAGE ||
             request.purpose != MediaHttpPurpose.IMAGE || url.host != "media.licdn.com")
             throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
-        val page = MediaHttpPolicy.parse(context.url()) ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+        val page = HttpsUrl.parse(context.url()) ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
         if (page.host != "www.linkedin.com" || !(page.encodedPath.startsWith("/posts/") ||
                 page.encodedPath.startsWith("/feed/update/urn:li:activity:")))
             throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)

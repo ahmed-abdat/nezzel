@@ -1,11 +1,11 @@
 package dev.ahmed.savlino.engine.reddit
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import org.junit.Test
 import kotlin.test.*
 
 class RedditJsChallengeTest {
-    private val page = assertNotNull(MediaHttpPolicy.parse("https://www.reddit.com$PERMALINK"))
+    private val page = assertNotNull(HttpsUrl.parse("https://www.reddit.com$PERMALINK"))
     private fun answer(html: ByteArray, at: okhttp3.HttpUrl = page) = RedditJsChallenge.answer(html, html.size, at)
     private fun edited(from: String, to: String) = String(challengePage()).also { assertTrue(from in it, from) }.replace(from, to).toByteArray()
 

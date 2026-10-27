@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.reddit
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import okhttp3.HttpUrl
 
 /**
@@ -23,7 +23,7 @@ class RedditPostIdentity private constructor(val fetchUrl: String, val postId: S
         private val videoPage = Regex("/video/($ID)/?")
         private val gallery = Regex("/gallery/($ID)/?")
 
-        fun parse(raw: String): RedditPostIdentity? = MediaHttpPolicy.parse(raw)?.let(::parse)
+        fun parse(raw: String): RedditPostIdentity? = HttpsUrl.parse(raw)?.let(::parse)
 
         internal fun parse(url: HttpUrl): RedditPostIdentity? {
             if (!url.isHttps || url.port != 443) return null

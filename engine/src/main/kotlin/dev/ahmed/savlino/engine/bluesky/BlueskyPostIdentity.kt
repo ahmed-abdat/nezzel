@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.bluesky
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -29,7 +29,7 @@ class BlueskyPostIdentity private constructor(val actor: String, val rkey: Strin
         private val handle = Regex("(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
         internal fun validDid(value: String): Boolean = value.length <= 253 && did.matches(value)
         fun parse(raw: String): BlueskyPostIdentity? {
-            val url = MediaHttpPolicy.parse(raw) ?: return null
+            val url = HttpsUrl.parse(raw) ?: return null
             if (url.host != "bsky.app") return null
             val match = path.matchEntire(url.encodedPath) ?: return null
             val actor = match.groupValues[1]

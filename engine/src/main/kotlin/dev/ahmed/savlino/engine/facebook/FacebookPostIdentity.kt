@@ -1,6 +1,6 @@
 package dev.ahmed.savlino.engine.facebook
 
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import okhttp3.HttpUrl
 
 enum class FacebookLinkKind { SHARE, SHORTLINK, STORY, PERMALINK, POST, PHOTO, REEL, WATCH, VIDEO }
@@ -41,7 +41,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
 
         fun parse(url: String): FacebookPostIdentity? {
             if ('#' in url) return null
-            val parsed = MediaHttpPolicy.parse(url) ?: return null
+            val parsed = HttpsUrl.parse(url) ?: return null
             val host = parsed.host.lowercase()
             val path = parsed.encodedPath
             if (host == "fb.watch") {
@@ -89,12 +89,12 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
         internal fun isFacebookHost(url: HttpUrl): Boolean = url.host.lowercase().let { it in inputHosts || localeHost.matches(it) }
 
         /** Event pages are unsupported, including mobile hosts and nested event paths. */
-        fun isEventLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
+        fun isEventLink(url: String): Boolean = HttpsUrl.parse(url)?.let {
             isFacebookHost(it) && it.encodedPath.startsWith("/events/")
         } == true
 
         /** Ephemeral stories always need sign-in; story.php is a separate, supported post shape. */
-        fun isStoryLink(url: String): Boolean = MediaHttpPolicy.parse(url)?.let {
+        fun isStoryLink(url: String): Boolean = HttpsUrl.parse(url)?.let {
             isFacebookHost(it) && it.encodedPath.startsWith("/stories/")
         } == true
 

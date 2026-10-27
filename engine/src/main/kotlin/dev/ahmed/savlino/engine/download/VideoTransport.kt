@@ -1,7 +1,7 @@
 package dev.ahmed.savlino.engine.download
 
+import dev.ahmed.savlino.engine.mediahttp.HttpsUrl
 import dev.ahmed.savlino.domain.Host
-import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import dev.ahmed.savlino.engine.mediahttp.OperationToken
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpOperation
 import dev.ahmed.savlino.engine.mediahttp.PublicAddressDns
@@ -55,7 +55,7 @@ internal class VideoTransport(private val site: Host,
                 throw java.io.IOException("Transfer interrupted")
             }
             if (response.code in setOf(301, 302, 303, 307, 308)) {
-                val next = response.header("Location")?.let { MediaHttpPolicy.resolve(target, it) }?.let { permits(it.toString()) }
+                val next = response.header("Location")?.let { HttpsUrl.resolve(target, it) }?.let { permits(it.toString()) }
                 call.cancel(); response.close()
                 if (next == null || hop >= 3) throw DirectPolicyRejected()
                 target = next
