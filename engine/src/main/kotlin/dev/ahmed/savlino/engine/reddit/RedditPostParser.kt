@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.engine.reddit
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.domain.PreviewMetadata
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy
 import dev.ahmed.savlino.engine.mediahttp.MediaPageLimits
@@ -39,20 +40,25 @@ internal object RedditPostParser {
             if (document.getAllElements().size > 60_000) return RedditPost.Unknown
             val post = document.select("shreddit-post").filter { it.attr("id") == "t3_$postId" }.singleOrNull()
                 ?: return RedditPost.Unknown
-            if (post.attributes().any { "nsfw" in it.key.lowercase() }) return RedditPost.LoginRequired
             val type = post.attr("post-type")
+            // A post with no video says so, 18+ or not; only an 18+ video asks for sign-in.
+            if (type in noVideoTypes) return RedditPost.NoVideo
+            if (post.attributes().any { "nsfw" in it.key.lowercase() }) return RedditPost.LoginRequired
             val content = MediaHttpPolicy.parse(post.attr("content-href"))
             when {
-                type in noVideoTypes -> RedditPost.NoVideo
                 type == "video" -> video(post, postId, content?.takeIf { it.host == "v.redd.it" }?.pathSegments
                     ?.singleOrNull()?.takeIf(videoId::matches) ?: return RedditPost.Unknown, expectedVideoId)
                 type == "link" && content != null && !RedditPostIdentity.isRedditHost(content.host) &&
-                    !content.host.endsWith(".redd.it") && !content.host.endsWith(".reddit.com") -> RedditPost.Link(content.toString())
+                    !content.host.endsWith(".redd.it") && !content.host.endsWith(".reddit.com") -> link(post.attr("content-href"))
                 else -> RedditPost.Unknown
             }
         } catch (_: Exception) { RedditPost.Unknown }
         catch (_: StackOverflowError) { RedditPost.Unknown }
     }
+
+    /** A linked page passes only as one whole HTTPS link that a pasted link would also pass as. */
+    private fun link(raw: String): RedditPost =
+        LinkInput.candidates(raw).singleOrNull()?.takeIf { it.rawUrl == raw }?.let { RedditPost.Link(it.rawUrl) } ?: RedditPost.Unknown
 
     private fun video(post: Element, postId: String, id: String, expectedVideoId: String?): RedditPost {
         if (expectedVideoId != null && id != expectedVideoId) return RedditPost.Unknown

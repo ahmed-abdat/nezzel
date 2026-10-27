@@ -61,12 +61,18 @@ class RedditPostParserTest {
     @Test fun aLinkPostHandsOnItsOutsidePageButNeverAnotherRedditPage() {
         assertEquals("https://www.youtube.com/watch?v=aaaaaaaaaaa",
             assertIs<RedditPost.Link>(parse(postPage("link", content = "https://www.youtube.com/watch?v=aaaaaaaaaaa"))).url)
-        for (inside in listOf("https://www.reddit.com/r/other/comments/9zzzzzz/", "https://i.redd.it/x.jpg", "http://example.com/"))
+        // Only one whole HTTPS link that a pasted link would also pass as; never another scheme or a local host.
+        for (inside in listOf("https://www.reddit.com/r/other/comments/9zzzzzz/", "https://i.redd.it/x.jpg", "http://example.com/",
+            "file:///sdcard/x.mp4", "content://media/x", "intent://x#Intent;end", "https://127.0.0.1/x", "https://localhost/x",
+            "https://example.com/a https://example.org/b", "https://user@example.com/x", ""))
             assertEquals(RedditPost.Unknown, parse(postPage("link", content = inside)), inside)
     }
 
     @Test fun anAdultPostAsksForSignInAndUnknownShapesKeepTheOldPath() {
         assertEquals(RedditPost.LoginRequired, parse(postPage(extra = "nsfw")))
+        // An 18+ post without a video still says it holds none.
+        for (type in listOf("text", "image", "gallery"))
+            assertEquals(RedditPost.NoVideo, parse(postPage(type, extra = "nsfw")), type)
         assertEquals(RedditPost.Unknown, parse(postPage(player = false)))
         assertEquals(RedditPost.Unknown, parse(postPage("crosspost")))
         assertEquals(RedditPost.Unknown, parse(postPage(content = "https://v.redd.it/../x")))

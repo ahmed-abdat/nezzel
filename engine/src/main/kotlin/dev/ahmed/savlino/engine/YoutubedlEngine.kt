@@ -495,12 +495,25 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             }
             var retriedWithoutTags = false
             var preProcessingBytes: Long? = null
+            // Without an info JSON a Reddit post is still read through its own video, never its post link.
+            var postRead = false
+            var postUrl: String? = null
+            suspend fun urlTarget(): String? {
+                if (!postRead) when (val target = redditTarget(current, command.source)) {
+                    is RedditTarget.Failed -> throw YtdlpExecutionFailure(target.error)
+                    is RedditTarget.Read -> postUrl = target.url
+                    null -> Unit
+                }
+                postRead = true
+                return postUrl
+            }
             suspend fun transfer(info: File?) {
                 val attemptEpoch = restartEpoch
+                val target = if (info == null) urlTarget() else null
                 // Build both while staging still contains only valid partials. A postprocessor failure
                 // leaves completed audio here, which must not be cleared or revalidated as a partial.
-                val untaggedArgs = YtdlpCommand.download(command, directory, info, embedAudioTags = false)
-                var args = YtdlpCommand.download(command, directory, info, embedAudioTags = !retriedWithoutTags)
+                val untaggedArgs = YtdlpCommand.download(command, directory, info, embedAudioTags = false, target = target)
+                var args = YtdlpCommand.download(command, directory, info, embedAudioTags = !retriedWithoutTags, target = target)
                 var reextractionBlocked = false
                 while (true) {
                     val mapper = YtdlpProgressMapper(if (command.format.requiresMerge) 2 else 1, expected = command.format.size)

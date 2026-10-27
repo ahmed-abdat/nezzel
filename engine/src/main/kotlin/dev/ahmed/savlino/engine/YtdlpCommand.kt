@@ -54,8 +54,9 @@ object YtdlpCommand {
                 (PartialFileNames.matches(it.name) || it.name == kept) } == true) { "Invalid staging directory" }
         return root
     }
+    /** [target]: read in place of the post link when there is no info JSON, as in [inspect]. */
     fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
-        embedAudioTags: Boolean = true): List<String> {
+        embedAudioTags: Boolean = true, target: String? = null): List<String> {
         val root = validateStaging(directory, finishedSource(command.format))
         val row = command.format
         // Generic direct-file IDs can equal a MIME subtype/container. A bare "mp4" is an extension selector,
@@ -87,7 +88,7 @@ object YtdlpCommand {
             else if (embedAudioTags && !row.hasVideo && row.container in setOf("m4a", "mp3"))
                 addAll(audioTagArgs(infoJson))
             if (infoJson != null) addAll(listOf("--load-info-json", infoJson.absolutePath))
-            else addAll(listOf("--", command.source.link.rawUrl))
+            else addAll(listOf("--", target ?: command.source.link.rawUrl))
         }
     }
 
