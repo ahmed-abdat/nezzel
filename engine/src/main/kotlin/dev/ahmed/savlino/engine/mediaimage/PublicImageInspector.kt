@@ -423,37 +423,65 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         } else null
         val discovery = parsed.discovery.copy(sound = parsed.sound, photoLimit = TikTokPostParser.MAX_PHOTOS)
         val metadata = MediaMetadata(title = parsed.title)
+        // Up to three photos in flight, sharing the 16 MiB budget; tiles keep the post's order.
+        val slots = arrayOfNulls<Fetched.Asset>(parsed.photos.size)
+        val next = AtomicInteger()
+        // One refused resize means the post's URLs are signed; photos not yet started go straight to their originals.
+        val resizeRefused = java.util.concurrent.atomic.AtomicBoolean()
+        fun work() {
+            while (true) {
+                val index = next.getAndIncrement()
+                if (index >= slots.size || operation.token.checkActive() != null) return
+                val photo = parsed.photos[index]
+                val original = photo.urls.first()
+                val preview = if (resizeRefused.get()) original else TikTokPostInspector.previewUrl(original)
+                val cap = operation.token.budget.reserveImage(thumbnail = true) {
+                    operation.state == ImageInspectionOperation.State.ACTIVE && operation.token.id.terminal == null
+                }
+                if (cap <= 0) return
+                try {
+                    fun fetch(url: String) = fetchAsset(operation,
+                        PublicMediaRequest(url, MediaHttpPurpose.IMAGE, hostRule = MediaHostRule.TIKTOK_CDN), cap) { bytes, image ->
+                        // A preview never claims the original's size or dimensions; Save validates the full original.
+                        Fetched.Asset(bytes, image, original, 1, discovery, validity, null, false,
+                            MediaHostRule.TIKTOK_CDN, metadata, photo.position, previewOnly = true,
+                            videoSource = soundSource, mirrors = photo.urls.drop(1))
+                    }
+                    var fetched = fetch(preview)
+                    // A signature may reject resizing. Failed HTTP replies have no image body; use the original once.
+                    if (preview != original && fetched is Fetched.Failed && fetched.result.reason == ImageFailure.HTTP) {
+                        resizeRefused.set(true)
+                        fetched = fetch(original)
+                    }
+                    slots[index] = fetched as? Fetched.Asset
+                } finally { operation.token.budget.releaseImage(cap) }
+            }
+        }
+        inParallel(parsed.photos.size, ::work)
         val assets = ArrayList<Fetched.Asset>()
         var notPreviewed = 0
-        // One refused resize means the post's URLs are signed; the other photos go straight to their originals.
-        var resizeRefused = false
-        for (photo in parsed.photos) {
-            val original = photo.urls.first()
-            val preview = if (resizeRefused) original else TikTokPostInspector.previewUrl(original)
-            fun placeholder() = Fetched.Asset(null, MediaImageMetadata(photo.format),
-                original, 1, discovery, validity, null, false, MediaHostRule.TIKTOK_CDN, metadata,
-                photo.position, previewOnly = true, videoSource = soundSource, mirrors = photo.urls.drop(1))
-            val cap = operation.token.budget.imageLimit(thumbnail = true)
-            if (cap <= 0 || operation.token.checkActive() != null) {
-                assets += placeholder(); notPreviewed++; continue
-            }
-            fun fetch(url: String) = fetchAsset(operation,
-                PublicMediaRequest(url, MediaHttpPurpose.IMAGE, hostRule = MediaHostRule.TIKTOK_CDN), cap) { bytes, image ->
-                // A preview never claims the original's size or dimensions; Save validates the full original.
-                Fetched.Asset(bytes, image, original, 1, discovery, validity, null, false,
-                    MediaHostRule.TIKTOK_CDN, metadata, photo.position, previewOnly = true,
-                    videoSource = soundSource, mirrors = photo.urls.drop(1))
-            }
-            var fetched = fetch(preview)
-            // A signature may reject resizing. Failed HTTP replies have no image body; use the original once.
-            if (preview != original && fetched is Fetched.Failed && fetched.result.reason == ImageFailure.HTTP) {
-                resizeRefused = true
-                fetched = fetch(original)
-            }
-            if (fetched is Fetched.Asset) assets += fetched
-            else { assets += placeholder(); notPreviewed++ }
+        for ((index, photo) in parsed.photos.withIndex()) {
+            // Not fetched, failed, past the deadline or out of image bytes: the photo stays selectable without a preview.
+            assets += slots[index] ?: Fetched.Asset(null, MediaImageMetadata(photo.format),
+                photo.urls.first(), 1, discovery, validity, null, false, MediaHostRule.TIKTOK_CDN, metadata,
+                photo.position, previewOnly = true, videoSource = soundSource, mirrors = photo.urls.drop(1)).also { notPreviewed++ }
         }
         return Fetched.Carousel(assets, discovery.copy(notPreviewedCount = notPreviewed))
+    }
+
+    /** Runs [work] on this thread plus up to [carouselFetches] - 1 helpers; each [work] pulls positions until none are left. */
+    private fun inParallel(count: Int, work: () -> Unit) {
+        val helpers = if (count < 2) 0 else minOf(carouselFetches, count) - 1
+        val pool = if (helpers > 0) Executors.newFixedThreadPool(helpers) { task ->
+            Thread(task, "media-carousel").apply { isDaemon = true }
+        } else null
+        try {
+            val running = (0 until helpers).map { checkNotNull(pool).submit(Callable { work() }) }
+            work()
+            running.forEach { future ->
+                try { future.get() } catch (failure: ExecutionException) { throw failure.cause ?: failure }
+            }
+        } finally { pool?.shutdownNow() }
     }
 
     /** Small CDN renditions share 2 MiB; LinkedIn validates its evidenced images with the full per-image limit. */
@@ -502,16 +530,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             }
         }
         // LinkedIn stays serial: its first photo opens the post context and photos are full size.
-        val helpers = if (linkedIn || candidates.size < 2) 0 else minOf(carouselFetches, candidates.size) - 1
-        val pool = if (helpers > 0) Executors.newFixedThreadPool(helpers) { task ->
-            Thread(task, "media-carousel").apply { isDaemon = true }
-        } else null
         try {
-            val running = (0 until helpers).map { checkNotNull(pool).submit(Callable { work() }) }
-            work()
-            running.forEach { future ->
-                try { future.get() } catch (failure: ExecutionException) { throw failure.cause ?: failure }
-            }
+            inParallel(if (linkedIn) 1 else candidates.size, ::work)
             // A deadline keeps every photo that finished in time.
             val anyAsset = slots.any { it is Fetched.Asset }
             for ((position, url) in candidates.withIndex()) {
@@ -555,7 +575,6 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             completed = true
             return result
         } finally {
-            pool?.shutdownNow()
             if (!completed) postContext?.let(http::forgetLinkedInPost)
         }
     }
