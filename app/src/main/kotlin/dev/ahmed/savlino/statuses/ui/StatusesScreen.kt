@@ -14,6 +14,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -50,14 +51,19 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import dev.ahmed.savlino.ui.nav.Joined
 import dev.ahmed.savlino.ui.nav.LocalTabActive
 import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
+import dev.ahmed.savlino.ui.nav.SharedAxisContent
+import dev.ahmed.savlino.ui.nav.heldWhileLeaving
+import dev.ahmed.savlino.ui.nav.rememberSharedAxis
 import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.ui.ThumbnailCache
 import dev.ahmed.savlino.ui.rememberCachedThumbnail
@@ -131,14 +137,20 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
         }
     }
     BackHandler(state.selecting) { state.exitSelect() }
-    BackHandler(!state.selecting && state.selectedAccount != null) { state.closeAccount() }
+    // One account's grid sits a level below the account cards: the bar and the page move together.
+    val opened = state.selectedAccount
+    val pages = rememberSharedAxis(opened, backTo = null, back = if (!state.selecting && opened != null) state::closeAccount else null,
+        "statuses_page")
+    val accountsScroll = rememberLazyListState()
     Scaffold(
         topBar = {
             val ready = state.access as? StatusAccess.Ready
-            val opened = state.selectedAccount
-            if (state.selecting) SelectionBar(state, language)
-            else if (ready != null && opened != null) AccountBar(state, ready, opened, media, language)
-            else ScreenHeader(stringResource(R.string.statuses_tab)) { if (ready != null) SelectAction(state) }
+            pages.SharedAxisContent(AccountDepth, joined = Joined.Bottom) { page ->
+                if (state.selecting) SelectionBar(state, language)
+                else if (ready != null && page != null) AccountBar(state, ready, page, media, language)
+                // Decided by the page: the account cards' bar never shows the grid's Select, even while a back swipe peeks at it.
+                else ScreenHeader(stringResource(R.string.statuses_tab)) { if (ready != null && ready.sources.size <= 1) SelectAction(state) }
+            }
         },
         bottomBar = { if (state.selecting) SaveBar(state, language) },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -155,14 +167,19 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
                 is StatusAccess.Ready -> PullToRefreshBox(state.pulling, state::pull, Modifier.fillMaxSize(),
                     contentAlignment = Alignment.TopCenter) {
                     if (access.items.isEmpty()) EmptyStatuses(access.apps)
-                    else if (state.showAccountList) AccountList(state, access, media, language)
-                    else StatusGrid(state, media, language)
+                    else pages.SharedAxisContent(AccountDepth, Modifier.fillMaxSize(), Joined.Top) { page ->
+                        // Decided by the page, not live state, so a leaving page never turns into the next one.
+                        if (page == null && access.sources.size > 1) AccountList(state, access, media, language, accountsScroll)
+                        else StatusGrid(state, media, language, heldWhileLeaving(state.visible))
+                    }
                 }
             }
         }
     }
     state.preview?.let { opened -> StatusViewer(state, opened, media, language) }
 }
+
+private val AccountDepth: (StatusSource?) -> Int = { if (it == null) 0 else 1 }
 
 /** Dashed-ring mark of the tab, larger: the same generic glyph, never a messaging app's logo. */
 @Composable
@@ -239,8 +256,7 @@ private fun AppRow(app: StatusApp, media: StatusMedia) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusGrid(state: StatusesState, media: StatusMedia, language: String) {
-    val items = state.visible
+private fun StatusGrid(state: StatusesState, media: StatusMedia, language: String, items: List<StatusItem>) {
     val scroll = rememberLazyGridState()
     ScrollOnTabReselect { scroll.scrollToItem(0) }
     // Columns follow the text size: three at 100%, two from about 130%, so Save stays whole in every language.
@@ -298,8 +314,7 @@ private fun AppIcon(packageName: String, media: StatusMedia, size: Dp) {
 
 /** The tab's first screen with several accounts: one open section each (icon, counts, newest few statuses); space alone separates them. */
 @Composable
-private fun AccountList(state: StatusesState, access: StatusAccess.Ready, media: StatusMedia, language: String) {
-    val scroll = rememberLazyListState()
+private fun AccountList(state: StatusesState, access: StatusAccess.Ready, media: StatusMedia, language: String, scroll: LazyListState) {
     ScrollOnTabReselect { scroll.scrollToItem(0) }
     LazyColumn(Modifier.widthIn(max = 720.dp).fillMaxSize(), state = scroll, contentPadding = PaddingValues(bottom = Space.l)) {
         items(state.accounts, key = { "${it.source.packageName}/${it.source.accountIndex}" }, contentType = { "account" }) { summary ->
@@ -366,8 +381,9 @@ private fun PreviewThumb(item: StatusItem, media: StatusMedia, more: Int?, langu
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AccountBar(state: StatusesState, access: StatusAccess.Ready, source: StatusSource, media: StatusMedia, language: String) {
+    // The dot stays with the app name when the title wraps.
     val title = listOfNotNull(appLabel(source, access, language), accountNumber(source, access, language))
-        .joinToString(stringResource(R.string.separator))
+        .joinToString(stringResource(R.string.separator).replaceFirst(' ', '\u00A0'))
     val summary = state.accounts.firstOrNull { it.source == source }
     val subtitle = summary?.let { listOfNotNull(
         pluralStringResource(R.plurals.statuses_count, it.total, NezzelFormat.count(it.total, language)),
@@ -380,7 +396,8 @@ private fun AccountBar(state: StatusesState, access: StatusAccess.Ready, source:
         }
         AppIcon(source.packageName, media, 36.dp)
         Column(Modifier.weight(1f).padding(vertical = Space.s).semantics(mergeDescendants = true) { heading() }) {
-            Text(title, style = MaterialTheme.typography.titleLarge,
+            // Balanced lines when the name wraps, never a lone account number on the second line.
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(lineBreak = LineBreak.Heading),
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
@@ -470,7 +487,8 @@ private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean,
 @Composable
 private fun CornerSave(saving: Boolean, onSave: () -> Unit, modifier: Modifier) {
     val label = stringResource(if (saving) R.string.statuses_saving else R.string.statuses_save)
-    Box(modifier.size(48.dp).clickable(enabled = !saving, role = Role.Button, onClick = onSave)
+    // The ripple stays round like the button it surrounds.
+    Box(modifier.size(48.dp).clip(CircleShape).clickable(enabled = !saving, role = Role.Button, onClick = onSave)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
         Surface(Modifier.size(36.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer, shadowElevation = 2.dp) {

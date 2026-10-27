@@ -4,9 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -26,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -51,7 +49,8 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import dev.ahmed.savlino.ui.nav.LocalTabActive
+import dev.ahmed.savlino.ui.nav.LocalTabShown
+import dev.ahmed.savlino.ui.nav.rememberTabLoop
 import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.Size
@@ -84,12 +83,14 @@ internal fun rememberWithSavedMoment(jobs: List<DownloadProgress>, visible: List
     val flashing = remember { mutableStateMapOf<String, DownloadProgress>() }
     // Ids whose end came from [completed]: the list may still hold their last live row for a moment.
     val ended = remember { mutableSetOf<String>() }
+    // A hidden tab isn't watching: a job that ends meanwhile leaves without a Saved moment.
+    val shown = LocalTabShown.current
     // The coordinator drops a finished job from its list instead of showing it COMPLETED: its end arrives here.
     LaunchedEffect(completed) {
         completed?.collect { job ->
             ended += job.jobId
             val before = seen.put(job.jobId, DownloadPhase.COMPLETED)
-            if (job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
+            if (shown.value && job.saved && before != null && before != DownloadPhase.COMPLETED && before != DownloadPhase.FAILED &&
                 before != DownloadPhase.CANCELLED) flashing[job.jobId] = job
         }
     }
@@ -206,11 +207,10 @@ private fun JobFill(fraction: Float, paused: Boolean, light: Boolean, modifier: 
 @Composable
 private fun JobPulse(still: Boolean, modifier: Modifier) {
     val tint = MaterialTheme.colorScheme.primary
-    // A kept-but-hidden tab must not keep asking for frames.
-    if (still || !LocalTabActive.current.value) return
-    val t = rememberInfiniteTransition(label = "pulse")
-    val alpha by t.animateFloat(.02f, .08f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse), label = "pulse alpha")
-    Box(modifier.background(tint.copy(alpha = alpha)))
+    if (still) return
+    // Clear while the tab is hidden or settling; the tint is read while drawing.
+    val alpha = rememberTabLoop(.02f, .08f, tween(1100, easing = LinearEasing), RepeatMode.Reverse, rest = 0f)
+    Box(modifier.drawBehind { drawRect(tint.copy(alpha = alpha.value)) })
 }
 
 /** A filename is LTR inside RTL layouts. The journal's confirmed filename is the identity; no synthetic title. */

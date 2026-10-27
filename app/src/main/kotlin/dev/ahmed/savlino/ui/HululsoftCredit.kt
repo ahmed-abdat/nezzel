@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -38,7 +39,7 @@ internal fun MadeByHululsoft(modifier: Modifier = Modifier) {
     val uri = LocalUriHandler.current
     val context = LocalContext.current
     val spoken = stringResource(R.string.company_open_site, stringResource(R.string.company_name))
-    Row(modifier.heightIn(min = 48.dp).clickable(onClickLabel = spoken) {
+    Row(modifier.heightIn(min = 48.dp).clip(MaterialTheme.shapes.small).clickable(onClickLabel = spoken) {
         runCatching { uri.openUri(HULULSOFT_SITE) }.onFailure { showLinkFailure(context) }
     }
         .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically,

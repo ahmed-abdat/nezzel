@@ -60,7 +60,7 @@ class HomeInPlaceTest {
     @Composable
     private fun Home(vm: LinkViewModel, jobs: List<DownloadProgress>, media: List<SavedMedia>) {
         val state = remember(media) { LibraryState(LibraryLoadState.Ready(media), {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
-        NezzelTheme(ThemePref.Light, false) { HomeScreen(vm, jobs, state, "en", {}, {}, {}, {}) }
+        NezzelTheme(ThemePref.Light, false) { HomeScreen(vm, { jobs }, state, "en", {}, {}, {}, {}) }
     }
 
     private fun model() = LinkViewModel(SavedStateHandle(), engine = dev.ahmed.savlino.engine.FakeEngine()).apply { automaticOptions = false }

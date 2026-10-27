@@ -14,6 +14,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
 import dev.ahmed.savlino.downloads.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -60,12 +61,13 @@ fun NezzelApp(
     statusLibrary: dev.ahmed.savlino.statuses.StatusLibrary? = null,
     openSavedUri: String? = null, onSavedOpened: () -> Unit = {},
 ) {
-    var updateBack by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
-    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack = links.destination }
-    BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack else "Home") }
+    val updateBack = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Home") }
+    DestinationBack(links, updateBack)
     val reduced = rememberReducedMotion()
     val tabStateHolder = rememberSaveableStateHolder()
     val reselections = remember { TabReselections() }
+    // The tab behind the update page: not state, so a switch never recomposes twice.
+    val lastTab = remember { arrayOf(Snapshot.withoutReadObservation { updateBack.value }) }
     val onReselect = remember(reselections) { { destination: String -> reselections.reselect(destination) } }
     val onNavigate = remember(links) { { destination: String -> links.navigate(destination) } }
     val snackbar = remember { SnackbarHostState() }
@@ -74,7 +76,9 @@ fun NezzelApp(
         links.downloads?.shareLinks()
     }
     val library = rememberLibraryState(snackbar, sweep = shareLinks?.let { it::sweep })
-    val jobs by (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()
+    // Read only in the scopes that show progress: a tick never re-runs this body.
+    val jobs = (links.downloads?.progress ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<DownloadProgress>()) }).collectAsState()
+    val liveJobs = remember(jobs) { { jobs.value } }
     val scope = rememberCoroutineScope()
     val sharer = dev.ahmed.savlino.sharing.rememberFileSharer { id -> scope.launch { snackbar.showSnackbar(context.getString(id)) } }
     // Both WhatsApp apps installed: the "Saved" snackbar's WhatsApp opens this choice for the file.
@@ -159,9 +163,10 @@ fun NezzelApp(
     // A paused notification outlives its pause only if the job expired or was removed elsewhere: clear it when the row leaves Paused.
     var pausedIds by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(jobs) {
-        val now = jobs.filter { it.paused && !it.terminal }.map { it.jobId }.toSet()
-        (pausedIds - now).forEach { DownloadNotifications(context).dismissPaused(it) }
-        pausedIds = now
+        snapshotFlow { jobs.value.filter { it.paused && !it.terminal }.map { it.jobId }.toSet() }.collect { now ->
+            (pausedIds - now).forEach { DownloadNotifications(context).dismissPaused(it) }
+            pausedIds = now
+        }
     }
     val retry: (String) -> Unit = { id ->
         scope.launch { if (links.downloads?.retry(id) != true) snackbar.showSnackbar(context.getString(R.string.download_retry_hint)) }
@@ -300,25 +305,25 @@ fun NezzelApp(
         dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork,
         dev.ahmed.savlino.sharing.LocalFileSharer provides sharer) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
+        // Fully drawn once the saved list is known (loaded or failed): Home shows its real content, not a placeholder.
+        androidx.activity.compose.ReportDrawnWhen { library.load !is LibraryLoadState.Loading }
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         if (updates != null) AppUpdateSheets(updates, updateState, links, language, notificationRationaleShowing)
-        if (links.destination == "AppUpdate" && updates != null) {
-            Box(Modifier.fillMaxSize()) {
-                AppUpdateRoute(updates, language) { links.navigate(updateBack) }
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
-            }
-        } else if (links.moreFormats && !links.hasPendingShare) {
-            OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
-        } else {
-            NavigationScaffold(links.destination, jobs, language, onNavigate, onReselect = onReselect,
-                snackbarHost = { if (!showOptions) SnackbarHost(snackbar) },
+        val appUpdate = links.destination == "AppUpdate" && updates != null
+        val moreFormats = links.moreFormats && !links.hasPendingShare
+        // A full page in front keeps the tabs composed behind it, off-window and inert: coming back composes nothing again.
+        val covered = appUpdate || moreFormats
+        val tab = lastTab.also { if (links.destination in PrewarmTabs) it[0] = links.destination }[0]
+        Box(Modifier.fillMaxSize().then(if (covered) OffWindow else Modifier)) {
+            NavigationScaffold(tab, liveJobs, language, onNavigate, onReselect = onReselect,
+                snackbarHost = { if (!showOptions && !covered) SnackbarHost(snackbar) },
                 updateAvailable = updateState.badge(BuildConfig.VERSION_CODE.toLong())) {
-                TabContent(links.destination, reselections, tabStateHolder) { route ->
+                TabContent(tab, reselections, tabStateHolder, PrewarmTabs, covered) { route ->
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks?.let { it::start }, clearingLinks = clearLinks?.busy == true)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(statusLibrary, language)
-                        "Downloads" -> DownloadsScreen(jobs, language,
+                        "Downloads" -> DownloadsScreen(rememberWhileShown(jobs).value, language,
                             cancel,
                             removeFailed, library.open, library.share, library.openWith,
                             library.showFiles, library.delete, { links.navigate("Home"); onPaste() },
@@ -330,13 +335,23 @@ fun NezzelApp(
                             openSavedUri = openSavedUri, onSavedOpened = onSavedOpened,
                             openPlaylistJob = playlistJob, onPlaylistJobOpened = { playlistJob = null },
                             completed = links.downloads?.completed, openSaved = showSaved, onSavedShown = { showSaved = false })
-                        else -> HomeScreen(links, jobs, library, language, onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications) { id ->
+                        else -> HomeScreen(links, rememberWhileShown(jobs).let { shown -> remember(shown) { { shown.value } } }, library, language,
+                            onPaste, onDismissSuggestion, onAcceptSuggestion, onAllowNotifications) { id ->
                             playlistJob = id
                             links.navigate("Downloads")
                         }
                     } }
                 }
             }
+        }
+        if (appUpdate && updates != null) {
+            Box(Modifier.fillMaxSize()) {
+                AppUpdateRoute(updates, language) { links.navigate(updateBack.value) }
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+            }
+        } else if (moreFormats) {
+            OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
+        } else {
             if (showOptions) OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
             if (links.multi.visible) dev.ahmed.savlino.ui.MultiLinkSheet(links.multi, language, links::dismissMulti)
         }
@@ -349,16 +364,26 @@ fun NezzelApp(
     }
 }
 
+/** Its own scope: a tab switch recomposes these lines, not the whole app body. */
+@Composable
+private fun DestinationBack(links: LinkViewModel, updateBack: MutableState<String>) {
+    SideEffect { if (links.destination in setOf("Home", "Settings", "Downloads", "Statuses")) updateBack.value = links.destination }
+    BackHandler(links.destination != "Home") { links.navigate(if (links.destination == "AppUpdate") updateBack.value else "Home") }
+}
+
 /** A short window trades bottom chrome for a start rail; nested screens keep their vertical insets. */
 @Composable
-internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, language: String,
+internal fun NavigationScaffold(route: String, jobs: () -> List<DownloadProgress>, language: String,
                                 onNavigate: (String) -> Unit, snackbarHost: @Composable () -> Unit = {},
                                 updateAvailable: Boolean = false, onReselect: (String) -> Unit = {},
                                 navigation: @Composable (String, NavigationBadges, (String) -> Unit, (String) -> Unit) -> Unit = { selected, badges, select, reselect ->
                                     NezzelNavigation(TopLevelDestinations, selected, badges, select, reselect)
                                 }, content: @Composable () -> Unit) {
     val rail = LocalConfiguration.current.screenHeightDp < 480
-    val badges = NavigationBadges(runningCount(jobs), jobs.any { it.phase == DownloadPhase.FAILED }, updateAvailable, language)
+    // Derived: a progress tick changes neither count, so the bar stays as it is.
+    val running by remember(jobs) { derivedStateOf { runningCount(jobs()) } }
+    val failed by remember(jobs) { derivedStateOf { jobs().any { it.phase == DownloadPhase.FAILED } } }
+    val badges = NavigationBadges(running, failed, updateAvailable, language)
     // Protect both physical edges (cutout or three-button navigation, including reverse landscape).
     // Consume once for the row so nested Scaffolds do not apply these horizontal insets again.
     val sideInsets = if (rail) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier
@@ -373,22 +398,30 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
     }
 }
 
+/** Every tab, composed ahead of its first visit once the app is fully drawn and idle. */
+private val PrewarmTabs = TopLevelDestinations.map { it.route }
+
 @Composable
-internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
+internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
                        onDismiss: () -> Unit, onAccept: () -> Unit, onAllowNotifications: () -> Unit,
                        onJob: (jobId: String) -> Unit = { links.navigate("Downloads") }) {
     val scroll = rememberScrollState()
     ScrollOnTabReselect { scroll.scrollTo(0) }
     // The copied link is offered inline only while nothing else is in front of the person.
-    val copiedHost = links.suggestionHost.takeIf {
+    // Derived: a tab switch changes it only while a link is offered, so hidden Home doesn't re-run on every switch.
+    val copiedHost by remember(links) { derivedStateOf { links.suggestionHost.takeIf {
         links.hasSuggestion && links.destination == "Home" && links.optionsState == dev.ahmed.savlino.ui.OptionsState.Hidden &&
             !links.hasPendingNotificationChoice
-    }
+    } } }
     // First run: the library loaded and nothing is saved or running yet, so the page says what Nezzel is for.
     // While loading or after a failed query the saved list is unknown, not empty.
-    val firstRun = jobs.isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty()
-    // Recents read the jobs in snapshots, so a progress tick redraws one card, not Home.
+    // Jobs are read in snapshots only (here, the recents and the note), so a progress tick redraws one card, not Home.
+    // Held in a State: the cards' remembered reads always reach the newest list, whoever passes it.
     val latestJobs = rememberUpdatedState(jobs)
+    val currentJobs = remember { { latestJobs.value() } }
+    val firstRun by remember(library) {
+        derivedStateOf { currentJobs().isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty() }
+    }
     // The coordinator drops a job from its list the moment it completes. Home keeps the last few completions, so a job's
     // card knows the file it became and hands its slot to that file instead of leaving and sliding the row.
     val completedJobs = remember { mutableStateOf(emptyList<DownloadProgress>()) }
@@ -397,7 +430,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
             completedJobs.value = (completedJobs.value.filterNot { it.jobId == job.jobId } + job).takeLast(dev.ahmed.savlino.downloads.HOME_JOB_CARDS * 2)
         }
     }
-    val homeJobs = { latestJobs.value.let { live -> live + completedJobs.value.filter { done -> live.none { it.jobId == done.jobId } } } }
+    val homeJobs = { currentJobs().let { live -> live + completedJobs.value.filter { done -> live.none { it.jobId == done.jobId } } } }
     val reduced = LocalReducedMotion.current
     Scaffold(snackbarHost = {
         if (links.invalidShare) {
@@ -436,7 +469,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, libr
                         Box(Modifier.padding(horizontal = Space.l)) { LibraryLoadStatus(library.load, library.onRetry) }
                         if (links.engineUnavailable) Box(Modifier.padding(horizontal = Space.l)) { EngineUnavailableNote() }
                     }
-                    NotificationsOffNote(jobs, firstRun, onAllowNotifications)
+                    NotificationsOffNote(currentJobs, firstRun, onAllowNotifications)
                     Crossfade(firstRun, animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
                         if (first) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
                         else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
@@ -488,8 +521,9 @@ private fun HomeNotes(links: LinkViewModel, language: String) {
 
 /** Below the library, so appearing with a download and leaving after it never moves the cards above. */
 @Composable
-private fun NotificationsOffNote(jobs: List<DownloadProgress>, firstRun: Boolean, onAllowNotifications: () -> Unit) {
-    if (!firstRun && runningCount(jobs) > 0 && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
+private fun NotificationsOffNote(jobs: () -> List<DownloadProgress>, firstRun: Boolean, onAllowNotifications: () -> Unit) {
+    val running by remember(jobs) { derivedStateOf { runningCount(jobs()) > 0 } }
+    if (!firstRun && running && !androidx.core.app.NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()) {
         Column(Modifier.padding(horizontal = Space.l).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

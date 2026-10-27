@@ -113,4 +113,64 @@ class SavedMomentTest {
             assertTrue("no Stopped header over a Saved moment", all().none { stopped in it })
         }
     }
+
+    /** A job that began while Downloads was hidden, then ran in view: its end still gets the Saved moment. */
+    @Test fun aJobStartedWhileHiddenThatEndsInViewShowsSaved() {
+        val live = dev.ahmed.savlino.jobs.DownloadProgress("later", "clip.mp4", dev.ahmed.savlino.jobs.DownloadPhase.DOWNLOADING,
+            bytes = 40, total = dev.ahmed.savlino.domain.Size.Exact(100))
+        val jobs = androidx.compose.runtime.mutableStateOf(emptyList<dev.ahmed.savlino.jobs.DownloadProgress>())
+        val shown = androidx.compose.runtime.mutableStateOf(false)
+        val completed = kotlinx.coroutines.flow.MutableSharedFlow<dev.ahmed.savlino.jobs.DownloadProgress>(extraBufferCapacity = 1)
+        renderThemed({ nodes(it) }, {
+            androidx.compose.runtime.CompositionLocalProvider(dev.ahmed.savlino.ui.nav.LocalTabShown provides shown) {
+                DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {},
+                    libraryLoad = LibraryLoadState.Ready(listOf(video)), completed = completed)
+            }
+        }) { activity ->
+            val saved = context.getString(R.string.download_saved)
+            fun all() = texts(nodes(activity))
+            jobs.value = listOf(live)
+            nodes(activity)
+            shown.value = true
+            waitWhile({ }) { all().none { "clip" in it } }
+            val before = all().count { saved in it }
+            assertTrue(completed.tryEmit(live.copy(phase = dev.ahmed.savlino.jobs.DownloadPhase.COMPLETED, bytes = 100)))
+            jobs.value = emptyList()
+            waitWhile({ }) { all().count { saved in it } <= before }
+            assertTrue("the Saved row is the job's", all().any { "clip" in it })
+        }
+    }
+
+    /** Downloads hidden behind another tab isn't watching: a job that ends meanwhile leaves without a Saved moment. */
+    @Test fun aJobThatEndsWhileTheTabIsHiddenLeavesWithoutASavedMoment() {
+        val live = dev.ahmed.savlino.jobs.DownloadProgress("hidden", "clip.mp4", dev.ahmed.savlino.jobs.DownloadPhase.DOWNLOADING,
+            bytes = 90, total = dev.ahmed.savlino.domain.Size.Exact(100))
+        val jobs = androidx.compose.runtime.mutableStateOf(listOf(live))
+        val shown = androidx.compose.runtime.mutableStateOf(true)
+        val completed = kotlinx.coroutines.flow.MutableSharedFlow<dev.ahmed.savlino.jobs.DownloadProgress>(extraBufferCapacity = 1)
+        renderThemed({ nodes(it) }, {
+            androidx.compose.runtime.CompositionLocalProvider(dev.ahmed.savlino.ui.nav.LocalTabShown provides shown) {
+                DownloadsScreen(jobs.value, "en", {}, {}, {}, {}, {}, null, {}, {},
+                    libraryLoad = LibraryLoadState.Ready(listOf(video)), completed = completed)
+            }
+        }) { activity ->
+            val saved = context.getString(R.string.download_saved)
+            fun all() = texts(nodes(activity))
+            waitWhile({ }) { all().none { "clip" in it } }
+            val before = all().count { saved in it }
+            // The list is frozen while hidden (rememberWhileShown); only the end event gets through.
+            shown.value = false
+            nodes(activity)
+            assertTrue(completed.tryEmit(live.copy(phase = dev.ahmed.savlino.jobs.DownloadPhase.COMPLETED, bytes = 100)))
+            nodes(activity)
+            assertTrue("no Saved moment while hidden", all().count { saved in it } == before)
+            // Shown again with the current list: the job has gone, and no Saved row appears late.
+            jobs.value = emptyList()
+            shown.value = true
+            nodes(activity)
+            // The tabs (one of them named Saved) leave with the last job, so the count may only drop.
+            assertTrue("no late Saved moment: $before -> ${all().filter { saved in it }}", all().count { saved in it } <= before)
+            assertTrue("the ended job left", all().none { "clip" in it })
+        }
+    }
 }

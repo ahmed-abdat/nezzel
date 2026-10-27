@@ -1,10 +1,8 @@
 package dev.ahmed.savlino
 
 import android.os.Build
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,8 +30,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import dev.ahmed.savlino.ui.*
 import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
-import dev.ahmed.savlino.ui.theme.LocalReducedMotion
-import dev.ahmed.savlino.ui.theme.Motion
+import dev.ahmed.savlino.ui.nav.SharedAxisContent
+import dev.ahmed.savlino.ui.nav.rememberSharedAxis
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.update.AppUpdates
@@ -63,19 +61,17 @@ internal fun SettingsScreen(
     val oldDownloads = rememberOldDownloadsOffer(advancedSnackbar)
     val app = LocalContext.current.applicationContext as? NezzelApplication
     var helpImprove by remember(app) { mutableStateOf(app?.preferences?.helpImprove ?: true) }
-    BackHandler(advanced) { advanced = false }
-    val reduced = LocalReducedMotion.current
-    AnimatedContent(advanced, transitionSpec = {
-        if (reduced) EnterTransition.None togetherWith ExitTransition.None
-        else fadeIn(tween(Motion.FADE_IN, 70, Motion.EaseOut)) togetherWith fadeOut(tween(70, easing = Motion.EaseOut))
-    }, label = "settings_page") { page ->
+    // Kept outside the pages, so back from Advanced lands where the list was left.
+    val mainScroll = rememberScrollState()
+    rememberSharedAxis(advanced, backTo = false, back = if (advanced) ({ advanced = false }) else null, "settings_page")
+        .SharedAxisContent(depth = { if (it) 1 else 0 }) { page ->
         if (page) AdvancedSettings(links.downloads?.let { it.maintenance.state.collectAsState().value }, links::updateEngine, updates,
             links.automaticOptions, onAutomaticOptions, links.confirmPausedUpdate, links::answerPausedUpdate, onClearLinks, clearingLinks,
             app?.preferences?.parallelDownloadsFlow?.collectAsState()?.value, { app?.preferences?.chooseParallelDownloads(it) },
             language, helpImprove.takeIf { app != null }, { on -> helpImprove = on; app?.chooseHelpImprove(on) },
             oldDownloads, advancedSnackbar) { advanced = false }
         else MainSettings(links, language, theme, wallpaper, suggestions, onLanguage, onTheme, onWallpaper,
-            onSuggestions, onAutomaticOptions, onHowItWorks, updates) { advanced = true }
+            onSuggestions, onAutomaticOptions, onHowItWorks, updates, mainScroll) { advanced = true }
     }
 }
 
@@ -84,14 +80,14 @@ private fun MainSettings(
     links: LinkViewModel, language: String, theme: ThemePref, wallpaper: Boolean, suggestions: Boolean,
     onLanguage: (String) -> Unit, onTheme: (ThemePref) -> Unit,
     onWallpaper: (Boolean) -> Unit, onSuggestions: (Boolean) -> Unit,
-    onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?, onAdvanced: () -> Unit,
+    onAutomaticOptions: (Boolean) -> Unit, onHowItWorks: () -> Unit, updates: AppUpdates?, scroll: ScrollState,
+    onAdvanced: () -> Unit,
 ) {
     var picker by rememberSaveable { mutableStateOf<String?>(null) }
     val languages = listOf("ar" to stringResource(R.string.language_ar), "en" to stringResource(R.string.language_en),
         "fr" to stringResource(R.string.language_fr))
     val themes = listOf(ThemePref.System to stringResource(R.string.theme_system), ThemePref.Light to stringResource(R.string.theme_light),
         ThemePref.Dark to stringResource(R.string.theme_dark))
-    val scroll = rememberScrollState()
     ScrollOnTabReselect { scroll.scrollTo(0) }
     Scaffold(topBar = { ScreenHeader(stringResource(R.string.settings)) }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets).verticalScroll(scroll)
@@ -230,7 +226,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                             EngineUpdateStatus.FAILED -> R.string.engine_update_failed
                             EngineUpdateStatus.BUSY -> R.string.engine_update_busy
                         }), enabled = !updating, chevron = false, liveNote = true, onClick = onUpdateEngine)
-                    if (updating) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = Space.l))
+                    if (updating) dev.ahmed.savlino.ui.nav.TabProgressBar(Modifier.fillMaxWidth().padding(horizontal = Space.l))
                 }
             }
             SettingsGroup(stringResource(R.string.settings_updates_heading)) {

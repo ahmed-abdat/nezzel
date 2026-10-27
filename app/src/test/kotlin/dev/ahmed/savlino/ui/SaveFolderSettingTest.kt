@@ -6,6 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
@@ -71,6 +74,40 @@ class SaveFolderSettingTest {
             }
             assertTrue(activity.contentResolver.persistedUriPermissions.isEmpty())
             assertEquals("تعذّر الحفظ في المجلد الذي اخترته، اختره مجددًا من الإعدادات", activity.getString(R.string.save_folder_error))
+        } finally { controller.pause().stop().destroy() }
+    }
+    // Lead condition: the folder check keeps its rules (every resume, a minute's staleness) and a tab switch alone never re-runs it.
+    @Test fun aQuickReturnKeepsTheLastFolderCheckWhileAResumeOrAMinuteRechecks() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val activity = controller.get()
+        val provider = SaveDestinationTest.Provider()
+        provider.attachInfo(activity, ProviderInfo().apply {
+            authority = "test.documents"; exported = true; grantUriPermissions = true
+            readPermission = "android.permission.MANAGE_DOCUMENTS"; writePermission = readPermission
+        })
+        ShadowContentResolver.registerProviderInternal("test.documents", provider)
+        SaveDestinations(activity).choose(SaveDestinationTest.tree)
+        var route by mutableStateOf("Settings")
+        val unavailable = activity.getString(R.string.save_folder_unavailable)
+        fun shown() = compose.onAllNodesWithText(unavailable).fetchSemanticsNodes().isNotEmpty()
+        fun visit(destination: String) { compose.runOnIdle { route = destination }; compose.waitForIdle() }
+        try {
+            activity.setContent {
+                MaterialTheme {
+                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Settings") SaveFolderSetting() else androidx.compose.material3.Text(it) }
+                }
+            }
+            compose.waitForIdle()
+            assertFalse(shown())
+            provider.denied = true
+            visit("Home"); visit("Settings")
+            assertFalse("a quick return re-checked the folder", runCatching { compose.waitUntil(1500) { shown() } }.isSuccess)
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(61))
+            visit("Home"); visit("Settings")
+            compose.waitUntil(5000) { shown() }
+            provider.denied = false
+            controller.pause(); controller.resume()
+            compose.waitUntil(5000) { !shown() }
         } finally { controller.pause().stop().destroy() }
     }
 }

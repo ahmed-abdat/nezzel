@@ -209,10 +209,15 @@ private fun TabLabel(text: String, selected: Boolean) {
     val colors = MaterialTheme.colorScheme
     val tint = animateColorAsState(if (selected) colors.onSurface else colors.onSurfaceVariant,
         motionSpec(LocalReducedMotion.current, Motion.TabLabelColor), label = "label")
-    // The colour is read while drawing, so a selection change never re-lays the text out.
-    BasicText(text, Modifier.padding(top = 2.dp), color = { tint.value },
-        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp, textAlign = TextAlign.Center,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium))
+    val style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp, textAlign = TextAlign.Center)
+    // Both weights are laid out once and the colour is read while drawing, so a selection change never re-lays the
+    // text (or the bar's intrinsic height) out; the label also keeps its size when bold would wrap.
+    Box(Modifier.padding(top = 2.dp), contentAlignment = Alignment.Center) {
+        BasicText(text, Modifier.graphicsLayer { alpha = if (selected) 0f else 1f }, color = { tint.value },
+            style = style.copy(fontWeight = FontWeight.Medium))
+        BasicText(text, Modifier.clearAndSetSemantics {}.graphicsLayer { alpha = if (selected) 1f else 0f }, color = { tint.value },
+            style = style.copy(fontWeight = FontWeight.Bold))
+    }
 }
 
 @Composable

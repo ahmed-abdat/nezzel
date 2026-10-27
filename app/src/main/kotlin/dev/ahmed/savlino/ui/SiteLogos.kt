@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
-import dev.ahmed.savlino.ui.nav.LocalTabActive
+import dev.ahmed.savlino.ui.nav.rememberTabLoop
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -59,11 +59,10 @@ private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, insta
 @Composable
 internal fun SiteLogoWall(modifier: Modifier = Modifier, tile: Dp = 80.dp) {
     // A slow drift of about half a tile and back keeps the wall alive; still when animations are off
-    val drift = if (rememberReducedMotion() || !LocalTabActive.current.value) null else rememberInfiniteTransition(label = "logo wall")
-        .animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "drift")
+    val drift = rememberTabLoop(0f, 1f, tween(14_000, easing = FastOutSlowInEasing), RepeatMode.Reverse, rest = 0f, enabled = !rememberReducedMotion())
     Column(modifier.requiredSize(tile * 7.5f).graphicsLayer {
         rotationZ = -24f
-        val shift = (drift?.value ?: 0f) * tile.toPx() * 0.6f
+        val shift = drift.value * tile.toPx() * 0.6f
         translationX = shift; translationY = -shift * 0.45f
     },
         verticalArrangement = Arrangement.spacedBy(tile / 5, Alignment.CenterVertically),
@@ -101,8 +100,7 @@ internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, t
         }.sortedBy { (x, y) -> hypot(x, y - markShift.value) +
             if (y - markShift.value > tile.value * 1.6f || kotlin.math.abs(x) > width.value / 2 - tile.value * 0.8f) 1000f else 0f }
     }
-    val drift = if (rememberReducedMotion() || !LocalTabActive.current.value) null else rememberInfiniteTransition(label = "logo arc")
-        .animateFloat(-1f, 1f, infiniteRepeatable(tween(9_000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "float")
+    val drift = rememberTabLoop(-1f, 1f, tween(9_000, easing = FastOutSlowInEasing), RepeatMode.Reverse, rest = 0f, enabled = !rememberReducedMotion())
     Box(modifier.requiredSize(width, height), contentAlignment = Alignment.Center) {
         cells.forEachIndexed { index, (x, y) ->
             val logo = arcOrder.getOrNull(index)
@@ -110,7 +108,7 @@ internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, t
             val sway = if (index % 2 == 0) 1f else -1f
             Box(Modifier.offset(x.dp, y.dp).graphicsLayer {
                 rotationZ = -24f
-                translationY = (drift?.value ?: 0f) * sway * 3.dp.toPx()
+                translationY = drift.value * sway * 3.dp.toPx()
             }) {
                 if (logo != null) LogoTile(logo, tile)
                 else Box(Modifier.size(tile).background(blanks[index % blanks.size], RoundedCornerShape(tile * 0.275f)))
