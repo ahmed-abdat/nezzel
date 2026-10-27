@@ -166,6 +166,21 @@ class JobRecoveryTest {
         assertRequeued("staged-finished", output)
         assertEquals(0, publisher.inserts)
     }
+    // F3: a death during every save does not loop; it spends the stall budget, then fails once.
+    @Test fun repeatedDeathsWhileSavingAFinishedSourceFailAfterTheStallBudget() {
+        val (_, output) = finished("save-loop")
+        repeat(3) {
+            reopen()
+            recoverTwice()
+            assertRequeued("save-loop", output)
+            check(store.startTransfer("save-loop", "recipe")); check(store.markStaged("save-loop"))
+        }
+        reopen()
+        recoverTwice()
+        assertFailed("save-loop")
+        assertFalse(output.exists())
+    }
+
     @Test fun abandonedPendingInsertWithAFinishedSourceIsRequeued() {
         val (job, output) = finished("pending-finished")
         publisher.boundary = "inserted"

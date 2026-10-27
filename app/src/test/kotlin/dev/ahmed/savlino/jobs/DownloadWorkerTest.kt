@@ -1006,6 +1006,54 @@ class DownloadWorkerTest {
             assertTrue(output.isFile); assertEquals(0, f.attempts.get())
         }
     }
+    // F4/F2: online, a requeued finished job is saved once from the same file; the engine finds it and writes nothing.
+    // Native: publish already removed the sidecar, so this rerun sees ytdlp and must still keep the file.
+    @Test fun requeuedFinishedJobOnlineSavesTheSameFileOnce() = runBlocking {
+        for (engine in listOf("ytdlp", "native")) {
+            val id = "s3-online-$engine"
+            val found = java.util.concurrent.CopyOnWriteArrayList<List<Byte>?>()
+            fixture(FakeEngine(), script = { _, dir, _ ->
+                val output = dir.resolve("output.mp4")
+                found += output.takeIf { it.isFile }?.readBytes()?.toList()
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }).use { f ->
+                f.store.enqueue(command(id))
+                check(f.store.startTransfer(id, "engine-42:${YtdlpCommand.ARGV_VERSION}:engine=$engine"))
+                val output = File(app.filesDir, "downloads/$id").apply { mkdirs() }.resolve("output.mp4")
+                output.writeBytes(byteArrayOf(5, 6, 7, 8))
+                check(f.store.markStaged(id))
+                recovery(f).recover()
+                assertEquals(engine, JobStage.ENQUEUED, f.store.get(id)!!.stage)
+                assertEquals(engine, ListenableWorker.Result.success(), f.worker(id).doWork())
+                assertEquals(engine, JobStage.COMPLETED, f.store.get(id)!!.stage)
+                assertEquals(engine, listOf(listOf<Byte>(5, 6, 7, 8)), found)
+                assertEquals(engine, 1, f.provider.rows.size)
+                assertEquals(engine, listOf<Byte>(5, 6, 7, 8), f.provider.file.readBytes().toList())
+            }
+        }
+    }
+    // F1: after the 6h dataSync timeout the background rerun cannot start a foreground service: keep the hours of
+    // partial for Retry from the opened app, never start over.
+    @Test fun refusedForegroundAfterASystemStopKeepsThePartialForRetry() = runBlocking {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        fixture(FakeEngine(), script = partialThenWait(seen)).use { f ->
+            f.store.enqueue(command("fgs-timeout"))
+            stopMidTransfer(f, "fgs-timeout", -128)
+            assertEquals(JobStage.ENQUEUED, f.store.get("fgs-timeout")!!.stage)
+            f.coordinator.execute("fgs-timeout", { throw IllegalStateException("dataSync limit") }, {})
+            val row = f.store.get("fgs-timeout")!!
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.ExecutionRestricted, row.error)
+            assertTrue(row.retryable)
+            val part = File(app.filesDir, "downloads/fgs-timeout/output.mp4.part")
+            assertEquals("keep", part.readText())
+            recovery(f).recover()
+            assertEquals("keep", part.readText())
+            assertTrue(f.store.retry("fgs-timeout"))
+            assertEquals(ListenableWorker.Result.success(), f.worker("fgs-timeout").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("fgs-timeout")!!.stage)
+            assertEquals(listOf(null, "keep"), seen)
+        }
+    }
     private val waiting = java.util.concurrent.atomic.AtomicInteger()
     /** The first [waits] runs write a partial and wait to be stopped; later runs finish. [seen]: the partial each run found. */
     private fun partialThenWait(seen: MutableList<String?> = java.util.concurrent.CopyOnWriteArrayList(), waits: Int = 1):

@@ -565,16 +565,19 @@ class DownloadCoordinator(
                     val baseRecipe = "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
                     val transferEngine = engine.resumeEngine(command, stagingRoot(id))
                     val recipe = "$baseRecipe:engine=$transferEngine"
-                    // Older recipes start with the app version code; it no longer decides compatibility.
-                    val stored = row.resumeRecipe?.let { if (it.substringBefore(':').toIntOrNull() != null) it.substringAfter(':') else it }
                     // One-time migration: only pre-native jobs can lack an engine marker. Preserve
                     // their bytes with the same yt-dlp/argv; new jobs always write engine=.
-                    // Native fallback ownership is also durable in staging.
-                    val legacyRecipe = stored == baseRecipe
-                    val nativeFallback = stored == "$baseRecipe:engine=native" &&
-                        DirectResume.read(stagingRoot(id))?.native == false
-                    val compatibleRecipe = stored == recipe ||
-                        (transferEngine == "ytdlp" && (legacyRecipe || nativeFallback))
+                    // Native fallback ownership is also durable in staging. A finished native file has no
+                    // sidecar any more (publish removed it), so the rerun sees ytdlp: keep that file too.
+                    val directRecord = DirectResume.read(stagingRoot(id))
+                    val nativeFinished = directRecord == null && YtdlpCommand.finishedSource(command.format)
+                        ?.let { File(stagingRoot(id), it).isFile } == true
+                    fun compatible(stored: String?) = stored == recipe || transferEngine == "ytdlp" &&
+                        (stored == baseRecipe || stored == "$baseRecipe:engine=native" && (directRecord?.native == false || nativeFinished))
+                    // Older recipes start with the app version code; it no longer decides compatibility. Strip it
+                    // only when the recipe as stored does not match (an engine version could be all digits).
+                    val compatibleRecipe = compatible(row.resumeRecipe) || row.resumeRecipe
+                        ?.takeIf { it.substringBefore(':').toIntOrNull() != null }?.substringAfter(':').let(::compatible)
                     val adopting = row.restartEpoch > 0 || row.hasPartial
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     // A stopped attempt's ffmpeg must not outlive any cleanup or adopt of its staging: one that
@@ -719,7 +722,9 @@ class DownloadCoordinator(
                             failure is ArithmeticException -> DownloadError.InsufficientSpace
                             else -> DownloadError.ExecutionRestricted
                         }
-                        finishStopped(id, error)
+                        // A refused foreground (dataSync after its timeout cannot restart in the background) is not the
+                        // download's fault: keep the partial so Retry, from the opened app, resumes it.
+                        finishStopped(id, error, keepPartial = attempt.reason == ExecutionFailureReason.FOREGROUND_DENIED)
                     }
                 } finally {
                     withContext(NonCancellable) {
@@ -791,7 +796,7 @@ class DownloadCoordinator(
     private fun finishStopped(id: String, error: DownloadError,
         systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
         cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false,
-        staleWriter: Boolean = false, schedulerStop: Boolean = false) = synchronized(userCancellation) {
+        staleWriter: Boolean = false, schedulerStop: Boolean = false, keepPartial: Boolean = false) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         store.resetAutomaticResumes(id, bytes)
@@ -834,7 +839,7 @@ class DownloadCoordinator(
             store.fail(id, error, keepPartial = bytes > 0)
             recovery.reconcile(id, cancellationRequested = true, cancellationError = error)
         } else {
-            store.fail(id, error)
+            store.fail(id, error, keepPartial = keepPartial && bytes > 0)
             val stopped = error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
                 DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)
             recovery.reconcile(id, cancellationRequested = stopped, cancellationError = error)

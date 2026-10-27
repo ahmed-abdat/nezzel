@@ -30,7 +30,7 @@ class JobRecord internal constructor(
     val engineVersion: String, val format: Format, val filename: String, val preset: Preset?,
     val pendingUri: Uri?, val displayName: String?, val createdAt: Long, val updatedAt: Long,
     val error: DownloadError?,
-    /** Explicit fresh transfer only; terminal staging is deleted, except a battery stop's partial (JobStore.keepsPartial). */
+    /** Explicit fresh transfer only; terminal staging is deleted, except a battery or refused-foreground stop's partial (JobStore.keepsPartial). */
     val retryable: Boolean,
     val hasPartial: Boolean, val resumeRecipe: String?, val restartEpoch: Long,
     val transportResumes: Int, val stallRestarts: Int, val resumeResetBytes: Long,
@@ -302,9 +302,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
      * Startup only: a death between staged and published left the finished file in staging. Run the job again
      * (it adopts that file and only saves) instead of failing it. A pending row must already be acknowledged gone.
      */
-    @Synchronized internal fun requeueFinished(jobId: String): Boolean =
-        transition(jobId, setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.ENQUEUED,
-            ContentValues().apply { put("has_partial", 1); putNull("error"); putNull("pending_uri"); putNull("display_name") })
+    // A death during every save (low memory on a big copy) must not loop: it spends the stall budget.
+    @Synchronized internal fun requeueFinished(jobId: String): Boolean {
+        val stalls = get(jobId)?.stallRestarts ?: return false
+        return stalls < 3 && transition(jobId, setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.ENQUEUED,
+            ContentValues().apply { put("has_partial", 1); putNull("error"); putNull("pending_uri"); putNull("display_name")
+                put("stall_restarts", stalls + 1) })
+    }
     /** Persist the reset position so trickles accumulate across attempts without reopening the budget. */
     @Synchronized internal fun resetAutomaticResumes(jobId: String, bytes: Long) {
         val row = get(jobId) ?: return
@@ -410,7 +414,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     /** Retry keeps only a still-confirmed URL; partial bytes are resumed only when [keepPartial] (see [keepsPartial]). */
     fun fail(jobId: String, error: DownloadError, retryable: Boolean = retryableError(error),
-        keepPartial: Boolean = false): Boolean = finishTerminal(jobId, keepStaging = keepPartial && error == DownloadError.StoppedByBattery) {
+        keepPartial: Boolean = false): Boolean = finishTerminal(jobId, keepStaging = keepPartial && error in KEEPS_PARTIAL) {
         transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED, JobStage.STAGED), JobStage.FAILED,
             ContentValues().apply {
                 put("error", error.name); put("retryable", if (retryable && retryableError(error)) 1 else 0)
@@ -636,13 +640,15 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         internal const val RESUME_PROGRESS_STEP_BYTES = 1024L * 1024
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
         /**
-         * A battery stop fails at once but keeps its partial so Retry resumes (has_partial stays 0 on FAILED rows: the
+         * A battery stop or a refused foreground fails at once but keeps its partial so Retry resumes (has_partial stays 0 on FAILED rows: the
          * staging bytes are the record; a stop before any byte keeps nothing). Remove, Clear failed and the
          * confirmation lifetime (startup cleanup once Retry is gone) delete it.
          */
         internal fun keepsPartial(row: JobRecord) = row.stage == JobStage.FAILED &&
-            row.error == DownloadError.StoppedByBattery && row.retryable && row.sourceUrl != null &&
+            row.error in KEEPS_PARTIAL && row.retryable && row.sourceUrl != null &&
             System.currentTimeMillis() - row.createdAt <= CONFIRMATION_LIFETIME_MS
+        /** Stops that are not the download's fault and recur on a background rerun: battery, a refused foreground. */
+        private val KEEPS_PARTIAL = setOf(DownloadError.StoppedByBattery, DownloadError.ExecutionRestricted)
         /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
         internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,

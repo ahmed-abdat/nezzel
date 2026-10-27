@@ -25,6 +25,10 @@ class DownloadCoordinatorRecipeTest {
     @Test fun olderVersionCodeWithAnotherEngineDiscardsOldBytes() = checkResume("update-engine")
     @Test fun olderVersionCodeWithAnotherArgvDiscardsOldBytes() = checkResume("update-argv")
     @Test fun nativeFallbackFromAnOlderVersionCodeAdoptsYtdlpBytes() = checkResume("update-fallback")
+    // F5: a current recipe whose engine version is all digits is not mistaken for the old "<versionCode>:" form.
+    @Test fun allDigitEngineVersionKeepsItsCurrentRecipe() = checkResume("digits")
+    // F2: a finished native file (publish removed its sidecar, so the rerun sees ytdlp) is saved, not downloaded again.
+    @Test fun finishedNativeFileWithoutItsSidecarIsAdopted() = checkResume("native-finished")
     @Test fun controlRecordNeverCountsAsPartialBytes() {
         val directory = File(RuntimeEnvironment.getApplication().filesDir, "empty-partial").canonicalFile.apply { mkdirs() }
         try {
@@ -45,7 +49,8 @@ class DownloadCoordinatorRecipeTest {
         val store = JobStore(app)
         val id = "recipe-$mode"
         val command = command(id)
-        val base = "engine-42:${YtdlpCommand.ARGV_VERSION}"
+        val engineVersion = if (mode == "digits") "20251112" else "engine-42"
+        val base = "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
         val older = dev.ahmed.savlino.BuildConfig.VERSION_CODE - 1
         val previous = when (mode) {
             "legacy" -> "0:engine-42:${YtdlpCommand.ARGV_VERSION}"
@@ -54,17 +59,21 @@ class DownloadCoordinatorRecipeTest {
             "update-engine" -> "$older:engine-41:${YtdlpCommand.ARGV_VERSION}:engine=ytdlp"
             "update-argv" -> "$older:engine-42:${YtdlpCommand.ARGV_VERSION - 1}:engine=ytdlp"
             "update-fallback" -> "$older:$base:engine=native"
+            "digits" -> "$base:engine=ytdlp"
+            "native-finished" -> "$base:engine=native"
             else -> "old:recipe"
         }
         val dir = File(app.filesDir, "downloads/$id").apply { mkdirs() }
-        dir.resolve(DirectResume.PART).writeText("kept")
+        val kept = if (mode == "native-finished") YtdlpCommand.finishedSource(command.format)!! else DirectResume.PART
+        dir.resolve(kept).writeText("kept")
         if (mode.endsWith("fallback")) DirectResume.write(dir, DirectResume.Record(null, null, null))
         assertTrue(store.enqueue(command)); assertTrue(store.startTransfer(id, previous)); assertTrue(store.requeue(id, true))
         var actualPartial: String? = null
         val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun installedVersion() = engineVersion
             override fun resumeEngine(command: DownloadCommand, directory: File) = "ytdlp"
             override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult {
-                actualPartial = directory.resolve(DirectResume.PART).takeIf { it.isFile }?.readText()
+                actualPartial = directory.resolve(kept).takeIf { it.isFile }?.readText()
                 return TransferResult.Failure(DownloadError.Failed, resumeAllowed = false)
             }
         }
