@@ -52,7 +52,7 @@ private val AlwaysActive: State<Boolean> = mutableStateOf(true)
 /** Read only inside effects: animation state never invalidates the scaffold or navigation. */
 val LocalTabActive = staticCompositionLocalOf { AlwaysActive }
 /** True from the frame a tab is chosen until another one is (no wait for the fade, unlike [LocalTabActive]). */
-private val LocalTabShown = staticCompositionLocalOf { AlwaysActive }
+internal val LocalTabShown = staticCompositionLocalOf { AlwaysActive }
 
 /**
  * [source] while this tab is shown; a hidden tab keeps the last value it showed and gets the current one in the frame it

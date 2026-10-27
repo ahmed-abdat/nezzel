@@ -16,6 +16,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 
 /** One motion vocabulary: exponential ease-out for state, linear only for real progress. */
 object Motion {
@@ -34,6 +35,9 @@ object Motion {
     const val FADE_IN = 180
     const val STATE = 200
     const val TAB = 250
+    /** Shared axis X between a page and the one below it: both move [AxisShift], the old fades out over [FADE_OUT]. */
+    const val AXIS = 300
+    val AxisShift = 30.dp
     /** Equals the coordinator's progress tick, so the ring trails the journal and never runs ahead. */
     const val PROGRESS = 250
     const val SAVED_DWELL = 1600L
