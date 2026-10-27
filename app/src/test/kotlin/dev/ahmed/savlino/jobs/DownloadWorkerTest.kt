@@ -77,6 +77,31 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun aCancelTheFinishOutranCountsOnlyTheFinish() = runBlocking {
+        val usage = UsageRecorder()
+        val entered = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        fixture(FakeEngine(), usage = usage, cancelHook = { stopped.complete(Unit) }, script = { _, dir, emit ->
+            emit(EngineEvent.Progress(2, Size.Exact(4)))
+            entered.complete(Unit)
+            stopped.await()
+            // The transfer was already done: the engine returns its file despite the cancel.
+            val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+            TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+        }).use { f ->
+            assertTrue(f.coordinator.enqueue(command("usage-late-cancel")))
+            val running = async(Dispatchers.Default) { f.worker("usage-late-cancel").doWork() }
+            try {
+                withTimeout(5000) { entered.await() }
+                f.coordinator.cancel("usage-late-cancel")
+                withTimeout(5000) { running.await() }
+                val stage = f.store.get("usage-late-cancel")!!.stage
+                assertEquals("One end, matching how the job really ended", mapOf(
+                    (if (stage == JobStage.COMPLETED) "dl.finished.video.hd" else "dl.cancelled.video.hd") to 1), usage.ends())
+            } finally { stopped.complete(Unit); running.cancelAndJoin() }
+        }
+    }
+
     @Test fun repeatedFailedJobDeliveryCountsOneEnd() = runBlocking {
         val usage = UsageRecorder()
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.FormatExpired))), usage = usage).use { f ->

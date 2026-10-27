@@ -194,7 +194,7 @@ class ImageInspectionFlowTest {
         assertEquals(3, usageKeys.count { it == "dl.finished.photo.any" })
         assertEquals(0, usageKeys.count { it == "dl.failed.photo.any" })
         assertEquals("One tap is one funnel end, however many photos it saved", listOf("funnel.finished"), usageKeys.filter { it == "funnel.finished" || it == "funnel.failed" })
-        assertEquals(List(3) { linkedIn }, usageSites)
+        assertEquals("One tap counts its site once", listOf(linkedIn), usageSites)
     }
 
     @Test fun cancellingBetweenPhotosCountsTheCancelWithoutInventingFailedOrAttemptedItems() {
@@ -251,7 +251,7 @@ class ImageInspectionFlowTest {
         assertEquals(2, publisher.published.get())
         assertEquals(2, usageKeys.count { it == "dl.finished.photo.any" })
         assertEquals(1, usageKeys.count { it == "dl.failed.photo.any" })
-        assertEquals(List(3) { linkedIn }, usageSites)
+        assertEquals("One tap counts its site once", listOf(linkedIn), usageSites)
         runBlocking { withTimeout(1000) { vm.imageEvents.take(1).collect { event ->
             assertEquals(2, (event as ImageSaveState.BatchFinished).saved.size)
             assertEquals(3, event.total)

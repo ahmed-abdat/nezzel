@@ -1451,9 +1451,9 @@ class LinkViewModel(
         repeat(saved) { usage.count(UsageKeys.photo(UsageKeys.Download.FINISHED)) }
         repeat(failed) { usage.count(UsageKeys.photo(UsageKeys.Download.FAILED)) }
         repeat(cancelled) { usage.count(UsageKeys.photo(UsageKeys.Download.CANCELLED)) }
-        // One Save tap, one funnel outcome, however many photos it held.
+        // One Save tap, one funnel outcome and one site, however many photos it held.
         if (saved > 0) usage.count(UsageKeys.FUNNEL_FINISHED) else if (failed > 0) usage.count(UsageKeys.FUNNEL_FAILED)
-        repeat(saved + failed) { usage.site(link) }
+        if (saved + failed > 0) usage.site(link)
     }
     private fun failConfirmation(error: DownloadError) {
         selectedId = null; selectedPreset = null; moreFormats = false

@@ -81,6 +81,18 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     @Synchronized fun containsJob(jobId: String): Boolean = db.query("batch_items", arrayOf("job_id"),
         "job_id=?", arrayOf(jobId), null, null, null, "1").use { it.moveToFirst() }
 
+    /** "b:<batch>:<position>" for a playlist video, the same across the new job ids its retries get; null for a single link. */
+    @Synchronized fun countKey(jobId: String): String? = db.query("batch_items", arrayOf("batch_id", "position"),
+        "job_id=?", arrayOf(jobId), null, null, null, "1").use { if (it.moveToFirst()) "b:${it.getString(0)}:${it.getInt(1)}" else null }
+
+    /** Whether the playlist video behind a [countKey] still has its row. */
+    @Synchronized fun hasCountKey(key: String): Boolean {
+        val batch = key.removePrefix("b:").substringBeforeLast(':')
+        val position = key.substringAfterLast(':')
+        return db.query("batch_items", arrayOf("job_id"), "batch_id=? AND position=?", arrayOf(batch, position),
+            null, null, null, "1").use { it.moveToFirst() }
+    }
+
     /** Whether a retry gave [jobId]'s video a new job id (the automatic fresh one or a person's Retry) and no row still uses it. */
     @Synchronized fun replaced(jobId: String): Boolean {
         if (containsJob(jobId)) return false
