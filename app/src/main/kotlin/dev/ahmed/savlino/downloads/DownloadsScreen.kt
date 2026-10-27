@@ -315,7 +315,8 @@ fun DownloadsScreen(
                 }
                 val unfinished = active.filter { it !in failed }
                 if (unfinished.isNotEmpty()) {
-                    if (!lone) stickyHeader(key = "jobs-header") {
+                    // A Saved moment alone is neither running nor stopped: no header over it.
+                    if (!lone && unfinished.any { !it.saved }) stickyHeader(key = "jobs-header") {
                         val batch = batchAction(unfinished)
                         SectionHeader(stringResource(if (runningCount(jobs) == 0) R.string.downloads_stopped_header else R.string.downloads_running_header,
                             NezzelFormat.count(if(runningCount(jobs) == 0) unfinished.size else runningCount(jobs), language)), runningCount(jobs) == 0,

@@ -109,6 +109,8 @@ class SavedMomentTest {
             jobs.value = emptyList()
             nodes(activity)
             assertTrue("Saved kept once the row is dropped", all().count { saved in it } > before)
+            val stopped = context.getString(R.string.downloads_stopped_header, "").substringBefore("·").trim()
+            assertTrue("no Stopped header over a Saved moment", all().none { stopped in it })
         }
     }
 }
