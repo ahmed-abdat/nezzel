@@ -96,9 +96,9 @@ class SharedAxisTest {
                 activity.onBackPressedDispatcher.dispatchOnBackProgressed(BackEventCompat(200f, 400f, .5f, BackEventCompat.EDGE_LEFT))
             }
             repeat(3) { compose.mainClock.advanceTimeByFrame() }
-            // Half way under the finger: the page below shows, coming in from the start; nothing is committed yet.
+            // Half way under the finger: the page lifts off toward the finger, the one below waits in place; nothing is committed yet.
             assertTrue(deep)
-            assertTrue("below at ${left("page-false")}", left("page-false") < 0f && left("page-false") > -30f)
+            assertEquals(0f, left("page-false"))
             assertTrue("leaving at ${left("page-true")}", left("page-true") > 0f)
             compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled() }
             compose.mainClock.autoAdvance = true
@@ -120,16 +120,16 @@ class SharedAxisTest {
     }
 
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    @Test fun aFingerRestingAnywhereInABackSwipeStillSeesAPage() {
+    @Test fun aFingerRestingAnywhereInABackSwipeSeesOnePageNeverOneThroughTheOther() {
         deep = true
-        // Opaque pages on white: the green channel is what neither page covers.
+        // Opaque pages on white: the green channel is what neither page covers; red and blue together are a crossfade.
         pages(paint = true).use {
             compose.mainClock.autoAdvance = false
             compose.runOnUiThread {
                 activity.onBackPressedDispatcher.dispatchOnBackStarted(BackEventCompat(0f, 400f, 0f, BackEventCompat.EDGE_LEFT))
             }
             compose.mainClock.advanceTimeByFrame()
-            for (progress in listOf(.1f, .25f, .4f, .6f, .9f)) {
+            for (progress in listOf(.1f, .25f, .4f, .5f, .6f, .9f)) {
                 compose.runOnUiThread {
                     activity.onBackPressedDispatcher.dispatchOnBackProgressed(BackEventCompat(400f * progress, 400f, progress, BackEventCompat.EDGE_LEFT))
                 }
@@ -139,6 +139,12 @@ class SharedAxisTest {
                 view.draw(Canvas(frame))
                 val uncovered = Color.green(frame.getPixel(view.width / 2, view.height / 2)) / 255f
                 assertTrue("at $progress ${(uncovered * 100).toInt()}% of the screen shows neither page", uncovered < .4f)
+                for (x in 1..3) for (y in 1..3) {
+                    val pixel = frame.getPixel(view.width * x / 4, view.height * y / 4)
+                    val red = Color.red(pixel) / 255f
+                    val blue = Color.blue(pixel) / 255f
+                    assertFalse("at $progress ($x/4, $y/4) shows red $red through blue $blue", red in 0.15f..0.85f && blue in 0.15f..0.85f)
+                }
             }
             compose.runOnUiThread { activity.onBackPressedDispatcher.dispatchOnBackCancelled() }
             compose.mainClock.autoAdvance = true
@@ -204,7 +210,8 @@ class SharedAxisTest {
             compose.runOnUiThread { systemBack().run { onBackStarted(swipe(0f)); onBackProgressed(swipe(.5f)) } }
             repeat(6) { compose.mainClock.advanceTimeByFrame() }
             assertTrue(deep)
-            assertTrue("below at ${left("page-false")}", left("page-false") < 0f && left("page-false") > -30f)
+            assertEquals(0f, left("page-false"))
+            assertTrue("leaving at ${left("page-true")}", left("page-true") > 0f)
             compose.runOnUiThread { systemBack().onBackCancelled() }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()

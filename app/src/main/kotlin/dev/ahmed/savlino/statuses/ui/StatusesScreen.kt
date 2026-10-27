@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import dev.ahmed.savlino.ui.nav.Joined
 import dev.ahmed.savlino.ui.nav.LocalTabActive
 import dev.ahmed.savlino.ui.nav.ScrollOnTabReselect
 import dev.ahmed.savlino.ui.nav.SharedAxisContent
@@ -144,7 +145,7 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
     Scaffold(
         topBar = {
             val ready = state.access as? StatusAccess.Ready
-            pages.SharedAxisContent(AccountDepth) { page ->
+            pages.SharedAxisContent(AccountDepth, joined = Joined.Bottom) { page ->
                 if (state.selecting) SelectionBar(state, language)
                 else if (ready != null && page != null) AccountBar(state, ready, page, media, language)
                 // Decided by the page: the account cards' bar never shows the grid's Select, even while a back swipe peeks at it.
@@ -166,7 +167,7 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
                 is StatusAccess.Ready -> PullToRefreshBox(state.pulling, state::pull, Modifier.fillMaxSize(),
                     contentAlignment = Alignment.TopCenter) {
                     if (access.items.isEmpty()) EmptyStatuses(access.apps)
-                    else pages.SharedAxisContent(AccountDepth, Modifier.fillMaxSize()) { page ->
+                    else pages.SharedAxisContent(AccountDepth, Modifier.fillMaxSize(), Joined.Top) { page ->
                         // Decided by the page, not live state, so a leaving page never turns into the next one.
                         if (page == null && access.sources.size > 1) AccountList(state, access, media, language, accountsScroll)
                         else StatusGrid(state, media, language, heldWhileLeaving(state.visible))
