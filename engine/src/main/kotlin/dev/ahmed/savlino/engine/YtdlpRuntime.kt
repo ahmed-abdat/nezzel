@@ -434,7 +434,7 @@ internal class DirectoryYtdlpRuntime(
 
 /** Only fixed labels, elapsed time and exception class names may reach the debug timing log. */
 internal class YtdlpPreparationTiming(
-    private val enabled: Boolean = BuildConfig.DEBUG,
+    private val enabled: Boolean = InspectionTiming.loggable(),
     private val log: (String, String) -> Unit = { tag, message -> android.util.Log.d(tag, message); Unit },
     private val nanoTime: () -> Long = System::nanoTime,
 ) {

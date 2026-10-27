@@ -89,6 +89,14 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override suspend fun warmUp(): Boolean = operation("warm-${UUID.randomUUID()}", { _, _ -> false }) { current ->
         if (!initialize()) return@operation false
         version(current)
+        // Only when a tester sets log.tag.NezzelTiming (never in JVM tests): one local `--version` per process
+        // splits Python start from extraction and network.
+        if (runCatching { android.util.Log.isLoggable("NezzelTiming", android.util.Log.DEBUG) }.getOrDefault(false) &&
+            pythonStartLogged.compareAndSet(false, true)) {
+            val started = System.nanoTime()
+            executeVersion(current)
+            runCatching { android.util.Log.d("NezzelTiming", "ytdlp_python_start ${(System.nanoTime() - started) / 1_000_000}ms") }
+        }
         true
     }
 
@@ -983,6 +991,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val fastSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val runningArgv = HashSet<List<String>>()
+        val pythonStartLogged = AtomicBoolean()
     }
 }
 

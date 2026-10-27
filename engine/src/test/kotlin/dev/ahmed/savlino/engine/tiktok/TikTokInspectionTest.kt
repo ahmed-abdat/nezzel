@@ -169,7 +169,7 @@ class TikTokInspectionTest : PublicImageTestBase() {
             assertTrue(result.discovery.notPreviewedCount > 0)
             assertTrue(result.inspection.items.all { it.renditions.size == 1 })
             assertTrue(result.previews.size < 40)
-            assertEquals(1, f.server.requests.count { it.target.contains("zoomcover") })
+            assertTrue(f.server.requests.count { it.target.contains("zoomcover") } in 1..CAROUSEL_PARALLEL_FETCHES)
             assertTrue(f.server.requests.any { it.target.contains("photomode-image") })
             val ref = assertIs<MediaRendition.Image>(result.inspection.items.last().renditions.single()).ref
             assertNotNull(result.inspection.selection(ref))

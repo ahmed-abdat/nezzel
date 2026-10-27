@@ -22,8 +22,7 @@ class InspectionTiming internal constructor(
     private val log: (String) -> Unit,
 ) {
     // Release builds stay silent unless a tester runs `adb shell setprop log.tag.NezzelTiming DEBUG` (phase names and ms only).
-    constructor() : this(BuildConfig.DEBUG || runCatching { Log.isLoggable(TAG, Log.DEBUG) }.getOrDefault(false),
-        SystemClock::elapsedRealtime, { Log.d(TAG, it); Unit })
+    constructor() : this(loggable(), SystemClock::elapsedRealtime, { Log.d(TAG, it); Unit })
     private val start = if (enabled) now() else 0L
     private val recorded = mutableSetOf<InspectionPhase>()
     fun context() = current.asContextElement(this)
@@ -35,6 +34,8 @@ class InspectionTiming internal constructor(
     companion object {
         private const val TAG = "NezzelTiming"
         private val current = ThreadLocal<InspectionTiming?>()
+        /** Debug builds, or a release with `log.tag.NezzelTiming` set to DEBUG. */
+        internal fun loggable() = BuildConfig.DEBUG || runCatching { Log.isLoggable(TAG, Log.DEBUG) }.getOrDefault(false)
         fun mark(phase: InspectionPhase) { current.get()?.record(phase) }
     }
 }
