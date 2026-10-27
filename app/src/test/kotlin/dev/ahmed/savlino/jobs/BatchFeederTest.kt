@@ -493,7 +493,7 @@ class BatchFeederTest {
         create(1)
         val f = feeder(); f.tick()
         val original = batches.items("batch").single().jobId
-        jobs.fail(original, DownloadError.StoppedByBattery)
+        jobs.fail(original, DownloadError.Interrupted)
         batches.state("batch", BatchState.PAUSED)
         f.tick()
         assertEquals(1, engine.calls)
@@ -502,6 +502,64 @@ class BatchFeederTest {
         assertEquals(BatchItemState.QUEUED, batches.items("batch").single().state)
         assertNull(batches.items("batch").single().error)
         assertEquals(2, engine.calls)
+    }
+
+    // A battery stop or a refused foreground keeps its partial: the video fails with its hint, the rest keep feeding,
+    // and the person's Retry resumes the same job from the kept bytes.
+    @Test fun aKeptPartialFailsWithItsHintAndRetryResumesTheSameJob() = runBlocking {
+        for (error in listOf(DownloadError.StoppedByBattery, DownloadError.ForegroundDenied)) {
+            close(); warmSQLite(); engine = Engine(); limit.value = 1
+            create(3)
+            val f = feeder(); f.tick()
+            val first = batches.items("batch").first().jobId
+            assertTrue(jobs.startTransfer(first))
+            val partial = JobDirectory(app.filesDir).createOrAdopt(first).directory.resolve("video.mp4.part")
+            partial.writeText("partial")
+            assertTrue(jobs.fail(first, error, keepPartial = true))
+            f.tick()
+            val item = batches.items("batch").first()
+            assertEquals(error.name, BatchItemState.FAILED, item.state)
+            assertEquals(error.name, error, item.error)
+            assertTrue(error.name, item.retryable)
+            assertEquals(error.name, first, item.jobId)
+            assertTrue(error.name, partial.isFile)
+            assertEquals(error.name, 3, engine.calls) // The next video was fed; no fresh inspection of this one.
+            batches.items("batch").drop(1).forEach { complete(it.jobId) }
+            f.tick()
+            f.retry("batch"); f.tick()
+            assertEquals(error.name, BatchItemState.QUEUED, batches.items("batch").first().state)
+            assertEquals(error.name, first, batches.items("batch").first().jobId)
+            assertEquals(error.name, JobStage.ENQUEUED, jobs.get(first)!!.stage)
+            assertEquals(error.name, "partial", partial.readText())
+            assertEquals(error.name, 3, engine.calls)
+        }
+    }
+
+    // Negative controls: an interrupted, expired or non-retryable stop keeps its partial nowhere and gets one fresh inspection.
+    @Test fun aStopThatKeepsNoPartialStillGetsAFreshInspection() = runBlocking {
+        for (case in listOf("interrupted", "expired", "final")) {
+            close(); warmSQLite(); engine = Engine()
+            create(1)
+            val f = feeder(); f.tick()
+            val original = batches.items("batch").single().jobId
+            assertTrue(jobs.startTransfer(original))
+            when (case) {
+                "interrupted" -> jobs.fail(original, DownloadError.Interrupted)
+                "expired" -> {
+                    assertTrue(jobs.fail(original, DownloadError.StoppedByBattery, keepPartial = true))
+                    jobs.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                        arrayOf<Any>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, original))
+                }
+                else -> jobs.fail(original, DownloadError.StoppedByBattery, retryable = false, keepPartial = true)
+            }
+            assertFalse(case, JobStore.keepsPartial(jobs.get(original)!!))
+            f.tick()
+            val item = batches.items("batch").single()
+            assertEquals(case, BatchItemState.QUEUED, item.state)
+            assertTrue(case, item.jobId.endsWith(BatchStore.FRESH_SUFFIX))
+            assertNull(case, jobs.get(original))
+            assertEquals(case, 2, engine.calls)
+        }
     }
 
     @Test fun refreshBudgetSurvivesDeathBeforeEnqueue() = runBlocking {
