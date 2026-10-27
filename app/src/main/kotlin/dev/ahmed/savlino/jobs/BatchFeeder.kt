@@ -201,7 +201,8 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                         batches.finish(item, BatchItemState.FAILED, DownloadError.Interrupted)
                     continue
                 }
-                val needsFresh = job.stage == JobStage.FAILED && !BatchStore.isLinkItem(item.itemId) &&
+                // A kept partial (battery, refused foreground) fails with its hint and resumes on the person's Retry.
+                val needsFresh = job.stage == JobStage.FAILED && !BatchStore.isLinkItem(item.itemId) && !JobStore.keepsPartial(job) &&
                     (job.error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.FormatExpired) ||
                         System.currentTimeMillis() - job.createdAt > JobStore.CONFIRMATION_LIFETIME_MS)
                 // Do not discard the source or consume the fresh attempt while batch controls defer it.
