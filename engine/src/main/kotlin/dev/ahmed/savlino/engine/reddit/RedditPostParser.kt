@@ -19,7 +19,16 @@ sealed interface RedditPost {
     }
     /** A link post: the page it links to, as yt-dlp's reddit extractor hands it on. */
     class Link(val url: String) : RedditPost { override fun toString() = "RedditPost.Link(redacted)" }
-    /** Text, photo, gallery or poll: the post exists but holds no video. */
+    /**
+     * An image or gallery post's own photos, in post order. [originals]: what Save fetches, the `i.redd.it` file when
+     * the page names it, else the largest signed preview it names ([previewQuality]). [previews]: a small copy the
+     * page names for each, else the original itself. [skipped]: gallery items that are no photo (an animated clip).
+     */
+    class Photos(val originals: List<String>, val previews: List<String>, val title: String?, val author: String?,
+        val previewQuality: Boolean, val skipped: Int) : RedditPost {
+        override fun toString() = "RedditPost.Photos(redacted)"
+    }
+    /** Text or poll, or a photo post whose page names no photo: the post exists but holds nothing to save. */
     data object NoVideo : RedditPost
     /** Reddit asks logged-out readers to sign in (18+ post). */
     data object LoginRequired : RedditPost
@@ -30,7 +39,14 @@ sealed interface RedditPost {
 /** Reads only the requested post's own `<shreddit-post>`; feed items, ads and comments never qualify. */
 internal object RedditPostParser {
     private val videoId = Regex("[a-z0-9]{8,24}")
-    private val noVideoTypes = setOf("text", "self", "image", "gallery", "poll")
+    private val noVideoTypes = setOf("text", "self", "poll")
+    private val photoTypes = setOf("image", "gallery")
+    /**
+     * Reddit galleries hold at most 20 items; a longer list is not a page this parser knows. Up to this many pass on,
+     * and the carousel keeps its own image cap and counts the rest as capped.
+     */
+    private const val MAX_ITEMS = 40
+    private const val PREVIEW_WIDTH = 320
     private val json = ObjectMapper()
 
     fun parse(html: ByteArray, length: Int, postId: String, expectedVideoId: String? = null): RedditPost {
@@ -41,9 +57,11 @@ internal object RedditPostParser {
             val post = document.select("shreddit-post").filter { it.attr("id") == "t3_$postId" }.singleOrNull()
                 ?: return RedditPost.Unknown
             val type = post.attr("post-type")
-            // A post with no video says so, 18+ or not; only an 18+ video asks for sign-in.
+            // A post with no media says so, 18+ or not; an 18+ photo or video asks for sign-in (logged out, it may
+            // name only blurred copies).
             if (type in noVideoTypes) return RedditPost.NoVideo
             if (post.attributes().any { "nsfw" in it.key.lowercase() }) return RedditPost.LoginRequired
+            if (type in photoTypes) return photos(post, type == "gallery")
             val content = MediaHttpPolicy.parse(post.attr("content-href"))
             when {
                 type == "video" -> video(post, postId, content?.takeIf { it.host == "v.redd.it" }?.pathSegments
@@ -54,6 +72,63 @@ internal object RedditPostParser {
             }
         } catch (_: Exception) { RedditPost.Unknown }
         catch (_: StackOverflowError) { RedditPost.Unknown }
+    }
+
+    /** One rendition a page names: a Reddit image URL and the width it is declared at (0 when undeclared). */
+    private class Named(val url: String, val width: Int) {
+        val original: Boolean get() = url.startsWith("https://i.redd.it/")
+    }
+
+    /**
+     * Only URLs this post's own markup names, on Reddit's image hosts: an image post's `content-href` file, a gallery's
+     * `<li slot="page-N">` items in page order. Nothing is built from an id, so a size or file is never guessed.
+     */
+    private fun photos(post: Element, gallery: Boolean): RedditPost {
+        val items: List<List<Named>?> = if (gallery) {
+            val pages = post.select("gallery-carousel li").filter { it.attr("slot").startsWith("page-") }
+                .ifEmpty { post.select("gallery-carousel ul > li") }
+            if (pages.size > MAX_ITEMS) return RedditPost.Unknown
+            pages.map { page ->
+                // A clip item (Reddit plays animated items as video) has no photo to save.
+                if (page.select("shreddit-player, shreddit-player-2, video").isNotEmpty()) null
+                else named(page.select("figure img").ifEmpty { page.select("img") }, page.select("a[href]"))
+                    .takeIf { it.isNotEmpty() }
+            }
+        } else {
+            val content = rendition(post.attr("content-href"), 0)?.takeIf { it.original }
+            val shown = named(post.select("img"), emptyList())
+            listOf((listOfNotNull(content) + shown).takeIf { it.isNotEmpty() })
+        }
+        val found = items.filterNotNull()
+        if (found.isEmpty()) return RedditPost.NoVideo
+        val originals = found.map { names -> names.firstOrNull { it.original } ?: names.filterNot { it.original }.maxBy { it.width } }
+        val previews = found.mapIndexed { index, names ->
+            val sized = names.filter { !it.original && it.width > 0 }
+            (sized.filter { it.width >= PREVIEW_WIDTH }.minByOrNull { it.width } ?: sized.maxByOrNull { it.width }
+                ?: originals[index]).url
+        }
+        return RedditPost.Photos(originals.map { it.url }, previews, PreviewMetadata.text(post.attr("post-title"), 300),
+            PreviewMetadata.text(post.attr("author"), 120), originals.any { !it.original }, items.size - found.size)
+    }
+
+    private fun named(images: List<Element>, links: List<Element>): List<Named> {
+        val names = ArrayList<Named>()
+        for (image in images) {
+            for (key in listOf("src", "data-lazy-src")) rendition(image.attr(key), 0)?.let(names::add)
+            for (key in listOf("srcset", "data-lazy-srcset")) image.attr(key).split(Regex(",\\s*(?=https://)")).forEach { entry ->
+                val parts = entry.trim().split(Regex("\\s+"))
+                rendition(parts[0], parts.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0)?.let(names::add)
+            }
+        }
+        links.forEach { link -> rendition(link.attr("href"), 0)?.let(names::add) }
+        return names.distinctBy { it.url }
+    }
+
+    /** [raw] as the page names it, when it is a Reddit image URL; a preview's `width=` query counts as its width. */
+    private fun rendition(raw: String, declared: Int): Named? {
+        val url = MediaHttpPolicy.parse(raw)?.takeIf(MediaHttpPolicy::isRedditImage) ?: return null
+        val width = declared.takeIf { it > 0 } ?: url.queryParameter("width")?.toIntOrNull()?.takeIf { it in 1..20_000 } ?: 0
+        return Named(url.toString(), width)
     }
 
     /** A linked page passes only as one whole HTTPS link that a pasted link would also pass as. */

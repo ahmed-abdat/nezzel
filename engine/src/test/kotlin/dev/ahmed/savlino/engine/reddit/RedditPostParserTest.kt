@@ -70,9 +70,10 @@ class RedditPostParserTest {
 
     @Test fun anAdultPostAsksForSignInAndUnknownShapesKeepTheOldPath() {
         assertEquals(RedditPost.LoginRequired, parse(postPage(extra = "nsfw")))
-        // An 18+ post without a video still says it holds none.
-        for (type in listOf("text", "image", "gallery"))
-            assertEquals(RedditPost.NoVideo, parse(postPage(type, extra = "nsfw")), type)
+        // An 18+ text post still says it holds nothing; an 18+ photo post asks for sign-in like a video.
+        assertEquals(RedditPost.NoVideo, parse(postPage("text", extra = "nsfw")))
+        for (type in listOf("image", "gallery"))
+            assertEquals(RedditPost.LoginRequired, parse(postPage(type, extra = "nsfw")), type)
         assertEquals(RedditPost.Unknown, parse(postPage(player = false)))
         assertEquals(RedditPost.Unknown, parse(postPage("crosspost")))
         assertEquals(RedditPost.Unknown, parse(postPage(content = "https://v.redd.it/../x")))

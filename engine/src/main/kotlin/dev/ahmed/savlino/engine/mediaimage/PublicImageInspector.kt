@@ -19,6 +19,9 @@ import dev.ahmed.savlino.engine.telegram.TelegramParseResult
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostParser
 import dev.ahmed.savlino.engine.bluesky.BlueskyParseResult
+import dev.ahmed.savlino.engine.reddit.RedditPost
+import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
+import dev.ahmed.savlino.engine.reddit.RedditPostParser
 import dev.ahmed.savlino.engine.x.XParseResult
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.x.XPostParser
@@ -77,6 +80,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             TelegramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             BlueskyPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
             TikTokPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL
+            RedditPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             else -> MediaHttpOperation.DIRECT_IMAGE
         }
         val previous = synchronized(lock) {
@@ -119,6 +123,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     ImageSourceType.TELEGRAM -> fetchTelegram(operation)
                     ImageSourceType.BLUESKY -> fetchBluesky(operation)
                     ImageSourceType.TIKTOK -> fetchTikTok(operation)
+                    ImageSourceType.REDDIT -> fetchReddit(operation)
                     ImageSourceType.DIRECT -> fetchDirect(operation)
                 } } catch (_: OutOfMemoryError) {
                     Fetched.Failed(failure(ImageFailure.BUDGET, operation.fetchPhase))
@@ -405,6 +410,34 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             MediaMetadata(parsed.title, parsed.author), parsed.previewCandidates)
     }
 
+    /**
+     * Reddit: the post's own logged-out page, then its photos on i.redd.it / preview.redd.it. Anything but an image or
+     * gallery post (video, link, text, a failed read, a page this reader can't place) hands the user's own link to
+     * the yt-dlp path, which reads the same page and keeps its own errors.
+     */
+    private fun fetchReddit(operation: ImageInspectionOperation): Fetched {
+        val identity = RedditPostIdentity.parse(operation.source.link.rawUrl)?.takeIf { it.videoId == null }
+            ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
+        fun handOff(): Fetched = if (operation.state == ImageInspectionOperation.State.ACTIVE)
+            Fetched.Video(MediaInspectResult.VideoRedirect(operation.source))
+            else Fetched.Failed(failure(terminal(operation) ?: ImageFailure.STALE, ImagePhase.PAGE))
+        val page = when (val result = http.fetchRedditPost(operation.token, identity)) {
+            is MediaHttpResult.Failure -> return handOff()
+            is MediaHttpResult.Success -> result.response
+        }
+        val (body, postId) = try {
+            page.takeBody() to MediaHttpPolicy.parse(page.target.url())?.let(RedditPostIdentity::postHop)?.postId
+        } catch (_: java.io.IOException) { return handOff() } finally { page.close() }
+        val photos = postId?.let { RedditPostParser.parse(body.bytes, body.length, it) } as? RedditPost.Photos
+            ?: return handOff()
+        operation.fetchPhase = ImagePhase.IMAGE
+        terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
+        val discovery = ImageDiscovery(photos.originals.size, DiscoveryCompleteness.COMPLETE,
+            previewQuality = photos.previewQuality, unavailableCount = photos.skipped)
+        return fetchCarousel(operation, photos.originals, discovery, MediaHostRule.REDDIT_MEDIA,
+            MediaMetadata(photos.title, photos.author), photos.previews)
+    }
+
     private fun fetchTikTok(operation: ImageInspectionOperation): Fetched {
         val identity = TikTokPostIdentity.parse(operation.source.link.rawUrl)
             ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
@@ -491,7 +524,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val validity = MediaInspectionValidity.processLocal()
         val assets = ArrayList<Fetched.Asset>()
         val linkedIn = pageContext != null
-        val optionalPreviews = rule == MediaHostRule.TELEGRAM_CDN || rule == MediaHostRule.BLUESKY_CDN
+        val optionalPreviews = rule == MediaHostRule.TELEGRAM_CDN || rule == MediaHostRule.BLUESKY_CDN ||
+            rule == MediaHostRule.REDDIT_MEDIA
         val thumbnails = !linkedIn && (optionalPreviews || urls.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0)
         val candidates = urls.take(operation.token.operation.maxImages)
         var postContext: MediaHttpPostContext? = null

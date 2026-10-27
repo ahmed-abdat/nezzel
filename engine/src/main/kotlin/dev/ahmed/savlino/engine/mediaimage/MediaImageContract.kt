@@ -20,7 +20,7 @@ enum class ImageFailure {
     SOURCE_REFUSED
 }
 enum class ImagePhase { PAGE, IMAGE, DECODE }
-enum class ImageSourceType { DIRECT, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK }
+enum class ImageSourceType { DIRECT, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT }
 enum class DiscoveryCompleteness { UNKNOWN, PARTIAL, COMPLETE }
 /** previewQuality: the page offered only a reduced copy (og:image, or a smaller rendition than it declares). */
 data class ImageDiscovery(val discoveredCount: Int, val completeness: DiscoveryCompleteness,

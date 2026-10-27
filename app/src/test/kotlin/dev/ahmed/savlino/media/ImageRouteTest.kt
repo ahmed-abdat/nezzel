@@ -15,6 +15,15 @@ class ImageRouteTest {
             "https://www.tiktok.com/@synthetic/photo/no-id")) assertEquals(MediaSourceRoute.LEGACY, route(url))
     }
 
+    @Test fun redditPostLinksReadTheirPhotosFirstWhileVideoLinksStayOnYtdlp() {
+        for (url in listOf("https://www.reddit.com/r/synthetic/comments/1abcdef/synthetic_photo/", "https://redd.it/1abcdef",
+            "https://www.reddit.com/r/synthetic/s/AbC123xyz", "https://old.reddit.com/comments/1abcdef/", "https://www.reddit.com/gallery/1abcdef"))
+            assertEquals(url, MediaSourceRoute.REDDIT, route(url))
+        for (url in listOf("https://v.redd.it/synthvid0001", "https://www.reddit.com/video/synthvid0001/",
+            "https://www.reddit.com/r/synthetic/", "https://reddit.com.evil.example/r/synthetic/comments/1abcdef/x/"))
+            assertEquals(url, MediaSourceRoute.LEGACY, route(url))
+    }
+
     @Test fun telegramAndBlueskyOnlyRoutePublicPostShapes() {
         for (url in listOf("https://t.me/synthetic_channel/123", "https://telegram.me/synthetic_channel/123?single"))
             assertEquals("TELEGRAM", route(url).name)

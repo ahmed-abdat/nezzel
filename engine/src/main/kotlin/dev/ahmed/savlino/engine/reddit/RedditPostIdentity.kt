@@ -7,7 +7,7 @@ import okhttp3.HttpUrl
  * A public Reddit post link and the one www page that reads it. Tracking queries never reach the page read.
  * Post links keep their slug: a slugless `/r/<sub>/comments/<id>/` serves a shell without the post, so it reads
  * `/comments/<id>/`, which Reddit redirects to the full permalink. Share (`/s/`) and video (`v.redd.it`) links
- * name no post id until their redirect does.
+ * name no post id until their redirect does. A gallery share link (`/gallery/<id>`) is the bare id page of its post.
  */
 class RedditPostIdentity private constructor(val fetchUrl: String, val postId: String?, val videoId: String?) {
     override fun toString() = "RedditPostIdentity(redacted)"
@@ -21,6 +21,7 @@ class RedditPostIdentity private constructor(val fetchUrl: String, val postId: S
         private val share = Regex("/(?:r|u|user)/$NAME/s/[A-Za-z0-9]{1,32}/?")
         private val video = Regex("/($ID)/?")
         private val videoPage = Regex("/video/($ID)/?")
+        private val gallery = Regex("/gallery/($ID)/?")
 
         fun parse(raw: String): RedditPostIdentity? = MediaHttpPolicy.parse(raw)?.let(::parse)
 
@@ -37,7 +38,8 @@ class RedditPostIdentity private constructor(val fetchUrl: String, val postId: S
                     // A user-profile post keeps its own path; Reddit redirects it as needed.
                     val kind = path.substringAfter('/').substringBefore('/')
                     post(owner.takeIf { it.isNotEmpty() }?.let { "$kind/$it" }, id, slug.takeIf { it.isNotEmpty() })
-                } ?: share.matchEntire(path)?.let { RedditPostIdentity("https://www.reddit.com$path".trimEnd('/') + "/", null, null) }
+                } ?: gallery.matchEntire(path)?.let { post(null, it.groupValues[1], null) }
+                    ?: share.matchEntire(path)?.let { RedditPostIdentity("https://www.reddit.com$path".trimEnd('/') + "/", null, null) }
                     ?: videoPage.matchEntire(path)?.let {
                         RedditPostIdentity("https://www.reddit.com/video/${it.groupValues[1]}/", null, it.groupValues[1])
                     }

@@ -20,14 +20,15 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
-/** X/Instagram/Telegram/Bluesky read with yt-dlp beside the reader; the reader's verdict decides which one is shown. */
+/** X/Instagram/Telegram/Bluesky/Reddit read with yt-dlp beside the reader; the reader's verdict decides which one is shown. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class LinkViewModelRaceTest {
     private val instagram = "https://www.instagram.com/p/SynthPost01/?igsh=Synthetic"
     private val canonicalPost = "https://www.instagram.com/p/SynthPost01/"
+    private val reddit = "https://www.reddit.com/r/synthetic/comments/1abcdef/synthetic_photo/"
     private val handoffLinks = listOf(instagram, "https://x.com/someone/status/1790000000000000001?s=20",
-        "https://t.me/synthetic_channel/123", "https://bsky.app/profile/synthetic.test/post/3synthetic001")
+        "https://t.me/synthetic_channel/123", "https://bsky.app/profile/synthetic.test/post/3synthetic001", reddit)
     private lateinit var store: JobStore
     private lateinit var coordinator: DownloadCoordinator
     private lateinit var vm: LinkViewModel
@@ -143,6 +144,44 @@ class LinkViewModelRaceTest {
         images.gate!!.complete(Unit); engine.inspectHold!!.complete(Unit); pump()
         assertEquals(OptionsState.Hidden, vm.optionsState)
         assertEquals(1, engine.inspected.size)
+    }
+
+    @Test fun aRedditPostRacesYtDlpWithTheUsersOwnLink() {
+        // Photos win: the yt-dlp read is cancelled and its late result dropped.
+        holdReader { imageSuccess(it, found = 2) }
+        engine.inspectHold = CompletableDeferred()
+        check(reddit)
+        assertEquals(listOf(MediaSourceRoute.REDDIT), images.routes)
+        assertEquals(listOf(reddit), engine.inspected)
+        images.gate!!.complete(Unit); pump()
+        assertTrue(vm.optionsState.toString(), vm.optionsState is OptionsState.ImageReady)
+        assertEquals(listOf("op-2"), engine.cancelled)
+        engine.inspectHold!!.complete(Unit); pump()
+        assertTrue(vm.optionsState is OptionsState.ImageReady)
+        vm.dismissOptions(); pump()
+
+        // A text post or a failed page hands off: the yt-dlp read of the same link is shown, never cancelled.
+        reset()
+        holdReader { MediaInspectResult.VideoRedirect(it) }
+        check(reddit)
+        images.gate!!.complete(Unit)
+        settle { vm.optionsState !is OptionsState.Checking }
+        assertEquals(reddit, (vm.optionsState as OptionsState.Ready).resolvedFrom!!.link.rawUrl)
+        assertEquals(listOf(reddit), engine.inspected)
+        assertEquals(emptyList<String>(), engine.cancelled)
+        vm.dismissOptions(); pump()
+
+        // A replacement link drops both reads.
+        reset()
+        holdReader { MediaInspectResult.VideoRedirect(it) }
+        engine.inspectHold = CompletableDeferred()
+        check(reddit)
+        vm.edit("https://www.reddit.com/r/synthetic/comments/2bcdefg/another/"); pump()
+        assertEquals(1, images.cancelled.size)
+        assertEquals(1, engine.cancelled.size)
+        images.gate!!.complete(Unit); engine.inspectHold!!.complete(Unit); pump()
+        assertEquals(OptionsState.Hidden, vm.optionsState)
+        assertEquals(listOf(reddit), engine.inspected)
     }
 
     @Test fun facebookAndLinkedInNeverRace() {
