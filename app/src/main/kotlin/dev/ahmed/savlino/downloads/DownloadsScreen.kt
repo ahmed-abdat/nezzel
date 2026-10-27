@@ -851,7 +851,8 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                 media.take(4).chunked(columns).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         row.forEach { item ->
-                            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}.clickable(onClickLabel = openLabel) { onOpen(item) },
+                            Column(Modifier.weight(1f).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
+                                .clickable(onClickLabel = openLabel) { onOpen(item) },
                                 verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                                 MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 9f), MaterialTheme.shapes.large)
                                 // Full-width captions on the layout's start edge, whatever the title's own direction.

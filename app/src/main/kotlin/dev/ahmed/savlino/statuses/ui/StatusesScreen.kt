@@ -482,7 +482,8 @@ private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean,
 @Composable
 private fun CornerSave(saving: Boolean, onSave: () -> Unit, modifier: Modifier) {
     val label = stringResource(if (saving) R.string.statuses_saving else R.string.statuses_save)
-    Box(modifier.size(48.dp).clickable(enabled = !saving, role = Role.Button, onClick = onSave)
+    // The ripple stays round like the button it surrounds.
+    Box(modifier.size(48.dp).clip(CircleShape).clickable(enabled = !saving, role = Role.Button, onClick = onSave)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
         Surface(Modifier.size(36.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer, shadowElevation = 2.dp) {
