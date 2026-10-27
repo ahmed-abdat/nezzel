@@ -256,6 +256,8 @@
     <string name="image_private_title">This post isn’t public</string>
     <string name="facebook_story_title">Facebook stories can’t be saved</string>
     <string name="facebook_story_body">Stories need a Facebook login. Nezzel saves public posts, reels and videos</string>
+    <string name="telegram_app_only_title">This video opens only in Telegram</string>
+    <string name="telegram_app_only_body">Telegram doesn’t share large videos on the web. Save it from the Telegram app</string>
     <string name="image_changed">The image changed — check the link again</string>
     <string name="image_save_failed">Couldn’t save the image</string>
     <string name="image_preview_quality">Preview quality: the post offers only a smaller copy</string>

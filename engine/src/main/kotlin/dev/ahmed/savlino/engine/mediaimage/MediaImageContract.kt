@@ -13,6 +13,8 @@ enum class ImageFailure {
     FACEBOOK_STORY,
     /** A signed photo expired or was removed; reopening the post may refresh its capability. */
     EXPIRED,
+    /** The site keeps this media in its app; its public page offers no file (Telegram's "Media is too big"). */
+    APP_ONLY,
     /**
      * Nezzel refused the source itself: the page or redirect did not prove the same public post, or the
      * transport rejected the URL/address/encoding. Not an image-type verdict (that stays [UNSUPPORTED]).

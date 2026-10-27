@@ -32,7 +32,11 @@ class TelegramPostParser {
             }
         } }
         val photos = message.select("a.tgme_widget_message_photo_wrap").filter(::own)
-        if (photos.isEmpty()) return if (video) TelegramParseResult.Video else TelegramParseResult.Failure(ImageFailure.NO_MEDIA)
+        // A video Telegram won't play on the web ("Media is too big"): its player is marked not_supported, with no file.
+        val appOnly = message.select("a.tgme_widget_message_video_player.not_supported").any(::own) &&
+            message.select("video[src]").none(::own)
+        if (photos.isEmpty()) return if (appOnly) TelegramParseResult.Failure(ImageFailure.APP_ONLY)
+            else if (video) TelegramParseResult.Video else TelegramParseResult.Failure(ImageFailure.NO_MEDIA)
         val urls = photos.take(20).mapNotNull { photo ->
             val raw = background.find(photo.attr("style"))?.groupValues?.get(2) ?: return@mapNotNull null
             MediaHttpPolicy.parse(raw)?.takeIf(MediaHttpPolicy::isTelegramImage)?.toString()

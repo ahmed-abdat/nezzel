@@ -80,6 +80,10 @@ class PostPhotoInspectionTest : PublicImageTestBase() {
         failed(f.inspect("telegram"), ImageFailure.PRIVATE, ImagePhase.PAGE)
         assertEquals(1, f.server.requests.size)
     }
+    @Test fun telegramTooBigVideoIsAppOnlyAfterOnePageRead() = fixturePost("telegram", "too-big") { f ->
+        failed(f.inspect("telegram"), ImageFailure.APP_ONLY, ImagePhase.PAGE)
+        assertEquals(1, f.server.requests.size)
+    }
     @Test fun singlePhotoIsValidatedAndHandleResolutionIsSkippedForDid() {
         for (site in listOf("telegram", "bluesky")) for (directDid in listOf(false, true)) {
             fixturePost(site, "single") { f -> inspected(f.inspect(site, directDid)).use { result ->

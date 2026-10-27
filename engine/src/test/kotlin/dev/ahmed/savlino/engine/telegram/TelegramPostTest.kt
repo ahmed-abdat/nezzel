@@ -48,6 +48,22 @@ class TelegramPostTest {
         assertEquals(ImageFailure.NO_MEDIA, assertIs<TelegramParseResult.Failure>(parse("no-media")).reason)
         assertEquals(ImageFailure.PRIVATE, assertIs<TelegramParseResult.Failure>(parse("private")).reason)
     }
+    @Test fun tooBigVideoIsAppOnlyButPlayableOrNestedPlayersAreNot() {
+        assertEquals(ImageFailure.APP_ONLY, assertIs<TelegramParseResult.Failure>(parse("too-big")).reason)
+        val html = bytes("too-big").toString(Charsets.UTF_8)
+        // A player with its own file still hands back to yt-dlp.
+        val playable = html.replace("<div class=\"tgme_widget_message_video_wrap\"></div>",
+            "<div class=\"tgme_widget_message_video_wrap\"><video class=\"tgme_widget_message_video\" src=\"https://cdn1.telesco.pe/file/syntheticVideo.mp4\"></video></div>")
+        assertIs<TelegramParseResult.Video>(TelegramPostParser().parse(playable.toByteArray(), identity))
+        // A too-big video in a reply is not this post's media.
+        val inReply = html.replace("<a class=\"tgme_widget_message_video_player", "<div class='tgme_widget_message_reply'><a class=\"tgme_widget_message_video_player")
+            .replace("</a></div></body>", "</a></div></div></body>")
+        assertEquals(ImageFailure.NO_MEDIA, assertIs<TelegramParseResult.Failure>(TelegramPostParser().parse(inReply.toByteArray(), identity)).reason)
+        // Photos beside it still show; the video counts as present.
+        val withPhoto = bytes("single").toString(Charsets.UTF_8).replace("Synthetic caption</div>",
+            "Synthetic caption</div><a class=\"tgme_widget_message_video_player not_supported\"></a>")
+        assertTrue(assertIs<TelegramParseResult.Success>(TelegramPostParser().parse(withPhoto.toByteArray(), identity)).discovery.hasVideo)
+    }
     @Test fun repliedAndOtherPostsNeverBecomeAttachments() {
         val html = bytes("single").toString(Charsets.UTF_8)
         val photo = "<a class='tgme_widget_message_photo_wrap' style=\"background-image:url('https://cdn1.telesco.pe/file/syntheticDecoy')\"></a>"

@@ -172,7 +172,7 @@ class ImageInspectionFlowTest {
                 assertEquals(before + 1, legacyInspections)
                 bad.dismissOptions()
             }
-            for (reason in listOf(ImageFailure.PRIVATE)) {
+            for (reason in listOf(ImageFailure.PRIVATE, ImageFailure.APP_ONLY)) {
                 val error = model(FakeImages { MediaInspectResult.Failure(reason, ImagePhase.PAGE) })
                 check(error, url)
                 assertEquals(OptionsState.ImageError(reason, phase = ImagePhase.PAGE), error.optionsState)

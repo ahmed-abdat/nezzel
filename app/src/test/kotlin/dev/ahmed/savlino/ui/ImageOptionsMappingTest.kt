@@ -10,6 +10,10 @@ class ImageOptionsMappingTest {
         assertEquals(Triple(R.string.facebook_story_title, R.string.facebook_story_body, false),
             imageErrorCopy(OptionsState.ImageError(ImageFailure.FACEBOOK_STORY, phase = ImagePhase.PAGE)))
     }
+    @Test fun appOnlyVideoHasItsOwnCopyWithoutRetry() {
+        assertEquals(Triple(R.string.telegram_app_only_title, R.string.telegram_app_only_body, false),
+            imageErrorCopy(OptionsState.ImageError(ImageFailure.APP_ONLY, phase = ImagePhase.PAGE)))
+    }
     @Test fun pageBudgetUsesReadFailureCopy() {
         for (reason in listOf(ImageFailure.BUDGET)) {
             assertEquals(Triple(R.string.read_failed_title, R.string.read_failed_body, true),

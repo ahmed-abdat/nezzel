@@ -262,6 +262,8 @@
     <string name="image_private_title">Cette publication n’est pas publique</string>
     <string name="facebook_story_title">Impossible d’enregistrer les stories Facebook</string>
     <string name="facebook_story_body">Les stories nécessitent une connexion à Facebook. Nezzel enregistre les publications, reels et vidéos publics</string>
+    <string name="telegram_app_only_title">Cette vidéo s’ouvre uniquement dans Telegram</string>
+    <string name="telegram_app_only_body">Telegram ne partage pas les grandes vidéos sur le web. Enregistrez-la depuis l’app Telegram</string>
     <string name="image_changed">L’image a changé — vérifiez à nouveau le lien</string>
     <string name="image_save_failed">Impossible d’enregistrer l’image</string>
     <string name="image_preview_quality">Qualité d’aperçu\u00A0: la publication ne propose qu’une version réduite</string>
