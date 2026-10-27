@@ -93,7 +93,9 @@ class ViewerControlsTest {
         node(R.string.viewer_close).assertDoesNotExist()
         node(R.string.viewer_seek_back_10).assertDoesNotExist()
     }
-    private fun tapCanvas() { page(2).performTouchInput { click(center) }; advance(400) }
+    /** Above the centre buttons, below the top bar: plain canvas. */
+    private fun TouchInjectionScope.canvas(x: Float = centerX) = Offset(x, height * .3f)
+    private fun tapCanvas() { page(2).performTouchInput { click(canvas()) }; advance(400) }
     private fun canvasActions() = page(2).onChild().fetchSemanticsNode().config[SemanticsActions.CustomActions]
 
     // A1
@@ -101,11 +103,39 @@ class ViewerControlsTest {
         show()
         assertTrue(player.isPlaying)
         advance(2_000)
-        node(R.string.viewer_mute).performClick()
+        node(R.string.viewer_seek_back_10).performClick()
         advance(2_000)
         assertTrue("A touch restarts the wait", shown())
         advance(1_500)
         hiddenEverywhere()
+    }
+
+    @Test fun volumePanelMutesSetsPhoneVolumeAndHoldsTheControls() {
+        show()
+        val audio = activity.getSystemService(android.media.AudioManager::class.java)
+        node(R.string.viewer_volume).performClick()
+        advance(6_000)
+        assertTrue("Volume panel open keeps controls", shown())
+        node(R.string.viewer_mute).performClick()
+        compose.waitForIdle()
+        assertEquals(0f, player.volume)
+        node(R.string.viewer_unmute).assertExists()
+        compose.onNode(hasContentDescription(text(R.string.viewer_volume)) and SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress))
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(5f) }
+        compose.waitForIdle()
+        assertEquals(5, audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC))
+        assertEquals("Raising the volume turns sound back on", 1f, player.volume)
+    }
+
+    @Test fun bigCentreControlsOnVideoPauseAndSkip() {
+        show()
+        compose.runOnIdle { player.seekTo(30_000) }
+        node(R.string.viewer_pause).performClick()
+        compose.waitForIdle()
+        assertFalse(player.playWhenReady)
+        node(R.string.viewer_seek_forward_10).performClick()
+        compose.waitForIdle()
+        assertEquals(40_000, player.currentPosition)
     }
 
     @Test fun canvasTapTogglesChromeAndNeverPauses() {
@@ -167,7 +197,7 @@ class ViewerControlsTest {
 
     // A2
     private fun doubleTapPhysical(forward: Boolean) {
-        page(2).performTouchInput { doubleClick(Offset(if (forward) width * .8f else width * .2f, centerY)) }
+        page(2).performTouchInput { doubleClick(canvas(if (forward) width * .8f else width * .2f)) }
         advance(400)
     }
 
@@ -216,7 +246,7 @@ class ViewerControlsTest {
         show()
         tapCanvas()
         hiddenEverywhere()
-        page(2).performTouchInput { down(center); moveBy(Offset(60f * density, 0f)); moveBy(Offset(20f * density, 0f)); up() }
+        page(2).performTouchInput { down(canvas()); moveBy(Offset(60f * density, 0f)); moveBy(Offset(20f * density, 0f)); up() }
         advance(1_000)
         page(2).assertExists()
         hiddenEverywhere()

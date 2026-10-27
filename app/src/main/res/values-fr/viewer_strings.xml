@@ -11,4 +11,6 @@
     <string name="viewer_speed_failed">Impossible de changer la vitesse</string>
     <string name="viewer_fullscreen">Plein écran</string>
     <string name="viewer_exit_fullscreen">Quitter le plein écran</string>
+    <string name="viewer_volume">Volume</string>
+    <string name="viewer_volume_muted">Son coupé</string>
 </resources>

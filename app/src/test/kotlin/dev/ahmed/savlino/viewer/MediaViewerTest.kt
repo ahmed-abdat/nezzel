@@ -110,6 +110,7 @@ class MediaViewerTest {
     @Test fun videoPageHasPlayerControls() {
         show(4)
         page(R.string.viewer_video_n, 5).assertIsDisplayed()
+        compose.onNodeWithContentDescription(activity.getString(R.string.viewer_volume)).assertHasClickAction().performClick()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_mute)).assertHasClickAction().performClick()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_unmute)).assertExists()
         compose.onNodeWithContentDescription(activity.getString(R.string.viewer_pause)).performClick()

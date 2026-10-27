@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
@@ -33,6 +34,7 @@ internal class ViewerControls(shown: Boolean = true, speed: Float = 1f, speedFor
     /** Bumped by every interaction, so the auto-hide wait starts over. */
     var touches by mutableIntStateOf(0); private set
     var menuOpen by mutableStateOf(false)
+    var volumeOpen by mutableStateOf(false)
     var scrubbing by mutableStateOf(false)
     private var focused by mutableStateOf(emptySet<String>())
     var speed by mutableFloatStateOf(speed); private set
@@ -41,12 +43,12 @@ internal class ViewerControls(shown: Boolean = true, speed: Float = 1f, speedFor
     var orientationBefore = orientationBefore; private set
 
     fun show() { shown = true; touches++ }
-    fun hide() { shown = false; menuOpen = false }
+    fun hide() { shown = false; menuOpen = false; volumeOpen = false }
     fun toggle() = if (shown) hide() else show()
     fun touched() { touches++ }
     fun focus(part: String, has: Boolean) { focused = if (has) focused + part else focused - part }
     /** The timer waits while a person is scrubbing, choosing in a menu or moving focus through the controls. */
-    val frozen get() = scrubbing || menuOpen || focused.isNotEmpty()
+    val frozen get() = scrubbing || menuOpen || volumeOpen || focused.isNotEmpty()
 
     /** Speed belongs to one file: any other file starts at 1×. */
     fun speedOf(uri: String): Float = if (speedFor == uri) speed else 1f
@@ -105,6 +107,15 @@ internal object ViewerFullscreen {
         controls.exitFullscreen()
         activity?.requestedOrientation = controls.orientationBefore
     }
+}
+
+/** The phone's media volume, the same one the volume keys move. Fixed-volume devices show no slider. */
+internal class DeviceVolume(context: Context) {
+    private val audio = context.getSystemService(AudioManager::class.java)
+    val max get() = audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 0
+    val level get() = audio?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+    val adjustable get() = audio != null && !audio.isVolumeFixed && max > 0
+    fun set(value: Int) = try { audio?.setStreamVolume(AudioManager.STREAM_MUSIC, value.coerceIn(0, max), 0); true } catch (_: SecurityException) { false }
 }
 
 internal fun Context.findActivity(): Activity? = when (this) { is Activity -> this; is ContextWrapper -> baseContext.findActivity(); else -> null }
