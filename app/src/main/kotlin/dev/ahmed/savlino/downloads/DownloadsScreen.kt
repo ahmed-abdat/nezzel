@@ -992,7 +992,8 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             }
         }
     }
-    viewing?.let { LibraryViewer(groupDownloads(media), media, it, language, { viewing = null }, onShare, onOpenWith) }
+    val grouped = remember(media) { groupDownloads(media) }
+    viewing?.let { LibraryViewer(grouped, media, it, language, { viewing = null }, onShare, onOpenWith) }
 }
 
 /** A saved file's recents card: 196dp wide, 16:10 picture, title and meta. [HomeJobCard] keeps the same box. */

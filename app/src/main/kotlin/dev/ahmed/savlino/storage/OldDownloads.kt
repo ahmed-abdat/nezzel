@@ -81,13 +81,17 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
      * from "transient". Only the system dropping the permission ends it, see [active].
      */
     @androidx.annotation.WorkerThread
-    internal fun list(cancellation: CancellationSignal? = null): List<FoundFile> {
+    internal fun list(cancellation: CancellationSignal? = null): List<FoundFile> = listOrNull(cancellation).orEmpty()
+
+    /** As [list], but null when a query failed, so a caller can keep its last listing; no grant is a real empty list. */
+    @androidx.annotation.WorkerThread
+    internal fun listOrNull(cancellation: CancellationSignal? = null): List<FoundFile>? {
         val tree = active() ?: return emptyList()
         val root = DocumentsContract.getTreeDocumentId(tree)
         val top = try { children(tree, root, cancellation) }
             catch (cancelled: OperationCanceledException) { throw cancelled }
-            catch (_: Exception) { return emptyList() }
-            ?: return emptyList()
+            catch (_: Exception) { return null }
+            ?: return null
         val statuses = top.firstOrNull { it.dir && it.name.equals(STATUSES, ignoreCase = true) }
         val nested = statuses?.let {
             try { children(tree, it.id, cancellation) }

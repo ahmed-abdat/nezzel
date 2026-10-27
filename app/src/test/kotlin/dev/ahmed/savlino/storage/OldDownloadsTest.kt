@@ -219,6 +219,74 @@ class OldDownloadsTest {
         assertEquals(1, provider.childQueries.size)
     }
 
+    @Test fun aRescanKeepsOldDownloadsListedUntilTheNewListingReplacesThem() {
+        val provider = provider()
+        provider.add("Song.m4a", "audio/mp4", 10)
+        val repository = SavedMediaRepository(resolver, context.packageName, SaveDestinations(context), OldDownloads(context).apply { onPicked(tree) })
+        val emissions = java.util.concurrent.LinkedBlockingQueue<List<SavedMedia>>()
+        val job = kotlinx.coroutines.GlobalScope.async(Dispatchers.IO) {
+            repository.observe(Dispatchers.IO).collect { emissions.put(it.getOrThrow()) }
+        }
+        fun turnUntil(check: () -> Boolean) {
+            val deadline = System.currentTimeMillis() + 10_000
+            while (!check() && System.currentTimeMillis() < deadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                Thread.sleep(20)
+            }
+            assertTrue(check())
+        }
+        fun rescan() = resolver.notifyChange(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
+        val seen = mutableListOf<List<SavedMedia>>()
+        fun drain() { while (true) seen += emissions.poll() ?: break }
+        try {
+            turnUntil { drain(); seen.lastOrNull()?.size == 1 }
+            seen.clear()
+            rescan()
+            turnUntil { provider.childQueries.size == 2 }
+            provider.add("Two.m4a", "audio/mp4", 10)
+            rescan()
+            turnUntil { drain(); seen.lastOrNull()?.size == 2 }
+            // The unchanged rescan emitted nothing, and no snapshot ever dropped the found song.
+            assertEquals(listOf(2), seen.map { it.size })
+        } finally { runBlocking { job.cancel(); job.join() } }
+    }
+
+    @Test fun aFailedListingKeepsTheOldDownloadsAndALostGrantClearsThem() {
+        val provider = provider()
+        provider.add("Song.m4a", "audio/mp4", 10)
+        val old = OldDownloads(context).apply { onPicked(tree) }
+        val repository = SavedMediaRepository(resolver, context.packageName, SaveDestinations(context), old)
+        val emissions = java.util.concurrent.LinkedBlockingQueue<List<SavedMedia>>()
+        val job = kotlinx.coroutines.GlobalScope.async(Dispatchers.IO) {
+            repository.observe(Dispatchers.IO).collect { emissions.put(it.getOrThrow()) }
+        }
+        fun turnUntil(check: () -> Boolean) {
+            val deadline = System.currentTimeMillis() + 10_000
+            while (!check() && System.currentTimeMillis() < deadline) {
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+                Thread.sleep(20)
+            }
+            assertTrue(check())
+        }
+        fun rescan() = resolver.notifyChange(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
+        val seen = mutableListOf<List<SavedMedia>>()
+        fun drain() { while (true) seen += emissions.poll() ?: break }
+        try {
+            turnUntil { drain(); seen.lastOrNull()?.size == 1 }
+            seen.clear()
+            provider.gone = true
+            val before = provider.childAttempts
+            rescan()
+            turnUntil { provider.childAttempts > before }
+            Thread.sleep(200)
+            drain()
+            assertTrue("A failed listing must not drop the found song", seen.none { it.isEmpty() })
+            old.forget()
+            rescan()
+            turnUntil { drain(); seen.lastOrNull()?.isEmpty() == true }
+        } finally { runBlocking { job.cancel(); job.join() } }
+    }
+
     @Test fun forgettingTheSaveFolderWhenItIsDownloadNezzelKeepsTheOldDownloadsGrant() {
         provider()
         val destinations = SaveDestinations(context)
@@ -257,6 +325,7 @@ class OldDownloadsTest {
         private val docs = linkedMapOf<String, Doc>()
         val files = mutableMapOf<String, File>()
         val childQueries = mutableListOf<String>()
+        @Volatile var childAttempts = 0
         var opens = 0
         var gone = false
         fun add(path: String, mime: String, size: Long? = null): String {
@@ -285,6 +354,7 @@ class OldDownloadsTest {
             return MatrixCursor(projection ?: arrayOf("document_id", "_display_name", "mime_type", "_size", "last_modified", "flags")).also { row(it, documentId) }
         }
         override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): android.database.Cursor {
+            childAttempts++
             if (gone) throw java.io.FileNotFoundException()
             childQueries += parentDocumentId
             val cursor = MatrixCursor(projection ?: arrayOf("document_id", "_display_name", "mime_type", "_size", "last_modified"))
