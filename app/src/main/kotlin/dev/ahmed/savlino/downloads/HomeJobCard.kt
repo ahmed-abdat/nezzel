@@ -2,10 +2,7 @@ package dev.ahmed.savlino.downloads
 
 import android.net.Uri
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -41,7 +38,7 @@ import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
 import dev.ahmed.savlino.jobs.DownloadNotifications
 import dev.ahmed.savlino.locale.NezzelFormat
-import dev.ahmed.savlino.ui.nav.LocalTabActive
+import dev.ahmed.savlino.ui.nav.rememberTabLoop
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -150,10 +147,9 @@ private fun JobDial(job: DownloadProgress, failed: Boolean, fraction: Float?, pe
         val shown = animateFloatAsState(filled ?: 0f, if ((filled ?: 0f) >= .99f) snap() else motionSpec(reduced,
             tween(Motion.PROGRESS, easing = LinearEasing)), label = "home ring")
         // Working without a fraction spins a quarter arc; waiting, paused, reduced motion and a hidden tab never ask for frames.
-        val spins = filled == null && !job.waiting && !paused && !reduced && LocalTabActive.current.value
-        val turn = if (spins) rememberInfiniteTransition(label = "home spin")
-            .animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "home turn") else null
-        Canvas(Modifier.matchParentSize().padding(Space.xs).graphicsLayer { rotationZ = turn?.value ?: 0f }) {
+        val spins = filled == null && !job.waiting && !paused && !reduced
+        val turn = rememberTabLoop(0f, 360f, tween(1000, easing = LinearEasing), enabled = spins)
+        Canvas(Modifier.matchParentSize().padding(Space.xs).graphicsLayer { rotationZ = turn.value }) {
             val stroke = Stroke(4.dp.toPx(), cap = StrokeCap.Round)
             drawCircle(track, style = Stroke(4.dp.toPx()))
             val sweep = when {

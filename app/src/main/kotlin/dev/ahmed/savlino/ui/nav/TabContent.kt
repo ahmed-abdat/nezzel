@@ -4,6 +4,9 @@ import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.DurationBasedAnimationSpec
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -42,6 +45,26 @@ fun ScrollOnTabReselect(scrollToTop: suspend () -> Unit) {
     val events = LocalTabReselections.current
     val action by rememberUpdatedState(scrollToTop)
     LaunchedEffect(events) { events.collectLatest { action() } }
+}
+
+/**
+ * An endless animation from [from] to [to] that runs only while [enabled] and the tab is shown and settled; [rest]
+ * otherwise, so a kept-but-hidden tab asks for no frames. Read it while drawing: the tab settling or hiding never
+ * recomposes the caller.
+ */
+@Composable
+fun rememberTabLoop(from: Float, to: Float, spec: DurationBasedAnimationSpec<Float>, repeatMode: RepeatMode = RepeatMode.Restart,
+                    rest: Float = from, enabled: Boolean = true): State<Float> {
+    val active = LocalTabActive.current
+    val value = remember { Animatable(rest) }
+    val run = rememberUpdatedState(enabled)
+    LaunchedEffect(active, from, to, spec, repeatMode, rest) {
+        snapshotFlow { active.value && run.value }.collectLatest { running ->
+            if (!running) value.snapTo(rest)
+            else { value.snapTo(from); value.animateTo(to, infiniteRepeatable(spec, repeatMode)) }
+        }
+    }
+    return value.asState()
 }
 
 /** Holds the current image when inactive, cancels pending IO, and starts automatic work only after the tab settles. */
