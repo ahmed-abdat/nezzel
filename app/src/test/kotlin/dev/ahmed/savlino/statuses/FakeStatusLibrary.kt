@@ -24,7 +24,14 @@ class FakeStatusLibrary(var access: StatusAccess = StatusAccess.NeedsGrant(listO
         if (grant == StatusGrantResult.Granted) afterGrant?.let { access = it }
         return grant
     }
-    override suspend fun load(): StatusAccess { loads++; return access }
+    /** When set, the next load reads what is there now, then waits for it before answering (one load only). */
+    var loadGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    override suspend fun load(): StatusAccess {
+        loads++
+        val now = access
+        loadGate?.let { gate -> loadGate = null; gate.await() }
+        return now
+    }
     /** Runs before one item's copy (a test can hold just that one). */
     var gate: suspend (StatusItem) -> Unit = {}
     /** False: saved files come back unmarked, like a status with unknown size or time. */
