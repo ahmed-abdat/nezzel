@@ -5,11 +5,11 @@ import org.junit.Test
 import kotlin.test.*
 
 class TikTokBudgetTest {
-    @Test fun previewsShareFourMiBAndBoundResizeFallbacksWithoutChangingOtherProviders() {
+    @Test fun previewsShareSixteenMiBAndBoundResizeFallbacksWithoutChangingOtherProviders() {
         val budget = OperationBudget(MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL)
         repeat(8) {
             val cap = budget.reserveImage(true) { true }
-            assertEquals(512 * 1024, cap)
+            assertEquals(2 * 1024 * 1024, cap)
             budget.consumed(cap, image = true)
             budget.releaseImage(cap)
         }

@@ -425,9 +425,11 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val metadata = MediaMetadata(title = parsed.title)
         val assets = ArrayList<Fetched.Asset>()
         var notPreviewed = 0
+        // One refused resize means the post's URLs are signed; the other photos go straight to their originals.
+        var resizeRefused = false
         for (photo in parsed.photos) {
             val original = photo.urls.first()
-            val preview = TikTokPostInspector.previewUrl(original)
+            val preview = if (resizeRefused) original else TikTokPostInspector.previewUrl(original)
             fun placeholder() = Fetched.Asset(null, MediaImageMetadata(photo.format),
                 original, 1, discovery, validity, null, false, MediaHostRule.TIKTOK_CDN, metadata,
                 photo.position, previewOnly = true, videoSource = soundSource, mirrors = photo.urls.drop(1))
@@ -444,8 +446,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             }
             var fetched = fetch(preview)
             // A signature may reject resizing. Failed HTTP replies have no image body; use the original once.
-            if (preview != original && fetched is Fetched.Failed && fetched.result.reason == ImageFailure.HTTP)
+            if (preview != original && fetched is Fetched.Failed && fetched.result.reason == ImageFailure.HTTP) {
+                resizeRefused = true
                 fetched = fetch(original)
+            }
             if (fetched is Fetched.Asset) assets += fetched
             else { assets += placeholder(); notPreviewed++ }
         }

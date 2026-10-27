@@ -152,13 +152,13 @@ class TikTokInspectionTest : PublicImageTestBase() {
     }
 
     @Test fun refusedResizeFallsBackToOriginalAndAnExhaustedBudgetKeepsEveryPhotoSelectable() {
-        // Hand-made repeated attachment data, not a real post. Each original is about 256 KiB.
+        // Hand-made repeated attachment data, not a real post. Each original is about 640 KiB.
         val item = """{"imageURL":{"urlList":["https://p16-sign.example.tiktokcdn.com/synthetic%s~tplv-photomode-image.jpeg?sig=fake"]}}"""
         val images = (1..41).joinToString(",") { item.format(it) }
         val json = """{"__DEFAULT_SCOPE__":{"webapp.video-detail":{"itemInfo":{"itemStruct":{"id":"900000001","imagePost":{"images":[$images]}}}}}}"""
         val jpeg = raster(40, 30, "jpg")
         val comment = byteArrayOf(0xff.toByte(), 0xfe.toByte(), 0xff.toByte(), 0xff.toByte()) + ByteArray(65533)
-        val large = jpeg.copyOfRange(0, 2) + comment + comment + comment + comment + jpeg.copyOfRange(2, jpeg.size)
+        val large = jpeg.copyOfRange(0, 2) + (1..10).fold(ByteArray(0)) { acc, _ -> acc + comment } + jpeg.copyOfRange(2, jpeg.size)
         fixture(respond = { request, socket -> when {
             request.headers["host"] == "www.tiktok.com" -> socket.reply(body = tikTokPage(json), headers = mapOf("Content-Type" to "text/html"))
             request.target.contains("zoomcover") -> socket.reply(403)
@@ -169,7 +169,7 @@ class TikTokInspectionTest : PublicImageTestBase() {
             assertTrue(result.discovery.notPreviewedCount > 0)
             assertTrue(result.inspection.items.all { it.renditions.size == 1 })
             assertTrue(result.previews.size < 40)
-            assertTrue(f.server.requests.any { it.target.contains("zoomcover") })
+            assertEquals(1, f.server.requests.count { it.target.contains("zoomcover") })
             assertTrue(f.server.requests.any { it.target.contains("photomode-image") })
             val ref = assertIs<MediaRendition.Image>(result.inspection.items.last().renditions.single()).ref
             assertNotNull(result.inspection.selection(ref))

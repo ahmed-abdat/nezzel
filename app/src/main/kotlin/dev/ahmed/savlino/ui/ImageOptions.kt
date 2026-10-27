@@ -16,6 +16,7 @@ import androidx.compose.ui.res.pluralStringResource
 import dev.ahmed.savlino.domain.MediaRenditionRef
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.engine.mediaimage.ImagePhase
@@ -130,18 +131,24 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
 /** A TikTok post's sound as one more tickable item, like a photo tile; Save downloads it with the photos. */
 @Composable
 private fun SoundTile(sound: TikTokSound, checked: Boolean, enabled: Boolean, onToggle: () -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).toggleable(checked, enabled = enabled, role = Role.Checkbox,
-            onValueChange = { onToggle() }).padding(start = Space.m, top = Space.s, bottom = Space.s, end = Space.xs),
-            horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(R.drawable.ic_music), contentDescription = null)
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.tiktok_sound), style = MaterialTheme.typography.titleSmall)
-                sound.title?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodyMedium) }
-                sound.author?.let { Text(NezzelFormat.firstStrong(it), style = MaterialTheme.typography.bodySmall) }
-            }
-            Checkbox(checked, onCheckedChange = null, enabled = enabled, modifier = Modifier.clearAndSetSemantics {})
+    // Same filled surface and shape as the photo tiles below it; one supporting line keeps the row short.
+    val details = listOfNotNull(sound.title, sound.author).filter { it.isNotBlank() }.map(NezzelFormat::firstStrong)
+    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(MaterialTheme.shapes.medium)
+        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        .toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onToggle() })
+        .padding(horizontal = Space.m, vertical = Space.s),
+        horizontalArrangement = Arrangement.spacedBy(Space.inline), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center) {
+            Icon(painterResource(R.drawable.ic_music), contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
         }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
+            Text(stringResource(R.string.tiktok_sound), style = MaterialTheme.typography.titleSmall)
+            if (details.isNotEmpty()) Text(details.joinToString(stringResource(R.string.separator)),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Checkbox(checked, onCheckedChange = null, enabled = enabled, modifier = Modifier.clearAndSetSemantics {})
     }
 }
 

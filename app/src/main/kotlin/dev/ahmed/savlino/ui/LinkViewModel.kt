@@ -780,7 +780,9 @@ class LinkViewModel(
                 }
                 is MediaInspectResult.Failure -> {
                     operationId = null; imageOperation = false
-                    if (legacyFallback != null && route == MediaSourceRoute.TIKTOK) showReady(legacyFallback, origin)
+                    // yt-dlp found only this photo post's sound; a failed photo read shows its error (with Retry), not the sound alone.
+                    if (legacyFallback != null && route == MediaSourceRoute.TIKTOK)
+                        optionsState = OptionsState.ImageError(result.reason, result.statusCode, phase = result.phase)
                     else if (selectedPositions != null && route == MediaSourceRoute.TIKTOK)
                         optionsState = OptionsState.ImageError(
                             if (result.reason == ImageFailure.NO_MEDIA ||
@@ -793,7 +795,9 @@ class LinkViewModel(
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
                         startLegacyInspection(landing ?: legacyReaderSource(source, route), origin,
                             noMedia = route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.NO_MEDIA,
-                            tikTokPhotos = route != MediaSourceRoute.TIKTOK)
+                            tikTokPhotos = route != MediaSourceRoute.TIKTOK,
+                            photoFailure = if (route == MediaSourceRoute.TIKTOK) OptionsState.ImageError(result.reason,
+                                result.statusCode, phase = result.phase) else null)
                     } else optionsState = OptionsState.ImageError(result.reason, result.statusCode,
                         directImage = route == MediaSourceRoute.DIRECT_IMAGE, phase = result.phase)
                 }
@@ -861,7 +865,7 @@ class LinkViewModel(
         FacebookPostIdentity.parse(source.link.rawUrl)?.kind == FacebookLinkKind.SHARE
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
     private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false,
-        tikTokPhotos: Boolean = true) {
+        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null) {
         // A carousel's explicit View video options starts a new inspection without startInspection().
         val timing = inspectionTiming ?: InspectionTiming().also {
             it.record(InspectionPhase.INTAKE_ACCEPTED)
@@ -888,7 +892,7 @@ class LinkViewModel(
                 }
             }
         }
-        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia, tikTokPhotos) }
+        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia, tikTokPhotos, photoFailure) }
     }
     /** One yt-dlp read under maintenance admission; generations are captured there and applied only by [showLegacy]. */
     private class LegacyRead(val result: InspectResult, val readGeneration: Long? = null,
@@ -946,7 +950,7 @@ class LinkViewModel(
         }
     }
     private fun showLegacy(read: LegacyRead, id: String, source: LinkRevision, origin: LinkRevision?, noMedia: Boolean,
-        tikTokPhotos: Boolean = true) {
+        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null) {
         read.version?.let { (version, generation) ->
             inspectedEngineVersion = version
             inspectedMaintenanceGeneration = generation
@@ -976,6 +980,9 @@ class LinkViewModel(
                     displayFormats(returned).isEmpty() -> optionsState = OptionsState.Error(DownloadError.NoFormats)
                     tikTokPhotos && images != null && isTikTokPhotoAudio(returned) ->
                         startImageInspection(images, source, MediaSourceRoute.TIKTOK, origin ?: source, returned)
+                    // A TikTok page read failed and yt-dlp found only a photo post's sound: show the photo failure
+                    // (with Retry), never the sound alone, whatever the link's /video/ or /photo/ shape.
+                    photoFailure != null && isTikTokPhotoAudio(returned) -> optionsState = photoFailure
                     else -> showReady(returned, origin)
                 }
             }

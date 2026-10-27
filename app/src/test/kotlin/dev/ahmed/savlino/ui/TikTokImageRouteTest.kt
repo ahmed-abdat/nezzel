@@ -101,13 +101,16 @@ class TikTokImageRouteTest {
         runBlocking { withTimeout(10_000) { saver.awaitIdle() } }; idle()
         assertEquals(listOf("Post.jpg"), publisher.names)
     }
-    @Test fun audioOnlyVideoTriesPhotosOnceAndReaderFailureRestoresTheOriginalAudioChoices() {
-        val images = FakeImages { MediaInspectResult.Failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE) }
-        val vm = model(images)
-        check(vm, video)
-        assertEquals(listOf(video), reads)
-        assertEquals(listOf(MediaSourceRoute.TIKTOK), images.routes)
-        assertEquals(audio, assertIs<OptionsState.Ready>(vm.optionsState).inspection.formats)
+    @Test fun audioOnlyVideoTriesPhotosOnceAndReaderFailureShowsItsErrorNotTheSoundAlone() {
+        for (reason in listOf(ImageFailure.SOURCE_REFUSED, ImageFailure.NETWORK)) {
+            reads.clear()
+            val images = FakeImages { MediaInspectResult.Failure(reason, ImagePhase.PAGE) }
+            val vm = model(images)
+            check(vm, video)
+            assertEquals(listOf(video), reads)
+            assertEquals(listOf(MediaSourceRoute.TIKTOK), images.routes)
+            assertEquals(reason, assertIs<OptionsState.ImageError>(vm.optionsState).failure)
+        }
     }
     @Test fun audioOnlyVideoShowsPhotosAndItsSoundSwitchDoesNotReenterTheReader() {
         val images = FakeImages(::success)

@@ -15,8 +15,9 @@ class OperationId internal constructor(internal val owner: Any) {
 }
 
 class OperationBudget internal constructor(private val operation: MediaHttpOperation) {
-    private val imageBudget = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 4 * 1024 * 1024 else 2 * 1024 * 1024
-    private val thumbnailLimit = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 512 * 1024 else 192 * 1024
+    // TikTok signs its photo URLs, so a resized preview is refused and previews are the originals (about 0.2–1 MiB each).
+    private val imageBudget = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 16 * 1024 * 1024 else 2 * 1024 * 1024
+    private val thumbnailLimit = if (operation == MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL) 2 * 1024 * 1024 else 192 * 1024
     private var requests = 0
     private var redirects = 0
     private var bytes = 0L
@@ -47,7 +48,7 @@ class OperationBudget internal constructor(private val operation: MediaHttpOpera
         bytes += count
         if (image) imageBytes += count
     }
-    /** Image inspection bytes shared across bodies, including failed reads: TikTok 4 MiB, others 2 MiB. */
+    /** Image inspection bytes shared across bodies, including failed reads: TikTok 16 MiB, others 2 MiB. */
     @Synchronized internal fun imageLimit(thumbnail: Boolean = false): Int {
         val remaining = if (operation.isCarousel)
             (imageBudget - imageBytes).coerceAtLeast(0).toInt() else 2 * 1024 * 1024
