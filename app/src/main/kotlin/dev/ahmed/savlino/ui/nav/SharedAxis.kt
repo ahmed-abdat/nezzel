@@ -30,6 +30,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -157,7 +162,10 @@ internal fun <T> SharedAxis<T>.SharedAxisContent(
 }
 
 private const val LIFTED = .9f
+/** How dark the page below starts under a lifting page: dark pages need more, or the card has no edge against them. */
 private const val DIM = .12f
+private const val DIM_DARK = .32f
+private const val EDGE_ALPHA = .6f
 
 private val Joined.pivot get() = when (this) {
     Joined.Nowhere -> TransformOrigin.Center
@@ -165,7 +173,10 @@ private val Joined.pivot get() = when (this) {
     Joined.Top -> TransformOrigin(.5f, 0f)
 }
 
-/** Under a back gesture: the leaving page is an opaque card whose corners round as it lifts; the page below is dimmed. */
+/**
+ * Under a back gesture: the leaving page is an opaque card whose corners round as it lifts; the page below is dimmed.
+ * In dark themes a hairline traces the card, which otherwise matches the near-black page below.
+ */
 @Composable
 private fun <T> SharedAxis<T>.lifted(scope: AnimatedContentScope, joined: Joined): Modifier {
     // -1 below, 0 resting, 1 lifted: read only while drawing, so a moving finger never recomposes the page.
@@ -173,18 +184,35 @@ private fun <T> SharedAxis<T>.lifted(scope: AnimatedContentScope, joined: Joined
         if (dragging.value) tween((Motion.AXIS * HELD).toInt(), easing = LinearEasing) else snap()
     }, "lift") { when (it) { EnterExitState.PreEnter -> -1f; EnterExitState.Visible -> 0f; EnterExitState.PostExit -> 1f } }
     if (!dragging.value) return Modifier
+    val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < .5f
     if (scope.transition.targetState != EnterExitState.PostExit) {
-        val scrim = MaterialTheme.colorScheme.scrim
-        return Modifier.drawWithContent { drawContent(); if (lift.value < 0f) drawRect(scrim, alpha = -lift.value * DIM) }
+        val dim = if (dark) DIM_DARK else DIM
+        return Modifier.drawWithContent { drawContent(); if (lift.value < 0f) drawRect(colors.scrim, alpha = -lift.value * dim) }
     }
     val corner = MaterialTheme.shapes.extraLarge.topStart
-    return Modifier.graphicsLayer {
-        val r = corner.toPx(size, this) * lift.value.coerceIn(0f, 1f)
-        val top = if (joined == Joined.Top) 0f else r
-        val bottom = if (joined == Joined.Bottom) 0f else r
-        shape = RoundedCornerShape(top, top, bottom, bottom)
+    val card = Modifier.graphicsLayer {
+        shape = cardShape(corner.toPx(size, this) * lift.value.coerceIn(0f, 1f), joined)
         clip = true
-    }.background(MaterialTheme.colorScheme.background)
+    }.background(colors.background)
+    if (!dark) return card
+    val edge = colors.outlineVariant.copy(alpha = EDGE_ALPHA)
+    return card.drawWithContent {
+        drawContent()
+        // Twice the hairline, half of it clipped away by the card; a joined side reaches past the seam so it draws no line.
+        val width = 2.dp.toPx()
+        val seam = if (joined == Joined.Nowhere) 0f else width
+        translate(top = if (joined == Joined.Top) -seam else 0f) {
+            drawOutline(cardShape(corner.toPx(size, this) * lift.value.coerceIn(0f, 1f), joined)
+                .createOutline(Size(size.width, size.height + seam), layoutDirection, this), edge, style = Stroke(width))
+        }
+    }
+}
+
+private fun cardShape(radius: Float, joined: Joined): RoundedCornerShape {
+    val top = if (joined == Joined.Top) 0f else radius
+    val bottom = if (joined == Joined.Bottom) 0f else radius
+    return RoundedCornerShape(top, top, bottom, bottom)
 }
 
 /** A leaving page keeps showing what it had instead of morphing into the next page's data while it fades. */
