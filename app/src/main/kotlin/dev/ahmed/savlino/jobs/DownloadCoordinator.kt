@@ -43,6 +43,8 @@ class DownloadCoordinator(
     private val checkGraceMs: Long = CHECK_GRACE_MS,
     private val network: NetworkWatch = NetworkWatch.Android(context),
     probeThreads: java.util.concurrent.ThreadPoolExecutor? = null, // tests: a pool no other coordinator can starve
+    private val countedEnds: dev.ahmed.savlino.usage.CountedEnds = dev.ahmed.savlino.usage.CountedEnds(
+        context.getSharedPreferences(dev.ahmed.savlino.usage.CountedEnds.PREFS, Context.MODE_PRIVATE), { store.get(it) != null }),
 ) {
     /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
     val batches by lazy { BatchStore(store) }
@@ -65,6 +67,7 @@ class DownloadCoordinator(
         initialize()
         batches.create(id, title, preset, items).also {
             if (it) {
+                usage.count(UsageKeys.FUNNEL_BATCH)
                 playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake()
                 artworkScope.launch { saveBatchArtwork(store.artwork, batches.items(id), items, previewArtwork) }
             }
@@ -74,7 +77,7 @@ class DownloadCoordinator(
     suspend fun confirmLinks(id: String, title: String, preset: Preset, links: List<ValidatedLink>): Boolean = withContext(Dispatchers.IO) {
         initialize()
         batches.createLinks(id, title, links, preset).also {
-            if (it) { playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
+            if (it) { usage.count(UsageKeys.FUNNEL_BATCH); playlistRefresh.update { revision -> revision + 1 }; batchFeeder.wake() }
         }
     }
     /** Playlist rows never pass through an options sheet; their artwork follows the confirm, off the feeder's path. */
@@ -309,6 +312,10 @@ class DownloadCoordinator(
     }
 
     suspend fun cancel(id: String) = withContext(Dispatchers.IO) {
+        // The person's cancel is the count; a job the system stops, expires or restarts counts no cancel.
+        store.get(id)?.takeIf { !it.stage.terminal && countedEnds.first(id) }?.let {
+            usage.count(UsageKeys.download(UsageKeys.Download.CANCELLED, it.format))
+        }
         requestCancellation(id)
         initialize()
         // Running work owns its cleanup after engine exit. WorkManager also interrupts its coroutine.
@@ -884,7 +891,11 @@ class DownloadCoordinator(
             else old + event
         }
     }
-    /** One count per job end; a failure also goes out as a report with its exact link (only while Help improve is on). */
+    /**
+     * One count per job, at its first end: a retried job's later ends count nothing (Retry has its own key), a cancel is
+     * counted by [cancel]. funnel.* only for a single link's job; playlist videos count under dl.*. Every failed attempt
+     * still goes out as a report with its exact link (only while Help improve is on).
+     */
     private fun countTerminal(event: DownloadProgress) {
         val row = store.get(event.jobId) ?: return
         val outcome = when (event.phase) {
@@ -894,13 +905,15 @@ class DownloadCoordinator(
             else -> return
         }
         val attempt = accounting.remove(event.jobId) ?: return
-        usage.count(UsageKeys.download(outcome, row.format))
         if (outcome == UsageKeys.Download.CANCELLED) { attempt.reportLink = null; return }
-        usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
-        val siteKey = attempt.siteKey ?: UsageKeys.site(row.sourceUrl)
-        siteKey?.let(usage::count)
-        if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
-        else {
+        if (countedEnds.first(event.jobId)) {
+            usage.count(UsageKeys.download(outcome, row.format))
+            if (!batches.containsJob(event.jobId))
+                usage.count(if (outcome == UsageKeys.Download.FINISHED) UsageKeys.FUNNEL_FINISHED else UsageKeys.FUNNEL_FAILED)
+            (attempt.siteKey ?: UsageKeys.site(row.sourceUrl))?.let(usage::count)
+            if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
+        }
+        if (outcome == UsageKeys.Download.FAILED) {
             val error = event.error ?: row.error ?: DownloadError.Failed
             // ForegroundDenied keeps the code it was reported under before it had its own value.
             val code = if (error == DownloadError.ForegroundDenied) "ExecutionRestricted_FOREGROUND_DENIED"

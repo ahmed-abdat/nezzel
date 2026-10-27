@@ -346,6 +346,8 @@ class LinkViewModel(
     private var inspectionTiming: InspectionTiming? = null
     private var optionsProvenance: UsageKeys.Path? = null
     private var inspectionStartedAt = 0L
+    /** The link the timing above belongs to; only its registrable name is ever counted. */
+    private var inspectionLink: String? = null
     /** The options sheet drew the preview image (timing journal only). */
     fun thumbnailShown() { inspectionTiming?.record(InspectionPhase.THUMBNAIL_SHOWN) }
     internal fun optionsShown() {
@@ -360,7 +362,9 @@ class LinkViewModel(
             else -> UsageKeys.Path.NPE
         }
         usage.count(UsageKeys.FUNNEL_OPTIONS)
-        usage.count(UsageKeys.options(path, now() - inspectionStartedAt))
+        val millis = now() - inspectionStartedAt
+        usage.count(UsageKeys.options(path, millis))
+        UsageKeys.optionsSite(inspectionLink, millis)?.let(usage::count)
     }
     private var operationId: String? = null
     /** Speculative yt-dlp read beside a handoff reader; owned here, so a photo verdict or dismissal ends it with its id. */
@@ -669,6 +673,7 @@ class LinkViewModel(
         optionsProvenance = null
         inspectionTiming = InspectionTiming().also { it.record(InspectionPhase.INTAKE_ACCEPTED) }
         inspectionStartedAt = now()
+        inspectionLink = source.link.rawUrl
         usage.count(UsageKeys.FUNNEL_LINK)
         if (ShortLinks.isShortLink(source.link)) startShortLink(source) else route(source, source)
     }
@@ -871,6 +876,7 @@ class LinkViewModel(
             it.record(InspectionPhase.INTAKE_ACCEPTED)
             inspectionTiming = it
             inspectionStartedAt = now()
+            inspectionLink = input.link.rawUrl
         }
         // Reels/TV bypass the image reader, so canonicalize Instagram at the shared legacy entry too.
         val source = legacyReaderSource(input, MediaSourceRoute.INSTAGRAM)
@@ -1114,6 +1120,7 @@ class LinkViewModel(
         inspectionJob?.cancel(); inspectionJob = null
         earlyPreviewJob?.cancel(); earlyPreviewJob = null
         inspectionTiming = null
+        inspectionLink = null
         optionsProvenance = null
         old?.let { if (image) images?.cancel(it) else engine.cancel(it) }
         endRace()
@@ -1435,15 +1442,17 @@ class LinkViewModel(
     private fun countPhotos(outcome: ImageSaveState, link: String?) {
         val (saved, failed, cancelled) = when (outcome) {
             is ImageSaveState.BatchFinished -> Triple(outcome.saved.size, outcome.failedCount,
-                // A cancel between items ends the batch without attempting another photo.
-                if (outcome.cancelled && outcome.cancelledCount == 0) 1 else outcome.cancelledCount)
+                // One cancel tap is one cancel, however many photos it stopped (or none, between items).
+                if (outcome.cancelled || outcome.cancelledCount > 0) 1 else 0)
             is ImageSaveState.Saved -> Triple(1, 0, 0)
             is ImageSaveState.Failed -> if (outcome.image == ImageFailure.CANCELLED) Triple(0, 0, 1) else Triple(0, 1, 0)
             else -> return
         }
-        repeat(saved) { usage.count(UsageKeys.photo(UsageKeys.Download.FINISHED)); usage.count(UsageKeys.FUNNEL_FINISHED) }
-        repeat(failed) { usage.count(UsageKeys.photo(UsageKeys.Download.FAILED)); usage.count(UsageKeys.FUNNEL_FAILED) }
+        repeat(saved) { usage.count(UsageKeys.photo(UsageKeys.Download.FINISHED)) }
+        repeat(failed) { usage.count(UsageKeys.photo(UsageKeys.Download.FAILED)) }
         repeat(cancelled) { usage.count(UsageKeys.photo(UsageKeys.Download.CANCELLED)) }
+        // One Save tap, one funnel outcome, however many photos it held.
+        if (saved > 0) usage.count(UsageKeys.FUNNEL_FINISHED) else if (failed > 0) usage.count(UsageKeys.FUNNEL_FAILED)
         repeat(saved + failed) { usage.site(link) }
     }
     private fun failConfirmation(error: DownloadError) {
