@@ -2,6 +2,7 @@ package dev.ahmed.savlino.jobs
 
 import android.os.CancellationSignal
 import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.engine.YtdlpCommand
 import dev.ahmed.savlino.storage.*
 import java.io.File
 import java.util.concurrent.Executor
@@ -80,7 +81,8 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
 
     private fun recoverTransfer(row: JobRecord) {
         try {
-            val job = JobDirectory(requireNotNull(jobRoot.parentFile)).createOrAdopt(row.jobId)
+            val job = JobDirectory(requireNotNull(jobRoot.parentFile)).createOrAdopt(row.jobId,
+                row.command()?.format?.let(YtdlpCommand::finishedSource)) // The run drops it if its recipe changed.
             val hasPartial = stagingBytes(job.directory) > 0
             if (!hasPartial) job.cleanup()
             if (row.stage == JobStage.TRANSFERRING || row.hasPartial != hasPartial)

@@ -197,6 +197,8 @@ class DownloadCoordinator(
         startup.withLock {
             if (initialized) return@withLock
             store.sweepInfoJson()
+            // An ffmpeg a killed or replaced process left behind would keep writing into a job dir recovery adopts.
+            engine.stopStaleProcesses(File(context.filesDir.canonicalFile, "downloads"))
             recovery.recover() // Never recover the whole journal after this barrier opens.
             restoreBatchControls()
             for (row in store.all()) {
@@ -455,6 +457,8 @@ class DownloadCoordinator(
         var schedulerStopped = false
         // This attempt's own network watch stopped the transfer: the same outcome as a connectivity stop.
         val networkStopped = java.util.concurrent.atomic.AtomicBoolean()
+        // Staged and publishing: a scheduler stop lets the local copy finish instead of discarding the file.
+        val saving = java.util.concurrent.atomic.AtomicBoolean()
         fun stoppedError(): DownloadError {
             if (id in userCancellation) return DownloadError.Cancelled
             if (networkStopped.get()) return DownloadError.Network
@@ -467,7 +471,7 @@ class DownloadCoordinator(
         }
         fun finishStopped() {
             schedulerStopped = stopReason() != WorkInfo.STOP_REASON_NOT_STOPPED
-            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes)
+            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes, keepOutput = id in postProcessing)
             if (networkStopped.get() && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
         }
         try {
@@ -500,7 +504,7 @@ class DownloadCoordinator(
             coroutineScope {
                 // A sibling receives cancellation even while publication blocks on Dispatchers.IO.
                 val stop = launch(start = CoroutineStart.UNDISPATCHED) {
-                    try { awaitCancellation() } finally { stopEngine(id, cancelUnregistered = false) }
+                    try { awaitCancellation() } finally { if (!saving.get()) stopEngine(id, cancelUnregistered = false) }
                 }
                 val metrics = TransferMetrics(monotonicMillis)
                 val delivery = ProgressDelivery(monotonicMillis, ::update)
@@ -583,7 +587,9 @@ class DownloadCoordinator(
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     signal.throwIfCanceled()
                     currentCoroutineContext().ensureActive()
-                    val job = if (adopting) directories.createOrAdopt(id) else directories.create(id)
+                    engine.stopStaleProcesses(stagingRoot(id)) // A stopped attempt's ffmpeg must not outlive its adopt.
+                    val job = if (adopting) directories.createOrAdopt(id, YtdlpCommand.finishedSource(command.format).takeIf { compatibleRecipe })
+                        else directories.create(id)
                     val partialBytes = stagingBytes(job.directory)
                     hasPartial = partialBytes > 0
                     startBytes = partialBytes
@@ -661,6 +667,7 @@ class DownloadCoordinator(
                                 signal.throwIfCanceled()
                                 outputBytes = job.requireOutput(result.output.file).length()
                                 check(store.markStaged(id))
+                                saving.set(true) // User cancel still reaches the copy through requestCancellation.
                             }
                             emit(initial.copy(phase = DownloadPhase.SAVING, restartEpoch = epoch))
                             recovery.publish(job, job.requireOutput(result.output.file), mime(command.format), signal,
@@ -755,7 +762,7 @@ class DownloadCoordinator(
 
     private fun finishStopped(id: String, error: DownloadError,
         systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
-        cause: DownloadFailureCause = error.cause) = synchronized(userCancellation) {
+        cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         store.resetAutomaticResumes(id, bytes)
@@ -764,9 +771,11 @@ class DownloadCoordinator(
         } else if (id in userCancellation || error == DownloadError.Cancelled) {
             store.cancel(id)
             recovery.reconcile(id, cancellationRequested = true)
-        } else if (systemStopped && error in setOf(DownloadError.Network, DownloadError.Offline) &&
+        } else if (systemStopped && (error in setOf(DownloadError.Network, DownloadError.Offline) ||
+                keepOutput && error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery)) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
-            // A scheduler stop waits for its constraints; it is not an engine failure episode.
+            // A scheduler stop waits for its constraints; it is not an engine failure episode. A stop during a
+            // convert or merge keeps the finished source, so the retry only converts again (createOrAdopt keep).
             if (bytes > 0) {
                 if (store.requeue(id, true) && bytes > startBytes) progressed += id
             } else if (cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)) store.requeue(id)

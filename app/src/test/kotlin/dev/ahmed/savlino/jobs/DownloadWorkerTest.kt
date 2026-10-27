@@ -158,6 +158,17 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun staleProcessScansRunOnceAtStartupAndBeforeEveryAttemptAdoptsItsDirectory() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            assertTrue(f.coordinator.enqueue(command("stale-scan")))
+            val downloads = File(app.filesDir.canonicalFile, "downloads")
+            assertEquals(listOf(downloads), f.staleScans)
+            assertEquals(ListenableWorker.Result.success(), f.worker("stale-scan").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("stale-scan")!!.stage)
+            assertEquals(listOf(downloads, File(downloads, "stale-scan")), f.staleScans)
+        }
+    }
+
     @Test fun restartReplaysTerminalRowsWithoutNewCountsOrTransfers() = runBlocking {
         val usage = UsageRecorder()
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))),
@@ -716,29 +727,75 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun systemStopDuringPublicationIsInterruptedAndCleansPendingRow() = runBlocking {
-        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
-            shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
-            f.store.enqueue(command("copy-stop"))
-            val opened = java.util.concurrent.CountDownLatch(1)
-            val release = java.util.concurrent.CountDownLatch(1)
-            f.provider.onOpen = { opened.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
-            val worker = f.worker("copy-stop")
-            val running = launch(Dispatchers.Default) { worker.doWork() }
-            try {
-                assertTrue(withContext(Dispatchers.IO) { opened.await(5, java.util.concurrent.TimeUnit.SECONDS) })
-                worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
-                running.cancel()
-                withTimeout(5000) { while (!f.coordinator.stopRequested("copy-stop")) yield() }
-            } finally { release.countDown() }
-            running.join()
-            assertEquals(JobStage.FAILED, f.store.get("copy-stop")!!.stage)
-            assertEquals(DownloadError.Interrupted, f.store.get("copy-stop")!!.error)
-            val notification = resultNotification()
-            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_interrupted_error),
-                notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
-            assertTrue(f.provider.rows.isEmpty())
-            assertFalse(File(app.filesDir, "downloads/copy-stop").exists())
+    // S1: a scheduler stop (network on old constrained work, or any other reason) never discards a file being saved.
+    @Test fun systemStopDuringPublicationLetsTheCopyFinishAndSaves() = runBlocking {
+        for (reason in listOf(WorkInfo.STOP_REASON_UNKNOWN, WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)) {
+            val id = "copy-stop-${reason.toString().replace('-', 'm')}"
+            app.getSystemService(android.app.NotificationManager::class.java).cancelAll()
+            fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+                shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+                f.store.enqueue(command(id))
+                val opened = java.util.concurrent.CountDownLatch(1)
+                val release = java.util.concurrent.CountDownLatch(1)
+                f.provider.onOpen = { opened.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
+                val worker = f.worker(id)
+                val running = launch(Dispatchers.Default) { worker.doWork() }
+                try {
+                    assertTrue(withContext(Dispatchers.IO) { opened.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+                    worker.stop(reason)
+                    running.cancel()
+                    assertFalse(f.coordinator.stopRequested(id))
+                } finally { release.countDown() }
+                withTimeout(5000) { running.join() }
+                assertSaved(f, id)
+                assertEquals(1, f.attempts.get())
+            }
+        }
+    }
+
+    // S1/S2: a stop during the MP3 conversion keeps the downloaded source; the retry converts again, never downloads.
+    @Test fun systemStopDuringConvertKeepsTheSourceAndTheRetryOnlyConvertsAgain() = runBlocking {
+        for (reason in listOf(WorkInfo.STOP_REASON_UNKNOWN, WorkInfo.STOP_REASON_QUOTA,
+                WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY)) {
+            val id = "convert-stop-${reason.toString().replace('-', 'm')}"
+            val entered = CompletableDeferred<Unit>()
+            val second = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val events = java.util.concurrent.CopyOnWriteArrayList<EngineEvent>()
+            fixture(FakeEngine(), script = { _, dir, emit ->
+                val record: (EngineEvent) -> Unit = { events += it; emit(it) }
+                if (!entered.isCompleted) {
+                    record(EngineEvent.Progress(4, Size.Exact(4)))
+                    dir.resolve("output.m4a").writeBytes(byteArrayOf(1, 2, 3, 4))
+                    record(EngineEvent.Merging)
+                    dir.resolve("output.mp3").writeText("half")
+                    entered.complete(Unit)
+                    awaitCancellation()
+                }
+                second += dir.list()!!.sorted()
+                record(EngineEvent.Merging)
+                dir.resolve("output.m4a").delete()
+                val output = dir.resolve("output.mp3").apply { writeBytes(byteArrayOf(5, 6, 7, 8)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }).use { f ->
+                f.store.enqueue(mp3Command(id))
+                val worker = f.worker(id)
+                val running = launch(Dispatchers.Default) { worker.doWork() }
+                try {
+                    withTimeout(5000) { entered.await() }
+                    worker.stop(reason)
+                    withTimeout(5000) { running.cancelAndJoin() }
+                } finally { running.cancelAndJoin() }
+                assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+                assertTrue(f.store.get(id)!!.hasPartial)
+                val staging = File(app.filesDir.canonicalFile, "downloads/$id")
+                assertTrue(staging.resolve("output.m4a").isFile)
+                events.clear()
+                assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+                assertEquals(listOf("output.m4a"), second) // half mp3 and result path dropped, source kept
+                assertEquals(listOf<EngineEvent>(EngineEvent.Merging), events.toList()) // no second transfer
+                assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+                assertEquals(2, f.staleScans.count { it == staging })
+            }
         }
     }
 
@@ -1081,9 +1138,10 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun matchingRecipeAdoptsPartialAndDropsOnlyStaleControlAndFinalOutput() = runBlocking {
+    // The finished output.mp4 is the file yt-dlp reuses (YtdlpCommand.finishedSource); only the manifest goes.
+    @Test fun matchingRecipeAdoptsPartialAndFinishedOutputAndDropsOnlyStaleControl() = runBlocking {
         fixture(FakeEngine(), script = { _, dir, _ ->
-            assertEquals(setOf("output.mp4.part"), dir.list()!!.toSet())
+            assertEquals(setOf("output.mp4.part", "output.mp4"), dir.list()!!.toSet())
             assertEquals("keep", dir.resolve("output.mp4.part").readText())
             TransferResult.Failure(DownloadError.Failed)
         }).use { f ->
@@ -1201,7 +1259,7 @@ class DownloadWorkerTest {
                 assertTrue(withContext(Dispatchers.IO) { committed.await(5, java.util.concurrent.TimeUnit.SECONDS) })
                 worker.stop(WorkInfo.STOP_REASON_UNKNOWN)
                 running.cancel()
-                withTimeout(5000) { while (!f.coordinator.stopRequested("late-stop")) yield() }
+                assertFalse(f.coordinator.stopRequested("late-stop")) // saving: a system stop lets the copy finish
             } finally { release.countDown() }
             running.join()
             assertSaved(f, "late-stop")
@@ -2081,7 +2139,9 @@ class DownloadWorkerTest {
         val store = JobStore(app)
         val engineStopped = CompletableDeferred<Unit>()
         val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val staleScans = java.util.concurrent.CopyOnWriteArrayList<File>()
         val observedEngine = object : EngineAdapter by engine {
+            override fun stopStaleProcesses(directory: File): Int { staleScans += directory; return 0 }
             override fun cancel(operationId: String) { cancelHook(); engine.cancel(operationId); engineStopped.complete(Unit) }
             override suspend fun installedVersion() = version()
             override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult {
@@ -2096,10 +2156,11 @@ class DownloadWorkerTest {
         val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick,
             probe = { null }, usage = usage, network = network) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
         (app as IsolatedTestApplication).coordinatorOverride = coordinator
-        return Fixture(engine, provider, store, coordinator, engineStopped, attempts)
+        return Fixture(engine, provider, store, coordinator, engineStopped, attempts, staleScans)
     }
     private inner class Fixture(val engine: FakeEngine, val provider: TestDownloadsProvider, val store: JobStore,
-        val coordinator: DownloadCoordinator, val engineStopped: CompletableDeferred<Unit>, val attempts: java.util.concurrent.atomic.AtomicInteger) : AutoCloseable {
+        val coordinator: DownloadCoordinator, val engineStopped: CompletableDeferred<Unit>, val attempts: java.util.concurrent.atomic.AtomicInteger,
+        val staleScans: List<File>) : AutoCloseable {
         val phases = java.util.concurrent.CopyOnWriteArrayList<String>()
         val progressData = java.util.concurrent.CopyOnWriteArrayList<Data>()
         val foregrounds = java.util.concurrent.CopyOnWriteArrayList<ForegroundInfo>()
@@ -2120,6 +2181,14 @@ class DownloadWorkerTest {
 }
 
 /** Provider boundary only: actual SQLite, filesystem, pending publication/copy/commit run above it. */
+private fun mp3Command(id: String): DownloadCommand {
+    val source = LinkRevision(LinkInput.parse("https://example.com/clip?token=private")!!, 7)
+    val format = Format("mp3-192", "mp3", false, true, size = Size.Exact(4), sourceFormatId = "140",
+        sourceContainer = "m4a", conversion = AudioConversion.MP3_192)
+    return (DownloadCommand.confirm(id, Inspection(source, "engine-42", listOf(format)), source,
+        format.id, "clip") as ConfirmResult.Confirmed).command
+}
+
 internal class TestDownloadsProvider(val file: File, private val owner: String) : ContentProvider() {
     val rows = linkedMapOf<Long, ContentValues>()
     var onOpen: () -> Unit = {}

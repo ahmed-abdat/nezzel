@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.jobs
 
 import dev.ahmed.savlino.domain.Size
+import dev.ahmed.savlino.downloads.ringFraction
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -24,6 +25,17 @@ class LiveUpdateSpecTest {
         assertEquals(indeterminate, spec(job(total = Size.Unknown)))
         assertEquals(indeterminate, spec(job(total = Size.Estimated(100))))
         assertEquals(indeterminate, spec(job().copy(stalled = true)))
+    }
+
+    // F4: a conversion after a full download has no percent anywhere: the notification bar (setProgress
+    // indeterminate when visiblePercent is null), the Live Update and the Downloads ring all spin.
+    @Test fun postProcessingAfterAFullTransferShowsNoPercentAnywhere() {
+        for (phase in listOf(DownloadPhase.JOINING, DownloadPhase.CONVERTING, DownloadPhase.SAVING)) {
+            val done = job(phase, bytes = 100)
+            assertNull(phase.name, done.visiblePercent)
+            assertNull(phase.name, done.ringFraction())
+            assertEquals(phase.name, LiveSpec(null, true, null), spec(done))
+        }
     }
 
     @Test fun anythingNotRunningOrNotLeadingKeepsTodaysNotification() {
