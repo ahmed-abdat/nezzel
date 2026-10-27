@@ -28,17 +28,27 @@ object YtdlpCommand {
             "--dump-single-json", "--skip-download", "--playlist-items", "$start:$end") + NETWORK +
             listOf("--", source.link.rawUrl)
     }
+    /**
+     * The finished file yt-dlp reuses instead of downloading again ("has already been downloaded"): the source of an
+     * MP3 conversion, or the final merged/single file. A stop in convert, merge or save keeps it for a compatible retry.
+     * An "mp3" source has no extension (see [download]'s template), so it is never kept.
+     */
+    fun finishedSource(format: Format): String? = when {
+        format.conversion == null -> "output.${format.container}"
+        format.sourceContainer != null && format.sourceContainer != "mp3" -> "output.${format.sourceContainer}"
+        else -> null
+    }
     /** Shared by both transfer engines before any staging write. */
-    internal fun validateStaging(directory: File): File {
+    internal fun validateStaging(directory: File, kept: String? = null): File {
         val root = directory.canonicalFile
         require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory &&
             root.listFiles()?.all { !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile &&
-                PartialFileNames.matches(it.name) } == true) { "Invalid staging directory" }
+                (PartialFileNames.matches(it.name) || it.name == kept) } == true) { "Invalid staging directory" }
         return root
     }
     fun download(command: DownloadCommand, directory: File, infoJson: File? = null,
         embedAudioTags: Boolean = true): List<String> {
-        val root = validateStaging(directory)
+        val root = validateStaging(directory, finishedSource(command.format))
         val row = command.format
         // Generic direct-file IDs can equal a MIME subtype/container. A bare "mp4" is an extension selector,
         // not an exact ID; filter by the actual returned ID so it cannot silently choose a different format.

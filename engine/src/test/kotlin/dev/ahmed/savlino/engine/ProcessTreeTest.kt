@@ -133,4 +133,33 @@ class ProcessTreeTest {
         assertTrue(tree.terminate(includeRoot = false) {})
         assertEquals(listOf(43 to 15, 43 to 9), signals)
     }
+    @Test fun staleProcessesKillsOnlyOurUidWritingIntoThatJobsDirectory() {
+        val proc = Table()
+        val jobs = temp.newFolder("downloads")
+        val job1 = File(jobs, "job-1").canonicalFile; val job10 = File(jobs, "job-10").canonicalFile
+        fun add(pid: Int, vararg argv: String) { proc.rows[pid] = ProcProcess(pid, 1, pid.toLong(), argv.toList()) }
+        add(20, "libffmpeg.so", "-i", "file:$job1/output.m4a", "-y", "file:$job1/output.mp3") // orphan ffmpeg
+        add(21, "libpython.so", "-o", "$job1/output.%(ext)s")
+        add(22, "libffmpeg.so", "-i", "file:$job10/output.m4a")   // another job
+        add(23, "libffmpeg.so", "-i", "file:$job1/output.m4a")     // another app's uid
+        add(24, "app_process")                                      // this app itself
+        add(25, "libffmpeg.so", "-i", "file:$job1/output.m4a")
+        proc.rows[25] = proc.rows[25]!!.copy(state = 'Z')
+        val uids = mapOf(20 to 10100, 21 to 10100, 22 to 10100, 23 to 10200, 24 to 10100, 25 to 10100)
+        val stale = StaleProcesses(proc, uids::get, { 10100 }, { 24 }, nanoTime = { 0L }, pause = { proc.rows.remove(20); proc.rows.remove(21) })
+        assertEquals(2, stale.kill(job1))
+        assertEquals(listOf(20 to 15, 21 to 15), proc.signals)
+    }
+    @Test fun staleProcessesEscalatesToKillAndScansEveryJobUnderTheRoot() {
+        val proc = Table()
+        val jobs = temp.newFolder("downloads").canonicalFile
+        proc.rows[30] = ProcProcess(30, 1, 30, listOf("libffmpeg.so", "file:$jobs/a/output.m4a"))
+        proc.rows[31] = ProcProcess(31, 1, 31, listOf("libffmpeg.so", "file:$jobs/b/output.m4a"))
+        proc.rows[32] = ProcProcess(32, 1, 32, listOf("libffmpeg.so", "file:${jobs.path}-old/x"))
+        var now = 0L
+        val stale = StaleProcesses(proc, { 1 }, { 1 }, { 2 }, nanoTime = { now }, pause = { now += 100_000_000 })
+        assertEquals(2, stale.kill(jobs))
+        assertEquals(listOf(30 to 15, 31 to 15, 30 to 9, 31 to 9), proc.signals)
+        assertEquals(0, StaleProcesses(proc, { 1 }, { 1 }, { 2 }).kill(File(jobs, "c")))
+    }
 }

@@ -479,6 +479,30 @@ class YtdlpMappingTest {
         File(dir, "existing").writeText("preserve")
         assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command(Format("18", "mp4", true, true)), dir) }
     }
+    @Test fun stagingAcceptsOnlyTheFinishedSourceTheRetryReuses() {
+        val mp3 = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_192)
+        val mp3FromMp3 = mp3.copy(sourceContainer = "mp3")
+        val merged = Format("137", "mp4", true, true, audioFormatId = "140", requiresMerge = true)
+        assertEquals("output.m4a", YtdlpCommand.finishedSource(mp3))
+        assertNull(YtdlpCommand.finishedSource(mp3FromMp3)) // its template has no extension
+        assertNull(YtdlpCommand.finishedSource(mp3.copy(sourceContainer = null))) // legacy row: source unknown
+        assertEquals("output.mp4", YtdlpCommand.finishedSource(merged))
+        for ((format, kept) in listOf(mp3 to "output.m4a", merged to "output.mp4")) {
+            val dir = temp.newFolder()
+            File(dir, kept).writeText("finished")
+            File(dir, "output.f140.m4a.part").writeText("partial")
+            assertTrue(YtdlpCommand.download(command(format), dir).isNotEmpty())
+            // The conversion target or any other finished name still means a dirty directory.
+            for (other in listOf("output.mp3", "output.webm", "output.mkv")) {
+                File(dir, other).writeText("stale")
+                assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command(format), dir) }
+                File(dir, other).delete()
+            }
+        }
+        val dir = temp.newFolder().also { File(it, "output.mp3").writeText("half") }
+        assertFailsWith<IllegalArgumentException> { YtdlpCommand.download(command(mp3FromMp3), dir) }
+    }
     @Test fun knownStderrPatternsMapToStableErrorsWithoutExposingMessages() {
         val cases = listOf(
             "ERROR: Unsupported URL: https://example.org/drm" to DownloadError.Unsupported,

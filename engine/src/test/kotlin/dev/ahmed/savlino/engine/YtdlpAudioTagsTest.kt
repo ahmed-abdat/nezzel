@@ -197,6 +197,33 @@ class YtdlpAudioTagsTest {
         }
     }
 
+    @Test fun failedConversionRetryDropsTheHalfWrittenMp3ButKeepsItsSource() = runBlocking {
+        for (sourceContainer in listOf("m4a", "mp3")) {
+            val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = sourceContainer,
+                conversion = AudioConversion.MP3_192)
+            val dir = temp.newFolder().canonicalFile
+            val source = File(dir, if (sourceContainer == "mp3") "output" else "output.m4a")
+            val output = File(dir, "output.mp3")
+            val runtime = Runtime().apply { action = { args, line ->
+                if ("--embed-thumbnail" in args) {
+                    source.writeText("downloaded audio")
+                    output.writeText("truncated by a killed ffmpeg")
+                    line("[ExtractAudio] Destination: ${output.path}")
+                    error("ERROR: Postprocessing: audio conversion failed")
+                }
+                assertEquals("downloaded audio", source.readText())
+                assertFalse(output.exists()) // yt-dlp would skip ExtractAudio and keep the truncated file
+                output.writeText("converted")
+                source.delete()
+                File(dir, "result-path.txt").writeText(output.path)
+                ""
+            } }
+            val result = YoutubedlEngine(runtime).download(command(format), dir) {}
+            assertEquals("converted", assertIs<TransferResult.Success>(result).output.file.readText())
+            assertEquals(2, runtime.calls.size)
+        }
+    }
+
     @Test fun secondPostprocessingFailureRemainsMergeFailed() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> error("ERROR: Postprocessing: failed") } }
         assertEquals(TransferResult.Failure(DownloadError.MergeFailed),
