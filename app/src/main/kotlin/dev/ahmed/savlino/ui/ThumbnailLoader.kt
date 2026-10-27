@@ -76,8 +76,26 @@ internal class ThumbnailLoader(
         // Bound both axes: malformed tall images must not allocate an enormous bitmap.
         while ((bounds.outWidth.toLong() + sample - 1) / sample > 480 ||
             (bounds.outHeight.toLong() + sample - 1) / sample > 480) sample *= 2
-        return decodeBytes(bytes, BitmapFactory.Options().apply { inSampleSize = sample })
+        val bitmap = decodeBytes(bytes, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        // Some sites store an all-black poster (a Reddit video's first frame); the placeholder reads better than a black box.
+        if (blank(bitmap)) { bitmap.recycle(); return null }
+        return bitmap
     }
 
-    private companion object { const val MAX_BYTES = 2 * 1024 * 1024 }
+    /** True when a 16x16 grid of samples finds no visible pixel: all near-black or near-transparent. */
+    private fun blank(bitmap: Bitmap): Boolean {
+        for (row in 0 until GRID) for (column in 0 until GRID) {
+            val pixel = bitmap.getPixel(column * (bitmap.width - 1) / (GRID - 1), row * (bitmap.height - 1) / (GRID - 1))
+            val alpha = pixel ushr 24
+            val bright = maxOf(pixel shr 16 and 0xFF, pixel shr 8 and 0xFF, pixel and 0xFF)
+            if (alpha >= DIM && bright >= DIM) return false
+        }
+        return true
+    }
+
+    private companion object {
+        const val MAX_BYTES = 2 * 1024 * 1024
+        const val GRID = 16
+        const val DIM = 16
+    }
 }

@@ -44,7 +44,7 @@ class ThumbnailLoaderTest {
     @Test fun imageDecodesInMemoryDownsampledAndConnectionCloses() = runBlocking {
         val output = ByteArrayOutputStream()
         Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888).apply {
-            compress(Bitmap.CompressFormat.PNG, 100, output); recycle()
+            eraseColor(android.graphics.Color.rgb(40, 120, 110)); compress(Bitmap.CompressFormat.PNG, 100, output); recycle()
         }
         val connection = Connection(output.toByteArray())
         val bitmap = ThumbnailLoader { connection }.load("https://i.ytimg.com/image")!!
@@ -116,5 +116,19 @@ class ThumbnailLoaderTest {
         assertNull(loader.load("https://i.ytimg.com:443/image"))
         assertNull(loader.load("https://i.ytimg.com:8443/image"))
         assertEquals(0, opens)
+    }
+    @Test fun allBlackOrTransparentPosterIsNoThumbnailButADarkSceneWithDetailStays() = runBlocking {
+        fun png(fill: Int, dot: Int? = null): ByteArray = ByteArrayOutputStream().also { output ->
+            Bitmap.createBitmap(640, 1137, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(fill); dot?.let { for (x in 280 until 360) for (y in 0 until height) setPixel(x, y, it) }
+                compress(Bitmap.CompressFormat.PNG, 100, output); recycle()
+            }
+        }.toByteArray()
+        val black = Connection(png(android.graphics.Color.rgb(2, 2, 2)))
+        assertNull(ThumbnailLoader { black }.load("https://i.ytimg.com/image")); assertTrue(black.closed)
+        assertNull(ThumbnailLoader { Connection(png(android.graphics.Color.TRANSPARENT)) }.load("https://i.ytimg.com/image"))
+        val dark = ThumbnailLoader { Connection(png(android.graphics.Color.rgb(2, 2, 2), android.graphics.Color.rgb(90, 90, 90))) }
+            .load("https://i.ytimg.com/image")
+        assertNotNull(dark); dark!!.recycle()
     }
 }
