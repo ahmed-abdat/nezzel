@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -379,8 +380,9 @@ private fun PreviewThumb(item: StatusItem, media: StatusMedia, more: Int?, langu
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AccountBar(state: StatusesState, access: StatusAccess.Ready, source: StatusSource, media: StatusMedia, language: String) {
+    // The dot stays with the app name when the title wraps.
     val title = listOfNotNull(appLabel(source, access, language), accountNumber(source, access, language))
-        .joinToString(stringResource(R.string.separator))
+        .joinToString(stringResource(R.string.separator).replaceFirst(' ', '\u00A0'))
     val summary = state.accounts.firstOrNull { it.source == source }
     val subtitle = summary?.let { listOfNotNull(
         pluralStringResource(R.plurals.statuses_count, it.total, NezzelFormat.count(it.total, language)),
@@ -393,7 +395,8 @@ private fun AccountBar(state: StatusesState, access: StatusAccess.Ready, source:
         }
         AppIcon(source.packageName, media, 36.dp)
         Column(Modifier.weight(1f).padding(vertical = Space.s).semantics(mergeDescendants = true) { heading() }) {
-            Text(title, style = MaterialTheme.typography.titleLarge,
+            // Balanced lines when the name wraps, never a lone account number on the second line.
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(lineBreak = LineBreak.Heading),
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
