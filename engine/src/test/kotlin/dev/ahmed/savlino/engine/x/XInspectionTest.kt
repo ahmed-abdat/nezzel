@@ -62,8 +62,11 @@ class XInspectionTest : PublicImageTestBase() {
                 assertEquals(1, result.inspection.items[0].renditions.size)
                 assertTrue(result.inspection.items.all { it.renditions.size == 1 })
                 assertEquals(4, result.previews.size)
+                assertEquals(result.inspection.items.map { it.renditions.single().ref }, result.previews.keys.toList(), "previews keep photo order")
                 assertEquals(5, f.server.requests.size, "each actual photo is fetched")
-                assertEquals("/media/SyntheticPhoto4?format=jpg&name=small", f.server.requests.last().target)
+                // The photos are fetched in parallel, so arrival order varies; every photo is requested once.
+                assertEquals((1..4).map { "/media/SyntheticPhoto$it?format=jpg&name=small" },
+                    f.server.requests.drop(1).map { it.target }.sorted())
             }
         }
     }

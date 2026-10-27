@@ -91,6 +91,9 @@ class SaveFolderSettingTest {
         val unavailable = activity.getString(R.string.save_folder_unavailable)
         fun shown() = compose.onAllNodesWithText(unavailable).fetchSemanticsNodes().isNotEmpty()
         fun visit(destination: String) { compose.runOnIdle { route = destination }; compose.waitForIdle() }
+        // The first check runs on an IO thread, so idle compose does not mean it has read the provider yet.
+        val firstCheck = java.util.concurrent.CountDownLatch(1)
+        provider.afterSnapshot = { firstCheck.countDown() }
         try {
             activity.setContent {
                 MaterialTheme {
@@ -98,6 +101,7 @@ class SaveFolderSettingTest {
                 }
             }
             compose.waitForIdle()
+            compose.waitUntil(5000) { firstCheck.count == 0L }
             assertFalse(shown())
             provider.denied = true
             visit("Home"); visit("Settings")
