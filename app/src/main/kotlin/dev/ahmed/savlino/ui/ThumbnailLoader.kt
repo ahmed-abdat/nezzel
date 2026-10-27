@@ -82,20 +82,22 @@ internal class ThumbnailLoader(
         return bitmap
     }
 
-    /** True when a 16x16 grid of samples finds no visible pixel: all near-black or near-transparent. */
+    /** True when no pixel is visible: all near-black or near-transparent. The bitmap is ≤480 px, so every pixel is read, a row at a time. */
     private fun blank(bitmap: Bitmap): Boolean {
-        for (row in 0 until GRID) for (column in 0 until GRID) {
-            val pixel = bitmap.getPixel(column * (bitmap.width - 1) / (GRID - 1), row * (bitmap.height - 1) / (GRID - 1))
-            val alpha = pixel ushr 24
-            val bright = maxOf(pixel shr 16 and 0xFF, pixel shr 8 and 0xFF, pixel and 0xFF)
-            if (alpha >= DIM && bright >= DIM) return false
+        val row = IntArray(bitmap.width)
+        for (y in 0 until bitmap.height) {
+            bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+            for (pixel in row) {
+                val alpha = pixel ushr 24
+                val bright = maxOf(pixel shr 16 and 0xFF, pixel shr 8 and 0xFF, pixel and 0xFF)
+                if (alpha >= DIM && bright >= DIM) return false
+            }
         }
         return true
     }
 
     private companion object {
         const val MAX_BYTES = 2 * 1024 * 1024
-        const val GRID = 16
         const val DIM = 16
     }
 }

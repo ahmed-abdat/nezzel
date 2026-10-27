@@ -130,5 +130,15 @@ class ThumbnailLoaderTest {
         val dark = ThumbnailLoader { Connection(png(android.graphics.Color.rgb(2, 2, 2), android.graphics.Color.rgb(90, 90, 90))) }
             .load("https://i.ytimg.com/image")
         assertNotNull(dark); dark!!.recycle()
+        // A small bright subject on a dark scene (a 3x3 star, off any sampling grid) still counts as a picture.
+        val star = ByteArrayOutputStream().also { output ->
+            Bitmap.createBitmap(400, 300, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(android.graphics.Color.rgb(2, 2, 2))
+                for (x in 220 until 223) for (y in 145 until 148) setPixel(x, y, android.graphics.Color.WHITE)
+                compress(Bitmap.CompressFormat.PNG, 100, output); recycle()
+            }
+        }.toByteArray()
+        val small = ThumbnailLoader { Connection(star) }.load("https://i.ytimg.com/image")
+        assertNotNull(small); small!!.recycle()
     }
 }
