@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -151,9 +152,12 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
                     error = if (state.wrongFolder) stringResource(R.string.statuses_wrong_folder) else null)
                 is StatusAccess.AccessLost -> Explainer(access.apps, media, onGrant = openPicker,
                     error = stringResource(if (state.wrongFolder) R.string.statuses_wrong_folder else R.string.statuses_access_lost))
-                is StatusAccess.Ready -> if (access.items.isEmpty()) EmptyStatuses(access.apps)
+                is StatusAccess.Ready -> PullToRefreshBox(state.pulling, state::pull, Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter) {
+                    if (access.items.isEmpty()) EmptyStatuses(access.apps)
                     else if (state.showAccountList) AccountList(state, access, media, language)
                     else StatusGrid(state, media, language)
+                }
             }
         }
     }
@@ -173,7 +177,7 @@ private fun RingMark() {
 private fun CenteredColumn(content: @Composable ColumnScope.() -> Unit) {
     val scroll = rememberScrollState()
     ScrollOnTabReselect { scroll.scrollTo(0) }
-    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(scroll)
+    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().fillMaxHeight().verticalScroll(scroll)
         .padding(horizontal = Space.gutter, vertical = Space.l), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Space.l), content = content)
 }

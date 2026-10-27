@@ -121,6 +121,16 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
 
     fun stale(now: Long = android.os.SystemClock.elapsedRealtime()) = loadedAt == Long.MIN_VALUE || now - loadedAt > STALE_MS
 
+    /** True only while a pull-down rescan runs; the automatic rescans stay quiet. */
+    var pulling by mutableStateOf(false); private set
+
+    /** Pull down on the tab: WhatsApp may add statuses while Nezzel stays open, and nothing tells the app. */
+    fun pull() {
+        if (library == null) return
+        pulling = true
+        refresh()
+    }
+
     fun refresh() {
         val library = library ?: return
         loading?.cancel()
@@ -128,6 +138,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
             val loaded = library.load()
             loadedAt = android.os.SystemClock.elapsedRealtime()
             access = loaded
+            pulling = false
             // Lost access or a vanished folder closes the account, so a later grant never reopens it untapped
             if (loaded !is StatusAccess.Ready || account !in loaded.sources) account = null
             // Items can vanish at any time (statuses expire after about a day): drop selections that went with them.

@@ -86,6 +86,19 @@ class StatusesStateTest {
         assertTrue(state.showAccountList)
     }
 
+    @Test fun pullDownRescansAndShowsStatusesWhatsAppAddedMeanwhile() = runTest {
+        val library = FakeStatusLibrary(ready(mixed(MAIN)))
+        val state = loaded(library)
+        val before = state.visible.size
+        library.access = ready(mixed(MAIN) + mixed(MAIN, offset = 10))
+        state.pull()
+        assertTrue(state.pulling)
+        advanceUntilIdle()
+        assertFalse(state.pulling)
+        assertEquals(2, library.loads)
+        assertTrue(state.visible.size > before)
+    }
+
     @Test fun lostAccessClosesTheAccountSoARegrantOpensOnTheCards() = runTest {
         val library = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 10)))
         val state = loaded(library)
