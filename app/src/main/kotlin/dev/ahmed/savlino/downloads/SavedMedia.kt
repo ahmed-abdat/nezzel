@@ -251,7 +251,8 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
                 fun rows() = (media + files.values + found.values).sortedByDescending { it.addedSeconds }.also { keptFound = found.toMap() }
                 emit(Result.success(rows()))
                 // Old downloads: one listing, then rows at once with cached dimensions; probes fill in below.
-                val listed = oldDownloads?.let { old -> cancellableQuery(ioDispatcher) { signal -> old.list(signal) } }
+                // A failed listing (provider busy or restarting) keeps the last one; a lost grant lists nothing.
+                val listed = oldDownloads?.let { old -> cancellableQuery(ioDispatcher) { signal -> old.listOrNull(signal) } ?: keptListed }
                     ?.let { OldDownloads.dedupe(it, media + files.values) }.orEmpty()
                 keptListed = listed
                 found.clear()
