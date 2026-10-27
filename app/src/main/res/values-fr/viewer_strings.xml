@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_show_controls">Afficher les commandes</string>
+    <string name="viewer_hide_controls">Masquer les commandes</string>
+    <string name="viewer_seek_back_10">Reculer de 10 secondes</string>
+    <string name="viewer_seek_forward_10">Avancer de 10 secondes</string>
+    <string name="viewer_seek_unavailable">Impossible de se déplacer dans ce fichier</string>
+    <string name="viewer_speed">Vitesse</string>
+    <string name="viewer_speed_value">%1$s×</string>
+    <string name="viewer_speed_normal">Normale</string>
+    <string name="viewer_speed_failed">Impossible de changer la vitesse</string>
+    <string name="viewer_fullscreen">Plein écran</string>
+    <string name="viewer_exit_fullscreen">Quitter le plein écran</string>
+</resources>

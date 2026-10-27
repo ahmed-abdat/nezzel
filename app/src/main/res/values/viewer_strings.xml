@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_show_controls">Show controls</string>
+    <string name="viewer_hide_controls">Hide controls</string>
+    <string name="viewer_seek_back_10">Back 10 seconds</string>
+    <string name="viewer_seek_forward_10">Forward 10 seconds</string>
+    <string name="viewer_seek_unavailable">Can\'t skip in this file</string>
+    <string name="viewer_speed">Speed</string>
+    <string name="viewer_speed_value">%1$s×</string>
+    <string name="viewer_speed_normal">Normal</string>
+    <string name="viewer_speed_failed">Couldn\'t change the speed</string>
+    <string name="viewer_fullscreen">Full screen</string>
+    <string name="viewer_exit_fullscreen">Exit full screen</string>
+</resources>

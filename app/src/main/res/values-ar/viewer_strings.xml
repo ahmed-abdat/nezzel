@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_show_controls">إظهار الأزرار</string>
+    <string name="viewer_hide_controls">إخفاء الأزرار</string>
+    <string name="viewer_seek_back_10">رجوع 10 ثوانٍ</string>
+    <string name="viewer_seek_forward_10">تقديم 10 ثوانٍ</string>
+    <string name="viewer_seek_unavailable">لا يمكن التنقّل داخل هذا الملف</string>
+    <string name="viewer_speed">السرعة</string>
+    <string name="viewer_speed_value">%1$s×</string>
+    <string name="viewer_speed_normal">عادية</string>
+    <string name="viewer_speed_failed">تعذّر تغيير السرعة</string>
+    <string name="viewer_fullscreen">ملء الشاشة</string>
+    <string name="viewer_exit_fullscreen">الخروج من ملء الشاشة</string>
+</resources>
