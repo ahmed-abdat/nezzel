@@ -27,9 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.layout
@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
-import dev.ahmed.savlino.ui.theme.Dock
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
@@ -79,6 +78,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         get() = slotRect
         set(value) {
             slotRect = value
+            if (value != null) lastSlot = value
             if (value != null && value.rect.top > 0f && value.rect.top != travel)
                 size.updateAnchors(DraggableAnchors { PlayerSize.Full at 0f; PlayerSize.Bar at value.rect.top }, size.targetValue)
         }
@@ -111,12 +111,31 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     /** The page's size, as last measured. */
     internal var page = Size.Zero
     /** Where the sheet is right now; null while there is no bar to shrink into. Read it only in layout, layer and draw lambdas. */
-    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let {
-        MiniPlayerLayout.at(progress, page, it.rect, if (lightBar && mini != null) it.cover(coverInset, coverSide) else null)
+    internal fun motion(): MiniPlayerLayout? {
+        // A session that ends mid-collapse takes its slot along: the page goes back up through the bar's last place, not in one jump.
+        val at = (slot ?: lastSlot?.takeIf { request != null && progress > 0f })?.takeIf { page != Size.Zero } ?: return null
+        val p = progress
+        val landing = mini != null
+        // Before the page's cover is placed, it is already the bar's.
+        val from = art ?: at.cover(coverInset, coverSide)
+        // The page's layer and its cover both ask each frame: one layout per frame, not one per caller.
+        last?.let { if (p == lastP && at == lastAt && from == lastFrom && page == lastPage && landing == lastLanding) return it }
+        return MiniPlayerLayout.at(p, page, at.rect, from, at.rtl, coverInset, landing).also {
+            last = it; lastP = p; lastAt = at; lastFrom = from; lastPage = page; lastLanding = landing
+        }
     }
-    /** A light bar under the black sheet: the sheet draws back into the cover rather than fading to grey over it. No bar, no cover to draw into. */
-    internal var lightBar = false
+    private var lastSlot: MiniSlot? = null
+    private var last: MiniPlayerLayout? = null
+    private var lastP = 0f
+    private var lastAt: MiniSlot? = null
+    private var lastFrom: Rect? = null
+    private var lastPage = Size.Zero
+    private var lastLanding = false
+    /** The page's cover on the still page, in window pixels: what lands on the bar's cover. */
+    internal var art by mutableStateOf<Rect?>(null)
     internal var coverInset = 0f
+    /** The bar's colour, which the sheet turns into as it lands. */
+    internal var barColor = Color.Black
     internal var coverSide = 0f
 
     internal fun show(next: ViewerRequest) {
@@ -155,7 +174,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
 
     private fun clear(fade: Boolean) {
         leaving = request.takeIf { fade && !reduced }
-        request = null; mini = null; wantBar = false; tapped = null
+        request = null; mini = null; wantBar = false; tapped = null; art = null; lastSlot = null
         settle(PlayerSize.Full, instant = true)
     }
     private fun settle(to: PlayerSize, instant: Boolean = false) {
@@ -215,10 +234,9 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     // The app's own reduced motion is provided below this host, so read the system setting here too.
     val reduced = LocalReducedMotion.current || rememberReducedMotion()
     val scope = rememberCoroutineScope()
-    val lightBar = Dock.color.luminance() > .5f
     val density = LocalDensity.current
     SideEffect {
-        state.scope = scope; state.reduced = reduced; state.lightBar = lightBar
+        state.scope = scope; state.reduced = reduced
         with(density) { state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx() }
     }
     val covered = request != null && !state.collapsed
@@ -274,9 +292,11 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                                 // Shrinking music: the whole page is one sheet that slides down and narrows into the bar.
                                 val motion = state.motion()?.takeIf { state.progress > 0f }
                                 alpha = appear.value * (motion?.fade ?: 1f)
-                                translationY = motion?.sheet?.top ?: 0f
+                                // The page slides with the finger; the sheet's outline (shorter, then drawing into the cover) clips it.
+                                val top = if (motion != null) state.progress * state.travel else 0f
+                                translationY = top
                                 clip = motion != null
-                                shape = motion?.run { SheetShape(sheet.translate(0f, -sheet.top), corner.toPx()) } ?: RectangleShape
+                                shape = motion?.run { SheetShape(sheet.translate(0f, -top), topCorner.toPx(), corner.toPx()) } ?: RectangleShape
                             }
                         }
                     }

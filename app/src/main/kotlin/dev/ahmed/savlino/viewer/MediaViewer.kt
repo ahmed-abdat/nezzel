@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -202,10 +203,11 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         val settled = settledItem?.uri
         zooms.forEach { (uri, zoom) -> if (uri != settled) zoom.reset() }
     }
-    // An opaque black page; shrinking music, the host slides and narrows all of it as one sheet.
+    // An opaque black page; shrinking music, the host slides and narrows all of it as one sheet that turns the bar's colour.
     Surface(Modifier.fillMaxSize().testTag(VIEWER_TAG)
-        .then(if (minimize) Modifier.semantics { collapse { host?.collapse(); true } } else Modifier),
-        color = SHEET_COLOR, contentColor = Color.White) {
+        .then(if (minimize) Modifier.semantics { collapse { host?.collapse(); true } } else Modifier)
+        .drawBehind { drawRect(host?.motion()?.takeIf { host.moving }?.let { host.sheetColor(it.tint) } ?: SHEET_COLOR) },
+        color = Color.Transparent, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
             // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
             // A rotation or hidden bars resize the pager without recreating it: settle back on the page so no neighbour peeks in.
