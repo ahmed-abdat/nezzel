@@ -56,6 +56,21 @@ class RedditPostIdentity private constructor(val fetchUrl: String, val postId: S
         internal fun isLoginWall(url: HttpUrl): Boolean = url.host in HOSTS &&
             Regex("/(?:login|account/login|register)/?").matches(url.encodedPath)
 
+        /**
+         * Reddit's redirect carries the title slug as raw UTF-8 (a Czech post, 2026-10-27); percent-encoded, it is the
+         * same path. Null for a lone surrogate.
+         */
+        internal fun asciiLocation(raw: String): String? = buildString {
+            var i = 0
+            while (i < raw.length) {
+                val cp = raw.codePointAt(i)
+                if (cp in 0xD800..0xDFFF) return null
+                if (cp < 0x80) appendCodePoint(cp)
+                else String(Character.toChars(cp)).toByteArray(Charsets.UTF_8).forEach { append("%%%02X".format(it.toInt() and 0xFF)) }
+                i += Character.charCount(cp)
+            }
+        }
+
         internal fun isRedditHost(host: String): Boolean = host in HOSTS || host == "redd.it" || host == "v.redd.it"
     }
 }

@@ -531,6 +531,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 // localhost or malformed destination is refused outright, so nothing hands it on.
                                 ?: if (shortLink) MediaHttpPolicy.resolve(url, location.replaceFirst(HTTP_SCHEME, "https://"))
                                     ?: throw MediaHttpException(MediaHttpFailure.ADDRESS_REJECTED)
+                                else if (redditPage) RedditPostIdentity.asciiLocation(location)?.let { MediaHttpPolicy.resolve(url, it) }
+                                    ?: throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                                 else throw MediaHttpException(MediaHttpFailure.INVALID_URL)
                             val next = when {
                                 tiktokPage -> MediaHttpPolicy.parse(checkNotNull(TikTokPostIdentity.parse(located.toString())).videoUrl)

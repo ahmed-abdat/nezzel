@@ -48,6 +48,24 @@ class RedditPostReaderTest : PublicImageTestBase() {
             }
     }
 
+    @Test fun aVideoLinkFollowsARedirectWhoseSlugIsRawUtf8() {
+        val slug = "pr\u00edli\u0161_\u017elut\u00fd_k\u016f\u0148"
+        val encoded = "pr%C3%ADli%C5%A1_%C5%BElut%C3%BD_k%C5%AF%C5%88"
+        val permalink = "/r/synthetic/comments/$POST_ID/$encoded/"
+        // The wire carries UTF-8 bytes, as Reddit sends them.
+        val location = String("https://www.reddit.com/r/synthetic/comments/$POST_ID/$slug/".toByteArray(), Charsets.ISO_8859_1)
+        fixture(respond = { request, socket -> when (request.target.substringBefore('?')) {
+            permalink -> if (answered in request.target) socket.reply(body = postPage(), headers = html)
+                else socket.reply(body = challengePage(permalink), headers = html)
+            else -> socket.reply(301, ByteArray(0), moved(location))
+        } }) { f ->
+            val read = assertIs<RedditTarget.Read>(f.read("https://v.redd.it/$VIDEO_ID"))
+            assertEquals("https://v.redd.it/$VIDEO_ID/DASHPlaylist.mpd", read.url)
+            assertEquals(listOf("/video/$VIDEO_ID/", permalink, permalink), f.targets().map { it.substringBefore('?') })
+        }
+        assertNull(RedditPostIdentity.asciiLocation("https://www.reddit.com/r/a/comments/$POST_ID/\uD800/"))
+    }
+
     @Test fun textPostsHoldNoVideoAndSignInWallsAskForSignIn() {
         fixture(respond = { request, socket ->
             socket.checked(request) { socket.reply(body = postPage("text"), headers = html) }
