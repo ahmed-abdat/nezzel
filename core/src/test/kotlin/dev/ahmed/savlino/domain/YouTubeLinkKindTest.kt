@@ -30,7 +30,9 @@ class YouTubeLinkKindTest {
         cases.forEach { (url, expected) -> assertEquals(expected, YouTubeLinkKind.classify(url), url) }
     }
     @Test fun everyRadioPrefixRequiresAVideoForTheMixNote() {
-        for (prefix in listOf("RD", "RDMM", "RDAMVM", "RDCLAK", "RDGMEM")) {
+        // Plain RD + an 11-character video id is the one list that names its seed video (LinkInput aliases it).
+        assertEquals(YouTubeLinkKind.Mix, YouTubeLinkKind.classify("https://youtube.com/playlist?list=RDabcdefghijk"))
+        for (prefix in listOf("RDMM", "RDAMVM", "RDCLAK", "RDGMEM")) {
             assertEquals(YouTubeLinkKind.Other, YouTubeLinkKind.classify("https://youtube.com/playlist?list=${prefix}abcdefghijk"))
             assertEquals(YouTubeLinkKind.Mix, YouTubeLinkKind.classify("https://youtube.com/watch?v=abcdefghijk&list=${prefix}abcdefghijk"))
         }

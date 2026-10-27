@@ -11,7 +11,7 @@ class PlaylistBatchNoticeTest {
         assertNull(playlistNotice("https://youtu.be/abcdefghijk"))
         assertNull(playlistNotice("https://youtube.com/watch?v=abcdefghijk&list=WL"))
         assertNull(playlistNotice("https://youtu.be/abcdefghijk?list=LL"))
-        assertNull(playlistNotice("https://youtube.com/playlist?list=RDabcdefghijk"))
+        assertEquals(R.string.playlist_mix_note, playlistNotice("https://youtube.com/playlist?list=RDabcdefghijk"))
         assertEquals(R.string.playlist_mix_note, playlistNotice("https://youtube.com/watch?v=abcdefghijk&list=RDabcdefghijk"))
         assertEquals(R.string.playlist_private_message, playlistNotice("https://youtube.com/playlist?list=WL"))
     }

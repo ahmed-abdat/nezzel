@@ -25,4 +25,19 @@ class LinkInputAliasTest {
         assertEquals(Host.FACEBOOK, LinkInput.parse("https://fb.com/reel/5")?.host)
         assertEquals("https://fb.me/abc", LinkInput.parse("https://fb.me/abc")?.rawUrl)
     }
+
+    @Test fun mixPlaylistLinkBecomesTheWatchLinkOfItsSeedVideo() {
+        val mix = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ"
+        for (pasted in listOf("https://youtube.com/playlist?list=RDdQw4w9WgXcQ", "https://m.youtube.com/playlist?list=RDdQw4w9WgXcQ&si=x",
+                "http://www.youtube.com/playlist?list=RDdQw4w9WgXcQ"))
+            assertEquals(mix, LinkInput.parse(pasted)?.rawUrl, pasted)
+        assertEquals(YouTubeLinkKind.Mix, YouTubeLinkKind.classify("https://youtube.com/playlist?list=RDdQw4w9WgXcQ"))
+        // Other RD lists, a wrong id length, repeated list= or an existing v= stay as pasted.
+        for (kept in listOf("https://www.youtube.com/playlist?list=RDCLAK5uy_kmPRjHDECIcuVwnKsx2Ng7fyNgFKWNJFs",
+                "https://www.youtube.com/playlist?list=RDMMdQw4w9WgXcQ", "https://www.youtube.com/playlist?list=RDdQw4w9WgXc",
+                "https://www.youtube.com/playlist?list=RDdQw4w9WgXcQ&list=RDdQw4w9WgXcQ",
+                "https://www.youtube.com/playlist?v=abcdefghijk&list=RDdQw4w9WgXcQ",
+                "https://music.youtube.com/playlist?list=RDdQw4w9WgXcQ"))
+            assertEquals(kept, LinkInput.parse(kept)?.rawUrl, kept)
+    }
 }

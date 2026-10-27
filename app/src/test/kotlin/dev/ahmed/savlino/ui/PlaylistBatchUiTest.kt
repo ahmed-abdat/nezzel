@@ -131,15 +131,20 @@ class PlaylistBatchUiTest {
         }
     }
 
-    @Test fun mixWithoutAVideoIsUnsupportedBeforeInspection() {
+    @Test fun mixPlaylistLinkInspectsItsSeedVideoOnly() {
+        var inspected: String? = null
         val engine = object : EngineAdapter by FakeEngine() {
-            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult = error("No video to inspect")
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+                inspected = source.link.rawUrl
+                return InspectResult.Success(Inspection(source, "fixture", listOf(Format("18", "mp4", true, true))))
+            }
         }
         val vm = LinkViewModel(SavedStateHandle(), engine = engine)
         try {
             vm.paste("https://youtube.com/playlist?list=RDabcdefghijk")
             shadowOf(Looper.getMainLooper()).idle()
-            assertEquals(DownloadError.Unsupported, (vm.optionsState as OptionsState.Error).error)
+            assertTrue(vm.optionsState is OptionsState.Ready)
+            assertEquals("https://www.youtube.com/watch?v=abcdefghijk&list=RDabcdefghijk", inspected)
         } finally { vm.dismissOptions() }
     }
 
