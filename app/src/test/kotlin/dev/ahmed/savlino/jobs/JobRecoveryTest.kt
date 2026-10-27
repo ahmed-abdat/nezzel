@@ -158,6 +158,44 @@ class JobRecoveryTest {
         assertEquals(0, publisher.inserts)
     }
 
+    // S3: a death between staged and published keeps the finished file; the job runs again and only saves.
+    @Test fun stagedFinishedSourceIsRequeuedWithItsFile() {
+        val (_, output) = finished("staged-finished")
+        reopen()
+        recoverTwice()
+        assertRequeued("staged-finished", output)
+        assertEquals(0, publisher.inserts)
+    }
+    @Test fun abandonedPendingInsertWithAFinishedSourceIsRequeued() {
+        val (job, output) = finished("pending-finished")
+        publisher.boundary = "inserted"
+        die { JobRecovery(store, publisher, root).publish(job, output, "video/mp4") }
+        val pendingUri = store.get("pending-finished")!!.pendingUri!!
+        reopen()
+        recoverTwice()
+        assertRequeued("pending-finished", output)
+        assertFalse(publisher.files.containsKey(pendingUri))
+        assertNull(store.get("pending-finished")!!.pendingUri)
+    }
+    @Test fun stagedWithNoneOrTwoFinishedFilesStillFails() {
+        val (_, none) = finished("staged-none"); none.delete()
+        val (_, two) = finished("staged-two"); File(two.parentFile, "output.mkv").writeBytes(bytes)
+        reopen()
+        recoverTwice()
+        assertFailed("staged-none"); assertFailed("staged-two")
+        assertFalse(two.parentFile.exists())
+    }
+    @Test fun cancelledPendingInsertIsNeverRequeued() {
+        val (job, output) = finished("pending-cancelled")
+        publisher.boundary = "inserted"
+        die { JobRecovery(store, publisher, root).publish(job, output, "video/mp4") }
+        store.requestPublicationFailure("pending-cancelled", DownloadError.Cancelled)
+        reopen()
+        recoverTwice()
+        assertEquals(JobStage.CANCELLED, store.get("pending-cancelled")!!.stage)
+        assertFalse(output.exists())
+    }
+
     @Test fun deathInsideInsertBeforeUriWasJournalledNeverTouchesUnrecordedRow() {
         val (job, staged) = staged("unrecorded")
         publisher.boundary = "before-journal"
@@ -669,6 +707,22 @@ class JobRecoveryTest {
         try { action(); fail("expected publication failure") } catch (_: Exception) { }
     }
 
+    /** STAGED with the engine's finished file (output.<ext>, the name a rerun adopts) and a leftover partial. */
+    private fun finished(id: String): Pair<JobDirectory.Job, File> {
+        store.enqueue(command(id))
+        check(store.startTransfer(id, "recipe"))
+        val job = directories.create(id)
+        val file = File(job.directory, "output.mp4").apply { writeBytes(bytes) }
+        File(job.directory, "output.f1.mp4.part").writeBytes(bytes)
+        check(store.markStaged(id))
+        return job to file
+    }
+    private fun assertRequeued(id: String, output: File) {
+        val row = store.get(id)!!
+        assertEquals(JobStage.ENQUEUED, row.stage); assertTrue(row.hasPartial); assertNull(row.error)
+        assertEquals("recipe", row.resumeRecipe)
+        assertArrayEquals(bytes, output.readBytes())
+    }
     private fun staged(id: String): Pair<JobDirectory.Job, File> {
         store.enqueue(command(id))
         check(store.startTransfer(id))

@@ -2,6 +2,7 @@ package dev.ahmed.savlino.jobs
 
 import android.os.CancellationSignal
 import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.domain.PartialFileNames
 import dev.ahmed.savlino.engine.YtdlpCommand
 import dev.ahmed.savlino.storage.*
 import java.io.File
@@ -33,8 +34,8 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
                 continue
             }
             when (row.stage) {
-                JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
-                JobStage.STAGED -> store.fail(row.jobId, DownloadError.SaveFailed)
+                JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row, startup = true)
+                JobStage.STAGED -> if (!requeueFinished(row)) store.fail(row.jobId, DownloadError.SaveFailed)
                 JobStage.TRANSFERRING -> recoverTransfer(row)
                 JobStage.FAILED -> { cleanupFailedTree(row); if (!JobStore.keepsPartial(row)) cleanup(row.jobId) }
                 JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(row.jobId)
@@ -159,7 +160,19 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
         }
     }
 
-    private fun recoverPublication(row: JobRecord) {
+    /** Exactly one finished file, the one a rerun adopts (YtdlpCommand.finishedSource), and nothing else but partials. */
+    private fun requeueFinished(row: JobRecord): Boolean {
+        val keep = row.command()?.format?.let(YtdlpCommand::finishedSource) ?: return false
+        val directory = File(jobRoot, row.jobId)
+        if (!safeRoot() || Files.isSymbolicLink(directory.toPath()) || !directory.isDirectory) return false
+        val outputs = directory.listFiles()?.filter { it.name != "result-path.txt" && !PartialFileNames.matches(it.name) }
+            ?: return false
+        val output = outputs.singleOrNull()?.takeIf { it.name == keep } ?: return false
+        if (Files.isSymbolicLink(output.toPath()) || !output.isFile || output.length() == 0L) return false
+        return store.requeueFinished(row.jobId)
+    }
+
+    private fun recoverPublication(row: JobRecord, startup: Boolean = false) {
         val uri = row.pendingUri ?: return
         try {
             val current = publisher.recover(uri)
@@ -172,7 +185,10 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             } else current
             when (resolved) {
                 is PublishedFile -> store.complete(row.jobId, resolved)
-                MissingPublication -> store.publicationAbandoned(row.jobId)
+                // At startup a death, not the save, ended it: save again from the finished file.
+                MissingPublication -> if (!(startup && row.error !in setOf(DownloadError.Cancelled,
+                        DownloadError.InsufficientSpace, DownloadError.FolderUnavailable) && requeueFinished(row)))
+                    store.publicationAbandoned(row.jobId)
                 is PendingPublication -> Unit // Delete not acknowledged: retain URI for reconciliation.
             }
         } catch (failure: Exception) {

@@ -295,6 +295,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         return transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING), JobStage.ENQUEUED,
             ContentValues().apply { put("has_partial", if (hasPartial) 1 else 0); putNull("error") })
     }
+    /**
+     * Startup only: a death between staged and published left the finished file in staging. Run the job again
+     * (it adopts that file and only saves) instead of failing it. A pending row must already be acknowledged gone.
+     */
+    @Synchronized internal fun requeueFinished(jobId: String): Boolean =
+        transition(jobId, setOf(JobStage.STAGED, JobStage.PENDING_INSERTED, JobStage.PUBLISHING), JobStage.ENQUEUED,
+            ContentValues().apply { put("has_partial", 1); putNull("error"); putNull("pending_uri"); putNull("display_name") })
     /** Persist the reset position so trickles accumulate across attempts without reopening the budget. */
     @Synchronized internal fun resetAutomaticResumes(jobId: String, bytes: Long) {
         val row = get(jobId) ?: return

@@ -990,6 +990,22 @@ class DownloadWorkerTest {
             assertFalse(File(app.filesDir, "downloads/battery-empty").exists())
         }
     }
+    // S3: a job requeued at startup with its finished file waits behind the gate while offline; it never fails.
+    @Test fun requeuedFinishedJobWaitsQueuedWhileOffline() = runBlocking {
+        val network = TestNetwork(connected = false)
+        fixture(FakeEngine(), network = network).use { f ->
+            f.store.enqueue(command("s3-offline")); check(f.store.startTransfer("s3-offline", "recipe"))
+            val output = File(app.filesDir, "downloads/s3-offline").apply { mkdirs() }.resolve("output.mp4")
+            output.writeBytes(byteArrayOf(1, 2, 3, 4))
+            check(f.store.markStaged("s3-offline"))
+            recovery(f).recover()
+            assertEquals(JobStage.ENQUEUED, f.store.get("s3-offline")!!.stage)
+            assertEquals(ListenableWorker.Result.success(), f.worker("s3-offline").doWork())
+            val row = f.store.get("s3-offline")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertNull(row.error)
+            assertTrue(output.isFile); assertEquals(0, f.attempts.get())
+        }
+    }
     private val waiting = java.util.concurrent.atomic.AtomicInteger()
     /** The first [waits] runs write a partial and wait to be stopped; later runs finish. [seen]: the partial each run found. */
     private fun partialThenWait(seen: MutableList<String?> = java.util.concurrent.CopyOnWriteArrayList(), waits: Int = 1):
