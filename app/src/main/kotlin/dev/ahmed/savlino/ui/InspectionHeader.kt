@@ -63,11 +63,16 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
                     Spacer(Modifier.fillMaxWidth(.65f).height(12.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceContainerHighest))
                 }
             }
-            // One line of facts (duration · channel · site) keeps the sheet short; the host stays an LTR island.
-            val metadata = listOfNotNull(inspection?.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) },
-                inspection?.uploader?.let(NezzelFormat::firstStrong), NezzelFormat.isolate(host))
-            Text(metadata.joinToString(" · "), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content),
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // The channel gets its own shortened line, so a long or mixed-direction name never splits the facts or hides the site.
+            val small = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content)
+            inspection?.uploader?.let {
+                Text(NezzelFormat.firstStrong(it), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            // duration · site; the host stays an LTR island.
+            val facts = listOfNotNull(inspection?.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }, NezzelFormat.isolate(host))
+            Text(facts.joinToString(" · "), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
