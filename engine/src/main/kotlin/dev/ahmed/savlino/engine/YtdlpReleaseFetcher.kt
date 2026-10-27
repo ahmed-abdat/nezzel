@@ -29,6 +29,8 @@ internal object YtdlpRelease {
     const val PREFS = "youtubedl-android"
     const val VERSION_KEY = "dlpVersion"
     const val VERSION_NAME_KEY = "dlpVersionName"
+    /** The copy in engine res/raw/ytdlp (overrides the wrapper's 2025.11.12); its SHA-256 is pinned in the engine build. */
+    const val BUNDLED_TAG = "2026.10.26"
     /** The 2026.10.21 asset is 3,074,818 bytes. */
     const val MAX_ASSET_BYTES = 15L * 1024 * 1024
     const val MAX_TEXT_BYTES = 1L * 1024 * 1024
@@ -114,6 +116,15 @@ internal class YtdlpStagedInstall(private val dir: File, private val binaryName:
         /** Expected plain-file size: bundled with no recorded update, the size we recorded, or null (unknown: keep). */
         fun expectedSize(recordedVersion: String?, recordedSize: Long?, bundled: () -> Long): Long? =
             if (recordedVersion == null) bundled() else recordedSize
+
+        /** True only when both are STABLE tags (YYYY.MM.DD[.N]) and [tag] is older than [than]; an unknown tag is kept. */
+        fun olderTag(tag: String, than: String = YtdlpRelease.BUNDLED_TAG): Boolean {
+            fun parts(tag: String) = tag.split('.').takeIf { it.size in 3..4 && it.all { p -> p.isNotEmpty() && p.all(Char::isDigit) && p.length <= 9 } }
+                ?.map(String::toInt)?.let { if (it.size == 3) it + 0 else it }
+            val old = parts(tag) ?: return false
+            val new = parts(than) ?: return false
+            return old.zip(new).firstOrNull { (a, b) -> a != b }?.let { (a, b) -> a < b } ?: false
+        }
     }
 }
 
@@ -134,7 +145,10 @@ internal class YtdlpReleaseFetcher(private val client: OkHttpClient, private val
         val tag = release?.get("tag_name")?.asText().orEmpty()
         val name = release?.get("name")?.asText().orEmpty()
         if (tag.isEmpty()) throw ReleaseFetchException("release metadata")
-        if (tag == installedTag()) return StagedYtdlp(null, tag, name)
+        // No recorded update, or one older than the bundle (startup drops it, possibly after this fetch), means the
+        // bundled copy runs. Only a newer STABLE tag is fetched; an older, equal or unknown one keeps what is installed.
+        val current = installedTag()?.takeUnless { YtdlpStagedInstall.olderTag(it) } ?: YtdlpRelease.BUNDLED_TAG
+        if (!YtdlpStagedInstall.olderTag(current, tag)) return StagedYtdlp(null, tag, name)
         val binary = assetUrl(release, YtdlpRelease.ASSET) ?: throw ReleaseFetchException("release asset")
         val sums = assetUrl(release, YtdlpRelease.SUMS) ?: return rejected()
         val expected = expectedSha256(text(sums)) ?: return rejected()

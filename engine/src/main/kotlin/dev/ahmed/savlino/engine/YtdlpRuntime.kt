@@ -89,6 +89,10 @@ internal interface YtdlpRuntime {
     /** Expected size of the plain copy (bundled, or our recorded install); null protects an unknown update from repair. */
     fun bundledYtdlpSizeForRepair(): Long? = null
     fun clearUpdatedYtdlpVersion() = Unit
+    /** Settles an install killed midway (old install back, or the new binary under the old tag). Local only. */
+    fun sweepStagedInstall() = Unit
+    /** The recorded updated tag; null while the bundled copy is in use. */
+    fun updatedYtdlpVersion(): String? = null
     /** Successful local probe for this installed binary; no process or network needed to read it. */
     fun warmedVersion(): String? = null
     fun rememberWarmedVersion(version: String) = Unit
@@ -187,6 +191,7 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     @Volatile private var youtubeDlReady = false
     @Volatile private var ffmpegReady = false
     override val initialization get() = sharedInitialization
+    override fun sweepStagedInstall() = installer.sweep()
     override fun initialize() {
         installer.sweep()
         YoutubeDL.init(app); youtubeDlReady = true
@@ -263,13 +268,14 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
         prefs.getLong(YtdlpStagedInstall.SIZE_KEY, -1).takeIf { it >= 0 }, ::bundledSize)
     private fun bundledSize(): Long =
         app.resources.openRawResource(com.yausername.youtubedl_android.R.raw.ytdlp).use { it.available().toLong() }
+    override fun updatedYtdlpVersion(): String? = prefs.getString(DLP_VERSION, null)
     override fun clearUpdatedYtdlpVersion() {
         prefs.edit().remove(DLP_VERSION).remove(YtdlpRelease.VERSION_NAME_KEY).remove(YtdlpStagedInstall.SIZE_KEY).commit()
     }
     private val warmPrefs get() = app.getSharedPreferences("engine-warm-up", Context.MODE_PRIVATE)
     // The stamp also distinguishes a bundled restore/re-extraction of a previously warmed version.
     private fun installedKey(): String {
-        return listOf(prefs.getString(DLP_VERSION, "bundled-0.18.1"),
+        return listOf(prefs.getString(DLP_VERSION, "bundled-${YtdlpRelease.BUNDLED_TAG}"),
             ytdlpInstallationStamp(File(base, YoutubeDL.ytdlpDirName)),
             prefs.getString("pythonLibVersion", null), prefs.getString("ffmpegLibVersion", null)).joinToString(":")
     }
@@ -388,7 +394,7 @@ internal class YtdlpDiagnostics {
 
 /** Local-only preparation runs inside the existing init/update gates, before any version probe. */
 internal class DirectoryYtdlpRuntime(
-    private val native: YtdlpRuntime, directory: File, enabled: Boolean,
+    private val native: YtdlpRuntime, private val directory: File, enabled: Boolean,
     private val timing: YtdlpPreparationTiming = YtdlpPreparationTiming.process,
     rename: (File, File) -> Boolean = File::renameTo,
 ) : YtdlpRuntime by native {
@@ -398,7 +404,18 @@ internal class DirectoryYtdlpRuntime(
     override fun initialize() {
         // Recover before upstream init: a missing executable would otherwise be replaced by the
         // bundled zip while the update-version preference still describes the backed-up update.
+        // First settle an install killed midway, so neither check below judges a half-swapped directory.
+        native.sweepStagedInstall()
         installation.recover()
+        // Startup only, before any yt-dlp process: init_ytdlp keeps whatever copy is already there, so an
+        // older app's bundled copy, or an update older than this bundle, is dropped to be re-copied offline.
+        val recorded = native.updatedYtdlpVersion()
+        if (recorded != null && YtdlpStagedInstall.olderTag(recorded)) {
+            check(directory.deleteRecursively())
+            native.clearUpdatedYtdlpVersion()
+        } else if (recorded == null && binary.isDirectory) native.bundledYtdlpSizeForRepair()?.let { expected ->
+            if (archive.length() != expected) check(directory.deleteRecursively())
+        }
         // 0.18.1 skips any existing path, even a first-copy fragment left by process death. Only
         // unversioned plain bundles and our recorded installs have a known size; retain other updates
         // and materialized directories. A deleted update is replaced by the bundled copy below.

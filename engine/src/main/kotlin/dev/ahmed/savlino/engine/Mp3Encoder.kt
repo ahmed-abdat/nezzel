@@ -41,8 +41,8 @@ internal data class Mp3Input(val movFamily: Boolean, val rate: Int, val duration
 
 /** yt-dlp's FFmpegMetadataPP.add() for the keys an MP3 row keeps; the rest are blanked as today's args do. */
 internal object Mp3Tags {
-    // album <- (album, series) as in yt-dlp 2026.10.21 ffmpeg.py add('album', ('album', 'series')); the bundled
-    // 2025.11.12 reads album only, but the weekly STABLE update is what phones run.
+    // album <- (album, series) as in yt-dlp ffmpeg.py add('album', ('album', 'series')), true of
+    // the bundled 2026.10.26 and of the weekly STABLE update.
     private val fields = listOf(
         "title" to listOf("track", "title"), "track" to listOf("track_number"),
         "artist" to listOf("artist", "artists", "creator", "creators", "uploader", "uploader_id"),

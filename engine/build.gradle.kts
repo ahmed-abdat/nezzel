@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     alias(libs.plugins.android.library)
 }
@@ -23,6 +25,19 @@ android {
 }
 
 kotlin { jvmToolchain(17) }
+
+// res/raw/ytdlp overrides the wrapper's 2025.11.12 copy (YtdlpRelease.BUNDLED_TAG); a different file fails the build.
+val verifyBundledYtdlp = tasks.register("verifyBundledYtdlp") {
+    val pinned = "e51e69e89489f199530f13d32a4342da3ddb2cf34842f364603a066db05afbf3"
+    val bundled = layout.projectDirectory.file("src/main/res/raw/ytdlp")
+    inputs.file(bundled)
+    doLast {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bundled.asFile.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        check(digest == pinned) { "res/raw/ytdlp SHA-256 $digest is not the pinned $pinned" }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifyBundledYtdlp) }
 
 dependencies {
     constraints {

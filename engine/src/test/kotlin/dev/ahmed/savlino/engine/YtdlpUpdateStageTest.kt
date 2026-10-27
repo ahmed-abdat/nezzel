@@ -28,10 +28,10 @@ class YtdlpUpdateStageTest {
     @get:Rule val temp = TemporaryFolder()
     private val asset = "#!/usr/bin/env python3\nprint('yt-dlp')\n".toByteArray()
     private val sha = MessageDigest.getInstance("SHA-256").digest(asset).joinToString("") { "%02x".format(it) }
-    private val binaryUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp"
-    private val sumsUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/SHA2-256SUMS"
+    private val binaryUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.11.02/yt-dlp"
+    private val sumsUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.11.02/SHA2-256SUMS"
     private val cdn = "https://release-assets.githubusercontent.com/asset"
-    private fun release(tag: String = "2026.10.21", binary: String = binaryUrl, sums: String? = sumsUrl): String {
+    private fun release(tag: String = "2026.11.02", binary: String = binaryUrl, sums: String? = sumsUrl): String {
         val assets = mutableListOf("""{"name":"yt-dlp.exe","browser_download_url":"https://github.com/x.exe"}""",
             """{"name":"yt-dlp","browser_download_url":"$binary"}""")
         if (sums != null) assets += """{"name":"SHA2-256SUMS","browser_download_url":"$sums"}"""
@@ -73,7 +73,7 @@ class YtdlpUpdateStageTest {
     @Test fun verifiedReleaseIsStagedThroughAllowedRedirects() = runBlocking {
         val cache = temp.newFolder()
         val staged = assertIs<StagedYtdlp>(fetcher(github(), cache, installed = "2025.11.12").fetch())
-        assertEquals("2026.10.21", staged.tag); assertEquals("yt-dlp 2026.10.21", staged.name)
+        assertEquals("2026.11.02", staged.tag); assertEquals("yt-dlp 2026.11.02", staged.name)
         assertContentEquals(asset, assertNotNull(staged.file).readBytes())
         assertEquals(cache, staged.file!!.parentFile)
         assertFalse(staged.toString().contains("2026"))
@@ -81,10 +81,43 @@ class YtdlpUpdateStageTest {
 
     @Test fun currentTagDownloadsNothing() = runBlocking {
         val cache = temp.newFolder()
-        val staged = assertIs<StagedYtdlp>(fetcher(github(), cache, installed = "2026.10.21").fetch())
+        val staged = assertIs<StagedYtdlp>(fetcher(github(), cache, installed = "2026.11.02").fetch())
         assertNull(staged.file)
         assertEquals(listOf(YtdlpRelease.API_URL), requests)
         assertTrue(cache.listFiles()!!.isEmpty())
+    }
+
+    @Test fun bundledTagWithNoRecordedUpdateDownloadsNothing() = runBlocking {
+        val cache = temp.newFolder()
+        val staged = assertIs<StagedYtdlp>(fetcher(github(releaseJson = release(YtdlpRelease.BUNDLED_TAG)), cache).fetch())
+        assertNull(staged.file)
+        assertEquals(listOf(YtdlpRelease.API_URL), requests)
+        assertTrue(cache.listFiles()!!.isEmpty())
+    }
+
+    @Test fun aReleaseNotNewerThanWhatRunsDownloadsNothing() = runBlocking {
+        // Recorded older than the bundle (first start after an app upgrade, before init drops it): the bundle is current.
+        // A newer or unknown recorded tag is never replaced by an older, equal or unknown release.
+        for ((installed, remote) in listOf("2026.10.21" to YtdlpRelease.BUNDLED_TAG, "2026.11.09" to "2026.11.02",
+            "2026.11.02.1" to "2026.11.02", "updated" to "2026.11.02", null to "2026.10.21", null to "latest")) {
+            synchronized(requests) { requests.clear() }
+            val cache = temp.newFolder()
+            val staged = assertIs<StagedYtdlp>(fetcher(github(releaseJson = release(remote)), cache, installed).fetch())
+            assertNull(staged.file, "$installed vs $remote")
+            assertEquals(listOf(YtdlpRelease.API_URL), requests, "$installed vs $remote")
+        }
+        synchronized(requests) { requests.clear() }
+        val staged = assertIs<StagedYtdlp>(fetcher(github(), temp.newFolder(), "2026.10.21").fetch())
+        assertContentEquals(asset, assertNotNull(staged.file).readBytes()) // Newer than the bundle: fetched.
+    }
+
+    @Test fun onlyAStableTagOlderThanTheBundledOneIsOlder() {
+        assertTrue(YtdlpStagedInstall.olderTag("2025.11.12", "2026.10.26"))
+        assertTrue(YtdlpStagedInstall.olderTag("2026.10.21.3", "2026.10.26"))
+        assertTrue(YtdlpStagedInstall.olderTag("2026.10.26", "2026.10.26.1"))
+        for (kept in listOf("2026.10.26", "2026.10.26.1", "2026.11.02", "2027.01.01", "updated", "", "2026.10",
+            "2026.10.21-nightly", "v2026.10.21", "2026.10.21.1.2", "2026..21", "99999999999.1.1"))
+            assertFalse(YtdlpStagedInstall.olderTag(kept, "2026.10.26"), kept)
     }
 
     @Test fun hashMismatchOrMissingEntryFailsAndKeepsNoFile() = runBlocking {
@@ -236,7 +269,7 @@ class YtdlpUpdateStageTest {
         val cache = temp.newFolder()
         val stale = File(cache, "${YtdlpReleaseFetcher.TEMP_PREFIX}1.tmp").apply { writeBytes(asset) }
         val other = File(cache, "yt-dlp-other.tmp").apply { writeText("x") }
-        assertIs<StagedYtdlp>(fetcher(github(), cache, installed = "2026.10.21").fetch())
+        assertIs<StagedYtdlp>(fetcher(github(), cache, installed = "2026.10.26").fetch())
         assertFalse(stale.exists()); assertTrue(other.exists())
     }
 
