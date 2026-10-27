@@ -18,7 +18,8 @@ internal val LocalAudioConnection = staticCompositionLocalOf<((PlaybackEnvironme
 /** Activity-retained sessions survive recreation, while a dismissed viewer is removed immediately. */
 internal class ViewerPlaybackRegistry : ViewModel() {
     val sessions = mutableMapOf<String, PlaybackCoordinator>()
-    override fun onCleared() { sessions.values.toList().forEach { it.close() }; sessions.clear() }
+    var environment: PlaybackEnvironment? = null
+    override fun onCleared() { sessions.values.toList().forEach { it.close() }; sessions.clear(); environment?.releaseStopped() }
 }
 
 @Composable
@@ -28,6 +29,7 @@ internal fun rememberViewerPlayback(): PlaybackCoordinator {
     val id = rememberSaveable { UUID.randomUUID().toString() }
     val environment = LocalPlaybackEnvironment.current ?: PlaybackEnvironment.get(context)
     val audio = LocalAudioConnection.current ?: ::SessionAudioConnection
+    registry.environment = environment
     val owner = remember(registry, id) { registry.sessions.getOrPut(id) { PlaybackCoordinator(environment, audio(environment)) } }
     DisposableEffect(owner, context) {
         onDispose {

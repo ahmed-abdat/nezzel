@@ -39,6 +39,7 @@ class PlaybackCoordinatorTest {
         shadowOf(android.os.Looper.getMainLooper()).idle()
         assertTrue(players[0].released)
         owner.settle(item(3, true), initiallyTapped = false)
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(PlaybackEnvironment.RELEASE_DELAY_MS))
         assertTrue(players[1].released)
         assertEquals(0, audioStarts)
         owner.play()
@@ -58,6 +59,7 @@ class PlaybackCoordinatorTest {
         owner.foreground(true)
         assertFalse(player.playWhenReady)
         owner.close()
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(PlaybackEnvironment.RELEASE_DELAY_MS))
         assertTrue(player.released)
     }
     @Test fun processRestorationDoesNotAllocateAutoplayOrCount() {
@@ -103,6 +105,88 @@ class PlaybackCoordinatorTest {
         assertFalse(owner.item!!.isAudio)
         assertTrue(closes > 0)
         owner.close()
+    }
+    private val looper get() = shadowOf(android.os.Looper.getMainLooper())
+    private fun videoEnvironment(players: MutableList<RecordingPlayer>) = PlaybackEnvironment(RuntimeEnvironment.getApplication(),
+        PlayerFactory { _, _ -> RecordingPlayer().also(players::add) }, sizeOf = { 10L })
+    @Test fun closingTheViewerStopsThePlayerAtOnceAndReleasesItAfterTheCodecIsFreed() {
+        val players = mutableListOf<RecordingPlayer>()
+        val owner = PlaybackCoordinator(videoEnvironment(players), NoAudioConnection)
+        owner.settle(item(1), true)
+        looper.idle()
+        owner.close()
+        val player = players.single()
+        // The close frame only detaches the surface and stops (codec freed, audio focus dropped on the playback thread).
+        assertTrue(player.surfaceCleared)
+        assertEquals(androidx.media3.common.Player.STATE_IDLE, player.playbackState)
+        assertFalse(player.playWhenReady)
+        assertFalse("release() blocks the main thread on the codec: never on the close frame", player.released)
+        looper.idleFor(Duration.ofMillis(PlaybackEnvironment.RELEASE_DELAY_MS))
+        assertEquals(1, player.releases)
+        looper.idleFor(Duration.ofSeconds(5))
+        assertEquals(1, player.releases)
+        assertEquals(0, player.afterRelease)
+    }
+    @Test fun aNewVideoReleasesEveryStoppedPlayerFirstAndEachOnlyOnce() {
+        val players = mutableListOf<RecordingPlayer>()
+        val environment = videoEnvironment(players)
+        repeat(3) { index ->
+            PlaybackCoordinator(environment, NoAudioConnection).apply { settle(item(index), true); looper.idle(); close() }
+        }
+        // Each open released the one closed before it; the last closed is still waiting for its delay.
+        assertEquals(listOf(1, 1, 0), players.map { it.releases })
+        val next = PlaybackCoordinator(environment, NoAudioConnection)
+        next.settle(item(9), true)
+        assertTrue(players.take(3).all { it.releases == 1 })
+        looper.idleFor(Duration.ofSeconds(5))
+        assertTrue(players.take(3).all { it.releases == 1 && it.afterRelease == 0 })
+        assertFalse(players[3].released)
+        next.close()
+    }
+    @Test fun leavingTheAppOrEndingTheViewerActivityReleasesStoppedPlayersAtOnce() {
+        val players = mutableListOf<RecordingPlayer>()
+        val application = RuntimeEnvironment.getApplication()
+        val environment = videoEnvironment(players).also { it.watch(application) }
+        val activity = org.robolectric.Robolectric.buildActivity(androidx.activity.ComponentActivity::class.java).create().start()
+        PlaybackCoordinator(environment, NoAudioConnection).apply { settle(item(1), true); looper.idle(); close() }
+        assertFalse(players[0].released)
+        activity.stop()
+        assertEquals(1, players[0].releases)
+        // The viewer's retained registry ends with its activity: its stopped players go with it.
+        val store = androidx.lifecycle.ViewModelStore()
+        val registry = androidx.lifecycle.ViewModelProvider.create(store)[dev.ahmed.savlino.viewer.ViewerPlaybackRegistry::class]
+        registry.environment = environment
+        registry.sessions["viewer"] = PlaybackCoordinator(environment, NoAudioConnection).apply { settle(item(2), true); looper.idle(); close() }
+        assertFalse(players[1].released)
+        store.clear()
+        assertEquals(1, players[1].releases)
+        looper.idleFor(Duration.ofSeconds(5))
+        assertTrue(players.all { it.releases == 1 && it.afterRelease == 0 })
+    }
+    @Test fun theUiLetsGoOfThePlayerBeforeItsStopEventsArrive() {
+        val players = mutableListOf<RecordingPlayer>()
+        val owner = PlaybackCoordinator(videoEnvironment(players), NoAudioConnection)
+        owner.settle(item(1), true)
+        looper.idle()
+        // ViewerVideo follows the player only while the owner still exposes it.
+        val exposedDuringStop = mutableListOf<androidx.media3.common.Player?>()
+        players[0].onStop = { exposedDuringStop += owner.player.value }
+        owner.close()
+        assertEquals(listOf<androidx.media3.common.Player?>(null), exposedDuringStop)
+    }
+    @Test fun aFlushCancelsTheDelayedReleases() {
+        val pending = mutableListOf<() -> Unit>()
+        var cancelled = 0
+        val players = mutableListOf<RecordingPlayer>()
+        val environment = PlaybackEnvironment(RuntimeEnvironment.getApplication(), PlayerFactory { _, _ -> RecordingPlayer().also(players::add) },
+            sizeOf = { 10L }, scheduler = PlaybackScheduler { _, action -> pending += action; PlaybackCancellation { cancelled++; pending -= action } })
+        environment.releaseLater(RecordingPlayer().also(players::add))
+        environment.releaseLater(RecordingPlayer().also(players::add))
+        assertEquals(2, pending.size)
+        environment.releaseStopped()
+        assertTrue(pending.isEmpty())
+        assertEquals(2, cancelled)
+        assertTrue(players.all { it.releases == 1 })
     }
 }
 internal object NoAudioConnection : AudioConnection {

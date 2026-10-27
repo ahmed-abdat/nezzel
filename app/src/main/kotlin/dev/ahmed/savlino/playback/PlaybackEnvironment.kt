@@ -87,6 +87,17 @@ class PlaybackEnvironment(
         while (failedOpens.size > 200) failedOpens.remove(failedOpens.first())
     }
     internal var stopAudio: (() -> Unit)? = null
+    // release() waits on the playback thread while it frees the codec (40-60 ms on a phone): a closed viewer's player is
+    // stopped at once (frees the codec, drops audio focus) and released once that's done, off the close frame.
+    private val stopped = linkedMapOf<Player, PlaybackCancellation?>()
+    internal fun releaseLater(player: Player) {
+        player.clearVideoSurface(); player.stop()
+        stopped[player] = null
+        val timer = scheduler.after(RELEASE_DELAY_MS) { if (stopped.containsKey(player)) { stopped.remove(player); player.release() } }
+        if (stopped.containsKey(player)) stopped[player] = timer
+    }
+    /** Releases every stopped player now: a new video opens, the app leaves the foreground, or the viewer's activity ends. */
+    internal fun releaseStopped() { stopped.keys.toList().forEach { stopped.remove(it)?.cancel(); it.release() } }
     private val activities = mutableSetOf<Activity>()
     private var owner: Any? = null
     private var stopOwner: (() -> Unit)? = null
@@ -108,7 +119,7 @@ class PlaybackEnvironment(
             override fun onActivityStopped(activity: Activity) {
                 activities -= activity
                 // Rotation is not leaving the app; the replacement activity will bind the retained viewer.
-                if (activities.isEmpty() && !activity.isChangingConfigurations) foreground.value = false
+                if (activities.isEmpty() && !activity.isChangingConfigurations) { foreground.value = false; releaseStopped() }
             }
             override fun onActivityDestroyed(activity: Activity) { activities -= activity }
             override fun onActivityCreated(activity: Activity, state: Bundle?) {}
@@ -118,6 +129,7 @@ class PlaybackEnvironment(
         })
     }
     companion object {
+        internal const val RELEASE_DELAY_MS = 1_000L
         private val applications = java.util.WeakHashMap<Context, PlaybackEnvironment>()
         @Synchronized fun get(context: Context): PlaybackEnvironment {
             val application = context.applicationContext

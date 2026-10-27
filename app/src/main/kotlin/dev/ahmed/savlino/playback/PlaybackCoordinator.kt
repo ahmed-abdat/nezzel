@@ -127,6 +127,7 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
         val expected = generation
         try {
             ContentPlaybackSource.requireContent(next.uri)
+            environment.releaseStopped()
             val session = PlaybackSession(environment.playerFactory.create(environment.context, false), environment,
                 failed = { failureCounted = true }, openId = { openId })
             tracker = session; session.player.addListener(videoIntentListener); player.value = session.player
@@ -191,8 +192,9 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
     private fun releaseItem() {
         generation++; videoLoad?.cancel(); videoLoad = null; observe?.cancel(); observe = null
         tracker?.player?.removeListener(videoIntentListener)
-        tracker?.close(); tracker = null
+        // The UI stops following the player before stop() delivers its events.
         player.value?.removeListener(audioListener); player.value = null
+        tracker?.close(environment::releaseLater); tracker = null
         suppressDisconnect = true; audio.close(); suppressDisconnect = false
     }
     fun close() {
