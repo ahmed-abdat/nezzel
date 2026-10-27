@@ -24,7 +24,9 @@ internal class FileProcTable(private val root: File = File("/proc"),
         val end = stat.lastIndexOf(')')
         require(end > 0 && stat.substringBefore(' ').toInt() == pid)
         val fields = stat.substring(end + 1).trim().split(Regex("\\s+"))
-        val command = try { File(directory, "cmdline").readText().split('\u0000').filter { it.isNotEmpty() } }
+        // Each argv entry ends in NUL; an empty argument ("" in --replace-in-metadata) is a real entry.
+        val command = try { File(directory, "cmdline").readText().takeIf { it.isNotEmpty() }
+            ?.removeSuffix("\u0000")?.split('\u0000').orEmpty() }
             catch (_: Exception) { emptyList() }
         ProcProcess(pid, fields[1].toInt(), fields[19].toLong(), command, fields[0].single())
     } catch (_: Exception) { null } // Process may disappear between directory/stat/cmdline reads.

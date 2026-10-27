@@ -108,4 +108,29 @@ class ProcessTreeTest {
         assertFalse(matches(row.copy(command = row.command + "extra")))
         assertFalse(matches(row.copy(command = row.command.dropLast(1) + "https://other.org/video")))
     }
+    /** Audio with tags passes two "" values (--replace-in-metadata): /proc keeps them, so the root match must too. */
+    @Test fun audioConversionArgvWithEmptyArgumentsMatchesAndItsFfmpegIsSignalled() {
+        val dir = temp.newFolder().canonicalFile
+        val source = dev.ahmed.savlino.domain.LinkRevision(assertNotNull(dev.ahmed.savlino.domain.LinkInput.parse("https://example.org/123")), 1)
+        val row = dev.ahmed.savlino.domain.Format("mp3-192", "mp3", false, true, audioCodec = "mp3",
+            conversion = dev.ahmed.savlino.domain.AudioConversion.MP3_192, sourceFormatId = "140", sourceContainer = "m4a")
+        val command = assertIs<dev.ahmed.savlino.domain.ConfirmResult.Confirmed>(dev.ahmed.savlino.domain.DownloadCommand.confirm("job-1",
+            dev.ahmed.savlino.domain.Inspection(source, "2025.11.12", listOf(row)), source, row.id, "title")).command
+        val args = YtdlpCommand.download(command, dir)
+        assertTrue(args.count { it.isEmpty() } >= 2, "fixture must carry the empty metadata replacements")
+        val root = temp.newFolder()
+        fun write(pid: Int, parent: Int, argv: List<String>) {
+            val directory = File(root, pid.toString()).apply { mkdir() }
+            File(directory, "stat").writeText("$pid (x) S $parent " + List(17) { "0" }.joinToString(" ") + " $pid 0")
+            File(directory, "cmdline").writeBytes(argv.joinToString("") { it + "\u0000" }.toByteArray())
+        }
+        val signals = mutableListOf<Pair<Int, Int>>()
+        val proc = FileProcTable(root) { pid, signal -> signals += pid to signal; if (signal == 9) File(root, pid.toString()).deleteRecursively() }
+        val tree = ProcessTree(proc) { matchesYtdlpChild(it, 7, "/native/libpython.so", "/private/yt-dlp", args) }
+        write(42, 7, listOf("/native/libpython.so", "/private/yt-dlp") + args)
+        write(43, 42, listOf("/native/libffmpeg.so", "-y", "-i", File(dir, "output.m4a").path, File(dir, "output.mp3").path))
+        assertEquals(args, assertNotNull(proc.read(42)).command.drop(2))
+        assertTrue(tree.terminate(includeRoot = false) {})
+        assertEquals(listOf(43 to 15, 43 to 9), signals)
+    }
 }
