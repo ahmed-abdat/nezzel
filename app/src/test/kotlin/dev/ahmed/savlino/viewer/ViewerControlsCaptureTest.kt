@@ -22,7 +22,6 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.playback.PlaybackEnvironment
 import dev.ahmed.savlino.playback.PlayerFactory
-import dev.ahmed.savlino.playback.registerAudioServiceBinding
 import android.media.AudioManager
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import dev.ahmed.savlino.windowViews
@@ -53,7 +52,6 @@ class ViewerControlsCaptureTest {
         }
     }
     private val video = ViewerItem(Uri.parse("content://media/external/video/2"), true, "video/mp4", 100_000)
-    private val audio = ViewerItem(Uri.parse("content://media/external/audio/5"), false, "audio/mp4", 100_000, isAudio = true)
 
     private fun idle(millis: Long = 250) = repeat(4) {
         Snapshot.sendApplyNotifications()
@@ -74,7 +72,6 @@ class ViewerControlsCaptureTest {
         assumeTrue(dir != null)
         val app = RuntimeEnvironment.getApplication()
         app.getSystemService(AudioManager::class.java).setStreamVolume(AudioManager.STREAM_MUSIC, 9, 0)
-        registerAudioServiceBinding()
         for (lang in listOf("en", "ar")) for (dark in listOf(false, true)) {
             RuntimeEnvironment.setQualifiers("+$lang$qualifiers-${if (dark) "night" else "notnight"}")
             InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
@@ -127,7 +124,4 @@ class ViewerControlsCaptureTest {
     @Test fun fullscreen() = shoot("6-fullscreen-landscape", qualifiers = "-w832dp-h384dp-land") { a ->
         at32(a); node(a, R.string.viewer_fullscreen).performClick(); idle(); waitForIdle()
     }
-
-    // The JVM can't connect to the audio service, so this shows the audio layout under its "couldn't play" message.
-    @Test fun audioViewer() = shoot("7-audio-layout-no-service", audio)
 }

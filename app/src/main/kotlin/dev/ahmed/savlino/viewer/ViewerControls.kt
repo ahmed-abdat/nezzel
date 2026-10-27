@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.ExoPlayer
 import dev.ahmed.savlino.locale.NezzelFormat
 import kotlin.math.abs
 
@@ -77,6 +78,19 @@ internal object ViewerSeek {
         return (player.currentPosition.coerceAtLeast(0) + if (forward) STEP else -STEP).coerceIn(0, duration)
     }
     fun forward(x: Float, width: Int): Boolean = x >= width / 2f
+}
+
+/** While a finger drags the seek bar the picture follows it: Media3 scrubbing mode, video only (audio is no ExoPlayer here). */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal object ViewerScrub {
+    fun set(player: Player?, on: Boolean) {
+        val exo = player as? ExoPlayer ?: return
+        try { if (exo.isScrubbingModeEnabled != on) exo.setScrubbingModeEnabled(on) } catch (_: IllegalStateException) {}
+    }
+    fun move(player: Player?, position: Long) {
+        val exo = player as? ExoPlayer ?: return
+        if (exo.isScrubbingModeEnabled) exo.seekTo(position)
+    }
 }
 
 /** 0.5–2×, pitch kept: setPlaybackSpeed changes speed only. */

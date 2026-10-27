@@ -147,7 +147,7 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     }
 }
 
-private val TOP_BAR = 56.dp
+internal val TOP_BAR = 56.dp
 
 /** Longest screen side in pixels: decode no larger than the screen can show. */
 @Composable

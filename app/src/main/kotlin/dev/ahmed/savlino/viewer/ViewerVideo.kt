@@ -1,18 +1,28 @@
 package dev.ahmed.savlino.viewer
 
+import android.content.Context
 import android.database.ContentObserver
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.OpenableColumns
 import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
@@ -34,7 +44,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -52,7 +64,9 @@ import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.usage.UsageKeys
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.media3.session.R as Media3
 
 /** A double tap's brief answer: which way it skipped, or null when the file can't skip yet. */
@@ -85,9 +99,14 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     var speedFailed by remember(item.uri) { mutableLongStateOf(0) }
     var skip by remember(item.uri) { mutableStateOf<Skip?>(null) }
     var seeking by remember(item.uri) { mutableStateOf<Float?>(null) }
+    // Where a drag let go: the thumb and times stay there until the player gets close, so they never snap back first.
+    var held by remember(item.uri) { mutableStateOf<Long?>(null) }
+    // Short seek buffers pass without a ring; it shows only once loading lasts.
+    var slow by remember(item.uri) { mutableStateOf(false) }
     var muted by rememberSaveable(item.uri.toString()) { mutableStateOf(false) }
     var showResume by remember(item.uri, resumedAt) { mutableStateOf(resumedAt > 0) }
     val exploring = rememberTouchExploration()
+    val volume = rememberVolumeLevel()
     LaunchedEffect(item.uri, resumedAt) { if (resumedAt > 0) { delay(6_000); showResume = false } }
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     LaunchedEffect(current, lifecycle) { if (current) owner.foreground(lifecycle.isAtLeast(Lifecycle.State.RESUMED)) }
@@ -98,6 +117,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     fun read(player: Player) {
         playing = player.playWhenReady; running = player.isPlaying
         position = player.currentPosition.coerceAtLeast(0)
+        held?.let { if (kotlin.math.abs(position - it) < HELD_CLOSE) held = null }
         duration = player.duration.takeIf { it > 0 } ?: item.durationMillis ?: 0
         seekable = ViewerSeek.seekable(player); speed = player.playbackParameters.speed
         size(player.videoSize)
@@ -116,7 +136,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
             override fun onEvents(player: Player, events: Player.Events) { seekable = ViewerSeek.seekable(player) }
         }
         player?.addListener(listener)
-        onDispose { player?.removeListener(listener) }
+        onDispose { player?.removeListener(listener); ViewerScrub.set(player, false) }
     }
     // Speed belongs to one file: a recreated viewer keeps it, any other file starts at 1×.
     LaunchedEffect(player) {
@@ -129,16 +149,24 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     LaunchedEffect(player, muted) { if (!item.isAudio) player?.volume = if (muted) 0f else 1f }
     // Paused, ended or failed: the controls come back. Playing: they leave after 3 s of actual playback.
     LaunchedEffect(current, playing, state) { if (current && (!playing || state == PlaybackState.Ended || state is PlaybackState.Failed)) controls.show() }
-    val canHide = current && running && !controls.frozen && !exploring && state == PlaybackState.Ready
+    // Audio controls stay put: there is no picture under them to uncover.
+    LaunchedEffect(current, controls.shown) { if (current && item.isAudio && !controls.shown) controls.show() }
+    val canHide = current && !item.isAudio && running && !controls.frozen && !exploring && state == PlaybackState.Ready
     LaunchedEffect(controls.shown, controls.touches, canHide) { if (controls.shown && canHide) { delay(ViewerControls.HIDE_AFTER); controls.hide() } }
     LaunchedEffect(state, fullscreen) { if (fullscreen && state is PlaybackState.Failed) onFullscreen(false) }
+    LaunchedEffect(held) { if (held != null) { delay(HELD_MAX); held = null } }
+    LaunchedEffect(state, held) { if (state is PlaybackState.Failed) held = null }
+    LaunchedEffect(state == PlaybackState.Loading, held) {
+        slow = false
+        if (state == PlaybackState.Loading && held == null) { delay(RING_AFTER); slow = true }
+    }
     LaunchedEffect(skip) { skip?.let { delay(if (it.forward == null) 1_500 else 600); skip = null } }
 
     fun seekBy(forward: Boolean, gesture: Boolean) {
         controls.touched()
         val target = ViewerSeek.target(player, forward)
         if (target == null) { skip = Skip(null); return }
-        owner.seek(target); position = target
+        owner.seek(target); position = target; held = target
         usage.count(UsageKeys.PLAYER_SEEK)
         if (gesture) skip = Skip(forward)
     }
@@ -158,10 +186,86 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val hideLabel = stringResource(R.string.viewer_hide_controls)
     val backLabel = stringResource(R.string.viewer_seek_back_10)
     val forwardLabel = stringResource(R.string.viewer_seek_forward_10)
-    BoxWithConstraints(Modifier.fillMaxSize()
+    val togglePlay = {
+        controls.touched()
+        if (playing) owner.pause() else if (state is PlaybackState.Failed) owner.retry() else owner.play()
+    }
+    val failure = (state as? PlaybackState.Failed)?.failure?.takeIf { current }
+    val loading = state == PlaybackState.Loading
+    val ring = loading && slow
+    val notes: @Composable () -> Unit = {
+        if (resumedAt > 0 && showResume) Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.viewer_resumed_at, "⁦${NezzelFormat.duration(resumedAt / 1000)}⁩"), Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium)
+            TextButton({ controls.touched(); owner.startOver() }, Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = colors.accent)) { Text(stringResource(R.string.viewer_start_over)) }
+        }
+        if (speedFailed != 0L) Text(stringResource(R.string.viewer_speed_failed), Modifier.padding(horizontal = Space.s, vertical = Space.xs)
+            .semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
+    }
+    // Media timelines read left to right in every language; menus keep the reader's own direction.
+    val seekRow: @Composable () -> Unit = {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            val time = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr)
+            Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
+                val shown = seeking?.toLong() ?: held ?: position
+                Text(NezzelFormat.duration(shown / 1000), style = time)
+                SeekBar(shown.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
+                    Modifier.weight(1f).padding(horizontal = Space.s),
+                    onChange = {
+                        if (seeking == null) ViewerScrub.set(player, true)
+                        seeking = it; controls.scrubbing = true; ViewerScrub.move(player, it.toLong())
+                    },
+                    onDone = { ViewerScrub.set(player, false); seeking?.let { held = it.toLong(); owner.seek(it.toLong()) }; seeking = null; controls.scrubbing = false; controls.touched() })
+                Text(duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) } ?: "", style = time, color = Color.White.copy(alpha = .72f))
+            }
+        }
+    }
+    if (item.isAudio) {
+        val context = LocalContext.current
+        val fallback = stringResource(R.string.playback_audio)
+        val title by produceState<String?>(null, item.uri) { value = audioTitle(context, item.uri) ?: fallback }
+        // Music: the cover, the file's name and controls that stay put. Nothing to uncover, so nothing hides.
+        val details: @Composable () -> Unit = {
+            Column(Modifier.widthIn(max = 480.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(title.orEmpty(), Modifier.fillMaxWidth().padding(horizontal = Space.m).semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content),
+                    textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(Space.l))
+                if (failure != null) FailureCard(failure, owner::retry, onOpenWith, onClose)
+                else {
+                    notes()
+                    seekRow()
+                    PlayCluster(true, playing, ring, seekable, colors, { seekBy(it, false) }, togglePlay, Modifier.padding(vertical = Space.s))
+                    AnimatedContent(controls.volumeOpen && volume.device.adjustable, Modifier.fillMaxWidth().height(52.dp),
+                        transitionSpec = { fadeIn(easeOut(reduced)) togetherWith fadeOut(easeOut(reduced)) }, label = "volume") { open ->
+                        if (open) VolumePanel(muted, false, volume, controls, colors) { muted = it; controls.touched() }
+                        else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                            SpeedMenu(speed, player != null, controls, colors, language, direction, Modifier, ::chooseSpeed)
+                            Spacer(Modifier.weight(1f))
+                            VolumeButton(muted, false, volume, controls) { muted = it; controls.touched() }
+                        }
+                    }
+                }
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { controls.volumeOpen = false } }.padding(top = TOP_BAR)) {
+            if (maxWidth > maxHeight) Row(Modifier.fillMaxSize().padding(horizontal = Space.l, vertical = Space.m), verticalAlignment = Alignment.CenterVertically) {
+                AudioCover(poster, Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true))
+                Box(Modifier.weight(1f).fillMaxHeight().padding(start = Space.l), contentAlignment = Alignment.Center) {
+                    Box(Modifier.verticalScroll(rememberScrollState())) { details() }
+                }
+            } else Column(Modifier.fillMaxSize().padding(horizontal = Space.l, vertical = Space.m),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                AudioCover(poster, Modifier.widthIn(max = 360.dp).weight(1f, fill = false).aspectRatio(1f))
+                Spacer(Modifier.height(Space.l))
+                details()
+            }
+        }
+    } else BoxWithConstraints(Modifier.fillMaxSize()
         // Physical halves on purpose: the timeline is LTR, so left is always back. A pager drag cancels the tap.
         .pointerInput(current) {
-            if (current) detectTapGestures(onTap = { controls.toggle() }, onDoubleTap = { gesture(ViewerSeek.forward(it.x, size.width), true) })
+            if (current) detectTapGestures(onTap = { if (controls.volumeOpen) { controls.volumeOpen = false; controls.touched() } else controls.toggle() }, onDoubleTap = { gesture(ViewerSeek.forward(it.x, size.width), true) })
         }
         .semantics {
             if (current) customActions = listOfNotNull(
@@ -169,48 +273,30 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 CustomAccessibilityAction(backLabel) { seekBy(false, false); true }.takeIf { seekable },
                 CustomAccessibilityAction(forwardLabel) { seekBy(true, false); true }.takeIf { seekable })
         }, contentAlignment = Alignment.Center) {
-        if (player != null && !item.isAudio && state !is PlaybackState.Failed) {
+        if (player != null && failure == null) {
             val width = minOf(maxWidth, maxHeight * ratio)
             PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)))
         }
-        if (item.isAudio) Box(Modifier.fillMaxWidth(.72f).widthIn(max = 360.dp).aspectRatio(1f).clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = .1f)), contentAlignment = Alignment.Center) {
-            poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-                ?: Icon(painterResource(R.drawable.ic_music), null, Modifier.size(72.dp), tint = Color.White.copy(alpha = .7f))
-        } else if (player == null || state == PlaybackState.Loading || state is PlaybackState.Failed) poster?.let {
+        if (player == null || loading || failure != null) poster?.let {
             Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         }
         // Video keeps its centre buttons through loading and buffering, with a ring on Play; the plain spinner shows only without them.
-        val centre = current && !item.isAudio && player != null && state !is PlaybackState.Failed
-        if (current && state == PlaybackState.Loading && !(centre && controls.shown)) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        val centre = current && player != null && failure == null
+        if (current && ring && !(centre && controls.shown)) Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = colors.accent)
             Text(stringResource(R.string.viewer_loading))
         }
-        if (current && state is PlaybackState.Failed) Column(Modifier.background(Color.Black.copy(alpha = .85f)).padding(Space.m),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(stringResource(when (state.failure) {
-                PlaybackFailure.UNAVAILABLE -> R.string.viewer_file_unavailable
-                PlaybackFailure.UNSUPPORTED -> R.string.viewer_playback_unsupported
-                PlaybackFailure.OTHER -> R.string.viewer_playback_failed
-            }))
-            TextButton(owner::retry, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_retry)) }
-            TextButton(onOpenWith, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.saved_open_with)) }
-            TextButton(onClose, Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_close)) }
-        }
+        if (failure != null) FailureCard(failure, owner::retry, onOpenWith, onClose, Modifier.padding(Space.l))
         if (current) SkipFeedback(skip, reduced)
-        val togglePlay = {
-            controls.touched()
-            if (playing) owner.pause() else if (state is PlaybackState.Failed) owner.retry() else owner.play()
-        }
         // Gone from the tree the moment they hide: a fading button can't be reached by TalkBack or focus.
         val hidden = if (controls.shown) Modifier else Modifier.clearAndSetSemantics {}
-        // Video: the familiar big Back · Play · Forward in the middle, on a light dim so it reads over bright frames.
+        // The familiar big Back · Play · Forward in the middle, on a light dim so it reads over bright frames.
         // The dim takes no touches, so a tap anywhere else still reaches the canvas.
         if (centre)
             AnimatedVisibility(controls.shown, Modifier.matchParentSize(), enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .28f)).then(hidden)
                     .onFocusChanged { controls.focus("centre", it.hasFocus) }, contentAlignment = Alignment.Center) {
-                    PlayCluster(true, playing, state == PlaybackState.Loading, seekable, colors, { seekBy(it, false) }, togglePlay)
+                    PlayCluster(true, playing, ring, seekable, colors, { seekBy(it, false) }, togglePlay)
                 }
             }
         if (current) AnimatedVisibility(controls.shown, Modifier.align(Alignment.BottomCenter),
@@ -222,30 +308,15 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 // Taps on the bar's own background keep it up rather than falling through to the canvas.
                 .pointerInput(Unit) { detectTapGestures { controls.touched() } }
                 .padding(start = Space.s, end = Space.s, top = Space.xl, bottom = Space.xs)) {
-                if (resumedAt > 0 && showResume) Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.viewer_resumed_at, "\u2066${NezzelFormat.duration(resumedAt / 1000)}\u2069"), Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium)
-                    TextButton({ controls.touched(); owner.startOver() }, Modifier.heightIn(min = 48.dp),
-                        colors = ButtonDefaults.textButtonColors(contentColor = colors.accent)) { Text(stringResource(R.string.viewer_start_over)) }
-                }
-                if (speedFailed != 0L) Text(stringResource(R.string.viewer_speed_failed), Modifier.padding(horizontal = Space.s, vertical = Space.xs)
-                    .semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
-                // Media timelines read left to right in every language; menus keep the reader's own direction.
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    val time = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr)
-                    Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
-                        Text(NezzelFormat.duration((seeking?.toLong() ?: position) / 1000), style = time)
-                        SeekBar(seeking ?: position.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
-                            Modifier.weight(1f).padding(horizontal = Space.s),
-                            onChange = { seeking = it; controls.scrubbing = true },
-                            onDone = { seeking?.let { owner.seek(it.toLong()) }; seeking = null; controls.scrubbing = false; controls.touched() })
-                        Text(duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) } ?: "", style = time, color = Color.White.copy(alpha = .72f))
-                    }
-                    Box(Modifier.fillMaxWidth().height(if (item.isAudio) 72.dp else 52.dp)) {
+                notes()
+                seekRow()
+                AnimatedContent(controls.volumeOpen && volume.device.adjustable, Modifier.fillMaxWidth().height(52.dp),
+                    transitionSpec = { fadeIn(easeOut(reduced)) togetherWith fadeOut(easeOut(reduced)) }, label = "volume") { open ->
+                    if (open) VolumePanel(muted, true, volume, controls, colors) { muted = it; controls.touched() }
+                    else Box(Modifier.fillMaxSize()) {
                         SpeedMenu(speed, player != null, controls, colors, language, direction, Modifier.align(Alignment.CenterStart), ::chooseSpeed)
-                        if (item.isAudio) PlayCluster(false, playing, state == PlaybackState.Loading, seekable, colors, { seekBy(it, false) }, togglePlay, Modifier.align(Alignment.Center))
                         Row(Modifier.align(Alignment.CenterEnd)) {
-                            VolumeButton(muted, !item.isAudio, controls, colors, direction) { muted = it; controls.touched() }
+                            VolumeButton(muted, true, volume, controls) { muted = it; controls.touched() }
                             if (wide || fullscreen) IconButton(onClick = { controls.touched(); onFullscreen(!fullscreen) }, Modifier.size(48.dp)) {
                                 Icon(if (fullscreen) FullscreenExitIcon else FullscreenIcon,
                                     stringResource(if (fullscreen) R.string.viewer_exit_fullscreen else R.string.viewer_fullscreen))
@@ -257,6 +328,39 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         }
     }
 }
+
+/** The file's own cover, or the library's music tile, rounded like the app's cards. */
+@Composable
+private fun AudioCover(poster: Bitmap?, modifier: Modifier) {
+    Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
+        if (poster != null) Image(poster.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.3f)) }
+    }
+}
+
+/** Why it stopped and what to do next, on the theme's own surface so it reads in light and dark alike. */
+@Composable
+private fun FailureCard(failure: PlaybackFailure, onRetry: () -> Unit, onOpenWith: () -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(modifier.widthIn(max = 360.dp), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface) {
+        Column(Modifier.padding(Space.l), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            Text(stringResource(when (failure) {
+                PlaybackFailure.UNAVAILABLE -> R.string.viewer_file_unavailable
+                PlaybackFailure.UNSUPPORTED -> R.string.viewer_playback_unsupported
+                PlaybackFailure.OTHER -> R.string.viewer_playback_failed
+            }), Modifier.padding(bottom = Space.s).semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+            Button(onRetry, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_retry)) }
+            OutlinedButton(onOpenWith, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.saved_open_with)) }
+            TextButton(onClose, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.viewer_close)) }
+        }
+    }
+}
+
+private const val HELD_CLOSE = 1_000L
+private const val HELD_MAX = 1_500L
+private const val RING_AFTER = 500L
 
 /** Back 10 · Play/Pause · Forward 10. Big and centred on video, compact under the cover for audio. Always LTR. */
 @Composable
@@ -280,55 +384,76 @@ private fun PlayCluster(big: Boolean, playing: Boolean, loading: Boolean, seekab
     }
 }
 
-/** Mute for video plus the phone's media volume, the same level the volume keys move. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** The phone's media volume as the viewer shows it: follows the volume keys and other apps, not only its own slider. */
+@Stable
+private class VolumeLevel(val device: DeviceVolume) {
+    var level by mutableIntStateOf(device.level)
+    fun read() { level = device.level }
+}
+
 @Composable
-private fun VolumeButton(muted: Boolean, canMute: Boolean, controls: ViewerControls, colors: ViewerColors, direction: LayoutDirection,
-                         onMute: (Boolean) -> Unit) {
+private fun rememberVolumeLevel(): VolumeLevel {
     val context = LocalContext.current
-    val volume = remember(context) { DeviceVolume(context) }
-    var level by remember { mutableIntStateOf(volume.level) }
-    // Follows the volume keys and other apps: Android reports volume changes as system setting changes.
+    val volume = remember(context) { VolumeLevel(DeviceVolume(context)) }
+    // Android reports volume changes as system setting changes.
     DisposableEffect(context) {
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(self: Boolean) { level = volume.level } }
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(self: Boolean) { volume.read() } }
         context.contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observer)
         onDispose { context.contentResolver.unregisterContentObserver(observer) }
     }
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    LaunchedEffect(lifecycle) { if (lifecycle == Lifecycle.State.RESUMED) level = volume.level }
-    val silent = muted || volume.adjustable && level == 0
-    val title = stringResource(R.string.viewer_volume)
-    val mutedLabel = stringResource(R.string.viewer_volume_muted)
+    LaunchedEffect(lifecycle) { if (lifecycle == Lifecycle.State.RESUMED) volume.read() }
+    return volume
+}
+
+/** Opens the volume strip in place of its row; a phone with fixed volume gets a plain mute toggle (video only). */
+@Composable
+private fun VolumeButton(muted: Boolean, canMute: Boolean, volume: VolumeLevel, controls: ViewerControls, onMute: (Boolean) -> Unit) {
+    val silent = muted || volume.device.adjustable && volume.level == 0
     val icon = painterResource(if (silent) R.drawable.ic_volume_off else R.drawable.ic_volume_up)
-    if (!volume.adjustable) {
+    if (!volume.device.adjustable) {
         if (canMute) IconButton({ onMute(!muted) }, Modifier.size(48.dp)) {
             Icon(icon, stringResource(if (muted) R.string.viewer_unmute else R.string.viewer_mute))
         }
         return
     }
-    Box {
-        IconButton({ controls.touched(); controls.volumeOpen = true }, Modifier.size(48.dp)
-            .semantics { if (silent) stateDescription = mutedLabel }) { Icon(icon, title) }
-        DropdownMenu(controls.volumeOpen, { controls.volumeOpen = false; controls.touched() },
-            Modifier.semantics { paneTitle = title }, containerColor = colors.menu) {
-            CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                Row(Modifier.width(272.dp).padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    if (canMute) IconButton({ onMute(!muted) }, Modifier.size(48.dp)) {
-                        Icon(painterResource(if (muted) R.drawable.ic_volume_off else R.drawable.ic_volume_up),
-                            stringResource(if (muted) R.string.viewer_unmute else R.string.viewer_mute), tint = if (muted) colors.accent else colors.onMenu)
-                    } else Icon(painterResource(R.drawable.ic_volume_up), null, Modifier.padding(Space.m), tint = colors.onMenu)
-                    val slider = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent,
-                        inactiveTrackColor = colors.onMenu.copy(alpha = .24f), activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent)
-                    Slider(level.toFloat(), { value ->
-                        val wanted = kotlin.math.round(value).toInt()
-                        if (wanted != level && volume.set(wanted)) level = volume.level
-                        if (muted && wanted > 0) onMute(false)
-                    }, Modifier.weight(1f).padding(end = Space.s).semantics { contentDescription = title },
-                        valueRange = 0f..volume.max.toFloat(), steps = (volume.max - 1).coerceAtLeast(0), colors = slider,
-                        thumb = { Box(Modifier.size(16.dp).background(colors.accent, CircleShape)) },
-                        track = { state -> SliderDefaults.Track(state, Modifier.height(4.dp), colors = slider, drawStopIndicator = null, thumbTrackGapSize = 0.dp) })
-                }
-            }
+    val mutedLabel = stringResource(R.string.viewer_volume_muted)
+    IconButton({ controls.touched(); controls.volumeOpen = true }, Modifier.size(48.dp)
+        .semantics { if (silent) stateDescription = mutedLabel }) { Icon(icon, stringResource(R.string.viewer_volume)) }
+}
+
+/**
+ * Mute plus the phone's media volume, in the row the button sat in, so it never covers the seek bar. Quiet left, loud
+ * right in every language, the same way as the seek bar above it. Closes after 3 s untouched or on a tap elsewhere.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VolumePanel(muted: Boolean, canMute: Boolean, volume: VolumeLevel, controls: ViewerControls, colors: ViewerColors,
+                        onMute: (Boolean) -> Unit) {
+    val title = stringResource(R.string.viewer_volume)
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val dragged by interaction.collectIsDraggedAsState()
+    val pressed by interaction.collectIsPressedAsState()
+    LaunchedEffect(volume.level, muted, dragged || pressed) {
+        if (!dragged && !pressed) { delay(ViewerControls.HIDE_AFTER); controls.volumeOpen = false; controls.touched() }
+    }
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(Modifier.fillMaxSize().semantics { paneTitle = title }, verticalAlignment = Alignment.CenterVertically) {
+            val silent = muted || volume.level == 0
+            if (canMute) IconButton({ onMute(!muted) }, Modifier.size(48.dp)) {
+                Icon(painterResource(if (silent) R.drawable.ic_volume_off else R.drawable.ic_volume_up),
+                    stringResource(if (muted) R.string.viewer_unmute else R.string.viewer_mute), tint = if (muted) colors.accent else Color.White)
+            } else Icon(painterResource(if (silent) R.drawable.ic_volume_off else R.drawable.ic_volume_up), null, Modifier.padding(Space.m), tint = Color.White)
+            val slider = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent,
+                inactiveTrackColor = Color.White.copy(alpha = .24f), activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent)
+            Slider(volume.level.toFloat(), { value ->
+                val wanted = kotlin.math.round(value).toInt()
+                if (wanted != volume.level && volume.device.set(wanted)) volume.read()
+                if (muted && wanted > 0) onMute(false)
+            }, Modifier.weight(1f).padding(horizontal = Space.s).semantics { contentDescription = title },
+                valueRange = 0f..volume.device.max.toFloat(), steps = (volume.device.max - 1).coerceAtLeast(0), colors = slider, interactionSource = interaction,
+                thumb = { Box(Modifier.size(16.dp).background(colors.accent, CircleShape)) },
+                track = { state -> SliderDefaults.Track(state, Modifier.height(4.dp), colors = slider, drawStopIndicator = null, thumbTrackGapSize = 0.dp) })
         }
     }
 }
@@ -416,3 +541,13 @@ private fun BoxScope.SkipFeedback(skip: Skip?, reduced: Boolean) {
             style = MaterialTheme.typography.bodyMedium)
     }
 }
+
+/** The lock screen's title too: the file's name without its extension. Text tags inside the file are never read. */
+internal suspend fun audioTitle(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+    try {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (column >= 0 && cursor.moveToFirst() && !cursor.isNull(column)) cursor.getString(column) else null
+        }
+    } catch (_: Exception) { null }
+}?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }

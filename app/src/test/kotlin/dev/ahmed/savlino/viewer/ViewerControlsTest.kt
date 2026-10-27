@@ -13,7 +13,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.media3.common.Player
@@ -50,6 +52,7 @@ class ViewerControlsTest {
     private val players = mutableListOf<ViewerTestPlayer>()
     private val counts = mutableListOf<String>()
     private var prepare: (ViewerTestPlayer) -> Unit = {}
+    private var wrap: (ViewerTestPlayer) -> Player = { it }
     private lateinit var playback: PlaybackEnvironment
     private var open by mutableStateOf(true)
     private val pictures = MediaPictures { _, _, _ -> Bitmap.createBitmap(40, 80, Bitmap.Config.ARGB_8888) }
@@ -64,7 +67,7 @@ class ViewerControlsTest {
         // A phone in touch mode: no initial key focus, which would (rightly) hold the controls open.
         InstrumentationRegistry.getInstrumentation().setInTouchMode(true)
         controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
-        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer().also { prepare(it); players += it } },
+        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> wrap(ViewerTestPlayer().also { prepare(it); players += it }) },
             usage = object : UsageEvents { override fun count(key: String) { counts += key } }, sizeOf = { 10L })
         content(items, start, language)
     }
@@ -114,7 +117,7 @@ class ViewerControlsTest {
         show()
         val audio = activity.getSystemService(android.media.AudioManager::class.java)
         node(R.string.viewer_volume).performClick()
-        advance(6_000)
+        advance(2_500)
         assertTrue("Volume panel open keeps controls", shown())
         node(R.string.viewer_mute).performClick()
         compose.waitForIdle()
@@ -125,6 +128,32 @@ class ViewerControlsTest {
         compose.waitForIdle()
         assertEquals(5, audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC))
         assertEquals("Raising the volume turns sound back on", 1f, player.volume)
+    }
+
+    private fun volumeSlider() = compose.onNode(hasContentDescription(text(R.string.viewer_volume)) and SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress))
+
+    @Test fun volumeStripTakesTheButtonRowAndNeverCoversTheSeekBar() {
+        show(language = "ar")
+        val seek = compose.onNodeWithContentDescription(text(R.string.viewer_position)).fetchSemanticsNode().boundsInRoot
+        node(R.string.viewer_volume).performClick(); advance(400)
+        val mute = node(R.string.viewer_mute).fetchSemanticsNode().boundsInRoot
+        val slider = volumeSlider().fetchSemanticsNode().boundsInRoot
+        assertTrue("Below the seek bar", mute.top >= seek.bottom && slider.top >= seek.bottom)
+        assertTrue("Quiet left, loud right in Arabic too: speaker at the left end ($mute, $slider)", mute.center.x < slider.left && mute.center.x < slider.center.x)
+        node(R.string.viewer_speed).assertDoesNotExist()
+    }
+
+    @Test fun volumeStripClosesAfterThreeQuietSecondsOrATapElsewhere() {
+        show()
+        node(R.string.viewer_volume).performClick(); advance(400)
+        volumeSlider().assertExists()
+        advance(ViewerControls.HIDE_AFTER + 200)
+        volumeSlider().assertDoesNotExist()
+        assertTrue("Closing the strip leaves the controls up", shown())
+        node(R.string.viewer_volume).performClick(); advance(400)
+        tapCanvas()
+        volumeSlider().assertDoesNotExist()
+        assertTrue("That tap closed only the strip", shown())
     }
 
     @Test fun volumeKeysUpdateTheIconWithoutOpeningThePanel() {
@@ -252,6 +281,78 @@ class ViewerControlsTest {
         compose.onNodeWithText(text(R.string.viewer_seek_unavailable)).assertExists()
         assertEquals(listOf(text(R.string.viewer_hide_controls)), canvasActions().map { it.label })
         assertTrue(counts.none { it == UsageKeys.PLAYER_SEEK })
+    }
+
+    // A drag lets go where the finger left, and quick seek buffers pass without a ring.
+    private fun seekBar() = compose.onNodeWithContentDescription(text(R.string.viewer_position))
+    private fun dragTo(millis: Float) = seekBar().performSemanticsAction(SemanticsActions.SetProgress) { it(millis) }
+    private fun thumbAt(millis: Float) = seekBar().assert(SemanticsMatcher("thumb at $millis") {
+        it.config[SemanticsProperties.ProgressBarRangeInfo].current == millis })
+    private fun rings() = compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate),
+        useUnmergedTree = true).fetchSemanticsNodes().size
+
+    @Test fun releasedDragHoldsItsTargetUntilThePlayerGetsThere() {
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.slowSeeks = true }
+        dragTo(80_000f); advance(500)
+        assertEquals(0, player.currentPosition)
+        thumbAt(80_000f); compose.onNodeWithText("1:20").assertExists()
+        compose.runOnIdle { player.catchUp() }; advance(500)
+        assertEquals(80_000, player.currentPosition)
+        thumbAt(80_000f); compose.onNodeWithText("1:20").assertExists()
+    }
+
+    @Test fun aSeekThePlayerNeverReachesLetsGoAfterAMoment() {
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.slowSeeks = true }
+        dragTo(80_000f); advance(1_000)
+        thumbAt(80_000f)
+        advance(1_000)
+        thumbAt(0f); compose.onNodeWithText("0:00").assertExists()
+    }
+
+    @Test fun skipHoldsItsTargetToo() {
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.slowSeeks = true }
+        node(R.string.viewer_seek_forward_10).performClick(); advance(600)
+        thumbAt(10_000f)
+    }
+
+    private fun scrubbed(): ScrubWatch {
+        lateinit var watch: ScrubWatch
+        wrap = { ScrubWatch(it).also { w -> watch = w }.player }
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false }
+        seekBar().performTouchInput { down(Offset(width * .2f, centerY)); moveTo(Offset(width * .5f, centerY)) }
+        advance(100)
+        return watch
+    }
+
+    @Test fun draggingTheSeekBarScrubsUntilRelease() {
+        val watch = scrubbed()
+        assertTrue(watch.scrubbing)
+        assertTrue("The picture follows the finger", player.currentPosition > 0)
+        seekBar().performTouchInput { moveTo(Offset(width * .7f, centerY)); up() }
+        advance(300)
+        assertFalse(watch.scrubbing)
+    }
+
+    @Test fun leavingMidDragStopsScrubbing() {
+        val watch = scrubbed()
+        assertTrue(watch.scrubbing)
+        open = false; advance(300)
+        assertFalse(watch.scrubbing)
+    }
+
+    @Test fun shortBuffersShowNoRingLongOnesDo() {
+        show(); advance(300)
+        compose.runOnIdle { player.playWhenReady = false; player.buffering = true }
+        advance(300)
+        assertEquals(0, rings())
+        compose.runOnIdle { player.buffering = false }; advance(1_000)
+        assertEquals(0, rings())
+        compose.runOnIdle { player.buffering = true }; advance(700)
+        assertEquals(1, rings())
     }
 
     @Test fun pagerDragCancelsTheTap() {
