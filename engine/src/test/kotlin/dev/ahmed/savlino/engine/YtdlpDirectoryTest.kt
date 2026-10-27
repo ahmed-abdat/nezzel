@@ -117,10 +117,33 @@ class YtdlpDirectoryTest {
     /** Like the real native: repair size from the recorded install or the bundle, and the recorded tag. */
     private fun upgradingRuntime(native: Native, bundledSize: Long, enabled: Boolean, recordedSize: Long? = null) =
         DirectoryYtdlpRuntime(object : YtdlpRuntime by native {
+            private val installer = YtdlpStagedInstall(dir, "yt-dlp", {}, { _, _ -> true }, {})
             override fun bundledYtdlpSizeForRepair() =
                 YtdlpStagedInstall.expectedSize(native.prefs["dlpVersion"], recordedSize, { bundledSize })
             override fun updatedYtdlpVersion() = native.prefs["dlpVersion"]
+            override fun sweepStagedInstall() = installer.sweep()
+            override fun initialize() { installer.sweep(); native.initialize() } // As the real native init does.
         }, dir, enabled)
+
+    @Test fun killAfterTheNewBinaryMovedInNeverBringsBackTheRetiredOlderUpdate() = runBlocking {
+        val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)
+        val retired = File(temporary.root, "yt-dlp.retired")
+        for (materialize in listOf(false, true)) {
+            // Killed between the rename of the new binary and the preferences: they still name the retired update.
+            dir.deleteRecursively(); retired.deleteRecursively()
+            zip(File(retired, "yt-dlp"), "2026.10.21")
+            val retiredSize = File(retired, "yt-dlp").length()
+            zip(executable, "2026.11.02")
+            val native = Native(mutableMapOf("dlpVersion" to "2026.10.21", "dlpVersionName" to "stable"))
+            val engine = YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize, retiredSize))
+            val label = "materialize=$materialize"
+            // The unrecorded new binary cannot be trusted, so the bundled copy runs; the retired update is gone.
+            assertEquals("bundled", engine.installedVersion(), label)
+            assertFalse(retired.exists(), label)
+            assertEquals(bundle.length(), (if (materialize) archive else executable).length(), label)
+            assertTrue(native.prefs.isEmpty(), label)
+        }
+    }
 
     @Test fun olderAppsBundledCopyIsReplacedOfflineWhetherPlainOrMaterialized() = runBlocking {
         val bundle = File(temporary.root, "bundle-fixture.zip"); zip(bundle)

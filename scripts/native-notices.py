@@ -15,7 +15,7 @@ MANIFEST = ROOT / 'scripts/native-sources.tsv'
 PAYLOAD_ENTRIES = tuple('lib/arm64-v8a/' + name for name in (
     'libffmpeg.zip.so', 'libpython.zip.so', 'libffmpeg.so', 'libffprobe.so',
     'libpython.so', 'libqjs.so'))
-OPTIONAL_YTDLP = 'res/raw/ytdlp'
+YTDLP = 'res/raw/ytdlp'
 
 
 def sha256(path):
@@ -157,19 +157,28 @@ def check_apk(apk, document=ROOT / 'SOURCES.md'):
     text = Path(document).read_text(encoding='utf-8')
     block = text.split('<!-- BEGIN APK PAYLOAD HASHES -->')[1].split('<!-- END APK PAYLOAD HASHES -->')[0]
     pins = dict(re.findall(r'\| `([^`]+)` \| `([0-9a-f]{64})` \|', block))
+    def entry_sha256(archive, name):
+        digest = hashlib.sha256()
+        with archive.open(name) as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
-        for name in PAYLOAD_ENTRIES + ((OPTIONAL_YTDLP,) if OPTIONAL_YTDLP in names else ()):
+        for name in PAYLOAD_ENTRIES + ((YTDLP,) if YTDLP in names else ()):
             if names.count(name) != 1:
                 raise ValueError(f'Missing APK entry or duplicate: {name}')
             if name not in pins:
                 raise ValueError(f'Missing APK hash pin: {name}')
-            digest = hashlib.sha256()
-            with archive.open(name) as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-                    digest.update(chunk)
-            if digest.hexdigest() != pins[name]:
+            if entry_sha256(archive, name) != pins[name]:
                 raise ValueError(f'SHA-256 mismatch: APK {name}')
+        if YTDLP not in pins:
+            raise ValueError(f'Missing APK hash pin: {YTDLP}')
+        # Release resource shrinking shortens the path (res/raw/ytdlp -> res/Nc): require the pinned bytes once.
+        if YTDLP not in names and [entry_sha256(archive, info.filename) for info in archive.infolist()
+                                   if info.filename.startswith('res/') and not info.is_dir()].count(pins[YTDLP]) != 1:
+            raise ValueError(f'Missing APK entry or duplicate: {YTDLP}')
 
 
 def main():

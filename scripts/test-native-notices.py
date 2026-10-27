@@ -134,18 +134,32 @@ class NativeNoticesTests(unittest.TestCase):
         entries = {name: b'payload' for name in self.native.PAYLOAD_ENTRIES}
         document = self.root / 'SOURCES.md'
         pin = hashlib.sha256(b'payload').hexdigest()
+        ytdlp = hashlib.sha256(b'ytdlp').hexdigest()
         document.write_text('<!-- BEGIN APK PAYLOAD HASHES -->\n' + ''.join(
-            f'| `{name}` | `{pin}` |\n' for name in entries) + '<!-- END APK PAYLOAD HASHES -->\n')
+            f'| `{name}` | `{pin}` |\n' for name in entries) + f'| `res/raw/ytdlp` | `{ytdlp}` |\n'
+            + '<!-- END APK PAYLOAD HASHES -->\n')
         apk = self.root / 'test.apk'
         def write(values):
             with zipfile.ZipFile(apk, 'w') as archive:
                 for name, data in values.items():
                     archive.writestr(name, data)
         write(entries)
-        self.native.check_apk(apk, document)
-        write({**entries, 'res/raw/ytdlp': b'changed'})
-        with self.assertRaisesRegex(ValueError, 'Missing APK hash pin'):
+        with self.assertRaisesRegex(ValueError, 'Missing APK entry or duplicate: res/raw/ytdlp'):
             self.native.check_apk(apk, document)
+        write({**entries, 'res/raw/ytdlp': b'ytdlp'})
+        self.native.check_apk(apk, document)
+        write({**entries, 'res/Nc': b'ytdlp'})  # Release resource shrinking shortens the path.
+        self.native.check_apk(apk, document)
+        write({**entries, 'res/Nc': b'ytdlp', 'res/Xy': b'ytdlp'})
+        with self.assertRaisesRegex(ValueError, 'Missing APK entry or duplicate: res/raw/ytdlp'):
+            self.native.check_apk(apk, document)
+        write({**entries, 'res/raw/ytdlp': b'changed'})
+        with self.assertRaisesRegex(ValueError, 'SHA-256 mismatch: APK res/raw/ytdlp'):
+            self.native.check_apk(apk, document)
+        write({**entries, 'res/Nc': b'changed'})
+        with self.assertRaisesRegex(ValueError, 'Missing APK entry or duplicate: res/raw/ytdlp'):
+            self.native.check_apk(apk, document)
+        entries['res/raw/ytdlp'] = b'ytdlp'
         write(entries)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)

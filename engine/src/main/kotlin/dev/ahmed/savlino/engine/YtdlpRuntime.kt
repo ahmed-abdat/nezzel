@@ -89,6 +89,8 @@ internal interface YtdlpRuntime {
     /** Expected size of the plain copy (bundled, or our recorded install); null protects an unknown update from repair. */
     fun bundledYtdlpSizeForRepair(): Long? = null
     fun clearUpdatedYtdlpVersion() = Unit
+    /** Settles an install killed midway (old install back, or the new binary under the old tag). Local only. */
+    fun sweepStagedInstall() = Unit
     /** The recorded updated tag; null while the bundled copy is in use. */
     fun updatedYtdlpVersion(): String? = null
     /** Successful local probe for this installed binary; no process or network needed to read it. */
@@ -189,6 +191,7 @@ private class YoutubeDlNative(context: Context) : YtdlpRuntime {
     @Volatile private var youtubeDlReady = false
     @Volatile private var ffmpegReady = false
     override val initialization get() = sharedInitialization
+    override fun sweepStagedInstall() = installer.sweep()
     override fun initialize() {
         installer.sweep()
         YoutubeDL.init(app); youtubeDlReady = true
@@ -401,11 +404,13 @@ internal class DirectoryYtdlpRuntime(
     override fun initialize() {
         // Recover before upstream init: a missing executable would otherwise be replaced by the
         // bundled zip while the update-version preference still describes the backed-up update.
+        // First settle an install killed midway, so neither check below judges a half-swapped directory.
+        native.sweepStagedInstall()
         installation.recover()
         // Startup only, before any yt-dlp process: init_ytdlp keeps whatever copy is already there, so an
         // older app's bundled copy, or an update older than this bundle, is dropped to be re-copied offline.
         val recorded = native.updatedYtdlpVersion()
-        if (recorded != null && YtdlpStagedInstall.olderThanBundled(recorded)) {
+        if (recorded != null && YtdlpStagedInstall.olderTag(recorded)) {
             check(directory.deleteRecursively())
             native.clearUpdatedYtdlpVersion()
         } else if (recorded == null && binary.isDirectory) native.bundledYtdlpSizeForRepair()?.let { expected ->
