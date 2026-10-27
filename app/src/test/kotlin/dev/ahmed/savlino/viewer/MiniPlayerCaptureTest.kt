@@ -131,6 +131,14 @@ class MiniPlayerCaptureTest {
         }
     }
 
+    /** The bar's row riding the sheet: each step of the drag, in both languages. */
+    @Test fun barRidesTheSheet() {
+        assumeTrue(dir != null)
+        for (lang in listOf("en", "ar")) scene(lang, false, "Summer mix 2024.mp3") { activity, host ->
+            for (p in listOf(0f, .15f, .3f, .5f, .7f, .8f, .9f, 1f)) { pose(host, p); save(frame(activity), "ride-$lang-${(p * 100).toInt()}") }
+        }
+    }
+
     /** Six steps of the drag side by side, for reading the hand-off at a glance. */
     @Test fun motionStrip() {
         assumeTrue(dir != null)

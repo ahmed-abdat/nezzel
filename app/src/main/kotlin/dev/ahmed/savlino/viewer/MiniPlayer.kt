@@ -99,6 +99,12 @@ internal data class MiniPlayerLayout(val sheet: Rect, val topCorner: Dp, val cor
         fun content(p: Float) = 1f - span(p, 0f, .3f)
         /** The tabs rise from under the sheet with its bottom edge. */
         fun tabs(p: Float) = 1f - FastOutSlowInEasing.transform(span(p, 0f, RISE))
+        /** The bar's row rides the sheet's top edge, on the finger: [slotTop] pixels up at full screen, in its slot at the bar. */
+        fun barOffset(p: Float, slotTop: Float) = (p - 1f) * slotTop
+        /** The bar's row is under the sheet until the sheet draws back from over it: only then is it placed. */
+        fun bar(p: Float) = p > RISE
+        /** The name shows once the cover has shrunk off it into the row. */
+        fun title(p: Float) = FastOutSlowInEasing.transform(span(p, LAND, 1f))
         /** What the sheet uncovers late (the paste field, the footer) fades in over the last third instead of appearing at once. */
         fun home(p: Float) = span(p, 2f / 3f, 1f)
         private fun span(p: Float, start: Float, end: Float) = ((p - start) / (end - start)).coerceIn(0f, 1f)
@@ -211,13 +217,15 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
         },
         shape = Dock.SHAPE, color = Dock.color, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = Dock.SHADOW) {
         Row(Modifier.fillMaxSize().padding(horizontal = MiniPlayerLayout.INSET), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.size(MiniPlayerLayout.COVER), shape = RoundedCornerShape(MiniPlayerLayout.COVER_CORNER), color = MaterialTheme.colorScheme.secondaryContainer,
+            // While it moves, the page's own cover is the cover: it lands exactly here.
+            Surface(Modifier.size(MiniPlayerLayout.COVER).graphicsLayer { alpha = if (host.progress < 1f) 0f else 1f }, shape = RoundedCornerShape(MiniPlayerLayout.COVER_CORNER), color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
                 cover?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                     ?: Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.5f)) }
             }
             // A file name reads left to right inside either language.
-            Text("\u2066$title\u2069", Modifier.weight(1f).padding(horizontal = Space.m), style = MaterialTheme.typography.titleSmall,
+            Text("\u2066$title\u2069", Modifier.weight(1f).padding(horizontal = Space.m)
+                .graphicsLayer { alpha = MiniPlayerLayout.title(host.progress) }, style = MaterialTheme.typography.titleSmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             IconButton(toggle, Modifier.size(48.dp)) {
                 Icon(painterResource(if (playing) Media3.drawable.media3_icon_pause else Media3.drawable.media3_icon_play), playLabel, Modifier.size(24.dp))

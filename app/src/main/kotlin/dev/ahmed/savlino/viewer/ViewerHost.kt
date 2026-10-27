@@ -100,6 +100,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         return if (offset.isNaN() || bar <= 0f) (if (size.currentValue == PlayerSize.Bar) 1f else 0f) else (offset / bar).coerceIn(0f, 1f)
     }
     internal val moving by derivedStateOf { progress > 0f }
+    /** The sheet has drawn back far enough to uncover the bar's row riding on its top edge. */
+    internal val barShown by derivedStateOf { MiniPlayerLayout.bar(progress) }
     /** The sheet has left the status bar: the app's own status bar icons are back. */
     internal val uncovered by derivedStateOf { progress > .05f }
     /** The sheet has left the navigation bar too. */
@@ -268,11 +270,15 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
             val slot = state.slot
             if (request != null && mini != null && slot != null) request.locals?.let { locals ->
                 CompositionLocalProvider(locals) {
-                    // Placed only once the page starts to shrink: an invisible bar must not take the page's touches.
+                    // Placed only once the sheet draws back from over it: a hidden bar must not take the page's touches.
+                    // Its row rides the sheet's top edge, so name and controls travel with the cover instead of waiting in the slot;
+                    // the sheet, turning the bar's colour, uncovers it.
                     MiniPlayerBar(state, mini, Modifier.layout { measurable, constraints ->
                         val bar = measurable.measure(Constraints.fixed(slot.rect.width.roundToInt(), slot.rect.height.roundToInt()))
                         layout(constraints.maxWidth, constraints.maxHeight) {
-                            if (state.moving) bar.place(slot.rect.left.roundToInt(), slot.rect.top.roundToInt())
+                            if (state.barShown) bar.placeWithLayer(slot.rect.left.roundToInt(), slot.rect.top.roundToInt()) {
+                                translationY = MiniPlayerLayout.barOffset(state.progress, slot.rect.top)
+                            }
                         }
                     })
                 }
