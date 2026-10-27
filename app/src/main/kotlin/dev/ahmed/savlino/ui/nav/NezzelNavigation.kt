@@ -10,6 +10,8 @@ import dev.ahmed.savlino.viewer.miniPlayerTabs
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.text.modifiers.TextAutoSizeLayoutScope
 import androidx.compose.material.icons.outlined.Home as OutlinedHome
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,14 +36,22 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ahmed.savlino.ui.theme.Dock
@@ -49,6 +59,7 @@ import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.motionSpec
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -118,13 +129,18 @@ fun NezzelNavigation(
             }
         }
     } else {
+        val labels = destinations.map { stringResource(it.label) }
+        val labelStyle = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp, textAlign = TextAlign.Center)
+        val measurer = rememberTextMeasurer()
+        val direction = LocalLayoutDirection.current
+        val labelSize = remember(labels, labelStyle, measurer, direction) { SharedLabelSize(labels, labelStyle, measurer, direction) }
         TabBar(destinations, selected, Modifier.testTag("navigation_bar").then(collection)) { destination, index, isSelected ->
             Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 54.dp).clip(RoundedCornerShape(27.dp))
                 .selectable(isSelected, role = Role.Tab) { select(destination.route) }.then(itemModifier(destination, index))
                 .padding(horizontal = Space.s, vertical = Space.s),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 TabIcon(destination.route, isSelected, badges, updateDescription)
-                TabLabel(stringResource(destination.label), isSelected)
+                TabLabel(labels[index], isSelected, labelSize)
             }
         }
     }
@@ -206,20 +222,76 @@ private fun TabIcon(route: String, selected: Boolean, badges: NavigationBadges, 
 }
 
 @Composable
-private fun TabLabel(text: String, selected: Boolean) {
+private fun TabLabel(text: String, selected: Boolean, size: TextAutoSize) {
     val colors = MaterialTheme.colorScheme
     val tint = animateColorAsState(if (selected) colors.onSurface else colors.onSurfaceVariant,
         motionSpec(LocalReducedMotion.current, Motion.TabLabelColor), label = "label")
     val style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp, textAlign = TextAlign.Center)
     // Both weights are laid out once and the colour is read while drawing, so a selection change never re-lays the
-    // text (or the bar's intrinsic height) out; the label also keeps its size when bold would wrap.
+    // text (or the bar's intrinsic height) out. One line at the size every label shares, so large text never breaks a word.
+    // Only the one on show carries the label, so TalkBack reads it once and its bounds are the drawn text's.
     Box(Modifier.padding(top = 2.dp), contentAlignment = Alignment.Center) {
-        BasicText(text, Modifier.graphicsLayer { alpha = if (selected) 0f else 1f }, color = { tint.value },
-            style = style.copy(fontWeight = FontWeight.Medium))
-        BasicText(text, Modifier.clearAndSetSemantics {}.graphicsLayer { alpha = if (selected) 1f else 0f }, color = { tint.value },
-            style = style.copy(fontWeight = FontWeight.Bold))
+        BasicText(text, Modifier.then(if (selected) NoSemantics else Modifier).graphicsLayer { alpha = if (selected) 0f else 1f }, color = { tint.value },
+            style = style.copy(fontWeight = FontWeight.Medium), overflow = TextOverflow.Ellipsis, softWrap = false, maxLines = 1,
+            autoSize = size)
+        BasicText(text, Modifier.then(if (selected) Modifier else NoSemantics).graphicsLayer { alpha = if (selected) 1f else 0f }, color = { tint.value },
+            style = style.copy(fontWeight = FontWeight.Bold), overflow = TextOverflow.Ellipsis, softWrap = false, maxLines = 1,
+            autoSize = size)
     }
 }
+
+/**
+ * One size for every tab label: the largest, in half-sp steps from the [style]'s size down to [LABEL_FLOOR] on screen, at
+ * which each label in bold fits its cell on one line. Below the floor a label ends in an ellipsis; TalkBack reads it whole.
+ * All the labels share one instance, so the first to be laid out at a width works the size out for the others. The other
+ * labels go through [measurer]: the autosize scope only lays out its own node's text.
+ */
+private class SharedLabelSize(
+    private val labels: List<String>,
+    private val style: TextStyle,
+    private val measurer: TextMeasurer,
+    private val direction: LayoutDirection,
+) : TextAutoSize {
+    private var seenWidth = -1
+    private var seenHeight = -1
+    private var seenDensity = 0f
+    private var seenScale = 0f
+    private var size = TextUnit.Unspecified
+
+    override fun TextAutoSizeLayoutScope.getFontSize(constraints: Constraints, text: AnnotatedString): TextUnit {
+        // Equal cells may differ by a pixel; they still share the size worked out for the narrower one.
+        if (abs(constraints.maxWidth - seenWidth) > 1 || constraints.maxHeight != seenHeight || density != seenDensity ||
+            fontScale != seenScale) {
+            seenWidth = constraints.maxWidth
+            seenHeight = constraints.maxHeight
+            seenDensity = density
+            seenScale = fontScale
+            // Laid out without a height limit, then checked against it: the bar's height comes from the label at the style's
+            // size, and a tall script (Arabic) at the fitted size can still need a pixel more than that.
+            val narrower = Constraints(maxWidth = (constraints.maxWidth - 1).coerceAtLeast(0))
+            // The floor is the size on screen, so it holds at any font scale, nonlinear (Android 14+) included.
+            val floor = LABEL_FLOOR.dp.toSp().value
+            var sp = style.fontSize.value
+            while (sp > floor && labels.any { overflows(narrower, constraints.maxHeight, this, it, sp) }) sp -= .5f
+            size = sp.coerceAtLeast(floor).sp
+        }
+        return size
+    }
+
+    private fun overflows(constraints: Constraints, maxHeight: Int, density: Density, label: String, sp: Float): Boolean {
+        val layout = measurer.measure(label, style.copy(fontSize = sp.sp, fontWeight = FontWeight.Bold), TextOverflow.Ellipsis,
+            softWrap = false, maxLines = 1, constraints = constraints, layoutDirection = direction, density = density)
+        return layout.didOverflowWidth || layout.lineCount > 1 || layout.isLineEllipsized(0) || layout.size.height > maxHeight
+    }
+
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = System.identityHashCode(this)
+}
+
+/** The smallest label on screen (after the user's font scale), in dp, before it gives way to an ellipsis. */
+private const val LABEL_FLOOR = 9f
+
+private val NoSemantics = Modifier.clearAndSetSemantics {}
 
 @Composable
 private fun NavLabel(text: String) = Text(text, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
