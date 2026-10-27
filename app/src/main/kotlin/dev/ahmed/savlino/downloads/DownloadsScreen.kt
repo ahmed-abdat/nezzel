@@ -421,7 +421,7 @@ fun DownloadsScreen(
             }
         }
     }
-    viewingUri?.let { LibraryViewer(filtered, it, language, { viewingUri = null }, onShare, onOpenWith) }
+    viewingUri?.let { LibraryViewer(filtered, saved, it, language, { viewingUri = null }, onShare, onOpenWith) }
     saved.find { it.uri.toString() == renamingUri }?.let { item ->
         SavedRenameDialog(item, onDismiss = { renamingUri = null }, onRename = { name ->
             val finalName = withContext(Dispatchers.IO) { repository.rename(item.uri, name) }
@@ -992,7 +992,7 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             }
         }
     }
-    viewing?.let { LibraryViewer(groupDownloads(media), it, language, { viewing = null }, onShare, onOpenWith) }
+    viewing?.let { LibraryViewer(groupDownloads(media), media, it, language, { viewing = null }, onShare, onOpenWith) }
 }
 
 /** A saved file's recents card: 196dp wide, 16:10 picture, title and meta. [HomeJobCard] keeps the same box. */

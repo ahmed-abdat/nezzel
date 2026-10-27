@@ -76,6 +76,8 @@ class MiniPlayerTest {
     private var saved = false
     private var items by mutableStateOf(listOf(song))
     private var open by mutableStateOf(false)
+    /** The whole library behind [items]; a filter or search shows only part of it. */
+    private var library by mutableStateOf<Set<Uri>?>(null)
     private var start by mutableStateOf(0)
     private var mounted by mutableStateOf(true)
     private var taps = 0
@@ -92,7 +94,8 @@ class MiniPlayerTest {
                                 Button({ taps++ }, Modifier.fillMaxSize()) { Text("Below") }
                                 CompositionLocalProvider(LocalMediaPictures provides MediaPictures { _, _, _ -> null },
                                     LocalPlaybackEnvironment provides playback, LocalAudioConnection provides { audio }) {
-                                    if (open && mounted) MediaViewer(items, start, "en", { open = false }, onShare = {}, onOpenWith = {})
+                                    if (open && mounted) MediaViewer(items, start, "en", { open = false }, onShare = {}, onOpenWith = {},
+                                        library = library ?: items.mapTo(HashSet()) { it.uri })
                                 }
                             }
                         }
@@ -356,6 +359,23 @@ class MiniPlayerTest {
     }
 
     private fun shownNode(id: Int) = compose.onNode(hasContentDescription(text(id)) and SemanticsMatcher("placed") { it.layoutInfo.isPlaced })
+    @Test fun aFilterThatHidesTheSongInTheBarKeepsItPlaying() {
+        val other = ViewerItem(Uri.parse("content://media/external/audio/media/7"), false, "audio/mp4", 100_000, isAudio = true)
+        items = listOf(song, other); library = setOf(song.uri, other.uri)
+        playSong()
+        val player = players.last()
+        collapse()
+        items = listOf(other); advance(300)
+        assertTrue(host.collapsed)
+        assertTrue(placed(MINI_PLAYER_TAG))
+        assertEquals(0, audio.closes)
+        items = listOf(song, other); advance(300)
+        assertTrue(host.collapsed)
+        assertEquals("The same session", 1, audio.opens)
+        assertSame(player, players.last())
+        assertTrue(player.playWhenReady)
+    }
+
     /** Down, then a slow drag down in steps, checking the page never followed it. */
     private fun steepDrag(node: SemanticsNodeInteraction) {
         node.performTouchInput { down(center) }

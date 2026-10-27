@@ -69,37 +69,48 @@ import kotlinx.coroutines.flow.first
  * Full-screen swipe viewer over [items], opening at [start]. Images zoom (pinch, double tap) and the pager only swipes at 1x;
  * videos play with Media3 while their page is the settled one; a tap on them shows or hides the chrome, a double tap skips 10 s.
  * Back leaves fullscreen first, then dismisses, as does Close. Inside the app it is drawn by [ViewerHost], above the tabs.
- * [actions] adds screen-specific buttons (Statuses: Save) before Share and Open with.
+ * [actions] adds screen-specific buttons (Statuses: Save) before Share and Open with. [library] is every file the screen
+ * knows, filters and search aside: music in the bar whose file left it was deleted, so the bar closes.
  */
 @Composable
 fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: () -> Unit,
                 onShare: (ViewerItem) -> Unit, onOpenWith: (ViewerItem) -> Unit,
-                actions: @Composable RowScope.(ViewerItem) -> Unit = {}) {
+                library: Set<android.net.Uri>? = null, actions: @Composable RowScope.(ViewerItem) -> Unit = {}) {
     val host = LocalViewerHost.current
     // Tests and captures without the app host draw the viewer where it is composed.
     if (host == null) { if (items.isNotEmpty()) ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions); return }
     val id = androidx.compose.runtime.saveable.rememberSaveable { java.util.UUID.randomUUID().toString() }
     val request = remember(id) { ViewerRequest(id) }
-    // The file playing in the bar was deleted: the bar and its music go with it.
+    // The file playing in the bar was deleted: the bar and its music go with it. A filter or search that only hides it doesn't.
     val playing = host.mini?.item?.uri
-    if (playing != null && host.collapsed && host.request === request && items.none { it.uri == playing }) SideEffect { host.close() }
+    if (playing != null && library != null && host.collapsed && host.request === request && playing !in library) SideEffect { host.close() }
     if (items.isEmpty()) return
     val locals = currentCompositionLocalContext
     // A file tapped in the screen while its music sits in the bar: the music playing there just opens again; any other
     // file opens in its place, full screen (a new page, so the music stops).
     var shown by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(start) }
     var turn by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(0) }
-    val content: @Composable () -> Unit = { key(shown, turn) { ViewerScreen(items, shown, language, onClose, onShare, onOpenWith, actions) } }
+    // A filter or search that hides the music in the bar leaves the viewer's own list as it was, so its page stays; the
+    // screen's list applies again once the song shows, nothing plays, or a tap opens another file.
+    val kept = remember(id) { KeptPages(items, turn) }
+    if (playing == null || kept.turn != turn || items.any { it.uri == playing }) { kept.items = items; kept.turn = turn }
+    // Read when drawn: a tap's new page draws in the same frame as this screen, before the new content is handed over.
+    val content: @Composable () -> Unit = { key(shown, turn) { ViewerScreen(kept.items, shown, language, onClose, onShare, onOpenWith, actions) } }
     SideEffect { request.locals = locals; request.content = content; request.onClose = onClose }
     DisposableEffect(host, request) { host.show(request); onDispose { host.dismiss(request) } }
     val tap = host.tapped
+    val latest by rememberUpdatedState(items)
     LaunchedEffect(start, tap) {
+        val items = latest
         val asked = host.tapped?.let { t -> host.tapped = null; items.indexOfFirst { it.uri == t.uri }.takeIf { it >= 0 } }
-        val index = asked ?: start.takeIf { it != shown } ?: return@LaunchedEffect
+        val index = asked ?: start.takeIf { it != shown && it in items.indices } ?: return@LaunchedEffect
         if (items[index].uri != host.mini?.item?.uri) { shown = index; turn++ }
         host.expand()
     }
 }
+
+/** The list the viewer last showed, and the open it belongs to. */
+private class KeptPages(var items: List<ViewerItem>, var turn: Int)
 
 @Composable
 private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, onClose: () -> Unit,

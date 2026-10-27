@@ -136,14 +136,16 @@ private fun GridTile(item: SavedMedia, language: String, selecting: Boolean, sel
     }
 }
 
-/** The viewer over the current filter's images and videos, opened at [uri]. */
+/** The viewer over the current filter's images and videos, opened at [uri]; [all] is the whole library, filters aside. */
 @Composable
-internal fun LibraryViewer(filtered: List<SavedMedia>, uri: String, language: String, onClose: () -> Unit,
+internal fun LibraryViewer(filtered: List<SavedMedia>, all: List<SavedMedia>, uri: String, language: String, onClose: () -> Unit,
                            onShare: (SavedMedia) -> Unit, onOpenWith: (SavedMedia) -> Unit) {
     val pages = remember(filtered) { viewerItems(filtered) }
+    val library = remember(all) { all.mapTo(HashSet()) { it.uri } }
     val start = remember(uri) { viewerStart(pages, android.net.Uri.parse(uri)) }
     // Every file in view was deleted or filtered away: nothing left to show.
     if (pages.isEmpty()) LaunchedEffect(Unit) { onClose() }
     fun find(page: ViewerItem) = filtered.firstOrNull { it.uri == page.uri }
-    MediaViewer(pages, start, language, onClose, onShare = { page -> find(page)?.let(onShare) }, onOpenWith = { page -> find(page)?.let(onOpenWith) })
+    MediaViewer(pages, start, language, onClose, onShare = { page -> find(page)?.let(onShare) }, onOpenWith = { page -> find(page)?.let(onOpenWith) },
+        library = library)
 }
