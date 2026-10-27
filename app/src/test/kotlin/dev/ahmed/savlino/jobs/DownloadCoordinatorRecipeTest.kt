@@ -20,6 +20,11 @@ class DownloadCoordinatorRecipeTest {
     @Test fun legacyYtdlpRecipeAdoptsItsPartialWithoutRestarting() = checkResume("legacy")
     @Test fun nativeFallbackMarkerAdoptsYtdlpBytesOnNextAttempt() = checkResume("fallback")
     @Test fun differentArgvRecipeDiscardsOldBytes() = checkResume("changed")
+    // S8: an app update alone keeps the bytes; another yt-dlp or argv still discards them.
+    @Test fun olderVersionCodeWithTheSameEngineAndArgvAdoptsItsPartial() = checkResume("update")
+    @Test fun olderVersionCodeWithAnotherEngineDiscardsOldBytes() = checkResume("update-engine")
+    @Test fun olderVersionCodeWithAnotherArgvDiscardsOldBytes() = checkResume("update-argv")
+    @Test fun nativeFallbackFromAnOlderVersionCodeAdoptsYtdlpBytes() = checkResume("update-fallback")
     @Test fun controlRecordNeverCountsAsPartialBytes() {
         val directory = File(RuntimeEnvironment.getApplication().filesDir, "empty-partial").canonicalFile.apply { mkdirs() }
         try {
@@ -40,11 +45,20 @@ class DownloadCoordinatorRecipeTest {
         val store = JobStore(app)
         val id = "recipe-$mode"
         val command = command(id)
-        val base = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:engine-42:${YtdlpCommand.ARGV_VERSION}"
-        val previous = when (mode) { "legacy" -> "0:engine-42:${YtdlpCommand.ARGV_VERSION}"; "fallback" -> "$base:engine=native"; else -> "old:recipe" }
+        val base = "engine-42:${YtdlpCommand.ARGV_VERSION}"
+        val older = dev.ahmed.savlino.BuildConfig.VERSION_CODE - 1
+        val previous = when (mode) {
+            "legacy" -> "0:engine-42:${YtdlpCommand.ARGV_VERSION}"
+            "fallback" -> "$base:engine=native"
+            "update" -> "$older:$base:engine=ytdlp"
+            "update-engine" -> "$older:engine-41:${YtdlpCommand.ARGV_VERSION}:engine=ytdlp"
+            "update-argv" -> "$older:engine-42:${YtdlpCommand.ARGV_VERSION - 1}:engine=ytdlp"
+            "update-fallback" -> "$older:$base:engine=native"
+            else -> "old:recipe"
+        }
         val dir = File(app.filesDir, "downloads/$id").apply { mkdirs() }
         dir.resolve(DirectResume.PART).writeText("kept")
-        if (mode == "fallback") DirectResume.write(dir, DirectResume.Record(null, null, null))
+        if (mode.endsWith("fallback")) DirectResume.write(dir, DirectResume.Record(null, null, null))
         assertTrue(store.enqueue(command)); assertTrue(store.startTransfer(id, previous)); assertTrue(store.requeue(id, true))
         var actualPartial: String? = null
         val engine = object : EngineAdapter by FakeEngine() {
@@ -59,7 +73,7 @@ class DownloadCoordinatorRecipeTest {
                 dev.ahmed.savlino.storage.FreeSpace { Long.MAX_VALUE }))
         try {
             coordinator.execute(id, {}, {})
-            assertEquals(if (mode == "changed") null else "kept", actualPartial)
+            assertEquals(if (mode in setOf("changed", "update-engine", "update-argv")) null else "kept", actualPartial)
             assertEquals("$base:engine=ytdlp", store.get(id)?.resumeRecipe)
         } finally { store.close(); dir.deleteRecursively() }
     }

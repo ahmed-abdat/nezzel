@@ -560,19 +560,19 @@ class DownloadCoordinator(
                     var command = row.command() ?: error("Invalid job command")
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
-                    val baseRecipe = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:$engineVersion:${YtdlpCommand.ARGV_VERSION}"
+                    // An app update alone keeps the bytes: only the engine, the argv or the transfer engine matter.
+                    val baseRecipe = "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
                     val transferEngine = engine.resumeEngine(command, stagingRoot(id))
                     val recipe = "$baseRecipe:engine=$transferEngine"
+                    // Older recipes start with the app version code; it no longer decides compatibility.
+                    val stored = row.resumeRecipe?.let { if (it.substringBefore(':').toIntOrNull() != null) it.substringAfter(':') else it }
                     // One-time migration: only pre-native jobs can lack an engine marker. Preserve
                     // their bytes with the same yt-dlp/argv; new jobs always write engine=.
                     // Native fallback ownership is also durable in staging.
-                    val legacyRecipe = row.resumeRecipe?.let {
-                        ":engine=" !in it && it.substringBefore(':').toIntOrNull() != null &&
-                            it.substringAfter(':') == "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
-                    } == true
-                    val nativeFallback = row.resumeRecipe == "$baseRecipe:engine=native" &&
+                    val legacyRecipe = stored == baseRecipe
+                    val nativeFallback = stored == "$baseRecipe:engine=native" &&
                         DirectResume.read(stagingRoot(id))?.native == false
-                    val compatibleRecipe = row.resumeRecipe == recipe ||
+                    val compatibleRecipe = stored == recipe ||
                         (transferEngine == "ytdlp" && (legacyRecipe || nativeFallback))
                     val adopting = row.restartEpoch > 0 || row.hasPartial
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
