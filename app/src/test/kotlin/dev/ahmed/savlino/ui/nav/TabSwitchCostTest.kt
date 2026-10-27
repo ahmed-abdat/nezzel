@@ -69,6 +69,8 @@ class TabSwitchCostTest {
                         println("PROBE   rest: ${RecompositionProbe.describe(rest)}")
                         // 101-128 scopes before the app body and hidden Home stopped re-running on a switch.
                         assertTrue("$destination tap frame: ${RecompositionProbe.total(tap)}", RecompositionProbe.total(tap) <= TAP_BUDGET)
+                        // The app body itself never re-runs; only its small leaf lambdas may.
+                        assertTrue("$destination re-ran the app body: ${appScopes.keys}", appScopes.keys.none { it.endsWith("NezzelApp") })
                         // Screen roots are entered and skip: no screen's body runs, shown or hidden.
                         val bodies = tap.keys.filter { owner -> owner !in SCREEN_ROOTS && SCREEN_FILES.any { owner.startsWith(it) } }
                         assertTrue("$destination re-ran $bodies", bodies.isEmpty())
