@@ -219,6 +219,7 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     // Unseen mid-drag, the bar's own taps do nothing: only the drag that started on it goes on.
     val toggle = { if (!host.barHidden) { if (playing) session.owner.pause() else session.owner.play() } }
     val close = { if (!host.barHidden) host.close() }
+    val reopen = { if (!host.barHidden) host.expand() }
     val label = stringResource(if (playing) R.string.mini_playing else R.string.mini_paused, title)
     val open = stringResource(R.string.mini_open_player)
     val playLabel = stringResource(if (playing) R.string.viewer_pause else R.string.viewer_play)
@@ -229,17 +230,17 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
     // The sheet's surface once the sheet has narrowed into it, under the page's cover until that lands.
     Surface(modifier.anchoredDraggable(host.size, Orientation.Vertical, interactionSource = drags,
             flingBehavior = AnchoredDraggableDefaults.flingBehavior(host.size, { it * .5f }, if (host.reduced) snap() else ViewerHostState.SETTLE))
-        .clickable { if (!host.barHidden) host.expand() }
+        .clickable(onClick = reopen)
         // One TalkBack stop that says what plays, with its actions; a double tap opens the player. None while it is unseen.
         .barSemantics(host) {
             testTag = MINI_PLAYER_TAG
             contentDescription = label
             role = Role.Button
-            onClick(open) { host.expand(); true }
-            expand { host.expand(); true }
+            onClick(open) { reopen(); true }
+            expand { reopen(); true }
             customActions = listOf(CustomAccessibilityAction(playLabel) { toggle(); true },
                 CustomAccessibilityAction(closeLabel) { close(); true },
-                CustomAccessibilityAction(open) { host.expand(); true })
+                CustomAccessibilityAction(open) { reopen(); true })
         },
         shape = Dock.SHAPE, color = Dock.color, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = Dock.SHADOW) {
         // The row keeps the settled bar's height at the surface's top, beside the cover's top while the surface is taller.
