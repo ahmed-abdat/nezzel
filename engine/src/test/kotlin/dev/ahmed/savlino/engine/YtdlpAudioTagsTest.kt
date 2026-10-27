@@ -20,6 +20,14 @@ internal val audioTagsWithoutArtist = listOf(
     "--replace-in-metadata", "title", "[\\U00010000-\\U0010ffff\\u200b-\\u200d\\ufeff]", "",
     "--replace-in-metadata", "title", "\\s+$", "")
 
+/** MP3 rows: yt-dlp writes the square cover and the tag fields; Mp3Encoder applies them. */
+internal fun mp3SourceArgs(dir: File) = listOf(
+    "-o", "thumbnail:" + File(dir, "output.temp.%(ext)s").path, "--write-thumbnail", "--convert-thumbnails", "jpg",
+    "--postprocessor-args", squareCover, "--print-to-file",
+    "after_move:%(.{title,track,track_number,artist,artists,creator,creators,uploader,uploader_id,composer,composers," +
+        "album,album_artist,album_artists,disc_number,series,season_number,episode,episode_id,episode_number})j",
+    File(dir, "output.temp.tags").path) + audioTagsWithoutArtist.takeLast(8)
+
 class YtdlpAudioTagsTest {
     @get:Rule val temp = TemporaryFolder()
     private val source = LinkRevision(assertNotNull(LinkInput.parse("https://example.org/audio")), 1)
@@ -38,6 +46,12 @@ class YtdlpAudioTagsTest {
         for (format in audio) {
             val dir = temp.newFolder().canonicalFile
             val args = YtdlpCommand.download(command(format), dir, info)
+            if (format.conversion != null) {
+                assertEquals(mp3SourceArgs(dir), args.subList(args.indexOf("--write-thumbnail") - 2, args.indexOf("--load-info-json")))
+                assertTrue(args.none { it == "--extract-audio" || it == "--embed-metadata" || "libmp3lame" in it })
+                assertEquals(File(dir, "output.%(ext)s").path, args[args.indexOf("-o") + 1])
+                continue
+            }
             assertEquals(audioTagsWithoutArtist, args.subList(args.indexOf("--embed-metadata"), args.indexOf("--load-info-json")))
             assertEquals(format.sourceFormatId, args[args.indexOf("-f") + 1])
             assertEquals(squareCover, args[args.indexOf("--convert-thumbnails") + 3])
@@ -83,8 +97,21 @@ class YtdlpAudioTagsTest {
             calls += args
             return action(args, line)
         }
+        var ffmpeg: (List<String>) -> Process? = { null }
+        override fun startFfmpeg(args: List<String>, stdin: Boolean, stderr: File) = ffmpeg(args)
+        override fun constrained() = true
         override fun update() = Unit
         override fun destroy(processId: String) = true
+    }
+    private class Exited : Process() {
+        override fun getOutputStream() = java.io.ByteArrayOutputStream()
+        override fun getInputStream() = java.io.ByteArrayInputStream(byteArrayOf())
+        override fun getErrorStream() = java.io.ByteArrayInputStream(byteArrayOf())
+        override fun waitFor() = 0
+        override fun waitFor(timeout: Long, unit: java.util.concurrent.TimeUnit) = true
+        override fun exitValue() = 0
+        override fun isAlive() = false
+        override fun destroy() = Unit
     }
 
     @Test fun artistDecisionUsesTheSameConfirmedInfoJsonLoadedByTheDownload() = runBlocking {
@@ -168,7 +195,8 @@ class YtdlpAudioTagsTest {
     }
 
     @Test fun taggingFailureRetriesOnceOnSameAudioAndPublishesWithoutArtworkSidecars() = runBlocking {
-        for (format in audio) {
+        // MP3 rows tag in Mp3Encoder's mux, which has its own untagged retry.
+        for (format in audio.filter { it.conversion == null }) {
             val dir = temp.newFolder().canonicalFile
             val output = File(dir, "output.${format.container}")
             val runtime = Runtime().apply { action = { args, line ->
@@ -197,30 +225,42 @@ class YtdlpAudioTagsTest {
         }
     }
 
-    @Test fun failedConversionRetryDropsTheHalfWrittenMp3ButKeepsItsSource() = runBlocking {
+    @Test fun aRetryAfterADeathBeforeTheMuxReusesTheSourceAndEndsWithOnlyTheMp3() = runBlocking {
         for (sourceContainer in listOf("m4a", "mp3")) {
             val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = sourceContainer,
                 conversion = AudioConversion.MP3_192)
             val dir = temp.newFolder().canonicalFile
-            val source = File(dir, if (sourceContainer == "mp3") "output" else "output.m4a")
-            val output = File(dir, "output.mp3")
-            val runtime = Runtime().apply { action = { args, line ->
-                if ("--embed-thumbnail" in args) {
-                    source.writeText("downloaded audio")
-                    output.writeText("truncated by a killed ffmpeg")
-                    line("[ExtractAudio] Destination: ${output.path}")
-                    error("ERROR: Postprocessing: audio conversion failed")
-                }
-                assertEquals("downloaded audio", source.readText())
-                assertFalse(output.exists()) // yt-dlp would skip ExtractAudio and keep the truncated file
-                output.writeText("converted")
-                source.delete()
-                File(dir, "result-path.txt").writeText(output.path)
+            val staged = File(dir, if (sourceContainer == "mp3") "output" else "output.m4a").apply { writeText("downloaded audio") }
+            // What a process death mid-encode leaves: the kept source, cover and tags, a chunk and a half-written mux.
+            File(dir, "output.temp.jpg").writeText("cover")
+            File(dir, "output.temp.tags").writeText("""{"title":"Old","uploader":"Channel"}""" + "\n")
+            File(dir, "output.temp.c03").writeText("chunk")
+            File(dir, "output.temp.enc").writeText("half")
+            val runtime = Runtime().apply { action = { args, _ ->
+                assertTrue("--write-thumbnail" in args && "--extract-audio" !in args)
+                assertEquals("downloaded audio", staged.readText()) // kept: yt-dlp reports it as already downloaded
+                File(dir, "result-path.txt").appendText(staged.path + "\n")
+                // --print-to-file appends this run's tags after the dead run's line.
+                File(dir, "output.temp.tags").appendText("""{"title":"Song","uploader":"Channel"}""" + "\n")
                 ""
             } }
-            val result = YoutubedlEngine(runtime).download(command(format), dir) {}
-            assertEquals("converted", assertIs<TransferResult.Success>(result).output.file.readText())
-            assertEquals(2, runtime.calls.size)
+            val ffmpeg = mutableListOf<List<String>>()
+            runtime.ffmpeg = { args -> ffmpeg += args; File(args.last().removePrefix("file:")).writeText("mp3"); Exited() }
+            // The inspection's info JSON keeps the staged source; without it the engine restarts from nothing.
+            val inspection = Inspection(source, "v1", listOf(format))
+            val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(
+                "job-audio", inspection, source, format.id, "title")).command
+            val cache = YtdlpInfoCache(temp.newFolder()).apply { remember(inspection, """{"uploader":"Channel"}""") }
+            val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = cache).download(command, dir) {})
+            assertEquals(File(dir, "output.mp3"), result.output.file)
+            assertEquals("mp3", result.output.file.readText())
+            assertEquals(setOf("output.mp3", "result-path.txt"), dir.list()!!.toSet())
+            assertEquals(1, runtime.calls.size)
+            val single = ffmpeg.single()
+            assertEquals("file:${staged.path}", single[single.indexOf("-i") + 1])
+            assertTrue("file:${File(dir, "output.temp.jpg").path}" in single)
+            assertEquals(listOf("title=Song", "artist=", "comment=", "purl=", "description=", "synopsis=", "genre=", "date="),
+                single.indices.filter { single[it] == "-metadata" }.map { single[it + 1] })
         }
     }
 

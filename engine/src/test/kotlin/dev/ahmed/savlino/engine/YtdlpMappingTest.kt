@@ -18,23 +18,20 @@ class YtdlpMappingTest {
 
     @Test fun mp3ConversionsScopeEncoderBitrateAndTemplateToActualSourceContainer() {
         for (container in listOf("mp3", "m4a", "webm", "mp4", null)) {
-            for ((conversion, quality, scoped) in listOf(
-                Triple(AudioConversion.MP3_128, "128K", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 128k"),
-                Triple(AudioConversion.MP3_192, "192K", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 192k"),
-                Triple(AudioConversion.MP3_320, "320K", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a 320k -ar 44100"))) {
+            for (conversion in AudioConversion.entries) {
                 val dir = temp.newFolder().canonicalFile
                 val row = Format("converted", "mp3", false, true, audioCodec = "mp3",
                     conversion = conversion, sourceFormatId = "actual-source", sourceContainer = container)
                 val args = YtdlpCommand.download(command(row), dir)
-                assertEquals(2, args.count { it == "--postprocessor-args" })
-                assertEquals(scoped, args[args.indexOf("--postprocessor-args") + 1])
-                assertEquals(listOf(scoped, squareCover), args.indices.filter { args[it] == "--postprocessor-args" }.map { args[it + 1] })
+                // yt-dlp only downloads the source; Mp3Encoder runs LAME at the row's bitrate.
+                assertEquals(listOf(squareCover), args.indices.filter { args[it] == "--postprocessor-args" }.map { args[it + 1] })
+                assertTrue(args.none { it == "--extract-audio" || it == "--audio-quality" || "libmp3lame" in it })
                 assertEquals("actual-source", args[args.indexOf("-f") + 1])
-                assertEquals(quality, args[args.indexOf("--audio-quality") + 1])
                 assertEquals(File(dir, if (container == "mp3") "output" else "output.%(ext)s").path,
                     args[args.indexOf("-o") + 1])
                 assertEquals(listOf("--", source.link.rawUrl), args.takeLast(2))
-                assertEquals(1, args.count { it == "-o" })
+                assertEquals(listOf(File(dir, "output.%(ext)s").path.takeIf { container != "mp3" } ?: File(dir, "output").path,
+                    "thumbnail:" + File(dir, "output.temp.%(ext)s").path), args.indices.filter { args[it] == "-o" }.map { args[it + 1] })
                 assertEquals(File(dir, "result-path.txt").path, args[args.indexOf("--print-to-file") + 2])
             }
         }
@@ -457,15 +454,12 @@ class YtdlpMappingTest {
         assertEquals("http-480", YtdlpCommand.download(command(map("single-file").formats.single { it.id == "http-480" }), dir).let { it[it.indexOf("-f") + 1] })
     }
     @Test fun audioConversionsAreExplicitAndM4aIsNotTranscoded() {
-        val dir = temp.newFolder()
+        val dir = temp.newFolder().canonicalFile
         val audio = map("audio").formats
         for (conversion in AudioConversion.entries) {
             val args = YtdlpCommand.download(command(audio.single { it.conversion == conversion }), dir)
             assertEquals("audio-128", args[args.indexOf("-f") + 1])
-            assertEquals(listOf("--extract-audio", "--audio-format", "mp3", "--audio-quality", "${conversion.bitrateKbps}K",
-                "--postprocessor-args", "ExtractAudio+ffmpeg_o1:-c:a libmp3lame -b:a ${conversion.bitrateKbps}k" +
-                    if (conversion == AudioConversion.MP3_320) " -ar 44100" else "") + audioTagsWithoutArtist,
-                args.subList(args.indexOf("--extract-audio"), args.indexOf("--")))
+            assertEquals(mp3SourceArgs(dir), args.subList(args.indexOf("--write-thumbnail") - 2, args.indexOf("--")))
         }
         assertFalse(YtdlpCommand.download(command(audio.first()), dir).contains("--extract-audio"))
     }
@@ -485,7 +479,8 @@ class YtdlpMappingTest {
         val mp3FromMp3 = mp3.copy(sourceContainer = "mp3")
         val merged = Format("137", "mp4", true, true, audioFormatId = "140", requiresMerge = true)
         assertEquals("output.m4a", YtdlpCommand.finishedSource(mp3))
-        assertNull(YtdlpCommand.finishedSource(mp3FromMp3)) // its template has no extension
+        // Its template has no extension; Mp3Encoder reads it until the mux succeeds, so a retry keeps it too.
+        assertEquals("output", YtdlpCommand.finishedSource(mp3FromMp3))
         assertNull(YtdlpCommand.finishedSource(mp3.copy(sourceContainer = null))) // legacy row: source unknown
         assertEquals("output.mp4", YtdlpCommand.finishedSource(merged))
         // ExtractAudio writes output.m4a in place: a stopped extract leaves it half written, so nothing is kept.
