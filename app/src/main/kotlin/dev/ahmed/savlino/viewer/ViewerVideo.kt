@@ -241,7 +241,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val seekRow: @Composable () -> Unit = {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             val time = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr)
-            Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().keepsDrags(host).padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
                 val shown = seeking?.toLong() ?: held ?: position
                 Text(NezzelFormat.duration(shown / 1000), style = time)
                 SeekBar(shown.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
@@ -291,7 +291,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
             if (maxWidth > maxHeight) Row(Modifier.fillMaxSize().padding(horizontal = Space.l, vertical = Space.m), verticalAlignment = Alignment.CenterVertically) {
                 AudioCover(poster, host.takeIf { current }, Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true))
                 Box(Modifier.weight(1f).fillMaxHeight().padding(start = Space.l), contentAlignment = Alignment.Center) {
-                    Box(Modifier.verticalScroll(rememberScrollState())) { details() }
+                    Box(Modifier.keepsDrags(host).verticalScroll(rememberScrollState())) { details() }
                 }
             } else Column(Modifier.fillMaxSize().padding(horizontal = Space.l, vertical = Space.m),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

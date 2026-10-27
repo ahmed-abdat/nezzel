@@ -75,19 +75,30 @@ import kotlinx.coroutines.flow.first
 fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: () -> Unit,
                 onShare: (ViewerItem) -> Unit, onOpenWith: (ViewerItem) -> Unit,
                 actions: @Composable RowScope.(ViewerItem) -> Unit = {}) {
-    if (items.isEmpty()) return
     val host = LocalViewerHost.current
     // Tests and captures without the app host draw the viewer where it is composed.
-    if (host == null) { ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions); return }
+    if (host == null) { if (items.isNotEmpty()) ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions); return }
     val id = androidx.compose.runtime.saveable.rememberSaveable { java.util.UUID.randomUUID().toString() }
     val request = remember(id) { ViewerRequest(id) }
+    // The file playing in the bar was deleted: the bar and its music go with it.
+    val playing = host.mini?.item?.uri
+    if (playing != null && host.collapsed && host.request === request && items.none { it.uri == playing }) SideEffect { host.close() }
+    if (items.isEmpty()) return
     val locals = currentCompositionLocalContext
-    // Another file opened from the same screen while its music sits in the bar: that file opens, full screen, instead.
-    val content: @Composable () -> Unit = { key(start) { ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions) } }
+    // A file tapped in the screen while its music sits in the bar: the music playing there just opens again; any other
+    // file opens in its place, full screen (a new page, so the music stops).
+    var shown by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(start) }
+    var turn by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(0) }
+    val content: @Composable () -> Unit = { key(shown, turn) { ViewerScreen(items, shown, language, onClose, onShare, onOpenWith, actions) } }
     SideEffect { request.locals = locals; request.content = content; request.onClose = onClose }
     DisposableEffect(host, request) { host.show(request); onDispose { host.dismiss(request) } }
-    var opened by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(start) }
-    LaunchedEffect(start) { if (start != opened) { opened = start; host.expand() } }
+    val tap = host.tapped
+    LaunchedEffect(start, tap) {
+        val asked = host.tapped?.let { t -> host.tapped = null; items.indexOfFirst { it.uri == t.uri }.takeIf { it >= 0 } }
+        val index = asked ?: start.takeIf { it != shown } ?: return@LaunchedEffect
+        if (items[index].uri != host.mini?.item?.uri) { shown = index; turn++ }
+        host.expand()
+    }
 }
 
 @Composable
@@ -151,9 +162,14 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         onDispose { if (session != null && host.mini === session) host.mini = null }
     }
     // In the bar: the track ending or the service stopping takes the bar away; a failure opens the page with its card.
+    // A page that arrives there with no player yet (restored after the app was killed, or another file opened from the
+    // bar) opens full screen instead, paused until Play.
+    var hadPlayer by remember { mutableStateOf(false) }
+    if (ownedPlayer != null) hadPlayer = true
     LaunchedEffect(collapsed, ownedPlayer == null, ownedState) {
         if (!collapsed || host == null) return@LaunchedEffect
-        if (ownedPlayer == null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Ended) host.close()
+        if (ownedPlayer == null && !hadPlayer) host.expand()
+        else if (ownedPlayer == null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Ended) host.close()
         else if (ownedState is dev.ahmed.savlino.playback.PlaybackState.Failed) host.expand()
     }
     val minimize = host != null && shrinkable != null && host.mini?.owner === playback && host.slot != null

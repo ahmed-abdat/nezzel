@@ -7,6 +7,8 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
@@ -24,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -71,6 +75,10 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
             if (value != null && value.rect.top > 0f && value.rect.top != travel)
                 size.updateAnchors(DraggableAnchors { PlayerSize.Full at 0f; PlayerSize.Bar at value.rect.top }, size.targetValue)
         }
+    /** A file the screen was asked to open again, maybe while its viewer sits in the bar; that viewer takes it. */
+    internal var tapped by mutableStateOf<ViewerTap?>(null)
+    /** A finger is down on a slider or scroll inside the page: the page's own drag waits. */
+    internal var held by mutableStateOf(false)
     internal var scope: CoroutineScope? = null
     internal var reduced = false
     // Set the moment a collapse starts: a screen disposing in the same frame must not take the music with it.
@@ -94,7 +102,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         val old = request
         if (old != null && old.id != next.id) {
             // Another screen's viewer replaces this one (and its music), closed, and opens full screen.
-            old.onClose(); mini = null; wantBar = false; settle(PlayerSize.Full, instant = true)
+            old.onClose(); mini = null; wantBar = false; tapped = null; settle(PlayerSize.Full, instant = true)
         }
         if (old == null) leaving = null
         request = next
@@ -117,12 +125,14 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         wantBar = true; settle(PlayerSize.Bar)
     }
     internal fun expand() { wantBar = false; settle(PlayerSize.Full) }
+    /** A screen's tap on a file: with its viewer in the bar, the music there opens again, or the tapped file opens instead. */
+    fun reopen(uri: android.net.Uri) { if (request != null) tapped = ViewerTap(uri) }
     /** A new intent brings the app forward: music shrinks into the bar, anything else closes. */
     fun yieldToApp() { if (request == null) return; if (canCollapse) collapse() else close() }
 
     private fun clear(fade: Boolean) {
         leaving = request.takeIf { fade && !reduced }
-        request = null; mini = null; wantBar = false
+        request = null; mini = null; wantBar = false; tapped = null
         settle(PlayerSize.Full, instant = true)
     }
     private fun settle(to: PlayerSize, instant: Boolean = false) {
@@ -140,6 +150,22 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
 }
 
 internal enum class PlayerSize { Full, Bar }
+
+/**
+ * A drag that starts here stays here (a steep seek, a details scroll): while a finger is down on it the page doesn't
+ * shrink into the bar. Only watches, so the slider or scroll inside still gets every move.
+ */
+internal fun Modifier.keepsDrags(host: ViewerHostState?) = if (host == null) this else pointerInput(host) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        host.held = true
+        try { do { val event = awaitPointerEvent(PointerEventPass.Initial) } while (event.changes.any { it.pressed }) }
+        finally { host.held = false }
+    }
+}
+
+/** One tap: a new object each time, so tapping the same file twice still reads as a change. */
+internal class ViewerTap(val uri: android.net.Uri)
 
 /** The page that can sit in the bar: its file, its playback and its own Close. */
 internal class MiniSession(val item: ViewerItem, val owner: dev.ahmed.savlino.playback.PlaybackCoordinator, val close: () -> Unit)
@@ -216,7 +242,7 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                             }
                         }
                     }
-                    .anchoredDraggable(state.size, Orientation.Vertical, enabled = draggable,
+                    .anchoredDraggable(state.size, Orientation.Vertical, enabled = draggable && !state.held,
                         flingBehavior = AnchoredDraggableDefaults.flingBehavior(state.size, { it * .5f },
                             if (reduced) snap() else ViewerHostState.SETTLE))
                     .then(if (request == null) Modifier.clearAndSetSemantics {} else Modifier)

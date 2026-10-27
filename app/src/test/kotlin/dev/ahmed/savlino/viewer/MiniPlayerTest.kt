@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -61,18 +62,21 @@ private class CountingAudio(private val players: MutableList<ViewerTestPlayer>) 
 @Config(sdk = [35], qualifiers = "en-w384dp-h832dp")
 class MiniPlayerTest {
     @get:Rule val compose = createEmptyComposeRule()
-    private val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+    private var controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
     private val activity get() = controller.get()
     private val players = mutableListOf<ViewerTestPlayer>()
-    private val audio = CountingAudio(players)
-    private val playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
+    private var audio = CountingAudio(players)
+    private var playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
     @After fun close() { controller.pause().stop().destroy() }
 
     private val song = ViewerItem(Uri.parse("content://media/external/audio/media/5"), false, "audio/mp4", 100_000, isAudio = true)
     private val clip = ViewerItem(Uri.parse("content://media/external/video/media/6"), true, "video/mp4", 100_000)
-    private val host = ViewerHostState()
+    private var host = ViewerHostState()
+    /** The host kept in saved state, as the app does, so it survives the process. */
+    private var saved = false
     private var items by mutableStateOf(listOf(song))
     private var open by mutableStateOf(false)
+    private var start by mutableStateOf(0)
     private var mounted by mutableStateOf(true)
     private var taps = 0
 
@@ -80,13 +84,15 @@ class MiniPlayerTest {
         activity.setContent {
             NezzelTheme(ThemePref.Light, false) {
                 CompositionLocalProvider(dev.ahmed.savlino.ui.theme.LocalReducedMotion provides reduced) {
-                    ViewerHost(host) {
+                    val kept = if (saved) rememberViewerHost() else host
+                    SideEffect { host = kept }
+                    ViewerHost(kept) {
                         NavigationScaffold("Downloads", emptyList(), "en", {}) {
                             TabContent("Downloads") {
                                 Button({ taps++ }, Modifier.fillMaxSize()) { Text("Below") }
                                 CompositionLocalProvider(LocalMediaPictures provides MediaPictures { _, _, _ -> null },
                                     LocalPlaybackEnvironment provides playback, LocalAudioConnection provides { audio }) {
-                                    if (open && mounted) MediaViewer(items, 0, "en", { open = false }, onShare = {}, onOpenWith = {})
+                                    if (open && mounted) MediaViewer(items, start, "en", { open = false }, onShare = {}, onOpenWith = {})
                                 }
                             }
                         }
@@ -260,6 +266,41 @@ class MiniPlayerTest {
         assertFalse(host.open)
     }
 
+    /** What the Downloads list does on a tap: tells the host, then opens the file. */
+    private fun tapInList(index: Int) { compose.runOnIdle { host.reopen(items[index].uri); open = true; start = index }; advance(600) }
+
+    @Test fun tappingThePlayingSongInTheListOpensItsPlayer() {
+        playSong()
+        val player = players.last()
+        collapse()
+        tapInList(0)
+        assertFalse(host.moving)
+        assertTrue(placed(VIEWER_TAG))
+        assertEquals("The same session, not a second one", 1, audio.opens)
+        assertEquals(0, audio.closes)
+        assertSame(player, players.last())
+        assertTrue(player.playWhenReady)
+        // Twice in a row still works: every tap counts, not only a change of file.
+        collapse(); tapInList(0)
+        assertTrue(placed(VIEWER_TAG))
+        assertEquals(1, audio.opens)
+    }
+
+    @Test fun tappingAnotherSongOpensItInsteadOfTheBar() {
+        val other = ViewerItem(Uri.parse("content://media/external/audio/media/7"), false, "audio/mp4", 100_000, isAudio = true)
+        items = listOf(song, other)
+        playSong()
+        collapse()
+        tapInList(1)
+        assertFalse(host.moving)
+        assertTrue(placed(VIEWER_TAG))
+        assertTrue(compose.onAllNodesWithContentDescription(activity.getString(R.string.viewer_audio_n, "2", "2"))
+            .fetchSemanticsNodes().any { it.layoutInfo.isPlaced })
+        // The music in the bar stops, and opening the new file releases the previous item once more.
+        assertEquals(2, audio.closes)
+        assertEquals(2, audio.opens)
+    }
+
     @Test fun theBarOutlivesTheScreenThatOpenedIt() {
         playSong()
         collapse()
@@ -273,5 +314,75 @@ class MiniPlayerTest {
         advance(300)
         assertFalse(host.open)
         assertEquals(1, audio.closes)
+    }
+
+    /** The app killed while its music sits in the bar: it comes back on the page, full screen and paused. */
+    @Test fun anAppKilledWithMusicInTheBarComesBackPausedOnThePage() {
+        saved = true
+        playSong(); collapse()
+        assertTrue(host.collapsed)
+        val state = android.os.Bundle()
+        controller.saveInstanceState(state).pause().stop().destroy()
+        // A new process: new services and players; only the saved state is left.
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).create(state).start().postCreate(state).resume().visible()
+        players.clear(); audio = CountingAudio(players)
+        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
+        show(); advance(600)
+        assertTrue(host.open)
+        assertFalse(host.moving)
+        assertTrue(placed(VIEWER_TAG))
+        assertTrue(compose.onAllNodesWithContentDescription(text(R.string.viewer_play)).fetchSemanticsNodes().any { it.layoutInfo.isPlaced })
+        assertTrue(compose.onAllNodesWithContentDescription(text(R.string.viewer_pause)).fetchSemanticsNodes().isEmpty())
+        assertEquals("Nothing plays until Play", 0, audio.opens)
+    }
+
+    @Test fun deletingTheSongInTheBarTakesTheBarAway() {
+        playSong(); collapse()
+        items = emptyList(); advance(300)
+        assertFalse(host.open)
+        assertFalse(placed(MINI_PLAYER_TAG))
+        assertFalse(open)
+        assertEquals(1, audio.closes)
+    }
+
+    @Test fun deletingTheSongFromALongerListTakesTheBarAway() {
+        val other = ViewerItem(Uri.parse("content://media/external/audio/media/7"), false, "audio/mp4", 100_000, isAudio = true)
+        items = listOf(song, other)
+        playSong(); collapse()
+        items = listOf(other); advance(300)
+        assertFalse(host.open)
+        assertFalse(placed(MINI_PLAYER_TAG))
+        assertEquals(1, audio.closes)
+    }
+
+    private fun shownNode(id: Int) = compose.onNode(hasContentDescription(text(id)) and SemanticsMatcher("placed") { it.layoutInfo.isPlaced })
+    /** Down, then a slow drag down in steps, checking the page never followed it. */
+    private fun steepDrag(node: SemanticsNodeInteraction) {
+        node.performTouchInput { down(center) }
+        repeat(12) { node.performTouchInput { moveBy(Offset(4f, 24f)) }; assertFalse("The page followed the finger", host.moving) }
+        node.performTouchInput { up() }
+        advance(600)
+        assertFalse(host.moving)
+    }
+
+    @Test fun aSteepDragOnTheSeekBarDoesNotShrinkThePage() {
+        playSong()
+        steepDrag(shownNode(R.string.viewer_position))
+    }
+
+    @Config(qualifiers = "en-w832dp-h384dp")
+    @Test fun scrollingTheDetailsInLandscapeDoesNotShrinkThePage() {
+        playSong()
+        steepDrag(shownNode(R.string.viewer_pause))
+    }
+
+    @Test fun aDragDownOnTheCoverStillShrinksThePage() {
+        playSong()
+        compose.onNodeWithTag(VIEWER_TAG).performTouchInput {
+            down(Offset(centerX, height * .35f)); repeat(20) { moveBy(Offset(0f, 30f)) }; up()
+        }
+        advance(600)
+        assertTrue(host.collapsed)
+        assertTrue(players.last().playWhenReady)
     }
 }

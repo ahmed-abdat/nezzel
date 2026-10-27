@@ -178,7 +178,8 @@ fun DownloadsScreen(
     LaunchedEffect(effectiveFilter) { filterName = effectiveFilter.name }
     val view = rememberLibraryView(preferences, effectiveFilter)
     var viewingUri by rememberSaveable { mutableStateOf<String?>(null) }
-    val open = { item: SavedMedia -> if (item.inViewer) viewingUri = item.uri.toString() else onOpen(item) }
+    val viewer = dev.ahmed.savlino.viewer.LocalViewerHost.current
+    val open = { item: SavedMedia -> if (item.inViewer) { viewer?.reopen(item.uri); viewingUri = item.uri.toString() } else onOpen(item) }
     // Match the actual library row before opening: stale/deleted widget tiles must not open a different file.
     LaunchedEffect(openSavedUri, libraryLoad) {
         if (openSavedUri != null && libraryLoad !is LibraryLoadState.Loading) {
@@ -886,7 +887,8 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
     // Own key: unkeyed saveables in one function share a key and restore in call order, and the row's
     // rememberLazyListState below sits after an early return, so a restored Home could hand its saved list here (rc3 crash).
     var viewing by rememberSaveable(key = "home-recents-viewing") { mutableStateOf<String?>(null) }
-    val open = { item: SavedMedia -> if (item.inViewer) viewing = item.uri.toString() else onOpen(item) }
+    val viewer = dev.ahmed.savlino.viewer.LocalViewerHost.current
+    val open = { item: SavedMedia -> if (item.inViewer) { viewer?.reopen(item.uri); viewing = item.uri.toString() } else onOpen(item) }
     val entries = remember(media) { homeEntries(media) }
     val recent = remember(entries) { entries.take(RECENT_ROW) }
     val earlier = remember(entries) { entries.drop(RECENT_ROW).take(EARLIER_ROWS) }
