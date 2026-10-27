@@ -34,6 +34,8 @@ import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
+import dev.ahmed.savlino.engine.reddit.RedditJsChallenge
+import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
 import dev.ahmed.savlino.engine.tiktok.TikTokWafChallenge
 import okhttp3.Authenticator
@@ -70,7 +72,7 @@ internal sealed interface MediaHttpImageTransferResult {
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpImageTransferResult
 }
 
-private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, YOUTUBE_OEMBED, SHORT_LINK }
+private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, YOUTUBE_OEMBED, SHORT_LINK }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -159,6 +161,16 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
 
     internal fun fetchBlueskyApi(token: OperationToken, url: String): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.BLUESKY)
+
+    internal fun newRedditOperation(): OperationToken = createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false)
+
+    /**
+     * The logged-out page read of a Reddit post: desktop-browser headers, no cookie. Redirects stay on www post pages
+     * of the same post (share and video links name it on their first hop); a sign-in redirect ends as LOGIN_REQUIRED.
+     * Reddit's page check is answered by refetching the same page, at most twice per read. Cap [MediaPageLimits.REDDIT].
+     */
+    internal fun fetchRedditPost(token: OperationToken, identity: RedditPostIdentity): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.REDDIT)
 
     internal fun newYouTubeOEmbedOperation(): OperationToken =
         createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false, deadlineSeconds = 4)
@@ -405,9 +417,10 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val telegramPage = site == PageSite.TELEGRAM
         val blueskyPage = site == PageSite.BLUESKY
         val tiktokPage = site == PageSite.TIKTOK
+        val redditPage = site == PageSite.REDDIT
         val oembed = site == PageSite.YOUTUBE_OEMBED
         val shortLink = site == PageSite.SHORT_LINK
-        val browserPage = facebookPage || instagramPage || telegramPage || tiktokPage
+        val browserPage = facebookPage || instagramPage || telegramPage || tiktokPage || redditPage
         if (token.owner !== this) return MediaHttpResult.Failure(MediaHttpFailure.CLOSED)
         var entered = false
         // LinkedIn: the last public post URL this read reached (entry or accepted hop), query/fragment stripped.
@@ -453,6 +466,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     !TikTokPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (!tiktokPage && request.purpose == MediaHttpPurpose.PAGE && url.host in setOf("www.tiktok.com", "tiktok.com", "m.tiktok.com"))
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (redditPage && (request.purpose != MediaHttpPurpose.PAGE || token.operation != MediaHttpOperation.PAGE_AND_IMAGE ||
+                    RedditPostIdentity.parse(url)?.fetchUrl != url.toString())) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             requireHostRule(request, url)
             val entry = if (linkedInPage) MediaHttpPolicy.withoutQuery(url) else null
             validateContext(token, request, url)
@@ -462,6 +477,9 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             val seen = hashSetOf(url.toString())
             // TikTok's «Please wait…» answer: sent only on the one refetch of this same page read.
             var tikTokChallenge: String? = null
+            // Reddit: the post a share/video link's first hop named, and how many page checks this read answered.
+            var redditPost = if (redditPage) RedditPostIdentity.parse(url)?.postId else null
+            var redditAnswers = 0
             while (true) {
                 if (linkedInPage && MediaHttpPolicy.isLinkedInPost(url)) landing = MediaHttpPolicy.withoutQuery(url)
                 token.requireActive()
@@ -518,6 +536,14 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 tiktokPage -> MediaHttpPolicy.parse(checkNotNull(TikTokPostIdentity.parse(located.toString())).videoUrl)
                                     ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                                 facebookPage -> facebookHop(url, located, seen)
+                                redditPage -> {
+                                    if (RedditPostIdentity.isLoginWall(located)) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
+                                    val hop = RedditPostIdentity.postHop(located)
+                                    if (hop == null || (redditPost != null && hop.postId != redditPost))
+                                        throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                                    redditPost = hop.postId
+                                    MediaHttpPolicy.parse(hop.fetchUrl) ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                                }
                                 linkedInPage -> MediaHttpPolicy.linkedInHopTarget(located)
                                 else -> located
                             }
@@ -548,6 +574,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 if (oembed) YouTubeOEmbed.MAX_BYTES else if (facebookPage) MediaPageLimits.FACEBOOK else if (xPost) MediaPageLimits.X
                                 else if (instagramPage) MediaPageLimits.INSTAGRAM
                                 else if (tiktokPage) MediaPageLimits.TIKTOK
+                                else if (redditPage) MediaPageLimits.REDDIT
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN
                                 else imageCap?.let { minOf(it, token.budget.imageLimit()) })
@@ -560,6 +587,21 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                     tikTokChallenge = answer
                                     continue
                                 }
+                            }
+                            if (redditPage && redditAnswers < 2) {
+                                val answer = try {
+                                    complete.peek { bytes, length -> RedditJsChallenge.answer(bytes, length, url) }
+                                } catch (failure: Exception) { complete.close(); throw failure }
+                                if (answer != null) {
+                                    complete.close()
+                                    redditAnswers++
+                                    url = answer
+                                    continue
+                                }
+                            }
+                            if (redditPage && RedditPostIdentity.postHop(url)?.postId.let { it == null || (redditPost != null && it != redditPost) }) {
+                                complete.close()
+                                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             }
                             try {
                                 token.admit(complete)
