@@ -244,21 +244,25 @@ internal fun MiniPlayerBar(host: ViewerHostState, session: MiniSession, modifier
                 cover?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                     ?: Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.5f)) }
             }
-            // A Latin file name reads left to right inside either language, an Arabic one right to left; it scrolls the same way.
-            val ltr = remember(title) { Bidi(title, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseIsLeftToRight() }
-            val scrolls = MiniPlayerLayout.marquee(if (host.collapsed) 1f else 0f, reduced)
-            Box(Modifier.weight(1f).padding(horizontal = Space.m).then(row), contentAlignment = Alignment.CenterStart) {
-                CompositionLocalProvider(LocalLayoutDirection provides if (ltr) LayoutDirection.Ltr else LayoutDirection.Rtl) {
-                    Text(title, if (scrolls) Modifier.basicMarquee(initialDelayMillis = MiniPlayerLayout.MARQUEE_DELAY,
-                        velocity = MiniPlayerLayout.MARQUEE_SPEED) else Modifier,
-                        style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = if (scrolls) TextOverflow.Clip else TextOverflow.Ellipsis)
-                }
-            }
+            Box(Modifier.weight(1f).padding(horizontal = Space.m).then(row), contentAlignment = Alignment.CenterStart) { BarTitle(title, host, reduced) }
             IconButton(toggle, Modifier.size(48.dp).then(row)) {
                 Icon(painterResource(if (playing) Media3.drawable.media3_icon_pause else Media3.drawable.media3_icon_play), playLabel, Modifier.size(24.dp))
             }
             IconButton({ host.close() }, Modifier.size(48.dp).then(row)) { Icon(Icons.Default.Close, closeLabel) }
         }
+    }
+}
+
+/** The bar's name. Its own scope: the bar settling starts the scroll without recomposing the rest of the bar. */
+@Composable
+private fun BarTitle(title: String, host: ViewerHostState, reduced: Boolean) {
+    // A Latin file name reads left to right inside either language, an Arabic one right to left; it scrolls the same way.
+    val ltr = remember(title) { Bidi(title, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseIsLeftToRight() }
+    val scrolls = MiniPlayerLayout.marquee(if (host.collapsed) 1f else 0f, reduced)
+    CompositionLocalProvider(LocalLayoutDirection provides if (ltr) LayoutDirection.Ltr else LayoutDirection.Rtl) {
+        Text(title, if (scrolls) Modifier.basicMarquee(initialDelayMillis = MiniPlayerLayout.MARQUEE_DELAY,
+            velocity = MiniPlayerLayout.MARQUEE_SPEED) else Modifier,
+            style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = if (scrolls) TextOverflow.Clip else TextOverflow.Ellipsis)
     }
 }
 

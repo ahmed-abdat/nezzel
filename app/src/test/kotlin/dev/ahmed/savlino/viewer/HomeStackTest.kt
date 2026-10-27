@@ -10,9 +10,13 @@ import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composer
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.CompositionTracer
+import androidx.compose.runtime.InternalComposeTracingApi
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -22,6 +26,8 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.SavedStateHandle
@@ -238,6 +244,40 @@ class HomeStackTest {
                 save(strip, "$tag-$name-$lang-${if (dark) "dark" else "light"}")
             }
         }
+    }
+
+    /**
+     * Over Home with its paste field: a drag up from the bar and back down from the page recomposes nothing on its frames,
+     * except where the sheet passes a threshold (it leaves or reaches the bar, the page's controls fade), and those stay small.
+     */
+    @OptIn(InternalComposeTracingApi::class)
+    @Test fun aDragRecomposesOnlyWhereItPassesAThreshold() = scene("en", false) { _, host ->
+        pose(host, 1f); idle(400)
+        var scopes = 0
+        Composer.setTracer(object : CompositionTracer {
+            override fun isTraceInProgress() = true
+            override fun traceEventStart(key: Int, dirty1: Int, dirty2: Int, info: String) { scopes++ }
+            override fun traceEventEnd() {}
+        })
+        try {
+            for (up in listOf(true, false)) {
+                val travel = compose.runOnIdle { host.travel }
+                val root = compose.onRoot()
+                val start = if (up) compose.onNodeWithTag(MINI_PLAYER_TAG).fetchSemanticsNode().boundsInRoot.center
+                    else compose.onNodeWithTag(VIEWER_TAG).fetchSemanticsNode().boundsInRoot.let { Offset(it.center.x, it.top + it.height * .2f) }
+                root.performTouchInput { down(start) }
+                val frames = List(40) {
+                    scopes = 0
+                    root.performTouchInput { moveBy(Offset(0f, (if (up) -.024f else .024f) * travel)) }; compose.waitForIdle()
+                    scopes
+                }
+                root.performTouchInput { up() }; idle(800)
+                val drag = if (up) "Up from the bar" else "Down from the page"
+                assertEquals("$drag: the sheet followed the finger and settled", if (up) 0f else 1f, compose.runOnIdle { host.progress })
+                assertTrue("$drag: frames that recomposed $frames", frames.count { it > 0 } <= 2)
+                assertTrue("$drag: a threshold frame recomposed too much $frames", frames.max() <= 40)
+            }
+        } finally { Composer.setTracer(null) }
     }
 
     /** Owner review: the bar as one surface around the cover, over Home with its paste field, in both languages. */

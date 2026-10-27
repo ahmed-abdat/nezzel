@@ -83,7 +83,7 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     val request = remember(id) { ViewerRequest(id) }
     // The file playing in the bar was deleted: the bar and its music go with it. A filter or search that only hides it doesn't.
     val playing = host.mini?.item?.uri
-    if (playing != null && library != null && host.collapsed && host.request === request && playing !in library) SideEffect { host.close() }
+    if (playing != null && library != null && playing !in library && host.collapsed && host.request === request) SideEffect { host.close() }
     if (items.isEmpty()) return
     val locals = currentCompositionLocalContext
     // A file tapped in the screen while its music sits in the bar: the music playing there just opens again; any other
@@ -106,6 +106,24 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
         val index = asked ?: start.takeIf { it != shown && it in items.indices } ?: return@LaunchedEffect
         if (items[index].uri != host.mini?.item?.uri) { shown = index; turn++ }
         host.expand()
+    }
+}
+
+/**
+ * Back on the page: it leaves fullscreen first, then closes; on music it shrinks the player into the bar instead,
+ * following the finger on Android 14+ (a cancelled gesture puts it back). Its own scope: the page reaching or leaving
+ * the bar recomposes only this.
+ */
+@Composable
+private fun ViewerBack(host: ViewerHostState?, shrinks: Boolean, onBack: () -> Unit) {
+    val collapsed = host?.collapsed == true
+    BackHandler(!collapsed, onBack)
+    PredictiveBackHandler(shrinks && !collapsed) { events ->
+        val target = host ?: return@PredictiveBackHandler
+        try {
+            target.size.anchoredDrag { _ -> events.collect { dragTo(it.progress * .4f * target.travel) } }
+            target.collapse()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { target.expand(); throw cancelled }
     }
 }
 
@@ -134,9 +152,6 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
     // Rotation recreates the activity mid-fullscreen: only a real dismissal puts the old orientation back.
     DisposableEffect(activity) { onDispose { if (activity?.isChangingConfigurations != true) ViewerFullscreen.exit(activity, controls) } }
     LaunchedEffect(activity) { ViewerFullscreen.resume(activity, controls) }
-    val collapsed = host?.collapsed == true
-    // Back leaves fullscreen first, then closes; on music it shrinks the player into the bar instead.
-    BackHandler(!collapsed) { if (controls.fullscreen) fullscreen(false) else close() }
     // Black page: light status and navigation icons whatever the app theme. Fullscreen hides the bars; a swipe shows them
     // briefly. The activity window is shared with the app, so closing puts its bars back as they were.
     val view = LocalView.current
@@ -153,13 +168,15 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         }
     }
     // The shrinking sheet uncovers the app's top first, then its bottom, so its own bar icons come back in that order.
-    val uncovered = host?.uncovered == true
-    val away = host?.away == true
-    LaunchedEffect(window, view, controls.fullscreen, uncovered, away) {
-        if (window != null) WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = uncovered && appBars.first; isAppearanceLightNavigationBars = away && appBars.second
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            if (controls.fullscreen) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
+    // Read in the effect, not the body: the sheet passing these points mid-drag recomposes nothing.
+    LaunchedEffect(window, view, controls.fullscreen) {
+        if (window == null) return@LaunchedEffect
+        snapshotFlow { (host?.uncovered == true) to (host?.away == true) }.collect { (uncovered, away) ->
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = uncovered && appBars.first; isAppearanceLightNavigationBars = away && appBars.second
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (controls.fullscreen) hide(WindowInsetsCompat.Type.systemBars()) else show(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
     val pager = rememberPagerState(start.coerceIn(0, items.lastIndex)) { items.size }
@@ -178,22 +195,17 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
     // bar) opens full screen instead, paused until Play.
     var hadPlayer by remember { mutableStateOf(false) }
     if (ownedPlayer != null) hadPlayer = true
-    LaunchedEffect(collapsed, ownedPlayer == null, ownedState) {
-        if (!collapsed || host == null) return@LaunchedEffect
-        if (ownedPlayer == null && !hadPlayer) host.expand()
-        else if (ownedPlayer == null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Ended) host.close()
-        else if (ownedState is dev.ahmed.savlino.playback.PlaybackState.Failed) host.expand()
+    LaunchedEffect(ownedPlayer == null, ownedState) {
+        if (host == null) return@LaunchedEffect
+        snapshotFlow { host.collapsed }.collect { collapsed ->
+            if (!collapsed) return@collect
+            if (ownedPlayer == null && !hadPlayer) host.expand()
+            else if (ownedPlayer == null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Ended) host.close()
+            else if (ownedState is dev.ahmed.savlino.playback.PlaybackState.Failed) host.expand()
+        }
     }
     val minimize = host != null && shrinkable != null && host.mini?.owner === playback && host.slot != null
-    // The music page's Back shrinks it, following the finger on Android 14+; a cancelled gesture puts it back.
-    PredictiveBackHandler(minimize && !controls.fullscreen && !collapsed) { events ->
-        val target = host ?: return@PredictiveBackHandler
-        try {
-            target.size.anchoredDrag { _ -> events.collect { dragTo(it.progress * .4f * target.travel) } }
-            target.collapse()
-        } catch (cancelled: kotlinx.coroutines.CancellationException) { target.expand(); throw cancelled }
-    }
-    val moving = host?.moving == true
+    ViewerBack(host, minimize && !controls.fullscreen) { if (controls.fullscreen) fullscreen(false) else close() }
     // A page swiped away comes back unzoomed, and every newly settled page starts with its controls showing.
     LaunchedEffect(pager.settledPage, items) {
         val settledItem = items.getOrNull(pager.settledPage)
@@ -218,7 +230,7 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
             }
             HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding())
                 .onSizeChanged { width = it.width },
-                key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen && !moving) { page ->
+                key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen && host?.moving != true) { page ->
                 // Full screen shows the playing file alone, and so does a page shrinking into the bar.
                 if (controls.fullscreen && page != pager.currentPage) return@HorizontalPager
                 val item = items[page]
