@@ -145,7 +145,8 @@ class JobStoreRetryTest {
     @Test fun retryableErrorsRetainUrlButPermanentFailuresAndCancellationScrubIt() {
         val retryable = setOf(DownloadError.Network, DownloadError.Offline, DownloadError.InsufficientSpace,
             DownloadError.MergeFailed, DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted,
-            DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Failed, DownloadError.EngineUnavailable)
+            DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.ForegroundDenied, DownloadError.Failed,
+            DownloadError.EngineUnavailable)
         JobStore(app).use { store ->
             for (error in DownloadError.entries) {
                 val id = "failure-${error.name}"

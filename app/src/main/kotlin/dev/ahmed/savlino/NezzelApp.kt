@@ -169,7 +169,11 @@ fun NezzelApp(
         }
     }
     val retry: (String) -> Unit = { id ->
-        scope.launch { if (links.downloads?.retry(id) != true) snackbar.showSnackbar(context.getString(R.string.download_retry_hint)) }
+        scope.launch {
+            val downloads = links.downloads
+            if (downloads?.retry(id) != true) snackbar.showSnackbar(context.getString(
+                if (downloads?.retryWaitsForSave(id) == true) R.string.download_retry_still_saving else R.string.download_retry_hint))
+        }
     }
     // One snackbar with the count of rows that actually changed; refused rows (finished meanwhile) are not counted.
     // One batch at a time: the button is disabled until it ends, so a double tap or a Pause all turning into Resume all never overlaps.

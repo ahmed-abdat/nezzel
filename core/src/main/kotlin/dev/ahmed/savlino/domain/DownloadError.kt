@@ -15,6 +15,8 @@ enum class DownloadError {
     SourceRefused,
     /** Android stopped the transfer for battery/background limits (API 31+ stop reason only, never guessed). */
     StoppedByBattery,
+    /** Android refused the foreground service a background rerun needs (dataSync after its timeout); the partial is kept. */
+    ForegroundDenied,
     /** A link batch met a photos-only post; photos are saved from the single-link sheet. */
     PhotoPost;
 

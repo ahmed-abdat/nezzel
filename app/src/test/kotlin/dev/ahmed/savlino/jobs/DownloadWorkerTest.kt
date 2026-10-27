@@ -283,7 +283,7 @@ class DownloadWorkerTest {
                 val id = if (foregroundFailure) "fg-denied-reason" else "engine-run-reason"
                 f.coordinator.enqueue(command(id))
                 f.coordinator.execute(id, { if (foregroundFailure) throw IllegalStateException("denied") }, {})
-                assertEquals(DownloadError.ExecutionRestricted, f.store.get(id)!!.error)
+                assertEquals(if (foregroundFailure) DownloadError.ForegroundDenied else DownloadError.ExecutionRestricted, f.store.get(id)!!.error)
                 val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
                 assertEquals(if (foregroundFailure) "ExecutionRestricted_FOREGROUND_DENIED" else "ExecutionRestricted_ENGINE_RUN", report.getString("code"))
                 assertFalse(report.toString().contains("private details"))
@@ -902,23 +902,184 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun unknownAndDeviceStateStopsStayInterrupted() = runBlocking {
-        // DEVICE_STATE also covers memory pressure: no battery claim, still retryable.
-        for (reason in listOf(WorkInfo.STOP_REASON_UNKNOWN, WorkInfo.STOP_REASON_DEVICE_STATE)) {
-            fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
-                val id = "plain-stop-${reason.toString().replace('-', 'm')}"
+    // S4: a system stop that is not connectivity or battery (FGS timeout -128, preemption, device state, unknown)
+    // requeues and keeps the partial; the rerun resumes it.
+    @Test fun systemStopMidTransferRequeuesKeepingThePartial() = runBlocking {
+        for (reason in listOf(WorkInfo.STOP_REASON_UNKNOWN, WorkInfo.STOP_REASON_DEVICE_STATE, -128,
+                WorkInfo.STOP_REASON_PREEMPT)) {
+            checkSystemStopRequeues("plain-stop-${reason.toString().replace('-', 'm')}", reason)
+        }
+    }
+    // S5: below API 31 every stop reports UNKNOWN; a quick flap already back at unwind is still not a failure.
+    @Test @Config(sdk = [29])
+    fun stopWhileConnectedBelowApi31RequeuesKeepingThePartial() = runBlocking {
+        checkSystemStopRequeues("old-api-stop", WorkInfo.STOP_REASON_UNKNOWN)
+    }
+    private suspend fun checkSystemStopRequeues(id: String, reason: Int) = coroutineScope {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        fixture(FakeEngine(), script = partialThenWait(seen)).use { f ->
+            f.store.enqueue(command(id))
+            stopMidTransfer(f, id, reason)
+            val row = f.store.get(id)!!
+            assertEquals("$reason", JobStage.ENQUEUED, row.stage); assertTrue("$reason", row.hasPartial); assertNull(row.error)
+            assertEquals("keep", File(app.filesDir, "downloads/$id/output.mp4.part").readText())
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+            assertEquals(listOf(null, "keep"), seen) // the rerun started from the kept partial
+        }
+    }
+    @Test fun repeatedSystemStopsWithoutProgressFailInterrupted() = runBlocking {
+        fixture(FakeEngine(), script = partialThenWait(waits = 4)).use { f ->
+            f.store.enqueue(command("stop-loop"))
+            repeat(3) {
+                stopMidTransfer(f, "stop-loop", -128)
+                assertEquals(JobStage.ENQUEUED, f.store.get("stop-loop")!!.stage)
+            }
+            stopMidTransfer(f, "stop-loop", -128)
+            val row = f.store.get("stop-loop")!!
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.Interrupted, row.error); assertTrue(row.retryable)
+            assertFalse(File(app.filesDir, "downloads/stop-loop").exists())
+        }
+    }
+    // S4: battery limits stop every rerun, so the job fails at once with the hint, but Retry resumes the partial.
+    @Test fun batteryStopFailsAtOnceAndRetryResumesTheKeptPartial() = runBlocking {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        fixture(FakeEngine(), script = partialThenWait(seen)).use { f ->
+            f.store.enqueue(command("battery-keep"))
+            stopMidTransfer(f, "battery-keep", WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION)
+            val row = f.store.get("battery-keep")!!
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.StoppedByBattery, row.error)
+            assertTrue(row.retryable)
+            val part = File(app.filesDir, "downloads/battery-keep/output.mp4.part")
+            assertEquals("keep", part.readText())
+            recovery(f).recover() // startup keeps it while Retry is offered
+            assertEquals("keep", part.readText())
+            assertTrue(f.store.retry("battery-keep"))
+            assertEquals(ListenableWorker.Result.success(), f.worker("battery-keep").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("battery-keep")!!.stage)
+            assertEquals(listOf(null, "keep"), seen)
+        }
+    }
+    @Test fun keptBatteryPartialGoesOnRemoveAndAfterTheConfirmationLifetime() = runBlocking {
+        fixture(FakeEngine(), script = partialThenWait(waits = 2)).use { f ->
+            for (id in listOf("battery-remove", "battery-expired")) {
                 f.store.enqueue(command(id))
-                val worker = f.worker(id)
-                val running = launch(Dispatchers.Default) { worker.doWork() }
-                withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
-                worker.stop(reason)
-                running.cancelAndJoin()
-                val row = f.store.get(id)!!
-                assertEquals(DownloadError.Interrupted, row.error)
-                assertTrue(row.retryable)
+                stopMidTransfer(f, id, WorkInfo.STOP_REASON_APP_STANDBY)
+                assertTrue(File(app.filesDir, "downloads/$id/output.mp4.part").isFile)
+            }
+            f.coordinator.removeFailed("battery-remove")
+            assertNull(f.store.get("battery-remove"))
+            assertFalse(File(app.filesDir, "downloads/battery-remove").exists())
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1, "battery-expired"))
+            recovery(f).recover()
+            assertEquals(JobStage.FAILED, f.store.get("battery-expired")!!.stage)
+            assertFalse(File(app.filesDir, "downloads/battery-expired").exists())
+        }
+    }
+    @Test fun batteryStopBeforeAnyBytesKeepsNothing() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
+            f.store.enqueue(command("battery-empty"))
+            val worker = f.worker("battery-empty")
+            val running = launch(Dispatchers.Default) { worker.doWork() }
+            withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+            worker.stop(WorkInfo.STOP_REASON_BACKGROUND_RESTRICTION)
+            running.cancelAndJoin()
+            val row = f.store.get("battery-empty")!!
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.StoppedByBattery, row.error)
+            assertFalse(File(app.filesDir, "downloads/battery-empty").exists())
+        }
+    }
+    // S3: a job requeued at startup with its finished file waits behind the gate while offline; it never fails.
+    @Test fun requeuedFinishedJobWaitsQueuedWhileOffline() = runBlocking {
+        val network = TestNetwork(connected = false)
+        fixture(FakeEngine(), network = network).use { f ->
+            f.store.enqueue(command("s3-offline")); check(f.store.startTransfer("s3-offline", "recipe"))
+            val output = File(app.filesDir, "downloads/s3-offline").apply { mkdirs() }.resolve("output.mp4")
+            output.writeBytes(byteArrayOf(1, 2, 3, 4))
+            check(f.store.markStaged("s3-offline"))
+            recovery(f).recover()
+            assertEquals(JobStage.ENQUEUED, f.store.get("s3-offline")!!.stage)
+            assertEquals(ListenableWorker.Result.success(), f.worker("s3-offline").doWork())
+            val row = f.store.get("s3-offline")!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertNull(row.error)
+            assertTrue(output.isFile); assertEquals(0, f.attempts.get())
+        }
+    }
+    // F4/F2: online, a requeued finished job is saved once from the same file; the engine finds it and writes nothing.
+    // Native: publish already removed the sidecar, so this rerun sees ytdlp and must still keep the file.
+    @Test fun requeuedFinishedJobOnlineSavesTheSameFileOnce() = runBlocking {
+        for (engine in listOf("ytdlp", "native")) {
+            val id = "s3-online-$engine"
+            val found = java.util.concurrent.CopyOnWriteArrayList<List<Byte>?>()
+            fixture(FakeEngine(), script = { _, dir, _ ->
+                val output = dir.resolve("output.mp4")
+                found += output.takeIf { it.isFile }?.readBytes()?.toList()
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }).use { f ->
+                f.store.enqueue(command(id))
+                check(f.store.startTransfer(id, "engine-42:${YtdlpCommand.ARGV_VERSION}:engine=$engine"))
+                val output = File(app.filesDir, "downloads/$id").apply { mkdirs() }.resolve("output.mp4")
+                output.writeBytes(byteArrayOf(5, 6, 7, 8))
+                check(f.store.markStaged(id))
+                recovery(f).recover()
+                assertEquals(engine, JobStage.ENQUEUED, f.store.get(id)!!.stage)
+                assertEquals(engine, ListenableWorker.Result.success(), f.worker(id).doWork())
+                assertEquals(engine, JobStage.COMPLETED, f.store.get(id)!!.stage)
+                assertEquals(engine, listOf(listOf<Byte>(5, 6, 7, 8)), found)
+                assertEquals(engine, 1, f.provider.rows.size)
+                assertEquals(engine, listOf<Byte>(5, 6, 7, 8), f.provider.file.readBytes().toList())
             }
         }
     }
+    // F1: after the 6h dataSync timeout the background rerun cannot start a foreground service: keep the hours of
+    // partial for Retry from the opened app, never start over.
+    @Test fun refusedForegroundAfterASystemStopKeepsThePartialForRetry() = runBlocking {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        fixture(FakeEngine(), script = partialThenWait(seen)).use { f ->
+            f.store.enqueue(command("fgs-timeout"))
+            stopMidTransfer(f, "fgs-timeout", -128)
+            assertEquals(JobStage.ENQUEUED, f.store.get("fgs-timeout")!!.stage)
+            f.coordinator.execute("fgs-timeout", { throw IllegalStateException("dataSync limit") }, {})
+            val row = f.store.get("fgs-timeout")!!
+            assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.ForegroundDenied, row.error)
+            assertTrue(row.retryable)
+            val part = File(app.filesDir, "downloads/fgs-timeout/output.mp4.part")
+            assertEquals("keep", part.readText())
+            recovery(f).recover()
+            assertEquals("keep", part.readText())
+            assertTrue(f.store.retry("fgs-timeout"))
+            assertEquals(ListenableWorker.Result.success(), f.worker("fgs-timeout").doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get("fgs-timeout")!!.stage)
+            assertEquals(listOf(null, "keep"), seen)
+        }
+    }
+    private val waiting = java.util.concurrent.atomic.AtomicInteger()
+    /** The first [waits] runs write a partial and wait to be stopped; later runs finish. [seen]: the partial each run found. */
+    private fun partialThenWait(seen: MutableList<String?> = java.util.concurrent.CopyOnWriteArrayList(), waits: Int = 1):
+        suspend (DownloadCommand, File, (EngineEvent) -> Unit) -> TransferResult = { _, dir, emit ->
+        val part = dir.resolve("output.mp4.part")
+        seen += part.takeIf { it.isFile }?.readText()
+        if (seen.size <= waits) {
+            part.writeText("keep")
+            emit(EngineEvent.Progress(4, Size.Exact(8)))
+            waiting.incrementAndGet()
+            awaitCancellation()
+        }
+        part.delete()
+        val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+        TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+    }
+    private suspend fun stopMidTransfer(f: Fixture, id: String, reason: Int) = coroutineScope {
+        val before = waiting.get()
+        val worker = f.worker(id)
+        val running = launch(Dispatchers.Default) { worker.doWork() }
+        withTimeout(5000) { while (waiting.get() == before) yield() }
+        worker.stop(reason)
+        running.cancelAndJoin()
+    }
+    private fun recovery(f: Fixture) = JobRecovery(f.store, MediaStorePublisher(app.contentResolver,
+        SpaceBudget(app.filesDir, app.cacheDir, FreeSpace { Long.MAX_VALUE }), app.packageName) { }, File(app.filesDir, "downloads"))
 
     @Test fun zeroByteConnectivityStopReturnsWorkerRetry() = runBlocking {
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Fail(DownloadError.Cancelled)))).use { f ->

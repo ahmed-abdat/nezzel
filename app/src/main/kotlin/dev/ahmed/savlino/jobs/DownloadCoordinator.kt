@@ -481,7 +481,8 @@ class DownloadCoordinator(
         }
         fun finishStopped() {
             schedulerStopped = stopReason() != WorkInfo.STOP_REASON_NOT_STOPPED
-            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes, keepOutput = id in postProcessing)
+            finishStopped(id, stoppedError(), systemStopped = true, startBytes = startBytes, keepOutput = id in postProcessing,
+                schedulerStop = schedulerStopped)
             if (networkStopped.get() && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
         }
         try {
@@ -560,20 +561,23 @@ class DownloadCoordinator(
                     var command = row.command() ?: error("Invalid job command")
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
-                    val baseRecipe = "${dev.ahmed.savlino.BuildConfig.VERSION_CODE}:$engineVersion:${YtdlpCommand.ARGV_VERSION}"
+                    // An app update alone keeps the bytes: only the engine, the argv or the transfer engine matter.
+                    val baseRecipe = "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
                     val transferEngine = engine.resumeEngine(command, stagingRoot(id))
                     val recipe = "$baseRecipe:engine=$transferEngine"
                     // One-time migration: only pre-native jobs can lack an engine marker. Preserve
                     // their bytes with the same yt-dlp/argv; new jobs always write engine=.
-                    // Native fallback ownership is also durable in staging.
-                    val legacyRecipe = row.resumeRecipe?.let {
-                        ":engine=" !in it && it.substringBefore(':').toIntOrNull() != null &&
-                            it.substringAfter(':') == "$engineVersion:${YtdlpCommand.ARGV_VERSION}"
-                    } == true
-                    val nativeFallback = row.resumeRecipe == "$baseRecipe:engine=native" &&
-                        DirectResume.read(stagingRoot(id))?.native == false
-                    val compatibleRecipe = row.resumeRecipe == recipe ||
-                        (transferEngine == "ytdlp" && (legacyRecipe || nativeFallback))
+                    // Native fallback ownership is also durable in staging. A finished native file has no
+                    // sidecar any more (publish removed it), so the rerun sees ytdlp: keep that file too.
+                    val directRecord = DirectResume.read(stagingRoot(id))
+                    val nativeFinished = directRecord == null && YtdlpCommand.finishedSource(command.format)
+                        ?.let { File(stagingRoot(id), it).isFile } == true
+                    fun compatible(stored: String?) = stored == recipe || transferEngine == "ytdlp" &&
+                        (stored == baseRecipe || stored == "$baseRecipe:engine=native" && (directRecord?.native == false || nativeFinished))
+                    // Older recipes start with the app version code; it no longer decides compatibility. Strip it
+                    // only when the recipe as stored does not match (an engine version could be all digits).
+                    val compatibleRecipe = compatible(row.resumeRecipe) || row.resumeRecipe
+                        ?.takeIf { it.substringBefore(':').toIntOrNull() != null }?.substringAfter(':').let(::compatible)
                     val adopting = row.restartEpoch > 0 || row.hasPartial
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     // A stopped attempt's ffmpeg must not outlive any cleanup or adopt of its staging: one that
@@ -716,9 +720,12 @@ class DownloadCoordinator(
                                 else -> DownloadError.SaveFailed
                             }
                             failure is ArithmeticException -> DownloadError.InsufficientSpace
+                            attempt.reason == ExecutionFailureReason.FOREGROUND_DENIED -> DownloadError.ForegroundDenied
                             else -> DownloadError.ExecutionRestricted
                         }
-                        finishStopped(id, error)
+                        // A refused foreground (dataSync after its timeout cannot restart in the background) is not the
+                        // download's fault: keep the partial so Retry, from the opened app, resumes it.
+                        finishStopped(id, error, keepPartial = error == DownloadError.ForegroundDenied)
                     }
                 } finally {
                     withContext(NonCancellable) {
@@ -760,7 +767,7 @@ class DownloadCoordinator(
                     if (store.get(id)?.stage?.terminal != false) offlineStarts.remove(id) // A reused id starts its count over.
                     // Expiry skipped this staging while the writer was live; the writer has exited now.
                     JobStore.liveWriters.remove(id)
-                    if (store.get(id)?.stage?.terminal == true) {
+                    if (store.get(id)?.let { it.stage.terminal && !JobStore.keepsPartial(it) } == true) {
                         cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)
                         // Expiry removed the info file while the engine still ran; a rebuild may have stored a new one.
                         store.discardInfoJson(id)
@@ -790,7 +797,7 @@ class DownloadCoordinator(
     private fun finishStopped(id: String, error: DownloadError,
         systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
         cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false,
-        staleWriter: Boolean = false) = synchronized(userCancellation) {
+        staleWriter: Boolean = false, schedulerStop: Boolean = false, keepPartial: Boolean = false) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         store.resetAutomaticResumes(id, bytes)
@@ -817,8 +824,23 @@ class DownloadCoordinator(
             if (store.requeueAutomatic(id, cause, hasPartial = bytes > 0)) {
                 if (bytes > startBytes) progressed += id
             } else store.fail(id, error)
+        } else if (schedulerStop && error == DownloadError.Interrupted &&
+            row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
+            // A system stop (foreground-service timeout, preemption, quota; any stop below API 31) is not the
+            // download's fault: resume from the partial. It shares the stall budget, reset by real progress.
+            if (store.requeueAutomatic(id, DownloadFailureCause.STALL, hasPartial = bytes > 0)) {
+                if (bytes > startBytes) progressed += id
+            } else {
+                store.fail(id, error)
+                recovery.reconcile(id, cancellationRequested = true, cancellationError = error)
+            }
+        } else if (systemStopped && error == DownloadError.StoppedByBattery &&
+            row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
+            // Battery limits stop it again on every rerun: fail now with the battery hint, keep the partial for Retry.
+            store.fail(id, error, keepPartial = bytes > 0)
+            recovery.reconcile(id, cancellationRequested = true, cancellationError = error)
         } else {
-            store.fail(id, error)
+            store.fail(id, error, keepPartial = keepPartial && bytes > 0)
             val stopped = error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
                 DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)
             recovery.reconcile(id, cancellationRequested = stopped, cancellationError = error)
@@ -880,13 +902,17 @@ class DownloadCoordinator(
         if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
         else {
             val error = event.error ?: row.error ?: DownloadError.Failed
-            val code = error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
+            // ForegroundDenied keeps the code it was reported under before it had its own value.
+            val code = if (error == DownloadError.ForegroundDenied) "ExecutionRestricted_FOREGROUND_DENIED"
+                else error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
             usage.failed(Report.DOWNLOAD, code, attempt.reportLink ?: row.sourceUrl, row.engineVersion)
         }
         attempt.reportLink = null
     }
     /** Explicit retry of the original confirmation only; scheduling never substitutes the editor URL. */
     suspend fun retry(id: String): Boolean = retryOne(id).also { if (it) usage.count(UsageKeys.RETRY) }
+    /** A refused Retry still waiting on the provider to finish the last save (a new link would save a 2nd copy). */
+    fun retryWaitsForSave(id: String): Boolean = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
     private suspend fun retryOne(id: String): Boolean = withContext(Dispatchers.IO) {
         initialize()
         val row = store.get(id) ?: return@withContext false
@@ -922,7 +948,15 @@ class DownloadCoordinator(
             // Wait above without the gate: an old worker must be able to finish and release it.
             maintenance.withDownload {
                 // CAS rechecks eligibility/expiry after waiting; duplicate taps cannot reset twice.
-                recovery.reconcile(id) // Re-picked trees can now discard a previously inaccessible partial document.
+                // Re-picked trees can now discard a previously inaccessible partial document. A MediaStore save
+                // the provider now confirms gone requeues its kept finished file: schedule that instead.
+                val owned = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
+                recovery.reconcile(id, retrying = true)
+                if (owned && store.get(id)?.stage == JobStage.ENQUEUED) {
+                    mutableError.value = null
+                    rescheduleUnderMaintenanceGate(id)
+                    return@withDownload true
+                }
                 if (!store.retry(id)) {
                     store.get(id)?.let { updateQueue(fromRecord(it)) }
                     return@withDownload false
@@ -940,6 +974,7 @@ class DownloadCoordinator(
 
     suspend fun removeFailed(id: String) = withContext(Dispatchers.IO) {
         initialize()
+        recovery.release(id)
         val row = store.get(id)
         val removed = row?.stage == JobStage.FAILED && store.remove(id)
         if (removed) offlineStarts.remove(id)

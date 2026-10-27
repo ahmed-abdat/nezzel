@@ -2,6 +2,7 @@ package dev.ahmed.savlino.jobs
 
 import android.os.CancellationSignal
 import dev.ahmed.savlino.domain.DownloadError
+import dev.ahmed.savlino.domain.PartialFileNames
 import dev.ahmed.savlino.engine.YtdlpCommand
 import dev.ahmed.savlino.storage.*
 import java.io.File
@@ -29,15 +30,17 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
         for (row in store.all()) {
             // Death may separate the atomic fresh-id reservation from old-row/progress cleanup.
             if (row.stage == JobStage.FAILED && BatchStore(store).replaced(row.jobId)) {
+                cleanupUnresolved(row) // Best effort: no sweep finds a MediaStore pending row once its owner is gone.
                 store.remove(row.jobId)
                 continue
             }
             when (row.stage) {
-                JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
-                JobStage.STAGED -> store.fail(row.jobId, DownloadError.SaveFailed)
+                JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row, startup = true)
+                JobStage.STAGED -> if (!requeueFinished(row)) store.fail(row.jobId, DownloadError.SaveFailed)
                 JobStage.TRANSFERRING -> recoverTransfer(row)
-                JobStage.FAILED -> { cleanupFailedTree(row); cleanup(row.jobId) }
-                JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(row.jobId)
+                JobStage.FAILED -> { cleanupUnresolved(row, requeue = true); cleanupFailed(row.jobId) }
+                JobStage.CANCELLED -> { cleanupUnresolved(row); cleanup(row.jobId) }
+                JobStage.COMPLETED -> cleanup(row.jobId)
                 JobStage.ENQUEUED -> if (row.hasPartial) recoverTransfer(row)
                 JobStage.PAUSED -> Unit
             }
@@ -145,7 +148,7 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
      */
     fun reconcile(jobId: String, cancellationRequested: Boolean = false,
         cancellationError: DownloadError = DownloadError.Cancelled,
-        publicationError: DownloadError = DownloadError.SaveFailed): Unit = synchronized(lock) {
+        publicationError: DownloadError = DownloadError.SaveFailed, retrying: Boolean = false): Unit = synchronized(lock) {
         if (cancellationRequested || publicationError in setOf(DownloadError.InsufficientSpace, DownloadError.FolderUnavailable))
             store.requestPublicationFailure(jobId, if (cancellationRequested) cancellationError else publicationError)
         val row = store.get(jobId) ?: return@synchronized
@@ -153,13 +156,26 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
             JobStage.STAGED -> if (cancellationRequested && cancellationError == DownloadError.Cancelled) store.cancel(jobId)
                 else store.fail(jobId, if (cancellationRequested) cancellationError else publicationError)
-            JobStage.FAILED -> { cleanupFailedTree(row); cleanup(jobId) }
-            JobStage.COMPLETED, JobStage.CANCELLED -> cleanup(jobId)
+            JobStage.FAILED -> { cleanupUnresolved(row, requeue = retrying); cleanupFailed(jobId) }
+            JobStage.CANCELLED -> { cleanupUnresolved(row); cleanup(jobId) }
+            JobStage.COMPLETED -> cleanup(jobId)
             else -> Unit
         }
     }
 
-    private fun recoverPublication(row: JobRecord) {
+    /** Exactly one finished file, the one a rerun adopts (YtdlpCommand.finishedSource), and nothing else but partials. */
+    private fun requeueFinished(row: JobRecord): Boolean {
+        val keep = YtdlpCommand.finishedSource(row.format) ?: return false // A FAILED row has no command().
+        val directory = File(jobRoot, row.jobId)
+        if (!safeRoot() || Files.isSymbolicLink(directory.toPath()) || !directory.isDirectory) return false
+        val outputs = directory.listFiles()?.filter { it.name != "result-path.txt" && !PartialFileNames.matches(it.name) }
+            ?: return false
+        val output = outputs.singleOrNull()?.takeIf { it.name == keep } ?: return false
+        if (Files.isSymbolicLink(output.toPath()) || !output.isFile || output.length() == 0L) return false
+        return store.requeueFinished(row.jobId)
+    }
+
+    private fun recoverPublication(row: JobRecord, startup: Boolean = false) {
         val uri = row.pendingUri ?: return
         try {
             val current = publisher.recover(uri)
@@ -172,22 +188,45 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             } else current
             when (resolved) {
                 is PublishedFile -> store.complete(row.jobId, resolved)
-                MissingPublication -> store.publicationAbandoned(row.jobId)
-                is PendingPublication -> Unit // Delete not acknowledged: retain URI for reconciliation.
+                // At startup a death, not the save, ended it: save again from the finished file.
+                MissingPublication -> if (!(startup && row.error !in setOf(DownloadError.Cancelled,
+                        DownloadError.InsufficientSpace, DownloadError.FolderUnavailable) && requeueFinished(row)))
+                    store.publicationAbandoned(row.jobId)
+                // Delete not acknowledged: end the job, retain the URI for [cleanupUnresolved].
+                is PendingPublication -> store.publicationUnresolved(row.jobId)
             }
         } catch (failure: Exception) {
+            // Permission/provider failure is not evidence of absence or ownership. Keep recorded URI.
             if (failure is StorageException && failure.error == StorageError.FolderUnavailable &&
                 android.provider.DocumentsContract.isTreeUri(uri)) store.folderUnavailable(row.jobId)
-            // Permission/provider failure is not evidence of absence or ownership. Keep recorded URI.
+            else store.publicationUnresolved(row.jobId)
         }
     }
 
-    private fun cleanupFailedTree(row: JobRecord) {
+    /** Before Remove: best effort, as no sweep finds a MediaStore pending row once its owner is gone. */
+    fun release(jobId: String): Unit = synchronized(lock) { store.get(jobId)?.let { cleanupUnresolved(it) } }
+
+    /**
+     * A terminal row still owning its URI: delete it now, or adopt it if the commit landed after all (a committed
+     * file wins a late cancellation). [requeue] (startup, Retry): once the row is gone, save the kept finished file again.
+     */
+    private fun cleanupUnresolved(row: JobRecord, requeue: Boolean = false) {
         val uri = row.pendingUri ?: return
-        if (!android.provider.DocumentsContract.isTreeUri(uri)) return
         try {
-            if (publisher.abandon(uri) == MissingPublication) store.clearFailedPublication(row.jobId, uri)
-        } catch (_: Exception) { /* Retain ownership until the user restores access. */ }
+            when (val result = publisher.abandon(uri)) {
+                // keepsPartial: only a still-retryable, confirmed, unexpired row saves again.
+                MissingPublication -> if (!(requeue && JobStore.keepsPartial(row) && row.error !in setOf(
+                        DownloadError.InsufficientSpace, DownloadError.FolderUnavailable) && requeueFinished(row)))
+                    store.clearFailedPublication(row.jobId, uri)
+                is PublishedFile -> store.complete(row.jobId, result)
+                is PendingPublication -> Unit
+            }
+        } catch (_: Exception) { /* Retain ownership until the provider or the user's grant is back. */ }
+    }
+
+    private fun cleanupFailed(jobId: String) {
+        val row = store.get(jobId) ?: return
+        if (row.stage == JobStage.FAILED && !JobStore.keepsPartial(row)) cleanup(jobId)
     }
 
     private fun safeRoot(): Boolean = jobRoot.absoluteFile == jobRoot.canonicalFile &&
