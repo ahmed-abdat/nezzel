@@ -443,6 +443,30 @@ class JobRecoveryTest {
         assertRequeued("retry-finished", output)
     }
 
+    // H1: a non-retryable (no URL) or expired unresolved save never saves again: the row lets go, staging goes.
+    @Test fun nonRetryableOrExpiredUnresolvedSaveIsClearedNotRequeued() {
+        for (id in listOf("unresolved-final", "unresolved-expired")) {
+            val (job, output) = finished(id)
+            publisher.boundary = "copy"
+            die { JobRecovery(store, publisher, root).publish(job, output, "video/mp4") }
+            publisher.boundary = "delete-fails"
+            reopen()
+            JobRecovery(store, publisher, root).recover()
+            assertNotNull(store.get(id)!!.pendingUri)
+            if (id == "unresolved-final")
+                store.writableDatabase.execSQL("UPDATE jobs SET retryable = 0, source_url = NULL WHERE job_id = ?", arrayOf(id))
+            else store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, id))
+            publisher.boundary = ""
+            reopen()
+            JobRecovery(store, publisher, root).recover()
+            assertEquals(id, JobStage.FAILED, store.get(id)!!.stage)
+            assertNull(id, store.get(id)!!.pendingUri)
+            assertFalse(id, output.exists())
+        }
+        assertTrue(publisher.files.isEmpty())
+    }
+
     // G2: pruning keeps the only owner of a MediaStore pending row; Remove first lets go of it.
     @Test fun pruningKeepsAndRemoveReleasesAnUnresolvedMediaStoreSave() {
         val (job, staged) = staged("owner")

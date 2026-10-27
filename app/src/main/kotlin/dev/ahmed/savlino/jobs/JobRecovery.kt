@@ -214,7 +214,8 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
         val uri = row.pendingUri ?: return
         try {
             when (val result = publisher.abandon(uri)) {
-                MissingPublication -> if (!(requeue && row.stage == JobStage.FAILED && row.error !in setOf(
+                // keepsPartial: only a still-retryable, confirmed, unexpired row saves again.
+                MissingPublication -> if (!(requeue && JobStore.keepsPartial(row) && row.error !in setOf(
                         DownloadError.InsufficientSpace, DownloadError.FolderUnavailable) && requeueFinished(row)))
                     store.clearFailedPublication(row.jobId, uri)
                 is PublishedFile -> store.complete(row.jobId, result)
