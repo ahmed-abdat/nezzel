@@ -100,4 +100,22 @@ class PlaybackCodecMappingTest {
         val vp9Only = map(listOf(video("vp9-1080", "vp9", 1080), aac).joinToString())
         assertEquals("vp9-1080", vp9Only.presets.single { it.preset == Preset.BEST }.formatId)
     }
+
+    @Test fun hevcTallerThanEveryH264RowBecomesBestButNeverAtTheSameHeight() {
+        val tiktok = map(listOf(video("avc-540", "h264", 540, size = 1600), video("hevc-540", "h265", 540, size = 420),
+            video("hevc-720", "h265", 720, size = 540), video("hevc-1080", "h265", 1080, size = 780),
+            video("av1-1440", "av01.0.12M.08", 1440), aac).joinToString())
+        assertEquals("hevc-1080", tiktok.presets.single { it.preset == Preset.BEST }.formatId)
+        assertEquals("hevc-720", tiktok.presets.single { it.preset == Preset.BALANCED }.formatId)
+        val sameHeight = map(listOf(video("avc-1080", "avc1.640028", 1080), video("hevc-1080", "hvc1.1.6.L120.90", 1080, size = 10),
+            aac).joinToString())
+        assertEquals("avc-1080", sameHeight.presets.single { it.preset == Preset.BEST }.formatId)
+        assertEquals("avc-1080", sameHeight.presets.single { it.preset == Preset.SMALL }.formatId, "same height stays H.264")
+        // H.264 1080 with muxed Opus loses its height's pick to the HEVC + AAC mp4, but it still exists.
+        val avcOpus = """{"format_id":"avc-1080","ext":"mp4","vcodec":"avc1.640028","acodec":"opus","height":1080,"tbr":900,"filesize":900}"""
+        val hevcMuxed = """{"format_id":"hevc-1080","ext":"mp4","vcodec":"hvc1.1.6.L120.90","acodec":"mp4a.40.2","height":1080,"tbr":900,"filesize":500}"""
+        val avcMkv = map(listOf(avcOpus, hevcMuxed,
+            """{"format_id":"m","ext":"mp4","vcodec":"avc1.4d401f","acodec":"mp4a.40.2","height":720,"tbr":900,"filesize":900}""").joinToString())
+        assertNotEquals("hevc-1080", avcMkv.presets.single { it.preset == Preset.BEST }.formatId, "an H.264 1080 merge exists")
+    }
 }
