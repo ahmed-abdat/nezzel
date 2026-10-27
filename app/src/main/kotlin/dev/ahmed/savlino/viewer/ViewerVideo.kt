@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -317,7 +318,8 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         val landscape = maxWidth > maxHeight
         if (player != null && failure == null) {
             val width = minOf(maxWidth, maxHeight * ratio)
-            PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)))
+            // The screen stays on only while the picture moves: a pause, the end, Home or closing lets it sleep again.
+            PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)).then(if (running) Modifier.keepScreenOn() else Modifier))
         }
         if (player == null || loading || failure != null) poster?.let {
             Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
