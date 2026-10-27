@@ -1,7 +1,10 @@
 package dev.ahmed.savlino.ui.nav
 
+import android.os.Looper
+import androidx.activity.FullyDrawnReporter
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.LocalFullyDrawnReporterOwner
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.DurationBasedAnimationSpec
@@ -16,12 +19,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import kotlinx.coroutines.flow.Flow
@@ -88,26 +96,78 @@ fun <T> rememberTabResource(initial: T, vararg keys: Any?, load: suspend () -> T
 /** Off-window tabs refuse keyboard focus and leave the semantics tree. */
 private val HiddenTab = Modifier.focusProperties { onEnter = { cancelFocusChange() } }.focusGroup().clearAndSetSemantics {}
 
+/** A pre-warm step needs this long without a touch or switch (so 400-800 ms after the last one), then an idle main thread. */
+private const val PREWARM_QUIET_MS = 400L
+
+/** The tab a pre-warm step is composing, withdrawn by a touch or a switch until it has composed. */
+private class PreWarm(private val visited: Set<String>) {
+    val pending = mutableStateOf<String?>(null)
+    var interruptions = 0
+    fun interrupt() {
+        interruptions++
+        pending.value?.let { if (it !in visited) pending.value = null }
+    }
+}
+
+private suspend fun FullyDrawnReporter.awaitReported() {
+    if (isFullyDrawnReported) return
+    suspendCancellableCoroutine { done ->
+        val listener = { done.resume(Unit) }
+        addOnReportDrawnListener(listener)
+        done.invokeOnCancellation { removeOnReportDrawnListener(listener) }
+    }
+}
+
+/** Nothing is due on the main thread: no input, frame or message waits behind a pre-warm step. */
+private suspend fun awaitMainIdle() { while (!Looper.getMainLooper().queue.isIdle) delay(16) }
+
 /**
  * Peer destinations keep independent saveable state, including lazy and ordinary scroll positions. A visited tab stays
  * composed and placed while hidden (off-window and transparent, no touch, focus, semantics or back handling), so switching
  * back to it never composes or re-records a whole screen in one frame. Only draw properties animate.
+ *
+ * Once the app reported fully drawn, [prewarm] tabs not visited yet are composed the same way, hidden and inactive (so
+ * none of their loads start), one per idle window; a touch or a switch puts the next one off.
  */
 @Composable
 fun TabContent(
     destination: String,
     reselections: TabReselections = remember { TabReselections() },
     stateHolder: SaveableStateHolder = rememberSaveableStateHolder(),
+    prewarm: List<String> = emptyList(),
     content: @Composable (String) -> Unit,
 ) {
     val reduced = LocalReducedMotion.current
     val first = remember { destination }
     // Not snapshot state: a new destination recomposes this scope anyway.
     val visited = remember { linkedSetOf<String>() }
+    val warm = remember { PreWarm(visited) }
+    // A switch landing in the same frame as a pre-warm step wins; the step retries in the next idle window.
+    val lastDestination = remember { arrayOf(destination) }
+    if (destination == lastDestination[0]) warm.pending.value?.let { visited += it }
+    lastDestination[0] = destination
     visited += destination
     val focus = LocalFocusManager.current
     var switched by remember { mutableStateOf(false) }
-    LaunchedEffect(destination) { if (switched) focus.clearFocus() else switched = true }
+    LaunchedEffect(destination) {
+        warm.interrupt()
+        if (switched) focus.clearFocus() else switched = true
+    }
+    val fullyDrawn = LocalFullyDrawnReporterOwner.current?.fullyDrawnReporter
+    LaunchedEffect(fullyDrawn, prewarm) {
+        fullyDrawn?.awaitReported() ?: return@LaunchedEffect
+        for (route in prewarm) while (route !in visited) {
+            val seen = warm.interruptions
+            delay(PREWARM_QUIET_MS)
+            awaitMainIdle()
+            if (seen != warm.interruptions || route in visited) continue
+            warm.pending.value = route
+            // The next frame composes it; a touch before then withdraws it.
+            withFrameNanos {}
+            withFrameNanos {}
+            if (route !in visited) warm.pending.value = null
+        }
+    }
     val backOwner = LocalOnBackPressedDispatcherOwner.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val detachedBack = remember(lifecycle) {
@@ -116,7 +176,10 @@ fun TabContent(
             override val lifecycle = lifecycle
         }
     }
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().pointerInput(warm) {
+        // Watches without consuming: every touch on the shown tab puts pre-warming off.
+        awaitPointerEventScope { while (true) { awaitPointerEvent(PointerEventPass.Initial); warm.interrupt() } }
+    }) {
         for (route in visited) key(route) {
             val shown = route == destination
             val alpha = remember { Animatable(if (route == first) 1f else 0f) }

@@ -1,6 +1,7 @@
 package dev.ahmed.savlino.ui.nav
 
 import androidx.activity.ComponentActivity
+import android.os.Looper
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -135,6 +137,72 @@ class TabContentTest {
             compose.onNodeWithTag("home").performClick()
             compose.runOnIdle { assertEquals(1, clicks) }
         }
+    }
+
+    // Lead conditions for pre-warm: only after fully drawn, one tab per idle window, hidden and inactive (no loads, no
+    // semantics), and its loads start only once it is shown.
+    @Test fun prewarmComposesOneHiddenInactiveTabPerIdleWindowAfterFullyDrawn() {
+        var route by mutableStateOf("Home")
+        val composed = mutableListOf<String>()
+        val loads = mutableListOf<String>()
+        render {
+            TabContent(route, prewarm = listOf("Home", "Downloads", "Settings")) { destination ->
+                DisposableEffect(Unit) { composed += destination; onDispose {} }
+                val result by rememberTabResource<String?>(null, destination) { loads += destination; destination }
+                Text(destination + result.orEmpty(), Modifier.testTag(destination))
+            }
+        }.use {
+            compose.mainClock.autoAdvance = false
+            repeat(4) { idleWindow() }
+            compose.runOnIdle { assertEquals(listOf("Home"), composed) }
+            fullyDrawn()
+            idleWindow()
+            compose.runOnIdle { assertEquals(listOf("Home", "Downloads"), composed) }
+            idleWindow()
+            compose.runOnIdle { assertEquals(listOf("Home", "Downloads", "Settings"), composed) }
+            repeat(4) { idleWindow() }
+            compose.runOnIdle { assertEquals(listOf("Home"), loads) }
+            compose.onAllNodesWithTag("Downloads").assertCountEquals(0)
+            compose.onAllNodesWithTag("Settings").assertCountEquals(0)
+            compose.mainClock.autoAdvance = true
+            compose.runOnIdle { route = "Downloads" }
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(listOf("Home", "Downloads"), loads) }
+            assertEquals(3, composed.size)
+        }
+    }
+
+    @Test fun touchesPutPrewarmOff() {
+        val composed = mutableListOf<String>()
+        render {
+            TabContent("Home", prewarm = listOf("Downloads")) { destination ->
+                DisposableEffect(Unit) { composed += destination; onDispose {} }
+                Box(Modifier.fillMaxSize().testTag(destination))
+            }
+        }.use {
+            fullyDrawn()
+            compose.mainClock.autoAdvance = false
+            repeat(6) {
+                compose.mainClock.advanceTimeBy(250)
+                shadowOf(Looper.getMainLooper()).idle()
+                compose.onNodeWithTag("Home").performTouchInput { click(center) }
+            }
+            compose.runOnIdle { assertEquals(listOf("Home"), composed) }
+            // The quiet wait restarts when the one a touch interrupted ends, so a step comes 400-800 ms after the last touch.
+            idleWindow()
+            idleWindow()
+            compose.runOnIdle { assertEquals(listOf("Home", "Downloads"), composed) }
+        }
+    }
+
+    /** Robolectric never draws, so ReportDrawn never reports; the activity's own call reaches the same listeners. */
+    private fun fullyDrawn() = compose.runOnUiThread { activity.reportFullyDrawn() }
+
+    /** Quiet for longer than a pre-warm step waits, then the main thread idles and two frames pass. */
+    private fun idleWindow() {
+        compose.mainClock.advanceTimeBy(450)
+        shadowOf(Looper.getMainLooper()).idle()
+        repeat(3) { compose.mainClock.advanceTimeByFrame(); shadowOf(Looper.getMainLooper()).idle() }
     }
 
     @Test fun hiddenTabsDoNotHandleBack() {

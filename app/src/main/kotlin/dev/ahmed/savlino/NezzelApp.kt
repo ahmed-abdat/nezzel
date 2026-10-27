@@ -299,6 +299,8 @@ fun NezzelApp(
         dev.ahmed.savlino.downloads.LocalHot provides dev.ahmed.savlino.downloads.rememberHot(), LocalJobArtwork provides artwork,
         dev.ahmed.savlino.sharing.LocalFileSharer provides sharer) {
     Surface(Modifier.fillMaxSize().focusable(), color = MaterialTheme.colorScheme.surface) {
+        // Fully drawn once the saved list is known (loaded or failed): Home shows its real content, not a placeholder.
+        androidx.activity.compose.ReportDrawnWhen { library.load !is LibraryLoadState.Loading }
         val showOptions = !links.hasPendingShare && links.optionsState != OptionsState.Hidden
         if (updates != null) AppUpdateSheets(updates, updateState, links, language, notificationRationaleShowing)
         if (links.destination == "AppUpdate" && updates != null) {
@@ -312,7 +314,7 @@ fun NezzelApp(
             NavigationScaffold(links.destination, jobs, language, onNavigate, onReselect = onReselect,
                 snackbarHost = { if (!showOptions) SnackbarHost(snackbar) },
                 updateAvailable = updateState.badge(BuildConfig.VERSION_CODE.toLong())) {
-                TabContent(links.destination, reselections, tabStateHolder) { route ->
+                TabContent(links.destination, reselections, tabStateHolder, PrewarmTabs) { route ->
                     CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks?.let { it::start }, clearingLinks = clearLinks?.busy == true)
@@ -378,6 +380,9 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
         }
     }
 }
+
+/** Every tab, composed ahead of its first visit once the app is fully drawn and idle. */
+private val PrewarmTabs = TopLevelDestinations.map { it.route }
 
 @Composable
 internal fun HomeScreen(links: LinkViewModel, jobs: List<DownloadProgress>, library: LibraryState, language: String, onPaste: () -> Unit,
