@@ -36,6 +36,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -127,7 +132,11 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         seekableNow(player); speed = player.playbackParameters.speed
         size(player.videoSize)
     }
-    LaunchedEffect(player) {
+    // In the bar the page isn't shown: no ticking, the bar follows the player itself.
+    val host = LocalViewerHost.current
+    val hidden = host?.collapsed == true
+    LaunchedEffect(player, hidden) {
+        if (hidden && player != null) return@LaunchedEffect
         while (player != null) { read(player); delay(250) }
         playing = false; running = false; seekable = false
     }
@@ -232,7 +241,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val seekRow: @Composable () -> Unit = {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             val time = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr)
-            Row(Modifier.fillMaxWidth().padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().keepsDrags(host).padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
                 val shown = seeking?.toLong() ?: held ?: position
                 Text(NezzelFormat.duration(shown / 1000), style = time)
                 SeekBar(shown.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
@@ -251,8 +260,12 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         val fallback = stringResource(R.string.playback_audio)
         val title by produceState<String?>(null, item.uri) { value = audioTitle(context, item.uri) ?: fallback }
         // Music: the cover, the file's name and controls that stay put. Nothing to uncover, so nothing hides.
+        // Shrinking into the bar: the name and controls fade as they follow the finger down, the cover flies to the bar.
         val details: @Composable () -> Unit = {
-            Column(Modifier.widthIn(max = 480.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.widthIn(max = 480.dp).graphicsLayer {
+                val p = host?.progress ?: 0f
+                alpha = MiniPlayerLayout.at(p).title; translationY = p * (host?.travel ?: 0f)
+            }, horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(title.orEmpty(), Modifier.fillMaxWidth().padding(horizontal = Space.m).semantics { heading() },
                     style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Ltr),
                     textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -276,13 +289,13 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         }
         BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { controls.volumeOpen = false } }.padding(top = TOP_BAR)) {
             if (maxWidth > maxHeight) Row(Modifier.fillMaxSize().padding(horizontal = Space.l, vertical = Space.m), verticalAlignment = Alignment.CenterVertically) {
-                AudioCover(poster, Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true))
+                AudioCover(poster, host.takeIf { current }, Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true))
                 Box(Modifier.weight(1f).fillMaxHeight().padding(start = Space.l), contentAlignment = Alignment.Center) {
-                    Box(Modifier.verticalScroll(rememberScrollState())) { details() }
+                    Box(Modifier.keepsDrags(host).verticalScroll(rememberScrollState())) { details() }
                 }
             } else Column(Modifier.fillMaxSize().padding(horizontal = Space.l, vertical = Space.m),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                AudioCover(poster, Modifier.widthIn(max = 360.dp).weight(1f, fill = false).aspectRatio(1f))
+                AudioCover(poster, host.takeIf { current }, Modifier.widthIn(max = 360.dp).weight(1f, fill = false).aspectRatio(1f))
                 Spacer(Modifier.height(Space.l))
                 details()
             }
@@ -358,8 +371,22 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
 
 /** The file's own cover, or the library's music tile, rounded like the app's cards. */
 @Composable
-private fun AudioCover(poster: Bitmap?, modifier: Modifier) {
-    Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer,
+private fun AudioCover(poster: Bitmap?, host: ViewerHostState?, modifier: Modifier) {
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    Surface(modifier.then(if (host == null) Modifier else Modifier.onPlaced { bounds = it.boundsInRoot() }.graphicsLayer {
+        val p = host.progress
+        val slot = host.slot
+        if (p > 0f && slot != null && bounds.width > 0f) {
+            // Mapped onto the bar's own cover: at 1 it sits exactly where the bar draws it.
+            val target = slot.cover(MiniPlayerLayout.INSET.toPx(), MiniPlayerLayout.COVER.toPx())
+            val layout = MiniPlayerLayout.at(p, bounds, target)
+            val scale = layout.cover.width / bounds.width
+            transformOrigin = TransformOrigin(0f, 0f)
+            scaleX = scale; scaleY = scale
+            translationX = layout.cover.left - bounds.left; translationY = layout.cover.top - bounds.top
+            shape = RoundedCornerShape(layout.corner / scale); clip = true
+        }
+    }), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
         if (poster != null) Image(poster.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Box(contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.3f)) }

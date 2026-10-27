@@ -365,7 +365,8 @@ internal fun NavigationScaffold(route: String, jobs: List<DownloadProgress>, lan
     Row(Modifier.fillMaxSize().then(sideInsets)) {
         if (rail) navigation(route, badges, onNavigate, onReselect)
         Scaffold(modifier = Modifier.weight(1f).fillMaxHeight(), contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = { if (!rail) navigation(route, badges, onNavigate, onReselect) },
+            bottomBar = { if (!rail) navigation(route, badges, onNavigate, onReselect)
+                else dev.ahmed.savlino.viewer.MiniPlayerSlot(Modifier.navigationBarsPadding().padding(horizontal = Space.m)) },
             snackbarHost = snackbarHost) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { content() }
         }

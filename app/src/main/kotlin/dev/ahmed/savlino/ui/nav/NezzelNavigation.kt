@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import dev.ahmed.savlino.viewer.miniPlayerTabs
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -154,9 +155,13 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
         }
     }
     Box(modifier.fillMaxWidth().windowInsetsPadding(insets).padding(start = Space.m, end = Space.m, top = Space.s, bottom = Space.m)) {
-        // Bound the corners: a growing capsule cuts off large labels near its outer edges.
-        Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(31.dp), color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
-            Box(Modifier.padding(Space.xs)) { tabs() }
+        // Shrunk music sits just above the tabs.
+        Column {
+            dev.ahmed.savlino.viewer.MiniPlayerSlot()
+            // Bound the corners: a growing capsule cuts off large labels near its outer edges.
+            Surface(Modifier.fillMaxWidth().miniPlayerTabs(), shape = RoundedCornerShape(31.dp), color = colors.surfaceContainerHigh, shadowElevation = 1.dp) {
+                Box(Modifier.padding(Space.xs)) { tabs() }
+            }
         }
     }
 }

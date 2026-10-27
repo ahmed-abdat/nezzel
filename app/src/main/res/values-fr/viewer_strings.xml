@@ -13,4 +13,8 @@
     <string name="viewer_exit_fullscreen">Quitter le plein écran</string>
     <string name="viewer_volume">Volume</string>
     <string name="viewer_volume_muted">Son coupé</string>
+    <string name="viewer_minimize">Réduire le lecteur</string>
+    <string name="mini_open_player">Ouvrir le lecteur</string>
+    <string name="mini_playing">%1$s, en lecture</string>
+    <string name="mini_paused">%1$s, en pause</string>
 </resources>
