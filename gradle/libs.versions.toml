@@ -9,7 +9,9 @@ androidx-test-runner = "1.6.2"
 androidx-test-junit = "1.2.1"
 espresso = "3.6.1"
 youtubedl = "0.18.1"
-jackson = "2.11.1"
+jackson = "2.22.4"
+commons-compress = "1.28.0"
+commons-io = "2.22.0"
 jsoup = "1.23.2"
 androidx-appcompat = "1.7.1"
 androidx-core = "1.13.1"
@@ -40,6 +42,9 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 youtubedl-library = { module = "io.github.junkfood02.youtubedl-android:library", version.ref = "youtubedl" }
 youtubedl-ffmpeg = { module = "io.github.junkfood02.youtubedl-android:ffmpeg", version.ref = "youtubedl" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
+commons-io = { module = "commons-io:commons-io", version.ref = "commons-io" }
 newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipe-extractor" }
 rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
 rhino-engine = { module = "org.mozilla:rhino-engine", version.ref = "rhino" }

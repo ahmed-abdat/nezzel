@@ -31,6 +31,11 @@ dependencies {
         implementation(libs.rhino)
         implementation(libs.rhino.engine)
         implementation(libs.protobuf.javalite)
+        // youtubedl-android 0.18.1 brings Jackson 2.11.1, commons-io 2.5 and commons-compress 1.12, all with
+        // published advisories. Jackson parses yt-dlp and site JSON; the other two unpack the bundled payloads.
+        implementation(libs.jackson.core)
+        implementation(libs.commons.io)
+        implementation(libs.commons.compress)
     }
     api(project(":core"))
     implementation(libs.okhttp)
