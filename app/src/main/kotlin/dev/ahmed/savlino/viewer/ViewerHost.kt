@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -76,6 +77,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         get() = slotRect
         set(value) {
             slotRect = value
+            if (value != null) lastSlot = value
             if (value != null && value.rect.top > 0f && value.rect.top != travel)
                 size.updateAnchors(DraggableAnchors { PlayerSize.Full at 0f; PlayerSize.Bar at value.rect.top }, size.targetValue)
         }
@@ -108,14 +110,31 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     /** The page's size, as last measured. */
     internal var page = Size.Zero
     /** Where the sheet is right now; null while there is no bar to shrink into. Read it only in layout, layer and draw lambdas. */
-    internal fun motion(): MiniPlayerLayout? = slot?.takeIf { page != Size.Zero }?.let {
+    internal fun motion(): MiniPlayerLayout? {
+        // A session that ends mid-collapse takes its slot along: the page goes back up through the bar's last place, not in one jump.
+        val at = (slot ?: lastSlot?.takeIf { request != null && progress > 0f })?.takeIf { page != Size.Zero } ?: return null
+        val p = progress
+        val landing = mini != null
         // Before the page's cover is placed, it is already the bar's.
-        val from = art ?: it.cover(coverInset, coverSide)
-        MiniPlayerLayout.at(progress, page, it.rect, from, it.rtl, coverInset, landing = mini != null)
+        val from = art ?: at.cover(coverInset, coverSide)
+        // The page's layer and its cover both ask each frame: one layout per frame, not one per caller.
+        last?.let { if (p == lastP && at == lastAt && from == lastFrom && page == lastPage && landing == lastLanding) return it }
+        return MiniPlayerLayout.at(p, page, at.rect, from, at.rtl, coverInset, landing).also {
+            last = it; lastP = p; lastAt = at; lastFrom = from; lastPage = page; lastLanding = landing
+        }
     }
+    private var lastSlot: MiniSlot? = null
+    private var last: MiniPlayerLayout? = null
+    private var lastP = 0f
+    private var lastAt: MiniSlot? = null
+    private var lastFrom: Rect? = null
+    private var lastPage = Size.Zero
+    private var lastLanding = false
     /** The page's cover on the still page, in window pixels: what lands on the bar's cover. */
     internal var art by mutableStateOf<Rect?>(null)
     internal var coverInset = 0f
+    /** The bar's colour, which the sheet turns into as it lands. */
+    internal var barColor = Color.Black
     internal var coverSide = 0f
 
     internal fun show(next: ViewerRequest) {
@@ -154,7 +173,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
 
     private fun clear(fade: Boolean) {
         leaving = request.takeIf { fade && !reduced }
-        request = null; mini = null; wantBar = false; tapped = null; art = null
+        request = null; mini = null; wantBar = false; tapped = null; art = null; lastSlot = null
         settle(PlayerSize.Full, instant = true)
     }
     private fun settle(to: PlayerSize, instant: Boolean = false) {
@@ -275,7 +294,7 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                                 val top = if (motion != null) state.progress * state.travel else 0f
                                 translationY = top
                                 clip = motion != null
-                                shape = motion?.run { SheetShape(sheet.translate(0f, -top), corner.toPx()) } ?: RectangleShape
+                                shape = motion?.run { SheetShape(sheet.translate(0f, -top), topCorner.toPx(), corner.toPx()) } ?: RectangleShape
                             }
                         }
                     }

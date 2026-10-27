@@ -137,12 +137,13 @@ class MiniPlayerTest {
         fun at(p: Float, rtl: Boolean = false) = MiniPlayerLayout.at(p, page, slot, from, rtl, 8f)
         at(0f).run {
             assertEquals(Rect(0f, 0f, 384f, 832f), sheet); assertEquals(0.dp, corner); assertEquals(from, art)
-            assertEquals(1f, content); assertEquals(1f, fade); assertEquals(1f, tabs)
+            assertEquals(1f, content); assertEquals(1f, fade); assertEquals(1f, tabs); assertEquals(0.dp, topCorner); assertEquals(0f, tint)
         }
+        assertEquals("Leaving full screen it rounds its top", MiniPlayerLayout.SHEET_CORNER, at(.1f).topCorner)
         assertEquals("The controls fade as the finger starts", 0f, at(.3f).content)
-        // Until it lands: opaque, full width, its top on the finger, its bottom only rising, onto the bar's bottom by .6.
+        // Until it draws back: opaque, full width, its top on the finger, its bottom only rising, onto the bar's bottom by .6.
         val steps = (0..100).map { it / 100f }
-        for (p in steps.filter { it < .85f }) at(p).run {
+        for (p in steps.filter { it <= .6f }) at(p).run {
             assertEquals(1f, fade); assertEquals(0f, sheet.left); assertEquals(384f, sheet.right)
             assertEquals(p * slot.top, sheet.top, .01f)
             assertTrue("p=$p: the cover stays on the sheet", sheet.contains(art.topLeft) && art.right <= sheet.right && art.bottom <= sheet.bottom + .01f)
@@ -164,13 +165,17 @@ class MiniPlayerTest {
                 assertEquals(1f, fade); assertEquals(0f, tabs)
             }
         }
-        // Landing, the sheet draws back toward the cover and always still holds it.
-        for (p in steps.filter { it >= .85f }) at(p).run {
+        // Drawing back, the sheet always still holds the cover; from .85 it is the cover, in the bar's colour: only the cover lands.
+        for (p in steps.filter { it > .6f }) at(p).run {
             assertEquals(1f, fade)
             assertTrue("p=$p", sheet.left <= art.left + .01f && sheet.top <= art.top + .01f && sheet.right >= art.right - .01f && sheet.bottom >= art.bottom - .01f)
+            if (p >= .85f) { assertEquals("p=$p", art, sheet); assertEquals(1f, tint) }
         }
         // No bar to land on: it fades out instead of drawing into a cover that isn't there.
-        assertTrue(MiniPlayerLayout.at(.95f, page, slot, from, false, 8f, landing = false).fade in .01f..(.99f))
+        MiniPlayerLayout.at(.95f, page, slot, from, false, 8f, landing = false).run {
+            assertTrue(fade in .01f..(.99f))
+            assertEquals("The cover stays where it sits on the page", from.translate(0f, sheet.top), art)
+        }
         // The bar's cover sits at the start: right in Arabic.
         assertEquals(24f, MiniSlot(slot, false).cover(8f, 48f).left)
         assertEquals(368f - 8f - 48f, MiniSlot(slot, true).cover(8f, 48f).left)
@@ -215,7 +220,15 @@ class MiniPlayerTest {
         val reveal = compose.runOnIdle { host.motion()!! }
         assertEquals("The sheet is drawing into the cover", 1f, reveal.fade)
         // The frame it goes, before the bar's slot is gone too: no bar, no cover to draw into, so the sheet fades instead.
-        assertTrue(compose.runOnIdle { host.mini = null; host.motion()!!.fade } < 1f)
+        compose.runOnIdle {
+            host.mini = null
+            assertTrue(host.motion()!!.fade < 1f)
+            // Then the slot goes too: the page keeps the bar's last place on its way back up instead of snapping full screen.
+            host.slot = null
+            val going = host.motion()!!
+            assertEquals(host.progress * host.travel, going.sheet.top, .01f)
+            assertEquals("Its cover stays on the page", host.art!!.width, going.art.width, .01f)
+        }
         advance(600)
         assertTrue(host.open)
         assertEquals("The page went back up", 0f, compose.runOnIdle { host.progress })

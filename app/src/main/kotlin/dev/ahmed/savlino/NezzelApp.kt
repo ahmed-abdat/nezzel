@@ -3,6 +3,7 @@ package dev.ahmed.savlino
 import android.os.Build
 import dev.ahmed.savlino.update.*
 import dev.ahmed.savlino.storage.SaveDestinations
+import dev.ahmed.savlino.viewer.miniPlayerReveal
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -475,14 +476,14 @@ internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>
                         if (links.engineUnavailable) Box(Modifier.padding(horizontal = Space.l)) { EngineUnavailableNote() }
                     }
                     NotificationsOffNote(currentJobs, firstRun, onAllowNotifications)
-                    Crossfade(firstRun, animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
+                    Crossfade(firstRun, Modifier.miniPlayerReveal(), animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
                         if (first) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
                         else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
                     }
                 }
             }
             // The tabs' own top gap sits under it, so paste, music and tabs are evenly apart.
-            Box(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = Dock.INSET, end = Dock.INSET, top = Space.xs)) {
+            Box(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(start = Dock.INSET, end = Dock.INSET, top = Space.xs).miniPlayerReveal()) {
                 HomeLinkCard(links, copiedHost, onAccept, onDismiss, onPaste)
             }
         }
