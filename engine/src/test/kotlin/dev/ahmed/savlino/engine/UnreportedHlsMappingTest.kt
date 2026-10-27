@@ -39,10 +39,10 @@ class UnreportedHlsMappingTest {
         assertFalse(track.hasVideo); assertTrue(track.hasAudio); assertNull(track.audioCodec)
     }
 
-    @Test fun knownH264StillWinsPresetsWithCodecLessAudioOverHigherHevcAv1AndUnknownVideo() {
+    @Test fun tallerHevcWinsPresetsWithCodecLessAudioButAv1AndUnknownVideoNever() {
         val inspection = map(listOf(video("h264", 360, "avc1.4d401e"), video("hevc", 720, "hvc1"),
             video("av1", 1080, "av01"), video("unknown", 1440), audio()).joinToString())
-        assertEquals("h264", inspection.presets.single { it.preset == Preset.BEST }.formatId)
+        assertEquals("hevc", inspection.presets.single { it.preset == Preset.BEST }.formatId, "owner 2026-10-27")
         assertTrue(inspection.formats.filter { it.hasVideo }.all { it.audioFormatId == "audio" && it.requiresMerge })
     }
 
