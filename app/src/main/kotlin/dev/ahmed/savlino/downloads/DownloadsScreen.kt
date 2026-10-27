@@ -70,6 +70,7 @@ import dev.ahmed.savlino.ui.TintedIcon
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.bleedGutter
 import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.ui.theme.isLargeText
 import kotlinx.coroutines.Dispatchers
@@ -1050,10 +1051,3 @@ fun ScreenTitle(text: String) {
     Text(text, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
 }
 
-/** Widens a list item by the list's gutter on both sides, so a scrolling row runs to the screen edges. */
-private fun Modifier.bleedGutter() = layout { measurable, constraints ->
-    val extra = (Space.gutter * 2).roundToPx()
-    val wide = if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.maxWidth + extra, maxWidth = constraints.maxWidth + extra) else constraints
-    val placeable = measurable.measure(wide)
-    layout(if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width, placeable.height) { placeable.place(-extra / 2, 0) }
-}
