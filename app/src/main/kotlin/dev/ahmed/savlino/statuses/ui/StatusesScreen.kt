@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -77,6 +78,7 @@ import dev.ahmed.savlino.statuses.StatusItem
 import dev.ahmed.savlino.statuses.StatusLibrary
 import dev.ahmed.savlino.statuses.StatusSource
 import dev.ahmed.savlino.ui.theme.Space
+import dev.ahmed.savlino.ui.theme.bleedGutter
 import dev.ahmed.savlino.viewer.LocalMediaPictures
 import dev.ahmed.savlino.viewer.MediaPictures
 import dev.ahmed.savlino.viewer.MediaViewer
@@ -254,7 +256,6 @@ private fun AppRow(app: StatusApp, media: StatusMedia) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StatusGrid(state: StatusesState, media: StatusMedia, language: String, items: List<StatusItem>) {
     val scroll = rememberLazyGridState()
@@ -265,8 +266,9 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.l),
         horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
         if (state.showFilters || state.showHideSaved) item(key = "chips", span = { GridItemSpan(maxLineSpan) }) {
-            FlowRow(Modifier.fillMaxWidth().padding(bottom = Space.xs), horizontalArrangement = Arrangement.spacedBy(Space.s),
-                verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            // One row that scrolls under the grid gutter instead of wrapping (Arabic, large text), like Downloads.
+            Row(Modifier.bleedGutter().horizontalScroll(rememberScrollState()).padding(horizontal = Space.gutter).padding(bottom = Space.xs),
+                horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
                 if (state.showFilters) StatusFilter.entries.forEach { filter ->
                     Chip(state.filter == filter, stringResource(when (filter) {
                         StatusFilter.ALL -> R.string.statuses_filter_all
@@ -274,7 +276,9 @@ private fun StatusGrid(state: StatusesState, media: StatusMedia, language: Strin
                         StatusFilter.VIDEOS -> R.string.statuses_filter_videos
                     })) { state.filter = filter }
                 }
-                if (state.showHideSaved) Chip(state.hideSaved, stringResource(R.string.statuses_hide_saved)) { state.hideSaved = !state.hideSaved }
+                // A toggle, not a fourth filter: set apart, and ticked while on.
+                if (state.showFilters && state.showHideSaved) VerticalDivider(Modifier.height(24.dp))
+                if (state.showHideSaved) Chip(state.hideSaved, stringResource(R.string.statuses_hide_saved), check = true) { state.hideSaved = !state.hideSaved }
             }
         }
         state.newCount.takeIf { it > 0 && !state.selecting && state.selectedAccount == null }?.let { count ->
@@ -414,8 +418,9 @@ private fun SelectAction(state: StatusesState) {
 }
 
 @Composable
-private fun Chip(selected: Boolean, label: String, onClick: () -> Unit) {
-    FilterChip(selected, onClick, label = { Text(label) }, modifier = Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp), shape = CircleShape,
+private fun Chip(selected: Boolean, label: String, check: Boolean = false, onClick: () -> Unit) {
+    FilterChip(selected, onClick, label = { Text(label) },
+        leadingIcon = if (check && selected) { { Icon(Icons.Default.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } } else null, modifier = Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp), shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
             selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer))
 }

@@ -66,13 +66,14 @@ class StatusesCaptureTest {
     }
 
     private fun shoot(name: String, library: () -> FakeStatusLibrary?, fonts: Boolean = false, dialog: Boolean = false,
-                      u3: Boolean = false, setup: suspend StatusesState.() -> Unit = {}) {
+                      u3: Boolean = false, big: Boolean = false, setup: suspend StatusesState.() -> Unit = {}) {
         assumeTrue(dir != null)
         // Save-flow review set: EN and AR in both themes, Arabic at twice the text size.
         val variants = if (u3) listOf("en", "ar").flatMap { lang -> listOf(Triple(lang, false, 1f), Triple(lang, true, 1f)) } +
             listOf(Triple("ar", false, 2f))
         else listOf("en", "ar", "fr").flatMap { lang -> listOf(Triple(lang, false, 1f), Triple(lang, true, 1f)) } +
-            (if (fonts) listOf("en", "ar", "fr").map { Triple(it, false, 1.3f) } else emptyList())
+            (if (fonts) listOf("en", "ar", "fr").map { Triple(it, false, 1.3f) } else emptyList()) +
+            (if (big) listOf("en", "ar").map { Triple(it, false, 2f) } else emptyList())
         for ((lang, dark, scale) in variants) {
             RuntimeEnvironment.setQualifiers("+$lang-${if (dark) "night" else "notnight"}")
             RuntimeEnvironment.setFontScale(scale)
@@ -123,7 +124,8 @@ class StatusesCaptureTest {
     private fun threeAccounts() = FakeStatusLibrary(ready(mixed(MAIN) + mixed(SECOND, offset = 9).take(5) +
         mixed(FakeStatusLibrary.THIRD, offset = 18).drop(2).take(3), apps = listOf(APP, BUSINESS)))
     @Test fun accounts() = shoot("7-accounts", ::threeAccounts, fonts = true)
-    @Test fun accountOpen() = shoot("7-account-open", ::threeAccounts, fonts = true, setup = { open(MAIN) })
+    @Test fun accountOpen() = shoot("7-account-open", ::threeAccounts, fonts = true, big = true, setup = { open(MAIN) })
+    @Test fun accountHideSaved() = shoot("7-account-hide-saved", ::threeAccounts, big = true, setup = { open(MAIN); hideSaved = true })
     @Test fun selecting() = shoot("8-selecting", { FakeStatusLibrary(ready()) }, fonts = true) { first(this, 3).forEach(::toggle) }
     @Test fun saving() = shoot("9-saving", { FakeStatusLibrary(ready()).apply { hold = kotlinx.coroutines.CompletableDeferred() } }) {
         first(this, 3).forEach(::toggle)
