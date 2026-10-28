@@ -48,12 +48,16 @@ internal object SiteLogos {
     val telegram = SiteLogo(R.drawable.logo_telegram, white, Color(0xFF26A5E4), 54.dp)
     val x = SiteLogo(R.drawable.logo_x, black, Color.White, 40.dp)
     val snapchat = SiteLogo(R.drawable.logo_snapchat, SolidColor(Color(0xFFFFFC00)), Color.White, 46.dp, outline = Color.Black)
+    val reddit = SiteLogo(R.drawable.logo_reddit, white, Color(0xFFFF4500), 56.dp)
+    val pinterest = SiteLogo(R.drawable.logo_pinterest, white, Color(0xFFE60023), 62.dp)
+    val vimeo = SiteLogo(R.drawable.logo_vimeo, SolidColor(Color(0xFF1AB7EA)), Color.White, 48.dp)
+    val soundcloud = SiteLogo(R.drawable.logo_soundcloud, Brush.verticalGradient(listOf(Color(0xFFFF8800), Color(0xFFFF3300))), Color.White, 56.dp)
     // Order decides where each tile falls on the wall: WhatsApp (Statuses) lands on clear cells, not under the mark
-    val all = listOf(youtube, facebook, instagram, whatsapp, tiktok, telegram, x, snapchat)
+    val all = listOf(youtube, facebook, instagram, whatsapp, tiktok, reddit, telegram, x, snapchat, pinterest, soundcloud, vimeo)
 }
 
-// The arc has room for about seven logos: the most used sites take the closest spots, WhatsApp beside the mark for Statuses
-private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, instagram, facebook, snapchat, x, telegram) }
+// The most used sites take the spots closest to the mark, WhatsApp beside it for Statuses; the newer sites fill the outer ring
+private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, instagram, facebook, snapchat, x, telegram, reddit, pinterest, soundcloud, vimeo) }
 
 /** A tilted wall of every site tile, larger than its parent so it bleeds off the edges. Purely decorative. */
 @Composable
@@ -69,7 +73,8 @@ internal fun SiteLogoWall(modifier: Modifier = Modifier, tile: Dp = 80.dp) {
         horizontalAlignment = Alignment.CenterHorizontally) {
         repeat(5) { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(tile / 5)) {
-                repeat(6) { column -> LogoTile(SiteLogos.all[(row * 6 + column) % SiteLogos.all.size], tile) }
+                // Each row starts seven tiles on, so no site sits next to or above itself
+                repeat(6) { column -> LogoTile(SiteLogos.all[(row * 7 + column) % SiteLogos.all.size], tile) }
             }
         }
     }
