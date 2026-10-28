@@ -17,7 +17,11 @@ fun isOffline(context: Context): Boolean {
     return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }
 
-/** Offline settles after a second so a Wi-Fi/mobile handover never flashes "Waiting for network"; back online is immediate. */
+/**
+ * Offline settles after a second so a Wi-Fi/mobile handover never flashes "Waiting for network"; back online is immediate.
+ * Callbacks never query the manager: during onLost it still names the lost network as active, so airplane mode read as
+ * online. A default-network callback only ever reports the default network; a new one reports its own capabilities.
+ */
 @Composable
 fun rememberOffline(): Boolean {
     val context = LocalContext.current
@@ -25,12 +29,10 @@ fun rememberOffline(): Boolean {
     DisposableEffect(context) {
         val manager = context.getSystemService(ConnectivityManager::class.java)
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { raw = isOffline(context) }
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                if (network == manager?.activeNetwork)
-                    raw = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                raw = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             }
-            override fun onLost(network: Network) { raw = isOffline(context) }
+            override fun onLost(network: Network) { raw = true }
         }
         val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }
             catch (_: RuntimeException) { false }
