@@ -23,9 +23,12 @@ interface NetworkWatch {
         override fun watch(lost: () -> Unit): AutoCloseable {
             val manager = manager ?: return AutoCloseable { }
             val callback = object : ConnectivityManager.NetworkCallback() {
-                // A Wi-Fi/mobile handover loses one network while the next is already default. During onLost the
-                // manager can still name the lost network as active (airplane mode), so that counts as offline too.
-                override fun onLost(network: Network) { if (manager.activeNetwork.let { it == null || it == network }) lost() }
+                // The default network as the callbacks report it. The manager is never queried here: during onLost it
+                // can still name the lost network as active (airplane mode read as online). A Wi-Fi/mobile handover
+                // makes the next network default first, so losing the old one is not offline.
+                @Volatile var current: Network? = null
+                override fun onAvailable(network: Network) { current = network }
+                override fun onLost(network: Network) { if (current == null || current == network) { current = null; lost() } }
             }
             val registered = try { manager.registerDefaultNetworkCallback(callback); true } catch (_: RuntimeException) { false }
             return AutoCloseable { if (registered) try { manager.unregisterNetworkCallback(callback) } catch (_: RuntimeException) { } }
