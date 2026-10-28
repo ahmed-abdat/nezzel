@@ -326,6 +326,12 @@ private fun metaParts(job: DownloadProgress, word: String): List<MetaPart> {
     // AnimatedContent retains the outgoing phase word. Never pair it with the incoming byte tick.
     if (word != DownloadNotifications.phase(LocalContext.current, job, LocalOffline.current, LocalHot.current))
         return listOf(MetaPart(word, scheme.primary, direction = TextDirection.Content))
+    // An offline wait keeps the last real sample, without speed or time left. Preparation has no numbers.
+    if (job.waitingForNetwork(LocalOffline.current)) return listOfNotNull(
+        MetaPart(word, scheme.primary, direction = TextDirection.Content, live = true),
+        job.percent?.let { MetaPart(NezzelFormat.isolate(NezzelFormat.percent(it, language)), scheme.onSurface, bold = true) },
+        job.bytes?.takeIf { it >= 0 }?.let { MetaPart(DownloadNotifications.bytes(LocalContext.current, job.copy(phase = DownloadPhase.DOWNLOADING), language), quiet,
+            direction = TextDirection.Content, keep = true, short = NezzelFormat.isolate(NezzelFormat.size(it, language))) })
     // Paused keeps the last real numbers only: percent and bytes the journal had, no speed, no time left.
     if (job.paused) return listOfNotNull(MetaPart(word, scheme.primary, direction = TextDirection.Content, live = true),
         job.percent?.let { MetaPart(NezzelFormat.isolate(NezzelFormat.percent(it, language)), scheme.onSurface, bold = true) },
@@ -359,7 +365,9 @@ private fun JobMeta(job: DownloadProgress) {
         val total = exactTotal(job)
         val busiest = if (total == null || job.ringFraction() == null) job else job.copy(bytes = total * 99 / 100,
             remainingTransferSeconds = job.remainingTransferSeconds?.coerceAtLeast(3599))
-        MetaLine(metaParts(job, word), metaParts(busiest, word), lines = if (isLargeText()) 2 else 1)
+        // Connection wait needs both its reason and the frozen sample, even on a narrow row.
+        val frozenWait = job.waitingForNetwork(LocalOffline.current) && job.bytes != null
+        MetaLine(metaParts(job, word), metaParts(busiest, word), lines = if (isLargeText() || frozenWait) 2 else 1)
     }
 }
 

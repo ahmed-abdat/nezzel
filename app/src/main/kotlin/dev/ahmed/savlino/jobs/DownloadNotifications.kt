@@ -249,6 +249,9 @@ class DownloadNotifications(private val base: Context,
         fun text(context: Context, progress: DownloadProgress, offline: Boolean = false, hot: Boolean = false): String {
             val language = languageOf(context)
             val phase = phase(context, progress, offline, hot)
+            if (progress.waitingForNetwork(offline)) return (listOf(phase) + listOfNotNull(
+                progress.percent?.let { NezzelFormat.isolate(NezzelFormat.percent(it, language)) },
+                progress.bytes?.takeIf { it >= 0 }?.let { bytes(context, progress.copy(phase = DownloadPhase.DOWNLOADING), language) })).joinToString(" · ")
             if (progress.paused && !progress.terminal) return listOfNotNull(phase, progress.bytes?.takeIf { it >= 0 }
                 ?.let { NezzelFormat.isolate(NezzelFormat.size(it, language)) }).joinToString(" · ")
             return if (progress.phase == DownloadPhase.DOWNLOADING) {

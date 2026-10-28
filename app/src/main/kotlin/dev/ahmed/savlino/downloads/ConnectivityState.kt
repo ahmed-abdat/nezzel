@@ -25,7 +25,11 @@ fun rememberOffline(): Boolean {
     DisposableEffect(context) {
         val manager = context.getSystemService(ConnectivityManager::class.java)
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { raw = false }
+            override fun onAvailable(network: Network) { raw = isOffline(context) }
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                if (network == manager?.activeNetwork)
+                    raw = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            }
             override fun onLost(network: Network) { raw = isOffline(context) }
         }
         val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }

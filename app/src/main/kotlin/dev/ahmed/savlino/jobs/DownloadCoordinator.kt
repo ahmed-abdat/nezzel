@@ -812,13 +812,17 @@ class DownloadCoordinator(
         staleWriter: Boolean = false, schedulerStop: Boolean = false, keepPartial: Boolean = false) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
+        // The engine may return before Android delivers the loss callback, even before its first byte.
+        // Offline waits use the CONNECTED gate; only failures with a usable network spend retry budget.
+        val offlineFailure = !systemStopped && error in setOf(DownloadError.Network, DownloadError.Offline) &&
+            cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) && !network.online()
         store.resetAutomaticResumes(id, bytes)
         if (id !in userCancellation && (id in pauseRequests || row.stage == JobStage.PAUSED)) {
             store.pausedPartial(id, bytes > 0)
         } else if (id in userCancellation || error == DownloadError.Cancelled) {
             store.cancel(id)
             recovery.reconcile(id, cancellationRequested = true)
-        } else if (systemStopped && (error in setOf(DownloadError.Network, DownloadError.Offline) ||
+        } else if ((systemStopped || offlineFailure) && (error in setOf(DownloadError.Network, DownloadError.Offline) ||
                 keepOutput && error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery)) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             // A scheduler stop waits for its constraints; it is not an engine failure episode. A stop during a
@@ -829,6 +833,7 @@ class DownloadCoordinator(
                 if (store.requeue(id, true) && bytes > startBytes) progressed += id
             } else if (cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)) store.requeue(id)
             else store.fail(id, DownloadError.SaveFailed)
+            if (offlineFailure && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
         } else if (resumeAllowed && cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) &&
             error in setOf(DownloadError.Network, DownloadError.Offline) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
@@ -1056,7 +1061,15 @@ class DownloadCoordinator(
             else -> DownloadPhase.FAILED
         }, error = row.error, publishedUri = row.pendingUri.takeIf { row.stage == JobStage.COMPLETED }, targetUri = row.pendingUri, mimeType = mime(row.format), total = row.format.size, qualityHeight = VideoQuality.of(row.format.width, row.format.height), waiting = row.stage == JobStage.ENQUEUED,
         retryable = row.stage == JobStage.FAILED && row.retryable && row.sourceUrl != null,
-        paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch)
+        paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch).let { queued ->
+        // The journal has no byte columns. A retained partial keeps this process's last real sample,
+        // including in the worker's final callback; never carry it across a discarded staging epoch.
+        val previous = mutableProgress.value.firstOrNull { it.jobId == row.jobId }
+        if (queued.waiting && queued.hasPartial && previous != null && previous.restartEpoch == queued.restartEpoch)
+            queued.copy(bytes = previous.bytes, total = previous.total,
+                fragmentIndex = previous.fragmentIndex, fragmentCount = previous.fragmentCount)
+        else queued
+    }
     private fun scheduleFailed(row: JobRecord) = fromRecord(row).copy(phase = DownloadPhase.FAILED,
         error = DownloadError.ExecutionRestricted, awaitingSchedule = true, waiting = true)
     private fun mime(format: Format) = mimeTypeFor(format)

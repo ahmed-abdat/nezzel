@@ -109,8 +109,8 @@ class PlaylistBatchCardTest {
             }
         }) {
             fun check(offlineNow: Boolean) {
-                jobs.forEachIndexed { i, job ->
-                    val expected = context.getString(if (offlineNow && job.hasPartial)
+                jobs.forEachIndexed { i, _ ->
+                    val expected = context.getString(if (offlineNow)
                         R.string.download_waiting_network else R.string.download_waiting)
                     compose.onNodeWithTag("single_queued_$i").assert(hasAnyDescendant(hasText(expected, substring = true)))
                     word(i, expected)

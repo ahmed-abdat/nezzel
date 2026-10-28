@@ -2281,6 +2281,68 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun offlineTransportFailureWhilePreparingWaitsWithoutSpendingTheOnlineBudgetThenRuns() = runBlocking {
+        val network = TestNetwork()
+        var first = true
+        fixture(FakeEngine(), network = network, script = { _, dir, _ ->
+            if (first) {
+                first = false
+                // No loss callback: connectivity can change before the platform delivers one.
+                network.connected = false
+                TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
+            } else {
+                check(network.connected) { "An offline attempt must not reach the engine" }
+                val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }
+        }).use { f ->
+            val id = "offline-preparing"
+            f.store.enqueue(command(id, Size.Unknown))
+            // An earlier ONLINE failure has already spent the single transport resume.
+            assertTrue(f.store.startTransfer(id, "engine-42:${YtdlpCommand.ARGV_VERSION}:engine=ytdlp"))
+            assertTrue(f.store.requeueAutomatic(id, DownloadFailureCause.TRANSPORT, hasPartial = false))
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            val row = f.store.get(id)!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertNull(row.error)
+            assertFalse(row.hasPartial); assertNotNull(row.sourceUrl)
+            assertEquals(1, row.transportResumes); assertEquals(0, row.stallRestarts)
+            val waiting = f.coordinator.progress.value.single()
+            assertTrue(waiting.waiting); assertFalse(waiting.terminal)
+            assertNull(waiting.bytes); assertNull(waiting.percent)
+            assertEquals(Size.Unknown, waiting.total)
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_waiting_network),
+                DownloadNotifications.phase(app, waiting, offline = true))
+            assertFalse(f.phases.contains("FAILED"))
+            val gates = WorkManager.getInstance(app).getWorkInfosForUniqueWork(id).get()
+                .filter { NetworkGateWorker::class.java.name in it.tags }
+            assertEquals(2, gates.size)
+            assertTrue(gates.all { it.constraints.requiredNetworkType == NetworkType.CONNECTED })
+            assertEquals(1, f.attempts.get())
+            // Still offline: the engine never runs. A restored connection admits the same confirmation.
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(1, f.attempts.get())
+            network.connected = true
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+            assertArrayEquals(byteArrayOf(1, 2, 3, 4), f.provider.file.readBytes())
+            assertEquals(1, f.provider.rows.size); assertEquals(2, f.attempts.get())
+        }
+    }
+
+    @Test fun onlinePreparingTransportFailureStillFailsAfterOneResume() = runBlocking {
+        fixture(FakeEngine(), network = TestNetwork(), script = { _, _, _ ->
+            TransferResult.Failure(DownloadError.Network, cause = DownloadFailureCause.TRANSPORT)
+        }).use { f ->
+            f.store.enqueue(command("online-preparing", Size.Unknown))
+            assertEquals(ListenableWorker.Result.retry(), f.worker("online-preparing").doWork())
+            assertEquals(1, f.store.get("online-preparing")!!.transportResumes)
+            assertEquals(ListenableWorker.Result.failure(), f.worker("online-preparing").doWork())
+            assertEquals(JobStage.FAILED, f.store.get("online-preparing")!!.stage)
+            assertEquals(2, f.attempts.get())
+            assertEquals(1, f.phases.count { it == "FAILED" })
+        }
+    }
+
     @Test fun networkLossWhileDownloadingRequeuesOnceBehindTheGateAndResumes() = runBlocking {
         val network = TestNetwork()
         val entered = CompletableDeferred<Unit>(); val stopped = CompletableDeferred<Unit>()
@@ -2312,6 +2374,12 @@ class DownloadWorkerTest {
                 assertEquals(JobStage.ENQUEUED, row.stage)
                 assertNull(row.error); assertFalse(row.retryable); assertTrue(row.hasPartial)
                 assertEquals("keep", File(app.filesDir, "downloads/net-transfer/output.mp4.part").readText())
+                val queued = f.coordinator.progress.value.single()
+                assertEquals(2L, queued.bytes); assertEquals(Size.Exact(4), queued.total)
+                assertEquals(50, queued.percent)
+                assertEquals(app.getString(dev.ahmed.savlino.R.string.download_waiting_network),
+                    DownloadNotifications.phase(app, queued, offline = true))
+                assertEquals(2L, f.progressData.last().getLong("bytes", -1))
                 assertTrue(network.listeners.isEmpty())
                 // Startup's chain plus one continuation, each run behind a CONNECTED gate.
                 assertEquals(2, downloadRuns(app, "net-transfer").size)

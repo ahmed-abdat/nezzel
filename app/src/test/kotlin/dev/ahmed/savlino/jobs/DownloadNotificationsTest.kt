@@ -13,6 +13,30 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], manifest = Config.NONE)
 class DownloadNotificationsTest {
+    @Test fun offlineQueuedRowsShowConnectionWaitWithOnlyRealFrozenNumbers() {
+        val app = RuntimeEnvironment.getApplication()
+        for (language in listOf("en", "ar", "fr")) {
+            val config = android.content.res.Configuration(app.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag("$language-u-nu-latn"))
+            }
+            val context = app.createConfigurationContext(config)
+            val empty = DownloadProgress("waiting", "Clip.mp4", DownloadPhase.PREPARING, waiting = true)
+            assertEquals(context.getString(dev.ahmed.savlino.R.string.download_waiting_network),
+                DownloadNotifications.text(context, empty, offline = true))
+            assertEquals(context.getString(dev.ahmed.savlino.R.string.download_waiting),
+                DownloadNotifications.phase(context, empty, offline = false))
+            val partial = empty.copy(hasPartial = true, bytes = 25_000_000,
+                total = dev.ahmed.savlino.domain.Size.Exact(100_000_000),
+                bytesPerSecond = 2_500_000.0, remainingTransferSeconds = 30)
+            val text = DownloadNotifications.text(context, partial, offline = true)
+            assertTrue(text, text.startsWith(context.getString(dev.ahmed.savlino.R.string.download_waiting_network)))
+            assertTrue(text, text.contains("25")); assertTrue(text, text.contains("100"))
+            assertFalse(text, text.contains("/s"))
+            val unknown = DownloadNotifications.text(context, partial.copy(total = dev.ahmed.savlino.domain.Size.Unknown), offline = true)
+            assertTrue(unknown, unknown.contains("25")); assertFalse(unknown, unknown.contains("100") || unknown.contains("%"))
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun network(context: android.content.Context, offline: Boolean) {
         val manager = context.getSystemService(android.net.ConnectivityManager::class.java)

@@ -12,6 +12,12 @@ class IsolatedTestApplication : NezzelApplication() {
         private set
     override fun startMaintenanceAfterOnboarding() { maintenanceRequests++ }
     override fun onCreate() {
+        // Robolectric's connected default network omits INTERNET. Model a usable connection unless a
+        // test explicitly removes it; coordinator and UI now share this capability-based predicate.
+        val connectivity = getSystemService(android.net.ConnectivityManager::class.java)
+        connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.let {
+            org.robolectric.Shadows.shadowOf(it).addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
         // Most Activity tests exercise an established Home session; first-run tests explicitly clear this.
         dev.ahmed.savlino.locale.AppPreferences(this).markOnboardingSeen()
         // Do not start process-wide recovery against tests' private staging.

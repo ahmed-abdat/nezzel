@@ -113,6 +113,23 @@ class PauseRowTest {
         }
     }
 
+    @Test fun offlinePreparingQueueWithoutPartialSaysWaitingForConnectionWithoutNumbers() {
+        render(DownloadProgress("a", name, DownloadPhase.PREPARING, waiting = true), offline = true) {
+            assertTrue(hasText(context.getString(R.string.download_waiting_network)))
+            assertFalse(hasText("%"))
+            assertFalse(pulses()); assertFalse(indeterminate())
+        }
+    }
+
+    @Test fun offlineQueuedPartialKeepsItsMeasuredPercentAndBytes() {
+        render(base.copy(phase = DownloadPhase.PREPARING, waiting = true, hasPartial = true), offline = true) {
+            assertTrue(hasText(context.getString(R.string.download_waiting_network)))
+            assertTrue(hasText("25%")); assertTrue(hasText("25\u00a0MB / 100\u00a0MB"))
+            assertFalse(hasText("left") || hasText("/s"))
+            assertFalse(pulses()); assertFalse(indeterminate())
+        }
+    }
+
     @Test fun newEpochBeforeItsFirstSampleIsStartingAgainWithNoPercent() {
         val restarting = DownloadProgress("a", name, DownloadPhase.PREPARING, total = Size.Exact(100), restartEpoch = 2)
         render(restarting) {

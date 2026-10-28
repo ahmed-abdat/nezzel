@@ -7,8 +7,8 @@ import dev.ahmed.savlino.jobs.DownloadProgress
 internal val DownloadProgress.restarting: Boolean get() = restartEpoch > 1 && !hasPartial && !paused && !terminal &&
     bytes == null && phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
 
-/** Queued with bytes on disk while the device is offline. Online, such a row is just queued. */
-internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = offline && !terminal && !paused && waiting && hasPartial
+/** Offline queued work waits for connectivity, including preparation before its first byte. */
+internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = offline && !terminal && !paused && waiting
 
 /** Pause is offered only while bytes move; the coordinator refuses it from joining onward, so the button leaves then too. */
 internal val DownloadProgress.canPause: Boolean get() = !terminal && !awaitingSchedule && !paused && !waiting && !restarting &&
