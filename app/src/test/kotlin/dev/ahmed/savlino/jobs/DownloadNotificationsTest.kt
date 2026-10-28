@@ -34,6 +34,12 @@ class DownloadNotificationsTest {
             assertFalse(text, text.contains("/s"))
             val unknown = DownloadNotifications.text(context, partial.copy(total = dev.ahmed.savlino.domain.Size.Unknown), offline = true)
             assertTrue(unknown, unknown.contains("25")); assertFalse(unknown, unknown.contains("100") || unknown.contains("%"))
+            // Back online, the queue and the next preparation keep the same frozen numbers until bytes move.
+            for (resuming in listOf(partial, partial.copy(waiting = false))) {
+                val back = DownloadNotifications.text(context, resuming, offline = false)
+                assertFalse(back, back.startsWith(context.getString(dev.ahmed.savlino.R.string.download_waiting_network)))
+                assertTrue(back, back.contains("25")); assertTrue(back, back.contains("100")); assertFalse(back, back.contains("/s"))
+            }
         }
     }
 

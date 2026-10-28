@@ -7,13 +7,18 @@ import dev.ahmed.savlino.jobs.DownloadProgress
 internal val DownloadProgress.restarting: Boolean get() = restartEpoch > 1 && !hasPartial && !paused && !terminal &&
     bytes == null && phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
 
-/** Offline queued work waits for connectivity, including preparation before its first byte. */
-internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = offline && !terminal && !paused && waiting
+/** Offline queued work waits for connectivity, including preparation before its first byte. A drop the coordinator already
+ * saw counts at once, so the row never shows "Queued" while the offline signal settles. */
+internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = (offline || networkWait) && !terminal && !paused && waiting
+
+/** Queued or preparing again with a kept partial: the row keeps the last real percent and size until bytes move. */
+internal val DownloadProgress.keepsSample: Boolean get() = !terminal && !paused && hasPartial && bytes != null &&
+    (waiting || phase == DownloadPhase.PREPARING)
 
 /** Pause is offered only while bytes move; the coordinator refuses it from joining onward, so the button leaves then too. */
 internal val DownloadProgress.canPause: Boolean get() = !terminal && !awaitingSchedule && !paused && !waiting && !restarting &&
     phase == DownloadPhase.DOWNLOADING
 
-/** Paused and offline-waiting rows keep the last real fraction frozen; the live-progress gate (`visiblePercent`) stays strict. */
+/** Paused, offline-waiting and resuming rows keep the last real fraction frozen; the live-progress gate (`visiblePercent`) stays strict. */
 internal fun DownloadProgress.frozenFraction(offline: Boolean): Float? =
-    if (paused || waitingForNetwork(offline)) percent?.let { it / 100f } else null
+    if (paused || waitingForNetwork(offline) || keepsSample) percent?.let { it / 100f } else null

@@ -16,6 +16,7 @@ import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.downloads.isOffline
 import dev.ahmed.savlino.downloads.restarting
+import dev.ahmed.savlino.downloads.keepsSample
 import dev.ahmed.savlino.downloads.waitingForNetwork
 import dev.ahmed.savlino.locale.AppLocale
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -249,7 +250,7 @@ class DownloadNotifications(private val base: Context,
         fun text(context: Context, progress: DownloadProgress, offline: Boolean = false, hot: Boolean = false): String {
             val language = languageOf(context)
             val phase = phase(context, progress, offline, hot)
-            if (progress.waitingForNetwork(offline)) return (listOf(phase) + listOfNotNull(
+            if (progress.waitingForNetwork(offline) || progress.keepsSample) return (listOf(phase) + listOfNotNull(
                 progress.percent?.let { NezzelFormat.isolate(NezzelFormat.percent(it, language)) },
                 progress.bytes?.takeIf { it >= 0 }?.let { bytes(context, progress.copy(phase = DownloadPhase.DOWNLOADING), language) })).joinToString(" · ")
             if (progress.paused && !progress.terminal) return listOfNotNull(phase, progress.bytes?.takeIf { it >= 0 }

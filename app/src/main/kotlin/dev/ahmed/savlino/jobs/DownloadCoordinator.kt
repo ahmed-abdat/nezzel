@@ -299,6 +299,7 @@ class DownloadCoordinator(
     fun requestCancellation(id: String) {
         if (!JobStore.validJobId(id)) return
         synchronized(userCancellation) { userCancellation += id }
+        networkWait.remove(id)
         transfer.removeWaiting(id)
         stopEngine(id)
     }
@@ -347,6 +348,7 @@ class DownloadCoordinator(
             else { pauseRequests += id; stopEngine(id, cancelUnregistered = false); true }
         }
         if (!paused) return@withContext false
+        networkWait.remove(id)
         transfer.removeWaiting(id)
         if (!active.containsKey(id)) store.pausedPartial(id, stagingBytes(stagingRoot(id)) > 0)
         store.get(id)?.let { update(fromRecord(it)) }
@@ -873,7 +875,11 @@ class DownloadCoordinator(
         val previous = mutableProgress.value.find { it.jobId == incoming.jobId }
         if (incoming.restartEpoch < (previous?.restartEpoch ?: 0)) return
         // A paused row has no byte columns: keep this run's last real progress (gone after a process restart).
-        val event = if (incoming.paused && incoming.bytes == null && previous != null && previous.restartEpoch == incoming.restartEpoch)
+        // So does the next attempt's preparation over the same kept partial (startTransfer adds one epoch).
+        val resumes = !incoming.terminal && !incoming.paused && incoming.hasPartial && incoming.phase == DownloadPhase.PREPARING && !incoming.waiting &&
+            previous?.hasPartial == true && previous.restartEpoch == incoming.restartEpoch - 1
+        val event = if (incoming.bytes == null && previous != null &&
+                (incoming.paused && previous.restartEpoch == incoming.restartEpoch || resumes && previous.bytes != null))
             incoming.copy(bytes = previous.bytes, total = previous.total,
                 fragmentIndex = previous.fragmentIndex, fragmentCount = previous.fragmentCount) else incoming
         if (!event.terminal) {
@@ -1061,7 +1067,8 @@ class DownloadCoordinator(
             else -> DownloadPhase.FAILED
         }, error = row.error, publishedUri = row.pendingUri.takeIf { row.stage == JobStage.COMPLETED }, targetUri = row.pendingUri, mimeType = mime(row.format), total = row.format.size, qualityHeight = VideoQuality.of(row.format.width, row.format.height), waiting = row.stage == JobStage.ENQUEUED,
         retryable = row.stage == JobStage.FAILED && row.retryable && row.sourceUrl != null,
-        paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch).let { queued ->
+        paused = row.stage == JobStage.PAUSED, hasPartial = row.hasPartial, restartEpoch = row.restartEpoch,
+        networkWait = row.stage == JobStage.ENQUEUED && row.jobId in networkWait).let { queued ->
         // The journal has no byte columns. A retained partial keeps this process's last real sample,
         // including in the worker's final callback; never carry it across a discarded staging epoch.
         val previous = mutableProgress.value.firstOrNull { it.jobId == row.jobId }

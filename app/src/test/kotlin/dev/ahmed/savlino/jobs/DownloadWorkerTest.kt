@@ -2312,6 +2312,7 @@ class DownloadWorkerTest {
             assertEquals(Size.Unknown, waiting.total)
             assertEquals(app.getString(dev.ahmed.savlino.R.string.download_waiting_network),
                 DownloadNotifications.phase(app, waiting, offline = true))
+            assertTrue(waiting.networkWait)
             assertFalse(f.phases.contains("FAILED"))
             val gates = WorkManager.getInstance(app).getWorkInfosForUniqueWork(id).get()
                 .filter { NetworkGateWorker::class.java.name in it.tags }
@@ -2347,8 +2348,16 @@ class DownloadWorkerTest {
         val network = TestNetwork()
         val entered = CompletableDeferred<Unit>(); val stopped = CompletableDeferred<Unit>()
         val stops = java.util.concurrent.atomic.AtomicInteger()
+        var probe: () -> DownloadProgress? = { null }
+        var resumed: DownloadProgress? = null
         fixture(FakeEngine(), network = network, cancelHook = { stops.incrementAndGet(); stopped.complete(Unit) },
             script = { _, dir, emit ->
+                // The next attempt's preparation, before its first byte, still shows the kept sample.
+                if (entered.isCompleted) resumed = withTimeoutOrNull(2000) {
+                    var seen: DownloadProgress? = null
+                    while (seen == null) { seen = probe()?.takeIf { it.phase == DownloadPhase.PREPARING && !it.waiting }; delay(10) }
+                    seen
+                }
                 emit(EngineEvent.Progress(2, Size.Exact(4)))
                 if (!entered.isCompleted) {
                     dir.resolve("output.mp4.part").writeText("keep")
@@ -2361,6 +2370,7 @@ class DownloadWorkerTest {
                 }
             }).use { f ->
             f.store.enqueue(command("net-transfer"))
+            probe = { f.coordinator.progress.value.singleOrNull() }
             val running = async(Dispatchers.Default) { f.worker("net-transfer").doWork() }
             try {
                 withTimeout(5000) { entered.await() }
@@ -2379,6 +2389,10 @@ class DownloadWorkerTest {
                 assertEquals(50, queued.percent)
                 assertEquals(app.getString(dev.ahmed.savlino.R.string.download_waiting_network),
                     DownloadNotifications.phase(app, queued, offline = true))
+                // The coordinator saw the drop: the row waits for the connection before the system says offline.
+                assertTrue(queued.networkWait)
+                assertEquals(app.getString(dev.ahmed.savlino.R.string.download_waiting_network),
+                    DownloadNotifications.phase(app, queued, offline = false))
                 assertEquals(2L, f.progressData.last().getLong("bytes", -1))
                 assertTrue(network.listeners.isEmpty())
                 // Startup's chain plus one continuation, each run behind a CONNECTED gate.
@@ -2388,6 +2402,9 @@ class DownloadWorkerTest {
                 assertEquals(ListenableWorker.Result.success(), f.worker("net-transfer").doWork())
                 assertEquals(JobStage.COMPLETED, f.store.get("net-transfer")!!.stage)
                 assertEquals(2, f.attempts.get())
+                assertNotNull(resumed); val preparing = resumed!!
+                assertEquals(2L, preparing.bytes); assertEquals(Size.Exact(4), preparing.total)
+                assertFalse(preparing.networkWait)
             } finally { stopped.complete(Unit); running.cancelAndJoin() }
         }
     }

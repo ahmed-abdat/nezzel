@@ -22,8 +22,29 @@ class RowStateTest {
             hasPartial = true, bytes = 25, total = Size.Exact(100))
         assertTrue(queued.waitingForNetwork(true))
         assertEquals(.25f, queued.frozenFraction(true)!!, .001f)
-        assertNull(queued.frozenFraction(false))
+        // Back online it is still queued over the same partial, so the fraction stays until bytes move.
+        assertEquals(.25f, queued.frozenFraction(false)!!, .001f)
         assertNull(queued.copy(total = Size.Unknown).frozenFraction(true))
         assertNull(queued.copy(total = Size.Estimated(100)).frozenFraction(true))
+    }
+
+    @Test fun aDropTheCoordinatorSawWaitsBeforeTheOfflineSignalSettles() {
+        val queued = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, waiting = true, networkWait = true)
+        assertTrue(queued.waitingForNetwork(false))
+        assertFalse(queued.copy(paused = true).waitingForNetwork(false))
+        assertFalse(queued.copy(waiting = false).waitingForNetwork(false))
+    }
+
+    @Test fun queueAndPreparationOverAKeptPartialKeepTheLastSample() {
+        val sample = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, waiting = true,
+            hasPartial = true, bytes = 25, total = Size.Exact(100))
+        assertTrue(sample.keepsSample)
+        assertEquals(.25f, sample.frozenFraction(false)!!, .001f)
+        assertTrue(sample.copy(waiting = false).keepsSample)
+        assertFalse(sample.copy(waiting = false, phase = DownloadPhase.DOWNLOADING).keepsSample)
+        assertFalse(sample.copy(hasPartial = false).keepsSample)
+        assertFalse(sample.copy(bytes = null).keepsSample)
+        assertFalse(sample.copy(paused = true).keepsSample)
+        assertFalse(sample.copy(phase = DownloadPhase.FAILED, waiting = false).keepsSample)
     }
 }

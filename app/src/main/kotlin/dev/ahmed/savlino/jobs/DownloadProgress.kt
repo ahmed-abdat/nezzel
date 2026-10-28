@@ -13,7 +13,9 @@ data class DownloadProgress(val jobId: String, val filename: String, val phase: 
     /** Result check of a COMPLETED file (null on every other event, and when nothing could be judged). */
     val check: dev.ahmed.savlino.domain.ResultCheck? = null,
     /** The MediaStore row the job writes to, set before it completes: the library may list the file a moment earlier. */
-    val targetUri: android.net.Uri? = null) {
+    val targetUri: android.net.Uri? = null,
+    /** Requeued because the connection dropped: waits for the network before the system reports it offline. */
+    val networkWait: Boolean = false) {
     /** Byte estimates never supply a percentage; completed fragments can supply their own real fraction. */
     val percent: Int? get() {
         val fragments = fragmentCount?.takeIf { it > 0 }
