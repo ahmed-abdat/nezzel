@@ -8,8 +8,10 @@ internal val DownloadProgress.restarting: Boolean get() = restartEpoch > 1 && !h
     bytes == null && phase in setOf(DownloadPhase.PREPARING, DownloadPhase.DOWNLOADING)
 
 /** Offline queued work waits for connectivity, including preparation before its first byte. A drop the coordinator already
- * saw counts at once, so the row never shows "Queued" while the offline signal settles. */
-internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = (offline || networkWait) && !terminal && !paused && waiting
+ * saw counts at once, so the row never shows "Queued" while the offline signal settles. A transfer that stalls while
+ * offline waits for the connection too, not for data. */
+internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = !terminal && !paused &&
+    ((offline || networkWait) && waiting || offline && phase == DownloadPhase.DOWNLOADING && stalled == true)
 
 /** Queued or preparing again with a kept partial: the row keeps the last real percent and size until bytes move. */
 internal val DownloadProgress.keepsSample: Boolean get() = !terminal && !paused && hasPartial && bytes != null &&

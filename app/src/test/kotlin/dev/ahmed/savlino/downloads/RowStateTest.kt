@@ -35,6 +35,18 @@ class RowStateTest {
         assertFalse(queued.copy(waiting = false).waitingForNetwork(false))
     }
 
+    @Test fun aTransferThatStallsOfflineWaitsForConnectionAndKeepsItsPercent() {
+        val stalled = DownloadProgress("job", "Clip.mp4", DownloadPhase.DOWNLOADING, stalled = true,
+            bytes = 26, total = Size.Exact(100))
+        assertTrue(stalled.waitingForNetwork(true))
+        assertEquals(.26f, stalled.frozenFraction(true)!!, .001f)
+        // Online, a stall is the server's: it still waits for data.
+        assertFalse(stalled.waitingForNetwork(false))
+        assertFalse(stalled.copy(networkWait = true).waitingForNetwork(false))
+        assertFalse(stalled.copy(stalled = false).waitingForNetwork(true))
+        assertFalse(stalled.copy(paused = true).waitingForNetwork(true))
+    }
+
     @Test fun queueAndPreparationOverAKeptPartialKeepTheLastSample() {
         val sample = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, waiting = true,
             hasPartial = true, bytes = 25, total = Size.Exact(100))
