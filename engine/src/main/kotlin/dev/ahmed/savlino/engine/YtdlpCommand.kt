@@ -45,7 +45,10 @@ object YtdlpCommand {
         format.sourceContainer != null -> "output.${format.sourceContainer}"
         else -> null
     }
-    /** The finished source a failed conversion kept, or null: only a nonempty regular file in a valid staging directory. */
+    /**
+     * The finished source a failed conversion kept, or null: only a nonempty regular file in a valid staging directory.
+     * Nonempty but corrupt input fails to convert again, and the coordinator then drops it, so the next Retry downloads.
+     */
     fun keptConversionSource(format: Format, directory: File): File? {
         if (format.conversion == null) return null
         val name = finishedSource(format) ?: return null
