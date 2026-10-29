@@ -811,10 +811,10 @@ class DownloadCoordinator(
         store.get(id)
     }
 
-    @Suppress("DEPRECATION")
+    /** Pre-31 follows the runner: a default without INTERNET can still try; only its absence means offline. */
     private fun connectivityStopped(reason: Int): Boolean =
         if (android.os.Build.VERSION.SDK_INT >= 31) reason == WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY
-        else context.getSystemService(android.net.ConnectivityManager::class.java).activeNetworkInfo?.isConnected != true
+        else !network.online()
 
     private fun stagingRoot(id: String) = File(context.filesDir.canonicalFile, "downloads/$id")
 

@@ -61,8 +61,14 @@ class OptionsNetworkCopyTest {
             val capabilities = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance()
             shadowOf(capabilities).addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
             shadowOf(manager).setNetworkCapabilities(manager.activeNetwork, capabilities)
+            // Shadow setters do not deliver Android's API 26+ availability -> capabilities callback pair.
+            compose.runOnIdle {
+                shadowOf(manager).networkCallbacks.forEach {
+                    it.onAvailable(checkNotNull(manager.activeNetwork))
+                    it.onCapabilitiesChanged(checkNotNull(manager.activeNetwork), capabilities)
+                }
+            }
             assertFalse(dev.ahmed.savlino.downloads.isOffline(activity))
-            compose.runOnIdle { shadowOf(manager).networkCallbacks.forEach { it.onAvailable(checkNotNull(manager.activeNetwork)) } }
             compose.onNodeWithText(activity.getString(R.string.network_title)).assertIsDisplayed()
             compose.onNodeWithText(activity.getString(R.string.network_body)).assertIsDisplayed()
             compose.onNodeWithText(activity.getString(R.string.offline_title)).assertDoesNotExist()

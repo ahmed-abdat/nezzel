@@ -77,8 +77,8 @@ class MobileDataNoteTest {
 
     @Test fun smallFileShowsNoNote() = render(Size.Exact(40_000_000), metered = true) { activity, _ -> assertFalse(note(activity)) }
 
-    @Test fun networkSwitchUpdatesTheNoteAndDismissUnregisters() {
-        render(Size.Exact(240_000_000), metered = false, onClose = { assertTrue(callbacks().isEmpty()) }) { activity, _ ->
+    @Test fun networkSwitchUpdatesTheNoteAndDismissKeepsSharedCallback() {
+        render(Size.Exact(240_000_000), metered = false, onClose = { assertEquals(1, callbacks().size) }) { activity, _ ->
             assertFalse(note(activity))
             assertEquals(1, callbacks().size)
             switchTo(metered = true)
@@ -134,7 +134,7 @@ class MobileDataNoteTest {
     private fun switchTo(metered: Boolean) {
         val caps = setNetwork(metered)
         val network = connectivity().activeNetwork!!
-        callbacks().forEach { it.onCapabilitiesChanged(network, caps) }
+        callbacks().forEach { it.onAvailable(network); it.onCapabilitiesChanged(network, caps) }
     }
 
     private fun noteNodes(activity: ComponentActivity): List<SemanticsNode> {
@@ -167,7 +167,7 @@ class MobileDataNoteTest {
                 NezzelTheme(ThemePref.Light, false) { Surface { if (shown) ConfirmationScreen(vm, language) } }
             }
             check(controller.get(), vm)
-            // Dismissing the sheet leaves composition, which must drop the network callback.
+            // Dismissing the sheet stops collection; the process retains its one shared callback.
             shown = false
             note(controller.get())
             onClose()

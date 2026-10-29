@@ -1,76 +1,18 @@
 package dev.ahmed.savlino.downloads
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.delay
+import dev.ahmed.savlino.jobs.Connectivity
 
-/** True while the device has no network that can carry traffic; rows use it to tell "queued" from "waiting for network". */
+/** Settled offline state for rows; the connectivity module owns capability and timing decisions. */
 val LocalOffline = staticCompositionLocalOf { false }
 
-fun isOffline(context: Context): Boolean {
-    val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
-    val capabilities = manager.getNetworkCapabilities(manager.activeNetwork ?: return true) ?: return true
-    return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-}
+fun isOffline(context: Context): Boolean = Connectivity.get(context).snapshot.offline
+fun isMetered(context: Context): Boolean = Connectivity.get(context).snapshot.metered
 
-/**
- * Offline settles after a second so a Wi-Fi/mobile handover never flashes "Waiting for network"; back online is immediate.
- * Callbacks never query the manager: during onLost it still names the lost network as active, so airplane mode read as
- * online. A default-network callback only ever reports the default network; a new one reports its own capabilities.
- */
 @Composable
-fun rememberOffline(): Boolean {
-    val context = LocalContext.current
-    var raw by remember { mutableStateOf(isOffline(context)) }
-    DisposableEffect(context) {
-        val manager = context.getSystemService(ConnectivityManager::class.java)
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                raw = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            }
-            override fun onLost(network: Network) { raw = true }
-        }
-        val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }
-            catch (_: RuntimeException) { false }
-        onDispose { if (registered) try { manager?.unregisterNetworkCallback(callback) } catch (_: RuntimeException) { } }
-    }
-    var settled by remember { mutableStateOf(raw) }
-    LaunchedEffect(raw) { if (raw) delay(1000); settled = raw }
-    return settled
-}
+fun rememberOffline(): Boolean = Connectivity.get(LocalContext.current).state.collectAsState().value.offlineSettled
 
-/** True only when the default network says it is metered; unknown capabilities count as not metered, so nothing nags. */
-fun isMetered(context: Context): Boolean {
-    val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
-    val capabilities = manager.getNetworkCapabilities(manager.activeNetwork ?: return false) ?: return false
-    return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-}
-
-/**
- * Follows the default network while composed (a Wi-Fi/mobile switch updates it); the callback goes when the caller
- * leaves. Callbacks never query the manager (stale during a handoff): no default network means no note, and the next
- * one reports its own capabilities. If the callback cannot be registered, nothing is shown.
- */
 @Composable
-fun rememberMetered(): Boolean {
-    val context = LocalContext.current
-    var metered by remember { mutableStateOf(isMetered(context)) }
-    DisposableEffect(context) {
-        val manager = context.getSystemService(ConnectivityManager::class.java)
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                metered = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-            }
-            override fun onLost(network: Network) { metered = false }
-        }
-        val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }
-            catch (_: RuntimeException) { false }
-        if (!registered) metered = false
-        onDispose { if (registered) try { manager?.unregisterNetworkCallback(callback) } catch (_: RuntimeException) { } }
-    }
-    return metered
-}
+fun rememberMetered(): Boolean = Connectivity.get(LocalContext.current).state.collectAsState().value.metered

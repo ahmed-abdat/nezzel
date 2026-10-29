@@ -1,5 +1,7 @@
 package dev.ahmed.savlino.downloads
 
+import dev.ahmed.savlino.jobs.waitingForNetwork
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable

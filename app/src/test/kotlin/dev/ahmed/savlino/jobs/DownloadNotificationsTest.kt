@@ -43,23 +43,10 @@ class DownloadNotificationsTest {
         }
     }
 
-    @Suppress("DEPRECATION")
-    private fun network(context: android.content.Context, offline: Boolean) {
-        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
-        val connectivity = shadowOf(manager)
-        connectivity.setActiveNetworkInfo(if (offline) null else org.robolectric.shadows.ShadowNetworkInfo.newInstance(
-            android.net.NetworkInfo.DetailedState.CONNECTED, android.net.ConnectivityManager.TYPE_WIFI, 0, true, true))
-        if (!offline) {
-            val capabilities = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance()
-            shadowOf(capabilities).addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            connectivity.setNetworkCapabilities(manager.activeNetwork, capabilities)
-        }
-    }
-
     @Test fun hostFailureCopyDoesNotClaimTheDeviceIsOffline() {
         val app = RuntimeEnvironment.getApplication()
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        network(app, false)
+        val connectivity = FakeConnectivity()
         for (language in listOf("en", "ar", "fr")) {
             dev.ahmed.savlino.locale.AppLocale.choose(app, language)
             val configuration = android.content.res.Configuration(app.resources.configuration).apply {
@@ -72,7 +59,7 @@ class DownloadNotificationsTest {
             assertEquals(expected, DownloadNotifications.phase(context, failed))
             assertEquals(context.getString(dev.ahmed.savlino.R.string.download_network_error),
                 DownloadNotifications.phase(context, failed.copy(error = dev.ahmed.savlino.domain.DownloadError.Offline)))
-            DownloadNotifications(context).finished(failed)
+            DownloadNotifications(context, connectivity = connectivity).finished(failed)
             val notification = context.getSystemService(NotificationManager::class.java).activeNotifications
                 .single { it.notification.channelId == "completed" }.notification
             assertEquals(expected, notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
@@ -82,6 +69,7 @@ class DownloadNotificationsTest {
     @Test fun networkFailureUsesCurrentConnectivityInEnglishAndArabic() {
         val app = RuntimeEnvironment.getApplication()
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val connectivity = FakeConnectivity()
         for (language in listOf("en", "ar")) {
             dev.ahmed.savlino.locale.AppLocale.choose(app, language)
             val configuration = android.content.res.Configuration(app.resources.configuration).apply {
@@ -91,13 +79,12 @@ class DownloadNotificationsTest {
             val failed = DownloadProgress("network-copy", "Video", DownloadPhase.FAILED,
                 error = dev.ahmed.savlino.domain.DownloadError.Network)
             for (offline in listOf(true, false)) {
-                network(context, offline)
-                assertEquals(offline, dev.ahmed.savlino.downloads.isOffline(context))
+                connectivity.set(ConnectivityState(online = !offline, offline = offline))
                 val expected = context.getString(if (offline) dev.ahmed.savlino.R.string.download_network_error
                     else dev.ahmed.savlino.R.string.network_title)
-                assertEquals(expected, DownloadNotifications.phase(context, failed, offline))
-                assertEquals(expected, DownloadNotifications.text(context, failed, offline))
-                DownloadNotifications(context).finished(failed)
+                assertEquals(expected, DownloadNotifications.phase(context, failed, connectivity.snapshot.offline))
+                assertEquals(expected, DownloadNotifications.text(context, failed, connectivity.snapshot.offline))
+                DownloadNotifications(context, connectivity = connectivity).finished(failed)
                 val notification = context.getSystemService(NotificationManager::class.java).activeNotifications
                     .single { it.notification.channelId == "completed" }.notification
                 assertEquals(expected, notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())

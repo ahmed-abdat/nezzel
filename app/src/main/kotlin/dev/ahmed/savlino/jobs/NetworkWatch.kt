@@ -1,10 +1,13 @@
 package dev.ahmed.savlino.jobs
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.Network
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 
 /**
  * The network as a running download sees it. The runner has no WorkManager constraint (running work can't drop one),
@@ -12,26 +15,21 @@ import androidx.work.WorkerParameters
  */
 interface NetworkWatch {
     fun online(): Boolean
-    /** [lost] runs on a callback thread when no network can carry traffic; close() unregisters. */
+    /** [lost] runs on a callback thread when no network can carry traffic; close() stops this observer. */
     fun watch(lost: () -> Unit): AutoCloseable
 
-    class Android(private val context: Context) : NetworkWatch {
-        private val manager get() = context.getSystemService(ConnectivityManager::class.java)
-        // Only "no default network" (airplane mode, out of range) counts as offline. A network without
-        // internet still lets the engine try: its own transport errors decide, a stop here could loop.
-        override fun online(): Boolean = manager?.let { it.activeNetwork != null } ?: true
+    class Android(context: Context) : NetworkWatch by Adapter(Connectivity.get(context))
+
+    /** Runner view of the shared module; collecting never registers another platform callback. */
+    class Adapter(private val connectivity: Connectivity) : NetworkWatch {
+        override fun online(): Boolean = connectivity.snapshot.online
         override fun watch(lost: () -> Unit): AutoCloseable {
-            val manager = manager ?: return AutoCloseable { }
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                // The default network as the callbacks report it. The manager is never queried here: during onLost it
-                // can still name the lost network as active (airplane mode read as online). A Wi-Fi/mobile handover
-                // makes the next network default first, so losing the old one is not offline.
-                @Volatile var current: Network? = null
-                override fun onAvailable(network: Network) { current = network }
-                override fun onLost(network: Network) { if (current == null || current == network) { current = null; lost() } }
+            // Undispatched collection is installed before watch returns; loss is handled on the emitting thread.
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                connectivity.state.map { it.online }.distinctUntilChanged().drop(1).collect { if (!it) lost() }
             }
-            val registered = try { manager.registerDefaultNetworkCallback(callback); true } catch (_: RuntimeException) { false }
-            return AutoCloseable { if (registered) try { manager.unregisterNetworkCallback(callback) } catch (_: RuntimeException) { } }
+            return AutoCloseable { scope.cancel() }
         }
     }
 }

@@ -1,5 +1,7 @@
 package dev.ahmed.savlino.downloads
 
+import dev.ahmed.savlino.jobs.waitingForNetwork
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState

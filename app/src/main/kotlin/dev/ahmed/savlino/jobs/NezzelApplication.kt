@@ -4,13 +4,11 @@ import android.app.Application
 import androidx.work.Configuration
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.channels.awaitClose
 
 /** On-demand WorkManager initialization; workers cannot pass the coordinator's startup barrier. */
 open class NezzelApplication : Application(), Configuration.Provider {
@@ -101,17 +99,6 @@ open class NezzelApplication : Application(), Configuration.Provider {
         }
         scope.launch { media.saver.sweep() }
     }
-    private fun batchConnectivity() = callbackFlow {
-        val manager = getSystemService(android.net.ConnectivityManager::class.java)
-        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
-                trySend(capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED))
-            }
-            override fun onLost(network: android.net.Network) { trySend(false) }
-        }
-        val registered = try { manager?.registerDefaultNetworkCallback(callback); manager != null }
-            catch (_: RuntimeException) { false }
-        awaitClose { if (registered) runCatching { manager?.unregisterNetworkCallback(callback) } }
-    }
+    private fun batchConnectivity() = Connectivity.get(this).state.map { it.validated }.distinctUntilChanged()
 
 }

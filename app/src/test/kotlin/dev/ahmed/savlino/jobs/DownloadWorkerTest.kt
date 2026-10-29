@@ -985,6 +985,30 @@ class DownloadWorkerTest {
             assertEquals(listOf(null, "keep"), seen) // the rerun started from the kept partial
         }
     }
+    /** Pre-31 uses the same default-network rule as the runner, even without INTERNET or isConnected. */
+    @Test @Config(sdk = [29])
+    fun defaultNetworkWithoutInternetDoesNotTurnSystemStopsIntoEndlessNetworkRetries() = runBlocking {
+        val network = TestNetwork()
+        network.connectivity.set(ConnectivityState(online = true, offline = true, offlineSettled = true))
+        // Model the old fallback disagreeing: activeNetworkInfo.isConnected is false, but a default exists.
+        @Suppress("DEPRECATION")
+        val info = org.robolectric.shadows.ShadowNetworkInfo.newInstance(android.net.NetworkInfo.DetailedState.DISCONNECTED,
+            android.net.ConnectivityManager.TYPE_WIFI, 0, true, false)
+        shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(info)
+        fixture(FakeEngine(), network = network, script = partialThenWait(waits = 4)).use { f ->
+            f.store.enqueue(command("default-without-internet"))
+            repeat(3) {
+                stopMidTransfer(f, "default-without-internet", WorkInfo.STOP_REASON_UNKNOWN)
+                assertEquals(JobStage.ENQUEUED, f.store.get("default-without-internet")!!.stage)
+            }
+            stopMidTransfer(f, "default-without-internet", WorkInfo.STOP_REASON_UNKNOWN)
+            val row = f.store.get("default-without-internet")!!
+            assertEquals(JobStage.FAILED, row.stage)
+            assertEquals(DownloadError.Interrupted, row.error)
+            assertTrue(row.retryable)
+        }
+    }
+
     @Test fun repeatedSystemStopsWithoutProgressFailInterrupted() = runBlocking {
         fixture(FakeEngine(), script = partialThenWait(waits = 4)).use { f ->
             f.store.enqueue(command("stop-loop"))
@@ -1155,12 +1179,13 @@ class DownloadWorkerTest {
 
     @Test @Config(sdk = [29, 33, 35])
     fun connectivityStopBeforeBytesReturnsSameRowToQueueAndReruns() = runBlocking {
-        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation))).use { f ->
-            shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
+        val network = TestNetwork()
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation)), network = network).use { f ->
             f.store.enqueue(command("network-zero"))
             val worker = f.worker("network-zero")
             val running = launch(Dispatchers.Default) { worker.doWork() }
             withTimeout(5000) { while (f.engine.commands.isEmpty()) yield() }
+            network.connected = false // Snapshot loss before its platform callback (including pre-31).
             worker.stop(if (android.os.Build.VERSION.SDK_INT >= 31) WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY
                 else WorkInfo.STOP_REASON_UNKNOWN)
             running.cancelAndJoin()
@@ -1217,16 +1242,17 @@ class DownloadWorkerTest {
 
     @Test @Config(sdk = [29, 33, 35])
     fun connectivityStopAfterBytesRequeuesAndKeepsPartial() = runBlocking {
-        fixture(FakeEngine(), script = { _, dir, emit ->
+        val network = TestNetwork()
+        fixture(FakeEngine(), network = network, script = { _, dir, emit ->
             dir.resolve("output.mp4.part").writeText("bytes")
             emit(EngineEvent.Progress(2, Size.Exact(4)))
             awaitCancellation()
         }).use { f ->
-            shadowOf(app.getSystemService(android.net.ConnectivityManager::class.java)).setActiveNetworkInfo(null)
             f.store.enqueue(command("network-partial"))
             val worker = f.worker("network-partial")
             val running = launch(Dispatchers.Default) { worker.doWork() }
             withTimeout(5000) { while (f.coordinator.progress.value.none { it.bytes == 2L }) yield() }
+            network.connected = false // Snapshot loss before its platform callback (including pre-31).
             worker.stop(if (android.os.Build.VERSION.SDK_INT >= 31) WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY
                 else WorkInfo.STOP_REASON_UNKNOWN)
             running.cancelAndJoin()

@@ -2,11 +2,26 @@ package dev.ahmed.savlino.downloads
 
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.jobs.DownloadPhase
+import dev.ahmed.savlino.jobs.ConnectivityState
+import dev.ahmed.savlino.jobs.FakeConnectivity
+import dev.ahmed.savlino.jobs.waitingForNetwork
 import dev.ahmed.savlino.jobs.DownloadProgress
 import org.junit.Assert.*
 import org.junit.Test
 
 class RowStateTest {
+    @Test fun sharedConnectivityKeepsRunnerLossImmediateAndRowsSettled() {
+        val connectivity = FakeConnectivity()
+        val queued = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, waiting = true)
+        connectivity.set(ConnectivityState(online = false, offline = true))
+        assertFalse(queued.waitingForNetwork(connectivity.snapshot.offlineSettled))
+        assertTrue(queued.copy(networkWait = true).waitingForNetwork(connectivity.snapshot.offlineSettled))
+        connectivity.set(connectivity.snapshot.copy(offlineSettled = true))
+        assertTrue(queued.waitingForNetwork(connectivity.snapshot.offlineSettled))
+        connectivity.set(ConnectivityState())
+        assertFalse(queued.waitingForNetwork(connectivity.snapshot.offlineSettled))
+    }
+
     @Test fun offlineQueueWaitsForConnectionEvenBeforeTheFirstByte() {
         val queued = DownloadProgress("job", "Clip.mp4", DownloadPhase.PREPARING, waiting = true)
         assertTrue(queued.waitingForNetwork(true))

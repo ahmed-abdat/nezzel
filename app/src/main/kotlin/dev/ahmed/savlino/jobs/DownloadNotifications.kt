@@ -14,10 +14,8 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.ResultCheck
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.Size
-import dev.ahmed.savlino.downloads.isOffline
 import dev.ahmed.savlino.downloads.restarting
 import dev.ahmed.savlino.downloads.keepsSample
-import dev.ahmed.savlino.downloads.waitingForNetwork
 import dev.ahmed.savlino.locale.AppLocale
 import dev.ahmed.savlino.locale.NezzelFormat
 import kotlinx.coroutines.launch
@@ -31,7 +29,8 @@ data class TransferParts(val percent: String?, val bytes: String, val speed: Str
 class DownloadNotifications(private val base: Context,
     private val batchMember: (String) -> Boolean = { id ->
         (base.applicationContext as? NezzelApplication)?.downloads?.batches?.containsJob(id) == true
-    }, private val leaderId: () -> String? = { null }) {
+    }, private val connectivity: Connectivity = Connectivity.get(base),
+    private val leaderId: () -> String? = { null }) {
     private val context: Context get() = AppLocale.localized(base)
     private val manager = base.getSystemService(NotificationManager::class.java)
     private fun channel() {
@@ -152,7 +151,7 @@ class DownloadNotifications(private val base: Context,
             .putExtra(DownloadWorker.JOB_ID, jobId), FLAGS)
     private fun notification(progress: DownloadProgress): Notification {
         val ctx = context
-        val offline = isOffline(base)
+        val offline = connectivity.snapshot.offline
         val description = text(ctx, progress, offline, dev.ahmed.savlino.downloads.isHeatLimited(base))
         val builder = NotificationCompat.Builder(ctx, if (progress.terminal) COMPLETED_CHANNEL else CHANNEL).setSmallIcon(R.drawable.ic_stat_nezzel)
             .setContentTitle(progress.filename).setContentText(description)
