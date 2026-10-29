@@ -111,11 +111,12 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
 
 /**
  * Back on the page: it leaves fullscreen first, then closes; on music it shrinks the player into the bar instead,
- * following the finger on Android 14+ (a cancelled gesture puts it back). Its own scope: the page reaching or leaving
- * the bar recomposes only this.
+ * following the finger on Android 14+ (a cancelled gesture puts it back). A video or photo [pulls] down a little with the
+ * gesture, as a swipe down would, and goes on down when it completes. Its own scope: the page reaching or leaving the bar
+ * recomposes only this.
  */
 @Composable
-private fun ViewerBack(host: ViewerHostState?, shrinks: Boolean, onBack: () -> Unit) {
+private fun ViewerBack(host: ViewerHostState?, shrinks: Boolean, pulls: Boolean, onBack: () -> Unit) {
     val collapsed = host?.collapsed == true
     BackHandler(!collapsed, onBack)
     PredictiveBackHandler(shrinks && !collapsed) { events ->
@@ -124,6 +125,13 @@ private fun ViewerBack(host: ViewerHostState?, shrinks: Boolean, onBack: () -> U
             target.size.anchoredDrag { _ -> events.collect { dragTo(it.progress * .4f * target.travel) } }
             target.collapse()
         } catch (cancelled: kotlinx.coroutines.CancellationException) { target.expand(); throw cancelled }
+    }
+    PredictiveBackHandler(pulls && host?.exit != null && !collapsed) { events ->
+        val target = host ?: return@PredictiveBackHandler
+        try {
+            events.collect { target.backPull(it.progress) }
+            target.finishPull()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { target.settlePull(0f); throw cancelled }
     }
 }
 
@@ -205,7 +213,21 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
         }
     }
     val minimize = host != null && shrinkable != null && host.mini?.owner === playback && host.slot != null
-    ViewerBack(host, minimize && !controls.fullscreen) { if (controls.fullscreen) fullscreen(false) else close() }
+    // Videos and photos can be pulled down: out of fullscreen when in it, closed otherwise. Read when a finger lands, never here.
+    if (host != null) DisposableEffect(host, pager, zooms) {
+        val exit = PageExit(
+            can = {
+                val settled = items.getOrNull(pager.settledPage)
+                settled != null && !settled.isAudio && zooms[settled.uri]?.zoomed != true && !pager.isScrollInProgress &&
+                    !controls.volumeOpen && !controls.menuOpen
+            },
+            fullscreen = { controls.fullscreen }, leaveFullscreen = { fullscreen(false) }, close = { latestClose() })
+        host.exit = exit
+        onDispose { if (host.exit === exit) host.exit = null }
+    }
+    ViewerBack(host, minimize && !controls.fullscreen, !current.isAudio && !controls.fullscreen) {
+        if (controls.fullscreen) fullscreen(false) else close()
+    }
     // A page swiped away comes back unzoomed, and every newly settled page starts with its controls showing.
     LaunchedEffect(pager.settledPage, items) {
         val settledItem = items.getOrNull(pager.settledPage)
@@ -218,7 +240,11 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
     // An opaque black page; shrinking music, the host slides and narrows all of it as one sheet that turns the bar's colour.
     Surface(Modifier.fillMaxSize().testTag(VIEWER_TAG)
         .then(if (minimize) Modifier.semantics { collapse { host?.collapse(); true } } else Modifier)
-        .drawBehind { drawRect(host?.motion()?.takeIf { host.moving }?.let { host.sheetColor(it.tint) } ?: SHEET_COLOR) },
+        .drawBehind {
+            val color = host?.motion()?.takeIf { host.moving }?.let { host.sheetColor(it.tint) } ?: SHEET_COLOR
+            // Pulled down, the host draws the black still and full-screen behind the page (see ViewerHost), so none travels with it.
+            if (host == null || host.pulled == 0f) drawRect(color)
+        },
         color = Color.Transparent, contentColor = Color.White) {
         Box(Modifier.fillMaxSize()) {
             // Fullscreen runs edge to edge; the media page's own controls keep clear of cutouts and bars.
@@ -230,13 +256,13 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
             }
             HorizontalPager(pager, Modifier.fillMaxSize().then(if (controls.fullscreen) Modifier else Modifier.safeDrawingPadding())
                 .onSizeChanged { width = it.width },
-                key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen && host?.moving != true) { page ->
+                key = { items[it].uri.toString() }, userScrollEnabled = zooms[current.uri]?.zoomed != true && !controls.fullscreen && host?.displaced != true) { page ->
                 // Full screen shows the playing file alone, and so does a page shrinking into the bar.
                 if (controls.fullscreen && page != pager.currentPage) return@HorizontalPager
                 val item = items[page]
                 val description = stringResource(when { item.isVideo -> R.string.viewer_video_n; item.isAudio -> R.string.viewer_audio_n; else -> R.string.viewer_image_n },
                     NezzelFormat.count(page + 1, language), NezzelFormat.count(items.size, language))
-                Box(Modifier.fillMaxSize().drawWithContent { if (host?.moving != true || page == pager.currentPage) drawContent() }
+                Box(Modifier.fillMaxSize().drawWithContent { if (host?.displaced != true || page == pager.currentPage) drawContent() }
                     .semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
                     if (item.isVideo || item.isAudio) ViewerVideo(item, current = pager.settledPage == page, playback, controls, language,
                         controls.fullscreen, fullscreen, onOpenWith = { onOpenWith(item) }, onClose = close)
@@ -248,7 +274,7 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
                 enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
                 // The shade rides on the sheet with the controls it sits behind and fades with them near the end.
                 Row(Modifier.fillMaxWidth().then(if (controls.shown) Modifier else Modifier.clearAndSetSemantics {})
-                    .graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }.fadesWithSheet(host)
+                    .graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }.fadesWithSheet(host).fadesWhilePulled(host)
                     .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .6f), Color.Transparent)))
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .onFocusChanged { controls.focus("top", it.hasFocus) }

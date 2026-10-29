@@ -17,6 +17,9 @@ internal class ViewerTestPlayer(val inner: RecordingPlayer = RecordingPlayer()) 
     var slowSeeks = false
     private var pendingSeek: Long? = null
     fun catchUp() { pendingSeek?.let { pendingSeek = null; inner.seekTo(it) } }
+    /** A fast local file: its first picture is drawn the moment it is prepared, before any page can listen. */
+    var frameOnPrepare = false
+    override fun handlePrepare(): ListenableFuture<*> = super.handlePrepare().also { if (frameOnPrepare) inner.renderFirstFrame() }
     private var parameters = PlaybackParameters.DEFAULT
 
     override fun getState(): State {

@@ -72,6 +72,11 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
     val state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     val player = MutableStateFlow<Player?>(null)
     val resumedAt = MutableStateFlow(0L)
+    /**
+     * The video's first picture is on its surface, so the poster can go. Heard by a listener added before the player is
+     * published, so a fast local file that draws before the page attaches is never missed.
+     */
+    val firstFrame = MutableStateFlow(false)
     private var tracker: PlaybackSession? = null
     private var videoLoad: Job? = null
     private var observe: Job? = null
@@ -90,6 +95,7 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
             if (!playWhenReady && (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS ||
                 reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY)) wantsPlay = false
         }
+        override fun onRenderedFirstFrame() { firstFrame.value = true }
     }
     private val audioListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -191,7 +197,7 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
     }
     private fun releaseItem() {
         generation++; videoLoad?.cancel(); videoLoad = null; observe?.cancel(); observe = null
-        tracker?.player?.removeListener(videoIntentListener)
+        tracker?.player?.removeListener(videoIntentListener); firstFrame.value = false
         // The UI stops following the player before stop() delivers its events.
         player.value?.removeListener(audioListener); player.value = null
         tracker?.close(environment::releaseLater); tracker = null

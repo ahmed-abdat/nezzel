@@ -73,3 +73,9 @@ internal fun waitWhile(pump: () -> Unit, timeoutMs: Long = 5_000, busy: () -> Bo
         pump(); Thread.sleep(5)
     }
 }
+
+/** Robolectric has no real renderer, so a TextureView (the video surface) draws once and then throws; it is black there anyway. */
+fun hideTextureViews(view: View) {
+    if (view is android.view.TextureView) view.visibility = View.INVISIBLE
+    if (view is android.view.ViewGroup) for (i in 0 until view.childCount) hideTextureViews(view.getChildAt(i))
+}

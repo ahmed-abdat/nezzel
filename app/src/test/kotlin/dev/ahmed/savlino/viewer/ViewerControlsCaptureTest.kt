@@ -24,6 +24,7 @@ import dev.ahmed.savlino.playback.PlaybackEnvironment
 import dev.ahmed.savlino.playback.PlayerFactory
 import android.media.AudioManager
 import dev.ahmed.savlino.ui.theme.NezzelTheme
+import dev.ahmed.savlino.hideTextureViews
 import dev.ahmed.savlino.windowViews
 import dev.ahmed.savlino.playback.ResumePolicy
 import kotlinx.coroutines.runBlocking
@@ -65,7 +66,7 @@ class ViewerControlsCaptureTest {
         val root = a.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        windowViews(a).filter { it.isAttachedToWindow && it.width > 0 }.forEach { view: View -> view.draw(canvas) }
+        windowViews(a).filter { it.isAttachedToWindow && it.width > 0 }.forEach { view: View -> hideTextureViews(view); view.draw(canvas) }
         dir!!.mkdirs()
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }

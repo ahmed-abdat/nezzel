@@ -64,6 +64,11 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.compose.PlayerSurface
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.playback.*
@@ -77,6 +82,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToInt
 import androidx.media3.session.R as Media3
 
 /** A double tap's brief answer: which way it skipped, or null when the file can't skip yet. */
@@ -94,14 +100,15 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val ownedPlayer by owner.player.collectAsState()
     val ownedState by owner.state.collectAsState()
     val resumedAt by owner.resumedAt.collectAsState()
+    val firstFrame by owner.firstFrame.collectAsState()
     val player = ownedPlayer.takeIf { current && owner.item?.uri == item.uri }
     val state = if (current) ownedState else PlaybackState.Idle
     val uri = item.uri.toString()
     var playing by remember(item.uri) { mutableStateOf(false) }
     // Actually moving: not buffering, not paused. Only this time counts toward hiding the controls.
     var running by remember(item.uri) { mutableStateOf(false) }
-    var position by remember(item.uri) { mutableLongStateOf(0) }
-    var duration by remember(item.uri) { mutableLongStateOf(item.durationMillis ?: 0) }
+    // Ticks four times a second: read only by the time row, so the page itself never recomposes for it.
+    val times = remember(item.uri) { VideoTimes(item.durationMillis ?: 0) }
     var ratio by remember(item.uri) { mutableFloatStateOf(1f) }
     var wide by remember(item.uri) { mutableStateOf(false) }
     var seekable by remember(item.uri) { mutableStateOf(false) }
@@ -130,9 +137,10 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     fun seekableNow(player: Player) { seekable = ViewerSeek.seekable(player); if (seekable) everSeekable = true }
     fun read(player: Player) {
         playing = player.playWhenReady; running = player.isPlaying
-        position = player.currentPosition.coerceAtLeast(0)
+        val position = player.currentPosition.coerceAtLeast(0)
+        times.position = position
         held?.let { if (kotlin.math.abs(position - it) < HELD_CLOSE) held = null }
-        duration = player.duration.takeIf { it > 0 } ?: item.durationMillis ?: 0
+        times.duration = player.duration.takeIf { it > 0 } ?: item.durationMillis ?: 0
         seekableNow(player); speed = player.playbackParameters.speed
         size(player.videoSize)
     }
@@ -141,7 +149,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     LaunchedEffect(player) {
         while (player != null) {
             // Read here, not in the body: the sheet starting to move recomposes nothing.
-            if (host != null) snapshotFlow { host.moving }.first { !it }
+            if (host != null) snapshotFlow { host.displaced }.first { !it }
             if (owner.player.value === player) read(player); delay(250)
         }
         playing = false; running = false; seekable = false
@@ -190,7 +198,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         // The coordinator's player right now, not the one this frame was drawn with.
         val live = owner.player.value.takeIf { owner.item?.uri == item.uri }
         val target = ViewerSeek.target(live, forward) ?: return false
-        owner.seek(target); position = target; held = target
+        owner.seek(target); times.position = target; held = target
         usage.count(UsageKeys.PLAYER_SEEK)
         if (gesture) skip = Skip(forward)
         return true
@@ -219,6 +227,17 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         } else { speed = attached.playbackParameters.speed; speedFailed = System.nanoTime() }
     }
     LaunchedEffect(speedFailed) { if (speedFailed != 0L) { delay(3_000); speedFailed = 0 } }
+    // Held down on a playing video: 2× until the finger lifts, then back to the speed chosen in the menu, which never changes.
+    var boosted by remember(item.uri) { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    fun boost(on: Boolean) {
+        val live = owner.player.value.takeIf { owner.item?.uri == item.uri }
+        if (!on) { if (boosted) { boosted = false; live?.let { ViewerSpeed.apply(it, controls.speedOf(uri)) } }; return }
+        if (live == null || !live.playWhenReady || owner.state.value is PlaybackState.Failed || controls.speedOf(uri) >= BOOST) return
+        if (ViewerSpeed.apply(live, BOOST)) { boosted = true; haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+    }
+    val hold by rememberUpdatedState(::boost)
+    val menuSpeed = if (boosted) controls.speedOf(uri) else speed
 
     val gesture by rememberUpdatedState(::seekBy)
     val direction = LocalLayoutDirection.current
@@ -252,16 +271,12 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             val time = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr)
             Row(Modifier.fillMaxWidth().keepsDrags(host).padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
-                val shown = seeking?.toLong() ?: held ?: position
-                Text(NezzelFormat.duration(shown / 1000), style = time)
-                SeekBar(shown.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
-                    Modifier.weight(1f).padding(horizontal = Space.s),
+                TimeRow(times, { seeking?.toLong() ?: held }, seekable, colors, time,
                     onChange = {
                         if (seeking == null) ViewerScrub.set(player, true)
                         seeking = it; controls.scrubbing = true; ViewerScrub.move(player, it.toLong())
                     },
                     onDone = { ViewerScrub.set(player, false); seeking?.let { held = it.toLong(); owner.seek(it.toLong()) }; seeking = null; controls.scrubbing = false; controls.touched() })
-                Text(duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) } ?: "", style = time, color = Color.White.copy(alpha = .72f))
             }
         }
     }
@@ -310,7 +325,10 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     } else BoxWithConstraints(Modifier.fillMaxSize()
         // Physical halves on purpose: the timeline is LTR, so left is always back. A pager drag cancels the tap.
         .pointerInput(current) {
-            if (current) detectTapGestures(onTap = { if (controls.volumeOpen) { controls.volumeOpen = false; controls.touched() } else controls.toggle() }, onDoubleTap = { gesture(ViewerSeek.forward(it.x, size.width), true) })
+            // A long press holds its finger until it lifts: a pull down never starts from it (see pullsDown).
+            if (current) detectTapGestures(onTap = { if (controls.volumeOpen) { controls.volumeOpen = false; controls.touched() } else controls.toggle() },
+                onDoubleTap = { gesture(ViewerSeek.forward(it.x, size.width), true) },
+                onLongPress = { hold(true) }, onPress = { try { tryAwaitRelease() } finally { hold(false) } })
         }
         .semantics {
             if (current) customActions = listOfNotNull(
@@ -322,10 +340,17 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         if (player != null && failure == null) {
             val width = minOf(maxWidth, maxHeight * ratio)
             // The screen stays on only while the picture moves: a pause, the end, Home or closing lets it sleep again.
-            PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)).then(if (running) Modifier.keepScreenOn() else Modifier))
+            // A TextureView draws inside the page's layer, so a pull down scales and fades the picture with the page on every API.
+            PlayerSurface(player, Modifier.width(width).height(width / ratio.coerceAtLeast(.01f)).then(if (running) Modifier.keepScreenOn() else Modifier),
+                surfaceType = SURFACE_TYPE_TEXTURE_VIEW)
         }
-        if (player == null || loading || failure != null) poster?.let {
-            Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        // The poster stays until the player has drawn its first picture, then crossfades into it; a seek's buffering keeps the last frame.
+        val framed = player != null && failure == null && firstFrame
+        val cover = remember(item.uri) { Animatable(if (framed) 0f else 1f) }
+        LaunchedEffect(framed) { if (!framed) cover.snapTo(1f) else if (reduced) cover.snapTo(0f) else cover.animateTo(0f, tween(POSTER_FADE)) }
+        val covered by remember(item.uri) { derivedStateOf { cover.value > 0f } }
+        if (covered) poster?.let {
+            Image(it.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = cover.value }.testTag(POSTER_TAG), contentScale = ContentScale.Fit)
         }
         // Video keeps its centre buttons through loading and buffering, with a ring on Play; the plain spinner shows only without them.
         val centre = current && player != null && failure == null
@@ -341,14 +366,14 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         // The dim takes no touches, so a tap anywhere else still reaches the canvas.
         if (centre)
             AnimatedVisibility(controls.shown, Modifier.matchParentSize(), enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .28f)).then(hidden)
+                Box(Modifier.fillMaxSize().fadesWhilePulled(host).background(Color.Black.copy(alpha = .28f)).then(hidden)
                     .onFocusChanged { controls.focus("centre", it.hasFocus) }, contentAlignment = Alignment.Center) {
                     PlayCluster(true, playing, ring, seekable, colors, { seekBy(it, false) }, togglePlay)
                 }
             }
         if (current) AnimatedVisibility(controls.shown, Modifier.align(Alignment.BottomCenter),
             enter = fadeIn(easeOut(reduced)), exit = fadeOut(easeOut(reduced))) {
-            Column(Modifier.fillMaxWidth().then(hidden)
+            Column(Modifier.fillMaxWidth().then(hidden).fadesWhilePulled(host)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .72f))))
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                 .onFocusChanged { controls.focus("bottom", it.hasFocus) }
@@ -361,7 +386,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                     transitionSpec = { fadeIn(easeOut(reduced)) togetherWith fadeOut(easeOut(reduced)) }, label = "volume") { open ->
                     if (open) VolumePanel(muted, true, volume, controls, colors) { muted = it; controls.touched() }
                     else Box(Modifier.fillMaxSize()) {
-                        SpeedMenu(speed, player != null, controls, colors, language, direction, Modifier.align(Alignment.CenterStart), ::chooseSpeed)
+                        SpeedMenu(menuSpeed, player != null, controls, colors, language, direction, Modifier.align(Alignment.CenterStart), ::chooseSpeed)
                         if (landscape) resume(Modifier.align(Alignment.Center).padding(horizontal = 112.dp))
                         Row(Modifier.align(Alignment.CenterEnd)) {
                             VolumeButton(muted, true, volume, controls) { muted = it; controls.touched() }
@@ -374,6 +399,10 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
                 }
             }
         }
+        // Last, so the centre buttons' dim never greys it.
+        if (current) AnimatedVisibility(boosted, Modifier.align(Alignment.TopCenter)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = TOP_BAR + Space.s),
+            enter = fadeIn(easeOut(reduced, 120)), exit = fadeOut(easeOut(reduced, 240))) { BoostPill(language) }
     }
 }
 
@@ -388,7 +417,8 @@ private fun AudioCover(poster: Bitmap?, host: ViewerHostState?, modifier: Modifi
     // Its place on the still page, wherever the sheet is when it is placed (a page restored in the bar is first placed moving).
     Surface(modifier.then(if (host == null) Modifier else Modifier.onPlaced {
         val at = it.positionInRoot()
-        bounds = Rect(Offset(at.x, at.y - host.progress * host.travel), it.size.toSize())
+        // Whole pixels: a re-place mid-drag gives the same spot back with float noise, which must not count as a move.
+        bounds = Rect(Offset(at.x.roundToInt().toFloat(), (at.y - host.progress * host.travel).roundToInt().toFloat()), it.size.toSize())
         host.art = bounds
     }.graphicsLayer {
         val p = host.progress
@@ -427,6 +457,12 @@ private fun FailureCard(failure: PlaybackFailure, onRetry: () -> Unit, onOpenWit
     }
 }
 
+/** The video page's poster, for tests: there until the first picture is drawn. */
+internal const val POSTER_TAG = "viewer_poster"
+private const val POSTER_FADE = 120
+internal const val BOOST_TAG = "viewer_boost"
+/** Held down on a playing video: this speed until the finger lifts. */
+private const val BOOST = 2f
 private const val HELD_CLOSE = 1_000L
 private const val HELD_MAX = 1_500L
 private const val RING_AFTER = 500L
@@ -539,6 +575,25 @@ private fun SkipButton(forward: Boolean, enabled: Boolean, big: Boolean, onClick
     }
 }
 
+/** Where the file is and how long it is: written by the page's poll, read only inside [TimeRow]. */
+@Stable
+private class VideoTimes(duration: Long) {
+    var position by mutableLongStateOf(0)
+    var duration by mutableLongStateOf(duration)
+}
+
+/** Time, seek bar, length. Its own scope: the position ticking recomposes only this row, never the page around it. */
+@Composable
+private fun RowScope.TimeRow(times: VideoTimes, pinned: () -> Long?, seekable: Boolean, colors: ViewerColors,
+                             style: androidx.compose.ui.text.TextStyle, onChange: (Float) -> Unit, onDone: () -> Unit) {
+    val duration = times.duration
+    val shown = pinned() ?: times.position
+    Text(NezzelFormat.duration(shown / 1000), style = style)
+    SeekBar(shown.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
+        Modifier.weight(1f).padding(horizontal = Space.s), onChange, onDone)
+    Text(duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) } ?: "", style = style, color = Color.White.copy(alpha = .72f))
+}
+
 /** A thin teal line with a round thumb: progress reads at a glance on black, played part bright, the rest dim. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -584,6 +639,22 @@ private fun SpeedMenu(speed: Float, enabled: Boolean, controls: ViewerControls, 
                         colors = MenuDefaults.itemColors(textColor = if (selected) colors.accent else colors.onMenu, trailingIconColor = colors.accent))
                 }
             }
+        }
+    }
+}
+
+/** "2×" while a finger holds the video down; TalkBack hears it once. */
+@Composable
+private fun BoostPill(language: String) {
+    val value = ViewerSpeed.label(stringResource(R.string.viewer_speed_value, ViewerSpeed.number(BOOST, language)))
+    val said = stringResource(R.string.viewer_speed_held, value)
+    Row(Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(50)).padding(horizontal = Space.m, vertical = Space.xs)
+        .clearAndSetSemantics { contentDescription = said; liveRegion = LiveRegionMode.Polite; testTag = BOOST_TAG },
+        verticalAlignment = Alignment.CenterVertically) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Icon(painterResource(Media3.drawable.media3_icon_fast_forward), null, Modifier.size(18.dp))
+            Spacer(Modifier.width(Space.xs))
+            Text(value, style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.Ltr))
         }
     }
 }

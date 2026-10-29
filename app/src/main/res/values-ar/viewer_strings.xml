@@ -9,6 +9,7 @@
     <string name="viewer_speed_value">%1$s×</string>
     <string name="viewer_speed_normal">عادية</string>
     <string name="viewer_speed_failed">تعذّر تغيير السرعة</string>
+    <string name="viewer_speed_held">%1$s ما دمت تضغط</string>
     <string name="viewer_fullscreen">ملء الشاشة</string>
     <string name="viewer_exit_fullscreen">الخروج من ملء الشاشة</string>
     <string name="viewer_volume">الصوت</string>

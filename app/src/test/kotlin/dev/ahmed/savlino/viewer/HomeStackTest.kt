@@ -52,6 +52,7 @@ import dev.ahmed.savlino.playback.PlayerFactory
 import dev.ahmed.savlino.ui.LinkViewModel
 import dev.ahmed.savlino.ui.nav.TabContent
 import dev.ahmed.savlino.ui.theme.NezzelTheme
+import dev.ahmed.savlino.hideTextureViews
 import dev.ahmed.savlino.windowViews
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -98,7 +99,7 @@ class HomeStackTest {
         val root = a.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        windowViews(a).filter { it.isAttachedToWindow && it.width > 0 }.forEach { view: View -> view.draw(canvas) }
+        windowViews(a).filter { it.isAttachedToWindow && it.width > 0 }.forEach { view: View -> hideTextureViews(view); view.draw(canvas) }
         return bitmap
     }
     private fun save(bitmap: Bitmap, name: String) {

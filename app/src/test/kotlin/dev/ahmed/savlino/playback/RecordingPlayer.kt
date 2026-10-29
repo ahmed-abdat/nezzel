@@ -36,6 +36,11 @@ internal class RecordingPlayer : SimpleBasePlayer(Looper.getMainLooper()) {
     override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> { touch(); return Futures.immediateVoidFuture() }
     override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> { touch(); surfaceCleared = true; return Futures.immediateVoidFuture() }
     fun at(position: Long) { this.position = position }
+    /** The video renderer drew its first picture on the surface. */
+    fun renderFirstFrame() {
+        value = value.buildUpon().setNewlyRenderedFirstFrame(true).build(); invalidateState()
+        value = value.buildUpon().setNewlyRenderedFirstFrame(false).build()
+    }
     fun tags(metadata: MediaMetadata, timed: Metadata = Metadata(emptyList())) {
         value = value.buildUpon().setPlaylist(value.timeline, value.currentTracks, metadata)
             .setPlaylistMetadata(metadata).setTimedMetadata(timed).build()

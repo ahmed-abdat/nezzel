@@ -4,10 +4,12 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
@@ -43,6 +45,7 @@ import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -102,6 +105,8 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
         return if (offset.isNaN() || bar <= 0f) (if (size.currentValue == PlayerSize.Bar) 1f else 0f) else (offset / bar).coerceIn(0f, 1f)
     }
     internal val moving by derivedStateOf { progress > 0f }
+    /** The page is off its rest: shrinking into the bar, or pulled down to close. The app shows behind it either way. */
+    internal val displaced by derivedStateOf { moving || pull > 0f && !pullLeavesFullscreen }
     /** The sheet has drawn back far enough to uncover the bar's row riding on its top edge. */
     internal val barShown by derivedStateOf { MiniPlayerLayout.bar(progress) }
     /** Placed only for the drag that started on it, and unseen: nothing on it answers a tap, a second finger or TalkBack. */
@@ -146,6 +151,59 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     internal var barColor = Color.Black
     internal var coverSide = 0f
 
+    /** The video or photo page that can be pulled down right now ([pullsDown]); null on music and while nothing is open. */
+    internal var exit by mutableStateOf<PageExit?>(null)
+    /** How far that page is pulled down, in pixels; 0 at rest. Read it only in layer and draw lambdas. */
+    internal var pull by mutableFloatStateOf(0f); private set
+    /** This pull leaves fullscreen rather than closing: the app stays hidden behind black. */
+    internal var pullLeavesFullscreen by mutableStateOf(false); private set
+    /** 0 at rest, 1 a full page height down; always 0 for a pull out of fullscreen, which neither shrinks nor fades. */
+    internal val pulled: Float get() = if (pullLeavesFullscreen) 0f else PagePull.fraction(pull, page.height)
+    /** A downward release this fast, in pixels per second, leaves the page. */
+    internal var flingSpeed = Float.MAX_VALUE
+    private var pullJob: Job? = null
+
+    internal fun canPull() = request != null && mini == null && !held && exit?.can?.invoke() == true
+    internal fun startPull(): Boolean {
+        val page = exit?.takeIf { canPull() } ?: return false
+        pullJob?.cancel()
+        pullLeavesFullscreen = page.fullscreen()
+        return true
+    }
+    /** Reduced motion: the page stays put under the finger, and only the release decides. */
+    internal fun dragPull(distance: Float) {
+        if (!reduced) pull = if (pullLeavesFullscreen) distance * PagePull.FULLSCREEN_FOLLOW else distance
+    }
+    internal fun releasePull(distance: Float, velocity: Float) {
+        val page = exit
+        when {
+            page == null || !PagePull.letsGo(distance, velocity, this.page.height, flingSpeed) -> settlePull(velocity)
+            pullLeavesFullscreen -> { page.leaveFullscreen(); settlePull(velocity) }
+            else -> finishPull()
+        }
+    }
+    /** Predictive back on a video or photo: the same pull, a little way down as the gesture goes. */
+    internal fun backPull(progress: Float) {
+        pullJob?.cancel(); pullLeavesFullscreen = false
+        if (!reduced) pull = progress * PagePull.BACK * page.height
+    }
+    /** Carries a pulled page the rest of the way down and closes it; one that never moved closes with the usual fade. */
+    internal fun finishPull() {
+        val close = exit?.close ?: return settlePull(0f)
+        pullJob?.cancel()
+        if (reduced || pull <= 0f || page.height <= 0f) { pull = 0f; close(); return }
+        pullJob = scope?.launch {
+            animate(pull, page.height, animationSpec = tween(PagePull.OUT_MILLIS, easing = Motion.EaseOut)) { value, _ -> pull = value }
+            close()
+        } ?: run { pull = 0f; close(); null }
+    }
+    internal fun settlePull(velocity: Float) {
+        pullJob?.cancel()
+        if (pull == 0f) return
+        pullJob = scope?.launch { animate(pull, 0f, velocity, if (reduced) snap() else SETTLE) { value, _ -> pull = value } }
+            ?: run { pull = 0f; null }
+    }
+
     internal fun show(next: ViewerRequest) {
         val old = request
         if (old != null && old.id != next.id) {
@@ -153,6 +211,7 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
             old.onClose(); mini = null; wantBar = false; tapped = null; settle(PlayerSize.Full, instant = true)
         }
         if (old == null) leaving = null
+        pullJob?.cancel(); pull = 0f
         request = next
     }
     internal fun dismiss(old: ViewerRequest) {
@@ -181,7 +240,11 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     fun yieldToApp() { if (request == null) return; if (canCollapse) collapse() else close() }
 
     private fun clear(fade: Boolean) {
-        leaving = request.takeIf { fade && !reduced }
+        // A page pulled out is already gone: it doesn't come back to fade.
+        leaving = request.takeIf { fade && !reduced && pull == 0f }
+        // It also keeps its pull until the next show(): the page's layer can draw once more before it leaves the
+        // composition, and at 0 that frame would flash the whole viewer back.
+        pullJob?.cancel()
         request = null; mini = null; wantBar = false; tapped = null; art = null; lastSlot = null
         settle(PlayerSize.Full, instant = true)
     }
@@ -243,7 +306,10 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
     val density = LocalDensity.current
     SideEffect {
         state.scope = scope; state.reduced = reduced
-        with(density) { state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx() }
+        with(density) {
+            state.coverInset = MiniPlayerLayout.INSET.toPx(); state.coverSide = MiniPlayerLayout.COVER.toPx()
+            state.flingSpeed = PagePull.FLING.toPx()
+        }
     }
     LaunchedEffect(state) {
         snapshotFlow { state.collapsed }.collect { settled ->
@@ -285,24 +351,34 @@ fun ViewerHost(state: ViewerHostState = remember { ViewerHostState() }, app: @Co
                     })
                 }
             }
+            // A page pulled down moves over the viewer's black, which stays put and thins out so the app shows through.
+            // Fullscreen keeps it whole: the app stays hidden until fullscreen is left.
+            if (shown != null) Box(Modifier.fillMaxSize().drawBehind {
+                if (state.pull > 0f) drawRect(SHEET_COLOR, alpha = if (state.pullLeavesFullscreen) 1f else PagePull.backdrop(state.pulled))
+            })
             shown?.let { open ->
                 val locals = open.locals ?: return@let
                 val draggable = request != null && state.mini != null
                 key(open.id) { Box(Modifier.fillMaxSize()
+                    // Outside the page's layer: the finger is measured on the still screen, not on the moving, shrinking page.
+                    // Music owns its page's drags (shrink into the bar): no pull recognizer there at all.
+                    .then(if (state.mini == null) Modifier.pullsDown(state) else Modifier)
                     // Collapsed, the page stays composed (same player, same page) but is not placed: no drawing, touches or TalkBack.
                     .layout { measurable, constraints ->
                         val page = measurable.measure(constraints)
                         state.page = Size(page.width.toFloat(), page.height.toFloat())
                         layout(page.width, page.height) {
                             if (!state.collapsed) page.placeWithLayer(0, 0) {
-                                val grown = .96f + .04f * appear.value
+                                // A video or photo pulled down: it follows the finger and shrinks a little (see PagePull).
+                                val pulled = state.pulled
+                                val grown = (.96f + .04f * appear.value) * PagePull.scale(pulled)
                                 scaleX = grown; scaleY = grown
                                 // Shrinking music: the whole page is one sheet that slides down and narrows into the bar.
                                 val motion = state.motion()?.takeIf { state.progress > 0f }
-                                alpha = appear.value * (motion?.fade ?: 1f)
+                                alpha = appear.value * (motion?.fade ?: 1f) * PagePull.alpha(pulled)
                                 // The page slides with the finger; the sheet's outline (shorter, then drawing into the cover) clips it.
                                 val top = if (motion != null) state.progress * state.travel else 0f
-                                translationY = top
+                                translationY = top + state.pull
                                 clip = motion != null
                                 shape = motion?.run { SheetShape(sheet.translate(0f, -top), topCorner.toPx(), corner.toPx()) } ?: RectangleShape
                             }
@@ -340,7 +416,7 @@ private fun CoveredApp(state: ViewerHostState, appear: Animatable<Float, *>, app
     // A keyboard or D-pad can't move into the covered app, and focus never leaves the viewer for it.
     // Fully covered and still, the app isn't drawn at all.
     Box(Modifier.fillMaxSize()
-        .graphicsLayer { alpha = if (state.request != null && !state.moving && appear.value >= 1f) 0f else 1f }
+        .graphicsLayer { alpha = if (state.request != null && !state.displaced && appear.value >= 1f) 0f else 1f }
         .then(if (covered) Modifier.clearAndSetSemantics {} else Modifier)
         .focusProperties { if (covered) onEnter = { cancelFocusChange() } }.focusGroup()) { app() }
 }

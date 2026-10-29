@@ -9,6 +9,7 @@
     <string name="viewer_speed_value">%1$s×</string>
     <string name="viewer_speed_normal">Normale</string>
     <string name="viewer_speed_failed">Impossible de changer la vitesse</string>
+    <string name="viewer_speed_held">%1$s tant que vous appuyez</string>
     <string name="viewer_fullscreen">Plein écran</string>
     <string name="viewer_exit_fullscreen">Quitter le plein écran</string>
     <string name="viewer_volume">Volume</string>
