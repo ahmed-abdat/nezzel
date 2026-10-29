@@ -60,6 +60,7 @@ object YtdlpCommand {
      */
     fun postProcessingError(format: Format, error: DownloadError): DownloadError =
         if (error == DownloadError.MergeFailed && format.conversion != null) DownloadError.ConvertFailed else error
+    private fun extractsAudio(row: Format) = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
     /** Shared by both transfer engines before any staging write. */
     internal fun validateStaging(directory: File, kept: String? = null): File {
         val root = directory.canonicalFile
