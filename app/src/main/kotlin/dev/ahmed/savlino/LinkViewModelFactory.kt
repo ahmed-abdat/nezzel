@@ -22,6 +22,7 @@ internal fun linkViewModel(activity: ComponentActivity, preferences: AppPreferen
                 engine = downloads.engine, downloads = downloads, coordinatorScope = application.scope,
                 initialPreset = preferences.lastPreset, rememberPreset = { preferences.lastPreset = it },
                 initialHeight = preferences.lastHeight, rememberHeight = { preferences.lastHeight = it },
+                storedPick = { preferences.lastPreset to preferences.lastHeight },
                 rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
                 images = application.imageInspect, imageSaver = application.imageSaver, earlyPreview = media::earlyPreview,
                 resolveShortLink = media::resolveShortLink,

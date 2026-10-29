@@ -43,11 +43,12 @@ class LastPickTest {
                 PresetChoice(Preset.AUDIO_M4A, audio.id)))
     private fun model(prefs: AppPreferences, heights: List<Int> = listOf(2160, 1440, 720),
         saved: SavedStateHandle = SavedStateHandle(), presets: List<PresetChoice>? = null,
-        extra: List<Format> = emptyList(), link: String = url): LinkViewModel =
+        extra: List<Format> = emptyList(), link: String = url, checked: Boolean = true): LinkViewModel =
         LinkViewModel(saved, engine = FakeEngine(InspectResult.Success(inspection(heights, link, presets = presets, extra = extra))),
             currentEngineVersion = { "fixture-v1" }, initialPreset = prefs.lastPreset,
             rememberPreset = { prefs.lastPreset = it }, initialHeight = prefs.lastHeight,
-            rememberHeight = { prefs.lastHeight = it }).also { check(it, link) }
+            rememberHeight = { prefs.lastHeight = it }, storedPick = { prefs.lastPreset to prefs.lastHeight })
+            .also { if (checked) check(it, link) }
     private fun check(vm: LinkViewModel, link: String = url) {
         vm.edit(link); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
     }
@@ -59,6 +60,15 @@ class LastPickTest {
     private fun remember1440(prefs: AppPreferences) {
         prefs.lastPreset = Preset.BALANCED
         confirmAllQualities(model(prefs), "v1440")
+    }
+
+    @Test fun aPickConfirmedInTheShareSheetPreselectsInTheAlreadyOpenApp() {
+        val prefs = store()
+        val app = model(prefs, link = nextUrl, checked = false)
+        remember1440(prefs)
+        check(app, nextUrl)
+        assertEquals("v1440", app.selectedFormat?.id)
+        assertBadge(app, "1440p")
     }
 
     @Test fun confirmedAllQualitiesPickReplacesPresetAndPreselectsExactOutsideRowOnNextLink() {

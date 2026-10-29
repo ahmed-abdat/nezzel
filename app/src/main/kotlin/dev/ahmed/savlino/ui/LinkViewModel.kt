@@ -131,6 +131,8 @@ class LinkViewModel(
     private val previewDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
     initialHeight: Int? = null,
     private val rememberHeight: (Int) -> Unit = {},
+    /** The stored pick (preset, height) as it is now: another screen may have saved a newer one since. */
+    private val storedPick: (() -> Pair<Preset?, Int?>)? = null,
     private val earlyPreview: suspend (ValidatedLink) -> EarlyPreview? = { null },
     private val now: () -> Long = System::currentTimeMillis,
     /** A known shortener's destination from its redirect alone; Unresolved keeps the short link (today's path). */
@@ -510,6 +512,7 @@ class LinkViewModel(
                 .maxByOrNull { FormatChoices.quality(it)!! }
     }
     /** The badge only helps tell rows apart: with one video row there is nothing to tell apart. */
+    private var seenPick = storedPick?.invoke()
     val lastUsedBadge: Format? get() = lastUsedFormat?.takeIf { primaryFormats.count { it.hasVideo } > 1 }
     val confirmed get() = submitted
     /** The last job the coordinator accepted from this view model; the share sheet closes on it. */
@@ -1040,6 +1043,13 @@ class LinkViewModel(
             val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
             if (optionsState === ready) savedFormats = found
         } }
+        // The Share sheet keeps its own view model: a pick confirmed there is the one to remember here too.
+        // Only a change made elsewhere counts: a stored pick that merely lags this screen's restored one must not win.
+        storedPick?.invoke()?.takeIf { it != seenPick }?.let { pick ->
+            seenPick = pick
+            lastUsedHeight = pick.second?.takeIf { it > 0 }
+            lastUsedPreset = if (lastUsedHeight != null) null else pick.first?.takeUnless { it.audio }
+        }
         // Video links prefer remembered/Balanced, then the engine's BEST, never audio;
         // a link with no video at all (TikTok photo slideshow) preselects its first audio row.
         val options = presetOptions
@@ -1201,6 +1211,7 @@ class LinkViewModel(
                         saved["lastPreset"] = preset?.name
                         saved["lastHeight"] = lastUsedHeight
                         if (preset != null) rememberPreset(preset) else rememberHeight(checkNotNull(height))
+                        seenPick = storedPick?.invoke()
                     }
                 }
                 downloads?.let { coordinator ->
