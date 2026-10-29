@@ -229,12 +229,20 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     LaunchedEffect(speedFailed) { if (speedFailed != 0L) { delay(3_000); speedFailed = 0 } }
     // Held down on a playing video: 2× until the finger lifts, then back to the speed chosen in the menu, which never changes.
     var boosted by remember(item.uri) { mutableStateOf(false) }
+    // While held only the pill shows; letting go puts the controls back as they were.
+    var shownBeforeBoost by remember(item.uri) { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     fun boost(on: Boolean) {
         val live = owner.player.value.takeIf { owner.item?.uri == item.uri }
-        if (!on) { if (boosted) { boosted = false; live?.let { ViewerSpeed.apply(it, controls.speedOf(uri)) } }; return }
+        if (!on) {
+            if (boosted) { boosted = false; live?.let { ViewerSpeed.apply(it, controls.speedOf(uri)) }; if (shownBeforeBoost) controls.show() }
+            return
+        }
         if (live == null || !live.playWhenReady || owner.state.value is PlaybackState.Failed || controls.speedOf(uri) >= BOOST) return
-        if (ViewerSpeed.apply(live, BOOST)) { boosted = true; haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+        if (ViewerSpeed.apply(live, BOOST)) {
+            boosted = true; shownBeforeBoost = controls.shown; controls.hide()
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
     }
     val hold by rememberUpdatedState(::boost)
     val menuSpeed = if (boosted) controls.speedOf(uri) else speed

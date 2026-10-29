@@ -246,6 +246,10 @@ class ViewerPullTest {
         advance(700)
         assertEquals(2f, player.playbackParameters.speed)
         compose.onNodeWithTag(BOOST_TAG).assertExists()
+        // Only the pill while held: no centre buttons, top bar or bottom bar.
+        node(R.string.viewer_pause).assertDoesNotExist()
+        node(R.string.viewer_close).assertDoesNotExist()
+        node(R.string.viewer_speed).assertDoesNotExist()
         // A held finger that then moves down never starts a pull.
         viewer().performTouchInput { repeat(10) { moveBy(Offset(0f, 40f)) } }
         assertEquals(0f, host.pull)
@@ -256,6 +260,22 @@ class ViewerPullTest {
         compose.onNodeWithTag(BOOST_TAG).assertDoesNotExist()
         assertEquals("A long press doesn't toggle the controls", shown,
             compose.onAllNodesWithContentDescription(text(R.string.viewer_pause)).fetchSemanticsNodes().size)
+    }
+
+    @Test fun hiddenControlsStayHiddenAfterAHold() {
+        show(listOf(video(1)))
+        advance(300)
+        viewer().performTouchInput { click(canvas()) }
+        advance(400)
+        node(R.string.viewer_pause).assertDoesNotExist()
+        viewer().performTouchInput { down(canvas()) }
+        advance(700)
+        compose.onNodeWithTag(BOOST_TAG).assertExists()
+        viewer().performTouchInput { up() }
+        advance(400)
+        assertEquals(1f, player.playbackParameters.speed)
+        node(R.string.viewer_pause).assertDoesNotExist()
+        node(R.string.viewer_close).assertDoesNotExist()
     }
 
     @Test fun holdingAPausedVideoDoesNothing() {
