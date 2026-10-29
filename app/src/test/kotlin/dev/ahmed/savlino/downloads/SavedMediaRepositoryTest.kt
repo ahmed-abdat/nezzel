@@ -26,6 +26,16 @@ class SavedMediaRepositoryTest {
         ShadowContentResolver.registerProviderInternal("media", provider)
         try { check(SavedMediaRepository(context.contentResolver, context.packageName), provider) } finally { provider.db.close() }
     }
+    @Test fun mediaStoreEditChangesTheRevisionWithoutChangingTheUriOrSize() = fixture { repo, provider ->
+        provider.db.execSQL("UPDATE media SET date_modified = 100 WHERE _id = 1")
+        val before = repo.query().single()
+        provider.db.execSQL("UPDATE media SET date_modified = 101 WHERE _id = 1")
+        val after = repo.query().single()
+        assertEquals(before.uri, after.uri)
+        assertEquals(before.size, after.size)
+        assertEquals(100_000L, before.modifiedMillis)
+        assertEquals(101_000L, after.modifiedMillis)
+    }
     @Test fun historicalUnambiguousAudioExtensionsRouteAsAudioWithoutChangingProviderMime() = fixture { repo, _ ->
         val row = repo.query().single()
         for (extension in listOf("opus", "ogg", "m4a", "mp3", "weba", "flac")) {
@@ -503,11 +513,11 @@ class SavedMediaRepositoryTest {
     }
     open class Provider : ContentProvider() {
         val db = SQLiteDatabase.create(null).apply {
-            execSQL("CREATE TABLE media (_id INTEGER PRIMARY KEY, _display_name TEXT, title TEXT, mime_type TEXT, _size INTEGER, date_added INTEGER, height INTEGER, width INTEGER, duration INTEGER, bitrate INTEGER, relative_path TEXT, is_pending INTEGER, owner_package_name TEXT, volume_name TEXT)")
+            execSQL("CREATE TABLE media (_id INTEGER PRIMARY KEY, _display_name TEXT, title TEXT, mime_type TEXT, _size INTEGER, date_added INTEGER, date_modified INTEGER, height INTEGER, width INTEGER, duration INTEGER, bitrate INTEGER, relative_path TEXT, is_pending INTEGER, owner_package_name TEXT, volume_name TEXT)")
         }
         init { insertRow(1, "video/mp4", 100) }
         fun insertRow(id: Int, mime: String, date: Long, pending: Int = 0, path: String = "Download/Nezzel/", owner: String = RuntimeEnvironment.getApplication().packageName, volume: String = "external_primary") {
-            db.execSQL("INSERT INTO media VALUES (?, ?, ?, ?, NULL, ?, 720, NULL, 84000, NULL, ?, ?, ?, ?)", arrayOf<Any>(id, "Saved $id.mp4", "Saved $id", mime, date, path, pending, owner, volume))
+            db.execSQL("INSERT INTO media VALUES (?, ?, ?, ?, NULL, ?, NULL, 720, NULL, 84000, NULL, ?, ?, ?, ?)", arrayOf<Any>(id, "Saved $id.mp4", "Saved $id", mime, date, path, pending, owner, volume))
         }
         override fun onCreate() = true
         override fun query(uri: Uri, columns: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor =

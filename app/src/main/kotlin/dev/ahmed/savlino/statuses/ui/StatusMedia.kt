@@ -31,7 +31,7 @@ class SystemStatusMedia(context: Context) : StatusMedia {
     private val durations = LruCache<Uri, Long>(256)
 
     // Cancellable: a status scrolled away cancels its provider call, so it never holds a decode slot.
-    override suspend fun thumbnail(item: StatusItem, size: Int): Bitmap? = thumbs.getOrLoad(ThumbnailCache.key(item.uri, size)) {
+    override suspend fun thumbnail(item: StatusItem, size: Int): Bitmap? = thumbs.getOrLoad(ThumbnailCache.key(item.uri, size, item.sizeBytes, item.lastModifiedMillis)) {
         decodeMediaThumbnail(context, item.uri, if (item.isVideo) ThumbnailKind.VIDEO else ThumbnailKind.IMAGE, size, size)
     }
 

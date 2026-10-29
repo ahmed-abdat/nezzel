@@ -85,7 +85,9 @@ class ThumbnailCache(val maxBytes: Int, private val now: () -> Long = { android.
         /** 1/16 of the app's heap class: 8 MB on a 128 MB phone, about 30 list thumbnails. */
         fun budget(memoryClassMb: Int): Int = memoryClassMb * 1024 * 1024 / 16
 
-        fun key(uri: Uri, size: Int) = "$uri@$size"
+        /** Revision comes from the listing, never a provider query during composition. Unknown fields stay null. */
+        fun key(uri: Uri, size: Int, fileSize: Long? = null, modifiedMillis: Long? = null) =
+            "$uri@$size:$fileSize:$modifiedMillis"
 
         private var owner: Context? = null
         private var instance: ThumbnailCache? = null

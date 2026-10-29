@@ -157,7 +157,7 @@ class SaveDestinations(private val context: Context) {
                 cancellation.throwIfCanceled()
                 val bounds = fileBounds(uri, size, modified, mime)
                 SavedMedia(uri, name, name.substringBeforeLast('.').ifBlank { name }, mime, size,
-                    record.getLong("time"), bounds.height, null, bounds.durationMillis, width = bounds.width)
+                    record.getLong("time"), bounds.height, null, bounds.durationMillis, width = bounds.width, modifiedMillis = modified)
             }
         } catch (cancelled: OperationCanceledException) { throw cancelled }
         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }

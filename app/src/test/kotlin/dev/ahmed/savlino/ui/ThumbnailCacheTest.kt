@@ -49,6 +49,47 @@ class ThumbnailCacheTest {
         assertNotNull(cache["u17"])
     }
 
+    @Test fun replacingAFileAtTheSameUriReloadsItsThumbnail() = kotlinx.coroutines.test.runTest {
+        val cache = ThumbnailCache(8_000_000)
+        val uri = Uri.parse("content://media/external/downloads/7")
+        val old = picture(10, 10).apply { eraseColor(android.graphics.Color.RED) }
+        val fresh = picture(10, 10).apply { eraseColor(android.graphics.Color.BLUE) }
+        val firstKey = ThumbnailCache.key(uri, 240, 100L, 1_000L)
+        assertSame(old, cache.getOrLoad(firstKey) { old })
+        assertSame(old, cache.getOrLoad(firstKey) { error("unchanged revision is cached") })
+        val nextKey = ThumbnailCache.key(uri, 240, 100L, 2_000L)
+        val result = cache.getOrLoad(nextKey) { fresh }
+        assertSame(fresh, result)
+        assertEquals(android.graphics.Color.BLUE, result!!.getPixel(0, 0))
+        assertNotEquals(nextKey, ThumbnailCache.key(uri, 240, 200L, 2_000L))
+        assertNotEquals(nextKey, ThumbnailCache.key(uri, 320, 100L, 2_000L))
+    }
+
+    @Test fun displayedSavedFileReloadsWhenOnlyItsModificationTimeChanges() {
+        var file by mutableStateOf(SavedMedia(Uri.parse("content://media/external/downloads/7"), "Clip.mp4", "Clip",
+            "video/mp4", 100L, 1_000L, null, null, null, modifiedMillis = 1_000L))
+        val cache = ThumbnailCache(8_000_000)
+        val loads = java.util.concurrent.atomic.AtomicInteger()
+        val pictures = MediaPictures { _, _, _ -> loads.incrementAndGet(); picture(16, 9) }
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            controller.get().setContent {
+                CompositionLocalProvider(LocalThumbnailCache provides cache, LocalMediaPictures provides pictures) {
+                    NezzelTheme(ThemePref.Light, false) {
+                        dev.ahmed.savlino.downloads.MediaThumbnail(file, androidx.compose.ui.Modifier)
+                    }
+                }
+            }
+            compose.waitUntil(5000) { loads.get() == 1 }
+            compose.runOnIdle { file = file.copy(modifiedMillis = 2_000L) }
+            // This activity is not the rule's own: frames only run when the main looper's clock moves.
+            compose.waitUntil(5000) { org.robolectric.shadows.ShadowLooper.idleMainLooper(16, java.util.concurrent.TimeUnit.MILLISECONDS); loads.get() == 2 }
+            compose.runOnIdle { file = file.copy(title = "Edited label") }
+            org.robolectric.shadows.ShadowLooper.idleMainLooper(200, java.util.concurrent.TimeUnit.MILLISECONDS); compose.waitForIdle()
+            assertEquals(2, loads.get())
+        } finally { controller.pause().stop().destroy() }
+    }
+
     @Test fun sameKeyLoadsShareOneRun() = kotlinx.coroutines.test.runTest {
         val cache = ThumbnailCache(8_000_000)
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()

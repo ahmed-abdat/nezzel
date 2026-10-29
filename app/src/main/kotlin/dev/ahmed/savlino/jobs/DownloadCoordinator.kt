@@ -42,6 +42,12 @@ class DownloadCoordinator(
     private val previewArtwork: suspend (String) -> android.graphics.Bitmap? = { dev.ahmed.savlino.ui.ThumbnailLoader().load(it) },
     private val checkGraceMs: Long = CHECK_GRACE_MS,
     private val network: NetworkWatch = NetworkWatch.Android(context),
+    private val clearPreviews: () -> Boolean = {
+        dev.ahmed.savlino.preview.PreviewCache.shared(context).let { cache ->
+            // Unsupported storage contains no display entries; it must not break the existing history clear.
+            !cache.usage().available || cache.clear()
+        }
+    },
     probeThreads: java.util.concurrent.ThreadPoolExecutor? = null, // tests: a pool no other coordinator can starve
 ) {
     /** Additive batch hooks: per-job admission, recovery and publication remain owned below. */
@@ -1030,8 +1036,10 @@ class DownloadCoordinator(
     fun shareLinks(onGone: (String) -> Unit = {}) = dev.ahmed.savlino.downloads.ShareLinks(context.contentResolver, store, onGone)
     /** Settings › Clear link history: every kept link and its key go; the files stay. */
     suspend fun clearShareLinks() = withContext(Dispatchers.IO) {
+        val previewsCleared = try { clearPreviews() } catch (_: Exception) { false }
         engine.clearRecentLinks()
         store.clearShareLinks()
+        check(previewsCleared) { "Preview clear failed" }
     }
     /** Optional checks run after commit and outside all writer/transfer permits. Late problems use the warning list. */
     private fun checkSavedAsync(row: JobRecord, stagedBytes: Long?): Deferred<ResultCheck?> {

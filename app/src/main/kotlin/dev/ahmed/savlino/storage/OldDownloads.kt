@@ -102,7 +102,7 @@ class OldDownloads(private val context: Context, private val onFound: () -> Unit
             val relative = child.id.substringAfter(':').substringBeforeLast('/', "") + "/"
             FoundFile(SavedMedia(DocumentsContract.buildDocumentUriUsingTree(tree, child.id), child.name,
                 child.name.substringBeforeLast('.').ifBlank { child.name }, child.mime, child.size,
-                (child.modified ?: 0L) / 1000, null, null, null, relativePath = relative), child.modified)
+                (child.modified ?: 0L) / 1000, null, null, null, relativePath = relative, modifiedMillis = child.modified), child.modified)
         }
     }
 

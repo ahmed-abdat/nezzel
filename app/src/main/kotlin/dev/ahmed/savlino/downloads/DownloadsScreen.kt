@@ -810,7 +810,7 @@ private fun rememberThumbnailLoader(): suspend (SavedMedia) -> android.graphics.
 fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
     val load = rememberThumbnailLoader()
     // Audio shows its embedded cover; the music icon stays only when the file has none.
-    val bitmap = rememberCachedThumbnail(ThumbnailCache.key(item.uri, THUMB_PX)) { load(item) }
+    val bitmap = rememberCachedThumbnail(ThumbnailCache.key(item.uri, THUMB_PX, item.size, item.modifiedMillis)) { load(item) }
     Surface(modifier.clip(shape), color = if (item.kind == SavedMediaKind.AUDIO) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
             val loaded = bitmap
@@ -957,12 +957,12 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                     val lastFile = remember { arrayOfNulls<SavedMedia>(1) }.also { if (file != null) it[0] = file }
                     // The job card stays until the file's picture is decoded, so the fade never lands on an empty box.
                     val jobId = slot.key.removePrefix("job:")
-                    val ready = remember { mutableStateOf(file != null && (thumbs[ThumbnailCache.key(file.uri, THUMB_PX)] != null || jobs().none { it.jobId == jobId })) }
+                    val ready = remember { mutableStateOf(file != null && (thumbs[ThumbnailCache.key(file.uri, THUMB_PX, file.size, file.modifiedMillis)] != null || jobs().none { it.jobId == jobId })) }
                     LaunchedEffect(file?.uri) {
                         if (file == null || ready.value) return@LaunchedEffect
                         // A file that just listed can fail to decode for a moment; audio may have no cover at all.
                         withTimeoutOrNull(PICTURE_WAIT_MS) {
-                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX), retryMiss = true) { loadThumb(file) } == null &&
+                            while (thumbs.getOrLoad(ThumbnailCache.key(file.uri, THUMB_PX, file.size, file.modifiedMillis), retryMiss = true) { loadThumb(file) } == null &&
                                 file.kind != SavedMediaKind.AUDIO && file.kind != null) kotlinx.coroutines.delay(120)
                         }
                         ready.value = true

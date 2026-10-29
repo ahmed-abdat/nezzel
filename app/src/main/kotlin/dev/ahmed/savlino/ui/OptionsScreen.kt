@@ -84,7 +84,7 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                 key(links.text) {
                     InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking,
                         (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown,
-                        hint = links.shareHint)
+                        hint = links.shareHint, cachedPreview = links.cachedPreview, onArtwork = links::previewArtworkShown)
                 }
             }
             if (YouTubeLinkKind.classify(links.text) == YouTubeLinkKind.VideoInList) {

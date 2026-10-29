@@ -48,6 +48,7 @@ data class SavedMedia(
     val volumeName: String? = null,
     val postPosition: SavedPostPosition? = null,
     val postAddedSeconds: Long? = null,
+    val modifiedMillis: Long? = null,
 ) {
     /** File labels follow DISPLAY_NAME without the " (1)" a name clash added; provider TITLE remains available to search. */
     val displayName: String get() = filename.removeSuffix(savedExtension(filename)).let { stem ->
@@ -198,7 +199,7 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
     }
     private fun queryMediaStore(cancellation: CancellationSignal? = null): List<SavedMedia> {
         val columns = listOf("_id", "_display_name", "title", "mime_type", "_size", "date_added", "height", "width", "duration", MediaStore.MediaColumns.RELATIVE_PATH,
-            MediaStore.MediaColumns.VOLUME_NAME) +
+            MediaStore.MediaColumns.VOLUME_NAME, MediaStore.MediaColumns.DATE_MODIFIED) +
             if (Build.VERSION.SDK_INT >= 30) listOf("bitrate") else emptyList()
         val cursor = resolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, columns.toTypedArray(),
             "owner_package_name = ? AND (relative_path = ? OR relative_path = ? OR relative_path = ? OR relative_path = ?) AND is_pending = ? AND (mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ? OR mime_type = ?)",
@@ -219,7 +220,8 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
                     number("_size")?.takeIf { it >= 0 }, number("date_added") ?: 0,
                     dimension("height"), number("bitrate")?.takeIf { it > 0 }?.div(1000)?.toInt(),
                     number("duration")?.takeIf { it > 0 }, width = dimension("width"), relativePath = string(MediaStore.MediaColumns.RELATIVE_PATH),
-                    volumeName = string(MediaStore.MediaColumns.VOLUME_NAME)))
+                    volumeName = string(MediaStore.MediaColumns.VOLUME_NAME),
+                    modifiedMillis = number(MediaStore.MediaColumns.DATE_MODIFIED)?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000)))
             } }
         }
     }

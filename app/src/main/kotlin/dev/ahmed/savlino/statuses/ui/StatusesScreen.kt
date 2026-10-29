@@ -366,7 +366,7 @@ private fun AccountSection(summary: AccountSummary, access: StatusAccess.Ready, 
 /** A small square of the newest statuses; the last one carries "+N" when more wait inside. */
 @Composable
 private fun PreviewThumb(item: StatusItem, media: StatusMedia, more: Int?, language: String) {
-    val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 240)) { media.thumbnail(item, 240) }
+    val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 240, item.sizeBytes, item.lastModifiedMillis)) { media.thumbnail(item, 240) }
     Surface(Modifier.fillMaxSize(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
             val loaded = thumb
@@ -446,7 +446,7 @@ private fun describe(item: StatusItem, duration: Long?): String = listOfNotNull(
 @Composable
 private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean, selected: Boolean, saving: Boolean,
                        onClick: () -> Unit, onLongClick: () -> Unit, onSave: () -> Unit) {
-    val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 320)) { media.thumbnail(item, 320) }
+    val thumb = rememberCachedThumbnail(ThumbnailCache.key(item.uri, 320, item.sizeBytes, item.lastModifiedMillis)) { media.thumbnail(item, 320) }
     val duration = rememberDuration(item, media)
     val description = describe(item, duration)
     val shape = MaterialTheme.shapes.small

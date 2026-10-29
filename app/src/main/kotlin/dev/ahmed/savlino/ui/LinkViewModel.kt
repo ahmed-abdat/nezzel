@@ -1,5 +1,8 @@
 package dev.ahmed.savlino.ui
 
+import android.graphics.Bitmap
+import dev.ahmed.savlino.preview.CachedPreview
+import dev.ahmed.savlino.preview.LinkPreviews
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -134,6 +137,7 @@ class LinkViewModel(
     private val resolveShortLink: suspend (ValidatedLink) -> ShortLinkOutcome = { ShortLinkOutcome.Unresolved },
     /** Daily usage counts and automatic failure reports; both no-ops while Help improve Nezzel is off. */
     private val usage: UsageEvents = UsageEvents.None,
+    private val previews: LinkPreviews? = null,
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -341,6 +345,16 @@ class LinkViewModel(
     private var submitted by mutableStateOf(false)
     private var command: DownloadCommand? = null
     private var submissionId: String? = null
+    /** Header metadata only: never converted to Inspection, selectable formats or a download command. */
+    internal var cachedPreview by mutableStateOf<CachedPreview?>(null); private set
+    private var previewSession: Deferred<LinkPreviews.Session>? = null
+    private var previewRequest: Any? = null
+    private var cachedPreviewJob: Job? = null
+    internal fun previewArtworkShown(bitmap: Bitmap) {
+        val live = (optionsState as? OptionsState.Ready)?.inspection ?: return
+        val session = previewSession ?: return
+        viewModelScope.launch { session.await().write(live, bitmap) }
+    }
     private var inspectionJob: Job? = null
     private var earlyPreviewJob: Job? = null
     private var inspectionTiming: InspectionTiming? = null
@@ -675,7 +689,24 @@ class LinkViewModel(
         inspectionStartedAt = now()
         inspectionLink = source.link.rawUrl
         usage.count(UsageKeys.FUNNEL_LINK)
-        if (ShortLinks.isShortLink(source.link)) startShortLink(source) else route(source, source)
+        fun inspect() {
+            if (ShortLinks.isShortLink(source.link)) startShortLink(source) else route(source, source)
+        }
+        val request = Any()
+        previewRequest = request
+        val session = previews?.let { cache ->
+            viewModelScope.async(start = kotlinx.coroutines.CoroutineStart.LAZY) { cache.open(source.link.normalizedUrl) }
+        }
+        previewSession = session
+        // Routing and live inspection start immediately; optional disk bootstrap must never delay them.
+        inspect()
+        if (session == null) return
+        cachedPreviewJob = viewModelScope.launch {
+            // Both reads and writes await this same session: its generation token exists before any write.
+            val cached = session.await().read { if (currentEngineVersion != null) currentEngineVersion.invoke() else engine.installedVersion() }
+            if (previewRequest === request && currentSource()?.matches(source) == true && optionsState is OptionsState.Checking)
+                cachedPreview = cached
+        }
     }
     /** Resolve a shortener's redirect first, so its destination takes its own fast route (YouTube, readers). */
     private fun startShortLink(source: LinkRevision) {
@@ -1004,6 +1035,7 @@ class LinkViewModel(
         val ready = OptionsState.Ready(returned, origin)
         readAt = now()
         optionsState = ready
+        previewSession?.let { session -> viewModelScope.launch { session.await().write(returned) } }
         downloads?.let { coordinator -> viewModelScope.launch {
             val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
             if (optionsState === ready) savedFormats = found
@@ -1109,6 +1141,10 @@ class LinkViewModel(
         if (next.normalizedUrl != failed) paste(value)
     }
     private fun invalidateOptions() {
+        previewRequest = null
+        cachedPreviewJob?.cancel(); cachedPreviewJob = null
+        previewSession?.cancel(); previewSession = null
+        cachedPreview = null
         pendingPlaylistPermission?.cancel(); pendingPlaylistPermission = null
         playlist.close()
         failedReadGeneration = null
