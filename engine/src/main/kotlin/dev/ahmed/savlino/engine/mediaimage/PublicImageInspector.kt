@@ -6,23 +6,18 @@ import dev.ahmed.savlino.engine.facebook.FacebookLinkKind
 import dev.ahmed.savlino.engine.facebook.FacebookPageParser
 import dev.ahmed.savlino.engine.facebook.FacebookParseResult
 import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
-import dev.ahmed.savlino.engine.instagram.InstagramParseResult
-import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
-import dev.ahmed.savlino.engine.instagram.InstagramPostParser
 import dev.ahmed.savlino.engine.linkedin.LinkedInParseResult
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostAttachmentParser
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import dev.ahmed.savlino.engine.mediahttp.*
 import dev.ahmed.savlino.engine.telegram.TelegramReader
-import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
-import dev.ahmed.savlino.engine.bluesky.BlueskyPostParser
-import dev.ahmed.savlino.engine.bluesky.BlueskyParseResult
+import dev.ahmed.savlino.engine.x.XReader
+import dev.ahmed.savlino.engine.instagram.InstagramReader
+import dev.ahmed.savlino.engine.bluesky.BlueskyReader
 import dev.ahmed.savlino.engine.reddit.RedditPost
 import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import dev.ahmed.savlino.engine.reddit.RedditPostParser
-import dev.ahmed.savlino.engine.x.XParseResult
 import dev.ahmed.savlino.engine.x.XPostIdentity
-import dev.ahmed.savlino.engine.x.XPostParser
 import dev.ahmed.savlino.engine.tiktok.*
 import java.io.Closeable
 import java.util.UUID
@@ -59,8 +54,6 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     private val validator = ImageRepresentationValidator()
     private val parser = LinkedInPostAttachmentParser()
     private val facebookParser = FacebookPageParser()
-    private val xParser = XPostParser()
-    private val instagramParser = InstagramPostParser()
     /** Carousel bodies fetched at once (tests compare against 1). */
     internal var carouselFetches = CAROUSEL_PARALLEL_FETCHES
 
@@ -73,10 +66,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val kind = when {
             LinkedInPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL
             FacebookPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
-            XPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
-            InstagramPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
+            XReader.accepts(source.link.rawUrl) -> XReader.operation
+            InstagramReader.accepts(source.link.rawUrl) -> InstagramReader.operation
             TelegramReader.accepts(source.link.rawUrl) -> TelegramReader.operation
-            BlueskyPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGES_AND_CAROUSEL
+            BlueskyReader.accepts(source.link.rawUrl) -> BlueskyReader.operation
             TikTokPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL
             RedditPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             else -> MediaHttpOperation.DIRECT_IMAGE
@@ -116,13 +109,24 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                 try { when (type) {
                     ImageSourceType.LINKEDIN -> fetchLinkedIn(operation)
                     ImageSourceType.FACEBOOK -> fetchFacebook(operation)
-                    ImageSourceType.X -> fetchX(operation)
-                    ImageSourceType.INSTAGRAM -> fetchInstagram(operation)
+                    ImageSourceType.X -> {
+                        val reader = XReader(operation.source.link)
+                        mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, XReader.imageRule,
+                            checkPageTerminal = true)
+                    }
+                    ImageSourceType.INSTAGRAM -> {
+                        val reader = InstagramReader(operation.source.link)
+                        mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, InstagramReader.imageRule,
+                            checkPageTerminal = true)
+                    }
                     ImageSourceType.TELEGRAM -> {
                         val reader = TelegramReader(operation.source.link)
                         mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, TelegramReader.imageRule)
                     }
-                    ImageSourceType.BLUESKY -> fetchBluesky(operation)
+                    ImageSourceType.BLUESKY -> {
+                        val reader = BlueskyReader(operation.source.link)
+                        mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, BlueskyReader.imageRule)
+                    }
                     ImageSourceType.TIKTOK -> fetchTikTok(operation)
                     ImageSourceType.REDDIT -> fetchReddit(operation)
                     ImageSourceType.DIRECT -> fetchDirect(operation)
@@ -295,65 +299,6 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         }
     }
 
-    /**
-     * X: one syndication JSON read, then bounded real photos on pbs.twimg.com/media. Mixed posts
-     * expose a video switch; video-only posts hand back to yt-dlp unchanged.
-     */
-    private fun fetchX(operation: ImageInspectionOperation): Fetched {
-        val identity = XPostIdentity.parse(operation.source.link.rawUrl)
-            ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
-        val page = when (val result = http.fetchXPost(operation.token, identity)) {
-            is MediaHttpResult.Failure -> return Fetched.Failed(transportFailure(operation, result, ImagePhase.PAGE))
-            is MediaHttpResult.Success -> result.response
-        }
-        val body = try { page.takeBody() }
-            catch (_: java.io.IOException) { return Fetched.Failed(failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE)) }
-            finally { page.close() }
-        val parsed = when (val result = xParser.parse(body.bytes, identity.postId, body.length, identity.mediaIndex)) {
-            is XParseResult.Failure -> return Fetched.Failed(failure(result.reason, result.phase))
-            is XParseResult.Video -> return xVideo(operation, identity, result.infoJson, photosUnavailable = false)
-            is XParseResult.PhotosUnavailableVideo -> return xVideo(operation, identity, result.infoJson, photosUnavailable = true)
-            is XParseResult.Success -> result
-        }
-        operation.fetchPhase = ImagePhase.IMAGE
-        terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
-        val carousel = parsed.candidates.size > 1 || parsed.discovery.unavailableCount > 0 || parsed.discovery.cappedCount > 0
-        val originals = if (carousel) parsed.candidates.map {
-            HttpsUrl.parse(it)!!.newBuilder().setQueryParameter("name", "orig").build().toString()
-        } else parsed.candidates
-        return fetchCarousel(operation, originals,
-            if (carousel) parsed.discovery.copy(previewQuality = false) else parsed.discovery, MediaHostRule.X_MEDIA,
-            MediaMetadata(parsed.title, parsed.author), parsed.candidates.map {
-                HttpsUrl.parse(it)!!.newBuilder().setQueryParameter("name", "small").build().toString()
-            })
-    }
-
-    /**
-     * Instagram: one logged-out post page, then bounded real photos on its image CDN.
-     * Mixed posts expose a video switch; video-only posts hand back to yt-dlp.
-     */
-    private fun fetchInstagram(operation: ImageInspectionOperation): Fetched {
-        val identity = InstagramPostIdentity.parse(operation.source.link.rawUrl)
-            ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
-        val page = when (val result = http.fetchInstagramPost(operation.token, identity)) {
-            is MediaHttpResult.Failure -> return Fetched.Failed(transportFailure(operation, result, ImagePhase.PAGE))
-            is MediaHttpResult.Success -> result.response
-        }
-        val body = try { page.takeBody() }
-            catch (_: java.io.IOException) { return Fetched.Failed(failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE)) }
-            finally { page.close() }
-        val parsed = when (val result = instagramParser.parse(body.bytes, identity.code, body.length)) {
-            is InstagramParseResult.Failure -> return Fetched.Failed(failure(result.reason, result.phase))
-            InstagramParseResult.Video -> return redirectTo(operation, operation.source.link)
-            InstagramParseResult.PhotosUnavailableVideo -> return redirectTo(operation, operation.source.link, photosUnavailable = true)
-            is InstagramParseResult.Success -> result
-        }
-        operation.fetchPhase = ImagePhase.IMAGE
-        terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
-        return fetchCarousel(operation, parsed.candidates, parsed.discovery, MediaHostRule.INSTAGRAM_CDN,
-            MediaMetadata(parsed.title, parsed.author), parsed.previewCandidates)
-    }
-
     /** One page body on the operation's token; site verdicts precede the shared transport mapping. */
     private fun readPage(operation: ImageInspectionOperation, result: MediaHttpResult): ImagePageRead {
         val page = when (result) {
@@ -369,50 +314,28 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         return ImagePageRead.Body(body)
     }
 
-    /** Keep preview/Save ownership and mixed-photo fallback in the shared pipeline. */
-    private fun mapPlan(operation: ImageInspectionOperation, plan: ImageReadPlan, rule: MediaHostRule): Fetched = when (plan) {
-        is ImageReadPlan.Photos -> {
-            operation.fetchPhase = ImagePhase.IMAGE
-            fetchCarousel(operation, plan.candidates, plan.discovery, rule, plan.metadata, plan.previewCandidates,
-                plan.pageContext, plan.videoTarget?.let { LinkRevision(it, operation.source.revision) })
-        }
-        is ImageReadPlan.Video -> redirectTo(operation, plan.target, plan.photosUnavailable)
-        is ImageReadPlan.Failure -> Fetched.Failed(MediaInspectResult.Failure(plan.reason, plan.phase, plan.statusCode,
-            plan.fallback?.let { LinkRevision(it, operation.source.revision) }))
-    }
-
-    private fun fetchBluesky(operation: ImageInspectionOperation): Fetched {
-        val identity = BlueskyPostIdentity.parse(operation.source.link.rawUrl)
-            ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
-        val parser = BlueskyPostParser()
-        // Two exact API reads at most, on the same deadline and request budget. No arbitrary PDS requests.
-        fun read(url: String): Pair<MediaHttpBody?, Fetched.Failed?> {
-            val page = when (val result = http.fetchBlueskyApi(operation.token, url)) {
-                is MediaHttpResult.Failure -> return null to Fetched.Failed(
-                    if (result.reason == MediaHttpFailure.HTTP_STATUS && result.statusCode in setOf(400, 404, 410))
-                        failure(ImageFailure.PRIVATE, ImagePhase.PAGE)
-                    else transportFailure(operation, result, ImagePhase.PAGE))
-                is MediaHttpResult.Success -> result.response
+    /**
+     * Keep preview/Save ownership and mixed-photo fallback in the shared pipeline.
+     * [checkPageTerminal] preserves X/Instagram's post-parse PAGE terminal check before photos.
+     */
+    private fun mapPlan(operation: ImageInspectionOperation, plan: ImageReadPlan, rule: MediaHostRule,
+        checkPageTerminal: Boolean = false): Fetched {
+        return when (plan) {
+            is ImageReadPlan.Photos -> {
+                operation.fetchPhase = ImagePhase.IMAGE
+                // X/Instagram checked retirement in PAGE before entering the carousel; keep that failure phase.
+                if (checkPageTerminal) terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
+                fetchCarousel(operation, plan.candidates, plan.discovery, rule, plan.metadata, plan.previewCandidates,
+                    plan.pageContext, plan.videoTarget?.let { LinkRevision(it, operation.source.revision) })
             }
-            return try { page.takeBody() to null }
-                catch (_: java.io.IOException) { null to Fetched.Failed(failure(terminal(operation) ?: ImageFailure.NETWORK, ImagePhase.PAGE)) }
-                finally { page.close() }
+            is ImageReadPlan.Video -> {
+                if (plan.infoJson != null && plan.xIdentity != null && terminal(operation) == null)
+                    xVideoInfo(plan.xIdentity, plan.infoJson)
+                redirectTo(operation, plan.target, plan.photosUnavailable)
+            }
+            is ImageReadPlan.Failure -> Fetched.Failed(MediaInspectResult.Failure(plan.reason, plan.phase, plan.statusCode,
+                plan.fallback?.let { LinkRevision(it, operation.source.revision) }))
         }
-        val did = identity.did ?: run {
-            val (body, failed) = read(identity.resolveUrl)
-            if (failed != null) return failed
-            parser.resolveDid(body!!.bytes, body.length) ?: return Fetched.Failed(failure(ImageFailure.SOURCE_REFUSED, ImagePhase.PAGE))
-        }
-        val (body, failed) = read(identity.threadUrl(did))
-        if (failed != null) return failed
-        val parsed = when (val result = parser.parse(body!!.bytes, identity.atUri(did), body.length)) {
-            is BlueskyParseResult.Failure -> return Fetched.Failed(failure(result.reason, result.phase))
-            BlueskyParseResult.Video -> return redirectTo(operation, operation.source.link)
-            is BlueskyParseResult.Success -> result
-        }
-        operation.fetchPhase = ImagePhase.IMAGE
-        return fetchCarousel(operation, parsed.candidates, parsed.discovery, MediaHostRule.BLUESKY_CDN,
-            MediaMetadata(parsed.title, parsed.author), parsed.previewCandidates)
     }
 
     /**
@@ -627,13 +550,6 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     private fun facebookWatchLink(videoId: String): ValidatedLink? =
         videoId.takeIf { it.length <= 25 && it.isNotEmpty() && it.all { c -> c in '0'..'9' } }
             ?.let { LinkInput.parse("https://www.facebook.com/watch/?v=$it") }
-
-    /** The info built from the syndication JSON goes out only while this operation is still current. */
-    private fun xVideo(operation: ImageInspectionOperation, identity: XPostIdentity, infoJson: String?,
-        photosUnavailable: Boolean): Fetched {
-        if (infoJson != null && terminal(operation) == null) xVideoInfo(identity, infoJson)
-        return redirectTo(operation, operation.source.link, photosUnavailable)
-    }
 
     /** A canonical post/watch link for yt-dlp at the caller's revision; no media URL, preview or reference. */
     private fun redirectTo(operation: ImageInspectionOperation, link: ValidatedLink?, photosUnavailable: Boolean = false): Fetched {

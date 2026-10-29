@@ -4,6 +4,7 @@ import dev.ahmed.savlino.domain.MediaMetadata
 import dev.ahmed.savlino.domain.ValidatedLink
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpTarget
 import dev.ahmed.savlino.engine.mediahttp.MediaHttpBody
+import dev.ahmed.savlino.engine.x.XPostIdentity
 
 /** A bounded page transfer or the shared transport failure; site interpretation stays in readers. */
 internal sealed class ImagePageRead {
@@ -32,9 +33,10 @@ internal sealed interface ImageReadPlan {
      * [target] is the source post (Telegram, X, Instagram, Bluesky, Reddit) or canonical video
      * post (Facebook, LinkedIn, TikTok). [photosUnavailable] distinguishes X/Instagram mixed posts
      * whose photos failed from video-only posts. [infoJson] is X's already-read video info.
+     * [xIdentity] is X's parsed post identity for the existing info-cache callback; other sites leave it null.
      */
     class Video(val target: ValidatedLink, val photosUnavailable: Boolean,
-        val infoJson: String? = null) : ImageReadPlan {
+        val infoJson: String? = null, val xIdentity: XPostIdentity? = null) : ImageReadPlan {
         override fun toString() = "ImageReadPlan.Video(redacted)"
     }
 
