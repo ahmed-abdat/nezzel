@@ -332,7 +332,7 @@ class YtdlpAudioTagsTest {
     }
 
     @Test fun ytdlpPostprocessingFailureOnAnAudioOnlyRowIsAConversionNotAMerge() {
-        val video = Format("18", "mp4", true, true, requiresMerge = true)
+        val video = Format("137", "mp4", true, true, audioFormatId = "140", requiresMerge = true)
         assertEquals(DownloadError.MergeFailed, YtdlpCommand.postProcessingError(video, DownloadError.MergeFailed))
         assertEquals(DownloadError.MergeFailed, YtdlpCommand.postProcessingError(audio.first(), DownloadError.MergeFailed))
         for (format in audio.filter { it.conversion != null || it.id == "extracted" })
