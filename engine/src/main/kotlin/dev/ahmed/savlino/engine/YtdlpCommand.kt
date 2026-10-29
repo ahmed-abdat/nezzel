@@ -54,10 +54,12 @@ object YtdlpCommand {
             !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && it.length() > 0
         }
     }
-    /** An audio-only row converts rather than merges: yt-dlp's ffmpeg failure there is a failed conversion. */
+    /**
+     * An MP3 row converts rather than merges: yt-dlp's ffmpeg failure there is a failed conversion, retried locally.
+     * M4A extraction stays MergeFailed: nothing keeps its source, so ConvertFailed's local retry would not hold.
+     */
     fun postProcessingError(format: Format, error: DownloadError): DownloadError =
-        if (error == DownloadError.MergeFailed && (format.conversion != null || extractsAudio(format))) DownloadError.ConvertFailed else error
-    private fun extractsAudio(row: Format) = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
+        if (error == DownloadError.MergeFailed && format.conversion != null) DownloadError.ConvertFailed else error
     /** Shared by both transfer engines before any staging write. */
     internal fun validateStaging(directory: File, kept: String? = null): File {
         val root = directory.canonicalFile

@@ -244,8 +244,7 @@
     <string name="recent_files">الملفات الأخيرة</string>
     <string name="see_all">عرض الكل</string>
     <string name="download_merge_error">تعذّر دمج الصوت والفيديو</string>
-    <string name="download_convert_mp3_error">تعذّر التحويل إلى MP3. إعادة المحاولة لا تعيد التنزيل</string>
-    <string name="download_convert_error">تعذّر تحويل الصوت</string>
+    <string name="download_convert_mp3_error">تعذّر التحويل إلى MP3</string>
     <string name="download_restricted_error">تعذّر إكمال التنزيل</string>
     <plurals name="downloads_running">
         <item quantity="zero">لا توجد تنزيلات جارية</item>

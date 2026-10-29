@@ -705,7 +705,9 @@ class DownloadCoordinator(
                     if (result is TransferResult.Failure) attempt.reason = result.reason
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
-                            // A second failed conversion of a kept source drops it: the next Retry downloads in full.
+                            // Deliberate bound: a kept source that fails to convert again is dropped, so the next Retry
+                            // downloads in full. The encoder cannot tell a corrupt source from a stall; this way a corrupt
+                            // one never traps Retry in a local loop.
                             else finishStopped(id, result.error, resumeAllowed = result.resumeAllowed,
                                 startBytes = startBytes, cause = result.cause, keepSource = !convertedKept)
                         is TransferResult.Success -> {

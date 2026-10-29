@@ -229,8 +229,7 @@
     <string name="recent_files">Récents</string>
     <string name="see_all">Tout voir</string>
     <string name="download_merge_error">Impossible de fusionner l’audio et la vidéo</string>
-    <string name="download_convert_mp3_error">Impossible de convertir en MP3. Réessayer ne le retélécharge pas</string>
-    <string name="download_convert_error">Impossible de convertir l’audio</string>
+    <string name="download_convert_mp3_error">Impossible de convertir en MP3</string>
     <string name="download_restricted_error">Impossible de terminer ce téléchargement</string>
     <plurals name="downloads_running">
         <item quantity="one">%1$s téléchargement en cours</item>

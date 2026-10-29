@@ -224,8 +224,7 @@
     <string name="recent_files">Recent</string>
     <string name="see_all">See all</string>
     <string name="download_merge_error">Couldn’t join audio and video</string>
-    <string name="download_convert_mp3_error">Couldn’t convert to MP3. Retry won’t download it again</string>
-    <string name="download_convert_error">Couldn’t convert the audio</string>
+    <string name="download_convert_mp3_error">Couldn’t convert to MP3</string>
     <string name="download_restricted_error">Couldn’t complete this download</string>
     <plurals name="downloads_running">
         <item quantity="one">%1$s download running</item>

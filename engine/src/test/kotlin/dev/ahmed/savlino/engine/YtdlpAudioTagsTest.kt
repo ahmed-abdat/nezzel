@@ -331,12 +331,12 @@ class YtdlpAudioTagsTest {
         assertTrue(File(dir, "output.m4a").isFile)
     }
 
-    @Test fun ytdlpPostprocessingFailureOnAnAudioOnlyRowIsAConversionNotAMerge() {
+    @Test fun ytdlpPostprocessingFailureOnAnMp3RowIsAConversionNotAMerge() {
         val video = Format("137", "mp4", true, true, audioFormatId = "140", requiresMerge = true)
         assertEquals(DownloadError.MergeFailed, YtdlpCommand.postProcessingError(video, DownloadError.MergeFailed))
         assertEquals(DownloadError.MergeFailed, YtdlpCommand.postProcessingError(audio.first(), DownloadError.MergeFailed))
-        for (format in audio.filter { it.conversion != null || it.id == "extracted" })
-            assertEquals(DownloadError.ConvertFailed, YtdlpCommand.postProcessingError(format, DownloadError.MergeFailed))
+        for (format in audio) assertEquals(if (format.conversion != null) DownloadError.ConvertFailed else DownloadError.MergeFailed,
+            YtdlpCommand.postProcessingError(format, DownloadError.MergeFailed), format.id)
         assertEquals(DownloadError.Network, YtdlpCommand.postProcessingError(audio[2], DownloadError.Network))
     }
 

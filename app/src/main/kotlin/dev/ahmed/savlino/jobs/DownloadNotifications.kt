@@ -243,7 +243,7 @@ class DownloadNotifications(private val base: Context,
                 DownloadPhase.SAVING -> R.string.download_saving
                 DownloadPhase.COMPLETED -> R.string.download_saved
                 DownloadPhase.CANCELLED -> R.string.download_cancelled
-                DownloadPhase.FAILED -> errorTitle(progress.error, offline, progress.mimeType)
+                DownloadPhase.FAILED -> errorTitle(progress.error, offline)
             })
         }
 
@@ -336,7 +336,7 @@ class DownloadNotifications(private val base: Context,
                 ?: return NezzelFormat.isolate(downloaded ?: context.getString(R.string.unknown_size))
             return NezzelFormat.isolate(if (downloaded == null || progress.phase == DownloadPhase.COMPLETED) total else "$downloaded / $total")
         }
-        private fun errorTitle(error: DownloadError?, offline: Boolean, mimeType: String) = when (error) {
+        private fun errorTitle(error: DownloadError?, offline: Boolean) = when (error) {
             DownloadError.Network -> if (offline) R.string.download_network_error else R.string.network_title
             DownloadError.Offline -> R.string.download_network_error
             DownloadError.InsufficientSpace -> R.string.download_space_error
@@ -346,8 +346,7 @@ class DownloadNotifications(private val base: Context,
             DownloadError.Interrupted -> R.string.download_interrupted_error
             DownloadError.StoppedByBattery -> BatterySettings.errorText
             DownloadError.MergeFailed -> R.string.download_merge_error
-            // Only an MP3 row keeps its finished source for Retry; an extracted M4A downloads again.
-            DownloadError.ConvertFailed -> if (mimeType == "audio/mpeg") R.string.download_convert_mp3_error else R.string.download_convert_error
+            DownloadError.ConvertFailed -> R.string.download_convert_mp3_error
             DownloadError.ExecutionRestricted, DownloadError.ForegroundDenied -> R.string.download_restricted_error
             DownloadError.LoginRequired -> R.string.private_title
             DownloadError.SourceRefused -> R.string.source_refused_title
