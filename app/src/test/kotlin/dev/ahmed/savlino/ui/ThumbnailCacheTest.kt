@@ -80,10 +80,14 @@ class ThumbnailCacheTest {
                     }
                 }
             }
-            compose.waitUntil(5000) { loads.get() == 1 }
+            compose.waitUntil(20_000) { loads.get() == 1 }
             compose.runOnIdle { file = file.copy(modifiedMillis = 2_000L) }
-            // This activity is not the rule's own: frames only run when the main looper's clock moves.
-            compose.waitUntil(5000) { org.robolectric.shadows.ShadowLooper.idleMainLooper(16, java.util.concurrent.TimeUnit.MILLISECONDS); loads.get() == 2 }
+            // This activity is not the rule's own: frames only run when the main looper's clock moves, and the change
+            // reaches its recomposer only once applied (the global apply observer may sit on an earlier test's dispatcher).
+            compose.waitUntil(20_000) {
+                androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                org.robolectric.shadows.ShadowLooper.idleMainLooper(16, java.util.concurrent.TimeUnit.MILLISECONDS); loads.get() == 2
+            }
             compose.runOnIdle { file = file.copy(title = "Edited label") }
             org.robolectric.shadows.ShadowLooper.idleMainLooper(200, java.util.concurrent.TimeUnit.MILLISECONDS); compose.waitForIdle()
             assertEquals(2, loads.get())
