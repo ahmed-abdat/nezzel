@@ -208,8 +208,34 @@ class Mp3EncoderTest {
     @Test fun chunksThatStopGrowingAreAStallNotAFallback() {
         val (_, job) = staging()
         val encoder = Mp3Encoder(starter(chunk = { Fake(blocks = true) }), heartbeatMs = 10, stallMs = 100)
-        assertEquals(DownloadError.MergeFailed, assertFailsWith<Mp3Failure> { encoder.encode(job, "job") }.error)
+        assertEquals(DownloadError.ConvertFailed, assertFailsWith<Mp3Failure> { encoder.encode(job, "job") }.error)
         assertTrue(singles().isEmpty())
+    }
+
+    /** Thermal throttling: a single pass that keeps writing, however slowly, is never a stall; only output growth counts. */
+    @Test fun aSlowSinglePassThatKeepsWritingOutlivesTheStallWindow() {
+        val (_, job) = staging()
+        val encoder = Mp3Encoder({ args, _, _ ->
+            calls += args
+            val out = out(args)
+            val process = Fake(blocks = true)
+            // 12 writes 40 ms apart: 480 ms in all, nearly 5x the 100 ms stall window, never 100 ms without growth.
+            thread { repeat(12) { out.appendText("x"); Thread.sleep(40) }; process.finish() }
+            process
+        }, constrained = { true }, heartbeatMs = 10, stallMs = 100)
+        val started = System.nanoTime()
+        val result = encoder.encode(job, "job")
+        assertTrue(System.nanoTime() - started >= TimeUnit.MILLISECONDS.toNanos(400))
+        assertEquals("x".repeat(12), result.readText())
+        assertEquals(1, singles().size)
+    }
+
+    @Test fun aSinglePassWhoseOutputStopsGrowingIsAConversionStall() {
+        val (_, job) = staging()
+        val encoder = Mp3Encoder({ args, _, _ -> calls += args; out(args).writeText("x"); Fake(blocks = true) },
+            constrained = { true }, heartbeatMs = 10, stallMs = 100)
+        assertEquals(DownloadError.ConvertFailed, assertFailsWith<Mp3Failure> { encoder.encode(job, "job") }.error)
+        assertTrue(job.source.isFile)
     }
 
     @Test fun aFailedTaggedMuxRetriesWithoutCoverOrTags() {

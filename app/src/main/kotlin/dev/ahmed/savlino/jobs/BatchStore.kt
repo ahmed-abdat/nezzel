@@ -185,7 +185,7 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
                 if (!(state == BatchItemState.FAILED && alive)) putNull("source_url")
             }, "batch_id=? AND position=? AND state IN $allowed", args(item)) == 1
             if (changed) {
-                val network = error in setOf(DownloadError.Network, DownloadError.Offline)
+                val network = error?.spendsResumeBudget == true
                 val refused = error in setOf(DownloadError.SourceRefused, DownloadError.LoginRequired)
                 db.execSQL("UPDATE batches SET network_failures=" + (if (network) "network_failures+1" else "0") +
                     ", refused_failures=" + (if (refused) "refused_failures+1" else "0") +
@@ -320,9 +320,9 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
 
     private fun args(item: BatchItemRecord) = arrayOf(item.batchId, item.position.toString())
     private fun batch(c: Cursor) = BatchRecord(c.text("batch_id"), c.text("title"), Preset.valueOf(c.text("preset")),
-        BatchState.valueOf(c.text("state")), c.getLong(c.getColumnIndexOrThrow("created_at")), c.optional("error")?.let(DownloadError::valueOf))
+        BatchState.valueOf(c.text("state")), c.getLong(c.getColumnIndexOrThrow("created_at")), c.optional("error")?.let(DownloadError::fromName))
     private fun item(c: Cursor) = BatchItemRecord(c.text("batch_id"), c.getInt(c.getColumnIndexOrThrow("position")), c.text("item_id"), c.text("title"),
-        BatchItemState.valueOf(c.text("state")), c.text("job_id"), c.optional("error")?.let(DownloadError::valueOf),
+        BatchItemState.valueOf(c.text("state")), c.text("job_id"), c.optional("error")?.let(DownloadError::fromName),
         c.getInt(c.getColumnIndexOrThrow("retryable")) == 1, c.getInt(c.getColumnIndexOrThrow("fallback")) == 1,
         !c.isNull(c.getColumnIndexOrThrow("source_url")))
     private fun Cursor.text(name: String) = getString(getColumnIndexOrThrow(name))

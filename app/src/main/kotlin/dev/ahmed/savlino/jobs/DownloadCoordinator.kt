@@ -639,7 +639,7 @@ class DownloadCoordinator(
                         downloading += id
                     }
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
-                    val result = try { engine.download(command, job.directory) { event ->
+                    val onEvent: (EngineEvent) -> Unit = { event ->
                         synchronized(delivery) {
                             // Late callbacks from a finished attempt never reach the next one.
                             if (engineReturned || event is EngineEvent.Progress && event.restartEpoch != engineEpoch) return@synchronized
@@ -690,7 +690,14 @@ class DownloadCoordinator(
                                 is EngineEvent.Restarting -> error("Restart handled above")
                             })
                         }
-                    } } finally {
+                    }
+                    // A failed conversion kept its finished source: convert it again, with no transfer. Without an
+                    // intact kept source the engine says so (null) and the job downloads in full.
+                    var convertedKept = false
+                    val result = try {
+                        (if (adopting && compatibleRecipe) engine.convertKept(command, job.directory, onEvent) else null)
+                            ?.also { convertedKept = true } ?: engine.download(command, job.directory, onEvent)
+                    } finally {
                         // Closed with the engine: a network loss after this never stops (and requeues) finished work.
                         synchronized(delivery) { engineReturned = true; transferOpen = false }
                         downloading.remove(id)
@@ -698,8 +705,9 @@ class DownloadCoordinator(
                     if (result is TransferResult.Failure) attempt.reason = result.reason
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
+                            // A second failed conversion of a kept source drops it: the next Retry downloads in full.
                             else finishStopped(id, result.error, resumeAllowed = result.resumeAllowed,
-                                startBytes = startBytes, cause = result.cause)
+                                startBytes = startBytes, cause = result.cause, keepSource = !convertedKept)
                         is TransferResult.Success -> {
                             attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                             // Single-stream output has no Merging event: close pause here so a resume never drops a finished file.
@@ -738,8 +746,8 @@ class DownloadCoordinator(
                             else -> DownloadError.ExecutionRestricted
                         }
                         // A refused foreground (dataSync after its timeout cannot restart in the background) is not the
-                        // download's fault: keep the partial so Retry, from the opened app, resumes it.
-                        finishStopped(id, error, keepPartial = error == DownloadError.ForegroundDenied)
+                        // download's fault: it keeps the partial (DownloadError.keepsSource) so Retry, from the opened app, resumes it.
+                        finishStopped(id, error)
                     }
                 } finally {
                     withContext(NonCancellable) {
@@ -811,12 +819,12 @@ class DownloadCoordinator(
     private fun finishStopped(id: String, error: DownloadError,
         systemStopped: Boolean = false, resumeAllowed: Boolean = true, startBytes: Long = Long.MAX_VALUE,
         cause: DownloadFailureCause = error.cause, keepOutput: Boolean = false,
-        staleWriter: Boolean = false, schedulerStop: Boolean = false, keepPartial: Boolean = false) = synchronized(userCancellation) {
+        staleWriter: Boolean = false, schedulerStop: Boolean = false, keepSource: Boolean = true) = synchronized(userCancellation) {
         val row = store.get(id) ?: return@synchronized
         val bytes = stagingBytes(stagingRoot(id))
         // The engine may return before Android delivers the loss callback, even before its first byte.
         // Offline waits use the CONNECTED gate; only failures with a usable network spend retry budget.
-        val offlineFailure = !systemStopped && error in setOf(DownloadError.Network, DownloadError.Offline) &&
+        val offlineFailure = !systemStopped && error.spendsResumeBudget &&
             cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) && !network.online()
         store.resetAutomaticResumes(id, bytes)
         if (id !in userCancellation && (id in pauseRequests || row.stage == JobStage.PAUSED)) {
@@ -824,7 +832,7 @@ class DownloadCoordinator(
         } else if (id in userCancellation || error == DownloadError.Cancelled) {
             store.cancel(id)
             recovery.reconcile(id, cancellationRequested = true)
-        } else if ((systemStopped || offlineFailure) && (error in setOf(DownloadError.Network, DownloadError.Offline) ||
+        } else if ((systemStopped || offlineFailure) && (error.spendsResumeBudget ||
                 keepOutput && error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery)) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             // A scheduler stop waits for its constraints; it is not an engine failure episode. A stop during a
@@ -837,8 +845,7 @@ class DownloadCoordinator(
             else store.fail(id, DownloadError.SaveFailed)
             if (offlineFailure && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
         } else if (resumeAllowed && cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) &&
-            error in setOf(DownloadError.Network, DownloadError.Offline) &&
-            row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
+            error.spendsResumeBudget && row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             // Cold probes/first-byte timeouts may have no partial yet; still allow one bounded resume.
             if (store.requeueAutomatic(id, cause, hasPartial = bytes > 0)) {
                 if (bytes > startBytes) progressed += id
@@ -859,10 +866,9 @@ class DownloadCoordinator(
             store.fail(id, error, keepPartial = bytes > 0)
             recovery.reconcile(id, cancellationRequested = true, cancellationError = error)
         } else {
-            store.fail(id, error, keepPartial = keepPartial && bytes > 0)
-            val stopped = error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
-                DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)
-            recovery.reconcile(id, cancellationRequested = stopped, cancellationError = error)
+            // The policy decides what is kept (DownloadError.keepsSource); [keepSource] false overrides it.
+            store.fail(id, error, keepPartial = keepSource && bytes > 0)
+            recovery.reconcile(id, cancellationRequested = error.stopsSave, cancellationError = error)
         }
     }
     /** Admission may finish scheduling after a worker has started or finished this same job. */

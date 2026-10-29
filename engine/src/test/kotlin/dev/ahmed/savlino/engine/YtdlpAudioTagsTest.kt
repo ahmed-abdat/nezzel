@@ -298,4 +298,56 @@ class YtdlpAudioTagsTest {
             assertEquals(1, failed.calls.size)
         }
     }
+
+    @Test fun keptSourceConvertsAgainWithoutRunningYtdlp() = runBlocking {
+        val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_192)
+        val dir = temp.newFolder().canonicalFile
+        val staged = File(dir, "output.m4a").apply { writeText("downloaded audio") }
+        File(dir, "output.temp.tags").writeText("""{"title":"Song","artist":"Singer","uploader":"Channel"}""" + "\n")
+        val runtime = Runtime().apply { action = { _, _ -> fail("A kept-source retry must not run yt-dlp") } }
+        val ffmpeg = mutableListOf<List<String>>()
+        runtime.ffmpeg = { args -> ffmpeg += args; File(args.last().removePrefix("file:")).writeText("mp3"); Exited() }
+        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).convertKept(command(format), dir) {})
+        assertEquals(File(dir, "output.mp3"), result.output.file)
+        assertTrue(runtime.calls.isEmpty())
+        val single = ffmpeg.single()
+        assertEquals("file:${staged.path}", single[single.indexOf("-i") + 1])
+        // Retry dropped the info JSON: the printed tags still say the artist is real.
+        assertTrue("artist=Singer" in single)
+        // No kept source (or not an MP3 row): the caller downloads in full.
+        assertNull(YoutubedlEngine(runtime).convertKept(command(format), temp.newFolder()) {})
+        assertNull(YoutubedlEngine(runtime).convertKept(command(audio.first()), dir) {})
+    }
+
+    @Test fun keptSourceThatStillFailsToConvertReportsConvertFailed() = runBlocking {
+        val format = Format("mp3-128", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_128)
+        val dir = temp.newFolder().canonicalFile
+        File(dir, "output.m4a").writeText("downloaded audio")
+        val runtime = Runtime().apply { ffmpeg = { Failed() } }
+        assertEquals(DownloadError.ConvertFailed, assertIs<TransferResult.Failure>(
+            YoutubedlEngine(runtime).convertKept(command(format), dir) {}).error)
+        assertTrue(File(dir, "output.m4a").isFile)
+    }
+
+    @Test fun ytdlpPostprocessingFailureOnAnAudioOnlyRowIsAConversionNotAMerge() {
+        val video = Format("18", "mp4", true, true, requiresMerge = true)
+        assertEquals(DownloadError.MergeFailed, YtdlpCommand.postProcessingError(video, DownloadError.MergeFailed))
+        assertEquals(DownloadError.MergeFailed, YtdlpCommand.postProcessingError(audio.first(), DownloadError.MergeFailed))
+        for (format in audio.filter { it.conversion != null || it.id == "extracted" })
+            assertEquals(DownloadError.ConvertFailed, YtdlpCommand.postProcessingError(format, DownloadError.MergeFailed))
+        assertEquals(DownloadError.Network, YtdlpCommand.postProcessingError(audio[2], DownloadError.Network))
+    }
+
+    private class Failed : Process() {
+        override fun getOutputStream() = java.io.ByteArrayOutputStream()
+        override fun getInputStream() = java.io.ByteArrayInputStream(byteArrayOf())
+        override fun getErrorStream() = java.io.ByteArrayInputStream(byteArrayOf())
+        override fun waitFor() = 1
+        override fun waitFor(timeout: Long, unit: java.util.concurrent.TimeUnit) = true
+        override fun exitValue() = 1
+        override fun isAlive() = false
+        override fun destroy() = Unit
+    }
 }

@@ -134,7 +134,7 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                     else batches.finish(item,
                         if (result.error in setOf(DownloadError.Unavailable, DownloadError.NoVideo, DownloadError.NotAPost, DownloadError.Unsupported))
                             BatchItemState.SKIPPED else BatchItemState.FAILED,
-                        result.error, JobStore.retryableError(result.error))
+                        result.error, result.error.retryable)
                     is InspectResult.Success -> {
                         val selected = choose(result.inspection, batch.preset)
                         if (selected == null) batches.finish(item, BatchItemState.SKIPPED, DownloadError.NoFormats)

@@ -325,7 +325,7 @@ internal class YtdlpDiagnostics {
             if (normalized.startsWith("ERROR:")) {
                 val safe = normalized.replace(URL, "").lowercase(java.util.Locale.ROOT)
                 if (HTTP_NO_RESUME.containsMatchIn(safe) || EXCLUDED_SIGNAL.containsMatchIn(safe) ||
-                    YtdlpErrorMapper.map(normalized) in EXCLUDED_ERRORS) reextractionBlocked.set(true)
+                    YtdlpErrorMapper.map(normalized).blocksReextraction) reextractionBlocked.set(true)
             }
             if (POSTPROCESSING.any(diagnostic::startsWith)) reextractionBlocked.set(true)
         }
@@ -354,7 +354,7 @@ internal class YtdlpDiagnostics {
             if (fallback is YtdlpExecutionFailure) {
                 if (fallback.expiredUrl) expired.set(true)
                 if (!fallback.resumeAllowed) httpFailure.set(true)
-                if (fallback.reextractionBlocked || !fallback.resumeAllowed || fallback.error in EXCLUDED_ERRORS ||
+                if (fallback.reextractionBlocked || !fallback.resumeAllowed || fallback.error.blocksReextraction ||
                     fallback.failureCause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL))
                     reextractionBlocked.set(true)
                 remember(fallback.error, fallback.failureCause)
@@ -362,7 +362,7 @@ internal class YtdlpDiagnostics {
         }
         val mapped = error.get().let {
             if (httpFailure.get() && cause.get() == DownloadFailureCause.HTTP &&
-                it in setOf(DownloadError.Network, DownloadError.Offline)) DownloadError.Failed else it
+                it.spendsResumeBudget) DownloadError.Failed else it
         }
         return YtdlpExecutionFailure(mapped, expired.get(), !httpFailure.get(), cause.get(), reextractionBlocked.get(),
             (fallback as? YtdlpExecutionFailure)?.reason ?: ExecutionFailureReason.UNKNOWN)
@@ -377,9 +377,6 @@ internal class YtdlpDiagnostics {
         private val HTTP_NO_RESUME = Regex("\\bhttp error (429|5\\d\\d)\\b")
         private val HTTP_EXPIRED = Regex("\\bhttp error (401|403|410)\\b")
         private val EXPIRED = Regex("\\b(url|signature|token)\\b.{0,40}\\bexpired\\b|\\bexpired (url|signature|token)\\b")
-        private val EXCLUDED_ERRORS = setOf(DownloadError.Network, DownloadError.Offline, DownloadError.InsufficientSpace,
-            DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted,
-            DownloadError.MergeFailed, DownloadError.Interrupted, DownloadError.Cancelled)
         private val EXCLUDED_SIGNAL = Regex("permission denied|read-only file system|operation not permitted|" +
             "unable to (?:open|write)|interrupted|keyboardinterrupt|\\bcancelled\\b|\\bcanceled\\b|" +
             "too many requests|temporarily unavailable|service unavailable|postprocessing|ffmpeg exited|unable to merge|" +

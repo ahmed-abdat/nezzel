@@ -458,7 +458,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         progress: (EngineEvent) -> Unit): TransferResult {
         var resumeAllowed = true
         var failureReason = ExecutionFailureReason.UNKNOWN
-        return operation(command.jobId, { error, cause -> TransferResult.Failure(error, resumeAllowed, cause, failureReason) }, lockTimeoutMs = limits.maintenanceWaitMs,
+        return operation(command.jobId, { error, cause ->
+            TransferResult.Failure(YtdlpCommand.postProcessingError(command.format, error), resumeAllowed, cause, failureReason)
+        }, lockTimeoutMs = limits.maintenanceWaitMs,
             executionFailure = { failureReason = it }) { current ->
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
             if (version(current) != command.engineVersion) return@operation TransferResult.Failure(DownloadError.FormatExpired)
@@ -695,34 +697,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val marker = File(directory, DirectResume.NAME)
             if (marker.exists() && !marker.delete()) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
             encodeMp3(current, command, directory, infoJson, progress)
-            val output = try {
-                val root = directory.canonicalFile
-                val manifest = File(root, "result-path.txt")
-                require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
-                val paths = manifest.readLines().filter { it.isNotBlank() }
-                require(paths.size == 1)
-                val files = requireNotNull(root.listFiles()).filter { it.name != "result-path.txt" }
-                require(files.size == 1)
-                val file = files.single()
-                require(file.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
-                require(!java.nio.file.Files.isSymbolicLink(file.toPath()))
-                require(File(paths.single()).canonicalFile == file.canonicalFile)
-                require(file.isFile)
-                val row = command.format
-                val expected = (row.size as? Size.Exact)?.bytes
-                val extractsAudio = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
-                // Allow a 2% size shortfall for an unchanged single stream; remuxed/extracted/converted
-                // outputs and estimates cannot be compared to input sizes. Native tags may change file size;
-                // compare the bytes captured before post-processing, or the untouched final file.
-                // expected - expected / 50 is ceil(98% of expected), without overflowing Long.
-                if (!row.requiresMerge && row.conversion == null && !extractsAudio && expected != null &&
-                    (preProcessingBytes ?: file.length()) < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
-                val output = StagedOutput.validate(root, listOf(file))
-                require(output.file.parentFile == root)
-                output
-            } catch (_: IllegalArgumentException) {
-                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
-            }
+            val output = stagedOutput(command, directory, preProcessingBytes)
             // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
             // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
             if (command.format.hasVideo && !command.format.animatedGif && output.file.extension.equals("mp4", ignoreCase = true)) {
@@ -740,12 +715,62 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
 
+    override suspend fun convertKept(command: DownloadCommand, directory: File,
+        progress: (EngineEvent) -> Unit): TransferResult? {
+        val source = YtdlpCommand.keptConversionSource(command.format, directory) ?: return null
+        var failureReason = ExecutionFailureReason.UNKNOWN
+        return operation(command.jobId, { error, cause -> TransferResult.Failure(error, cause = cause, reason = failureReason) },
+            lockTimeoutMs = limits.maintenanceWaitMs, executionFailure = { failureReason = it }) { current ->
+            if (!initialize()) return@operation unavailable.download(command, directory, progress)
+            // Adoption removed the old manifest: name the kept source as yt-dlp would have. No yt-dlp run, no network.
+            val manifest = File(directory.canonicalFile, "result-path.txt")
+            try {
+                require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
+                manifest.writeText(source.canonicalPath + "\n")
+            } catch (_: Exception) {
+                throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
+            }
+            encodeMp3(current, command, directory, infoCache?.freshFile(command.jobId), progress, keptTags = true)
+            TransferResult.Success(stagedOutput(command, directory, null))
+        }
+    }
+
+    /** The one staged file the manifest names, checked before publication. [preProcessingBytes]: before native tags. */
+    private fun stagedOutput(command: DownloadCommand, directory: File, preProcessingBytes: Long?): StagedOutput = try {
+        val root = directory.canonicalFile
+        val manifest = File(root, "result-path.txt")
+        require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
+        val paths = manifest.readLines().filter { it.isNotBlank() }
+        require(paths.size == 1)
+        val files = requireNotNull(root.listFiles()).filter { it.name != "result-path.txt" }
+        require(files.size == 1)
+        val file = files.single()
+        require(file.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
+        require(!java.nio.file.Files.isSymbolicLink(file.toPath()))
+        require(File(paths.single()).canonicalFile == file.canonicalFile)
+        require(file.isFile)
+        val row = command.format
+        val expected = (row.size as? Size.Exact)?.bytes
+        val extractsAudio = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
+        // Allow a 2% size shortfall for an unchanged single stream; remuxed/extracted/converted
+        // outputs and estimates cannot be compared to input sizes. Native tags may change file size;
+        // compare the bytes captured before post-processing, or the untouched final file.
+        // expected - expected / 50 is ceil(98% of expected), without overflowing Long.
+        if (!row.requiresMerge && row.conversion == null && !extractsAudio && expected != null &&
+            (preProcessingBytes ?: file.length()) < expected - expected / 50) throw YtdlpExecutionFailure(DownloadError.MergeFailed)
+        val output = StagedOutput.validate(root, listOf(file))
+        require(output.file.parentFile == root)
+        output
+    } catch (_: IllegalArgumentException) {
+        throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
+    }
+
     /**
      * MP3 rows: yt-dlp leaves the source (its path in result-path.txt), the cover and the tags; the encoder turns them
      * into output.mp3 and rewrites the manifest. A manifest that already names output.mp3 needs nothing.
      */
     private fun encodeMp3(current: Operation, command: DownloadCommand, directory: File, infoJson: File?,
-        progress: (EngineEvent) -> Unit) {
+        progress: (EngineEvent) -> Unit, keptTags: Boolean = false) {
         val conversion = command.format.conversion ?: return
         val root = directory.canonicalFile
         val manifest = File(root, "result-path.txt")
@@ -754,10 +779,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val source = manifest.readLines().lastOrNull { it.isNotBlank() }?.let { File(it).canonicalFile } ?: return
         if (source.parentFile != root || source.name == "output.mp3" || !source.isFile) return
         progress(EngineEvent.Merging)
+        // --print-to-file appends too: on a retry the last line is this run's.
+        val tags = File(root, Mp3Encoder.TAGS).takeIf { it.isFile }?.readLines()?.lastOrNull { it.isNotBlank() }
         val job = Mp3Job(root, source, File(root, Mp3Encoder.COVER).takeIf { it.isFile },
-            // --print-to-file appends too: on a retry the last line is this run's.
-            Mp3Tags.metadata(File(root, Mp3Encoder.TAGS).takeIf { it.isFile }?.readLines()?.lastOrNull { it.isNotBlank() },
-                YtdlpCommand.realArtist(infoJson)),
+            // A kept-source retry has no info JSON (Retry drops it): the tags yt-dlp printed carry the same artist field.
+            Mp3Tags.metadata(tags, YtdlpCommand.realArtist(infoJson) || keptTags && infoJson == null && YtdlpCommand.realArtist(tags)),
             conversion.bitrateKbps, resample = conversion == AudioConversion.MP3_320)
         // The canceller re-invokes this every 50 ms while cancelled, so a cancel before the encode registers still lands.
         synchronized(current) { checkCancelled(current); current.directCancel = { mp3.cancel(current.processId) } }

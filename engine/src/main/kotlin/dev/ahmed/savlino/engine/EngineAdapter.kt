@@ -47,6 +47,11 @@ interface EngineAdapter {
     /** Local selection only; transfer ownership is durable in staging, never inferred from byte names alone. */
     fun resumeEngine(command: DownloadCommand, directory: File): String = "ytdlp"
     suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult
+    /**
+     * Retry after a failed conversion: convert the finished source kept in [directory] again, with no network. Null when
+     * [directory] holds no intact kept source for this row; the caller then runs [download] in full.
+     */
+    suspend fun convertKept(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult? = null
     fun cancel(operationId: String)
     /** Blocking: stop native processes a previous attempt left writing into [directory]; how many are still alive. */
     fun stopStaleProcesses(directory: File): Int = 0

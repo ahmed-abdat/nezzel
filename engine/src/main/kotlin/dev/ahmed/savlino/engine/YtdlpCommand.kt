@@ -45,6 +45,18 @@ object YtdlpCommand {
         format.sourceContainer != null -> "output.${format.sourceContainer}"
         else -> null
     }
+    /** The finished source a failed conversion kept, or null: only a nonempty regular file in a valid staging directory. */
+    fun keptConversionSource(format: Format, directory: File): File? {
+        if (format.conversion == null) return null
+        val name = finishedSource(format) ?: return null
+        val root = try { validateStaging(directory, name) } catch (_: IllegalArgumentException) { return null }
+        return File(root, name).takeIf {
+            !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && it.length() > 0
+        }
+    }
+    /** An audio-only row converts rather than merges: yt-dlp's ffmpeg failure there is a failed conversion. */
+    fun postProcessingError(format: Format, error: DownloadError): DownloadError =
+        if (error == DownloadError.MergeFailed && (format.conversion != null || extractsAudio(format))) DownloadError.ConvertFailed else error
     private fun extractsAudio(row: Format) = !row.hasVideo && row.container == "m4a" && row.sourceFormatId != row.id
     /** Shared by both transfer engines before any staging write. */
     internal fun validateStaging(directory: File, kept: String? = null): File {
@@ -95,6 +107,11 @@ object YtdlpCommand {
     /** Whether the info JSON names a real artist; without one yt-dlp's uploader/channel fallback is blanked. */
     internal fun realArtist(infoJson: File?): Boolean = try {
         infoJson?.let { ObjectMapper().readTree(it)?.get("artist") }
+            ?.takeIf { it.isTextual }?.asText()?.isNotBlank() == true
+    } catch (_: Exception) { false }
+    /** The same check over one JSON line (the printed MP3 tag fields). */
+    internal fun realArtist(json: String?): Boolean = try {
+        json?.let { ObjectMapper().readTree(it)?.get("artist") }
             ?.takeIf { it.isTextual }?.asText()?.isNotBlank() == true
     } catch (_: Exception) { false }
 

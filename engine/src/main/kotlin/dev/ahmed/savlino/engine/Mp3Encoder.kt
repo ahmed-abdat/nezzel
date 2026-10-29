@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
 internal data class Mp3Job(val directory: File, val source: File, val cover: File?, val metadata: List<String>,
     val bitrateKbps: Int, val resample: Boolean)
 
-/** NoSpace, cancel (Cancelled) and stall (MergeFailed) end the encode; only a failed check falls back. */
+/** NoSpace, cancel (Cancelled) and stall (ConvertFailed) end the encode; only a failed check falls back. */
 internal class Mp3Failure(val error: DownloadError) : Exception()
 
 /** The source's container, input rate and duration, read from ffmpeg's banner on stderr. */
@@ -114,7 +114,7 @@ internal class Mp3Encoder(
             if (!muxed) {
                 // The chunks and a half-written mux would otherwise sit beside the one pass's output.
                 clean(dir)
-                if (!single(job, run, tagged = true) && !single(job, run, tagged = false)) throw Mp3Failure(DownloadError.MergeFailed)
+                if (!single(job, run, tagged = true) && !single(job, run, tagged = false)) throw Mp3Failure(DownloadError.ConvertFailed)
             }
             // A cancel after the last child ended: nothing else would see it before the file is published.
             if (synchronized(run) { run.cancelled }) throw Mp3Failure(DownloadError.Cancelled)
@@ -136,7 +136,7 @@ internal class Mp3Encoder(
             listOf("-c:a", "pcm_s16le") + stats(stats) + listOf("-f", "null", "-")
         // A two-second decode that writes no stats for stallMs is stuck: fall back to one pass, which has its own check.
         val ran = try { runToEnd(run, group(run), args, err, growth = stats) }
-        catch (stall: Mp3Failure) { if (stall.error == DownloadError.MergeFailed) false else throw stall }
+        catch (stall: Mp3Failure) { if (stall.error == DownloadError.ConvertFailed) false else throw stall }
         if (!ran) return null
         val input = Mp3Input.parse(err.readText()) ?: return null
         val probe = stats.useLines { Mp3Probe.parse(it) } ?: return null
@@ -184,7 +184,7 @@ internal class Mp3Encoder(
                 val now = plan.chunks.sumOf { chunkFile(job, it).length() }
                 if (now > bytes) { bytes = now; grew = nanoTime() }
                 else if ((nanoTime() - grew) / 1_000_000 >= stallMs) {
-                    synchronized(results) { if (error == null) error = Mp3Failure(DownloadError.MergeFailed) }
+                    synchronized(results) { if (error == null) error = Mp3Failure(DownloadError.ConvertFailed) }
                     stop(run, group)
                     break
                 }
@@ -348,7 +348,7 @@ internal class Mp3Encoder(
                 else if ((nanoTime() - grew) / 1_000_000 >= stallMs) {
                     stop(run, group)
                     reap(child)
-                    throw Mp3Failure(DownloadError.MergeFailed)
+                    throw Mp3Failure(DownloadError.ConvertFailed)
                 }
             }
         } finally { reap(child) }

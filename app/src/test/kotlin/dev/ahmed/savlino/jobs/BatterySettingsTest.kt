@@ -43,7 +43,7 @@ class BatterySettingsTest {
             assertFalse("$error", BatterySettings.offersButton(error, exempt = false))
     }
 
-    @Test fun batteryStopIsRetryable() = assertTrue(JobStore.retryableError(DownloadError.StoppedByBattery))
+    @Test fun batteryStopIsRetryable() = assertTrue(DownloadError.StoppedByBattery.retryable)
 
     @Test fun samsungHintOnlyOnSamsung() {
         assertTrue(BatterySettings.showsSamsungHint("samsung"))

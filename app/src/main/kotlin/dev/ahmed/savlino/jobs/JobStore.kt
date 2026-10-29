@@ -30,7 +30,7 @@ class JobRecord internal constructor(
     val engineVersion: String, val format: Format, val filename: String, val preset: Preset?,
     val pendingUri: Uri?, val displayName: String?, val createdAt: Long, val updatedAt: Long,
     val error: DownloadError?,
-    /** Explicit fresh transfer only; terminal staging is deleted, except a battery or refused-foreground stop's partial (JobStore.keepsPartial). */
+    /** Explicit fresh transfer only; terminal staging is deleted, except what a kept-source failure keeps (JobStore.keepsPartial). */
     val retryable: Boolean,
     val hasPartial: Boolean, val resumeRecipe: String?, val restartEpoch: Long,
     val transportResumes: Int, val stallRestarts: Int, val resumeResetBytes: Long,
@@ -415,18 +415,17 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     /** Retry keeps only a still-confirmed URL; partial bytes are resumed only when [keepPartial] (see [keepsPartial]). */
-    fun fail(jobId: String, error: DownloadError, retryable: Boolean = retryableError(error),
-        keepPartial: Boolean = false): Boolean = finishTerminal(jobId, keepStaging = keepPartial && error in KEEPS_PARTIAL) {
+    fun fail(jobId: String, error: DownloadError, retryable: Boolean = error.retryable,
+        keepPartial: Boolean = false): Boolean = finishTerminal(jobId, keepStaging = keepPartial && error.keepsSource) {
         transition(jobId, setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.PAUSED, JobStage.STAGED), JobStage.FAILED,
             ContentValues().apply {
-                put("error", error.name); put("retryable", if (retryable && retryableError(error)) 1 else 0)
+                put("error", error.name); put("retryable", if (retryable && error.retryable) 1 else 0)
             })
     }
 
     /** Persist the failure reason if provider reconciliation must be deferred. */
     @Synchronized internal fun requestPublicationFailure(jobId: String, reason: DownloadError) {
-        require(reason in setOf(DownloadError.Cancelled, DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
-            DownloadError.InsufficientSpace, DownloadError.FolderUnavailable))
+        require(reason == DownloadError.Cancelled || reason.stopsSave)
         writableDatabase.update("jobs", ContentValues().apply { put("error", reason.name) },
             "job_id = ? AND stage IN ('PENDING_INSERTED','PUBLISHING') AND (error IS NULL OR error != 'Cancelled')", arrayOf(jobId))
     }
@@ -459,8 +458,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING),
             if (cancelled) JobStage.CANCELLED else JobStage.FAILED, ContentValues().apply {
                 put("error", if (cancelled) DownloadError.Cancelled.name
-                    else if (reason in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.Network,
-                        DownloadError.InsufficientSpace, DownloadError.FolderUnavailable)) reason!!.name else DownloadError.SaveFailed.name)
+                    else if (reason?.stopsSave == true) reason.name else DownloadError.SaveFailed.name)
                 put("retryable", if (!cancelled) 1 else 0); if (!keepUri) putNull("pending_uri")
             })
     }
@@ -633,7 +631,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         return JobRecord(text("job_id"), JobStage.valueOf(text("stage")), text("source_url"), long("revision"),
             text("engine_version"), decodeFormat(text("format_json")), text("filename"), text("preset")?.let(Preset::valueOf),
             text("pending_uri")?.let(Uri::parse), text("display_name"), long("created_at"), long("updated_at"),
-            text("error")?.let(DownloadError::valueOf), long("retryable") == 1L,
+            text("error")?.let(DownloadError::fromName), long("retryable") == 1L,
             long("has_partial") == 1L, text("resume_recipe"), long("restart_epoch"),
             long("transport_resumes").toInt(), long("stall_restarts").toInt(), long("resume_reset_bytes"))
     }
@@ -646,23 +644,18 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         internal const val RESUME_PROGRESS_STEP_BYTES = 1024L * 1024
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
         /**
-         * A battery stop or a refused foreground fails at once but keeps its partial so Retry resumes (has_partial stays 0 on FAILED rows: the
-         * staging bytes are the record; a stop before any byte keeps nothing). Remove, Clear failed and the
-         * confirmation lifetime (startup cleanup once Retry is gone) delete it.
+         * An error that keeps its source ([DownloadError.keepsSource]: battery, refused foreground, failed conversion) fails at once
+         * but keeps its staging so Retry continues from it (has_partial stays 0 on FAILED rows: the staging bytes are the record;
+         * a stop before any byte keeps nothing). Remove, Clear failed and the confirmation lifetime (startup cleanup once
+         * Retry is gone) delete it.
          */
         internal fun keepsPartial(row: JobRecord) = row.stage == JobStage.FAILED &&
-            (row.error in KEEPS_PARTIAL || ownsMediaStoreSave(row)) && row.retryable && row.sourceUrl != null &&
+            (row.error?.keepsSource == true || ownsMediaStoreSave(row)) && row.retryable && row.sourceUrl != null &&
             System.currentTimeMillis() - row.createdAt <= CONFIRMATION_LIFETIME_MS
-        /** Stops that are not the download's fault and recur on a background rerun: battery, a refused foreground. */
-        private val KEEPS_PARTIAL = setOf(DownloadError.StoppedByBattery, DownloadError.ForegroundDenied)
         /** A MediaStore row the provider has not let go of yet; tree receipts outlive their rows. */
         internal fun ownsMediaStoreSave(row: JobRecord) = row.pendingUri?.let { !android.provider.DocumentsContract.isTreeUri(it) } == true
         /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
         internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
-        internal fun retryableError(error: DownloadError) = error in setOf(DownloadError.Network,
-            DownloadError.Offline, DownloadError.InsufficientSpace, DownloadError.MergeFailed,
-            DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted, DownloadError.Interrupted,
-            DownloadError.StoppedByBattery, DownloadError.ForegroundDenied, DownloadError.Failed, DownloadError.EngineUnavailable)
         const val DATABASE_VERSION = 8
         private const val SHARE_LINK_COLUMN = "share_link BLOB CHECK(share_link IS NULL OR stage = 'COMPLETED')"
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
