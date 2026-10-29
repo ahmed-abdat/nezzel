@@ -10,8 +10,10 @@ import okhttp3.HttpUrl
 
 /** Redirect-only link shapes: their destination is known from the redirect alone, so no page is ever read. */
 object ShortLinks {
-    private val hosts = setOf("bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "buff.ly", "is.gd", "cutt.ly", "rb.gy",
+    internal val hosts = setOf("bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "buff.ly", "is.gd", "cutt.ly", "rb.gy",
         "fb.me", "pin.it", "lnkd.in", "vm.tiktok.com", "vt.tiktok.com")
+    internal val instagramShareHosts = setOf("www.instagram.com", "instagram.com")
+    internal const val PINTEREST_HOST = "api.pinterest.com"
     private val token = Regex("/[A-Za-z0-9_-]{1,64}/?")
     private val instagramShare = Regex("/share/(?:reel/|p/)?[A-Za-z0-9_-]{1,64}/?")
     private val pinterestRedirect = Regex("/url_shortener/[A-Za-z0-9_-]{1,64}/redirect/?")
@@ -21,8 +23,8 @@ object ShortLinks {
         "lnkd.in" -> !url.encodedPath.startsWith("/p/") && token.matches(url.encodedPath)
         "fb.me", "goo.gl" -> url.encodedPath.length in 2..128
         in hosts -> token.matches(url.encodedPath)
-        "www.instagram.com", "instagram.com" -> instagramShare.matches(url.encodedPath)
-        "api.pinterest.com" -> pinterestRedirect.matches(url.encodedPath)
+        in instagramShareHosts -> instagramShare.matches(url.encodedPath)
+        PINTEREST_HOST -> pinterestRedirect.matches(url.encodedPath)
         else -> false
     }
 

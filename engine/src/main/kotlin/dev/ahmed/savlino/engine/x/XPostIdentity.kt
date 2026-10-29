@@ -18,7 +18,7 @@ class XPostIdentity private constructor(val postId: String, val legacyUrl: Strin
         const val SYNDICATION_HOST = "cdn.syndication.twimg.com"
         const val SYNDICATION_PATH = "/tweet-result"
         private val mirrors = setOf("fxtwitter.com", "vxtwitter.com", "fixupx.com", "fixvx.com", "d.fxtwitter.com")
-        private val hosts = setOf("x.com", "www.x.com", "mobile.x.com", "m.x.com", "twitter.com", "www.twitter.com",
+        internal val hosts = setOf("x.com", "www.x.com", "mobile.x.com", "m.x.com", "twitter.com", "www.twitter.com",
             "mobile.twitter.com", "m.twitter.com", "d.fxtwitter.com", "fxtwitter.com", "www.fxtwitter.com", "vxtwitter.com", "www.vxtwitter.com",
             "fixupx.com", "www.fixupx.com", "fixvx.com", "www.fixvx.com")
         private val path = Regex("/(?:i(?:/web)?|[A-Za-z0-9_]{1,15})/status/([1-9][0-9]{0,18})(?:/(?:photo|video)/([1-4]))?/?")

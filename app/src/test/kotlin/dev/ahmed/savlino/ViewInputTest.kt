@@ -2,6 +2,18 @@ package dev.ahmed.savlino
 
 import android.content.Intent
 import android.net.Uri
+import dev.ahmed.savlino.domain.Host
+import dev.ahmed.savlino.domain.LinkInput
+import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
+import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
+import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
+import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
+import dev.ahmed.savlino.engine.mediahttp.AcceptedLinkHosts
+import dev.ahmed.savlino.engine.mediahttp.ShortLinks
+import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
+import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
+import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
+import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.entry.ShareInput
 import org.junit.Assert.*
 import org.junit.Test
@@ -14,7 +26,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class ViewInputTest {
-    @Test fun manifestHostsEqualTheIntakeAllowlistAndStaticShortcutsTargetForegroundActions() {
+    @Test fun manifestHostsEqualAcceptedHostsMinusShareOnlyAndStaticShortcutsTargetForegroundActions() {
         val main = java.io.File("src/main").takeIf { it.isDirectory } ?: java.io.File("app/src/main")
         val xml = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(java.io.File(main, "AndroidManifest.xml"))
@@ -31,7 +43,7 @@ class ViewInputTest {
         assertNotEquals("true", (filters.item(0) as org.w3c.dom.Element).getAttribute("android:autoVerify"))
         val nodes = alias.getElementsByTagName("data")
         val data = (0 until nodes.length).map { nodes.item(it) as org.w3c.dom.Element }
-        assertEquals(ShareInput.VIEW_HOSTS, data.map { it.getAttribute("android:host") }.filter { it.isNotEmpty() }.toSet())
+        assertEquals(AcceptedLinkHosts.exactHosts - AcceptedLinkHosts.SHARE_ONLY, data.map { it.getAttribute("android:host") }.filter { it.isNotEmpty() }.toSet())
         assertEquals(setOf("https"), data.map { it.getAttribute("android:scheme") }.filter { it.isNotEmpty() }.toSet())
         val shortcuts = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(java.io.File(main, "res/xml/shortcuts.xml")).getElementsByTagName("intent")
@@ -79,6 +91,47 @@ class ViewInputTest {
         assertNotNull(ShareInput.from(Intent(Intent.ACTION_VIEW, Uri.parse(prefix + "a".repeat(8192 - prefix.length)))))
     }
 
+    @Test fun everyAcceptedAliasHasAnEngineOrUrlLayerRoute() {
+        val youtube = setOf("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be")
+        val paths = listOf("/token", "/p/Abc12", "/user/status/123", "/comments/abc", "/reel/123",
+            "/@user/video/123", "/posts/user-activity-123", "/channel/123", "/profile/user.example/post/abc",
+            "/url_shortener/token/redirect/", "/l.php?u=https%3A%2F%2Fyoutu.be%2Fone")
+        assertEquals(AcceptedLinkHosts.exactHosts, ShareInput.VIEW_HOSTS)
+        for (host in ShareInput.VIEW_HOSTS - youtube) {
+            val url = paths.map { "https://$host$it" }.firstOrNull { raw ->
+                val link = LinkInput.parse(raw)
+                XPostIdentity.parse(raw) != null || InstagramPostIdentity.parse(raw) != null ||
+                    FacebookPostIdentity.parse(raw) != null || RedditPostIdentity.parse(raw) != null ||
+                    TikTokPostIdentity.parse(raw) != null || TelegramPostIdentity.parse(raw) != null ||
+                    BlueskyPostIdentity.parse(raw) != null || LinkedInPostIdentity.parse(raw) != null ||
+                    (link != null && (ShortLinks.isShortLink(link) ||
+                        (link.rawUrl != raw && (link.host == Host.YOUTUBE || FacebookPostIdentity.parse(link.rawUrl) != null))))
+            }
+            assertNotNull("Engine/URL route for $host", url)
+            val send = ShareInput.from(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url))
+            assertNotNull(send)
+            assertEquals(send?.text, ShareInput.from(Intent(Intent.ACTION_VIEW, Uri.parse(url!!)))?.text)
+        }
+    }
+
+    @Test fun knownMissingAliasesAreIncluded() {
+        assertTrue(ShareInput.VIEW_HOSTS.containsAll(setOf("t.co", "lnkd.in", "mbasic.facebook.com",
+            "touch.facebook.com", "mobile.facebook.com", "www.instagr.am", "m.x.com", "m.twitter.com",
+            "fxtwitter.com", "vxtwitter.com", "fixupx.com", "fixvx.com", "reddit.com", "redd.it", "v.redd.it",
+            "telegram.me", "linkedin.com", "fb.com", "www.fb.com", "l.facebook.com", "lm.facebook.com")))
+    }
+
+    @Test fun localeAliasesAcceptedWithoutBroadeningToUnknownSubdomains() {
+        for (url in listOf("https://ar-ar.facebook.com/reel/123", "https://FR-FR.FACEBOOK.COM/reel/123",
+            "https://fr.linkedin.com/posts/user-activity-123")) {
+            assertNotNull(ShareInput.from(Intent(Intent.ACTION_VIEW, Uri.parse(url))))
+        }
+        for (host in listOf("unknown.facebook.com", "a.linkedin.com", "unknown.linkedin.com", "ar-ar.facebook.com.evil.example",
+            "www.t.co", "t.co.evil.example", "notlnkd.in", "cdn.syndication.twimg.com", "public.api.bsky.app")) {
+            assertNull(host, ShareInput.from(Intent(Intent.ACTION_VIEW, Uri.parse("https://$host/token"))))
+        }
+    }
+
     @Test fun viewSkipsOnboardingLikeShareAndAcceptsWarmIntents() {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("nezzel", 0).edit().clear().commit()
@@ -99,7 +152,7 @@ class ViewInputTest {
         dev.ahmed.savlino.locale.AppPreferences(app).apply { automaticOptions = false; suggestionsEnabled = false }
         val c = Robolectric.buildActivity(MainActivity::class.java).setup()
         try {
-            for (host in ShareInput.VIEW_HOSTS) {
+            for (host in ShareInput.VIEW_HOSTS - AcceptedLinkHosts.SHARE_ONLY) {
                 fun handlers(scheme: String) = app.packageManager.queryIntentActivities(
                     Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://$host/watch?v=clip"))
                         .addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
@@ -107,11 +160,28 @@ class ViewInputTest {
                 assertTrue("HTTPS handler for $host", handlers("https").isNotEmpty())
                 assertTrue("Unsupported HTTP must not be offered for $host", handlers("http").isEmpty())
                 c.newIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://$host/watch?v=clip")))
-                assertEquals("https://$host/watch?v=clip", c.get().links.text)
+                // fb.com keeps its query only as www.facebook.com: its own redirect drops it.
+                val expected = if (host in dev.ahmed.savlino.domain.LinkInput.FACEBOOK_ALIAS_HOSTS) "www.facebook.com" else host
+                assertEquals("https://$expected/watch?v=clip", c.get().links.text)
                 assertFalse(c.get().links.invalidShare)
                 assertNull(c.get().links.takeConfirmedCommand())
             }
         } finally { c.pause().stop().destroy() }
+    }
+
+    @Test @Config(sdk = [33]) fun shareOnlyHostsStayAcceptedWithoutOpenWithHandlers() {
+        val app = RuntimeEnvironment.getApplication()
+        assertTrue(AcceptedLinkHosts.exactHosts.containsAll(AcceptedLinkHosts.SHARE_ONLY))
+        for (host in AcceptedLinkHosts.SHARE_ONLY) {
+            val url = "https://$host/token"
+            val view = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)
+            val handlers = app.packageManager.queryIntentActivities(view, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                .filter { it.activityInfo.packageName == app.packageName }
+            assertTrue("No generic-link handler for $host", handlers.isEmpty())
+            assertEquals(url, ShareInput.from(view)?.text)
+            assertEquals(url, ShareInput.from(Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, url))?.text)
+        }
     }
 
     @Test @Config(sdk = [29]) fun aliasDisabledBeforeAndroid12() = assertFalse(RuntimeEnvironment.getApplication().resources.getBoolean(R.bool.open_with_links))

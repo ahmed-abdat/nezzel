@@ -18,6 +18,7 @@ class BlueskyPostIdentity private constructor(val actor: String, val rkey: Strin
     override fun toString() = "BlueskyPostIdentity(redacted)"
 
     companion object {
+        internal const val ENTRY_HOST = "bsky.app"
         const val API_HOST = "public.api.bsky.app"
         private const val API = "https://$API_HOST/xrpc"
         private val path = Regex("/profile/([^/]+)/post/([A-Za-z0-9_-]{1,64})(?:/(?:likes|reposted-by|quotes))?/?")
@@ -30,7 +31,7 @@ class BlueskyPostIdentity private constructor(val actor: String, val rkey: Strin
         internal fun validDid(value: String): Boolean = value.length <= 253 && did.matches(value)
         fun parse(raw: String): BlueskyPostIdentity? {
             val url = HttpsUrl.parse(raw) ?: return null
-            if (url.host != "bsky.app") return null
+            if (url.host != ENTRY_HOST) return null
             val match = path.matchEntire(url.encodedPath) ?: return null
             val actor = match.groupValues[1]
             if (!validDid(actor) && !(actor.length <= 253 && handle.matches(actor))) return null

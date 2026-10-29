@@ -26,7 +26,7 @@ class InstagramPostIdentity private constructor(val kind: InstagramLinkKind, val
 
     companion object {
         const val PAGE_HOST = "www.instagram.com"
-        private val hosts = setOf("instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am")
+        internal val hosts = setOf("instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am")
         private const val CODE = "[A-Za-z0-9_-]{5,64}"
         /** First segments Instagram uses for its own pages, in any case; never a user prefix. */
         private const val RESERVED = "(?i:share|stories|explore|accounts|direct|about|legal|developer|p|reels?|tv)/"

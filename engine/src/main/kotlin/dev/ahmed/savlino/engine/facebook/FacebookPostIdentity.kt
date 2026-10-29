@@ -22,11 +22,12 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
         FacebookLinkKind.POST, FacebookLinkKind.PHOTO, FacebookLinkKind.SHARE)
 
     companion object {
+        internal const val SHORT_HOST = "fb.watch"
         private const val WWW = "https://www.facebook.com"
         private val hosts = setOf("www.facebook.com", "facebook.com", "m.facebook.com", "web.facebook.com")
         /** Mobile and locale hosts (ar-ar.facebook.com) serve the same posts; parsed links always fetch www/web. */
-        private val inputHosts = hosts + setOf("mbasic.facebook.com", "touch.facebook.com", "mobile.facebook.com")
-        private val localeHost = Regex("[a-z]{2}-[a-z]{2}\\.facebook\\.com")
+        internal val inputHosts = hosts + setOf("mbasic.facebook.com", "touch.facebook.com", "mobile.facebook.com")
+        internal val localeHost = Regex("[a-z]{2}-[a-z]{2}\\.facebook\\.com")
         private val token = Regex("[A-Za-z0-9_-]{1,64}")
         private val numeric = Regex("[0-9]{1,25}")
         private val storyId = Regex("[0-9]{1,25}|pfbid[A-Za-z0-9]{1,80}")
@@ -44,7 +45,7 @@ class FacebookPostIdentity private constructor(val kind: FacebookLinkKind, val f
             val parsed = HttpsUrl.parse(url) ?: return null
             val host = parsed.host.lowercase()
             val path = parsed.encodedPath
-            if (host == "fb.watch") {
+            if (host == SHORT_HOST) {
                 return shortlink.matchEntire(path)?.let {
                     FacebookPostIdentity(FacebookLinkKind.SHORTLINK, "https://fb.watch$path", null, null, null)
                 }

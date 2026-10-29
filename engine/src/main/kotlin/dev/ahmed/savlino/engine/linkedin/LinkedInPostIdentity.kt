@@ -15,6 +15,7 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
     internal val activityId: String? get() = ids[ACTIVITY]
 
     companion object {
+        internal val entryHosts = setOf("linkedin.com", "www.linkedin.com")
         /**
          * A post slug exactly as LinkedIn serves it: `[A-Za-z0-9_-]` plus percent-escapes (non-Latin names arrive
          * encoded), never an escaped `#`, `%`, `.`, `/`, `?`, `\` or control character.
@@ -25,7 +26,7 @@ class LinkedInPostIdentity private constructor(internal val shortlink: Boolean, 
             (Regex("/posts/$LINKEDIN_SLUG/?").matches(url.encodedPath) ||
                 Regex("/feed/update/urn:li:(?:activity|share|ugcPost):[0-9]+/?").matches(url.encodedPath))
 
-        internal fun isLinkedInEntryHost(host: String): Boolean = host == "linkedin.com" || host == "www.linkedin.com" ||
+        internal fun isLinkedInEntryHost(host: String): Boolean = host in entryHosts ||
             Regex("[a-z]{2}\\.linkedin\\.com").matches(host)
 
         /** www host; an `/embed/` or `%3A`-encoded update link becomes its plain `/feed/update/urn:li:…/` page. */

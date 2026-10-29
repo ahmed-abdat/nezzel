@@ -15,6 +15,7 @@ class RedditPostIdentity private constructor(val fetchUrl: String, val postId: S
     companion object {
         private val HOSTS = setOf("reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "m.reddit.com",
             "np.reddit.com", "sh.reddit.com")
+        internal val inputHosts = HOSTS + setOf("redd.it", "v.redd.it")
         private const val NAME = "[A-Za-z0-9_-]{1,64}"
         private const val ID = "[a-z0-9]{1,16}"
         private val post = Regex("/(?:(?:r|user|u)/($NAME)/)?comments/($ID)(?:/([A-Za-z0-9_%-]{1,300}))?(?:/[a-z0-9]{1,16})?/?")
@@ -73,6 +74,6 @@ class RedditPostIdentity private constructor(val fetchUrl: String, val postId: S
             }
         }
 
-        internal fun isRedditHost(host: String): Boolean = host in HOSTS || host == "redd.it" || host == "v.redd.it"
+        internal fun isRedditHost(host: String): Boolean = host in inputHosts
     }
 }

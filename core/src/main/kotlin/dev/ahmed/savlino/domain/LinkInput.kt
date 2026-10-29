@@ -12,6 +12,8 @@ class ValidatedLink internal constructor(val rawUrl: String, val normalizedUrl: 
 enum class Host { YOUTUBE, TIKTOK, INSTAGRAM, FACEBOOK, X, LINKEDIN, OTHER }
 
 object LinkInput {
+    val FACEBOOK_WRAPPER_HOSTS: Set<String> = setOf("l.facebook.com", "lm.facebook.com")
+    val FACEBOOK_ALIAS_HOSTS: Set<String> = setOf("fb.com", "www.fb.com")
     private val urls = Regex("https?://[^\\s\\p{Z}<>\"“”«»]+", RegexOption.IGNORE_CASE)
     private val wrappers = mapOf('(' to ')', '[' to ']', '{' to '}', '\'' to '\'')
     private const val PROSE_PUNCTUATION = ".,;!،؛؟"
@@ -54,13 +56,13 @@ object LinkInput {
         val uri = try { URI(raw) } catch (_: URISyntaxException) { return raw }
         val host = uri.host?.lowercase() ?: return raw
         if (uri.rawUserInfo != null || uri.port != -1) return raw
-        if (host in setOf("l.facebook.com", "lm.facebook.com") && uri.rawPath == "/l.php") {
+        if (host in FACEBOOK_WRAPPER_HOSTS && uri.rawPath == "/l.php") {
             val target = uri.rawQuery.orEmpty().split('&').filter { it.startsWith("u=") }.singleOrNull()?.substring(2) ?: return raw
             val decoded = try { URLDecoder.decode(target, Charsets.UTF_8) } catch (_: IllegalArgumentException) { return "" }
             val secure = if (decoded.startsWith("http://", ignoreCase = true)) "https://" + decoded.substring(7) else decoded
             return secure.takeIf { it.startsWith("https://", ignoreCase = true) && it.none(Char::isWhitespace) }.orEmpty()
         }
-        if (host == "fb.com" || host == "www.fb.com")
+        if (host in FACEBOOK_ALIAS_HOSTS)
             return "https://www.facebook.com" + raw.substring(raw.indexOf(uri.rawAuthority) + uri.rawAuthority.length)
         // A Mix shared as /playlist?list=RD<video id> has no v=: it becomes the watch link of its seed video.
         if (host in setOf("youtube.com", "www.youtube.com", "m.youtube.com") && uri.rawPath.trimEnd('/') == "/playlist") {
