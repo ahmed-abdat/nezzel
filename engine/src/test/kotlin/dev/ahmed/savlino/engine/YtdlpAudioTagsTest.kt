@@ -320,6 +320,90 @@ class YtdlpAudioTagsTest {
         assertNull(YoutubedlEngine(runtime).convertKept(command(audio.first()), dir) {})
     }
 
+    @Test fun finishedMp3RetryValidatesAndReturnsWithoutYtdlpOrEncoding() = runBlocking {
+        val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_192)
+        val dir = temp.newFolder().canonicalFile
+        val output = File(dir, "output.mp3").apply { writeText("finished mp3") }
+        File(dir, "result-path.txt").writeText(output.path + "\n")
+        File(dir, "output.m4a.part-Frag184.part").writeText("leftover fragment")
+        val runtime = Runtime().apply {
+            action = { _, _ -> fail("Finished output must not transfer") }
+            ffmpeg = { fail("Finished output must not encode") }
+        }
+        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).convertKept(command(format), dir) {})
+        assertEquals(output, result.output.file)
+        assertEquals("finished mp3", output.readText())
+        assertEquals(setOf("output.mp3", "result-path.txt"), dir.list()!!.toSet())
+        assertTrue(runtime.calls.isEmpty())
+    }
+
+    @Test fun finishedMp3WithoutManifestProofIsNeverReturnedByConvertKept() = runBlocking {
+        val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_192)
+        for (proof in listOf("missing", "empty", "wrong", "multiple", "symlink")) {
+            val dir = temp.newFolder().canonicalFile
+            val output = File(dir, "output.mp3").apply { writeText(if (proof == "empty") "" else "unconfirmed") }
+            val manifest = File(dir, "result-path.txt")
+            when (proof) {
+                "missing" -> Unit
+                "wrong" -> manifest.writeText(File(dir, "output.m4a").path)
+                "multiple" -> manifest.writeText(output.path + "\n" + output.path)
+                "symlink" -> java.nio.file.Files.createSymbolicLink(manifest.toPath(),
+                    temp.newFile().apply { writeText(output.path) }.toPath())
+                else -> manifest.writeText(output.path)
+            }
+            val runtime = Runtime().apply { ffmpeg = { fail("Unconfirmed target must not encode") } }
+            assertNull(YoutubedlEngine(runtime).convertKept(command(format), dir) {}, proof)
+            assertTrue(runtime.calls.isEmpty())
+        }
+    }
+
+    @Test fun longLiveMp3DropsOnlyKnownTransferDebrisAfterEncode() = runBlocking {
+        val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_192)
+        val dir = temp.newFolder().canonicalFile
+        val debris = listOf("output.m4a.part", "output.m4a.ytdl", "output.m4a.part-Frag184.part")
+        val runtime = Runtime().apply {
+            action = { _, _ ->
+                File(dir, "output.m4a").writeText("downloaded audio")
+                File(dir, "result-path.txt").writeText(File(dir, "output.m4a").path)
+                debris.forEach { File(dir, it).writeText("fragment") }
+                ""
+            }
+            ffmpeg = { args -> File(args.last().removePrefix("file:")).writeText("finished mp3"); Exited() }
+        }
+        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command(format), dir) {})
+        assertEquals("finished mp3", result.output.file.readText())
+        assertEquals(setOf("output.mp3", "result-path.txt"), dir.list()!!.toSet())
+        assertEquals(1, runtime.calls.size)
+    }
+
+    @Test fun failureWritingManifestAfterEncodeKeepsTheFinishedMp3() = runBlocking {
+        val format = Format("mp3-192", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
+            conversion = AudioConversion.MP3_192)
+        val dir = temp.newFolder().canonicalFile
+        val runtime = Runtime().apply {
+            action = { _, _ ->
+                File(dir, "output.m4a").writeText("downloaded audio")
+                File(dir, "result-path.txt").writeText(File(dir, "output.m4a").path)
+                ""
+            }
+            ffmpeg = { args ->
+                File(args.last().removePrefix("file:")).writeText("finished mp3")
+                // Rename succeeds, but finish cannot replace the manifest with a regular file.
+                File(dir, "result-path.txt").delete()
+                File(dir, "result-path.txt").mkdir()
+                Exited()
+            }
+        }
+        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(format), dir) {})
+        assertEquals(DownloadError.PostTransferFailed, result.error)
+        assertEquals(ExecutionFailureReason.STORAGE_STAGING, result.reason)
+        assertEquals("finished mp3", File(dir, "output.mp3").readText())
+        assertEquals("downloaded audio", File(dir, "output.m4a").readText())
+    }
+
     @Test fun keptSourceThatStillFailsToConvertReportsConvertFailed() = runBlocking {
         val format = Format("mp3-128", "mp3", false, true, sourceFormatId = "140", sourceContainer = "m4a",
             conversion = AudioConversion.MP3_128)

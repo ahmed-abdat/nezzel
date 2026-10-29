@@ -635,4 +635,5 @@
     <string name="tip_widget_body">Add the Nezzel widget to paste links and see your downloads.</string>
     <string name="tip_pause_title">Pause everything with one tap</string>
     <string name="tip_pause_body">In Downloads, you can pause all your downloads and resume them together.</string>
+    <string name="download_post_transfer_error">Couldn’t finish the file</string>
 </resources>

@@ -29,6 +29,46 @@ class JobDirectoryResumeTest {
         jobs.createOrAdopt("owned") // Without a compatible recipe the source goes too.
         assertEquals(setOf("output.f140.m4a.part"), dir.list()!!.toSet())
     }
+    @Test fun compatibleConversionKeepsTheFinishedMp3InsteadOfItsSource() {
+        val jobs = JobDirectory(temp.root)
+        val dir = jobs.create("converted").directory
+        listOf("output.m4a", "output.mp3", "result-path.txt", "output.mp4.part-Frag14.part",
+            "output.temp.tags", "output.temp.jpg", "output.temp.enc", "output.temp.mp4")
+            .forEach { dir.resolve(it).writeText(it) }
+        dir.resolve("result-path.txt").writeText(dir.resolve("output.mp3").canonicalPath + "\n")
+        jobs.createOrAdopt("converted", keep = "output.m4a", keepConverted = true)
+        assertEquals(setOf("output.mp3", "result-path.txt", "output.mp4.part-Frag14.part"), dir.list()!!.toSet())
+        assertEquals("output.mp3", dir.resolve("output.mp3").readText())
+        jobs.createOrAdopt("converted") // A different recipe must discard the old result.
+        assertEquals(setOf("output.mp4.part-Frag14.part"), dir.list()!!.toSet())
+    }
+    @Test fun unconfirmedMp3IsDeletedAndTheSourceIsKeptForEncoding() {
+        for (manifest in listOf(null, "output.m4a", "output.mp3\noutput.m4a")) {
+            val jobs = JobDirectory(temp.newFolder())
+            val dir = jobs.create("unconfirmed").directory
+            dir.resolve("output.m4a").writeText("source")
+            dir.resolve("output.mp3").writeText("unconfirmed")
+            if (manifest != null) dir.resolve("result-path.txt").writeText(
+                manifest.lines().joinToString("\n") { dir.resolve(it).canonicalPath })
+            jobs.createOrAdopt("unconfirmed", keep = "output.m4a", keepConverted = true)
+            assertEquals(setOf("output.m4a"), dir.list()!!.toSet())
+            assertEquals("source", dir.resolve("output.m4a").readText())
+        }
+    }
+    @Test fun emptyOrSymlinkMp3IsNeverAdoptedAsFinished() {
+        for (symlink in listOf(false, true)) {
+            val jobs = JobDirectory(temp.newFolder())
+            val dir = jobs.create("invalid").directory
+            dir.resolve("output.m4a").writeText("source")
+            val outside = temp.newFile().apply { writeText("private") }
+            if (symlink) Files.createSymbolicLink(dir.resolve("output.mp3").toPath(), outside.toPath())
+            else dir.resolve("output.mp3").writeText("")
+            jobs.createOrAdopt("invalid", keep = "output.m4a", keepConverted = true)
+            assertEquals("source", dir.resolve("output.m4a").readText())
+            assertFalse(dir.resolve("output.mp3").exists())
+            assertEquals("private", outside.readText())
+        }
+    }
     @Test fun nativeSidecarAdoptsOnlyItsOwnPartialAndRejectsStrayOrMalformedRecords() {
         for (record in listOf("native-v1\nETag\n\"a\"\n6\n", "ytdlp-v1\n", "broken", "native-v1\nETag\nhttps://example.com/private\n6\n")) {
             val jobs = JobDirectory(temp.newFolder())

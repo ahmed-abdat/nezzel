@@ -48,8 +48,8 @@ interface EngineAdapter {
     fun resumeEngine(command: DownloadCommand, directory: File): String = "ytdlp"
     suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult
     /**
-     * Retry after a failed conversion: convert the finished source kept in [directory] again, with no network. Null when
-     * [directory] holds no intact kept source for this row; the caller then runs [download] in full.
+     * Retry from kept bytes: reuse a validated finished MP3, or convert its source again, with no network. Null when
+     * [directory] holds no intact kept file for this row; the caller then runs [download] in full.
      */
     suspend fun convertKept(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult? = null
     fun cancel(operationId: String)

@@ -346,6 +346,7 @@ class DownloadNotifications(private val base: Context,
             DownloadError.StoppedByBattery -> BatterySettings.errorText
             DownloadError.MergeFailed -> R.string.download_merge_error
             DownloadError.ConvertFailed -> R.string.download_convert_mp3_error
+            DownloadError.PostTransferFailed -> R.string.download_post_transfer_error
             DownloadError.ExecutionRestricted, DownloadError.ForegroundDenied -> R.string.download_restricted_error
             DownloadError.LoginRequired -> R.string.private_title
             DownloadError.SourceRefused -> R.string.source_refused_title

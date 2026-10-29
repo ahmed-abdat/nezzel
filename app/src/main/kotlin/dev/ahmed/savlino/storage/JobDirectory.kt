@@ -3,6 +3,7 @@ package dev.ahmed.savlino.storage
 import dev.ahmed.savlino.domain.FilenameSanitizer
 import dev.ahmed.savlino.domain.PartialFileNames
 import dev.ahmed.savlino.domain.DirectResume
+import dev.ahmed.savlino.engine.YtdlpCommand
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileVisitResult
@@ -13,8 +14,8 @@ import java.nio.file.attribute.BasicFileAttributes
 
 interface JobDirectories {
     fun create(jobId: String): JobDirectory.Job
-    /** [keep]: a finished source the retry reuses (YtdlpCommand.finishedSource); every other output is deleted. */
-    fun createOrAdopt(jobId: String, keep: String? = null): JobDirectory.Job = create(jobId)
+    /** [keep]: finished source for Retry. [keepConverted] also accepts a manifest-confirmed MP3 instead of that source. */
+    fun createOrAdopt(jobId: String, keep: String? = null, keepConverted: Boolean = false): JobDirectory.Job = create(jobId)
 }
 
 /** Job IDs are opaque identifiers, never remote titles. New jobs always create exclusively. */
@@ -32,7 +33,7 @@ class JobDirectory(filesDir: File) : JobDirectories {
     }
 
     /** The caller must own this ID in the journal and have stopped its previous writer. */
-    @Synchronized override fun createOrAdopt(jobId: String, keep: String?): Job {
+    @Synchronized override fun createOrAdopt(jobId: String, keep: String?, keepConverted: Boolean): Job {
         if (!jobId.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))) invalidPath()
         if (root.canonicalFile != root || Files.isSymbolicLink(root.toPath())) invalidPath()
         val directory = File(root, jobId)
@@ -44,9 +45,15 @@ class JobDirectory(filesDir: File) : JobDirectories {
         if (directory.canonicalFile != directory || directory.parentFile != root) invalidPath()
         val job = Job(root, directory)
         val files = directory.listFiles() ?: throw StorageException(StorageError.SaveFailed)
+        val converted = keepConverted && YtdlpCommand.keptConversionOutput(directory) != null
+        val retained = if (converted) "output.mp3" else keep
         for (file in files) {
-            if (file.name == "result-path.txt" || (file.name != keep &&
-                    file.name.matches(Regex("output\\.[^.]+")) && !PartialFileNames.matches(file.name))) {
+            val oldManifest = file.name == "result-path.txt" && !converted
+            val replacedSource = converted && file.name == keep && keep != retained
+            val otherOutput = file.name != retained && file.name.matches(Regex("output\\.[^.]+")) &&
+                !PartialFileNames.matches(file.name)
+            val encoderScratch = converted && file.name.matches(Regex("output\\.temp\\.[A-Za-z0-9]+"))
+            if (oldManifest || replacedSource || otherOutput || encoderScratch) {
                 if (Files.isSymbolicLink(file.toPath()) || file.isFile) Files.delete(file.toPath())
             }
         }
@@ -58,7 +65,8 @@ class JobDirectory(filesDir: File) : JobDirectories {
             } == true && (record.total?.let { File(directory, DirectResume.PART).length() <= it } != false) &&
                 (record.syncedBytes?.let { it <= File(directory, DirectResume.PART).length() } != false))))
         if (!validRecord || directory.listFiles()?.all {
-                !Files.isSymbolicLink(it.toPath()) && it.isFile && (PartialFileNames.matches(it.name) || it.name == keep)
+                !Files.isSymbolicLink(it.toPath()) && it.isFile && (PartialFileNames.matches(it.name) ||
+                    it.name == retained || converted && it.name == "result-path.txt")
             } != true) {
             job.cleanup()
             return create(jobId)

@@ -566,6 +566,8 @@ class DownloadCoordinator(
                     }
                 }
                 var outputBytes: Long? = null
+                val transferFinished = java.util.concurrent.atomic.AtomicBoolean()
+                var keptAttempt = false
                 try {
                     // Old retries and backoff reruns can start while offline: wait behind the gate instead. A gate that
                     // keeps passing while this process sees no network (background restriction) would spin: after
@@ -632,10 +634,12 @@ class DownloadCoordinator(
                     attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                     signal.throwIfCanceled()
                     currentCoroutineContext().ensureActive()
-                    val job = if (adopting) directories.createOrAdopt(id, YtdlpCommand.finishedSource(command.format).takeIf { compatibleRecipe })
+                    val job = if (adopting) directories.createOrAdopt(id, YtdlpCommand.finishedSource(command.format).takeIf { compatibleRecipe },
+                        keepConverted = compatibleRecipe && command.format.conversion != null)
                         else directories.create(id)
                     val partialBytes = stagingBytes(job.directory)
                     hasPartial = partialBytes > 0
+                    keptAttempt = adopting && compatibleRecipe && hasPartial
                     startBytes = partialBytes
                     store.transferPartial(id, hasPartial)
                     spaceLedger.reserve(id, space, command.format, partialBytes)
@@ -677,6 +681,7 @@ class DownloadCoordinator(
                                 signal.throwIfCanceled()
                                 return@synchronized
                             }
+                            if (event == EngineEvent.Merging) transferFinished.set(true)
                             if (event is EngineEvent.Progress) {
                                 dev.ahmed.savlino.ui.EngineTiming.firstDownloadBytes(id, event.bytesDownloaded)
                             }
@@ -711,12 +716,12 @@ class DownloadCoordinator(
                     if (result is TransferResult.Failure) attempt.reason = result.reason
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()
-                            // Deliberate bound: a kept source that fails to convert again is dropped, so the next Retry
-                            // downloads in full. The encoder cannot tell a corrupt source from a stall; this way a corrupt
-                            // one never traps Retry in a local loop.
+                            // A failed local retry drops its kept bytes, so the next Retry can escape a
+                            // corrupt source or persistent staging/cleanup failure by downloading afresh.
                             else finishStopped(id, result.error, resumeAllowed = result.resumeAllowed,
-                                startBytes = startBytes, cause = result.cause, keepSource = !convertedKept)
+                                startBytes = startBytes, cause = result.cause, keepSource = !convertedKept && !(keptAttempt && result.error == DownloadError.PostTransferFailed))
                         is TransferResult.Success -> {
+                            transferFinished.set(true)
                             attempt.reason = ExecutionFailureReason.STORAGE_STAGING
                             // Single-stream output has no Merging event: close pause here so a resume never drops a finished file.
                             synchronized(delivery) { transferOpen = false; postProcessing += id }
@@ -730,6 +735,9 @@ class DownloadCoordinator(
                             emit(initial.copy(phase = DownloadPhase.SAVING, restartEpoch = epoch))
                             recovery.publish(job, job.requireOutput(result.output.file), mime(command.format), signal,
                                 cancellationError = ::stoppedError)
+                            // An acknowledged commit failure returns rather than throws; apply the same retry bound.
+                            if (keptAttempt && store.get(id)?.error == DownloadError.PostTransferFailed)
+                                finishStopped(id, DownloadError.PostTransferFailed, keepSource = false)
                         }
                     }
                 } catch (cancelled: CancellationException) {
@@ -747,15 +755,18 @@ class DownloadCoordinator(
                                 StorageError.FolderUnavailable -> DownloadError.FolderUnavailable
                                 StorageError.InsufficientSpace -> DownloadError.InsufficientSpace
                                 StorageError.UnknownSizeRequiresBound -> DownloadError.ExecutionRestricted
+                                StorageError.SaveFailed, StorageError.CopySizeMismatch, StorageError.InvalidPublication ->
+                                    if (transferFinished.get()) DownloadError.PostTransferFailed else DownloadError.SaveFailed
                                 else -> DownloadError.SaveFailed
                             }
                             failure is ArithmeticException -> DownloadError.InsufficientSpace
                             attempt.reason == ExecutionFailureReason.FOREGROUND_DENIED -> DownloadError.ForegroundDenied
+                            transferFinished.get() -> DownloadError.PostTransferFailed
                             else -> DownloadError.ExecutionRestricted
                         }
                         // A refused foreground (dataSync after its timeout cannot restart in the background) is not the
                         // download's fault: it keeps the partial (DownloadError.keepsSource) so Retry, from the opened app, resumes it.
-                        finishStopped(id, error)
+                        finishStopped(id, error, keepSource = !(keptAttempt && error == DownloadError.PostTransferFailed))
                     }
                 } finally {
                     withContext(NonCancellable) {
@@ -877,6 +888,11 @@ class DownloadCoordinator(
             // The policy decides what is kept (DownloadError.keepsSource); [keepSource] false overrides it.
             store.fail(id, error, keepPartial = keepSource && bytes > 0)
             recovery.reconcile(id, cancellationRequested = error.stopsSave, cancellationError = error)
+            // publish() may already have ended the row before this catch. Its retention cannot override
+            // the one-local-retry bound. A committed publication still wins and is never removed here.
+            if (!keepSource && error == DownloadError.PostTransferFailed &&
+                store.get(id)?.let { it.stage == JobStage.FAILED && it.error == error } == true)
+                cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)
         }
     }
     /** Admission may finish scheduling after a worker has started or finished this same job. */

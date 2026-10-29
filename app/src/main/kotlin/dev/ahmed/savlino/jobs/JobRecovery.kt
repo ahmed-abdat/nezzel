@@ -85,7 +85,8 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
     private fun recoverTransfer(row: JobRecord) {
         try {
             val job = JobDirectory(requireNotNull(jobRoot.parentFile)).createOrAdopt(row.jobId,
-                row.command()?.format?.let(YtdlpCommand::finishedSource)) // The run drops it if its recipe changed.
+                row.command()?.format?.let(YtdlpCommand::finishedSource),
+                keepConverted = row.format.conversion != null) // The run drops it if its recipe changed.
             val hasPartial = stagingBytes(job.directory) > 0
             if (!hasPartial) job.cleanup()
             if (row.stage == JobStage.TRANSFERRING || row.hasPartial != hasPartial)
@@ -129,17 +130,24 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
                 result.copy(cleanupFailed = !cleanup(id))
             } else {
                 reconcile(id, cancellation.isCanceled, cancellationError(),
-                    publicationError = if (result is CommitFailed && result.error == StorageError.InsufficientSpace)
-                        DownloadError.InsufficientSpace else DownloadError.SaveFailed)
+                    publicationError = if (result is CommitFailed) publicationError(result.error) else DownloadError.SaveFailed)
                 result
             }
         } catch (failure: Exception) {
             reconcile(id, cancellation.isCanceled, cancellationError(),
                 publicationError = if (TransferSpacePolicy.isNoSpace(failure)) DownloadError.InsufficientSpace
-                    else if (failure is StorageException && failure.error == StorageError.FolderUnavailable) DownloadError.FolderUnavailable
-                    else DownloadError.SaveFailed)
+                    else if (failure is StorageException) publicationError(failure.error)
+                    else DownloadError.PostTransferFailed)
             throw failure
         }
+    }
+
+    /** Publishers wrap I/O and verification failures; these occur after the transfer already finished. */
+    private fun publicationError(error: StorageError): DownloadError = when (error) {
+        StorageError.InsufficientSpace -> DownloadError.InsufficientSpace
+        StorageError.FolderUnavailable -> DownloadError.FolderUnavailable
+        StorageError.SaveFailed, StorageError.CopySizeMismatch, StorageError.InvalidPublication -> DownloadError.PostTransferFailed
+        else -> DownloadError.SaveFailed
     }
 
     /**
@@ -149,13 +157,15 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
     fun reconcile(jobId: String, cancellationRequested: Boolean = false,
         cancellationError: DownloadError = DownloadError.Cancelled,
         publicationError: DownloadError = DownloadError.SaveFailed, retrying: Boolean = false): Unit = synchronized(lock) {
-        if (cancellationRequested || publicationError in setOf(DownloadError.InsufficientSpace, DownloadError.FolderUnavailable))
+        if (cancellationRequested || publicationError in setOf(DownloadError.InsufficientSpace, DownloadError.FolderUnavailable,
+                DownloadError.PostTransferFailed))
             store.requestPublicationFailure(jobId, if (cancellationRequested) cancellationError else publicationError)
         val row = store.get(jobId) ?: return@synchronized
         when (row.stage) {
             JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row)
             JobStage.STAGED -> if (cancellationRequested && cancellationError == DownloadError.Cancelled) store.cancel(jobId)
-                else store.fail(jobId, if (cancellationRequested) cancellationError else publicationError)
+                else store.fail(jobId, if (cancellationRequested) cancellationError else publicationError,
+                    keepPartial = !cancellationRequested && publicationError.keepsSource)
             JobStage.FAILED -> { cleanupUnresolved(row, requeue = retrying); cleanupFailed(jobId) }
             JobStage.CANCELLED -> { cleanupUnresolved(row); cleanup(jobId) }
             JobStage.COMPLETED -> cleanup(jobId)
@@ -163,9 +173,10 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
         }
     }
 
-    /** Exactly one finished file, the one a rerun adopts (YtdlpCommand.finishedSource), and nothing else but partials. */
+    /** Exactly one finished source or manifest-confirmed MP3, and nothing else but partials. */
     private fun requeueFinished(row: JobRecord): Boolean {
-        val keep = YtdlpCommand.finishedSource(row.format) ?: return false // A FAILED row has no command().
+        val keep = YtdlpCommand.keptConversionOutput(row.format, File(jobRoot, row.jobId))?.name
+            ?: YtdlpCommand.finishedSource(row.format) ?: return false // A FAILED row has no command().
         val directory = File(jobRoot, row.jobId)
         if (!safeRoot() || Files.isSymbolicLink(directory.toPath()) || !directory.isDirectory) return false
         val outputs = directory.listFiles()?.filter { it.name != "result-path.txt" && !PartialFileNames.matches(it.name) }

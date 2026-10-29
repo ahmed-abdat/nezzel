@@ -336,15 +336,17 @@ class JobRecoveryTest {
         assertEquals(1, publisher.inserts)
     }
 
-    @Test fun failedCommitReconcilesAndRemovesStagingInProcess() {
-        val (job, staged) = staged("failed-commit")
+    @Test fun failedCommitReconcilesAndKeepsFinishedStagingInProcess() {
+        val (job, staged) = finished("failed-commit")
         publisher.boundary = "failed"
         assertTrue(JobRecovery(store, publisher, root).publish(job, staged, "video/mp4") is CommitFailed)
-        assertFailed("failed-commit")
+        assertEquals(JobStage.FAILED, store.get("failed-commit")!!.stage)
+        assertEquals(DownloadError.PostTransferFailed, store.get("failed-commit")!!.error)
+        assertTrue(JobStore.keepsPartial(store.get("failed-commit")!!))
         assertNull(store.get("failed-commit")!!.pendingUri)
         assertFalse(publisher.hasPending())
         assertTrue(publisher.files.isEmpty())
-        assertFalse(staged.exists())
+        assertArrayEquals(bytes, staged.readBytes())
         assertEquals(1, publisher.inserts)
     }
 
@@ -696,14 +698,49 @@ class JobRecoveryTest {
         assertEquals(0, publisher.commits)
     }
 
-    @Test fun copyFailureReconcilesInProcess() {
-        val (job, staged) = staged("copy-error")
-        publisher.copyEnd = { throw java.io.IOException("copy failed") }
+    @Test fun copyFailureReconcilesInProcessAndKeepsFinishedFile() {
+        val (job, staged) = finished("copy-error")
+        publisher.copyEnd = { throw StorageException(StorageError.SaveFailed, java.io.IOException("copy failed")) }
         expectFailure { JobRecovery(store, publisher, root).publish(job, staged, "video/mp4") }
-        assertFailed("copy-error")
-        assertFalse(staged.exists())
+        val row = store.get("copy-error")!!
+        assertEquals(JobStage.FAILED, row.stage)
+        assertEquals(DownloadError.PostTransferFailed, row.error)
+        assertTrue(row.retryable)
+        assertNull(row.pendingUri)
+        assertTrue(JobStore.keepsPartial(row))
+        assertArrayEquals(bytes, staged.readBytes())
         assertFalse(publisher.hasPending())
         assertTrue(publisher.files.isEmpty())
+    }
+
+    @Test fun wrappedPublicationFailuresKeepFinishedBytesAtEveryBoundary() {
+        for (boundary in listOf("insert", "copy", "commit")) {
+            for (error in listOf(StorageError.SaveFailed, StorageError.CopySizeMismatch, StorageError.InvalidPublication)) {
+                val id = "wrapped-$boundary-${error.name}"
+                val (job, staged) = finished(id)
+                val wrapped = StorageException(error, java.io.IOException("provider I/O failed"))
+                val failing = object : Publisher by publisher {
+                    override fun insertPending(job: JobDirectory.Job, name: String, mimeType: String): PendingPublication {
+                        if (boundary == "insert") throw wrapped
+                        return publisher.insertPending(job, name, mimeType)
+                    }
+                    override fun copy(pending: PendingPublication, source: File, cancellation: CancellationSignal) {
+                        if (boundary == "copy") throw wrapped
+                        publisher.copy(pending, source, cancellation)
+                    }
+                    override fun commit(pending: PendingPublication): PublicationResult = throw wrapped
+                }
+                expectFailure { JobRecovery(store, failing, root).publish(job, staged, "video/mp4") }
+                val row = store.get(id)!!
+                assertEquals(JobStage.FAILED, row.stage)
+                assertEquals(DownloadError.PostTransferFailed, row.error)
+                assertTrue(row.retryable)
+                assertTrue(JobStore.keepsPartial(row))
+                assertNull(row.pendingUri)
+                assertArrayEquals(bytes, staged.readBytes())
+                assertFalse(publisher.hasPending())
+            }
+        }
     }
 
     @Test fun copyNoSpaceFailuresKeepTypedErrorAndAbandonOnlyPendingOutput() {

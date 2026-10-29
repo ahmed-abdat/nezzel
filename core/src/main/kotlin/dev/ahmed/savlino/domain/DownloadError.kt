@@ -20,7 +20,9 @@ enum class DownloadError {
     /** A link batch met a photos-only post; photos are saved from the single-link sheet. */
     PhotoPost,
     /** The audio was downloaded but its conversion (MP3 encode, audio extraction) failed; not an audio+video merge. */
-    ConvertFailed;
+    ConvertFailed,
+    /** Transfer finished, but preparing or publishing the file failed; Retry keeps the completed bytes. */
+    PostTransferFailed;
 
     /** Default for adapters that already return concrete connectivity errors. */
     val cause: DownloadFailureCause get() = when (this) {
@@ -36,7 +38,7 @@ enum class DownloadError {
     /** Which step failed: getting the bytes, turning them into the chosen file, or saving it. */
     val stage: FailureStage get() = when (this) {
         MergeFailed, ConvertFailed -> FailureStage.CONVERT
-        SaveFailed, FolderUnavailable -> FailureStage.SAVE
+        PostTransferFailed, SaveFailed, FolderUnavailable -> FailureStage.SAVE
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, Network, Offline,
         FormatExpired, InsufficientSpace, ExecutionRestricted, Interrupted, Failed, Cancelled, NoVideo, Unavailable,
         NotAPost, SourceRefused, StoppedByBattery, ForegroundDenied, PhotoPost -> FailureStage.TRANSFER
@@ -44,7 +46,7 @@ enum class DownloadError {
 
     /** The person may Retry the same confirmed download. A row's stored retryable flag never exceeds this. */
     val retryable: Boolean get() = when (this) {
-        Network, Offline, InsufficientSpace, MergeFailed, ConvertFailed, SaveFailed, FolderUnavailable,
+        Network, Offline, InsufficientSpace, MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, FolderUnavailable,
         ExecutionRestricted, Interrupted, StoppedByBattery, ForegroundDenied, Failed, EngineUnavailable -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, NoFormats, FormatExpired, Cancelled, NoVideo,
         Unavailable, NotAPost, SourceRefused, PhotoPost -> false
@@ -53,10 +55,10 @@ enum class DownloadError {
     /**
      * The failed job keeps what it downloaded so Retry continues from it: a battery stop or a refused foreground
      * (not the download's fault, and they recur on a background rerun) resumes the partial; a failed conversion
-     * converts the finished source again without downloading it.
+     * converts the finished source again; a later local failure keeps the prepared output too.
      */
     val keepsSource: Boolean get() = when (this) {
-        StoppedByBattery, ForegroundDenied, ConvertFailed -> true
+        StoppedByBattery, ForegroundDenied, ConvertFailed, PostTransferFailed -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, Network, Offline,
         FormatExpired, InsufficientSpace, MergeFailed, SaveFailed, FolderUnavailable, ExecutionRestricted, Interrupted,
         Failed, Cancelled, NoVideo, Unavailable, NotAPost, SourceRefused, PhotoPost -> false
@@ -69,7 +71,7 @@ enum class DownloadError {
     val spendsResumeBudget: Boolean get() = when (this) {
         Network, Offline -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, FormatExpired,
-        InsufficientSpace, MergeFailed, ConvertFailed, SaveFailed, FolderUnavailable, ExecutionRestricted,
+        InsufficientSpace, MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, FolderUnavailable, ExecutionRestricted,
         Interrupted, Failed, Cancelled, NoVideo, Unavailable, NotAPost, SourceRefused, StoppedByBattery,
         ForegroundDenied, PhotoPost -> false
     }
@@ -78,13 +80,13 @@ enum class DownloadError {
     val stopsSave: Boolean get() = when (this) {
         Interrupted, StoppedByBattery, Network, InsufficientSpace, FolderUnavailable -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, Offline, FormatExpired,
-        MergeFailed, ConvertFailed, SaveFailed, ExecutionRestricted, Failed, Cancelled, NoVideo, Unavailable,
+        MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, ExecutionRestricted, Failed, Cancelled, NoVideo, Unavailable,
         NotAPost, SourceRefused, ForegroundDenied, PhotoPost -> false
     }
 
     /** The device or a later step ended it, not the link: reading the link again (re-extraction) would not help. */
     val blocksReextraction: Boolean get() = when (this) {
-        Network, Offline, InsufficientSpace, MergeFailed, ConvertFailed, SaveFailed, FolderUnavailable,
+        Network, Offline, InsufficientSpace, MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, FolderUnavailable,
         ExecutionRestricted, Interrupted, Cancelled -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, FormatExpired, Failed,
         NoVideo, Unavailable, NotAPost, SourceRefused, StoppedByBattery, ForegroundDenied, PhotoPost -> false

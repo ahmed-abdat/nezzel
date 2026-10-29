@@ -457,9 +457,13 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override suspend fun download(command: DownloadCommand, directory: File,
         progress: (EngineEvent) -> Unit): TransferResult {
         var resumeAllowed = true
+        var transferred = false
         var failureReason = ExecutionFailureReason.UNKNOWN
         return operation(command.jobId, { error, cause ->
-            TransferResult.Failure(YtdlpCommand.postProcessingError(command.format, error), resumeAllowed, cause, failureReason)
+            val local = transferred && error in setOf(DownloadError.ExecutionRestricted, DownloadError.Failed)
+            TransferResult.Failure(if (local) DownloadError.PostTransferFailed
+                else YtdlpCommand.postProcessingError(command.format, error), resumeAllowed, cause,
+                if (local) ExecutionFailureReason.STORAGE_STAGING else failureReason)
         }, lockTimeoutMs = limits.maintenanceWaitMs,
             executionFailure = { failureReason = it }) { current ->
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
@@ -694,6 +698,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.deadline = NO_DEADLINE
             current.byteWatchdog = false
             checkCancelled(current)
+            transferred = true // Both engines finished: local staging failures must retain these bytes.
             val marker = File(directory, DirectResume.NAME)
             if (marker.exists() && !marker.delete()) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
             encodeMp3(current, command, directory, infoJson, progress)
@@ -717,12 +722,19 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
 
     override suspend fun convertKept(command: DownloadCommand, directory: File,
         progress: (EngineEvent) -> Unit): TransferResult? {
-        val source = YtdlpCommand.keptConversionSource(command.format, directory) ?: return null
+        val output = YtdlpCommand.keptConversionOutput(command.format, directory)
+        val source = output ?: YtdlpCommand.keptConversionSource(command.format, directory) ?: return null
         var failureReason = ExecutionFailureReason.UNKNOWN
-        return operation(command.jobId, { error, cause -> TransferResult.Failure(error, cause = cause, reason = failureReason) },
+        return operation(command.jobId, { error, cause ->
+            val local = error in setOf(DownloadError.ExecutionRestricted, DownloadError.Failed)
+            TransferResult.Failure(if (local) DownloadError.PostTransferFailed else error, cause = cause,
+                reason = if (local) ExecutionFailureReason.STORAGE_STAGING else failureReason)
+        },
             lockTimeoutMs = limits.maintenanceWaitMs, executionFailure = { failureReason = it }) { current ->
             if (!initialize()) return@operation unavailable.download(command, directory, progress)
-            // Adoption removed the old manifest: name the kept source as yt-dlp would have. No yt-dlp run, no network.
+            // A finished output already has its manifest. No yt-dlp run or encode is needed.
+            if (output != null) return@operation TransferResult.Success(stagedOutput(command, directory, null))
+            // Adoption removed the old source manifest: recreate it. No yt-dlp run, no network.
             val manifest = File(directory.canonicalFile, "result-path.txt")
             try {
                 require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
@@ -742,6 +754,18 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()))
         val paths = manifest.readLines().filter { it.isNotBlank() }
         require(paths.size == 1)
+        // Remove only transfer bookkeeping/fragments. In particular output.f*.m4a and output.temp.*
+        // may still be real media or encoder input: they are NOT disposable just because they are partial-safe.
+        require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory)
+        val named = File(paths.single()).absoluteFile
+        val transferredFile = named.canonicalFile
+        require(transferredFile.parentFile == root && !java.nio.file.Files.isSymbolicLink(named.toPath()) &&
+            !java.nio.file.Files.isSymbolicLink(transferredFile.toPath()) && transferredFile.isFile &&
+            transferredFile.name.matches(Regex("output\\.[a-zA-Z0-9]{1,16}")))
+        requireNotNull(root.listFiles()).filter { it != transferredFile && TRANSFER_DEBRIS.matches(it.name) }.forEach {
+            require(!java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile) { "Invalid transfer debris kind" }
+            check(it.delete()) { "Cannot remove transfer debris kind" }
+        }
         val files = requireNotNull(root.listFiles()).filter { it.name != "result-path.txt" }
         require(files.size == 1)
         val file = files.single()
@@ -762,7 +786,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         require(output.file.parentFile == root)
         output
     } catch (_: IllegalArgumentException) {
-        throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
+        throw YtdlpExecutionFailure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING)
     }
 
     /**
@@ -1044,6 +1068,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
     private companion object {
+        val TRANSFER_DEBRIS = Regex("output(?:\\.[A-Za-z0-9_.-]+)?\\.(?:part(?:-Frag[0-9]+(?:\\.part)?)?|ytdl)")
         const val CANCELLATION_WINDOW_MS = 500L
         const val NO_DEADLINE = Long.MIN_VALUE
         val VERSION_ARGS = listOf("--ignore-config", "--version")

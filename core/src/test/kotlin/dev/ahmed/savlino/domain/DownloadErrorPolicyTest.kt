@@ -21,6 +21,7 @@ class DownloadErrorPolicyTest {
         InsufficientSpace to p(TRANSFER, retry = true, stops = true, local = true),
         MergeFailed to p(CONVERT, retry = true, local = true),
         ConvertFailed to p(CONVERT, retry = true, keep = true, local = true),
+        PostTransferFailed to p(SAVE, retry = true, keep = true, local = true),
         SaveFailed to p(SAVE, retry = true, local = true),
         FolderUnavailable to p(SAVE, retry = true, stops = true, local = true),
         ExecutionRestricted to p(TRANSFER, retry = true, local = true),

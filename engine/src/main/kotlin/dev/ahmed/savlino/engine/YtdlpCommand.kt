@@ -57,6 +57,22 @@ object YtdlpCommand {
             !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.isFile && it.length() > 0
         }
     }
+    /** A complete encoder output must have its own manifest proof; a stray/half MP3 is never reused. */
+    fun keptConversionOutput(format: Format, directory: File): File? =
+        if (format.conversion != null) keptConversionOutput(directory) else null
+
+    /** Shared proof for adoption and conversion Retry; the caller separately validates/cleans the other files. */
+    fun keptConversionOutput(directory: File): File? = try {
+        val root = directory.canonicalFile
+        val output = File(root, "output.mp3")
+        val manifest = File(root, "result-path.txt")
+        require(!java.nio.file.Files.isSymbolicLink(directory.toPath()) && root.isDirectory)
+        require(!java.nio.file.Files.isSymbolicLink(output.toPath()) && output.isFile && output.length() > 0)
+        require(!java.nio.file.Files.isSymbolicLink(manifest.toPath()) && manifest.isFile)
+        val path = manifest.readLines().filter(String::isNotBlank).single()
+        require(File(path).absoluteFile == output && File(path).canonicalFile == output)
+        output
+    } catch (_: Exception) { null }
     /**
      * An MP3 row converts rather than merges: yt-dlp's ffmpeg failure there is a failed conversion, retried locally.
      * M4A extraction stays MergeFailed: nothing keeps its source, so ConvertFailed's local retry would not hold.

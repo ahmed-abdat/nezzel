@@ -303,6 +303,8 @@ internal class Mp3Encoder(
         val dir = job.directory
         val output = File(dir, "output.mp3")
         if (!enc.renameTo(output)) throw Mp3Failure(DownloadError.ExecutionRestricted)
+        // This is a completion marker, not a crash-durability guarantee: neither the output nor manifest is
+        // fsynced here. Adoption still rejects missing/empty output; power-loss durability is not promised.
         File(dir, "result-path.txt").writeText(output.path + "\n")
         // A thumbnail the convertor could not turn into jpg is left under its own extension.
         val thumbnails = dir.listFiles().orEmpty().filter { THUMBNAIL.matches(it.name) }

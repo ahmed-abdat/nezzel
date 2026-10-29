@@ -649,4 +649,5 @@
     <string name="tip_widget_body">Ajoutez le widget Nezzel pour coller des liens et suivre vos téléchargements.</string>
     <string name="tip_pause_title">Mettez tout en pause d’un geste</string>
     <string name="tip_pause_body">Dans Téléchargements, mettez tout en pause puis reprenez ensemble.</string>
+    <string name="download_post_transfer_error">Impossible de finaliser le fichier</string>
 </resources>

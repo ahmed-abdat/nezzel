@@ -715,4 +715,5 @@
     <string name="tip_widget_body">أضف أداة Nezzel للصق الروابط ومتابعة تنزيلاتك.</string>
     <string name="tip_pause_title">أوقف التنزيلات بلمسة</string>
     <string name="tip_pause_body">من التنزيلات، أوقف كل تنزيلاتك مؤقتًا ثم استأنفها معًا.</string>
+    <string name="download_post_transfer_error">تعذّر إكمال الملف</string>
 </resources>

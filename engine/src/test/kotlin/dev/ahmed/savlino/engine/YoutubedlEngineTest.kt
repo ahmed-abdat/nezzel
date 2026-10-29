@@ -336,7 +336,7 @@ class YoutubedlEngineTest {
         val engine = YoutubedlEngine(runtime)
         assertEquals(TransferResult.Failure(DownloadError.FormatExpired), engine.download(command("old"), dir) {})
         assertTrue(runtime.calls.none { it.contains("--no-simulate") })
-        assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING), engine.download(command(), dir) {})
+        assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING), engine.download(command(), dir) {})
         assertEquals("outside", outside.readText())
     }
     @Test fun exactSingleStreamRejectsTruncatedOutputBeforeReturningItForPublication() = runBlocking {
@@ -386,11 +386,36 @@ class YoutubedlEngineTest {
                 File(dir, "result-path.txt").writeText(File(dir, names.first()).path)
                 ""
             } }
-            assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING), YoutubedlEngine(runtime).download(command(), dir) {})
+            assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING), YoutubedlEngine(runtime).download(command(), dir) {})
             names.forEach { assertEquals("preserve", File(dir, it).readText()) }
         }
     }
-    @Test fun symlinkedOutputOrManifestReturnsExecutionRestrictedAndPreservesTargets() = runBlocking {
+    @Test fun stagingFailureBeforeTransferStillDoesNotKeepSource() = runBlocking {
+        val dir = temp.newFolder()
+        File(dir, "unexpected.txt").writeText("not transfer output")
+        val runtime = Runtime()
+        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), dir) {})
+        assertEquals(DownloadError.ExecutionRestricted, result.error)
+        assertFalse(result.error.keepsSource)
+        assertTrue(runtime.calls.none { "--no-simulate" in it })
+    }
+
+    @Test fun transferDebrisNeverFollowsSymlinksOrDeletesTheirTargets() = runBlocking {
+        val dir = temp.newFolder().canonicalFile
+        val outside = temp.newFile().apply { writeText("private") }
+        val runtime = Runtime().apply { action = { _, _ ->
+            File(dir, "output.mp4").writeText("media")
+            File(dir, "result-path.txt").writeText(File(dir, "output.mp4").path)
+            java.nio.file.Files.createSymbolicLink(File(dir, "output.mp4.part").toPath(), outside.toPath())
+            ""
+        } }
+        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), dir) {})
+        assertEquals(DownloadError.PostTransferFailed, result.error)
+        assertEquals("media", File(dir, "output.mp4").readText())
+        assertEquals("private", outside.readText())
+    }
+
+    @Test fun symlinkedOutputOrManifestFailsAfterTransferAndPreservesTargets() = runBlocking {
         for (symlinkManifest in listOf(false, true)) {
             val dir = temp.newFolder().canonicalFile
             val outside = temp.newFile().apply { writeText("preserve") }
@@ -407,7 +432,7 @@ class YoutubedlEngineTest {
                 }
                 ""
             } }
-            assertEquals(TransferResult.Failure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING),
+            assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING),
                 YoutubedlEngine(runtime).download(command(), dir) {})
             assertEquals(if (symlinkManifest) File(dir, "output.mp4").path else "preserve", outside.readText())
         }

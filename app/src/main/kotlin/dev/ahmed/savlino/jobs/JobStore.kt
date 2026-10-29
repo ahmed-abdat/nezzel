@@ -425,7 +425,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     /** Persist the failure reason if provider reconciliation must be deferred. */
     @Synchronized internal fun requestPublicationFailure(jobId: String, reason: DownloadError) {
-        require(reason == DownloadError.Cancelled || reason.stopsSave)
+        require(reason == DownloadError.Cancelled || reason.stopsSave || reason == DownloadError.PostTransferFailed)
         writableDatabase.update("jobs", ContentValues().apply { put("error", reason.name) },
             "job_id = ? AND stage IN ('PENDING_INSERTED','PUBLISHING') AND (error IS NULL OR error != 'Cancelled')", arrayOf(jobId))
     }
@@ -452,13 +452,14 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     // An unresolved MediaStore save keeps its staging (see [keepsPartial]): once the row is gone it saves again.
     private fun endPublication(jobId: String, keepUri: Boolean): Boolean = finishTerminal(jobId,
-        keepStaging = keepUri && get(jobId)?.let { ownsMediaStoreSave(it) && it.error != DownloadError.Cancelled } == true) {
+        keepStaging = get(jobId)?.let { it.error == DownloadError.PostTransferFailed ||
+            keepUri && ownsMediaStoreSave(it) && it.error != DownloadError.Cancelled } == true) {
         val reason = get(jobId)?.error
         val cancelled = reason == DownloadError.Cancelled
         transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING),
             if (cancelled) JobStage.CANCELLED else JobStage.FAILED, ContentValues().apply {
                 put("error", if (cancelled) DownloadError.Cancelled.name
-                    else if (reason?.stopsSave == true) reason.name else DownloadError.SaveFailed.name)
+                    else if (reason?.stopsSave == true || reason == DownloadError.PostTransferFailed) reason.name else DownloadError.SaveFailed.name)
                 put("retryable", if (!cancelled) 1 else 0); if (!keepUri) putNull("pending_uri")
             })
     }
@@ -644,7 +645,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         internal const val RESUME_PROGRESS_STEP_BYTES = 1024L * 1024
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
         /**
-         * An error that keeps its source ([DownloadError.keepsSource]: battery, refused foreground, failed conversion) fails at once
+         * An error that keeps its source ([DownloadError.keepsSource]: battery, refused foreground, failed conversion or local finalization) fails at once
          * but keeps its staging so Retry continues from it (has_partial stays 0 on FAILED rows: the staging bytes are the record;
          * a stop before any byte keeps nothing). Remove, Clear failed and the confirmation lifetime (startup cleanup once
          * Retry is gone) delete it.
