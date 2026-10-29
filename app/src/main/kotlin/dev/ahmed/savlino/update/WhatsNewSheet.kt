@@ -57,7 +57,8 @@ internal fun AppUpdateSheets(updates: AppUpdates, state: AppUpdateState, links: 
         links.confirmPausedUpdate || notificationRationaleShowing) return
     val installed = state.whatsNew
     val offered = state.offerSheet
-    if (installed != null) WhatsNewSheet(installed, language, onDismiss = updates::dismissWhatsNew)
+    // After an update Nezzel opens straight to the user's task: the notes stay in About, never a sheet on first open.
+    if (installed != null) LaunchedEffect(installed) { updates.dismissWhatsNew() }
     else if (offered != null) {
         LaunchedEffect(offered.code) { updates.offerSheetShown(offered.code) }
         WhatsNewSheet(WhatsNew(offered.version, offered.english, offered.arabic, offered.french), language,

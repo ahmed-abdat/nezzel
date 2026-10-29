@@ -57,20 +57,16 @@ class WhatsNewSheetTest {
             assertFalse(visible())
             assertNotNull(app.appUpdates.state.value.whatsNew)
             rationale = false
-            assertTrue(visible())
-            val displayed = texts(nodes(a))
-            assertTrue(displayed.contains(if (language == "ar") "تحسين 1" else "Improvement 1"))
-            assertFalse(displayed.contains(if (language == "ar") "Improvement 1" else "تحسين 1"))
-            assertFalse(displayed.any { "GitHub" in it })
-            click(a, app.getString(R.string.whats_new_ok))
+            // An update opens straight to Home: no sheet, the notes are consumed and stay in About.
             assertFalse(visible())
             assertNull(app.appUpdates.state.value.whatsNew)
+            assertNotNull(app.appUpdates.currentNotes())
             val owner = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
             try { assertNull(AppUpdates(app, owner).state.value.whatsNew) } finally { owner.cancel() }
         }
     }
-    @Test fun homeDefersForDialogThenDismissesPermanentlyEnglish() = home()
-    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun homeDefersForDialogThenDismissesPermanentlyArabic() = home()
+    @Test fun homeConsumesNotesWithoutASheetEnglish() = home()
+    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun homeConsumesNotesWithoutASheetArabic() = home()
 
     @Test fun homeWaitsForOptionsAndDoesNotConsumeNotesOnOtherRoutes() {
         record()
@@ -84,13 +80,13 @@ class WhatsNewSheetTest {
             fun visible() = nodes(a).any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" }
             assertFalse(visible())
             assertNotEquals(dev.ahmed.savlino.ui.OptionsState.Hidden, links.optionsState)
-            links.dismissOptions()
-            assertTrue(visible())
             links.navigate("Settings")
+            links.dismissOptions()
             assertFalse(visible())
             assertNotNull(app.appUpdates.state.value.whatsNew)
             links.navigate("Home")
-            assertTrue(visible())
+            assertFalse(visible())
+            assertNull(app.appUpdates.state.value.whatsNew)
         }
     }
 
