@@ -109,6 +109,19 @@ class PinterestPostParserTest {
         assertFalse(image.discovery.previewQuality)
     }
 
+    @Test fun aLightRelayResultIsThePinOnlyWhenItsNodeIdNamesIt() {
+        fun node(id: String) = java.util.Base64.getEncoder().encodeToString("Pin:$id".toByteArray())
+        fun html(light: String) = """
+            <script type="text/javascript">window.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__("%7B%22pinId%22%3A%22$pin%22%7D", {"data":{"v3GetPinQueryv2":{"data":{"entityId":"$pin","isVideo":false,"videos":null,"images_orig":{"url":"$original"}}}}});</script>
+            <script type="text/javascript">window.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__("%7B%22pinId%22%3A%22$pin%22%7D", {"data":{"v3GetPinQueryv2":{"__typename":"PinResponse","data":$light}}});</script>
+        """.trimIndent().toByteArray()
+        val own = html("""{"id":"${node(pin)}","imageSignature":"0123456789abcdef0123456789abcdef","images_736x":{"url":"$large"}}""")
+        assertEquals(original, assertIs<PinterestParseResult.Image>(PinterestPostParser().parse(own, pin)).candidate)
+        for (light in listOf("""{"id":"${node("100000000000000002")}","images_736x":{"url":"$large"}}""",
+                """{"images_736x":{"url":"$large"}}""", """{"id":"not base64!","images_736x":{"url":"$large"}}"""))
+            assertEquals(ImageFailure.SOURCE_REFUSED, assertIs<PinterestParseResult.Failure>(PinterestPostParser().parse(html(light), pin)).reason)
+    }
+
     @Test fun anImageOnlyStoryAndADeepStoryVideoStayOnTheVideoPath() {
         val cover = page("""{"is_video":false,"videos":null,"story_pin_data":{"pages":[{"blocks":[{"image":{"url":"$original"}}]}]},
             "images":{"orig":{"url":"$original","width":400,"height":400}}}""")

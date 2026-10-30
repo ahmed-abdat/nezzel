@@ -2,7 +2,9 @@ package dev.ahmed.savlino.engine
 
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.mediaimage.*
+import dev.ahmed.savlino.engine.mediahttp.MediaHttpFailure
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.delay
 
 enum class MediaSourceRoute { DIRECT_IMAGE, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST, LEGACY }
 
@@ -16,7 +18,14 @@ class MediaSourceInspector(private val images: PublicImageInspector, private val
 
     suspend fun inspect(source: LinkRevision, operationId: String, route: MediaSourceRoute): MediaInspectResult {
         if (route == MediaSourceRoute.LEGACY) return legacy.inspect(source, operationId)
-        val operation = images.newOperation(source, imageIdentity)
+        var operation = images.newOperation(source, imageIdentity)
+        // Two transport operations at most: the link just closed can hold its slot a moment longer. Wait for it
+        // briefly instead of failing a fresh link as unreadable.
+        var waited = 0L
+        while (operation.token.checkActive() == MediaHttpFailure.BUSY && waited < BUSY_WAIT_MS) {
+            delay(BUSY_POLL_MS); waited += BUSY_POLL_MS
+            operation = images.newOperation(source, imageIdentity)
+        }
         operations[operationId] = operation
         return try {
             images.inspect(operation, when (route) {
@@ -41,6 +50,8 @@ class MediaSourceInspector(private val images: PublicImageInspector, private val
 
     companion object {
         val PUBLIC_IMAGE_IDENTITY = MediaAdapterIdentity("public-image", 1, "android-image-1", 1)
+        private const val BUSY_WAIT_MS = 3_000L
+        private const val BUSY_POLL_MS = 100L
     }
 }
 

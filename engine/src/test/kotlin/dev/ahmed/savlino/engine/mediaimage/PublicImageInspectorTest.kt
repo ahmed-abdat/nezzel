@@ -3,6 +3,7 @@ package dev.ahmed.savlino.engine.mediaimage
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.mediahttp.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -96,6 +97,18 @@ class PublicImageInspectorTest : PublicImageTestBase() {
                 }
             }
         }
+    }
+
+    @Test fun aLinkOpenedWhileBothTransportSlotsAreHeldWaitsForOneInsteadOfFailing() = fixture { f ->
+        f.http.control()
+        val held = List(2) { f.http.client.newOperation(MediaHttpOperation.PAGE_AND_IMAGE) }
+        val facade = MediaSourceInspector(f.inspector, LegacyMediaInspectionAdapter(FakeEngine()))
+        val result = runBlocking {
+            launch(kotlinx.coroutines.Dispatchers.IO) { kotlinx.coroutines.delay(300); held[0].close() }
+            facade.inspect(imageSource(), "after-busy", MediaSourceRoute.DIRECT_IMAGE)
+        }
+        inspected(result).close()
+        held[1].close()
     }
 
     @Test fun directOpaquePathUsesActualMimeCompleteBytesAndMeasuredProofWithoutCreatingFiles() {

@@ -13,6 +13,7 @@ import dev.ahmed.savlino.engine.mediaimage.ImagePhase
 import dev.ahmed.savlino.engine.mediaimage.PostText
 import java.io.IOException
 import java.net.URLDecoder
+import java.util.Base64
 
 sealed interface PinterestParseResult {
     /**
@@ -110,7 +111,7 @@ class PinterestPostParser {
             from = end
             if (!named) continue
             val pin = relayPin(readJson(page.substring(brace, end), tokens) ?: throw Refusal()) ?: throw Refusal()
-            if (pin["entityId"] != pinId) throw Refusal()
+            if (!namesPin(pin, pinId)) throw Refusal()
             found += pin
         }
         if (page.indexOf(RELAY, from) >= 0) throw Budget()
@@ -118,6 +119,16 @@ class PinterestPostParser {
     }
 
     private class Refusal : RuntimeException()
+
+    /** `entityId`, or for a light image-only result with no `entityId`, its Relay node id `base64("Pin:<id>")`. */
+    private fun namesPin(pin: Map<*, *>, pinId: String): Boolean {
+        pin["entityId"]?.let { return it == pinId }
+        val node = pin["id"] as? String ?: return false
+        if (node.length > 64) return false
+        val decoded = try { String(Base64.getDecoder().decode(node), Charsets.UTF_8) }
+            catch (_: IllegalArgumentException) { return false }
+        return decoded == "Pin:$pinId"
+    }
 
     private fun jsonEnd(page: String, brace: Int): Int? {
         var depth = 0
