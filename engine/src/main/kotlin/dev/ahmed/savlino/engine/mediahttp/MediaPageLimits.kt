@@ -10,4 +10,5 @@ internal object MediaPageLimits {
     const val TIKTOK = 3 * 1024 * 1024
     const val X = 512 * 1024
     const val REDDIT = 3 * 1024 * 1024
+    const val PINTEREST = 3 * 1024 * 1024
 }

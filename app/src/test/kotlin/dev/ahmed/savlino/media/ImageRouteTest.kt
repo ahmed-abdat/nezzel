@@ -15,6 +15,16 @@ class ImageRouteTest {
             "https://www.tiktok.com/@synthetic/photo/no-id")) assertEquals(MediaSourceRoute.LEGACY, route(url))
     }
 
+    @Test fun pinterestPinLinksReadTheirImageFirst() {
+        val pin = "100000000000000001"
+        for (url in listOf("https://www.pinterest.com/pin/$pin/", "https://pinterest.com/pin/$pin",
+            "https://www.pinterest.co.uk/pin/synthetic-title--$pin/sent/?trk=1", "https://co.pinterest.com/pin/$pin/"))
+            assertEquals(url, MediaSourceRoute.PINTEREST, route(url))
+        for (url in listOf("https://pin.it/AbCd123", "https://www.pinterest.com/synthetic/board/",
+            "https://api.pinterest.com/url_shortener/AbCd123/redirect/", "https://www.pinterest.com.evil.example/pin/$pin/"))
+            assertEquals(url, MediaSourceRoute.LEGACY, route(url))
+    }
+
     @Test fun redditPostLinksReadTheirPhotosFirstWhileVideoLinksStayOnYtdlp() {
         for (url in listOf("https://www.reddit.com/r/synthetic/comments/1abcdef/synthetic_photo/", "https://redd.it/1abcdef",
             "https://www.reddit.com/r/synthetic/s/AbC123xyz", "https://old.reddit.com/comments/1abcdef/", "https://www.reddit.com/gallery/1abcdef"))

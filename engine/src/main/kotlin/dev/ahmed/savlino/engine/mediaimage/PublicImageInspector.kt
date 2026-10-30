@@ -13,6 +13,7 @@ import dev.ahmed.savlino.engine.mediahttp.*
 import dev.ahmed.savlino.engine.telegram.TelegramReader
 import dev.ahmed.savlino.engine.x.XReader
 import dev.ahmed.savlino.engine.instagram.InstagramReader
+import dev.ahmed.savlino.engine.pinterest.PinterestReader
 import dev.ahmed.savlino.engine.bluesky.BlueskyReader
 import dev.ahmed.savlino.engine.reddit.RedditPost
 import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
@@ -72,6 +73,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             BlueskyReader.accepts(source.link.rawUrl) -> BlueskyReader.operation
             TikTokPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL
             RedditPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
+            PinterestReader.accepts(source.link.rawUrl) -> PinterestReader.operation
             else -> MediaHttpOperation.DIRECT_IMAGE
         }
         val previous = synchronized(lock) {
@@ -129,6 +131,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     }
                     ImageSourceType.TIKTOK -> fetchTikTok(operation)
                     ImageSourceType.REDDIT -> fetchReddit(operation)
+                    ImageSourceType.PINTEREST -> {
+                        val reader = PinterestReader(operation.source.link)
+                        mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, PinterestReader.imageRule)
+                    }
                     ImageSourceType.DIRECT -> fetchDirect(operation)
                 } } catch (_: OutOfMemoryError) {
                     Fetched.Failed(failure(ImageFailure.BUDGET, operation.fetchPhase))
@@ -453,7 +459,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val assets = ArrayList<Fetched.Asset>()
         val linkedIn = pageContext != null
         val optionalPreviews = rule == MediaHostRule.TELEGRAM_CDN || rule == MediaHostRule.BLUESKY_CDN ||
-            rule == MediaHostRule.REDDIT_MEDIA
+            rule == MediaHostRule.REDDIT_MEDIA || rule == MediaHostRule.PINTEREST_CDN
         val thumbnails = !linkedIn && (optionalPreviews || urls.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0)
         val candidates = urls.take(operation.token.operation.maxImages)
         var postContext: MediaHttpPostContext? = null

@@ -32,6 +32,7 @@ import dev.ahmed.savlino.engine.facebook.FacebookLinkKind
 import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
 import dev.ahmed.savlino.engine.mediaimage.*
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
+import dev.ahmed.savlino.engine.pinterest.PinterestPostIdentity
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.entry.ShareInput
@@ -101,7 +102,7 @@ internal const val SHEET_FRESH_MS = YtdlpInfoCache.TTL_MS - 5 * 60 * 1000L
 private val CANONICAL_WATCH = Regex("https://www\\.facebook\\.com/watch/\\?v=[0-9]{1,25}")
 /** Readers that hand a proven video post back as the user's own link. */
 private val HANDOFF_ROUTES = setOf(MediaSourceRoute.X, MediaSourceRoute.INSTAGRAM,
-    MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.REDDIT)
+    MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.REDDIT, MediaSourceRoute.PINTEREST)
 /** Slug as LinkedIn serves it (percent-escaped non-Latin names allowed; no escaped #, %, ., /, ?, \\ or controls). */
 private val CANONICAL_LINKEDIN_POST = Regex("https://www\\.linkedin\\.com/(?:posts/" +
     "(?:[A-Za-z0-9_-]|%(?![01][0-9A-Fa-f]|2[35EeFf]|3[Ff]|5[Cc]|7[Ff])[0-9A-Fa-f]{2}){1,600}/" +
@@ -746,7 +747,7 @@ class LinkViewModel(
             MediaSourceRoute.LEGACY -> startLegacyInspection(input, readerOrigin)
             MediaSourceRoute.DIRECT_IMAGE, MediaSourceRoute.LINKEDIN, MediaSourceRoute.FACEBOOK, MediaSourceRoute.X,
             MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK,
-            MediaSourceRoute.REDDIT ->
+            MediaSourceRoute.REDDIT, MediaSourceRoute.PINTEREST ->
                 startImageInspection(images, input, route, origin)
         }
     }
@@ -883,6 +884,7 @@ class LinkViewModel(
             MediaSourceRoute.X -> XPostIdentity.parse(source.link.rawUrl)?.legacyUrl
             MediaSourceRoute.INSTAGRAM -> InstagramPostIdentity.parse(source.link.rawUrl)?.legacyUrl
             MediaSourceRoute.TIKTOK -> TikTokPostIdentity.parse(source.link.rawUrl)?.videoUrl
+            MediaSourceRoute.PINTEREST -> PinterestPostIdentity.parse(source.link.rawUrl)?.fetchUrl
             else -> null
         }
         return canonical?.let(LinkInput::parse)?.let { LinkRevision(it, source.revision) } ?: source

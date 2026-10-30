@@ -4,7 +4,7 @@ import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.mediaimage.*
 import java.util.concurrent.ConcurrentHashMap
 
-enum class MediaSourceRoute { DIRECT_IMAGE, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, LEGACY }
+enum class MediaSourceRoute { DIRECT_IMAGE, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST, LEGACY }
 
 /**
  * Additive, explicit routing facade; EngineAdapter and the audiovisual command path remain untouched.
@@ -28,6 +28,7 @@ class MediaSourceInspector(private val images: PublicImageInspector, private val
                 MediaSourceRoute.BLUESKY -> ImageSourceType.BLUESKY
                 MediaSourceRoute.TIKTOK -> ImageSourceType.TIKTOK
                 MediaSourceRoute.REDDIT -> ImageSourceType.REDDIT
+                MediaSourceRoute.PINTEREST -> ImageSourceType.PINTEREST
                 else -> ImageSourceType.DIRECT
             })
         } finally { operations.remove(operationId, operation) }

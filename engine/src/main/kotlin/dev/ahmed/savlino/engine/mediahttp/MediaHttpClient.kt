@@ -36,6 +36,7 @@ import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
+import dev.ahmed.savlino.engine.pinterest.PinterestPostIdentity
 import dev.ahmed.savlino.engine.reddit.RedditJsChallenge
 import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
@@ -74,7 +75,7 @@ internal sealed interface MediaHttpImageTransferResult {
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpImageTransferResult
 }
 
-private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, YOUTUBE_OEMBED, SHORT_LINK }
+private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST, YOUTUBE_OEMBED, SHORT_LINK }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -174,6 +175,13 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     internal fun fetchRedditPost(token: OperationToken, identity: RedditPostIdentity): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.REDDIT)
 
+    /**
+     * The logged-out page of one pin: `https://www.pinterest.com/pin/<id>/`, mobile browser headers, no cookie.
+     * A same-pin redirect may drop its query; a login redirect is not followed. Cap [MediaPageLimits.PINTEREST].
+     */
+    internal fun fetchPinterestPost(token: OperationToken, identity: PinterestPostIdentity): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.PINTEREST)
+
     internal fun newYouTubeOEmbedOperation(): OperationToken =
         createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false, deadlineSeconds = 4)
 
@@ -205,7 +213,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             (if (token.operation == MediaHttpOperation.LINKEDIN_PAGE_AND_CAROUSEL)
                 request.pageContext == null || request.hostRule != MediaHostRule.ANY
             else request.hostRule !in setOf(MediaHostRule.FACEBOOK_CDN, MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN,
-                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN, MediaHostRule.TIKTOK_CDN, MediaHostRule.REDDIT_MEDIA)))
+                MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN, MediaHostRule.TIKTOK_CDN, MediaHostRule.REDDIT_MEDIA,
+                MediaHostRule.PINTEREST_CDN)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
         else fetchInternal(token, request, null, optional = true, imageCap = cap)
 
@@ -420,6 +429,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val blueskyPage = site == PageSite.BLUESKY
         val tiktokPage = site == PageSite.TIKTOK
         val redditPage = site == PageSite.REDDIT
+        val pinterestPage = site == PageSite.PINTEREST
         val oembed = site == PageSite.YOUTUBE_OEMBED
         val shortLink = site == PageSite.SHORT_LINK
         val browserPage = facebookPage || instagramPage || telegramPage || tiktokPage || redditPage
@@ -471,6 +481,11 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             if (redditPage && (request.purpose != MediaHttpPurpose.PAGE ||
                     token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||
                     RedditPostIdentity.parse(url)?.fetchUrl != url.toString())) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (pinterestPage && (request.purpose != MediaHttpPurpose.PAGE ||
+                    token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||
+                    !PinterestPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (!pinterestPage && request.purpose == MediaHttpPurpose.PAGE && PinterestPostIdentity.isPinterestHost(url.host))
+                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             requireHostRule(request, url)
             val entry = if (linkedInPage) HttpsUrl.withoutQuery(url) else null
             validateContext(token, request, url)
@@ -549,6 +564,14 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                     redditPost = hop.postId
                                     HttpsUrl.parse(hop.fetchUrl) ?: throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                                 }
+                                pinterestPage -> {
+                                    if (PinterestPostIdentity.isLoginWall(located)) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
+                                    val hop = PinterestPostIdentity.parse(located.toString())
+                                    val requested = PinterestPostIdentity.parse(request.url)?.pinId
+                                    if (hop == null || hop.pinId != requested || located.host != PinterestPostIdentity.PAGE_HOST)
+                                        throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                                    located.newBuilder().query(null).fragment(null).build()
+                                }
                                 linkedInPage -> LinkedInPostIdentity.linkedInHopTarget(located)
                                 else -> located
                             }
@@ -580,6 +603,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 else if (instagramPage) MediaPageLimits.INSTAGRAM
                                 else if (tiktokPage) MediaPageLimits.TIKTOK
                                 else if (redditPage) MediaPageLimits.REDDIT
+                                else if (pinterestPage) MediaPageLimits.PINTEREST
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN
                                 else imageCap?.let { minOf(it, token.budget.imageLimit()) })
@@ -659,6 +683,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             MediaHostRule.BLUESKY_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isBlueskyImage(url)
             MediaHostRule.TIKTOK_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isTikTokImage(url)
             MediaHostRule.REDDIT_MEDIA -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isRedditImage(url)
+            MediaHostRule.PINTEREST_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isPinterestImage(url)
         }
         if (!allowed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
     }

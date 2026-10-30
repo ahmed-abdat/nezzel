@@ -62,6 +62,24 @@ internal object MediaHttpPolicy {
         }
     private val redditImagePath = Regex("/[A-Za-z0-9_-]{1,200}\\.(?:jpg|jpeg|png|webp|gif)")
 
+    /**
+     * Pinterest's image host only: `/originals/` or a sized folder (`736x`, `236x`, `136x136`, `75x75_RS`),
+     * then the signature split into three folders. No query, no `webapp` or cover paths.
+     */
+    internal fun isPinterestImage(url: HttpUrl): Boolean {
+        if (!url.isHttps || url.port != 443 || url.host != "i.pinimg.com" || url.encodedQuery != null) return false
+        val parts = url.encodedPath.split('/')
+        if (parts.size != 6 || !pinterestFolder.matches(parts[1])) return false
+        val file = parts[5]
+        val dot = file.lastIndexOf('.')
+        if (dot <= 0 || file.substring(dot + 1).lowercase() !in pinterestExtensions) return false
+        val signature = file.substring(0, dot).lowercase()
+        return signature.length == 32 && signature.all { it in '0'..'9' || it in 'a'..'f' } &&
+            (parts[2] + parts[3] + parts[4]).lowercase() == signature.take(6)
+    }
+    private val pinterestFolder = Regex("originals|[0-9]{2,4}x(?:[0-9]{2,4})?(?:_RS)?")
+    private val pinterestExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "avif")
+
     /** TikTok photo CDN, including p16-/p19- signed hosts; suffix boundaries reject lookalikes. */
     internal fun isTikTokImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 &&
         (url.host.endsWith(".tiktokcdn.com") || url.host.endsWith(".tiktokcdn-us.com")) &&

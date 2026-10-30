@@ -12,6 +12,7 @@ import dev.ahmed.savlino.engine.mediaimage.MediaInspectResult
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
+import dev.ahmed.savlino.engine.pinterest.PinterestPostIdentity
 import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import java.net.URI
 import java.net.URISyntaxException
@@ -39,6 +40,8 @@ object ImageRoute {
         // Reddit post links read their photos first; anything else is handed back to yt-dlp. v.redd.it is always video.
         RedditPostIdentity.parse(link.rawUrl)?.videoId == null && RedditPostIdentity.parse(link.rawUrl) != null ->
             MediaSourceRoute.REDDIT
+        // Pin links read their image first. A video pin is handed back; pin.it is resolved before this runs.
+        PinterestPostIdentity.parse(link.rawUrl) != null -> MediaSourceRoute.PINTEREST
         isImagePath(link.rawUrl) || isKnownImageCdn(link.rawUrl) -> MediaSourceRoute.DIRECT_IMAGE
         else -> MediaSourceRoute.LEGACY
     }
