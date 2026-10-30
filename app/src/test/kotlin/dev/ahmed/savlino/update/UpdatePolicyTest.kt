@@ -52,4 +52,14 @@ class UpdatePolicyTest {
         assertFalse(UpdatePolicy.notify("dev.ahmed.savlino", true, 11, 10, 11, 10))
         assertFalse(UpdatePolicy.notify("dev.ahmed.savlino", true, 11, 10, null, 11))
     }
+
+    @Test fun onlyVerifiedAutomaticIdleBackgroundUpdatesOnAndroidTwelveOrLater() {
+        assertTrue(canSilentlyUpdate(31, true, false, false, true))
+        assertTrue(canSilentlyUpdate(35, true, false, false, true))
+        assertFalse(canSilentlyUpdate(30, true, false, false, true))
+        assertFalse(canSilentlyUpdate(35, false, false, false, true))
+        assertFalse(canSilentlyUpdate(35, true, true, false, true))
+        assertFalse(canSilentlyUpdate(35, true, false, true, true))
+        assertFalse(canSilentlyUpdate(35, true, false, false, false))
+    }
 }

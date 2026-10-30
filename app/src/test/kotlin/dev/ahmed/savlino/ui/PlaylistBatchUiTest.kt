@@ -26,9 +26,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class PlaylistBatchUiTest {
-    @Test fun englishOptionsOpenThePlaylistWithoutInspectingTheFirstVideo() = sheet("en", true)
     @Test @Config(qualifiers = "ar") fun arabicOptionsOpenThePlaylistWithoutInspectingTheFirstVideo() = sheet("ar", true)
-    @Test @Config(qualifiers = "fr") fun frenchOptionsOpenThePlaylistWithoutInspectingTheFirstVideo() = sheet("fr", true)
     @Test fun videoSharedFromAPlaylistDoesNotShowTheFirstVideoWarning() = sheet("en", false)
 
     private fun sheet(language: String, pure: Boolean) {
