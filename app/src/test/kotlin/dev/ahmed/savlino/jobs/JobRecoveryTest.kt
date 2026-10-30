@@ -166,6 +166,34 @@ class JobRecoveryTest {
         assertRequeued("staged-finished", output)
         assertEquals(0, publisher.inserts)
     }
+
+    @Test fun stagedAudioIsPublishedAfterReopenWithoutReenteringTransfer() {
+        val formats = listOf(
+            Format("140", "m4a", false, true),
+            Format("extracted", "m4a", false, true, sourceFormatId = "18"),
+            Format("converted", "mp3", false, true, conversion = AudioConversion.MP3_192, sourceFormatId = "251")
+        )
+        for ((index, format) in formats.withIndex()) {
+            val id = "staged-audio-$index"
+            check(store.enqueue(command(id, format)))
+            check(store.startTransfer(id, "recipe"))
+            val job = directories.create(id)
+            val output = File(job.directory, "output.${format.container}").apply { writeBytes(bytes) }
+            File(job.directory, "result-path.txt").writeText(output.absolutePath + "\n")
+            check(store.markStaged(id))
+        }
+        reopen()
+        recoverTwice()
+        for (index in formats.indices) {
+            val row = store.get("staged-audio-$index")!!
+            assertEquals(JobStage.COMPLETED, row.stage)
+            assertNull(row.sourceUrl)
+            assertArrayEquals(bytes, publisher.files[row.pendingUri]!!.readBytes())
+            assertFalse(File(root, row.jobId).exists())
+        }
+        assertEquals(3, publisher.inserts)
+        assertEquals(3, publisher.commits)
+    }
     // F3: a death during every save does not loop; it spends the stall budget, then fails once.
     @Test fun repeatedDeathsWhileSavingAFinishedSourceFailAfterTheStallBudget() {
         val (_, output) = finished("save-loop")

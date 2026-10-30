@@ -310,6 +310,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             ContentValues().apply { put("has_partial", 1); putNull("error"); put("retryable", 0); putNull("pending_uri"); putNull("display_name")
                 put("stall_restarts", stalls + 1) })
     }
+
+    /** A validated staged output can save directly; repeated deaths still spend the save restart budget. */
+    @Synchronized internal fun retryStagedPublication(jobId: String): Boolean {
+        val stalls = get(jobId)?.stallRestarts ?: return false
+        return stalls < 3 && transition(jobId, setOf(JobStage.STAGED), JobStage.STAGED,
+            ContentValues().apply { put("stall_restarts", stalls + 1) })
+    }
     /** Persist the reset position so trickles accumulate across attempts without reopening the budget. */
     @Synchronized internal fun resetAutomaticResumes(jobId: String, bytes: Long) {
         val row = get(jobId) ?: return
@@ -512,7 +519,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
     /**
      * Clear link history: every blob and "Saved before" tag on ended rows, and the link a failure kept for Retry
-     * (that row stops being retryable), in one transaction; then the key. Active jobs keep the link they need.
+     * (that row stops being retryable), in one transaction; then the key if no active batch still needs it.
+     * Active jobs keep the link they need.
      * Under [terminalLock], so no completion seals across it.
      */
     fun clearShareLinks(): Unit = synchronized(terminalLock) {
@@ -534,8 +542,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
             for (id in failed) get(id)?.let(onExpired)
+            // Batch sources share this key. Keep it until no retained source needs to open again.
+            val batchNeedsKey = db.query("batch_items", arrayOf("batch_id"), "source_url IS NOT NULL",
+                null, null, null, "1").use { it.moveToFirst() }
+            if (!batchNeedsKey) links?.forget()
         }
-        links?.forget()
     }
 
     /** Remove is restricted to failures; a live job or completed publication is never discarded. */

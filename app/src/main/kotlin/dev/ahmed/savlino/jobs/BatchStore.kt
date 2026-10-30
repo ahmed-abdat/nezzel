@@ -285,7 +285,11 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     private fun userJobId(jobId: String) = jobId.replace(USER_RETRY, "") + "-u" + now() + FRESH_SUFFIX
 
     @Synchronized internal fun finishIfIdle(id: String) {
-        if (items(id).none { it.state in setOf(BatchItemState.WAITING, BatchItemState.QUEUED) })
+        val items = items(id)
+        if (get(id)?.state == BatchState.WAITING_NETWORK && items.any {
+                it.state == BatchItemState.FAILED && it.retryable && it.hasSource
+            }) return
+        if (items.none { it.state in setOf(BatchItemState.WAITING, BatchItemState.QUEUED) })
             db.execSQL("UPDATE batches SET state='COMPLETED' WHERE batch_id=? AND state IN ('ACTIVE','PAUSED','WAITING_NETWORK')", arrayOf(id))
     }
 

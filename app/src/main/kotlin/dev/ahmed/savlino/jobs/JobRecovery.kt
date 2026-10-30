@@ -36,7 +36,7 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             }
             when (row.stage) {
                 JobStage.PENDING_INSERTED, JobStage.PUBLISHING -> recoverPublication(row, startup = true)
-                JobStage.STAGED -> if (!requeueFinished(row)) store.fail(row.jobId, DownloadError.SaveFailed)
+                JobStage.STAGED -> if (!publishStaged(row) && !requeueFinished(row)) store.fail(row.jobId, DownloadError.SaveFailed)
                 JobStage.TRANSFERRING -> recoverTransfer(row)
                 JobStage.FAILED -> { cleanupUnresolved(row, requeue = true); cleanupFailed(row.jobId) }
                 JobStage.CANCELLED -> { cleanupUnresolved(row); cleanup(row.jobId) }
@@ -171,6 +171,28 @@ class JobRecovery(private val store: JobStore, private val publisher: Publisher,
             JobStage.COMPLETED -> cleanup(jobId)
             else -> Unit
         }
+    }
+
+    /** STAGED proves engine validation finished; its manifest names the final output, including extracted audio. */
+    private fun publishStaged(row: JobRecord): Boolean {
+        val directory = File(jobRoot, row.jobId)
+        val job = JobDirectory.Job(jobRoot, directory)
+        val output = try {
+            require(safeRoot())
+            job.requireActive()
+            val manifest = File(directory, "result-path.txt")
+            require(!Files.isSymbolicLink(manifest.toPath()) && manifest.isFile)
+            val path = manifest.readLines().filter(String::isNotBlank).single()
+            val expected = File(directory, "output.${row.format.container}")
+            require(File(path).absoluteFile == expected && File(path).canonicalFile == expected)
+            require(directory.listFiles()?.all { it.name == manifest.name || it.name == expected.name } == true)
+            job.requireOutput(expected)
+        } catch (_: Exception) { return false }
+        if (!store.retryStagedPublication(row.jobId)) return false
+        try {
+            publish(job, output, mimeTypeFor(row.format))
+        } catch (_: Exception) { /* publish reconciles its journal boundary before throwing. */ }
+        return true
     }
 
     /** Exactly one finished source or manifest-confirmed MP3, and nothing else but partials. */

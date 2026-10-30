@@ -23,9 +23,10 @@ class BatchStoreTest {
     private var now = System.currentTimeMillis()
     @Before fun warmSQLite() {
         app.deleteDatabase(JobStore.DATABASE_NAME)
-        jobs = JobStore(app, links = batchCipher())
+        val cipher = batchCipher()
+        jobs = JobStore(app, links = cipher)
         jobs.writableDatabase
-        batches = BatchStore(jobs, batchCipher()) { now }
+        batches = BatchStore(jobs, cipher) { now }
     }
     @After fun close() { jobs.close() }
 
@@ -113,7 +114,7 @@ class BatchStoreTest {
         assertNull(BatchStore(jobs, cipher).source(item))
     }
 
-    @Test fun lastItemBreakerStillCompletesWithoutPendingWork() {
+    @Test fun lastItemBreakerKeepsNetworkWaitingUntilRetryableWorkIsResolved() {
         for ((index, error) in listOf(DownloadError.Network, DownloadError.SourceRefused, DownloadError.Failed).withIndex()) {
             val id = "last-$index"
             val count = if (error == DownloadError.SourceRefused) 3 else 5
@@ -121,8 +122,16 @@ class BatchStoreTest {
             batches.items(id).forEach { batches.finish(it, BatchItemState.FAILED, error, true) }
             assertEquals(if (error == DownloadError.Network) BatchState.WAITING_NETWORK else BatchState.PAUSED, batches.get(id)!!.state)
             batches.finishIfIdle(id)
-            assertEquals(BatchState.COMPLETED, batches.get(id)!!.state)
+            assertEquals(if (error == DownloadError.Network) BatchState.WAITING_NETWORK else BatchState.COMPLETED, batches.get(id)!!.state)
             assertTrue(batches.items(id).all { it.state == BatchItemState.FAILED })
+            if (error == DownloadError.Network) {
+                assertTrue(batches.requestRetries(id, automatic = true))
+                assertEquals(BatchState.ACTIVE, batches.get(id)!!.state)
+                assertTrue(batches.items(id).all { it.state == BatchItemState.WAITING })
+                batches.items(id).forEach { batches.finish(it, BatchItemState.FAILED, error, retryable = false) }
+                batches.finishIfIdle(id)
+                assertEquals(BatchState.COMPLETED, batches.get(id)!!.state)
+            }
         }
     }
 
@@ -157,6 +166,7 @@ class BatchStoreTest {
             assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
         }
         assertEquals(2, batches.items("batch").size)
+        assertEquals(batchItems(2).map { it.sourceUrl }, batches.items("batch").map { batches.source(it) })
     }
 
     @Test fun storedItemAndBatchTitlesAreBounded() {
