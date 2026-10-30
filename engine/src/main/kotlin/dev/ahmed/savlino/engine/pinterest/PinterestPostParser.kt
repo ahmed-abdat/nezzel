@@ -88,7 +88,7 @@ class PinterestPostParser {
                 from = at + RELAY.length
                 continue
             }
-            val decoded = try { URLDecoder.decode(page.substring(quote + 1, endQuote), Charsets.UTF_8) }
+            val decoded = try { URLDecoder.decode(page.substring(quote + 1, endQuote), "UTF-8") }
                 catch (_: IllegalArgumentException) {
                     from = endQuote + 1
                     continue

@@ -239,7 +239,8 @@ class BatchFeederTest {
         f.tick()
         jobs.all().filter { !it.stage.terminal }.forEach { jobs.fail(it.jobId, DownloadError.Network) }
         f.tick()
-        assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
+        // Network-only failures leave the batch waiting for the connection rather than completed.
+        assertEquals(BatchState.WAITING_NETWORK, batches.get("batch")!!.state)
         f.retry("batch"); f.tick()
         assertEquals(3, active())
         assertEquals(3, batches.items("batch").count { it.state == BatchItemState.WAITING })

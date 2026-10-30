@@ -58,7 +58,7 @@ object LinkInput {
         if (uri.rawUserInfo != null || uri.port != -1) return raw
         if (host in FACEBOOK_WRAPPER_HOSTS && uri.rawPath == "/l.php") {
             val target = uri.rawQuery.orEmpty().split('&').filter { it.startsWith("u=") }.singleOrNull()?.substring(2) ?: return raw
-            val decoded = try { URLDecoder.decode(target, Charsets.UTF_8) } catch (_: IllegalArgumentException) { return "" }
+            val decoded = try { URLDecoder.decode(target, "UTF-8") } catch (_: IllegalArgumentException) { return "" }
             val secure = if (decoded.startsWith("http://", ignoreCase = true)) "https://" + decoded.substring(7) else decoded
             return secure.takeIf { it.startsWith("https://", ignoreCase = true) && it.none(Char::isWhitespace) }.orEmpty()
         }

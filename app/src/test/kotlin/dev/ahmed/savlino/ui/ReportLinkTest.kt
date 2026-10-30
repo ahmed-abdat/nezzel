@@ -65,16 +65,17 @@ class ReportLinkTest {
             Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC)
     }
 
-    @Test fun missingViewHandlerIsSilentlyIgnored() {
-        var attempts = 0
+    @Test fun missingViewHandlerFallsBackToTheShareChooserOnce() {
+        val started = mutableListOf<Intent>()
         val context = object : ContextWrapper(context("en")) {
             override fun startActivity(intent: Intent) {
-                attempts++
+                started += intent
                 throw ActivityNotFoundException()
             }
         }
         ReportLink.open(context, "message")
-        assertEquals(1, attempts)
+        assertEquals(listOf(Intent.ACTION_VIEW, Intent.ACTION_CHOOSER), started.map { it.action })
+        assertEquals("message", started[1].getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!.getStringExtra(Intent.EXTRA_TEXT))
     }
 
     /** Records what the view model hands to the automatic reporter. */
