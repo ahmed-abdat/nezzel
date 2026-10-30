@@ -58,12 +58,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.locale.NezzelFormat
+import dev.ahmed.savlino.sharing.LocalFileSharer
+import dev.ahmed.savlino.sharing.ShareTarget
+import dev.ahmed.savlino.sharing.ShareTargetsSheet
 import dev.ahmed.savlino.ui.ThumbnailKind
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.easeOut
 import dev.ahmed.savlino.usage.UsageKeys
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * Full-screen swipe viewer over [items], opening at [start]. Images zoom (pinch, double tap) and the pager only swipes at 1x;
@@ -190,23 +194,33 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
     val pager = rememberPagerState(start.coerceIn(0, items.lastIndex)) { items.size }
     val zooms = remember(items) { items.associate { it.uri to ZoomState() } }
     val current = items[pager.currentPage.coerceIn(0, items.lastIndex)]
+    val sharer = LocalFileSharer.current
+    val shareScope = rememberCoroutineScope()
+    var shareBusy by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf<Pair<ViewerItem, List<ShareTarget>>?>(null) }
     // The settled music page with its player can shrink into the bar; a player that attaches late registers it then.
-    val shrinkable = items.getOrNull(pager.settledPage)?.takeIf { host != null && it.isAudio && ownedPlayer != null && playback.item?.uri == it.uri }
+    val shrinkable = items.getOrNull(pager.settledPage)?.takeIf { host != null && it.isAudio &&
+        (ownedPlayer != null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Loading) && playback.item?.uri == it.uri }
     val latestClose by rememberUpdatedState(close)
     if (host != null) DisposableEffect(host, shrinkable) {
         val session = shrinkable?.let { MiniSession(it, playback) { latestClose() } }
         if (session != null) host.mini = session
         onDispose { if (session != null && host.mini === session) host.mini = null }
     }
-    // In the bar: the track ending or the service stopping takes the bar away; a failure opens the page with its card.
+    // A finished song continues to its immediate audio neighbour, on the page or in the bar. Stop still closes the bar.
     // A page that arrives there with no player yet (restored after the app was killed, or another file opened from the
     // bar) opens full screen instead, paused until Play.
     var hadPlayer by remember { mutableStateOf(false) }
     if (ownedPlayer != null) hadPlayer = true
     LaunchedEffect(ownedPlayer == null, ownedState) {
+        playback.advanceAudio(items)?.let { next ->
+            pager.scrollToPage(items.indexOfFirst { it.uri == next.uri })
+            return@LaunchedEffect
+        }
         if (host == null) return@LaunchedEffect
         snapshotFlow { host.collapsed }.collect { collapsed ->
             if (!collapsed) return@collect
+            if (ownedState == dev.ahmed.savlino.playback.PlaybackState.Loading) return@collect
             if (ownedPlayer == null && !hadPlayer) host.expand()
             else if (ownedPlayer == null || ownedState == dev.ahmed.savlino.playback.PlaybackState.Ended) host.close()
             else if (ownedState is dev.ahmed.savlino.playback.PlaybackState.Failed) host.expand()
@@ -286,7 +300,20 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
                     } else IconButton(onClick = close, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Close, stringResource(R.string.viewer_close)) }
                     Spacer(Modifier.weight(1f))
                     actions(current)
-                    IconButton(onClick = { controls.touched(); onShare(current) }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = {
+                        controls.touched()
+                        if (sharer == null) onShare(current)
+                        else if (!shareBusy && sharing == null) {
+                            val item = current
+                            shareBusy = true
+                            shareScope.launch {
+                                try {
+                                    val targets = sharer.targets(item.mimeType)
+                                    if (targets.isEmpty()) onShare(item) else sharing = item to targets
+                                } finally { shareBusy = false }
+                            }
+                        }
+                    }, modifier = Modifier.size(48.dp)) {
                         Icon(painterResource(R.drawable.ic_ms_share), stringResource(R.string.share_file))
                     }
                     IconButton(onClick = { controls.touched(); onOpenWith(current) }, modifier = Modifier.size(48.dp)) {
@@ -295,6 +322,10 @@ private fun ViewerScreen(items: List<ViewerItem>, start: Int, language: String, 
                 }
             }
         }
+    }
+    sharing?.let { (item, targets) ->
+        ShareTargetsSheet(targets, onPick = { target -> sharer?.share(item.uri, item.mimeType, target) },
+            onDismiss = { sharing = null })
     }
 }
 

@@ -64,7 +64,10 @@ open class AudioPlaybackService : MediaSessionService() {
         val strings = dev.ahmed.savlino.locale.AppLocale.localized(this)
         val player = PrivateAudioPlayer(environment.playerFactory.create(this, true), strings.getString(R.string.playback_audio))
         environment.audioState.value = PlaybackState.Idle
-        playback = PlaybackSession(player, environment, ended = ::shutdown, failed = { player.pause() }, openId = { openId })
+        playback = PlaybackSession(player, environment, ended = {
+            environment.completedAudioOpenId = openId
+            shutdown()
+        }, failed = { player.pause() }, openId = { openId })
         stateObserver = environment.scope.launch { playback!!.state.collect { environment.audioState.value = it } }
         val callback = object : PlaybackControllerPolicy(packageName, android.os.Process.myUid()) {
             override fun onSetMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo, mediaItems: List<MediaItem>,

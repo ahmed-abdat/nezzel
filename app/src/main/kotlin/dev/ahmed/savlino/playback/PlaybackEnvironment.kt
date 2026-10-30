@@ -75,6 +75,8 @@ class PlaybackEnvironment(
     val resume = PlaybackResumeStore(File(this.context.noBackupFilesDir, "playback.json"), now)
     val foreground = MutableStateFlow(false)
     internal val audioState = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
+    /** Natural completion only; Stop/disconnect also report Ended but must never select another file. */
+    internal var completedAudioOpenId: String? = null
     internal val sessionPositions = linkedMapOf<android.net.Uri, Long>()
     private val backgroundOpens = linkedSetOf<String>()
     internal fun countBackground(openId: String) {

@@ -19,6 +19,50 @@ import java.time.Duration
 class PlaybackCoordinatorTest {
     private fun item(id: Int, audio: Boolean = false) = ViewerItem(Uri.parse("content://test/items/$id"), !audio,
         if (audio) "audio/mpeg" else "video/mp4", isAudio = audio)
+
+    @Test fun finishedAudioPlaysOnlyItsImmediateAudioNeighbourOnce() {
+        val players = mutableListOf<RecordingPlayer>()
+        val env = videoEnvironment(mutableListOf())
+        val audio = object : AudioConnection {
+            override var openId: String = ""
+            override var onStopped: () -> Unit = {}
+            override fun open(item: ViewerItem, onPlayer: (androidx.media3.common.Player) -> Unit, onFailure: () -> Unit) {
+                env.audioState.value = PlaybackState.Idle
+                onPlayer(RecordingPlayer().also {
+                    it.setMediaItem(androidx.media3.common.MediaItem.fromUri(item.uri)); it.prepare(); players += it
+                })
+            }
+            override fun close() {}
+        }
+        val owner = PlaybackCoordinator(env, audio)
+        val first = item(1, true)
+        val second = item(2, true)
+        val third = item(3, true)
+        val clip = item(4)
+        try {
+            owner.settle(first, true)
+            looper.idle()
+            assertNull("A playing song cannot advance", owner.advanceAudio(listOf(first, second)))
+            owner.state.value = PlaybackState.Ended
+            assertNull("Stop is not a natural completion", owner.advanceAudio(listOf(first, second)))
+            players.last().end(); looper.idle()
+            // The real service releases its controller on completion, before Compose can move the page.
+            env.completedAudioOpenId = audio.openId
+            env.audioState.value = PlaybackState.Ended
+            audio.onStopped()
+            assertNull(owner.player.value)
+            assertEquals(second, owner.advanceAudio(listOf(first, second, third)))
+            looper.idle()
+            assertEquals(second.uri, players.last().currentMediaItem!!.localConfiguration!!.uri)
+            assertTrue(players.last().playWhenReady)
+            assertNull("The previous end cannot skip the new song", owner.advanceAudio(listOf(first, second, third)))
+            players.last().end(); looper.idle()
+            assertNull("Never wrap at the end", owner.advanceAudio(listOf(first, second)))
+            assertNull("Never skip over video", owner.advanceAudio(listOf(first, second, clip, third)))
+            assertNull("A missing current item has no next item", owner.advanceAudio(listOf(third)))
+            assertEquals(2, players.size)
+        } finally { owner.close() }
+    }
     @Test fun settleReplacesBeforeAcquireAndRecompositionDoesNotReopen() {
         val players = mutableListOf<RecordingPlayer>()
         val counts = mutableListOf<String>()

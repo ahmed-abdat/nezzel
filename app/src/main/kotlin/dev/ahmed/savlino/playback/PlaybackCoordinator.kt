@@ -34,6 +34,8 @@ internal class SessionAudioConnection(private val environment: PlaybackEnvironme
     override var openId: String = ""
     override fun open(item: ViewerItem, onPlayer: (Player) -> Unit, onFailure: () -> Unit) {
         close()
+        // The previous service's terminal state belongs to its old open, even while this connection is pending.
+        environment.audioState.value = PlaybackState.Idle
         val expected = ++generation
         val future = MediaController.Builder(environment.context, SessionToken(environment.context,
             ComponentName(environment.context, AudioPlaybackService::class.java)))
@@ -167,6 +169,16 @@ class PlaybackCoordinator internal constructor(private val environment: Playback
         } else player.value?.play()
     }
     fun pause() { wantsPlay = false; player.value?.pause(); tracker?.checkpoint() }
+    /** Continue only after a natural audio end, through the viewer's own order, with no wrap or skipped media. */
+    internal fun advanceAudio(items: List<ViewerItem>): ViewerItem? {
+        val current = item ?: return null
+        if (closed || !visible || !current.isAudio || state.value != PlaybackState.Ended) return null
+        if (player.value?.playbackState != Player.STATE_ENDED && environment.completedAudioOpenId != openId) return null
+        val index = items.indexOfFirst { it.uri == current.uri }.takeIf { it >= 0 } ?: return null
+        val next = items.getOrNull(index + 1)?.takeIf { it.isAudio } ?: return null
+        settle(next, initiallyTapped = true)
+        return next
+    }
     fun seek(position: Long) { player.value?.seekTo(position.coerceAtLeast(0)); tracker?.checkpoint() }
     fun startOver() { resumeDismissed = true; resumedAt.value = 0; tracker?.clear(); seek(0) }
     fun foreground(foreground: Boolean) {
