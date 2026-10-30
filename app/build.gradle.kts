@@ -186,7 +186,8 @@ tasks.withType<Test>().configureEach {
     dependsOn(prepareRobolectricSdks)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-sdks").get().asFile.absolutePath)
-    // PNG review classes boot the simulator before they skip. -PnezzelCapture=true runs them on this task.
+    // PNG generators boot Robolectric before their environment guard can skip them.
+    // Opt in with -PnezzelCapture=true and NEZZEL_CAPTURE_DIR. A new *CaptureTest class is excluded without edits here.
     if (providers.gradleProperty("nezzelCapture").orNull != "true") {
         filter.excludeTestsMatching("*CaptureTest")
         filter.excludeTestsMatching("*CaptureTest$*")
@@ -195,6 +196,11 @@ tasks.withType<Test>().configureEach {
         filter.excludeTestsMatching("*.HomeStackTest.oneSurface")
         filter.excludeTestsMatching("*.HomeStackTest.captures")
         filter.excludeTestsMatching("*.MultiLinkSheetTest.captures")
+    }
+    // Recomposition budgets run explicitly on the nightly path: -PnezzelNightly=true.
+    if (providers.gradleProperty("nezzelNightly").orNull != "true") {
+        filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.TabSwitchCostTest")
+        filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.ProgressTickCostTest")
     }
 }
 

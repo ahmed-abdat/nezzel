@@ -20,7 +20,8 @@ class LiveUpdateManifestTest {
     }
 
     /** Below Android 16 QPR2 the gate is closed without touching any API 36 member (no linkage error). */
-    @Test @Config(sdk = [29, 33, 35]) fun promotionStaysOffBelowAndroid16() {
+    // SDK coverage: LiveUpdate.kt:16 short-circuits below API36; one pre-36 SDK exercises that branch.
+    @Test @Config(sdk = [29]) fun promotionStaysOffBelowAndroid16() {
         org.junit.Assert.assertFalse(LiveUpdate.supported)
     }
 }

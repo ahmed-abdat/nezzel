@@ -9,7 +9,8 @@ import org.robolectric.annotation.Config
 
 /** "Saved on" dates: day and month apart, Latin digits, in every language. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35])
+// SDK coverage: NezzelFormat.kt:34 and AppLocale.localized (AppLocale.kt:20) format explicit locales without an API branch.
+@Config(sdk = [29])
 class ShortDateTest {
     private val oct24 = java.time.LocalDate.of(2026, 10, 24).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
     private fun codes(value: String) = value.map { "U+%04X".format(it.code) }.toString()

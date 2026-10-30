@@ -55,7 +55,8 @@ class ViewInputTest {
             else "dev.ahmed.savlino.MainActivity", intent.getAttribute("android:targetClass"))
     }
 
-    @Test @Config(sdk = [29, 33]) fun downloadsShortcutHasLocalizedShortLabelAndFullLongLabel() {
+    // SDK coverage: AppLocale.kt:20 uses the explicit language; shortcut label lookup has no API branch.
+    @Test @Config(sdk = [29]) fun downloadsShortcutHasLocalizedShortLabelAndFullLongLabel() {
         val main = java.io.File("src/main").takeIf { it.isDirectory } ?: java.io.File("app/src/main")
         val shortcuts = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
             .parse(java.io.File(main, "res/xml/shortcuts.xml")).getElementsByTagName("shortcut")

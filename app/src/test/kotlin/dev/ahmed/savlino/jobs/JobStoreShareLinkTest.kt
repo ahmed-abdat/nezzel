@@ -32,7 +32,8 @@ class MemoryLinkKeys : LinkKeySource {
 }
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], manifest = Config.NONE)
+// SDK coverage: JobStore.kt share-link persistence has no API branch; injected ciphers exercise success/failure independently of SDK.
+@Config(sdk = [29], manifest = Config.NONE)
 class JobStoreShareLinkTest {
     private val app = ApplicationProvider.getApplicationContext<android.app.Application>()
     private val link = "https://example.com/watch?v=private-token&x=%2f"

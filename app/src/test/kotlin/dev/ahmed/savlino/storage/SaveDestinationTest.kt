@@ -20,7 +20,8 @@ import org.robolectric.shadows.ShadowContentResolver
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], manifest = Config.NONE)
+// SDK coverage: SaveDestination.kt / DestinationPublisher.kt use SAF grants/receipts on every supported API, without an API branch.
+@Config(sdk = [29], manifest = Config.NONE)
 class SaveDestinationTest {
     private val context get() = RuntimeEnvironment.getApplication()
     @Test fun audioWebmJournalPublishesSingleWebaNameThroughFolderProvider() {

@@ -11,7 +11,8 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], application = Application::class)
+// SDK coverage: CrashReports.kt:9-16 records SDK as metadata; handler installation has no API branch.
+@Config(sdk = [29], application = Application::class)
 class CrashReportsInstallationTest {
     @Test fun installedHandlerWritesBuildMetadataAndDelegatesWithoutDoubleWrapping() {
         val app = RuntimeEnvironment.getApplication()

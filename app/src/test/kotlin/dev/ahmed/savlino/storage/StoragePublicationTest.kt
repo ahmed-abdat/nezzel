@@ -25,7 +25,8 @@ import java.nio.file.Files
 
 /** Local provider contract tests, not evidence of Android MediaProvider/device acceptance. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], manifest = Config.NONE)
+// SDK coverage: MediaStorePublisher.kt:57-177 uses scoped pending-row publication on all supported APIs (min 29), without an API branch.
+@Config(sdk = [29], manifest = Config.NONE)
 class StoragePublicationTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private lateinit var provider: DownloadsProvider

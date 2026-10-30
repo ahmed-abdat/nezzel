@@ -20,7 +20,8 @@ import java.util.concurrent.TimeUnit
 
 /** Real SQLite + disk, with simulated transfer/provider process-death boundaries. No network. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 33, 35], manifest = Config.NONE)
+// SDK coverage: JobRecovery.kt:28 and JobStore.kt journal/reconciliation paths have no API branch; preserve every recovery assertion.
+@Config(sdk = [29], manifest = Config.NONE)
 class JobRecoveryTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private lateinit var store: JobStore

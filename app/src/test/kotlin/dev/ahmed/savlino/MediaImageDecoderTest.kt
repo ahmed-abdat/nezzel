@@ -20,7 +20,8 @@ import kotlin.test.*
 
 /** Native graphics exercises real encoded pixels; not ART memory or phone acceptance. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 33, 35], manifest = Config.NONE, application = Application::class)
+// SDK coverage: Only AVIF branches on API (engine/.../mediaimage/AndroidImagePreviewDecoder.kt:36); its API29 override stays below.
+@Config(sdk = [29], manifest = Config.NONE, application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class MediaImageDecoderTest {
     private val decoder = AndroidImagePreviewDecoder()

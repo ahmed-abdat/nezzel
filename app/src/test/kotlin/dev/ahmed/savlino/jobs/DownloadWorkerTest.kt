@@ -27,7 +27,8 @@ import org.robolectric.Shadows.shadowOf
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33, 35], manifest = Config.NONE)
+// SDK coverage: DownloadWorker.kt:37 / DownloadCoordinator.kt:833 branch at API31; retain API29 stop tests and connectivity matrices below.
+@Config(sdk = [33], manifest = Config.NONE)
 class DownloadWorkerTest {
     private val app get() = RuntimeEnvironment.getApplication()
 
@@ -1177,7 +1178,7 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test @Config(sdk = [29, 33, 35])
+    @Test @Config(sdk = [29, 33])
     fun connectivityStopBeforeBytesReturnsSameRowToQueueAndReruns() = runBlocking {
         val network = TestNetwork()
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.AwaitCancellation)), network = network).use { f ->
@@ -1240,7 +1241,7 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test @Config(sdk = [29, 33, 35])
+    @Test @Config(sdk = [29, 33])
     fun connectivityStopAfterBytesRequeuesAndKeepsPartial() = runBlocking {
         val network = TestNetwork()
         fixture(FakeEngine(), network = network, script = { _, dir, emit ->

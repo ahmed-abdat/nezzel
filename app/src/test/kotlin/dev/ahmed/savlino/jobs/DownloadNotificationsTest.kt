@@ -448,7 +448,8 @@ class DownloadNotificationsTest {
     }
 
     /** Robolectric has no API 36 jar: below it the leader's notification must equal today's, with no promotion request. */
-    @Test @Config(sdk = [33, 35]) fun leaderNotificationBelowAndroid16IsTodaysUnpromotedOne() {
+    // SDK coverage: DownloadNotifications.kt:190 returns the plain notification on both SDK33 and SDK35.
+    @Test @Config(sdk = [33]) fun leaderNotificationBelowAndroid16IsTodaysUnpromotedOne() {
         val app = RuntimeEnvironment.getApplication()
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val job = DownloadProgress("lead", "Lead.mp4", DownloadPhase.DOWNLOADING, bytes = 45, total = dev.ahmed.savlino.domain.Size.Exact(100))

@@ -8,7 +8,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], manifest = Config.NONE)
+// SDK coverage: DownloadCoordinator.kt:1125/1148 maps format/container to MIME/name without an API branch.
+@Config(sdk = [29], manifest = Config.NONE)
 class MediaMimeTest {
     @Test fun audioRoleAndKnownContainersHaveHonestMimeAndPublicationNames() {
         for ((container, wanted) in listOf("webm" to "audio/webm", "opus" to "audio/ogg", "ogg" to "audio/ogg",

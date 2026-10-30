@@ -15,7 +15,8 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 33, 35])
+// SDK coverage: FolderIntents.kt:16-84 resolves URI/handler/grant combinations without an API branch.
+@Config(sdk = [29])
 class FolderIntentsTest {
     private val pm get() = RuntimeEnvironment.getApplication().packageManager
     private val item = SavedMedia(Uri.parse("content://media/external/downloads/1"),

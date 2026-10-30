@@ -13,7 +13,8 @@ import org.robolectric.annotation.Config
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 33, 35], manifest = Config.NONE)
+// SDK coverage: JobStore.kt:115-131 branches on database version, not Android API; every legacy migration fixture remains.
+@Config(sdk = [29], manifest = Config.NONE)
 class ResumeJournalTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private fun command(id: String): DownloadCommand {

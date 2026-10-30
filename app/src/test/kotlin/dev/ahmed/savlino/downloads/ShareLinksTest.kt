@@ -34,7 +34,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35])
+// SDK coverage: ShareLinks.kt:75 includes trashed rows on API30+; only the MediaStore probe needs both SDKs below.
+@Config(sdk = [29])
 class ShareLinksTest {
     private val app = ApplicationProvider.getApplicationContext<android.app.Application>()
     private val io = Executors.newSingleThreadExecutor { Thread(it, "share-links-io") }
@@ -115,7 +116,7 @@ class ShareLinksTest {
     } }
 
     /** MediaStore: 0 rows = gone; trashed rows still count (API 30+); a failing provider is unknown. */
-    @Test fun mediaStoreProbeTellsGoneFromUnknown() {
+    @Test @Config(sdk = [29, 35]) fun mediaStoreProbeTellsGoneFromUnknown() {
         val provider = MediaProvider().apply { attachInfo(app, android.content.pm.ProviderInfo().apply { authority = MediaStore.AUTHORITY }) }.also { ShadowContentResolver.registerProviderInternal(MediaStore.AUTHORITY, it) }
         val probe = FileProbe(app.contentResolver)
         provider.rows += "1"; provider.trashed += "2"

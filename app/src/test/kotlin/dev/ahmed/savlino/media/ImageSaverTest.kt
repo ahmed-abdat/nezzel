@@ -33,7 +33,8 @@ import org.robolectric.shadows.ShadowContentResolver
 
 /** Local provider contract tests (no Android MediaProvider); device acceptance is a separate on-device check. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], manifest = Config.NONE)
+// SDK coverage: ImageSaver.kt:276 switches pending-row query at API30; keep sweep matrices and the existing API33 AVIF case below.
+@Config(sdk = [29], manifest = Config.NONE)
 class ImageSaverTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private val collection: Uri = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
@@ -554,7 +555,7 @@ class ImageSaverTest {
         assertEquals(4, provider.rows.size)
     }
 
-    @Test fun startupSweepRemovesOnlyImageStagingAndOwnPendingImageRows() {
+    @Test @Config(sdk = [29, 35]) fun startupSweepRemovesOnlyImageStagingAndOwnPendingImageRows() {
         File(staging, "downloads/killed-save").apply { mkdirs() }.resolve("photo.jpg").writeBytes(fixture)
         val avStaging = File(app.filesDir, "downloads/av-job").apply { mkdirs() }.resolve("clip.mp4").apply { writeBytes(fixture) }
         val pendingImage = provider.seed("photo.jpg", "image/jpeg", pending = 1)
@@ -584,7 +585,7 @@ class ImageSaverTest {
         }
     }
 
-    @Test fun startupServiceSweepsStatusesAndTheirStageWithoutTouchingJournalledDownloads() = runBlocking {
+    @Test @Config(sdk = [29, 35]) fun startupServiceSweepsStatusesAndTheirStageWithoutTouchingJournalledDownloads() = runBlocking {
         val statusRoot = File(app.noBackupFilesDir, "status-save")
         val statusJob = JobDirectory(statusRoot.apply { mkdirs() }).create("status-876")
         statusJob.file("output", "png").writeBytes(fixture)

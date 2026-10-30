@@ -27,7 +27,8 @@ import org.robolectric.shadows.ShadowContentResolver
 
 /** Real adapter watchdog/cancellation, coordinator, SQLite, files and worker result; only native execution is replaced. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33, 35], manifest = Config.NONE)
+// SDK coverage: DownloadWorker.kt:37 / DownloadCoordinator.kt:833 take the same API31+ stop-reason path on 33 and 35.
+@Config(sdk = [33], manifest = Config.NONE)
 class EngineResumeIntegrationTest {
     private val app get() = RuntimeEnvironment.getApplication()
 

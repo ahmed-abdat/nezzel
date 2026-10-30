@@ -13,7 +13,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35])
+// SDK coverage: SavedMedia.kt rename/ownership paths have no API branch; query-column coverage lives in SavedMediaRepositoryTest.
+@Config(sdk = [29])
 class SavedMediaRenameTest {
     private val app get() = RuntimeEnvironment.getApplication()
     private fun fixture(check: (SavedMediaRepository, RenameProvider) -> Unit) {

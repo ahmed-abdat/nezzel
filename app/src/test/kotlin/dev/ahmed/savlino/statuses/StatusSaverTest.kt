@@ -34,7 +34,8 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowMediaMetadataRetriever
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35], manifest = Config.NONE)
+// SDK coverage: ImageSaver.kt:276 switches pending-row query at API30; keep the status sweep matrix below; saving has no API branch.
+@Config(sdk = [29], manifest = Config.NONE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class StatusSaverTest {
     private val app get() = RuntimeEnvironment.getApplication()
@@ -182,7 +183,7 @@ class StatusSaverTest {
         assertFalse(job.directory.exists())
     }
 
-    @Test fun statusSweepOnlyDeletesOwnStatusRowsAndLeavesDefaultImagesAndForeignRows() = runBlocking {
+    @Test @Config(sdk = [29, 35]) fun statusSweepOnlyDeletesOwnStatusRowsAndLeavesDefaultImagesAndForeignRows() = runBlocking {
         val ownStatus = provider.seed("status.png", "Download/Nezzel/Statuses/", 1, app.packageName, "image/png")
         val ownDefault = provider.seed("default.png", "Download/Nezzel/", 1, app.packageName, "image/png")
         val foreignStatus = provider.seed("foreign-status.png", "Download/Nezzel/Statuses/", 1, "foreign.package", "image/png")

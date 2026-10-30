@@ -10,7 +10,8 @@ import org.robolectric.annotation.Config
 import org.xmlpull.v1.XmlPullParser
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 33, 35])
+// SDK coverage: AndroidManifest.xml and res/xml/{backup_rules,data_extraction_rules}.xml are read explicitly; no API-selected rule path.
+@Config(sdk = [29])
 class JobBackupRulesTest {
     @Test fun cloudBackupIsDisabled() {
         val app = RuntimeEnvironment.getApplication()

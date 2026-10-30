@@ -18,7 +18,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowContentResolver
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [29, 35])
+// SDK coverage: SavedMedia.kt:203 selects bitrate on API30+; keep the query matrix and explicit modern-delete methods below.
+@Config(sdk = [29])
 class SavedMediaRepositoryTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private fun fixture(check: (SavedMediaRepository, Provider) -> Unit) {
@@ -47,7 +48,7 @@ class SavedMediaRepositoryTest {
         assertEquals(SavedMediaKind.VIDEO, row.copy(filename = "Clip.mkv", mimeType = "application/octet-stream").kind)
         assertFalse(row.copy(filename = "Ambiguous.webm", mimeType = "video/webm").audio)
     }
-    @Test fun queryExcludesPendingOtherFoldersAndNonMediaAndOrdersNewestFirst() = fixture { repo, provider ->
+    @Test @Config(sdk = [29, 35]) fun queryExcludesPendingOtherFoldersAndNonMediaAndOrdersNewestFirst() = fixture { repo, provider ->
         provider.insertRow(2, "audio/mpeg", 200)
         provider.insertRow(3, "video/mp4", 300, pending = 1)
         provider.insertRow(4, "video/mp4", 400, path = "Download/Other/")
@@ -491,7 +492,8 @@ class SavedMediaRepositoryTest {
             "content://media/external/video/media/1"), (0 until clip.itemCount).map { clip.getItemAt(it).uri.toString() })
         assertEquals(3, repo.query().size)
     }
-    @Test @Config(sdk = [33, 35]) fun deleteConsentPreservesVolumeAndIdAndDeduplicates() = fixture { repo, provider ->
+    // SDK coverage: SavedMedia.kt:356 requires API30+; 33 and 35 follow the same consent path.
+    @Test @Config(sdk = [35]) fun deleteConsentPreservesVolumeAndIdAndDeduplicates() = fixture { repo, provider ->
         listOf("external", "external_primary", "0123-4567").forEach { volume ->
             val uri = Uri.parse("content://media/$volume/downloads/1")
             repo.deleteRequest(listOf(uri, uri))
