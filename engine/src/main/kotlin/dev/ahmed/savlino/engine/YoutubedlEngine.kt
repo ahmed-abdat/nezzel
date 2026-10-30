@@ -339,6 +339,24 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         val target = redditTarget(current, source)
         if (target is RedditTarget.Failed) return InspectResult.Failure(target.error)
         val read = target as? RedditTarget.Read
+        // A Reddit link post: its linked page may hold a video (YouTube), but a page without one, or one that turns
+        // Nezzel away, means this post has no video to offer. Connection and storage failures keep their own message.
+        if (read != null && read.video == null) {
+            val result = try { inspectRead(current, source, version, epoch, empty, read) }
+                catch (error: Exception) {
+                    if (error is CancellationException || current.cancelled.get() || current.timedOut.get()) throw error
+                    val mapped = if (error is UnsupportedMetadataException) DownloadError.Unsupported
+                        else YtdlpDiagnostics().failure(error).error
+                    if (mapped in LINKED_PAGE_NO_VIDEO) InspectResult.Failure(DownloadError.NoVideo) else throw error
+                }
+            return if (result is InspectResult.Failure && result.error in LINKED_PAGE_NO_VIDEO) InspectResult.Failure(DownloadError.NoVideo)
+                else result
+        }
+        return inspectRead(current, source, version, epoch, empty, read)
+    }
+
+    private suspend fun inspectRead(current: Operation, source: LinkRevision, version: String, epoch: Long,
+        empty: YtdlpErrorMapper.EmptyInspection, read: RedditTarget.Read?): InspectResult {
         val json = try {
             execute(current, YtdlpCommand.inspect(source, read?.url), empty::accept)
                 .let { json -> read?.video?.let { RedditInfo.patch(json, it) } ?: json }
@@ -1068,6 +1086,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
     private companion object {
+        /** What a Reddit link post's outside page answers when it has no video Nezzel can read. */
+        val LINKED_PAGE_NO_VIDEO = setOf(DownloadError.SourceRefused, DownloadError.Failed, DownloadError.Unsupported,
+            DownloadError.NoFormats, DownloadError.NotAPost, DownloadError.LoginRequired, DownloadError.Unavailable)
         val TRANSFER_DEBRIS = Regex("output(?:\\.[A-Za-z0-9_.-]+)?\\.(?:part(?:-Frag[0-9]+(?:\\.part)?)?|ytdl)")
         const val CANCELLATION_WINDOW_MS = 500L
         const val NO_DEADLINE = Long.MIN_VALUE

@@ -522,6 +522,7 @@ class YtdlpMappingTest {
             "ERROR: This video is only available for registered users" to DownloadError.LoginRequired,
             "ERROR: Video has been removed" to DownloadError.Unavailable,
             "ERROR: This video is not available in your country" to DownloadError.Unavailable,
+            "ERROR: [TikTok] 7000000000000000000: Your IP address is blocked from accessing this post" to DownloadError.Unavailable,
             "ERROR: Temporary failure in name resolution" to DownloadError.Network,
             "ERROR: Network is unreachable" to DownloadError.Offline,
             "ERROR: Unable to download webpage: HTTP Error 503" to DownloadError.Failed,

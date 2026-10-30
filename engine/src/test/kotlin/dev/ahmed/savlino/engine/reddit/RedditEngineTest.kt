@@ -78,4 +78,20 @@ class RedditEngineTest : PublicImageTestBase() {
         assertEquals(DownloadError.Unavailable, assertIs<TransferResult.Failure>(engine.download(command, temp.newFolder()) {}).error)
         assertTrue(runtime.calls.isEmpty())
     } }
+    @Test fun aLinkPostWhoseOutsidePageHasNoVideoSaysThePostHasNone() = fixture(respond = { request, socket ->
+        socket.reply(body = if ("solution=" in request.target) postPage("link", content = "https://news.example.org/story")
+            else challengePage(), headers = mapOf("Content-Type" to "text/html"))
+    }) { f -> runBlocking {
+        val refused = object : YtdlpRuntime by Runtime(dash) {
+            val calls = java.util.concurrent.CopyOnWriteArrayList<List<String>>()
+            override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
+                if ("--version" in args) return "version"
+                calls += args
+                throw RuntimeException("ERROR: [generic] Unable to download webpage: HTTP Error 403: Forbidden")
+            }
+        }
+        val engine = YoutubedlEngine(refused, reddit = RedditPostReader(f.http.client))
+        assertEquals(DownloadError.NoVideo, assertIs<InspectResult.Failure>(engine.inspect(source, "inspect")).error)
+        assertEquals("https://news.example.org/story", refused.calls.single().last())
+    } }
 }

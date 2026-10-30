@@ -51,7 +51,9 @@ object YtdlpErrorMapper {
                 "no video formats found") -> DownloadError.NoVideo
             !transient && lastHas("has been removed", "video unavailable", "video is unavailable", "video is no longer available",
                 "video not available", "not available in your country", "geo restricted", "geo-restricted",
-                "not available from your location") -> DownloadError.Unavailable
+                "not available from your location",
+                // TikTok status 10204: the post is blocked for this region/network.
+                "ip address is blocked from accessing") -> DownloadError.Unavailable
             siteRoot -> DownloadError.NotAPost
             has("unsupported url", "no suitable extractor") -> DownloadError.Unsupported
             // A missing post page (not a media fragment) means the post is gone.
