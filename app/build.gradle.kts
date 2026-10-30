@@ -186,6 +186,16 @@ tasks.withType<Test>().configureEach {
     dependsOn(prepareRobolectricSdks)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-sdks").get().asFile.absolutePath)
+    // PNG review classes boot the simulator before they skip. -PnezzelCapture=true runs them on this task.
+    if (providers.gradleProperty("nezzelCapture").orNull != "true") {
+        filter.excludeTestsMatching("*CaptureTest")
+        filter.excludeTestsMatching("*CaptureTest$*")
+        filter.excludeTestsMatching("*.HomeRedesignTest.capture*")
+        filter.excludeTestsMatching("*.HomeStackTest.ytmStrips")
+        filter.excludeTestsMatching("*.HomeStackTest.oneSurface")
+        filter.excludeTestsMatching("*.HomeStackTest.captures")
+        filter.excludeTestsMatching("*.MultiLinkSheetTest.captures")
+    }
 }
 
 dependencies {

@@ -77,7 +77,8 @@ class ThumbRowTest {
     }
 
     @Test fun aFinishedJobLooksOnce() = render(failed, null) {
-        Thread.sleep(1_500); compose.waitForIdle()
+        // Retry waits live on the test clock (0 ms, then 1 s). A finished row stops after the first look.
+        compose.mainClock.advanceTimeBy(1_500); compose.waitForIdle()
         assertEquals(listOf("c"), asked)
     }
 

@@ -96,7 +96,7 @@ class ShareLinksTest {
         val unknown = store.completed("unknown", Uri.parse("content://media/external_primary/downloads/4"))
         val throwing = store.completed("throwing", Uri.parse("content://media/external_primary/downloads/5"))
         val listedAt = System.currentTimeMillis() + 1
-        Thread.sleep(2)
+        while (System.currentTimeMillis() <= listedAt) Thread.onSpinWait()
         val newer = store.completed("newer", Uri.parse("content://media/external_primary/downloads/6"))
         val probed = mutableListOf<Uri>()
         val threads = mutableListOf<String>()

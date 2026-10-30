@@ -281,8 +281,10 @@ class DocumentStatusLibraryTest {
         var signalled = false
         // Like a provider query stuck on I/O: only the CancellationSignal gets it out.
         val library = DocumentStatusLibrary(app, { _, signal -> withContext(Dispatchers.IO) {
+            val done = java.util.concurrent.CountDownLatch(1)
+            signal.setOnCancelListener { done.countDown() }
             started.complete(Unit)
-            while (!signal.isCanceled) Thread.sleep(5)
+            check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
             signalled = true
             StatusSaveResult.Cancelled
         } })

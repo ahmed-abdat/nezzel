@@ -87,7 +87,7 @@ class TabBarLargeTextTest {
             assertEquals("The bar sees the configuration's font scale", fontScale, activity.resources.configuration.fontScale, .001f)
             // Home selected (bold), then the last tab: each time every label is checked in the weight on show.
             checkLabels(labels, labels.first(), fontScale)
-            (System.getenv("NEZZEL_CAPTURE_DIR") ?: "build/reports/tabbar-bigtext").let { dir ->
+            System.getenv("NEZZEL_CAPTURE_DIR")?.let { dir ->
                 compose.runOnIdle {
                     val root = activity.window.decorView
                     val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)

@@ -161,7 +161,13 @@ class ThumbnailCacheTest {
         var signal: android.os.CancellationSignal? = null
         val started = kotlinx.coroutines.CompletableDeferred<Unit>()
         val job = launch(kotlinx.coroutines.Dispatchers.IO) {
-            withCancellationSignal { s -> signal = s; started.complete(Unit); while (!s.isCanceled) Thread.sleep(5) }
+            withCancellationSignal { s ->
+                signal = s
+                val done = java.util.concurrent.CountDownLatch(1)
+                s.setOnCancelListener { done.countDown() }
+                started.complete(Unit)
+                check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            }
         }
         started.await()
         assertFalse(signal!!.isCanceled)
