@@ -21,8 +21,9 @@ class ConnectivityTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private val manager get() = context.getSystemService(ConnectivityManager::class.java)
     private fun callback() = shadowOf(manager).networkCallbacks.single()
-    private fun caps(internet: Boolean = true, metered: Boolean = false, validated: Boolean = false) =
+    private fun caps(internet: Boolean = true, metered: Boolean = false, validated: Boolean = false, transports: IntArray = intArrayOf()) =
         ShadowNetworkCapabilities.newInstance().also {
+            transports.forEach { t -> shadowOf(it).addTransportType(t) }
             if (internet) shadowOf(it).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             if (!metered) shadowOf(it).addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
             if (validated) shadowOf(it).addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
@@ -46,6 +47,35 @@ class ConnectivityTest {
             assertEquals(1, losses)
             assertFalse(connectivity.snapshot.offlineSettled)
         }
+    }
+
+    @Test fun alwaysOnVpnWithoutAnUnderlyingNetworkIsOfflineAndStopsTheRunner() {
+        val connectivity = Connectivity.get(context)
+        val vpn = ShadowNetwork.newInstance(109)
+        // Airplane mode leaves the VPN as this app's default, still claiming INTERNET and VALIDATED.
+        callback().onAvailable(vpn)
+        callback().onCapabilitiesChanged(vpn, caps(validated = true, transports = intArrayOf(NetworkCapabilities.TRANSPORT_WIFI, NetworkCapabilities.TRANSPORT_VPN)))
+        var losses = 0
+        NetworkWatch.Adapter(connectivity).watch { losses++ }.use {
+            callback().onCapabilitiesChanged(vpn, caps(validated = true, transports = intArrayOf(NetworkCapabilities.TRANSPORT_VPN)))
+            assertFalse(connectivity.snapshot.online)
+            assertTrue(connectivity.snapshot.offline)
+            assertFalse(connectivity.snapshot.validated) // Playlist recovery waits for validation to come back.
+            assertEquals(1, losses)
+            callback().onCapabilitiesChanged(vpn, caps(validated = true, transports = intArrayOf(NetworkCapabilities.TRANSPORT_WIFI, NetworkCapabilities.TRANSPORT_VPN)))
+            assertTrue(connectivity.snapshot.online)
+            assertFalse(connectivity.snapshot.offline)
+            assertTrue(connectivity.snapshot.validated)
+        }
+    }
+
+    @Test fun startingUnderAStrandedVpnIsOffline() {
+        shadowOf(manager).setNetworkCapabilities(manager.activeNetwork,
+            caps(validated = true, transports = intArrayOf(NetworkCapabilities.TRANSPORT_VPN)))
+        val connectivity = Connectivity.get(context)
+        assertFalse(connectivity.snapshot.online)
+        assertTrue(connectivity.snapshot.offlineSettled)
+        assertFalse(connectivity.snapshot.validated)
     }
 
     @Test fun restoredDefaultRecoversImmediatelyFromCapabilitiesEvenWithStaleManager() {

@@ -48,10 +48,11 @@ private class AndroidConnectivity(private val manager: ConnectivityManager?) : C
     private fun initial(): ConnectivityState {
         if (manager == null) return ConnectivityState()
         val capabilities = current?.let(manager::getNetworkCapabilities)
-        val offline = current == null || capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) != true
-        return ConnectivityState(online = current != null, offline = offline, offlineSettled = offline,
+        val stranded = capabilities?.let(::vpnWithoutUnderlying) == true
+        val offline = current == null || stranded || capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) != true
+        return ConnectivityState(online = current != null && !stranded, offline = offline, offlineSettled = offline,
             metered = capabilities != null && !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-            validated = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true)
+            validated = !stranded && capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true)
     }
     private val updates = MutableStateFlow(initial())
     override val state = updates.asStateFlow()
@@ -81,10 +82,11 @@ private class AndroidConnectivity(private val manager: ConnectivityManager?) : C
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = synchronized(this@AndroidConnectivity) {
             if (current != null && current != network) return@synchronized
             current = network
-            publish(updates.value.copy(online = true,
-                offline = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+            val stranded = vpnWithoutUnderlying(capabilities)
+            publish(updates.value.copy(online = !stranded,
+                offline = stranded || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
                 metered = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-                validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)))
+                validated = !stranded && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)))
         }
         override fun onLost(network: Network) = synchronized(this@AndroidConnectivity) {
             // A handover makes the replacement default first. Ignore a late loss/capability event for the old one.
@@ -101,6 +103,14 @@ private class AndroidConnectivity(private val manager: ConnectivityManager?) : C
         if (!registered) updates.value = updates.value.copy(metered = false)
     }
 }
+
+/** An always-on VPN stays this app's default in airplane mode, still claiming INTERNET and VALIDATED; on API 29+
+ * it carries its underlying network's transports, so a VPN with none of them has nothing to send traffic over. */
+private fun vpnWithoutUnderlying(capabilities: NetworkCapabilities): Boolean =
+    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && listOf(NetworkCapabilities.TRANSPORT_WIFI,
+        NetworkCapabilities.TRANSPORT_CELLULAR, NetworkCapabilities.TRANSPORT_ETHERNET, NetworkCapabilities.TRANSPORT_BLUETOOTH,
+        NetworkCapabilities.TRANSPORT_WIFI_AWARE, NetworkCapabilities.TRANSPORT_LOWPAN, 8 /* USB, API 31 */,
+        9 /* THREAD, API 34 */, 10 /* SATELLITE, API 35 */).none(capabilities::hasTransport)
 
 /** A coordinator-observed drop wins before the UI settles; a stalled offline transfer waits too. */
 internal fun DownloadProgress.waitingForNetwork(offline: Boolean): Boolean = !terminal && !paused &&
