@@ -51,8 +51,6 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
         NezzelFormat.count(width, language), NezzelFormat.count(height, language))) else null
     val description = if (dimensions != null) stringResource(R.string.image_preview_desc, dimensions)
         else stringResource(R.string.image_save)
-    val frame = Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(MaterialTheme.shapes.large)
-        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
     val preview = state.preview
     if (state.isCarousel) {
         Text(pluralStringResource(R.plurals.image_available_count, state.photos.size,
@@ -65,6 +63,10 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
         }
         // Above the grid: under 11 photos it would be out of sight.
         state.discovery.sound?.let { SoundTile(it, soundSelected, enabled, onToggleSound) }
+        // Photos of one shape keep it (an Instagram 4:5 set); a mixed set uses squares so the rows line up.
+        val ratios = state.photos.mapNotNull { photoRatio(it.image.width, it.image.height) }
+        val tileRatio = ratios.firstOrNull()?.takeIf { first -> ratios.size == state.photos.size &&
+            ratios.all { kotlin.math.abs(it / first - 1f) < 0.03f } }?.coerceIn(9f / 16, 16f / 9) ?: 1f
         // Regular Rows compose every bounded item and inherit LayoutDirection, including the reading order in Arabic.
         state.photos.chunked(3).forEach { photos ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -75,7 +77,7 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
                     val expiredLabel = stringResource(R.string.image_expired)
                     val label = stringResource(R.string.image_thumbnail_desc, NezzelFormat.count(index, language),
                         NezzelFormat.count(maxOf(state.discovery.claimedCount ?: 0, state.inspection.items.maxOf { it.position + 1 }), language))
-                    Box(Modifier.weight(1f).aspectRatio(1f).heightIn(min = 48.dp)
+                    Box(Modifier.weight(1f).aspectRatio(tileRatio).heightIn(min = 48.dp)
                         .clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         .toggleable(checked, enabled = enabled && !expired, role = Role.Checkbox, onValueChange = { onToggle(photo.ref) })
                         .semantics(mergeDescendants = true) {
@@ -97,8 +99,17 @@ internal fun ImageOptions(state: OptionsState.ImageReady, host: String, language
                 repeat(3 - photos.size) { Spacer(Modifier.weight(1f)) }
             }
         }
-    } else if (preview != null) Image(preview, contentDescription = description, modifier = frame, contentScale = ContentScale.Fit)
-    else Box(frame.aspectRatio(4f / 3).semantics { contentDescription = description; role = Role.Image })
+    } else {
+        // The photo's own shape, as wide as the sheet and at most 420dp tall; the preview's pixel count never sizes it.
+        val ratio = (photoRatio(width, height) ?: preview?.let { photoRatio(it.width, it.height) } ?: 4f / 3).coerceIn(0.25f, 4f)
+        BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val frameHeight = minOf(maxWidth / ratio, 420.dp)
+            val frame = Modifier.size(frameHeight * ratio, frameHeight).clip(MaterialTheme.shapes.large)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            if (preview != null) Image(preview, contentDescription = description, modifier = frame, contentScale = ContentScale.Crop)
+            else Box(frame.semantics { contentDescription = description; role = Role.Image })
+        }
+    }
     if (!state.isCarousel) Text(listOfNotNull(dimensions, NezzelFormat.isolate(state.image.format.name)).joinToString(stringResource(R.string.separator)),
         style = MaterialTheme.typography.titleSmall)
     Text(NezzelFormat.isolate(host), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
@@ -227,3 +238,6 @@ internal fun imageErrorCopy(state: OptionsState.ImageError, offline: Boolean = f
     ImageFailure.UNAVAILABLE, ImageFailure.INVALID_IMAGE, ImageFailure.DECODE, ImageFailure.CANCELLED ->
         Triple(R.string.read_failed_title, R.string.read_failed_body, true)
 }
+
+private fun photoRatio(width: Int?, height: Int?): Float? =
+    if (width != null && height != null && width > 0 && height > 0) width.toFloat() / height else null
