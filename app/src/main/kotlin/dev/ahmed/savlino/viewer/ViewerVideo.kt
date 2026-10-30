@@ -296,8 +296,8 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
         // Shrinking into the bar: the name and controls ride down on the sheet and fade near the end, the cover settles into the bar.
         val details: @Composable () -> Unit = {
             Column(Modifier.widthIn(max = 480.dp).graphicsLayer { alpha = MiniPlayerLayout.content(host?.progress ?: 0f) }.fadesWithSheet(host), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(title.orEmpty(), Modifier.fillMaxWidth().padding(horizontal = Space.m).semantics { heading() },
-                    style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Ltr),
+                Text(NezzelFormat.firstStrong(title.orEmpty()), Modifier.fillMaxWidth().padding(horizontal = Space.m).semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content),
                     textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(Space.l))
                 if (failure != null) FailureCard(failure, owner::retry, onOpenWith, onClose)

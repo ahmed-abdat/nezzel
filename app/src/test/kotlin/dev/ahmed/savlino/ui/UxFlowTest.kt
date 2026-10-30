@@ -350,6 +350,7 @@ class UxFlowTest {
             val savesTo = context.getString(R.string.saves_to, NezzelFormat.isolate(context.getString(R.string.save_path)))
             assertTrue(texts(nodes).contains(savesTo))
             val (footer, _) = render("en") { ConfirmationScreen(vm, "en") }
+            assertTrue(texts(footer).any { it.startsWith(context.getString(R.string.download_again)) })
             assertFalse(footer.any { it.config.getOrNull(SemanticsProperties.TestTag) == "saved_before" })
             assertFalse(texts(footer).contains(savesTo))
             assertTrue(footer.any { it.config.getOrNull(SemanticsActions.OnClick) != null })

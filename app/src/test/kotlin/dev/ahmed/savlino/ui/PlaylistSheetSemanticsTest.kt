@@ -6,6 +6,7 @@ import androidx.compose.ui.test.*
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
+import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import kotlinx.coroutines.*
@@ -44,6 +45,22 @@ class PlaylistSheetSemanticsTest {
         } finally { vm.close(); scope.cancel(); controller.pause().stop().destroy() }
     }
     @Test fun checkboxLabelsTargetsAndDisabledRows() = rows()
+    @Test fun arabicPlaylistAndItemTitlesUseFirstStrongDirection() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?) = PlaylistResult.Success(
+                PlaylistPage("قائمة التشغيل", listOf(PlaylistItem("a", "https://youtube.com/watch?v=abcdefghijk", "صباح الخير", 60)), 1, null))
+        }
+        val vm = PlaylistViewModel(engine, scope, { false }, { _, _, _ -> true })
+        try {
+            vm.open(LinkRevision(LinkInput.parse("https://youtube.com/playlist?list=PLabcdefghij")!!, 1))
+            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { PlaylistSheetContent(vm, "en") } }
+            compose.waitForIdle()
+            // First-strong isolation lets an Arabic title read right to left; an LTR isolate would not.
+            listOf("قائمة التشغيل", "صباح الخير").forEach { compose.onNodeWithText(NezzelFormat.firstStrong(it), useUnmergedTree = true).assertExists() }
+        } finally { vm.close(); scope.cancel(); controller.pause().stop().destroy() }
+    }
     @Test fun longPlaylistKeepsQualityVisibleAndSubmitRetryConfirmsAgain() {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

@@ -69,7 +69,7 @@ internal fun PlaylistSheetContent(vm: PlaylistViewModel, language: String) {
             verticalArrangement = Arrangement.spacedBy(Space.s)) {
             item(key = "header") {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                    if (vm.title.isNotBlank()) Text(NezzelFormat.isolate(vm.title), style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Ltr),
+                    if (vm.title.isNotBlank()) Text(NezzelFormat.firstStrong(vm.title), style = MaterialTheme.typography.titleLarge.copy(textDirection = TextDirection.Content),
                         modifier = Modifier.semantics { heading() })
                     val count = NezzelFormat.number((vm.total ?: vm.items.size.toLong()).toDouble(), language, 0) + if (vm.total == null && vm.hasMore) "+" else ""
                     Text(stringResource(R.string.playlist_title, count), style = MaterialTheme.typography.titleMedium)
@@ -143,8 +143,8 @@ private fun PlaylistItemRow(item: PlaylistItem, selected: Boolean, saved: Boolea
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-            Text(NezzelFormat.isolate(item.title), maxLines = 2, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr))
+            Text(NezzelFormat.firstStrong(item.title), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content))
             if (reason != null) Text(reason, style = MaterialTheme.typography.bodySmall)
             else item.durationSeconds?.let { Text(NezzelFormat.duration(it), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr)) }
             if (saved) Text(stringResource(R.string.playlist_saved_before), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)

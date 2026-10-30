@@ -65,7 +65,7 @@ fun ConfirmationScreen(links: LinkViewModel, language: String, share: ShareSheet
             Text(stringResource(R.string.options_changed), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodyMedium)
         }
-        DownloadButton(links, language, metered)
+        DownloadButton(links, language, metered, again = links.savedBefore != null)
     }
 }
 
