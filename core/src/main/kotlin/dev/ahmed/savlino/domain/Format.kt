@@ -21,7 +21,10 @@ data class Format(val id: String, val container: String, val hasVideo: Boolean, 
     val conversion: AudioConversion? = null, val sourceFormatId: String = id,
     val sourceContainer: String? = null,
     /** X/Twitter animated GIF: the engine's file came from X's `tweet_video/` path, which carries no sound. */
-    val animatedGif: Boolean = false) {
+    val animatedGif: Boolean = false,
+    /** The engine returned video but no audio anywhere in the source post. */
+    val sourceHasNoSound: Boolean = false) {
+    val expectsNoSound: Boolean get() = sourceHasNoSound || animatedGif
     /**
      * A returned complete video with unreported audio facts (direct files or a sole HLS MP4).
      * Known video codecs survive; unknown audio is never evidence for extraction/conversion.
@@ -34,6 +37,7 @@ data class Format(val id: String, val container: String, val hasVideo: Boolean, 
         require(sourceContainer == null || (conversion != null && sourceContainer.matches(Regex("[a-zA-Z0-9]{1,10}"))))
         require(hasVideo || hasAudio)
         require(!animatedGif || hasVideo)
+        require(!sourceHasNoSound || (hasVideo && !hasAudio && !requiresMerge))
         require(width == null || width > 0)
         require(height == null || height > 0)
         require(bitrateKbps == null || bitrateKbps > 0)

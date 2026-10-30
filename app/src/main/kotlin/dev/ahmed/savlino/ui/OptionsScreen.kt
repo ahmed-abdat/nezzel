@@ -306,12 +306,13 @@ internal fun FormatRow(label: String, format: Format, selected: Boolean, enabled
     val size = sizeLabel(format, language)
     val sizeStyle = MaterialTheme.typography.titleSmall
     val titleStyle = MaterialTheme.typography.titleMedium
+    val noSound = if (format.sourceHasNoSound && !format.animatedGif) stringResource(R.string.video_no_sound) else null
     val sizeText = @Composable { modifier: Modifier ->
         if (size != null) Text(size, modifier, style = sizeStyle, color = MaterialTheme.colorScheme.onSurface)
     }
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val spokenRow = listOfNotNull(label, badge, hint.ifEmpty { null }, details, size).joinToString(stringResource(R.string.spoken_separator))
+    val spokenRow = listOfNotNull(label, badge, hint.ifEmpty { null }, noSound, details, size).joinToString(stringResource(R.string.spoken_separator))
     // Only the chosen quality is a container; the rest sit flat on the sheet.
     Surface(color = if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,
         shape = MaterialTheme.shapes.large,
@@ -333,7 +334,7 @@ internal fun FormatRow(label: String, format: Format, selected: Boolean, enabled
                     Text(label, Modifier.weight(1f), style = titleStyle)
                 }
                 badge?.let { LastUsedBadge(it) }
-                RowFacts(hint, details)
+                RowFacts(hint, details, noSound)
                 sizeText(Modifier.fillMaxWidth())
             }
         } else Row(Modifier.padding(horizontal = Space.l, vertical = Space.s), verticalAlignment = Alignment.CenterVertically,
@@ -347,7 +348,7 @@ internal fun FormatRow(label: String, format: Format, selected: Boolean, enabled
                     Text(label, style = titleStyle)
                     LastUsedBadge(badge)
                 }
-                RowFacts(hint, details)
+                RowFacts(hint, details, noSound)
             }
             sizeText(Modifier)
         }
@@ -364,8 +365,9 @@ private fun LastUsedBadge(text: String) {
 }
 
 @Composable
-private fun RowFacts(hint: String, details: String?) {
+private fun RowFacts(hint: String, details: String?, noSound: String?) {
     if (hint.isNotEmpty()) Text(hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (noSound != null) Text(noSound, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (details != null) Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

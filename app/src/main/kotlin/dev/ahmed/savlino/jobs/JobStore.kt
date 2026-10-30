@@ -680,6 +680,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             put("merge", format.requiresMerge); put("conversion", format.conversion?.name)
             format.sourceContainer?.let { put("sourceContainer", it) }
             if (format.animatedGif) put("animatedGif", true)
+            if (format.sourceHasNoSound) put("sourceHasNoSound", true)
             when (val size = format.size) {
                 is Size.Exact -> { put("sizeKind", "exact"); put("bytes", size.bytes) }
                 is Size.Estimated -> { put("sizeKind", "estimated"); put("bytes", size.bytes) }
@@ -699,7 +700,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             Format(getString("id"), getString("container"), getBoolean("video"), getBoolean("audio"),
                 string("videoCodec"), string("audioCodec"), int("width"), int("height"), int("bitrate"), size,
                 string("audioId"), getBoolean("merge"), string("conversion")?.let(AudioConversion::valueOf), getString("sourceId"), string("sourceContainer"),
-                optBoolean("animatedGif", false))
+                optBoolean("animatedGif", false), optBoolean("sourceHasNoSound", false))
         }
     }
 }

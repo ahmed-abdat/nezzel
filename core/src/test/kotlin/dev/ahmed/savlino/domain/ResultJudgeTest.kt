@@ -41,7 +41,13 @@ class ResultJudgeTest {
         assertEquals(ResultCheck.Verified(true, true), judge(merged, ProbeFacts(1, 1, 60_000, null), staged = null))
 
     @Test fun animatedGifWantsNoSound() =
-        assertEquals(ResultCheck.Verified(video = true, audio = false), judge(gif, ProbeFacts(1, 0, 3_000, 1000)))
+        assertEquals(ResultCheck.NoSoundExpected, judge(gif, ProbeFacts(1, 0, 3_000, 1000)))
+
+    @Test fun silentSourceWantsPictureButNoSound() {
+        val silent = Format("v", "mp4", true, false, sourceHasNoSound = true)
+        assertEquals(ResultCheck.NoSoundExpected, judge(silent, ProbeFacts(1, 0, 3_000, 1000)))
+        assertEquals(ResultCheck.Problem.NO_PICTURE, judge(silent, ProbeFacts(0, 0, 3_000, 1000)))
+    }
 
     @Test fun unreportedAudioFoundOrMissing() {
         assertTrue(direct.unreportedStreams)

@@ -62,9 +62,10 @@ class TitleDownloadTest {
         assertEquals("downloaded", result.output.file.readText())
     }
 
-    @Test fun audioOnlyAndAnimatedGifVideoNeverEnterTitleRewrite() = runBlocking {
+    @Test fun audioOnlyAndSilentVideoNeverEnterTitleRewrite() = runBlocking {
         for (row in listOf(Format("audio", "mp4", false, true), Format("audio", "m4a", false, true),
             Format("audio", "mp3", false, true), Format("gif", "mp4", true, false, animatedGif = true),
+            Format("silent", "mp4", true, false, sourceHasNoSound = true),
             Format("video", "mkv", true, true), Format("video", "webm", true, true))) {
             val directory = temp.newFolder().canonicalFile
             val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", Inspection(source,

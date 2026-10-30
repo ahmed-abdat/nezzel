@@ -60,9 +60,9 @@ class UnreportedGenericVideoMappingTest {
             assertTrue(map(bad).formats.isEmpty(), bad)
         }
         assertTrue(map(row("mov") + "," + row("webm").replace("\"http\"", "\"http2\"")).formats.isEmpty())
+        // An explicitly silent single file is offered as a silent video (owner 2026-10-30).
         val silent = map(row("mov", ",\"vcodec\":\"avc1\",\"acodec\":\"none\""))
-        assertTrue(silent.presets.isEmpty())
-        assertEquals(ConfirmResult.Invalid(DownloadError.Unsupported),
-            DownloadCommand.confirm("job", silent, source, "http", "Clip"))
+        assertTrue(silent.formats.single().sourceHasNoSound)
+        assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", silent, source, "http", "Clip"))
     }
 }

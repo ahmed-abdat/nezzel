@@ -26,7 +26,7 @@ class Inspection(val source: LinkRevision, val engineVersion: String, formats: L
             when (choice.preset) {
                 Preset.AUDIO_M4A -> require(!row.hasVideo && row.hasAudio && row.container == "m4a" && row.conversion == null)
                 Preset.AUDIO_MP3 -> require(!row.hasVideo && row.hasAudio && row.container == "mp3")
-                else -> require(row.hasVideo && (row.hasAudio || row.requiresMerge || row.animatedGif))
+                else -> require(row.hasVideo && (row.hasAudio || row.requiresMerge || row.expectsNoSound))
             }
         }
     }
@@ -45,8 +45,8 @@ class DownloadCommand private constructor(val jobId: String, val source: LinkRev
             if (!inspection.source.matches(current)) return ConfirmResult.Stale
             val format = inspection.formats.singleOrNull { it.id == formatId }
                 ?: return ConfirmResult.Invalid(DownloadError.FormatExpired)
-            // A silent X GIF is complete without audio; any other video-only row needs its partner.
-            if (format.hasVideo && !format.hasAudio && !format.requiresMerge && !format.animatedGif)
+            // A silent source is complete without audio; other video-only rows need their partner.
+            if (format.hasVideo && !format.hasAudio && !format.requiresMerge && !format.expectsNoSound)
                 return ConfirmResult.Invalid(DownloadError.Unsupported)
             return ConfirmResult.Confirmed(DownloadCommand(jobId, inspection.source, inspection.engineVersion, format,
                 FilenameSanitizer.sanitize(inspection.title?.takeIf { it.isNotBlank() } ?: title, format.container), inspection.inspectionId))

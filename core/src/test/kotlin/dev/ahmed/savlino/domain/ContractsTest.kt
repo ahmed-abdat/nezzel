@@ -78,6 +78,10 @@ class ContractsTest {
         assertFailsWith<IllegalArgumentException> { video.copy(hasVideo = false, hasAudio = false) }
         assertFailsWith<IllegalArgumentException> { video.copy(requiresMerge = true) }
         assertFailsWith<IllegalArgumentException> { video.copy(conversion = AudioConversion.MP3_128) }
+        for (row in listOf(video, Format("a", "m4a", false, true),
+            video.copy(hasAudio = false, audioCodec = null, audioFormatId = "a", requiresMerge = true))) {
+            assertFailsWith<IllegalArgumentException> { row.copy(sourceHasNoSound = true) }
+        }
     }
 
     @Test fun commandRejectsStaleRevisionDifferentUrlAndAbsentFormat() {
@@ -100,6 +104,16 @@ class ContractsTest {
         val row = video.copy(hasAudio = false, audioCodec = null)
         assertEquals(ConfirmResult.Invalid(DownloadError.Unsupported),
             DownloadCommand.confirm("job-1", inspection(listOf(row)), source, row.id, "عنوان"))
+    }
+
+    @Test fun videoFromASilentSourceNeedsNoAudioPartner() {
+        val row = video.copy(hasAudio = false, audioCodec = null, sourceHasNoSound = true)
+        val found = inspection(listOf(row), listOf(PresetChoice(Preset.BEST, row.id)))
+        val confirmed = assertIs<ConfirmResult.Confirmed>(
+            DownloadCommand.confirm("job-1", found, source, row.id, "عنوان")).command
+        assertEquals(row, confirmed.format)
+        assertFalse(confirmed.format.requiresMerge)
+        assertNull(confirmed.format.audioFormatId)
     }
 
     @Test fun filenameUnicodeSeparatorsCollapseToPlainSpaces() {

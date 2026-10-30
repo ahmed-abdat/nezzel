@@ -1123,9 +1123,9 @@ class LinkViewModel(
     /** Engine supplies ranking/pairs. UI only removes unplayable/unsupported presentation rows. */
     private fun isSelectable(row: Format): Boolean = if (row.hasVideo) {
         // The engine chooses MP4 or MKV for merges. WebM stays hidden except the direct-file fallback.
-        // A silent X GIF needs no audio partner and may have no reported height.
-        row.container in setOf("mp4", "mkv") && (row.height != null || row.animatedGif) &&
-            (row.hasAudio || row.requiresMerge || row.animatedGif) && row.conversion == null
+        // A silent source needs no audio partner and may have no reported height.
+        row.container in setOf("mp4", "mkv") && (row.height != null || row.expectsNoSound) &&
+            (row.hasAudio || row.requiresMerge || row.expectsNoSound) && row.conversion == null
     } else row.hasAudio && ((row.container == "m4a" && row.conversion == null) || (row.container == "mp3" && row.conversion != null))
 
     /** Facebook's named progressive files remain beside DASH; other unreported files stay fallback-only. */

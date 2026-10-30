@@ -574,6 +574,7 @@
     <string name="check_line_video">بالصوت والصورة</string>
     <string name="check_line_audio">الصوت موجود</string>
     <string name="check_line_silent">هذا الفيديو بلا صوت</string>
+    <string name="video_no_sound">بدون صوت</string>
     <string name="check_problem_no_sound">تم الحفظ، لكن بلا صوت</string>
     <string name="check_problem_no_picture">تم الحفظ، لكن بلا صورة</string>
     <string name="check_problem_damaged">تم الحفظ، لكن الملف يبدو تالفًا</string>

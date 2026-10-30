@@ -56,6 +56,43 @@ class SiteFormatsMappingTest {
         assertTrue(rows.all { it.audioFormatId == "hls-audio" })
     }
 
+    @Test fun videoOnlyRowsAreSilentOnlyWhenTheWholePostHasNoAudio() {
+        val videos = """{"format_id":"v720","ext":"mp4","vcodec":"avc1","acodec":"none","height":720},
+            {"format_id":"v480","ext":"mp4","vcodec":"avc1","acodec":"none","height":480}"""
+        val cases = listOf(
+            "" to true,
+            """,{"format_id":"a","ext":"m4a","vcodec":"none","acodec":"aac"}""" to false,
+            """,{"format_id":"muxed","ext":"mp4","vcodec":"avc1","acodec":"aac","height":360}""" to false,
+            // An unusable audio row still means this is not a silent source.
+            """,{"format_id":"drm-a","ext":"m4a","vcodec":"none","acodec":"aac","has_drm":true}""" to false,
+            // A video that does not report its audio codec may have sound: unknown, never labelled silent.
+            """,{"format_id":"v360","ext":"mp4","vcodec":"avc1","height":360}""" to false,
+        )
+        for ((extra, silent) in cases) {
+            val inspection = YtdlpMetadataMapper.map("""{"formats":[$videos$extra]}""", source, "fixture")
+            for (id in listOf("v720", "v480")) {
+                val row = inspection.formats.single { it.id == id }
+                assertEquals(silent, row.sourceHasNoSound, extra)
+                assertFalse(row.hasAudio)
+                assertEquals(Size.Unknown, row.size)
+                if (silent) {
+                    assertNull(row.audioFormatId)
+                    val argv = args(inspection, id)
+                    assertEquals(id, argv[argv.indexOf("-f") + 1])
+                    assertFalse("--merge-output-format" in argv)
+                    assertFalse("--extract-audio" in argv)
+                } else if (row.audioFormatId == null) {
+                    assertEquals(ConfirmResult.Invalid(DownloadError.Unsupported),
+                        DownloadCommand.confirm("job", inspection, source, id, "Clip"))
+                } else assertTrue(row.requiresMerge)
+            }
+            if (silent) {
+                assertEquals("v720", inspection.presets.single { it.preset == Preset.BEST }.formatId)
+                assertTrue(inspection.formats.all { it.hasVideo && it.conversion == null })
+            }
+        }
+    }
+
     @Test fun pinterestUsesActualHlsAudioAndMergesH264IntoMp4WithoutClaimingAac() {
         val inspection = video("pinterest", listOf("hls-234", "hls-360", "hls-540", "hls-720"), "hls-720", "mp4")
         assertEquals("hls-720", inspection.presets.single { it.preset == Preset.BALANCED }.formatId)
@@ -146,6 +183,8 @@ class SiteFormatsMappingTest {
         assertTrue(other.formats.filter { it.hasVideo }.all { it.requiresMerge && it.container == "mkv" })
         val silent = YtdlpMetadataMapper.map(json.replace("\"vcodec\": \"none\"", "\"vcodec\": \"none\", \"acodec\": \"none\""), source, "fixture")
         assertTrue(silent.formats.none { it.requiresMerge })
+        // Codec-less audio renditions remain possible sound: unknown, not silent, and nothing invented.
+        assertTrue(silent.formats.none { it.sourceHasNoSound })
         assertTrue(silent.presets.none { it.preset == Preset.BEST })
     }
 
@@ -165,9 +204,13 @@ class SiteFormatsMappingTest {
         val json = javaClass.getResource("/ytdlp/sites/fixture-streamable.json")!!.readText()
         val unrelated = YtdlpMetadataMapper.map(json.replace("Streamable", "Other"), source, "fixture")
         assertTrue(unrelated.formats.none { it.hasAudio || it.requiresMerge })
+        // A missing acodec is unknown, not silence: nothing is offered and nothing is labelled "No sound".
+        assertTrue(unrelated.formats.none { it.sourceHasNoSound })
         assertTrue(unrelated.presets.isEmpty())
         val silent = YtdlpMetadataMapper.map(json.replace("\"acodec\": null", "\"acodec\": \"none\""), source, "fixture")
         assertTrue(silent.formats.none { it.hasAudio || it.requiresMerge })
-        assertTrue(silent.presets.isEmpty())
+        assertTrue(silent.formats.all { it.sourceHasNoSound })
+        // "mp4" is also a selector word, so the 720p row with that ID is never selectable; 360p is the best real row.
+        assertEquals("mp4-mobile", silent.presets.single { it.preset == Preset.BEST }.formatId)
     }
 }

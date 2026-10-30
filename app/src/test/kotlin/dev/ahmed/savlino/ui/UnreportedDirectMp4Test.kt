@@ -91,7 +91,7 @@ class UnreportedDirectMp4Test {
         }
     }
 
-    @Test fun hlsVideoIsSelectableOnlyAfterItsActualSeparateAudioWasPaired() {
+    @Test fun hlsVideoUsesItsActualSeparateAudioOrIsSilentWhenThePostHasNone() {
         link = "https://www.pinterest.com/pin/1/"
         metadata = """{"extractor":"Pinterest","formats":[
             {"format_id":"v720","ext":"mp4","protocol":"m3u8_native","vcodec":"avc1","acodec":"none","height":720},
@@ -108,8 +108,29 @@ class UnreportedDirectMp4Test {
         metadata = """{"extractor":"Pinterest","formats":[
             {"format_id":"v720","ext":"mp4","protocol":"m3u8_native","vcodec":"avc1","acodec":"none","height":720}]}"""
         check()
-        assertEquals(OptionsState.Error(DownloadError.NoFormats), vm.optionsState)
-        assertFalse(vm.downloadEnabled)
+        assertTrue(vm.optionsState.toString(), vm.optionsState is OptionsState.Ready)
+        assertTrue(vm.primaryFormats.single().sourceHasNoSound)
+        assertTrue(vm.downloadEnabled)
+    }
+
+    @Test fun silentSourceRowSaysNoSoundAndQueuesWithoutAnAudioPartner() {
+        val silent = Format("v480", "mp4", true, false, videoCodec = "avc1", height = 480, sourceHasNoSound = true)
+        rows = listOf(silent)
+        presets = listOf(PresetChoice(Preset.BEST, silent.id))
+        check()
+        vm.showMoreFormats()
+        val context = RuntimeEnvironment.getApplication()
+        val language = context.resources.configuration.locales[0].language
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            controller.get().setContent { NezzelTheme(ThemePref.Light, false) { MoreFormatsScreen(vm, language) } }
+            compose.waitForIdle()
+            compose.onNode(isSelectable() and hasText(context.getString(R.string.video_no_sound), substring = true)).assertExists()
+            assertTrue(vm.downloadEnabled)
+            vm.confirmDownload()
+            val job = run { waitWhile({ pump() }) { store.all().isEmpty() }; pump(); store.all().single() }
+            assertEquals(silent, job.format)
+        } finally { controller.pause().stop().destroy() }
     }
 
     @Test fun loneUnreportedMp4IsOneSelectableVideoRowAndItsJobUsesItsFormatId() {

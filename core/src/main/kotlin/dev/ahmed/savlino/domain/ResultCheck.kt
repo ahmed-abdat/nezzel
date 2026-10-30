@@ -8,7 +8,7 @@ data class ProbeFacts(val videoTracks: Int, val audioTracks: Int, val durationMs
 /** The verdict on a saved file. Only measured facts; anything unreadable is [Unchecked] and claims nothing. */
 sealed interface ResultCheck {
     data class Verified(val video: Boolean, val audio: Boolean) : ResultCheck
-    /** The file has no sound, and none was promised (a silent direct file). */
+    /** The file has no sound, and none was promised. */
     data object NoSoundExpected : ResultCheck
     enum class Problem : ResultCheck { NO_SOUND, NO_PICTURE, DAMAGED }
     data object Unchecked : ResultCheck
@@ -25,12 +25,12 @@ object ResultJudge {
         // A null duration (some MKV/WebM) is never a problem; only an explicit zero is
         if (facts.durationMs == 0L) return ResultCheck.Problem.DAMAGED
         if (format.hasVideo && facts.videoTracks == 0) return ResultCheck.Problem.NO_PICTURE
-        // X animated GIFs carry no sound by design; unreported audio is not a promise.
+        // Silent sources carry no sound by design; unreported audio is not a promise.
         // A merge pairs a video-only row with an audio row: the mapper keeps hasAudio=false there, the merge is the promise.
         val promisedAudio = (format.hasAudio || format.requiresMerge && format.audioFormatId != null) &&
-            !format.animatedGif && !format.unreportedStreams
+            !format.expectsNoSound && !format.unreportedStreams
         if (promisedAudio && facts.audioTracks == 0) return ResultCheck.Problem.NO_SOUND
-        if (format.unreportedStreams && !format.animatedGif && facts.audioTracks == 0) return ResultCheck.NoSoundExpected
-        return ResultCheck.Verified(video = format.hasVideo, audio = facts.audioTracks > 0 && !format.animatedGif)
+        if ((format.expectsNoSound || format.unreportedStreams) && facts.audioTracks == 0) return ResultCheck.NoSoundExpected
+        return ResultCheck.Verified(video = format.hasVideo, audio = facts.audioTracks > 0 && !format.expectsNoSound)
     }
 }

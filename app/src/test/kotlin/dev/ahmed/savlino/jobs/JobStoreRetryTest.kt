@@ -64,10 +64,11 @@ class JobStoreRetryTest {
             }
         }
     }
-    @Test fun gifAndContainerPersistThroughReopenAndRetry() {
+    @Test fun sourceSilenceGifAndContainerPersistThroughReopenAndRetry() {
         val gif = Format("gif", "mp4", true, true, animatedGif = true)
         val mkv = Format("vp9", "mkv", true, false, videoCodec = "vp9", height = 848, audioFormatId = "a", requiresMerge = true)
-        for (format in listOf(gif, mkv)) {
+        val silent = Format("silent", "mp4", true, false, sourceHasNoSound = true)
+        for (format in listOf(gif, mkv, silent)) {
             val id = "playback-${format.id}"
             val source = command(id).source
             val confirmed = (DownloadCommand.confirm(id, Inspection(source, "engine-42", listOf(format)),

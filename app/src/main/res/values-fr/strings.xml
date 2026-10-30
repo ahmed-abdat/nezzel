@@ -517,6 +517,7 @@
     <string name="check_line_video">Avec image et son</string>
     <string name="check_line_audio">Avec son</string>
     <string name="check_line_silent">Cette vidéo n’a pas de son</string>
+    <string name="video_no_sound">Sans son</string>
     <string name="check_problem_no_sound">Enregistré, mais sans son</string>
     <string name="check_problem_no_picture">Enregistré, mais l’image est absente</string>
     <string name="check_problem_damaged">Enregistré, mais le fichier semble endommagé</string>

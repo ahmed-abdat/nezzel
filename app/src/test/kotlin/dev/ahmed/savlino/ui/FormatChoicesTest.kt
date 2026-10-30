@@ -28,6 +28,8 @@ class FormatChoicesTest {
         assertFalse(FormatChoices.sameChoice(picked, picked.copy(sourceFormatId = "399"), null, null))
         val mp3 = Format("a-mp3", "mp3", false, true, conversion = AudioConversion.MP3_128, sourceFormatId = "140", sourceContainer = "m4a")
         assertFalse(FormatChoices.sameChoice(mp3, mp3.copy(conversion = AudioConversion.MP3_320), null, null))
+        val silent = Format("v", "mp4", true, false, sourceHasNoSound = true)
+        assertFalse(FormatChoices.sameChoice(silent, silent.copy(sourceHasNoSound = false), null, null))
     }
 
     @Test fun tiersFollowTheQuality() {

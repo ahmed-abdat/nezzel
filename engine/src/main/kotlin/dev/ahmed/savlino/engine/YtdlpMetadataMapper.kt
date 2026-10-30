@@ -11,7 +11,7 @@ internal class UnsupportedMetadataException(val emptyResult: Boolean = false) : 
 /** Pure JVM mapping. Missing codecs stay unknown; narrowly recover direct files and explicit HLS stream roles. */
 object YtdlpMetadataMapper {
     private val json = ObjectMapper()
-    private class Parsed(val root: JsonNode, val genericDirect: JsonNode?, val rows: List<Pair<Format, JsonNode>>)
+    private class Parsed(val root: JsonNode, val genericDirect: JsonNode?, val rows: List<Pair<Format, JsonNode>>, val hasAnyAudio: Boolean)
 
     /** The returned streams before pairing or derived rows, by format id: what a confirmed row was built from. */
     internal fun streams(metadata: String): Map<String, Format> = parse(metadata).rows.associate { it.first.id to it.first }
@@ -58,7 +58,13 @@ object YtdlpMetadataMapper {
                 }
         // X animated GIF (silent): keep only its own video rows, so no audio partner, M4A or MP3 is ever derived.
         val animatedGif = returned.any { it.first.animatedGif }
-        return Parsed(root, genericDirect, if (animatedGif) returned.filter { it.first.animatedGif } else returned)
+        // Silent only when every video node explicitly reports acodec "none" and no audio-role node exists; any audio
+        // (even unusable or codec-less) or a missing acodec keeps it unknown, so "No sound" never hides real sound.
+        val videoNodes = nodes.filter { it.codec("vcodec") != null }
+        val hasAnyAudio = nodes.any { audioPresent(it, inferHlsRoles = true) } || returned.any { it.first.hasAudio } ||
+            videoNodes.isEmpty() || videoNodes.any { it.text("acodec")?.lowercase() != "none" } ||
+            nodes.any { it.text("vcodec")?.lowercase() == "none" }
+        return Parsed(root, genericDirect, if (animatedGif) returned.filter { it.first.animatedGif } else returned, hasAnyAudio)
     }
 
     fun map(metadata: String, source: LinkRevision, engineVersion: String): Inspection {
@@ -67,6 +73,8 @@ object YtdlpMetadataMapper {
         val genericDirect = parsing.genericDirect
         val parsed = parsing.rows
         val animatedGif = parsed.any { it.first.animatedGif }
+        // Check the whole returned post before presentation filters; a missing partner is not silence.
+        val sourceHasNoSound = !parsing.hasAnyAudio
         // HLS rows carry only peak manifest BANDWIDTH; prefer a direct row of the same height and codec family.
         fun hls(node: JsonNode) = node.text("protocol")?.startsWith("m3u8") == true
         fun twin(row: Format) = row.height to VideoCodecs.family(row.videoCodec)
@@ -77,7 +85,9 @@ object YtdlpMetadataMapper {
         // owner 2026-10-18: auto-dubbed tracks (negative language_preference) hidden; app has no language picker.
         val hasOriginal = streams.any { !it.first.hasVideo && preference(it.second) >= 0 }
         val candidates = streams.filter { (row, node) -> row.hasVideo || !hasOriginal || preference(node) >= 0 }
-        val raw = candidates.map { it.first }
+        val raw = candidates.map { (row, _) ->
+            if (sourceHasNoSound && row.hasVideo && !row.unreportedStreams) row.copy(sourceHasNoSound = true) else row
+        }
         val languagePreferences = candidates.associate { it.first.id to preference(it.second) }
         val languageRank = compareBy<Format> { languagePreferences.getValue(it.id) }
         val audioRank = languageRank.thenBy { it.bitrateKbps ?: 0 }
@@ -108,7 +118,7 @@ object YtdlpMetadataMapper {
                 requiresMerge = true, size = combined(video.size, audioPartner.size))
         }
         // A VP9 (or other known non-mp4-safe) row stays only when its height has no usable mp4-safe row.
-        fun usable(row: Format) = row.hasAudio || partner(row) != null
+        fun usable(row: Format) = row.hasAudio || row.expectsNoSound || partner(row) != null
         val safeHeights = raw.filter { it.hasVideo && it.container == "mp4" && VideoCodecs.mp4Safe(it.videoCodec) && usable(it) }
             .map { it.height }.toSet()
         val rawVideos = raw.filter { it.hasVideo && !(VideoCodecs.knownMp4Unsafe(it.videoCodec) && it.height in safeHeights) }
@@ -147,7 +157,7 @@ object YtdlpMetadataMapper {
                 audioCodec = "mp3", bitrateKbps = conversion.bitrateKbps, size = Size.Unknown,
                 conversion = conversion, sourceFormatId = conversionSource.id, sourceContainer = conversionSource.container)
         }
-        val availableVideo = recommendations.filter { it.hasAudio || it.requiresMerge || it.animatedGif }
+        val availableVideo = recommendations.filter { it.hasAudio || it.requiresMerge || it.expectsNoSound }
         // Presets are compatibility-first (lead 2026-10-19): only the best codec tier present among mp4-safe rows
         // (H.264, else HEVC, else AV1); with none, any playable row (VP9 mkv). The full list keeps every tier.
         val mp4Video = availableVideo.filter { isMp4(it) || (it.container == "mp4" && it.unreportedStreams) ||
@@ -158,7 +168,7 @@ object YtdlpMetadataMapper {
         // Every usable H.264 row counts, also one the per-height pick dropped for an mp4 (an Opus mkv merge).
         // TikTok's watermarked "download" copy has no height and is skipped; any other unknown height stops the climb.
         val tiktokDownload = root.text("extractor_key") == "TikTok"
-        val avcHeights = videos.filter { VideoCodecs.family(it.videoCodec) == "avc" && (it.hasAudio || it.requiresMerge) &&
+        val avcHeights = videos.filter { VideoCodecs.family(it.videoCodec) == "avc" && (it.hasAudio || it.requiresMerge || it.expectsNoSound) &&
             !(tiktokDownload && it.id == "download" && it.height == null) }
             .takeIf { bestTier == VideoCodecs.rank("avc") }?.map { it.height }
         val tallerHevc = if (avcHeights.isNullOrEmpty() || null in avcHeights) emptyList() else mp4Video.filter {
@@ -214,9 +224,7 @@ object YtdlpMetadataMapper {
         // playlist. "none" audio means silent, whereas absent/unknown audio may be recovered only in that role.
         val hasVideo = video != null || (hls && ext in setOf("mp4", "webm") &&
             node.text("vcodec")?.lowercase() != "none" && node.positiveInt("height") != null)
-        val hasAudio = audio != null || (hls && ext in setOf("mp4", "m4a", "webm") &&
-            node.text("vcodec")?.lowercase() == "none" && node.text("acodec")?.lowercase() != "none" &&
-            node.positiveInt("height") == null && node.positiveInt("width") == null)
+        val hasAudio = audioPresent(node, inferHlsRoles)
         if (ext == "mhtml" || (!hasVideo && !hasAudio)) return null
         val size = node.positiveLong("filesize")?.let(Size::Exact)
             ?: node.positiveLong("filesize_approx")?.let(Size::Estimated) ?: Size.Unknown
@@ -225,6 +233,10 @@ object YtdlpMetadataMapper {
             node.positiveInt(if (hasVideo) "tbr" else "abr") ?: node.positiveInt("tbr"), size,
             animatedGif = hasVideo && isXAnimatedGif(node))
     }
+    private fun audioPresent(node: JsonNode, inferHlsRoles: Boolean): Boolean = node.codec("acodec") != null ||
+        (inferHlsRoles && node.text("protocol")?.startsWith("m3u8") == true && node.text("ext") in setOf("mp4", "m4a", "webm") &&
+            node.text("vcodec")?.lowercase() == "none" && node.text("acodec")?.lowercase() != "none" &&
+            node.positiveInt("height") == null && node.positiveInt("width") == null)
     /** Returned non-manifest files only; codec-less variants retain their established ambiguity guards. */
     private fun unreportedDirectMp4s(nodes: List<JsonNode>, extractor: String?): List<JsonNode> {
         // Streamable/9gag report a video codec but omit audio facts on their progressive MP4s.

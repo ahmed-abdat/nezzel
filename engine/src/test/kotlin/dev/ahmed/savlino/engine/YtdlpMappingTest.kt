@@ -437,8 +437,10 @@ class YtdlpMappingTest {
     }
     @Test fun missingAudioNeverCreatesAnInventedMergePartner() {
         val inspection = YtdlpMetadataMapper.map("""{"formats":[{"format_id":"v","ext":"mp4","vcodec":"h264","acodec":"none"}]}""", source, "v1")
-        assertFalse(inspection.formats.single().requiresMerge); assertTrue(inspection.presets.isEmpty())
-        assertIs<ConfirmResult.Invalid>(DownloadCommand.confirm("job", inspection, source, "v", "x"))
+        // Explicit silence is offered as a silent video (owner 2026-10-30), never with an invented partner.
+        val row = inspection.formats.single()
+        assertFalse(row.requiresMerge); assertTrue(row.sourceHasNoSound)
+        assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, "v", "x"))
     }
     @Test fun exactCommandArgsConfineOutputAndNeverSelectFallbacks() {
         val dir = temp.newFolder().canonicalFile

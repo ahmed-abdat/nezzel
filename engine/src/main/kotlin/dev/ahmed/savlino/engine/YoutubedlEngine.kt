@@ -705,7 +705,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val output = stagedOutput(command, directory, preProcessingBytes)
             // Progressive MP4s may arrive with a numeric title atom; a provider scan can overwrite TITLE
             // after IS_PENDING clears. Repair the staged bytes, including merged MP4s, before publication.
-            if (command.format.hasVideo && !command.format.animatedGif && output.file.extension.equals("mp4", ignoreCase = true)) {
+            if (command.format.hasVideo && !command.format.expectsNoSound && output.file.extension.equals("mp4", ignoreCase = true)) {
                 progress(EngineEvent.Merging)
                 checkCancelled(current)
                 try { runtime.rewriteTitle(output.file, command.filename.substringBeforeLast('.'), current.processId) }

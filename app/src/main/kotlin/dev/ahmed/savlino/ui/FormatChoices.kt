@@ -79,7 +79,7 @@ internal object FormatChoices {
 
     /** Rows with the same key look identical in "Other versions": title, file type, codec or rate, and size. */
     fun shownKey(format: Format, roughBytes: Long?): List<Any?> =
-        listOf(labelKey(format), format.container, codecName(format), audioKbps(format), format.size, roughBytes)
+        listOf(labelKey(format), format.container, codecName(format), audioKbps(format), format.size, roughBytes, format.expectsNoSound)
 
     /**
      * A fresh read still offers exactly what the user picked on an older sheet: same ids (audio track, dub and
@@ -91,7 +91,7 @@ internal object FormatChoices {
             old.container == fresh.container && old.sourceContainer == fresh.sourceContainer &&
             old.hasVideo == fresh.hasVideo && old.hasAudio == fresh.hasAudio && old.height == fresh.height &&
             old.videoCodec == fresh.videoCodec && old.audioCodec == fresh.audioCodec &&
-            old.conversion == fresh.conversion && old.animatedGif == fresh.animatedGif &&
+            old.conversion == fresh.conversion && old.animatedGif == fresh.animatedGif && old.sourceHasNoSound == fresh.sourceHasNoSound &&
             (oldBytes == null || freshBytes == null || freshBytes - oldBytes <= oldBytes / 4)
 
     private fun sizeRank(size: Size) = when (size) { is Size.Exact -> 2; is Size.Estimated -> 1; Size.Unknown -> 0 }

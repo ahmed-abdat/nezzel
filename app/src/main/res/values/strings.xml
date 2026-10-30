@@ -506,6 +506,7 @@
     <string name="check_line_video">Has video and sound</string>
     <string name="check_line_audio">Has sound</string>
     <string name="check_line_silent">This video has no sound</string>
+    <string name="video_no_sound">No sound</string>
     <string name="check_problem_no_sound">Saved, but it has no sound</string>
     <string name="check_problem_no_picture">Saved, but the picture is missing</string>
     <string name="check_problem_damaged">Saved, but the file looks damaged</string>
