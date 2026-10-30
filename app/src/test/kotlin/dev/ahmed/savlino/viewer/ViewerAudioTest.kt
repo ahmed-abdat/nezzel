@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.ahmed.savlino.R
+import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.playback.AudioConnection
 import dev.ahmed.savlino.playback.PlaybackEnvironment
@@ -98,7 +99,10 @@ class ViewerAudioTest {
         playback.audioState.value = PlaybackState.Ready
         advance(300)
     }
-    private fun title(name: String) = compose.waitUntil(5_000) { compose.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty() }
+    // The title isolates itself (firstStrong) so an Arabic name reads right to left.
+    private fun title(name: String) = compose.waitUntil(5_000) {
+        compose.onAllNodesWithText(NezzelFormat.firstStrong(name)).fetchSemanticsNodes().isNotEmpty()
+    }
 
     @Test fun titleIsTheFileNameWithoutExtensionAndControlsStayPut() {
         DisplayNames.name = "Morning walk.final.m4a"
