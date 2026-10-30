@@ -38,6 +38,7 @@ class ShareSheetFlowTest {
     private var controller: ActivityController<ShareSheetActivity>? = null
 
     private class Engine(val failPrepare: Boolean = false) : EngineAdapter by FakeEngine() {
+        var beforePrepare: () -> Unit = {}
         val inspected = mutableListOf<String>()
         override val isAvailable = true
         override suspend fun installedVersion() = "2026.08.19"
@@ -46,7 +47,7 @@ class ShareSheetFlowTest {
             return InspectResult.Success(Inspection(source, "2026.08.19", listOf(Format("720", "mp4", true, true, height = 720)),
                 listOf(PresetChoice(Preset.BALANCED, "720")), title = "Real title"))
         }
-        override fun prepareDownload(command: DownloadCommand) { if (failPrepare) error("no space") }
+        override fun prepareDownload(command: DownloadCommand) { beforePrepare(); if (failPrepare) error("no space") }
     }
 
     private fun install(engine: Engine, automatic: Boolean = true, granted: Boolean = true,
@@ -189,6 +190,63 @@ class ShareSheetFlowTest {
         val open = bounds(activity.getString(R.string.share_sheet_open_app))
         assertTrue("$view", view.height > 0 && open.height > 0)
         assertTrue("$open below $view", open.top >= view.bottom)
+    }
+
+    @Test fun shareAfterDownloadStartsFreshIntakeAndCancelsTheOldClose() {
+        val engine = Engine(); val jobs = install(engine)
+        val activity = launch(share(url))
+        waitFor("options") { activity.links.downloadEnabled }
+        activity.links.requestDownload()
+        waitFor("job accepted") { activity.links.acceptedJob != null }
+        sheetTexts(activity)
+        activity.links.automaticOptions = false
+        val next = "https://youtu.be/two"
+        controller!!.newIntent(share(next))
+        waitFor("fresh intake") { activity.links.text == next && activity.links.acceptedJob == null }
+        assertFalse(activity.links.confirmed)
+        repeat(3) { sheetTexts(activity) }
+        assertFalse("the previous submission must not close a new intake", activity.isFinishing)
+        assertEquals(listOf(url), engine.inspected)
+        assertEquals(1, jobs.all().size)
+        activity.links.checkLink()
+        waitFor("new options") { activity.links.downloadEnabled }
+        activity.links.requestDownload()
+        waitFor("second job accepted") { jobs.all().size == 2 && activity.links.acceptedJob != null }
+    }
+
+    @Test fun deferredShareSurvivesActivityRecreation() = deferredShare(recreate = true, failPrepare = false)
+    @Test fun failedEnqueueReleasesDeferredShare() = deferredShare(recreate = false, failPrepare = true)
+
+    private fun deferredShare(recreate: Boolean, failPrepare: Boolean) {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val engine = Engine(failPrepare).apply { beforePrepare = { runBlocking { entered.complete(Unit); release.await() } } }
+        install(engine)
+        var activity = launch(share(url))
+        try {
+            waitFor("options") { activity.links.downloadEnabled }
+            activity.links.requestDownload()
+            waitFor("enqueue entered") { entered.isCompleted }
+            val next = "https://youtu.be/two"
+            controller!!.newIntent(share(next))
+            assertEquals(url, activity.links.text)
+            val model = activity.links
+            assertEquals("The in-flight confirmation must retain the next share", next, model.deferredShare?.text)
+            if (recreate) {
+                controller!!.recreate()
+                activity = controller!!.get()
+                activity.window.decorView.compositionContext = recomposer
+                assertSame(model, activity.links)
+                assertEquals("Recreation must retain the queued share", next, activity.links.deferredShare?.text)
+            }
+            release.complete(Unit)
+            waitFor("deferred options") { activity.links.text == next && activity.links.downloadEnabled }
+            assertFalse(activity.links.confirmed)
+            assertNull(activity.links.acceptedJob)
+            repeat(3) { sheetTexts(activity) }
+            assertFalse(activity.isFinishing)
+            assertEquals(listOf(url, next), engine.inspected)
+        } finally { release.complete(Unit) }
     }
 
     @Test fun sameLinkSharedAgainKeepsTheOptionsAndANewLinkReplacesThem() {

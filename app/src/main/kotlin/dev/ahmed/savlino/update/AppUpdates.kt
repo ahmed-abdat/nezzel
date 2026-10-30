@@ -222,7 +222,9 @@ class AppUpdates internal constructor(private val context: Context, private val 
         if (android.os.Build.VERSION.SDK_INT < 31 || !appPrefs.appUpdates || app.visibility.foreground || foreground || !verified) return false
         val downloads = app.downloads
         val busy = downloads.hasQueuedOrRunning() ||
-            downloads.maintenance.state.value.status == dev.ahmed.savlino.jobs.EngineUpdateStatus.UPDATING
+            downloads.maintenance.state.value.status == dev.ahmed.savlino.jobs.EngineUpdateStatus.UPDATING ||
+            app.imageSaver.outcome.value is dev.ahmed.savlino.media.ImageSaveState.Saving ||
+            dev.ahmed.savlino.statuses.StatusSaver.busy
         // Read the switch and visibility after the IO suspension, immediately before the caller commits.
         return canSilentlyUpdate(android.os.Build.VERSION.SDK_INT, appPrefs.appUpdates, app.visibility.foreground || foreground, busy, verified)
     }

@@ -19,6 +19,7 @@ import java.io.File
 import java.io.FileNotFoundException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -273,6 +274,26 @@ class DocumentStatusLibraryTest {
         // Same name, new content: a different status, not saved.
         File(root, "$wa/accounts/1001/Media/.Statuses/b.mp4").setLastModified(9_100)
         assertFalse(ready(library().load()).items.first().saved)
+    }
+
+    @Test fun saveStaysBusyUntilItsSavedMarkIsPersisted() = runBlocking {
+        seedPhone()
+        val existing = library()
+        existing.onPicked(tree("Android/media"))
+        val item = ready(existing.load()).items.first()
+        val queued = java.util.concurrent.LinkedBlockingQueue<Runnable>()
+        val dispatcher = java.util.concurrent.Executor { queued += it }.asCoroutineDispatcher()
+        val library = DocumentStatusLibrary(app, { _, _ -> StatusSaveResult.Saved(savedUri()) }, io = dispatcher)
+        val job = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { library.saveOne(item) }
+        try {
+            assertFalse(job.isCompleted)
+            assertTrue(StatusSaver.busy)
+            assertNull(marksPrefs.getString("saved", null))
+            queued.poll()!!.run()
+            job.join()
+            assertFalse(StatusSaver.busy)
+            assertFalse(marksPrefs.getString("saved", null).isNullOrEmpty())
+        } finally { while (queued.isNotEmpty()) queued.poll()!!.run(); job.join() }
     }
 
     @Test fun cancellingASaveStopsTheBlockedCopyThroughItsSignalAndMarksNothing() = runBlocking {

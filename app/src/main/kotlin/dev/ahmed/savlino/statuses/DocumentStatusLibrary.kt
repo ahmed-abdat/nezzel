@@ -111,7 +111,9 @@ class DocumentStatusLibrary(
         StatusAccess.Ready(apps, sources, items)
     }
 
-    override suspend fun saveOne(item: StatusItem): StatusSaveResult {
+    override suspend fun saveOne(item: StatusItem): StatusSaveResult = StatusSaver.whileSaving { saveAndMark(item) }
+
+    private suspend fun saveAndMark(item: StatusItem): StatusSaveResult {
         currentCoroutineContext().ensureActive()
         // Cancelling a coroutine can't interrupt a blocked provider query or MediaStore call; the signal can. The copy itself
         // runs non-cancellable so a file committed just before the cancel still comes back as saved.
@@ -264,7 +266,7 @@ internal class StatusMarks(private val prefs: SharedPreferences) {
         val rows = saved.entries.toList().takeLast(CAP).joinToString("\n") { (key, uri) ->
             if (uri == null) key else "$key\t$uri"
         }
-        prefs.edit().putString(SAVED, rows).apply()
+        prefs.edit().putString(SAVED, rows).commit()
     }
 
     private fun savedKey(documentId: String, size: Long?, modified: Long?): String? {

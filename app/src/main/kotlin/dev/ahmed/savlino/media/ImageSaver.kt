@@ -177,12 +177,13 @@ class ImageSaver(private val fetch: ImageFetch, private val publisher: Publisher
             var failed: SweepFailure? = null
             try { startupCleanup() } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { failed = SweepFailure.STAGING }
-            try { deleteContents(stagingRoot) } catch (_: Exception) { failed = SweepFailure.STAGING }
             val rows = try { pendingImages() } catch (_: Exception) { failed = failed ?: SweepFailure.QUERY; emptyList() }
             for (uri in rows) {
                 val left = try { abandonPending(uri) } catch (_: Exception) { null }
                 if (left == null || left is PendingPublication) failed = failed ?: SweepFailure.ABANDON
             }
+            // Receipt-owned recovery sources live outside disposable image staging.
+            try { deleteContents(stagingRoot) } catch (_: Exception) { failed = SweepFailure.STAGING }
             failed
         }
         lastSweepFailure = failure

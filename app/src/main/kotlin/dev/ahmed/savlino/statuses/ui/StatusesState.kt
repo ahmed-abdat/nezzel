@@ -9,6 +9,7 @@ import dev.ahmed.savlino.statuses.StatusGrantResult
 import dev.ahmed.savlino.statuses.StatusItem
 import dev.ahmed.savlino.statuses.StatusLibrary
 import dev.ahmed.savlino.statuses.StatusSaveResult
+import dev.ahmed.savlino.statuses.StatusSaver
 import dev.ahmed.savlino.statuses.StatusSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -230,6 +231,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
         if (fresh.isEmpty()) return
         pending = pending + fresh.map { it.uri }
         progress = progress.first to progress.second + fresh.size
+        val reservation = StatusSaver.reserveSave()
         val job = scope.launch {
             copies.withLock {
                 for (item in fresh) {
@@ -245,7 +247,7 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
             }
         }
         saves += job
-        job.invokeOnCompletion { saves -= job }
+        job.invokeOnCompletion { reservation.close(); saves -= job }
     }
 
     private suspend fun finishRun() {

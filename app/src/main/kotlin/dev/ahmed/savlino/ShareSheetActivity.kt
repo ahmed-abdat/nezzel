@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.*
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.lifecycleScope
 import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.entry.NotificationAsk
 import dev.ahmed.savlino.entry.ShareInput
@@ -27,6 +28,7 @@ import dev.ahmed.savlino.ui.ShareSheetHooks
 import dev.ahmed.savlino.ui.imageBatchMessage
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -40,6 +42,7 @@ class ShareSheetActivity : AppCompatActivity() {
     private lateinit var preferences: AppPreferences
     /** What the other app sent, kept only to hand it to the full app unchanged. */
     private var sharedText: String? = null
+    private var imageClose: Job? = null
     private var notifyLine by mutableStateOf(false)
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (::links.isInitialized) links.finishNotificationRequest()
@@ -64,21 +67,25 @@ class ShareSheetActivity : AppCompatActivity() {
         enableEdgeToEdge(SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         val language = AppLocale.current(this)
         setContent {
-            var sentAt by remember { mutableStateOf<Long?>(null) }
+            var sentAt by remember(links.shareGeneration) { mutableStateOf<Long?>(null) }
             val haptics = LocalHapticFeedback.current
             val sent = links.confirmed || links.acceptedJob != null
-            LaunchedEffect(sent) {
+            LaunchedEffect(sent, links.shareGeneration) {
                 if (!sent) return@LaunchedEffect
                 sentAt = android.os.SystemClock.uptimeMillis()
                 haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             }
             // Close only once the coordinator has the job (enqueue done), after the check was seen. With an
             // screen reader on (touch exploration), the sheet stays until dismissed (Close, Back or outside).
-            LaunchedEffect(links.acceptedJob, links.optionsState) {
-                if (links.acceptedJob == null || links.optionsState != OptionsState.Hidden || touchExploration()) return@LaunchedEffect
+            LaunchedEffect(links.acceptedJob, links.optionsState, links.shareGeneration, links.deferredShare) {
+                if (links.deferredShare != null || links.acceptedJob == null || links.optionsState != OptionsState.Hidden || touchExploration()) return@LaunchedEffect
+                val generation = links.shareGeneration
                 val shown = android.os.SystemClock.uptimeMillis() - (sentAt ?: android.os.SystemClock.uptimeMillis())
                 delay((STARTED_MILLIS - shown).coerceAtLeast(0))
-                finishAndRemoveTask()
+                if (generation == links.shareGeneration && links.deferredShare == null) finishAndRemoveTask()
+            }
+            LaunchedEffect(links.deferredShare, links.confirmed, links.acceptedJob, links.imageSaving, links.hasPendingNotificationChoice) {
+                links.takeDeferredShare()
             }
             LaunchedEffect(links.moreFormats) { if (links.moreFormats) openInNezzel() }
             LaunchedEffect(Unit) { links.imageEvents.collect(::onImageEvent) }
@@ -98,8 +105,8 @@ class ShareSheetActivity : AppCompatActivity() {
         setIntent(intent)
         sharedText = input.text
         if (!::links.isInitialized || handOffNeeded(input)) { openInNezzel(); return }
-        // A new share replaces the link; the same link keeps the options already on screen.
-        if (links.acceptedJob == null && !links.confirmed) links.onNewShare(input)
+        imageClose?.cancel()
+        links.deferShare(input)
     }
 
     private fun handOffNeeded(input: ShareInput?) = !preferences.onboardingSeen || LinkInput.candidates(input?.text).size > 1
@@ -133,7 +140,14 @@ class ShareSheetActivity : AppCompatActivity() {
             else -> return
         }
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
-        if (links.optionsState == OptionsState.Hidden) window.decorView.postDelayed({ finishAndRemoveTask() }, dwellMillis())
+        if (links.optionsState == OptionsState.Hidden && links.text.isEmpty() && links.deferredShare == null) {
+            val generation = links.shareGeneration
+            imageClose?.cancel()
+            imageClose = lifecycleScope.launch {
+                delay(dwellMillis())
+                if (generation == links.shareGeneration && links.deferredShare == null) finishAndRemoveTask()
+            }
+        }
     }
 
     /** TalkBack-style screen readers; other accessibility services (password managers, switches) don't hold the sheet. */

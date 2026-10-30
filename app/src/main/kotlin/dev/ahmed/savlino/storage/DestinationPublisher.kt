@@ -51,6 +51,7 @@ class DestinationPublisher(context: Context, space: SpaceGate,
             if (!Files.isRegularFile(source.toPath(), LinkOption.NOFOLLOW_LINKS) || source.length() <= 0)
                 throw StorageException(StorageError.SaveFailed)
             val expected = source.length()
+            destinations.recordCopySource(pending.uri, source)
             try {
                 Files.newInputStream(source.toPath(), LinkOption.NOFOLLOW_LINKS).use { input ->
                     cancellation.throwIfCanceled()
@@ -113,12 +114,44 @@ class DestinationPublisher(context: Context, space: SpaceGate,
                 val matches = !forCleanup || ((receipt.has("cleanupSize") || receipt.has("cleanupModified")) &&
                     (!receipt.has("cleanupSize") || (!it.isNull(1) && it.getLong(1) == receipt.getLong("cleanupSize"))) &&
                     (!receipt.has("cleanupModified") || (!it.isNull(2) && it.getLong(2) == receipt.getLong("cleanupModified"))))
-                if (matches) PendingPublication(uri, name) else MissingPublication
+                if (!matches) when (matchesInterruptedCopy(uri, receipt, cancellation)) {
+                    true -> Unit
+                    false -> return@use MissingPublication // Permanently unprovable: retire the receipt, never the document.
+                    null -> throw StorageException(StorageError.SaveFailed) // Transient read failure retains its evidence.
+                }
+                PendingPublication(uri, name)
             }
         } ?: run {
             destinations.folderName(SaveDestinations.treeOf(uri), cancellation)
             MissingPublication
         }
+    }
+
+    /** A stale fingerprint alone proves nothing. Compare every surviving byte with our retained private source. */
+    private fun matchesInterruptedCopy(uri: Uri, receipt: org.json.JSONObject, cancellation: CancellationSignal): Boolean? {
+        val source = destinations.copySource(receipt) ?: return false
+        return try {
+            Files.newInputStream(source.toPath(), LinkOption.NOFOLLOW_LINKS).use { staged ->
+                java.io.DataInputStream(staged).use { expected ->
+                    (resolver.openInputStream(uri) ?: return null).use { actual ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        val comparison = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var copied = 0L
+                        while (true) {
+                            cancellation.throwIfCanceled()
+                            val count = actual.read(buffer)
+                            if (count < 0) break
+                            copied += count
+                            if (copied > source.length()) return false
+                            expected.readFully(comparison, 0, count)
+                            for (index in 0 until count) if (buffer[index] != comparison[index]) return false
+                        }
+                        copied > 0
+                    }
+                }
+            }
+        } catch (cancelled: OperationCanceledException) { throw cancelled }
+        catch (_: Exception) { null }
     }
 
     override fun abandon(uri: Uri): RecoveryResult = abandon(uri, CancellationSignal()) { true }

@@ -11,6 +11,9 @@ import android.os.OperationCanceledException
 import android.provider.DocumentsContract
 import android.util.LruCache
 import dev.ahmed.savlino.downloads.SavedMedia
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import org.json.JSONObject
 
 sealed interface SaveDestination {
@@ -23,6 +26,7 @@ sealed interface SaveDestination {
 class SaveDestinations(private val context: Context) {
     internal val prefs: SharedPreferences = context.getSharedPreferences("nezzel-destinations", Context.MODE_PRIVATE)
     private val resolver get() = context.contentResolver
+    private val copyRoot get() = File(context.noBackupFilesDir.canonicalFile, "publication-sources")
     internal data class FileBounds(val size: Long?, val modified: Long?, val mime: String,
         val width: Int? = null, val height: Int? = null, val durationMillis: Long? = null)
     // Found old downloads share these probes, so the cache holds more than the receipts alone.
@@ -89,8 +93,52 @@ class SaveDestinations(private val context: Context) {
             .put("nonce", java.util.UUID.randomUUID().toString())
             .put("name", name).put("mime", mime).put("time", System.currentTimeMillis() / 1000)
         record.put("published", published)
+        if (published) clearCopySource(record)
         if (folderName != null) record.put("folder", folderName)
         check(prefs.edit().putString("file:$uri", record.toString()).commit())
+        pruneCopySources()
+    }
+
+    /** A receipt-owned hard link outlives disposable job/image staging without duplicating the media bytes. */
+    internal fun recordCopySource(uri: Uri, source: File) = synchronized(lock) {
+        val record = requireNotNull(receipt(uri))
+        check(!record.getBoolean("published"))
+        val local = source.canonicalFile
+        if (!local.toPath().startsWith(context.dataDir.canonicalFile.toPath()) || copyRoot.canonicalFile != copyRoot)
+            throw StorageException(StorageError.InvalidPath)
+        pruneCopySources()
+        val retained = File(copyRoot, java.util.UUID.randomUUID().toString())
+        try {
+            Files.createDirectories(copyRoot.toPath())
+            Files.createLink(retained.toPath(), local.toPath())
+        } catch (_: java.io.IOException) { return@synchronized } // An unsupported filesystem must not block a save.
+        catch (_: UnsupportedOperationException) { return@synchronized }
+        try {
+            record.put("copySource", retained.name).put("copySize", local.length()).put("copyModified", local.lastModified())
+            check(prefs.edit().putString("file:$uri", record.toString()).commit())
+        } catch (failure: Exception) { retained.delete(); throw failure }
+        pruneCopySources()
+    }
+
+    internal fun copySource(record: JSONObject): File? {
+        val name = record.optString("copySource").takeIf { it.isNotBlank() } ?: return null
+        if (!runCatching { java.util.UUID.fromString(name).toString() == name }.getOrDefault(false) ||
+            copyRoot.canonicalFile != copyRoot) return null
+        return File(copyRoot, name).takeIf { Files.isRegularFile(it.toPath(), LinkOption.NOFOLLOW_LINKS) &&
+            it.length() == record.optLong("copySize", -1) && it.lastModified() == record.optLong("copyModified", -1) }
+    }
+
+    private fun clearCopySource(record: JSONObject) {
+        record.remove("copySource"); record.remove("copySize"); record.remove("copyModified")
+    }
+
+    /** Under lock: keep only validated receipt references, including when a prior process died before journalling a link. */
+    private fun pruneCopySources() {
+        try {
+            if (!copyRoot.isDirectory || copyRoot.canonicalFile != copyRoot) return
+            val keep = receipts().mapNotNull { copySource(it.second)?.name }.toSet()
+            copyRoot.listFiles()?.filter { it.name !in keep }?.forEach { Files.deleteIfExists(it.toPath()) }
+        } catch (_: Exception) { /* Retry orphan evidence cleanup on the next receipt operation. */ }
     }
     /** After create/copy (including a failed copy), remember the document we may later delete. */
     internal fun recordPendingState(uri: Uri) {
@@ -105,7 +153,9 @@ class SaveDestinations(private val context: Context) {
             val record = receipt(uri)?.takeUnless { it.getBoolean("published") || it.optString("nonce") != nonce } ?: return
             record.put("cleanupSize", state.first)
             record.put("cleanupModified", state.second)
+            clearCopySource(record)
             check(prefs.edit().putString("file:$uri", record.toString()).commit())
+            pruneCopySources()
         }
     }
 
@@ -115,14 +165,19 @@ class SaveDestinations(private val context: Context) {
 
     internal fun forget(uri: Uri) = synchronized(lock) {
         check(prefs.edit().remove("file:$uri").commit())
+        pruneCopySources()
         boundsCache.remove(uri)
         fileCache.remove(uri)
         releaseIfUnused(treeOf(uri))
     }
-    internal fun pendingImages(): List<Uri> = receipts().filter { (_, r) -> !r.getBoolean("published") && r.getString("mime").startsWith("image/") }.map { it.first }
-    internal fun pendingJobFiles(): List<Uri> = receipts().filter { (_, r) ->
-        !r.getBoolean("published") && !r.getString("mime").startsWith("image/")
-    }.map { it.first }
+    internal fun pendingImages(): List<Uri> = synchronized(lock) {
+        pruneCopySources()
+        receipts().filter { (_, r) -> !r.getBoolean("published") && r.getString("mime").startsWith("image/") }.map { it.first }
+    }
+    internal fun pendingJobFiles(): List<Uri> = synchronized(lock) {
+        pruneCopySources()
+        receipts().filter { (_, r) -> !r.getBoolean("published") && !r.getString("mime").startsWith("image/") }.map { it.first }
+    }
     private fun receipts() = prefs.all.keys.filter { it.startsWith("file:") }.mapNotNull { key ->
         val uri = Uri.parse(key.removePrefix("file:")); receipt(uri)?.let { uri to it }
     }

@@ -210,9 +210,25 @@ class ImageSaverTest {
         staging.mkdirs()
         val job = JobDirectory(staging).create("img-interrupted")
         val pending = destinationPublisher.insertPending(job, "photo.jpg", "image/jpeg")
-        val source = job.file("photo", "jpg").apply { writeBytes(byteArrayOf(7, 8)) }
-        destinationPublisher.copy(pending, source) // Stop before commit, with the real cleanup fingerprint.
+        val source = job.file("photo", "jpg").apply { writeBytes(byteArrayOf(7, 8, 9)) }
+        val interrupted = AssertionError("Interrupted copy")
+        treeProvider.onOpen = {
+            treeProvider.files.getValue("1").writeBytes(byteArrayOf(7, 8))
+            treeProvider.denied = true
+            throw interrupted
+        }
+        try { destinationPublisher.copy(pending, source); fail() }
+        catch (failure: AssertionError) { assertSame(interrupted, failure) }
+        treeProvider.onOpen = null
+        treeProvider.denied = false
+        treeProvider.failOpen = true
+        val unrelated = JobDirectory(staging).create("img-unrelated").file("photo", "jpg").apply { writeBytes(fixture) }
         val saver = ImageSaver(FakeFetch(), destinationPublisher, staging, space, scope) { settings.pendingImages() }
+        saver.sweep()
+        assertEquals(SweepFailure.ABANDON, saver.lastSweepFailure)
+        assertFalse("Unrelated leftovers must not wait for the provider", unrelated.exists())
+        assertNotNull(settings.receipt(pending.uri))
+        treeProvider.failOpen = false
         saver.sweep()
         assertTrue(treeProvider.files.isEmpty())
         assertTrue(settings.pendingImages().isEmpty())

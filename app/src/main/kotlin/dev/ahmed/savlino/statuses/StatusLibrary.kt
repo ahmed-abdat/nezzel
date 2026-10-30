@@ -54,7 +54,8 @@ interface StatusLibrary {
 }
 
 /** Saves serially; results keep the input order. */
-suspend fun StatusLibrary.save(items: List<StatusItem>): List<StatusSaveResult> = items.map { saveOne(it) }
+suspend fun StatusLibrary.save(items: List<StatusItem>): List<StatusSaveResult> =
+    StatusSaver.whileSaving { items.map { saveOne(it) } }
 
 /** Help-improve counts per file, the moment each copy ends: saved, or not saved (failed, gone, no space). Cancelling counts nothing. */
 fun StatusLibrary.counted(count: (String) -> Unit): StatusLibrary = object : StatusLibrary by this {

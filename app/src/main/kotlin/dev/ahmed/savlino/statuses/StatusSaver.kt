@@ -53,6 +53,9 @@ class StatusSaver(context: Context,
     private val publisher = MediaStorePublisher(resolver, space, owner, relativePath = RELATIVE_PATH)
 
     suspend fun save(source: StatusSaveSource, cancellation: CancellationSignal = CancellationSignal()): StatusSaveResult =
+        whileSaving { saveActive(source, cancellation) }
+
+    private suspend fun saveActive(source: StatusSaveSource, cancellation: CancellationSignal): StatusSaveResult =
         withContext(Dispatchers.IO) {
             lock.withLock {
                 var job: JobDirectory.Job? = null
@@ -193,5 +196,13 @@ class StatusSaver(context: Context,
         const val UNKNOWN_SIZE_BOUND = 256L * 1024 * 1024
         private val nextId = AtomicLong(System.currentTimeMillis())
         private val lock = Mutex()
+        private val acceptedSaves = java.util.concurrent.atomic.AtomicInteger()
+        internal val busy get() = acceptedSaves.get() > 0 || lock.isLocked
+        /** Reserve before dispatch; the caller releases only after its queue and saved marks finish. */
+        internal fun reserveSave(): AutoCloseable {
+            acceptedSaves.incrementAndGet()
+            return AutoCloseable { acceptedSaves.decrementAndGet() }
+        }
+        internal suspend fun <T> whileSaving(block: suspend () -> T): T = reserveSave().use { block() }
     }
 }

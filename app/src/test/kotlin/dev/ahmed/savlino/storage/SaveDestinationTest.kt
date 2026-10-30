@@ -264,9 +264,48 @@ class SaveDestinationTest {
         assertArrayEquals(byteArrayOf(1, 2, 3, 4), file.readBytes())
     }
 
+    @Test fun interruptedCopyRetainsOwnershipUntilItsPartialCanBeVerifiedAndRemoved() {
+        val provider = provider()
+        val settings = SaveDestinations(context)
+        settings.choose(tree)
+        val job = JobDirectory(context.filesDir).create("interrupted-copy")
+        val source = job.file("output", "mp4").apply { writeBytes(ByteArray(32_768) { it.toByte() }) }
+        val publisher = DestinationPublisher(context, space)
+        val pending = publisher.insertPending(job, "clip.mp4", "video/mp4")
+        val partial = source.readBytes().copyOf(12_345)
+        val interrupted = AssertionError("Interrupted copy")
+        provider.onOpen = {
+            provider.files.getValue("1").writeBytes(partial)
+            provider.denied = true // The copy's finally cannot refresh the initial empty fingerprint.
+            throw interrupted
+        }
+        try { publisher.copy(pending, source); fail() }
+        catch (failure: AssertionError) { assertSame(interrupted, failure) }
+        val retained = requireNotNull(settings.copySource(settings.receipt(pending.uri)!!))
+        val orphan = File(retained.parentFile, java.util.UUID.randomUUID().toString()).apply { writeBytes(byteArrayOf(1)) }
+        assertEquals(listOf(pending.uri), settings.pendingJobFiles())
+        assertFalse("A death before receipt persistence must not leak recovery sources", orphan.exists())
+        provider.onOpen = null
+        provider.denied = false
+        provider.failOpen = true
+        val restarted = DestinationPublisher(context, space)
+        try { restarted.abandon(pending.uri); fail() }
+        catch (failure: StorageException) { assertEquals(StorageError.SaveFailed, failure.error) }
+        assertNotNull(SaveDestinations(context).receipt(pending.uri))
+        assertArrayEquals(partial, provider.files.getValue("1").readBytes())
+        job.cleanup() // Job recovery may retire disposable staging while the provider is unavailable.
+        assertFalse(source.exists())
+        provider.failOpen = false
+        assertEquals(MissingPublication, restarted.abandon(pending.uri))
+        assertTrue(provider.files.isEmpty())
+        assertNull(SaveDestinations(context).receipt(pending.uri))
+        assertFalse("Receipt retirement must release its recovery source", retained.exists())
+    }
+
     @Test fun replacementWithDifferentSizeIsNeverDeleted() = replacedPendingDocument(false)
     @Test fun replacementWithSameSizeAndDifferentModifiedTimeIsNeverDeleted() = replacedPendingDocument(true)
-    private fun replacedPendingDocument(sameSize: Boolean) {
+    @Test fun replacementDuringInterruptedCopyRetiresOnlyItsReceipt() = replacedPendingDocument(false, interrupted = true)
+    private fun replacedPendingDocument(sameSize: Boolean, interrupted: Boolean = false) {
         val provider = provider()
         val settings = SaveDestinations(context)
         settings.choose(tree)
@@ -274,7 +313,7 @@ class SaveDestinationTest {
         val source = job.file("clip", "mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
         val publisher = DestinationPublisher(context, space)
         val pending = publisher.insertPending(job, "clip.mp4", "video/mp4")
-        publisher.copy(pending, source)
+        if (interrupted) settings.recordCopySource(pending.uri, source) else publisher.copy(pending, source)
         val file = provider.files.getValue("1")
         val modified = file.lastModified()
         val replacement = if (sameSize) byteArrayOf(9, 8, 7, 6) else byteArrayOf(9, 8)

@@ -6,6 +6,7 @@ import dev.ahmed.savlino.preview.LinkPreviews
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -518,6 +519,20 @@ class LinkViewModel(
     val confirmed get() = submitted
     /** The last job the coordinator accepted from this view model; the share sheet closes on it. */
     var acceptedJob by mutableStateOf<String?>(null); private set
+    /** Memory only: a new intent waits for this model's original confirmation/save, including across rotation. */
+    var deferredShare by mutableStateOf<ShareInput?>(null); private set
+    var shareGeneration by mutableIntStateOf(0); private set
+    fun deferShare(input: ShareInput) {
+        shareGeneration++
+        deferredShare = input
+        takeDeferredShare()
+    }
+    fun takeDeferredShare() {
+        val input = deferredShare ?: return
+        if (imageSaving || hasPendingNotificationChoice || (confirmed && acceptedJob == null)) return
+        deferredShare = null
+        onNewShare(input)
+    }
     /** A stale sheet stays tappable: Download reads the link again first (see [confirmDownload]). An unknown engine version can't confirm anything. */
     val downloadEnabled get() = !submitted && !refreshing && !optionsChanged && !engineUpdating && engine.isAvailable && selectedFormat != null &&
         inspection != null && engineVersion() != null && confirmAgainst?.let { currentSource()?.matches(it) } == true
@@ -565,6 +580,10 @@ class LinkViewModel(
     }
     fun onNewShare(input: ShareInput?) {
         if (input == null) return
+        if (acceptedJob != null && optionsState == OptionsState.Hidden) {
+            acceptedJob = null
+            submitted = false
+        }
         if (openMulti(input.text)) { navigate("Home"); usage.count(UsageKeys.SHARE); return }
         val candidates = LinkInput.candidates(input.text)
         val link = candidates.firstOrNull()
@@ -1223,9 +1242,16 @@ class LinkViewModel(
                     // Application scope survives Activity recreation and ViewModel clearance.
                     (coordinatorScope ?: viewModelScope).launch {
                         try {
-                            coordinator.enqueue(confirmed, preset)
+                            val accepted = coordinator.enqueue(confirmed, preset)
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
-                                if (submissionId == confirmed.jobId) { acceptedJob = confirmed.jobId; dismissOptions(); clearField() }
+                                if (submissionId == confirmed.jobId) {
+                                    if (accepted) {
+                                        acceptedJob = confirmed.jobId; dismissOptions(); clearField()
+                                        // Completion owns intake progress even while the Activity's composition is detached.
+                                        takeDeferredShare()
+                                    }
+                                    else failConfirmation(DownloadError.ExecutionRestricted)
+                                }
                             }
                         } catch (cancelled: CancellationException) { throw cancelled }
                         catch (failure: Throwable) {
@@ -1506,8 +1532,10 @@ class LinkViewModel(
         if (saved + failed > 0) usage.site(link)
     }
     private fun failConfirmation(error: DownloadError) {
+        submitted = false; submissionId = null; command = null
         selectedId = null; selectedPreset = null; moreFormats = false
         optionsState = OptionsState.Error(error)
+        takeDeferredShare()
     }
     override fun onCleared() {
         invalidateOptions()
