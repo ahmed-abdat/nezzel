@@ -560,6 +560,7 @@
     <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
     <string name="saved_post_position">%1$s من %2$s</string>
     <string name="tiktok_sound">الصوت</string>
+    <string name="image_save_sound_only">حفظ الصوت فقط</string>
     <string name="sound_save">حفظ الصوت</string>
     <string name="sound_saving">جارٍ تجهيز الصوت…</string>
     <string name="sound_save_failed">تعذّر حفظ الصوت</string>

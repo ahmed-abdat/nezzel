@@ -58,7 +58,8 @@ internal fun MultiLinkSheetContent(vm: MultiLinkViewModel, language: String) {
             item(key = "quality") {
                 Column(Modifier.selectableGroup().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     listOf(Preset.BEST to R.string.preset_best, Preset.BALANCED to R.string.preset_balanced,
-                        Preset.SMALL to R.string.preset_small, Preset.AUDIO_M4A to R.string.audio_only).forEach { (preset, label) ->
+                        Preset.SMALL to R.string.preset_small, Preset.AUDIO_M4A to R.string.audio_only,
+                        Preset.AUDIO_MP3 to R.string.mp3_title).forEach { (preset, label) ->
                         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(vm.preset == preset, enabled = !vm.submitting,
                             role = Role.RadioButton, onClick = { vm.quality(preset) }), verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(vm.preset == preset, null, Modifier.size(48.dp))

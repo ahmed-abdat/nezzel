@@ -71,7 +71,7 @@ private fun PreviewBody(links: LinkViewModel, language: String, hooks: ShareShee
             Text(stringResource(R.string.shared_video), Modifier.fillMaxWidth().semantics { heading() },
                 style = MaterialTheme.typography.titleSmall)
             key(links.text) { InspectionHeader(null, host, checking = false, hint = links.shareHint) }
-            links.savedLink?.let { SavedBeforeNotice(it, null, language, onOpened = hooks.onFinish) }
+            links.savedLink?.let { SavedBeforeNotice(it, language, onOpened = { links.dismissOptions(); hooks.onFinish() }) }
             Button(onClick = links::checkLink, modifier = Modifier.fillMaxWidth().padding(top = Space.s).heightIn(min = 56.dp)) {
                 Text(stringResource(R.string.check_link))
             }

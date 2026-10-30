@@ -192,13 +192,30 @@ class StatusesScreenTest {
         compose.onNode(hasContentDescription(activity.getString(R.string.statuses_account_n, "1"), substring = true)).assertDoesNotExist()
     }
 
+    @Test fun selectedSizeIsExactAndDisappearsWhenAnySizeIsUnknown() {
+        val library = FakeStatusLibrary(ready(listOf(item(1, false).copy(sizeBytes = 2_000_000),
+            item(2, false).copy(sizeBytes = 3_000_000), item(3, false).copy(sizeBytes = null),
+            item(4, false).copy(sizeBytes = 0))))
+        show(library)
+        tiles(R.string.statuses_photo).onFirst().performTouchInput { longClick() }
+        tiles(R.string.statuses_photo)[1].performClick()
+        compose.onNodeWithText("Save 2 · \u20665\u00a0MB\u2069").assertIsEnabled().assertHeightIsAtLeast(48.dp)
+        tiles(R.string.statuses_photo)[2].performClick()
+        compose.onNodeWithText("Save 3").assertIsEnabled()
+        tiles(R.string.statuses_photo)[2].performClick()
+        tiles(R.string.statuses_photo)[3].performClick()
+        compose.onNodeWithText("Save 3").assertIsEnabled().performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(1, 2, 4).map { "status-$it" }, library.saved.map { it.uri.lastPathSegment })
+    }
+
     @Test fun longPressSelectsAndSaveNSavesTheSelection() {
         val library = FakeStatusLibrary(ready())
         show(library)
         tiles(R.string.statuses_video).onFirst().performTouchInput { longClick() }
         compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.saved_selected, 1, "1")).assertExists()
         tiles(R.string.statuses_photo).onFirst().performClick()
-        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 2, "2"))
+        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 2, "2"), substring = true)
             .assertHeightIsAtLeast(48.dp).performClick()
         compose.waitForIdle()
         assertEquals(2, library.saved.size)
@@ -314,7 +331,7 @@ class StatusesScreenTest {
         compose.onNode(hasText(s(R.string.statuses_select)) and hasClickAction()).assertHeightIsAtLeast(48.dp).performClick()
         compose.onNodeWithText(s(R.string.statuses_select_all)).performClick()
         compose.onNodeWithText(s(R.string.statuses_clear_selection)).assertExists()
-        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 6, "6")).performClick()
+        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 6, "6"), substring = true).performClick()
         compose.waitForIdle()
         assertEquals(6, library.saved.size)
         assertTrue(library.saved.none { it.saved })
@@ -334,27 +351,39 @@ class StatusesScreenTest {
         compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(4)
     }
 
-    @Test fun switchingTabsStopsTheCopy() {
+    @Test fun switchingTabsExitsSelectionAndKeepsConfirmedCopiesRunning() {
         val library = FakeStatusLibrary(ready()).apply { hold = kotlinx.coroutines.CompletableDeferred() }
         var route by mutableStateOf("Statuses")
+        lateinit var state: StatusesState
         activity.setContent {
+            state = rememberStatusesState(library)
             NezzelTheme(ThemePref.Light, false) {
                 CompositionLocalProvider(LocalStatusMedia provides media) {
-                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Statuses") StatusesScreen(library, "en") else androidx.compose.material3.Text(it) }
+                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Statuses") StatusesScreen(library, "en", state) else androidx.compose.material3.Text(it) }
                 }
             }
         }
         compose.waitForIdle()
-        compose.onAllNodes(gridSaves()).onFirst().performClick()
+        tiles(R.string.statuses_video).onFirst().performTouchInput { longClick() }
+        compose.onNodeWithText(activity.resources.getQuantityString(R.plurals.statuses_save_n, 1, "1"), substring = true).performClick()
         compose.waitForIdle()
+        assertTrue(state.selecting)
+        assertTrue(state.saving)
         compose.runOnIdle { route = "Home" }
         compose.waitForIdle()
+        assertFalse(state.selecting)
+        assertTrue(state.selection.isEmpty())
+        assertTrue(state.saving)
+        assertTrue(dev.ahmed.savlino.statuses.StatusSaver.busy)
         library.hold!!.complete(Unit)
+        compose.waitUntil(5000) { library.saved.size == 1 && !state.saving }
         compose.runOnIdle { route = "Statuses" }
         compose.waitForIdle()
-        assertEquals(0, library.saved.size)
-        compose.onNodeWithText(s(R.string.statuses_saving)).assertDoesNotExist()
-        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(3)
+        assertEquals(1, library.saved.size)
+        assertFalse(state.selecting)
+        compose.onNodeWithContentDescription(s(R.string.saved_selection_close)).assertDoesNotExist()
+        compose.onNodeWithContentDescription(s(R.string.statuses_saving)).assertDoesNotExist()
+        compose.onAllNodes(hasTestTag("status-saved"), useUnmergedTree = true).assertCountEquals(4)
     }
 
     @Config(fontScale = 2f)

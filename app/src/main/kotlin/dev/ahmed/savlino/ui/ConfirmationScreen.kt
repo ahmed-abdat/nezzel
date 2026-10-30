@@ -1,7 +1,6 @@
 package dev.ahmed.savlino.ui
 
 import android.content.ActivityNotFoundException
-import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,7 +18,7 @@ import dev.ahmed.savlino.domain.Format
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.downloads.rememberMetered
 import dev.ahmed.savlino.jobs.SavedBefore
-import dev.ahmed.savlino.jobs.mimeTypeFor
+import dev.ahmed.savlino.shortcuts.ShortcutActions
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Space
 import dev.ahmed.savlino.ui.theme.motionSpec
@@ -33,7 +32,7 @@ import androidx.compose.material.icons.outlined.Notifications
  */
 @Composable
 internal fun ConfirmationDetails(links: LinkViewModel, language: String, savedNotice: Boolean = true) {
-    if (savedNotice && !links.confirmed) links.savedBefore?.let { SavedBeforeNotice(it, links.selectedFormat, language) }
+    if (savedNotice && !links.confirmed) links.savedBefore?.let { SavedBeforeNotice(it, language, onOpened = links::dismissOptions) }
     SavesTo()
 }
 
@@ -159,7 +158,7 @@ internal fun largeOnMobileData(format: Format, roughBytes: Long?, metered: Boole
  * another copy; this never blocks.
  */
 @Composable
-internal fun SavedBeforeNotice(saved: SavedBefore, format: Format?, language: String, onOpened: () -> Unit = {}) {
+internal fun SavedBeforeNotice(saved: SavedBefore, language: String, onOpened: () -> Unit = {}) {
     val context = LocalContext.current
     // Plain note: a leading glyph, the sentence, a text action. No box around one row.
     Row(Modifier.fillMaxWidth().testTag("saved_before"), verticalAlignment = Alignment.CenterVertically,
@@ -170,11 +169,10 @@ internal fun SavedBeforeNotice(saved: SavedBefore, format: Format?, language: St
                 Modifier.weight(1f).padding(vertical = Space.m), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
                 try {
-                    // Before a format is picked only the file knows its type; MediaStore keeps it for our own rows.
-                    val type = format?.let(::mimeTypeFor) ?: context.contentResolver.getType(saved.uri)
-                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(saved.uri, type)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                    val type = context.contentResolver.getType(saved.uri)
                     onOpened()
+                    context.startActivity(ShortcutActions.intent(context, ShortcutActions.OPEN_SAVED)
+                        .setDataAndType(saved.uri, type).putExtra(ShortcutActions.SAVED_URI, saved.uri.toString()))
                 } catch (_: ActivityNotFoundException) {
                     android.widget.Toast.makeText(context, R.string.open_file_failed, android.widget.Toast.LENGTH_SHORT).show()
                 } catch (_: SecurityException) {

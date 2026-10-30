@@ -105,6 +105,17 @@ class TikTokSoundChoiceTest {
         assertEquals(OptionsState.Hidden, vm.optionsState)
     }
 
+    @Test fun saveOnlySoundOnACarouselLeavesEveryPhotoUnsaved() {
+        assertEquals(2, (vm.optionsState as OptionsState.ImageReady).photos.size)
+        assertEquals(2, vm.selectedImageRefs.size)
+        assertTrue(reads.isEmpty()); assertTrue(store.all().isEmpty())
+        vm.savePostSound(); settle()
+        assertTrue(publisher.names.isEmpty())
+        assertEquals(listOf(video), reads)
+        assertEquals("audio", store.all().single().format.id)
+        assertEquals(OptionsState.Hidden, vm.optionsState)
+    }
+
     @Test fun soundOnlyEnqueuesTheAudioAndClosesTheSheet() {
         vm.selectAllImages(false)
         vm.toggleSound()

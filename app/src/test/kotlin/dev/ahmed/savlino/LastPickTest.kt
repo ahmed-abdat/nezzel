@@ -62,6 +62,59 @@ class LastPickTest {
         confirmAllQualities(model(prefs), "v1440")
     }
 
+    @Test fun batchSheetsRememberVideoPicksOnDownloadAndKeepMp3Separate() {
+        val prefs = store().apply { lastPreset = Preset.SMALL }
+        val saved = SavedStateHandle()
+        var reads = 0
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+                reads++
+                return InspectResult.Success(inspection(listOf(1080, 720, 360), source.link.rawUrl, source.revision,
+                    listOf(PresetChoice(Preset.BEST, "v1080"), PresetChoice(Preset.BALANCED, "v720"),
+                        PresetChoice(Preset.SMALL, "v360"))))
+            }
+            override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?) =
+                PlaylistResult.Success(PlaylistPage("List", listOf(PlaylistItem("one", url, "Video", 60)), 1, null))
+        }
+        val vm = LinkViewModel(saved, engine = engine, currentEngineVersion = { "fixture-v1" },
+            initialPreset = prefs.lastPreset, rememberPreset = { prefs.lastPreset = it },
+            storedPick = { prefs.lastPreset to prefs.lastHeight })
+        val multiple = "$url $nextUrl"
+        vm.paste(multiple)
+        assertEquals(Preset.SMALL, vm.multi.preset)
+        vm.multi.quality(Preset.BALANCED)
+        assertEquals(Preset.SMALL, prefs.lastPreset)
+        assertEquals(0, reads)
+        vm.multi.confirm("2 links"); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(Preset.BALANCED, prefs.lastPreset)
+        assertEquals(Preset.BALANCED.name, saved.get<String>("lastPreset"))
+        vm.dismissMulti()
+        // A choice confirmed elsewhere is also current when a batch sheet opens.
+        prefs.lastPreset = Preset.BEST
+        val playlistUrl = "https://youtube.com/playlist?list=PLabcdefghij"
+        check(vm, playlistUrl)
+        assertEquals(Preset.BEST, vm.playlist.preset)
+        vm.playlist.quality(Preset.SMALL)
+        assertEquals(Preset.BEST, prefs.lastPreset)
+        assertEquals(0, reads)
+        vm.playlist.confirm(); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(Preset.SMALL, prefs.lastPreset)
+        assertEquals(Preset.SMALL, vm.lastUsedPreset)
+        vm.dismissOptions(); check(vm)
+        assertEquals("v360", vm.selectedFormat?.id)
+        vm.dismissOptions(); vm.paste(multiple)
+        vm.multi.quality(Preset.AUDIO_MP3)
+        assertEquals(Preset.AUDIO_MP3, vm.multi.preset)
+        vm.multi.confirm("2 links"); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(Preset.SMALL, prefs.lastPreset)
+        vm.dismissMulti(); check(vm, playlistUrl)
+        vm.playlist.quality(Preset.AUDIO_MP3)
+        assertEquals(Preset.AUDIO_MP3, vm.playlist.preset)
+        vm.playlist.confirm(); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(Preset.SMALL, prefs.lastPreset)
+        vm.dismissOptions()
+    }
+
     @Test fun aPickConfirmedInTheShareSheetPreselectsInTheAlreadyOpenApp() {
         val prefs = store()
         val app = model(prefs, link = nextUrl, checked = false)

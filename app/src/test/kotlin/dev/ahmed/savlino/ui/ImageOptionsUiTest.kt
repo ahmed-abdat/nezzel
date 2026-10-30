@@ -318,8 +318,10 @@ class ImageOptionsUiTest {
 
     /** One fresh activity per sheet, so a previous composition can never answer for the next. */
     private fun sheetLabels(language: String, build: (ComponentActivity) -> LinkViewModel): Pair<List<String>, Context> =
-        sheetNodes(language, build).let { (nodes, context) -> texts(nodes) to context }
-    private fun sheetNodes(language: String, build: (ComponentActivity) -> LinkViewModel): Pair<List<SemanticsNode>, Context> {
+        sheetNodes(language, build = build).let { (nodes, context) -> texts(nodes) to context }
+    private fun sheetNodes(language: String,
+        check: ((LinkViewModel, List<SemanticsNode>, Context) -> Unit)? = null,
+        build: (ComponentActivity) -> LinkViewModel): Pair<List<SemanticsNode>, Context> {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         try {
             val activity = controller.get()
@@ -331,7 +333,9 @@ class ImageOptionsUiTest {
                     NezzelTheme(ThemePref.Light, false) { OptionsSheetContent(vm, language, vm::dismissOptions) }
                 }
             }
-            return semanticsNodes(activity, rounds = 4, idleMillis = 200) to context
+            val nodes = semanticsNodes(activity, rounds = 4, idleMillis = 200)
+            check?.invoke(vm, nodes, context) // Parent click semantics must be read while the composition is attached.
+            return nodes to context
         } finally { controller.pause().stop().destroy() }
     }
 
@@ -341,28 +345,37 @@ class ImageOptionsUiTest {
     private fun assertSoundChoice(language: String) {
         val tiktok = "https://www.tiktok.com/@synthetic/photo/900000001"
         for ((photos, sound) in listOf(true to false, true to true, false to true)) {
-            val (nodes, context) = sheetNodes(language) { activity ->
+            sheetNodes(language, check = { vm, nodes, context ->
+                val n = NezzelFormat.count(3, language)
+                val expected = when {
+                    !sound -> context.resources.getQuantityString(R.plurals.image_save_count, 3, n)
+                    photos -> context.resources.getQuantityString(R.plurals.image_save_count_sound, 3, n)
+                    else -> context.getString(R.string.sound_save)
+                }
+                val labels = texts(nodes)
+                assertTrue(labels.toString(), expected in labels)
+                assertFalse(vm.imageSaving)
+                assertTrue(vm.imageSaveEnabled)
+                assertNull(clickable(nodes, expected).config.getOrNull(SemanticsProperties.Disabled))
+                val onlySound = clickable(nodes, context.getString(R.string.image_save_sound_only))
+                assertNull(onlySound.config.getOrNull(SemanticsProperties.Disabled))
+                assertTrue(onlySound.size.height / context.resources.displayMetrics.density >= 48f)
+                // The sound checkbox sits beside the photo tiles, which carry thumbnail descriptions.
+                val tile = nodes.single { it.config.getOrNull(SemanticsProperties.Role) == Role.Checkbox &&
+                    it.config.getOrNull(SemanticsProperties.ContentDescription) == null }
+                assertEquals(if (sound) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off,
+                    tile.config.getOrNull(SemanticsProperties.ToggleableState))
+                assertTrue("tile ${tile.boundsInRoot} ${tile.size}", tile.size.height / context.resources.displayMetrics.density >= 48f)
+                assertEquals(true, onlySound.config[SemanticsActions.OnClick].action?.invoke())
+            }) { activity ->
                 vm(activity, found = 3, link = tiktok) { tikTokPhotoSuccess(it, 3) }.also {
                     assertFalse(it.soundSelected)
                     if (!photos) it.selectAllImages(false)
                     if (sound) it.toggleSound()
                 }
             }
-            val n = NezzelFormat.count(3, language)
-            val expected = when {
-                !sound -> context.resources.getQuantityString(R.plurals.image_save_count, 3, n)
-                photos -> context.resources.getQuantityString(R.plurals.image_save_count_sound, 3, n)
-                else -> context.getString(R.string.sound_save)
-            }
-            val labels = texts(nodes)
-            assertTrue(labels.toString(), expected in labels)
-            // One more checkbox beside the three photo tiles (those carry a thumbnail description): ticked state, ≥48dp.
-            val tile = nodes.single { it.config.getOrNull(SemanticsProperties.Role) == Role.Checkbox &&
-                it.config.getOrNull(SemanticsProperties.ContentDescription) == null }
-            assertEquals(if (sound) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off,
-                tile.config.getOrNull(SemanticsProperties.ToggleableState))
-            assertTrue("tile ${tile.boundsInRoot} ${tile.size}", tile.size.height / context.resources.displayMetrics.density >= 48f)
         }
+
         val context = RuntimeEnvironment.getApplication()
         if (language == "ar") {
             assertEquals("حفظ 3 صور والصوت", context.resources.getQuantityString(R.plurals.image_save_count_sound, 3, "3"))

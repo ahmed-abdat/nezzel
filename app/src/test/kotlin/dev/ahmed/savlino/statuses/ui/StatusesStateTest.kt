@@ -265,7 +265,7 @@ class StatusesStateTest {
         assertTrue(state.selection.isEmpty())
     }
 
-    @Test fun leavingTheTabStopsUnfinishedCopiesAndCountsStayPerFile() = runTest {
+    @Test fun leavingTheTabKeepsConfirmedCopiesBusyUntilTheirResult() = runTest {
         val items = mixed()
         val library = FakeStatusLibrary(ready(items))
         val stop = kotlinx.coroutines.CompletableDeferred<Unit>()
@@ -278,10 +278,17 @@ class StatusesStateTest {
         state.save(state.selectedItems); advanceUntilIdle()
         assertEquals("the first file counts the moment it is saved", listOf(UsageKeys.STATUSES_SAVED), counts)
         state.setActive(false); advanceUntilIdle()
-        assertFalse(state.saving)
+        assertTrue(state.saving)
+        assertTrue(dev.ahmed.savlino.statuses.StatusSaver.busy)
         assertFalse("leaving closes select mode", state.selecting)
+        assertTrue(state.selection.isEmpty())
         assertEquals(listOf(items[0]), library.saved)
-        assertEquals("a cancel is not a failure", listOf(UsageKeys.STATUSES_SAVED), counts)
+        stop.complete(Unit); advanceUntilIdle()
+        assertEquals(items.take(3), library.saved)
+        assertFalse(state.saving)
+        assertFalse(dev.ahmed.savlino.statuses.StatusSaver.busy)
+        assertEquals(List(3) { UsageKeys.STATUSES_SAVED }, counts)
+        assertEquals(StatusEvent.Batch(3, 0), state.events.first())
     }
 
     @Test fun readyCountsOncePerVisitWhenSomethingIsLeftToSave() = runTest {

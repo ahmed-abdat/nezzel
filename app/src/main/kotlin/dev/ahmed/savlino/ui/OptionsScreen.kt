@@ -92,8 +92,7 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
             }
             // The share sheet says "saved before" first, from intake on; the app keeps it at the end of the choices.
             if (share != null && !failed && !links.confirmed) (links.savedBefore ?: links.savedLink)?.let { saved ->
-                SavedBeforeNotice(saved, links.selectedFormat?.takeIf { links.savedBefore != null }, language,
-                    onOpened = share.onFinish)
+                SavedBeforeNotice(saved, language, onOpened = { links.dismissOptions(); share.onFinish() })
             }
             playlistNotice(links.text)?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -148,6 +147,10 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                 is OptionsState.ImageReady -> {
                     ImageOptions(state, host.orEmpty(), language, links.selectedImageRefs, !links.imageSaving,
                         links::toggleImage, links::selectAllImages, links::inspectCarouselVideo, links.soundSelected, links::toggleSound)
+                    if (state.discovery.sound != null) TextButton(onClick = links::savePostSound,
+                        enabled = !links.imageSaving, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.image_save_sound_only))
+                    }
                     SavesTo()
                 }
                 is OptionsState.ImageError -> ImageInspectionError(state, links::checkLink, onDismiss, host, links::pasteAnother)

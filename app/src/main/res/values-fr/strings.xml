@@ -503,6 +503,7 @@
     <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
     <string name="saved_post_position">%1$s sur %2$s</string>
     <string name="tiktok_sound">Son</string>
+    <string name="image_save_sound_only">Enregistrer seulement le son</string>
     <string name="sound_save">Enregistrer le son</string>
     <string name="sound_saving">Préparation du son…</string>
     <string name="sound_save_failed">Impossible d’enregistrer le son</string>

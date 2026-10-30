@@ -44,7 +44,7 @@ sealed interface StatusEvent {
 /**
  * Screen state over a [StatusLibrary]. A null library (not wired yet) never loads and shows the explainer only.
  * Filter, account and hide-saved apply to what is shown; selection holds URIs and never reaches past what is shown.
- * Copies run one at a time in [scope]; leaving the tab cancels them (committed files stay), a rotation does not.
+ * Confirmed copies run one at a time in [scope] and finish across tab switches and rotation.
  */
 class StatusesState(private val library: StatusLibrary?, private val scope: CoroutineScope, opened: StatusSource? = null) {
     /** Null until the first load ends (or forever without a library). */
@@ -167,11 +167,11 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
     private var visit = 0
     private var readyVisit = 0
 
-    /** The tab became shown or hidden. Hiding it ends the visit: unfinished copies stop and select mode closes. */
+    /** The tab became shown or hidden. Hiding it ends the visit and select mode; confirmed copies keep running. */
     fun setActive(shown: Boolean) {
         if (shown == active) return
         active = shown
-        if (shown) { visit++; countReady() } else { cancelSaves(); exitSelect() }
+        if (shown) { visit++; countReady() } else exitSelect()
     }
 
     /** Once per visit, when the tab shows at least one status that isn't saved. */
@@ -257,15 +257,6 @@ class StatusesState(private val library: StatusLibrary?, private val scope: Coro
         // All picked files made it: select mode is done. Files that didn't save stay picked for another try.
         if (selecting && selection.isEmpty()) exitSelect()
         done.event()?.let { channel.send(it) }
-        refresh()
-    }
-
-    private fun cancelSaves() {
-        if (pending.isEmpty()) return
-        saves.toList().forEach { it.cancel() }
-        pending = emptySet()
-        progress = 0 to 0
-        run = Run()
         refresh()
     }
 

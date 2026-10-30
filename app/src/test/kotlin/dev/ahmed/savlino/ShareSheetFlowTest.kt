@@ -333,8 +333,10 @@ class ShareSheetFlowTest {
         assertNotNull(texts(semanticsNodes(activity, rounds = 1)).toString(), open)
         assertEquals(true, open!!.config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action?.invoke())
         val view = shadowOf(activity).nextStartedActivity
-        assertEquals(Intent.ACTION_VIEW, view.action)
+        assertEquals(dev.ahmed.savlino.shortcuts.ShortcutActions.OPEN_SAVED, view.action)
+        assertEquals(MainActivity::class.java.name, view.component?.className)
         assertEquals(savedUri, view.data)
+        assertEquals(savedUri.toString(), dev.ahmed.savlino.shortcuts.ShortcutActions.savedUri(view))
         assertEquals("video/mp4", view.type)
         assertTrue(activity.isFinishing)
         assertTrue(engine.inspected.isEmpty())

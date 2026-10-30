@@ -492,6 +492,7 @@
     <!-- Multi-media posts: naming, Downloads order, TikTok photos and sound. -->
     <string name="saved_post_position">%1$s of %2$s</string>
     <string name="tiktok_sound">Sound</string>
+    <string name="image_save_sound_only">Save only sound</string>
     <string name="sound_save">Save sound</string>
     <string name="sound_saving">Getting the sound…</string>
     <string name="sound_save_failed">Couldn’t save the sound</string>

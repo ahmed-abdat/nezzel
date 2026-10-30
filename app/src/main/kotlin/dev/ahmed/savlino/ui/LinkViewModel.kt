@@ -161,7 +161,8 @@ class LinkViewModel(
                 downloads?.confirmLinks(id, title, preset, chosen) == true
             }.await().also { accepted -> if (accepted) markAllHandled(chosen) }
         },
-        onAccepted = { acceptedJob = playlistSubmissionId; publishPendingLink() })
+        onAccepted = { acceptedJob = playlistSubmissionId; publishPendingLink() },
+        preferredPreset = ::preferredBatchPreset, rememberPreset = ::rememberBatchPreset)
     val hasPendingNotificationChoice get() = pendingPermissionChoice != null || pendingPlaylistPermission != null
     fun requestDownload() {
         if (!downloadEnabled || pendingPermissionChoice != null) return
@@ -450,7 +451,8 @@ class LinkViewModel(
                 downloads?.confirmBatch(id, title, preset, items) == true
             }.await()
         },
-        onAccepted = { acceptedJob = playlistSubmissionId; dismissOptions(); clearField() })
+        onAccepted = { acceptedJob = playlistSubmissionId; dismissOptions(); clearField() },
+        preferredPreset = ::preferredBatchPreset, rememberPreset = ::rememberBatchPreset)
     /** Handled-link marks for the clipboard after the confirm, like a single Download. */
     private fun markAllHandled(chosen: List<ValidatedLink>) {
         if (!clipboardReady) return
@@ -505,6 +507,27 @@ class LinkViewModel(
     var lastUsedPreset by mutableStateOf((if (lastUsedHeight != null) null else if (restoredPick) {
         saved.get<String>("lastPreset")?.let { name -> Preset.entries.find { it.name == name } }
     } else initialPreset)?.takeUnless { it.audio }); private set
+    private fun refreshRememberedPick() {
+        storedPick?.invoke()?.takeIf { it != seenPick }?.let { pick ->
+            seenPick = pick
+            lastUsedHeight = pick.second?.takeIf { it > 0 }
+            lastUsedPreset = if (lastUsedHeight != null) null else pick.first?.takeUnless { it.audio }
+        }
+    }
+    private fun preferredBatchPreset(): Preset {
+        refreshRememberedPick()
+        return lastUsedPreset ?: Preset.BALANCED
+    }
+    /** A confirmed batch shares the single-link video preference; audio never replaces it. */
+    private fun rememberBatchPreset(preset: Preset) {
+        if (preset.audio) return
+        lastUsedPreset = preset
+        lastUsedHeight = null
+        saved["lastPreset"] = preset.name
+        saved["lastHeight"] = null
+        rememberPreset(preset)
+        seenPick = storedPick?.invoke()
+    }
     /** The actual returned row the remembered pick resolves to; unrelated fallbacks have no badge. */
     val lastUsedFormat: Format? get() {
         val height = lastUsedHeight ?: return presetOptions.firstOrNull { it.first == lastUsedPreset && it.second.hasVideo }?.second
@@ -1066,11 +1089,7 @@ class LinkViewModel(
         } }
         // The Share sheet keeps its own view model: a pick confirmed there is the one to remember here too.
         // Only a change made elsewhere counts: a stored pick that merely lags this screen's restored one must not win.
-        storedPick?.invoke()?.takeIf { it != seenPick }?.let { pick ->
-            seenPick = pick
-            lastUsedHeight = pick.second?.takeIf { it > 0 }
-            lastUsedPreset = if (lastUsedHeight != null) null else pick.first?.takeUnless { it.audio }
-        }
+        refreshRememberedPick()
         // Video links prefer remembered/Balanced, then the engine's BEST, never audio;
         // a link with no video at all (TikTok photo slideshow) preselects its first audio row.
         val options = presetOptions
@@ -1396,6 +1415,14 @@ class LinkViewModel(
         if (chosen.isNotEmpty()) savePhotos(ready, chosen)
         if (sound) saveSound(ready, alone = chosen.isEmpty())
     }
+    /** Explicit sound-only confirmation, independent of the selected photos. */
+    fun savePostSound() {
+        val ready = optionsState as? OptionsState.ImageReady ?: return
+        if (imageSaving || ready.discovery.sound == null ||
+            currentSource()?.matches(ready.origin ?: ready.inspection.source) != true) return
+        usage.count(UsageKeys.FUNNEL_TAPPED)
+        saveSound(ready, alone = true)
+    }
     private fun savePhotos(ready: OptionsState.ImageReady, chosen: List<MediaRendition.Image>) {
         val first = chosen.first()
         val metadata = ready.inspection.items.first().metadata
@@ -1639,4 +1666,4 @@ class LinkViewModel(
     fun dismissedHashes(): Set<String> = gate.dismissedHashes()
 }
 
-private val Preset.audio get() = this == Preset.AUDIO_M4A || this == Preset.AUDIO_MP3
+internal val Preset.audio get() = this == Preset.AUDIO_M4A || this == Preset.AUDIO_MP3

@@ -14,6 +14,8 @@ class PlaylistViewModel internal constructor(
     private val wasSaved: suspend (PlaylistItem) -> Boolean,
     private val submit: suspend (String, Preset, List<PlaylistItem>) -> Boolean,
     private val onAccepted: () -> Unit = {},
+    private val preferredPreset: () -> Preset = { Preset.BALANCED },
+    private val rememberPreset: (Preset) -> Unit = {},
 ) : ViewModel() {
     var visible by mutableStateOf(false); private set
     var title by mutableStateOf(""); private set
@@ -36,7 +38,7 @@ class PlaylistViewModel internal constructor(
 
     fun open(source: LinkRevision) {
         close()
-        this.source = source; visible = true
+        this.source = source; preset = preferredPreset(); visible = true
         loadMore()
     }
     fun close() {
@@ -86,13 +88,14 @@ class PlaylistViewModel internal constructor(
     fun selectAll() { if (!submitting) selected = items.filter { it.selectable }.mapTo(LinkedHashSet()) { it.id } }
     fun selectNone() { if (!submitting) selected = emptySet() }
     fun quality(preset: Preset) {
-        if (!submitting && preset in listOf(Preset.BEST, Preset.BALANCED, Preset.SMALL, Preset.AUDIO_M4A)) this.preset = preset
+        if (!submitting && preset in listOf(Preset.BEST, Preset.BALANCED, Preset.SMALL, Preset.AUDIO_M4A, Preset.AUDIO_MP3)) this.preset = preset
     }
     fun confirm() {
         if (!canConfirm) return
         val rows = items.filter { it.id in selected }
         val chosenTitle = title
         val chosenPreset = preset
+        if (!chosenPreset.audio) rememberPreset(chosenPreset)
         // A pending continuation must not mutate the frozen confirmation or keep fetching after it.
         generation++; request?.cancel(); operation?.let(engine::cancel); operation = null; loading = false
         val epoch = generation

@@ -547,7 +547,12 @@ private fun SelectionBar(state: StatusesState, language: String) {
 /** Save N, with the real count done while copies run. */
 @Composable
 private fun SaveBar(state: StatusesState, language: String) {
-    val count = state.selectedItems.size
+    val selected = state.selectedItems
+    val count = selected.size
+    val bytes = if (selected.isNotEmpty() && selected.all { (it.sizeBytes ?: 0) > 0 }) {
+        try { selected.fold(0L) { total, item -> Math.addExact(total, checkNotNull(item.sizeBytes)) } }
+        catch (_: ArithmeticException) { null }
+    } else null
     Surface(color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             val (done, total) = state.progress
@@ -561,7 +566,8 @@ private fun SaveBar(state: StatusesState, language: String) {
             if (!state.saving || count > 0) Button(onClick = { state.save(state.selectedItems) }, enabled = count > 0,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(when {
-                    count > 0 -> pluralStringResource(R.plurals.statuses_save_n, count, NezzelFormat.count(count, language))
+                    count > 0 -> pluralStringResource(R.plurals.statuses_save_n, count, NezzelFormat.count(count, language)) +
+                        (bytes?.let { stringResource(R.string.separator) + NezzelFormat.isolate(NezzelFormat.size(it, language)) } ?: "")
                     !state.canSelect && !state.saving -> stringResource(R.string.statuses_all_saved)
                     else -> stringResource(R.string.statuses_save)
                 })

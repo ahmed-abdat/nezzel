@@ -135,7 +135,7 @@ class UxFlowTest {
         it.edit(url); it.checkLink(); idle()
     }
 
-    private fun render(language: String, content: @androidx.compose.runtime.Composable () -> Unit): Pair<List<SemanticsNode>, android.content.Context> {
+    private fun render(language: String, act: ((ComponentActivity, List<SemanticsNode>) -> Unit)? = null, content: @androidx.compose.runtime.Composable () -> Unit): Pair<List<SemanticsNode>, android.content.Context> {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         val activity = controller.get()
         val configuration = Configuration(activity.resources.configuration).apply { setLocale(Locale.forLanguageTag("$language-u-nu-latn")) }
@@ -146,6 +146,7 @@ class UxFlowTest {
             }
         }
         val nodes = semanticsNodes(activity, rounds = 4, idleMillis = 100)
+        act?.invoke(activity, nodes)
         controller.pause().stop().destroy()
         return nodes to context
     }
@@ -358,6 +359,28 @@ class UxFlowTest {
             assertNull(vm.savedBefore)
             val (other, _) = render("en") { ConfirmationDetails(vm, "en") }
             assertFalse(other.any { it.config.getOrNull(SemanticsProperties.TestTag) == "saved_before" })
+            vm.selectFormat("v720")
+            fun openSaved(activity: ComponentActivity, shown: List<SemanticsNode>) {
+                shown.filter { it.config.getOrNull(SemanticsActions.OnClick) != null &&
+                    activity.getString(R.string.open_file) in texts(dev.ahmed.savlino.descendants(it)) }
+                    .minBy { dev.ahmed.savlino.descendants(it).size }
+                    .config[SemanticsActions.OnClick].action!!.invoke()
+                assertEquals(OptionsState.Hidden, vm.optionsState)
+                val intent = shadowOf(activity).nextStartedActivity
+                assertEquals(dev.ahmed.savlino.MainActivity::class.java.name, intent.component?.className)
+                assertEquals("content://media/external/downloads/7", dev.ahmed.savlino.shortcuts.ShortcutActions.savedUri(intent))
+                assertEquals("Open never queues another download", 1, store.all().size)
+            }
+            render("en", act = ::openSaved) { OptionsSheetContent(vm, "en", vm::dismissOptions) }
+            vm.paste(url); waitFor("saved lookup") { vm.savedBefore != null }
+            var finished = false
+            val hooks = ShareSheetHooks(onOpenApp = {}, onFinish = {
+                assertEquals("dismiss before leaving the Share sheet", OptionsState.Hidden, vm.optionsState)
+                finished = true
+            })
+            render("en", act = { activity, shown -> openSaved(activity, shown); assertTrue(finished) }) {
+                OptionsSheetBody(vm, "en", vm::dismissOptions, hooks)
+            }
             exists = false
             vm.dismissOptions(); vm.edit(""); vm.paste(url)
             waitFor("options") { vm.optionsState is OptionsState.Ready }
