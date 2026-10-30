@@ -79,6 +79,7 @@ class YtdlpInfoReuseTest {
     }
     @Test fun forbiddenAndExpiredUrlsBeforeBytesFallBackExactlyOnce() = runBlocking {
         for (message in listOf("ERROR: unable to download video data: HTTP Error 403: Forbidden",
+            "ERROR: unable to download video data: HTTP Error 404: Not Found",
             "ERROR: media URL has expired", "ERROR: HTTP Error 403: Forbidden")) {
             val runtime = Runtime(json)
             val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
@@ -114,7 +115,7 @@ class YtdlpInfoReuseTest {
         }
     }
     @Test fun expiredSignedUrlWithBytesWipesBeforeExactSelectionRefetchAndChangesEpoch() = runBlocking {
-        for (code in listOf(401, 403, 410)) {
+        for (code in listOf(401, 403, 404, 410)) {
             val runtime = Runtime(json)
             val cache = YtdlpInfoCache(temp.newFolder())
             val engine = YoutubedlEngine(runtime, infoCache = cache)
@@ -263,13 +264,25 @@ class YtdlpInfoReuseTest {
         runtime.transfers.forEach(::assertPage)
     }
     @Test fun runtimePreservesExpiryFlagWithoutKeepingPrivateMessages() {
-        val diagnostics = YtdlpDiagnostics()
-        diagnostics.accept("ERROR: unable to download video data: HTTP Error 403: Forbidden https://example.org/private")
-        val error = diagnostics.failure()
-        assertTrue(error.expiredUrl); assertEquals(DownloadError.FormatExpired, error.error)
-        assertNull(error.message); assertNull(error.cause)
+        for (code in listOf(401, 403, 404, 410)) {
+            val diagnostics = YtdlpDiagnostics()
+            diagnostics.accept("ERROR: unable to download video data: HTTP Error $code https://example.org/private")
+            val error = diagnostics.failure()
+            assertTrue(error.expiredUrl); assertEquals(DownloadError.FormatExpired, error.error)
+            assertNull(error.message); assertNull(error.cause)
+        }
         assertFalse(YtdlpDiagnostics.expiredUrl("ERROR: failed https://example.org/HTTP%20Error%20403"))
         assertFalse(YtdlpDiagnostics.expiredUrl("WARNING: HTTP Error 403"))
+        for (message in listOf(
+            "ERROR: Unable to download webpage: HTTP Error 404",
+            "ERROR: Unable to download JSON metadata: HTTP Error 404",
+            "ERROR: Unable to download video thumbnail: HTTP Error 404",
+            "ERROR: HTTP Error 404",
+            "ERROR: unable to download video data\nERROR: HTTP Error 404",
+            "WARNING: unable to download video data: HTTP Error 404",
+            "ERROR: unable to download video data: HTTP Error 4040")) {
+            assertFalse(YtdlpDiagnostics.expiredUrl(message), message)
+        }
     }
 
 }

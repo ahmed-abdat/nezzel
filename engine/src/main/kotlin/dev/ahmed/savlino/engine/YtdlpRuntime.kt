@@ -369,13 +369,20 @@ internal class YtdlpDiagnostics {
     }
     companion object {
         fun blocksResume(message: String): Boolean = errorLines(message).any(HTTP_NO_RESUME::containsMatchIn)
-        fun expiredUrl(message: String): Boolean = errorLines(message).any { HTTP_EXPIRED.containsMatchIn(it) || EXPIRED.containsMatchIn(it) }
+        fun expiredUrl(message: String): Boolean = errorLines(message).any { line ->
+            HTTP_EXPIRED.containsMatchIn(line) || EXPIRED.containsMatchIn(line) ||
+                // A missing signed media URL can be refreshed; a missing page or thumbnail cannot.
+                // Restore the ERROR prefix after normalization for the mapper's same-line context check.
+                HTTP_NOT_FOUND.containsMatchIn(line) &&
+                    YtdlpErrorMapper.map("ERROR: " + line.removePrefix("error:")) == DownloadError.FormatExpired
+        }
         /** ERROR lines without URLs (a path may spell an error code), lowercased. */
         private fun errorLines(message: String) = message.lineSequence().filter { it.startsWith("ERROR:") }
             .map { it.replace(URL, "").lowercase(java.util.Locale.ROOT) }
         private val URL = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
         private val HTTP_NO_RESUME = Regex("\\bhttp error (429|5\\d\\d)\\b")
         private val HTTP_EXPIRED = Regex("\\bhttp error (401|403|410)\\b")
+        private val HTTP_NOT_FOUND = Regex("\\bhttp error 404\\b")
         private val EXPIRED = Regex("\\b(url|signature|token)\\b.{0,40}\\bexpired\\b|\\bexpired (url|signature|token)\\b")
         private val EXCLUDED_SIGNAL = Regex("permission denied|read-only file system|operation not permitted|" +
             "unable to (?:open|write)|interrupted|keyboardinterrupt|\\bcancelled\\b|\\bcanceled\\b|" +
