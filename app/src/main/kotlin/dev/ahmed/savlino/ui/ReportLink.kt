@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.engine.mediaimage.ImageFailure
 
@@ -21,6 +23,11 @@ internal object ReportLink {
 
     fun open(context: Context, message: String) {
         try { context.startActivity(intent(message)) }
-        catch (_: ActivityNotFoundException) { }
+        catch (_: ActivityNotFoundException) {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, message)
+            try { context.startActivity(Intent.createChooser(send, null)) }
+            catch (_: ActivityNotFoundException) { Toast.makeText(context, R.string.share_unavailable, Toast.LENGTH_SHORT).show() }
+            catch (_: SecurityException) { Toast.makeText(context, R.string.share_unavailable, Toast.LENGTH_SHORT).show() }
+        }
     }
 }

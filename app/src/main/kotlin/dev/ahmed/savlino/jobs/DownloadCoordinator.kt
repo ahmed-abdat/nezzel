@@ -1090,6 +1090,12 @@ class DownloadCoordinator(
         command.jobId
     }
 
+    /** Explicit quality inspection reads only a failed job's still-retained source; it never retries or enqueues it. */
+    suspend fun sourceForQuality(id: String): String? = withContext(Dispatchers.IO) {
+        val row = store.get(id) ?: return@withContext null
+        row.sourceUrl?.takeIf { row.stage == JobStage.FAILED && row.error != DownloadError.InsufficientSpace && it.isNotBlank() }
+    }
+
     fun dismiss(id: String) { mutableProgress.update { it.filterNot { event -> event.jobId == id && event.terminal && !event.awaitingSchedule } } }
     private fun fromRecord(row: JobRecord) = DownloadProgress(row.jobId, row.displayName ?: row.filename,
         when (row.stage) {

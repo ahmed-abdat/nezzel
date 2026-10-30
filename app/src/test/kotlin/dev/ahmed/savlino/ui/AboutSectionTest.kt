@@ -245,6 +245,30 @@ class AboutSectionTest {
         assertEquals(context.getString(R.string.contact_whatsapp_intro), started.data!!.getQueryParameter("text"))
     }
     @Test fun contactRowOpensWhatsAppEnglish() = contactOpensWhatsApp()
+
+    @Test fun unavailableWhatsAppContactFallsBackToSharingTheMessage() {
+        val controller = org.robolectric.Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        try {
+            val intents = mutableListOf<android.content.Intent>()
+            val context = object : android.content.ContextWrapper(controller.get()) {
+                override fun startActivity(intent: android.content.Intent) {
+                    intents += intent
+                    if (intent.action == android.content.Intent.ACTION_VIEW) throw android.content.ActivityNotFoundException()
+                    super.startActivity(intent)
+                }
+            }
+            val message = context.getString(R.string.contact_whatsapp_intro)
+            ReportLink.open(context, message)
+            assertEquals(2, intents.size)
+            val chooser = org.robolectric.Shadows.shadowOf(controller.get()).nextStartedActivity
+            assertEquals(android.content.Intent.ACTION_CHOOSER, chooser.action)
+            @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)!!
+            assertEquals(android.content.Intent.ACTION_SEND, send.action)
+            assertEquals("text/plain", send.type)
+            assertEquals(message, send.getStringExtra(android.content.Intent.EXTRA_TEXT))
+            assertNull(send.`package`)
+        } finally { controller.pause().stop().destroy() }
+    }
     @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
     @Test fun contactRowOpensWhatsAppArabic() = contactOpensWhatsApp()
     @Test fun companyLinkFailureGivesFeedbackEnglish() = failedCompanyLink()

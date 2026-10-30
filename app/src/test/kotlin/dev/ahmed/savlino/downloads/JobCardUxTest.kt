@@ -62,6 +62,24 @@ class JobCardUxTest {
         CompositionLocalProvider(LocalSoftwareKeyboardController provides keyboard) { DownloadsScreen(emptyList(), language, {}, {}, {}, {}, {}, null, {}, {}, libraryLoad = LibraryLoadState.Ready(listOf(family, song))) }
     }, check)
     private fun field() = compose.onNode(hasSetTextAction(), useUnmergedTree = true)
+
+    @Test fun changeQualityOnlyForEligibleFailureAndPassesItsJob() {
+        val opened = mutableListOf<String>()
+        val failed = job.copy(phase = DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.Network)
+        var current by mutableStateOf(failed)
+        host(content = {
+            CompositionLocalProvider(LocalFailedQuality provides FailedQualityLink(eligible = { it == "a" }, open = { opened += it })) {
+                JobRow(current, {}, {}, {})
+            }
+        }) { _ ->
+            compose.onNodeWithText(context.getString(R.string.change_quality)).assertHeightIsAtLeast(48.dp).performClick()
+            assertEquals(listOf("a"), opened)
+            compose.runOnIdle { current = failed.copy(error = dev.ahmed.savlino.domain.DownloadError.InsufficientSpace) }
+            compose.onNodeWithText(context.getString(R.string.change_quality)).assertDoesNotExist()
+            compose.runOnIdle { current = failed.copy(jobId = "without-source") }
+            compose.onNodeWithText(context.getString(R.string.change_quality)).assertDoesNotExist()
+        }
+    }
     private fun row(title: String) = compose.onNodeWithText(NezzelFormat.firstStrong(title), useUnmergedTree = true)
 
     private fun searchOpensFocusedWithKeyboardAndCloses(fontScale: Float) = screen(fontScale) { a ->

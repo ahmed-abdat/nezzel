@@ -632,6 +632,24 @@ class DownloadCoordinatorTest {
             assertEquals(1, downloadRuns(app, original.jobId).size)
         } finally { store.close() }
     }
+
+    @Test fun qualitySourceReadsOnlyTheRetainedFailedLinkAndNeverSchedules() = runBlocking {
+        JobStore(app).use { store ->
+            val original = command("quality-source")
+            store.enqueue(original)
+            val coordinator = DownloadCoordinator(app, engine = FakeEngine(), store = store,
+                workManager = { error("Opening quality options must not schedule work") })
+            assertNull(coordinator.sourceForQuality(original.jobId))
+            store.fail(original.jobId, DownloadError.Network)
+            assertEquals(original.source.link.rawUrl, coordinator.sourceForQuality(original.jobId))
+            assertEquals(JobStage.FAILED, store.get(original.jobId)!!.stage)
+            store.enqueue(command("no-space")); store.fail("no-space", DownloadError.InsufficientSpace)
+            assertNull(coordinator.sourceForQuality("no-space"))
+            store.clearShareLinks()
+            assertNull(coordinator.sourceForQuality(original.jobId))
+            assertNull(coordinator.sourceForQuality("missing"))
+        }
+    }
     @Test fun retryWaitsForOldWorkerToFinishFailureBeforeChangingJournal() = runBlocking {
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)

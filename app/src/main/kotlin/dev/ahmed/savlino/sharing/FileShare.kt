@@ -72,10 +72,17 @@ class FileSharer(
             try { context.contentResolver.openFileDescriptor(uri, "r")?.use { true } == true } catch (_: Exception) { false }
         }
         if (!readable) return message(R.string.share_file_unavailable)
+        // The sheet's target lookup may predate an uninstall or an app being disabled.
+        val available = target?.takeIf { wanted -> targets(mime).any { it.packageName == wanted.packageName } }
         try {
-            context.startActivity(FileShare.intent(uri, mime, target))
-            if (target != null) usage.count(UsageKeys.SHARE_WHATSAPP)
-        } catch (_: ActivityNotFoundException) { message(R.string.share_unavailable) }
+            context.startActivity(FileShare.intent(uri, mime, available))
+            if (available != null) usage.count(UsageKeys.SHARE_WHATSAPP)
+        } catch (_: ActivityNotFoundException) {
+            if (available == null) message(R.string.share_unavailable)
+            else try { context.startActivity(FileShare.intent(uri, mime, null)) }
+            catch (_: ActivityNotFoundException) { message(R.string.share_unavailable) }
+            catch (_: SecurityException) { message(R.string.share_unavailable) }
+        }
         catch (_: SecurityException) { message(R.string.share_unavailable) }
     }
 }

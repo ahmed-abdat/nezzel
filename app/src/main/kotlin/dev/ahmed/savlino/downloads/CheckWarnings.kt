@@ -67,3 +67,7 @@ internal fun CheckWarningRow(warning: CheckWarning, media: SavedMedia?, onTryAga
 /** "Look for better quality" in a saved file's sheet: [eligible] decides off the network; [open] starts the explicit inspection. */
 class BetterQualityLink(val eligible: suspend (SavedMedia) -> Boolean, val open: (SavedMedia) -> Unit)
 val LocalBetterQuality = staticCompositionLocalOf<BetterQualityLink?> { null }
+
+/** Failed jobs use their retained source, checked again on tap; no source is stored in UI state. */
+class FailedQualityLink(val eligible: suspend (String) -> Boolean, val open: (String) -> Unit)
+val LocalFailedQuality = staticCompositionLocalOf<FailedQualityLink?> { null }

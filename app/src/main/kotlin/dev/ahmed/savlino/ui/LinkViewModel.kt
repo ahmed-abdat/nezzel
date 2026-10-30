@@ -649,17 +649,17 @@ class LinkViewModel(
         (optionsState is OptionsState.Checking || optionsState is OptionsState.Ready || optionsState is OptionsState.ImageReady) &&
         currentSource()?.link?.normalizedUrl == link.normalizedUrl
     /**
-     * A saved file's sheet: read its kept link again, explicitly (allowed with automatic options off, like View options).
+     * A saved file's sheet or failed job: read its kept link again, explicitly (allowed with automatic options off).
      * Only selection and a note change; Download still needs its own tap.
      */
-    fun lookForBetter(link: String, saved: Format) {
+    fun lookForBetter(link: String, saved: Format? = null) {
         val parsed = LinkInput.parse(link) ?: return
         dismissShare()
         suggestion = null
         edit(parsed.rawUrl)
         setTyped(false)
         betterFrom = saved
-        betterThan = VideoQuality.of(saved.width, saved.height)
+        betterThan = saved?.let { VideoQuality.of(it.width, it.height) }
         checkLink()
     }
     private fun clearBetter() { betterFrom = null; betterThan = null }

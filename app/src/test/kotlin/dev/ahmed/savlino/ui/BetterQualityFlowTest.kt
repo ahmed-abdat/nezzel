@@ -73,4 +73,14 @@ class BetterQualityFlowTest {
         vm.edit("$link?x=2")
         assertNull(vm.betterThan)
     }
+
+    @Test fun failedLinkOpensOptionsWithoutClaimingItWasSavedOrStartingDownload() {
+        vm.automaticOptions = false
+        vm.lookForBetter(link); pump()
+        assertEquals(1, inspections)
+        assertTrue(vm.optionsState is OptionsState.Ready)
+        assertNull(vm.betterThan)
+        assertNotNull(vm.selectedFormat)
+        assertTrue(store.all().isEmpty())
+    }
 }

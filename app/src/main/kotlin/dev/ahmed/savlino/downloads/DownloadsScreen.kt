@@ -690,14 +690,15 @@ internal fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, on
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpenWith: () -> Unit, onShowFiles: ((SavedMedia) -> Unit)?, onDelete: () -> Unit,
-    repository: SavedMediaRepository, onRename: () -> Unit) {
+    repository: SavedMediaRepository, onRename: () -> Unit,
+    trigger: @Composable (open: () -> Unit) -> Unit = { open -> SavedMenuButton(item, open) }) {
     var open by rememberSaveable(item.uri.toString()) { mutableStateOf(false) }
     var canRename by remember(item.uri, repository, item.postPosition) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(open, item.uri, repository, item.postPosition) {
         canRename = null
         if (open) canRename = item.postPosition == null && withContext(Dispatchers.IO) { repository.canRename(item.uri) }
     }
-    IconButton(onClick = { canRename = null; open = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.saved_more, item.displayName)) }
+    trigger { canRename = null; open = true }
     if (!open) return
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -752,6 +753,13 @@ private fun SavedMenu(item: SavedMedia, meta: String, onShare: () -> Unit, onOpe
             HorizontalDivider(Modifier.padding(horizontal = Space.xl, vertical = Space.s))
             SheetAction(R.drawable.ic_ms_delete, stringResource(R.string.saved_delete), MaterialTheme.colorScheme.error) { act(onDelete) }
         }
+    }
+}
+
+@Composable
+private fun SavedMenuButton(item: SavedMedia, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(Icons.Default.MoreVert, stringResource(R.string.saved_more, item.displayName))
     }
 }
 
@@ -881,14 +889,29 @@ fun RecentFiles(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
 @Composable
 fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) -> Unit,
                 jobs: () -> List<DownloadProgress> = { emptyList() }, onJob: (jobId: String) -> Unit = {},
-                onShare: (SavedMedia) -> Unit = {}, onOpenWith: (SavedMedia) -> Unit = {}, onSeeAll: () -> Unit) {
+                onShare: (SavedMedia) -> Unit = {}, onOpenWith: (SavedMedia) -> Unit = {},
+                onShowFiles: ((SavedMedia) -> Unit)? = null, onDelete: (SavedMedia) -> Unit = {},
+                canShowFiles: (SavedMedia) -> Boolean = { onShowFiles != null },
+                renameRepository: SavedMediaRepository? = null, onSeeAll: () -> Unit) {
     val reduced = LocalReducedMotion.current
+    val context = LocalContext.current
+    val repository = renameRepository ?: remember(context) { SavedMediaRepository(context.contentResolver, context.packageName) }
+    var deletingUri by key("deleting") { rememberSaveable { mutableStateOf<String?>(null) } }
+    var renamingUri by key("renaming") { rememberSaveable { mutableStateOf<String?>(null) } }
     // A card opens the swipe viewer Downloads uses, over the same files in Home's order.
     // Own group: sibling saveables in one function share a positional key and restore in call order, and the row's
     // rememberLazyListState below sits after an early return, so a restored Home could hand its saved list here (rc3 crash).
     var viewing by key("viewing") { rememberSaveable { mutableStateOf<String?>(null) } }
     val viewer = dev.ahmed.savlino.viewer.LocalViewerHost.current
     val open = { item: SavedMedia -> if (item.inViewer) { viewer?.reopen(item.uri); viewing = item.uri.toString() } else onOpen(item) }
+    @Composable fun FileMenu(item: SavedMedia, card: Boolean, modifier: Modifier = Modifier) {
+        SavedMenu(item, mediaMeta(item, language), { onShare(item) }, { onOpenWith(item) },
+            onShowFiles.takeIf { canShowFiles(item) }, { deletingUri = item.uri.toString() }, repository,
+            { renamingUri = item.uri.toString() }) { show ->
+            if (card) RecentCard(item, language, open, modifier, onLongClick = show)
+            else SavedMenuButton(item, show)
+        }
+    }
     val entries = remember(media) { homeEntries(media) }
     val recent = remember(entries) { entries.take(RECENT_ROW) }
     val earlier = remember(entries) { entries.drop(RECENT_ROW).take(EARLIER_ROWS) }
@@ -969,9 +992,9 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                     }
                     Crossfade(file != null && ready.value, motion, easeOut(reduced, 300), label = "landed") { landed ->
                         val shown = if (landed) file ?: lastFile[0] else null
-                        if (shown != null) RecentCard(shown, language, open) else JobSlotCard(jobId, jobs) { onJob(jobId) }
+                        if (shown != null) FileMenu(shown, card = true) else JobSlotCard(jobId, jobs) { onJob(jobId) }
                     }
-                } else RecentCard((slot as FileSlot).item, language, open, motion)
+                } else FileMenu((slot as FileSlot).item, card = true, modifier = motion)
             }
         }
         if (earlier.isNotEmpty()) Column(Modifier.padding(horizontal = Space.l).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -988,19 +1011,35 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
                         Text(mediaMeta(item, language), style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    FileMenu(item, card = false)
                 }
             }
         }
     }
     val grouped = remember(media) { groupDownloads(media) }
     viewing?.let { LibraryViewer(grouped, media, it, language, { viewing = null }, onShare, onOpenWith) }
+    media.find { it.uri.toString() == renamingUri }?.let { item ->
+        SavedRenameDialog(item, onDismiss = { renamingUri = null },
+            onRename = { name -> withContext(Dispatchers.IO) { repository.rename(item.uri, name) } },
+            onComplete = { renamingUri = null })
+    }
+    media.find { it.uri.toString() == deletingUri }?.let { item ->
+        AlertDialog(onDismissRequest = { deletingUri = null },
+            title = { Text(stringResource(R.string.saved_delete_title)) }, text = { Text(stringResource(R.string.saved_delete_body)) },
+            confirmButton = { TextButton(onClick = { deletingUri = null; onDelete(item) }) { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deletingUri = null }) { Text(stringResource(R.string.cancel)) } })
+    }
 }
 
 /** A saved file's recents card: 196dp wide, 16:10 picture, title and meta. [HomeJobCard] keeps the same box. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun RecentCard(item: SavedMedia, language: String, onOpen: (SavedMedia) -> Unit, modifier: Modifier = Modifier) {
+private fun RecentCard(item: SavedMedia, language: String, onOpen: (SavedMedia) -> Unit, modifier: Modifier = Modifier,
+                       onLongClick: () -> Unit) {
     Column(modifier.width(196.dp).clip(MaterialTheme.shapes.large).semantics(mergeDescendants = true) {}
-        .clickable(onClickLabel = stringResource(R.string.open_file)) { onOpen(item) }, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+        .combinedClickable(onClickLabel = stringResource(R.string.open_file), onClick = { onOpen(item) },
+            onLongClickLabel = stringResource(R.string.saved_more, item.displayName), onLongClick = onLongClick),
+        verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
         MediaThumbnail(item, Modifier.fillMaxWidth().aspectRatio(16f / 10f).padding(bottom = Space.xs), MaterialTheme.shapes.large)
         // Inset from the card's rounded clip: at the corners it cut the meta's first and last letters.
         Column(Modifier.padding(start = Space.xs, end = Space.xs, bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {

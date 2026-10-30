@@ -521,6 +521,7 @@
     <string name="check_problem_damaged">Enregistré, mais le fichier semble endommagé</string>
     <string name="check_needs_look">À vérifier</string>
     <!-- Look for better quality (B2/B3) -->
+    <string name="change_quality">Changer la qualité</string>
     <string name="better_quality_action">Chercher une meilleure qualité</string>
     <string name="better_quality_support">Revérifie ce lien</string>
     <string name="better_quality_note">Vous avez enregistré en %1$s. Les qualités supérieures s’affichent en premier.</string>

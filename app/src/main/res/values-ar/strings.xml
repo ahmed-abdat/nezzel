@@ -578,6 +578,7 @@
     <string name="check_problem_damaged">تم الحفظ، لكن الملف يبدو تالفًا</string>
     <string name="check_needs_look">يحتاج إلى مراجعة</string>
     <!-- Look for better quality (B2/B3) -->
+    <string name="change_quality">تغيير الجودة</string>
     <string name="better_quality_action">ابحث عن جودة أفضل</string>
     <string name="better_quality_support">يفحص الرابط مرة أخرى</string>
     <string name="better_quality_note">حفظتَ بجودة %1$s. الجودة الأعلى تظهر أولًا.</string>

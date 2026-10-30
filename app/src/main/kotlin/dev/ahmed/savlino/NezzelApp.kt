@@ -112,6 +112,15 @@ fun NezzelApp(
                 links.lookForBetter(reopen.link, reopen.format)
             } }) }
     }
+    val failedQuality = remember(links.downloads) {
+        links.downloads?.let { downloads -> dev.ahmed.savlino.downloads.FailedQualityLink(
+            eligible = { downloads.sourceForQuality(it) != null },
+            open = { id -> scope.launch {
+                val source = downloads.sourceForQuality(id) ?: return@launch
+                links.navigate("Home")
+                links.lookForBetter(source)
+            } }) }
+    }
     // Same scope: a clear started in Settings outlives the screen.
     val clearLinks = remember(links.downloads) {
         links.downloads?.let { downloads -> LinkHistoryClear(scope, downloads::clearShareLinks) { cleared ->
@@ -325,7 +334,8 @@ fun NezzelApp(
                 snackbarHost = { if (!showOptions && !covered) SnackbarHost(snackbar) },
                 updateAvailable = updateState.badge(BuildConfig.VERSION_CODE.toLong())) {
                 TabContent(tab, reselections, tabStateHolder, PrewarmTabs, covered) { route ->
-                    CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality) { when (route) {
+                    CompositionLocalProvider(LocalLinkCopy provides linkCopy, dev.ahmed.savlino.downloads.LocalBetterQuality provides betterQuality,
+                        dev.ahmed.savlino.downloads.LocalFailedQuality provides failedQuality) { when (route) {
                         "Settings" -> SettingsScreen(links, language, theme, wallpaper, suggestions,
                             onLanguage, onTheme, onWallpaper, onSuggestions, onAutomaticOptions, onHowItWorks, onClearLinks = clearLinks?.let { it::start }, clearingLinks = clearLinks?.busy == true)
                         "Statuses" -> dev.ahmed.savlino.statuses.ui.StatusesScreen(statusLibrary, language)
@@ -467,7 +477,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>
                             } else {
                                 // A download is the row's first card, where its file will land: nothing above or below moves.
                                 HomeRecents(library.media, language, library.open, homeJobs, onJob,
-                                    library.share, library.openWith) {
+                                    library.share, library.openWith, library.showFiles, library.delete, library.canShowFiles) {
                                     links.navigate("Downloads")
                                 }
                             }

@@ -510,6 +510,7 @@
     <string name="check_problem_damaged">Saved, but the file looks damaged</string>
     <string name="check_needs_look">Needs a look</string>
     <!-- Look for better quality (B2/B3) -->
+    <string name="change_quality">Change quality</string>
     <string name="better_quality_action">Look for better quality</string>
     <string name="better_quality_support">Checks this link again</string>
     <string name="better_quality_note">You saved %1$s. Higher qualities are listed first.</string>

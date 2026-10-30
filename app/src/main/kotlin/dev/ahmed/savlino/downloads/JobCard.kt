@@ -492,6 +492,11 @@ internal fun SavedCheck(size: androidx.compose.ui.unit.Dp) {
 @Composable
 private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, ring: Color, onCancel: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit) {
     val context = LocalContext.current
+    val quality = LocalFailedQuality.current
+    val canChange by produceState(false, job.jobId, job.error, job.awaitingSchedule, quality) {
+        value = !job.awaitingSchedule && job.error != dev.ahmed.savlino.domain.DownloadError.InsufficientSpace &&
+            quality?.eligible?.invoke(job.jobId) == true
+    }
     Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),
         horizontalArrangement = Arrangement.spacedBy(Space.inline), verticalAlignment = Alignment.CenterVertically) {
         if (tile) JobThumb(art, R.drawable.ic_error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer,
@@ -504,6 +509,10 @@ private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, r
                 Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             BatteryHelp(job.error, onBatterySettings = { BatterySettings.open(context) })
+            if (canChange && job.error != dev.ahmed.savlino.domain.DownloadError.InsufficientSpace && !job.awaitingSchedule)
+                TextButton(onClick = { quality?.open?.invoke(job.jobId) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.change_quality))
+                }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
             if (job.awaitingSchedule || job.retryable) {

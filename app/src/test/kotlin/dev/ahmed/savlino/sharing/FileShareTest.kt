@@ -145,6 +145,39 @@ class FileShareTest {
         assertEquals(listOf(R.string.share_unavailable), messages)
     }
 
+    @Test fun removedWhatsAppFallsBackToAnUnrestrictedChooserWithTheSameFile() = withActivity { activity ->
+        install(FileShare.WHATSAPP, "WhatsApp")
+        val attempts = mutableListOf<Intent>()
+        val context = object : android.content.ContextWrapper(activity) {
+            override fun startActivity(intent: Intent) {
+                attempts += intent
+                @Suppress("DEPRECATION") val send = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+                if (send.`package` != null) throw android.content.ActivityNotFoundException()
+                super.startActivity(intent)
+            }
+        }
+        val sharer = FileSharer(context, usage, CoroutineScope(Dispatchers.Unconfined), { messages += it })
+        runBlocking { sharer.launch(file, "video/x-matroska", ShareTarget(FileShare.WHATSAPP, "WhatsApp")) }
+        assertEquals(2, attempts.size)
+        val fallback = shadowOf(activity).nextStartedActivity
+        assertEquals(Intent.ACTION_CHOOSER, fallback.action)
+        @Suppress("DEPRECATION") val send = fallback.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertNull(send.`package`)
+        assertEquals("video/x-matroska", send.type)
+        @Suppress("DEPRECATION") assertEquals(file, send.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+        assertEquals(file, send.clipData!!.getItemAt(0).uri)
+        assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        assertTrue(messages.isEmpty())
+        assertTrue(counted.isEmpty())
+        pm.removePackage(FileShare.WHATSAPP)
+        runBlocking { sharer.launch(file, "video/x-matroska", ShareTarget(FileShare.WHATSAPP, "WhatsApp")) }
+        @Suppress("DEPRECATION") val removed = shadowOf(activity).nextStartedActivity.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+        assertNull(removed.`package`)
+        assertEquals(3, attempts.size)
+        assertTrue(messages.isEmpty())
+        assertTrue(counted.isEmpty())
+    }
+
     @Test fun aRunOfSeveralFilesOffersViewFilesNotShare() {
         val targets = listOf(ShareTarget(FileShare.WHATSAPP, "WhatsApp"))
         assertEquals(CompletionAction.ViewSaved, completionAction(2, targets))

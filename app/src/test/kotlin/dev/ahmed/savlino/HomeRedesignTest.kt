@@ -187,6 +187,25 @@ class HomeRedesignTest {
         }
     }
 
+    @Test fun homeEarlierButtonAndRecentLongPressShareTheChosenFile() {
+        val shared = mutableListOf<SavedMedia>()
+        val context = RuntimeEnvironment.getApplication()
+        show {
+            NezzelTheme(ThemePref.Light, false) {
+                dev.ahmed.savlino.downloads.HomeRecents(HomeFixtures.library, "en", {}, onShare = { shared += it }) {}
+            }
+        }.use {
+            val earlier = HomeFixtures.library[8]
+            compose.onNodeWithContentDescription(context.getString(R.string.saved_more, earlier.displayName))
+                .assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(48f)).performClick()
+            compose.onNodeWithText(context.getString(R.string.share_file)).performClick()
+            compose.waitForIdle()
+            compose.onNodeWithText("Big Buck Bunny", substring = true).performTouchInput { longClick() }
+            compose.onNodeWithText(context.getString(R.string.share_file)).performClick()
+            assertEquals(listOf(earlier, HomeFixtures.library[0]), shared)
+        }
+    }
+
     @Test fun aRecentCardAudioIncludedOpensTheViewerNotTheSystem() {
         dev.ahmed.savlino.playback.registerAudioServiceBinding()
         val context = RuntimeEnvironment.getApplication()
