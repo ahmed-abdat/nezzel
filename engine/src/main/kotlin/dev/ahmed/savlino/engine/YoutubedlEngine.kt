@@ -1087,8 +1087,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     }
     private companion object {
         /** What a Reddit link post's outside page answers when it has no video Nezzel can read. */
+        // A linked page that refuses or has nothing to offer has no video; sign-in and removal keep their own message.
         val LINKED_PAGE_NO_VIDEO = setOf(DownloadError.SourceRefused, DownloadError.Failed, DownloadError.Unsupported,
-            DownloadError.NoFormats, DownloadError.NotAPost, DownloadError.LoginRequired, DownloadError.Unavailable)
+            DownloadError.NoFormats, DownloadError.NotAPost)
         val TRANSFER_DEBRIS = Regex("output(?:\\.[A-Za-z0-9_.-]+)?\\.(?:part(?:-Frag[0-9]+(?:\\.part)?)?|ytdl)")
         const val CANCELLATION_WINDOW_MS = 500L
         const val NO_DEADLINE = Long.MIN_VALUE

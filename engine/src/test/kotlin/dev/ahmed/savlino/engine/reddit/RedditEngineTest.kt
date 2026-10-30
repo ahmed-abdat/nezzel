@@ -94,4 +94,18 @@ class RedditEngineTest : PublicImageTestBase() {
         assertEquals(DownloadError.NoVideo, assertIs<InspectResult.Failure>(engine.inspect(source, "inspect")).error)
         assertEquals("https://news.example.org/story", refused.calls.single().last())
     } }
+
+    @Test fun aLinkedVideoThatNeedsSignInKeepsItsOwnMessage() = fixture(respond = { request, socket ->
+        socket.reply(body = if ("solution=" in request.target) postPage("link", content = "https://video.example.org/watch")
+            else challengePage(), headers = mapOf("Content-Type" to "text/html"))
+    }) { f -> runBlocking {
+        val privateVideo = object : YtdlpRuntime by Runtime(dash) {
+            override fun execute(args: List<String>, processId: String, line: (String) -> Unit): String {
+                if ("--version" in args) return "version"
+                throw RuntimeException("ERROR: [youtube] abc: Private video. Sign in if you've been granted access")
+            }
+        }
+        val engine = YoutubedlEngine(privateVideo, reddit = RedditPostReader(f.http.client))
+        assertEquals(DownloadError.LoginRequired, assertIs<InspectResult.Failure>(engine.inspect(source, "inspect")).error)
+    } }
 }
