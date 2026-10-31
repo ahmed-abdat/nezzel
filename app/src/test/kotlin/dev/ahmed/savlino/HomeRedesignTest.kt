@@ -27,12 +27,15 @@ import dev.ahmed.savlino.downloads.DownloadsScreen
 import dev.ahmed.savlino.downloads.LibraryLoadState
 import dev.ahmed.savlino.downloads.LibraryState
 import dev.ahmed.savlino.downloads.SavedMedia
+import dev.ahmed.savlino.downloads.rememberLibraryState
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.LinkViewModel
 import dev.ahmed.savlino.ui.nav.TabContent
 import dev.ahmed.savlino.ui.theme.NezzelTheme
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.flow
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -167,20 +170,43 @@ class HomeRedesignTest {
         }
     }
 
-    @Test fun footerAppearsWithEarlierOnceSavedFilesAreKnown() {
+    @Test @Config(qualifiers = "ar-w360dp-h780dp-night-xxhdpi")
+    fun homeWaitsForFirstLibraryReadBeforeChoosingEmptyOrEarlierLayout() {
         val context = RuntimeEnvironment.getApplication()
-        var load by mutableStateOf<LibraryLoadState>(LibraryLoadState.Loading())
         val vm = LinkViewModel(SavedStateHandle(), engine = dev.ahmed.savlino.engine.FakeEngine()).apply { automaticOptions = false }
-        show {
-            val library = remember(load) { LibraryState(load, {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
-            NezzelTheme(ThemePref.Light, false) { HomeScreen(vm, { emptyList() }, library, "en", {}, {}, {}, {}) }
-        }.use {
-            compose.onAllNodesWithTag("home_footer").assertCountEquals(0)
-            compose.onAllNodesWithText(context.getString(R.string.home_earlier)).assertCountEquals(0)
-            compose.runOnIdle { load = LibraryLoadState.Ready(HomeFixtures.library) }
-            compose.waitForIdle()
-            compose.onNodeWithText(context.getString(R.string.home_earlier)).assertExists()
-            compose.onNodeWithTag("home_footer").assertExists()
+        for (rows in listOf(emptyList(), HomeFixtures.library)) {
+            val events = Channel<Result<List<SavedMedia>>>(Channel.UNLIMITED)
+            var observing = false
+            val observe = { flow { observing = true; for (result in events) emit(result) } }
+            try {
+                show {
+                    val library = rememberLibraryState(remember { androidx.compose.material3.SnackbarHostState() }, observe, cache = null)
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl,
+                        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 1.3f)) {
+                        NezzelTheme(ThemePref.Dark, false) { HomeScreen(vm, { emptyList() }, library, "ar", {}, {}, {}, {}) }
+                    }
+                }.use {
+                    compose.runOnIdle { assertTrue("The initial query must be pending", observing) }
+                    compose.onAllNodesWithTag("home_footer").assertCountEquals(0)
+                    compose.onAllNodesWithText(context.getString(R.string.home_hero_title)).assertCountEquals(0)
+                    compose.onAllNodesWithText(context.getString(R.string.recent_files)).assertCountEquals(0)
+                    compose.onAllNodesWithText(context.getString(R.string.home_earlier)).assertCountEquals(0)
+                    compose.runOnIdle { assertTrue(events.trySend(Result.success(rows)).isSuccess) }
+                    compose.waitForIdle()
+                    if (rows.isEmpty()) {
+                        compose.onNodeWithText(context.getString(R.string.home_hero_title)).assertExists()
+                        compose.onAllNodesWithTag("home_footer").assertCountEquals(0)
+                        compose.onAllNodesWithText(context.getString(R.string.recent_files)).assertCountEquals(0)
+                        compose.onAllNodesWithText(context.getString(R.string.home_earlier)).assertCountEquals(0)
+                    } else {
+                        compose.onAllNodesWithText(context.getString(R.string.home_hero_title)).assertCountEquals(0)
+                        compose.onNodeWithText(context.getString(R.string.recent_files)).assertExists()
+                        compose.onNodeWithText(context.getString(R.string.home_earlier)).assertExists()
+                        compose.onNodeWithTag("home_footer").assertExists()
+                    }
+                }
+            } finally { events.close() }
         }
     }
 
