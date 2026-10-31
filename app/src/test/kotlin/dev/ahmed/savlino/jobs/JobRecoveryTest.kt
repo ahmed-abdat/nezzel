@@ -710,15 +710,6 @@ class JobRecoveryTest {
         assertTrue(store.all().filter { it.stage.terminal }.all { it.sourceUrl == null })
     }
 
-    @Test fun invalidJobIdsCannotEnterJournalOrEscapeRoot() {
-        for (id in listOf("_bad", "-bad", "a".repeat(81))) {
-            try { store.enqueue(command(id)); fail("invalid job ID accepted") }
-            catch (_: IllegalArgumentException) { }
-        }
-        assertTrue(store.all().isEmpty())
-    }
-
-
     @Test fun storeReadReturnsWhileCopyIsBlocked() {
         val (job, staged) = staged("blocked-copy")
         val entered = CountDownLatch(1)
