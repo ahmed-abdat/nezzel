@@ -44,7 +44,9 @@ internal fun TourIllustration(page: Int, description: String, modifier: Modifier
         BoxWithConstraints(contentAlignment = Alignment.Center) {
             // The first page shows where links come from; the rest share a soft brand tint from the top start corner
             if (page == 0) {
-                SiteLogoWall(tile = 64.dp)
+                // Same turning rings as Home and App update; drawn larger than the card so the inner ring clears the mark and
+                // the media row, and the card edge clips the outer ring
+                SiteLogoArc(maxWidth * 1.2f, maxHeight * 1.5f, tile = 50.dp)
                 Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(colors.surfaceContainerLow.copy(alpha = 0.85f),
                     colors.surfaceContainerLow.copy(alpha = if (dark) 0.5f else 0.3f)))))
             } else Box(Modifier.matchParentSize().background(Brush.linearGradient(
