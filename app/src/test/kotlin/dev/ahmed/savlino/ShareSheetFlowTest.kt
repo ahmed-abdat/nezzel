@@ -264,13 +264,14 @@ class ShareSheetFlowTest {
         assertFalse(activity.links.hasPendingShare)
     }
 
-    private fun assertHandsOff(activity: ShareSheetActivity, text: String) {
+    private fun assertHandsOff(activity: ShareSheetActivity, text: String): Intent {
         val next = shadowOf(activity).nextStartedActivity
         assertEquals(MainActivity::class.java.name, next.component?.className)
         assertEquals(Intent.ACTION_SEND, next.action)
         assertEquals(text, next.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue(next.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
         assertTrue(activity.isFinishing)
+        return next
     }
 
     @Test fun firstRunGoesToTheFullApp() {
@@ -295,7 +296,8 @@ class ShareSheetFlowTest {
         waitFor("options") { activity.links.downloadEnabled }
         activity.links.showMoreFormats()
         waitFor("hand-off") { activity.isFinishing }
-        assertHandsOff(activity, text)
+        val next = assertHandsOff(activity, text)
+        assertTrue(dev.ahmed.savlino.entry.ShareInput.from(next)!!.allQualities)
     }
 
     private val savedUri = Uri.parse("content://media/external/downloads/7")

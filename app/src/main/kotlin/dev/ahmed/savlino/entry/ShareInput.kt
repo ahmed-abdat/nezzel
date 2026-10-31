@@ -8,9 +8,27 @@ import dev.ahmed.savlino.engine.mediahttp.AcceptedLinkHosts
  * [hint]: the sender's own words around the link (YouTube sends "Title + link"), shown only until the real title
  * arrives; never a filename, a format or a job, never logged or stored.
  */
-class ShareInput private constructor(val text: String?, val hint: String? = null) {
+class ShareInput private constructor(val text: String?, val hint: String? = null, val allQualities: Boolean = false) {
     override fun toString() = "ShareInput(redacted)"
     companion object {
+        private const val HANDOFF_TOKEN = "dev.ahmed.savlino.SHARE_HANDOFF"
+        private var allQualitiesHandoff: Pair<String, String>? = null
+
+        /** Only the sheet can arm this memory-only, one-shot request; external extras grant nothing. */
+        @Synchronized internal fun handoffAllQualities(intent: Intent) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+            val token = java.util.UUID.randomUUID().toString()
+            allQualitiesHandoff = token to text
+            intent.putExtra(HANDOFF_TOKEN, token)
+        }
+
+        @Synchronized private fun consumeAllQualities(intent: Intent, text: String?): Boolean {
+            val pending = allQualitiesHandoff ?: return false
+            val token = try { intent.getStringExtra(HANDOFF_TOKEN) } catch (_: RuntimeException) { null }
+            if (intent.action != Intent.ACTION_SEND || token != pending.first || text != pending.second) return false
+            allQualitiesHandoff = null
+            return true
+        }
         private const val HINT_MAX = 120
         private val URLS = Regex("(?:https?://|www\\.)[^\\s\\p{Z}<>\"“”«»]+", RegexOption.IGNORE_CASE)
         private val SPACES = Regex("[\\s\\p{Z}]+")
@@ -50,7 +68,7 @@ class ShareInput private constructor(val text: String?, val hint: String? = null
             val subject = if (extra != Intent.EXTRA_TEXT) null else try {
                 intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()?.takeIf { it.length <= 8192 }
             } catch (_: RuntimeException) { null }
-            return ShareInput(boundedText, hint(boundedText, subject))
+            return ShareInput(boundedText, hint(boundedText, subject), consumeAllQualities(intent, boundedText))
         }
     }
 }

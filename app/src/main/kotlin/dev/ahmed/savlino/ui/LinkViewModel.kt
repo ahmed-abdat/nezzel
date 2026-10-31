@@ -327,6 +327,9 @@ class LinkViewModel(
         private set(value) {
             val fresh = value !== options
             options = value; publishPendingLink()
+            if (value is OptionsState.Error || value is OptionsState.ImageError || value is OptionsState.ImageReady) {
+                allQualitiesFor = null
+            }
             // A copied link read automatically stays memory-only: it is reported only once the person checks it.
             if (fresh && !automaticClipboardDraft) reportCode(value)?.let {
                 usage.failed(Report.OPTIONS, it, currentSource()?.link?.rawUrl, engineVersion())
@@ -345,6 +348,8 @@ class LinkViewModel(
     }
     var photosUnavailable by mutableStateOf(false); private set
     var moreFormats by mutableStateOf(false); private set
+    /** The share sheet's explicit full-list request follows this link through inspection or draft replacement. */
+    private var allQualitiesFor: String? = null
     private var selectedId by mutableStateOf<String?>(null)
     var selectedPreset by mutableStateOf<Preset?>(null); private set
     private var submitted by mutableStateOf(false)
@@ -632,7 +637,8 @@ class LinkViewModel(
         val link = candidates.firstOrNull()
         dismissShare()
         replaceLinkQueue(candidates)
-        if (hasOptionsFor(link)) return
+        allQualitiesFor = link?.normalizedUrl?.takeIf { input.allQualities }
+        if (hasOptionsFor(link)) { openSharedQualities(); return }
         suggestion = null
         val wasEditing = editorFocused
         navigate("Home")
@@ -649,7 +655,7 @@ class LinkViewModel(
             shareHint = input.hint
             lookUpSavedLink(link)
             shareActive = true; saved["shareActive"] = true
-            if (automaticOptions) checkLink()
+            if (automaticOptions || input.allQualities) checkLink()
         }
     }
     fun clearShareMessage() { invalidShare = false }
@@ -658,13 +664,15 @@ class LinkViewModel(
         pendingShare = null; saved.remove<String>("pendingShare")
         updateText(link)
         shareActive = true; saved["shareActive"] = true
-        if (automaticOptions) checkLink()
+        if (automaticOptions || allQualitiesFor == LinkInput.parse(link)?.normalizedUrl) checkLink()
     }
     fun dismissShare() {
         if (hasPendingShare) skipRemainingLinks()
         pendingShare = null; saved.remove<String>("pendingShare")
+        allQualitiesFor = null
     }
     fun edit(value: String) {
+        allQualitiesFor = null
         skipRemainingLinks()
         suggestion = null
         clearShareMessage()
@@ -1102,6 +1110,7 @@ class LinkViewModel(
         val ready = OptionsState.Ready(returned, origin)
         readAt = now()
         optionsState = ready
+        openSharedQualities()
         previewSession?.let { session -> viewModelScope.launch { session.await().write(returned) } }
         downloads?.let { coordinator -> viewModelScope.launch {
             val found = coordinator.savedBefore(returned.source.link.normalizedUrl)
@@ -1174,8 +1183,15 @@ class LinkViewModel(
         }
     }
     fun showMoreFormats() { if (optionsState is OptionsState.Ready && !submitted) moreFormats = true }
+    private fun openSharedQualities() {
+        if (allQualitiesFor != null && allQualitiesFor == currentSource()?.link?.normalizedUrl && optionsState is OptionsState.Ready) {
+            showMoreFormats()
+        }
+        if (optionsState !is OptionsState.Checking) allQualitiesFor = null
+    }
     fun hideMoreFormats() { moreFormats = false }
     fun dismissOptions() {
+        allQualitiesFor = null
         clearBetter()
         if (optionsState != OptionsState.Hidden && !hasPendingShare && linkQueue != null) nextLinkReady = true
         LinkInput.parse(text)?.let { link ->

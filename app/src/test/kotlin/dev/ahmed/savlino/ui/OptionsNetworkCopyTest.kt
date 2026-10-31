@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.unit.LayoutDirection
@@ -29,6 +31,28 @@ class OptionsNetworkCopyTest {
 
     @Test fun englishNetworkFailureFollowsCurrentConnectivity() = check()
     @Test @Config(qualifiers = "+ar") fun arabicNetworkFailureFollowsCurrentConnectivity() = check()
+
+    @Test @Config(sdk = [29]) fun retryHandleKeepsItsLabelWithoutATooltipAndOneOutsideTapCloses() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            val activity = controller.get()
+            val engine = FakeEngine(InspectResult.Failure(DownloadError.Network))
+            val links = LinkViewModel(SavedStateHandle(), engine = engine)
+            activity.setContent { NezzelTheme(ThemePref.Light, false) { OptionsScreen(links, "en", links::dismissOptions) } }
+            compose.runOnIdle { links.paste("https://example.com/video") }
+            compose.waitForIdle()
+            compose.onNodeWithText(activity.getString(R.string.try_again)).performClick()
+            compose.waitForIdle()
+            val label = activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
+            val handle = compose.onNodeWithContentDescription(label)
+            handle.assertHasClickAction().performSemanticsAction(SemanticsActions.RequestFocus)
+            compose.mainClock.advanceTimeBy(300)
+            compose.onAllNodesWithText(label).assertCountEquals(0)
+            compose.onNode(isDialog()).performTouchInput { click(Offset(4f, 4f)) }
+            compose.waitForIdle()
+            assertEquals(OptionsState.Hidden, links.optionsState)
+        } finally { controller.pause().stop().destroy() }
+    }
 
     private fun check() {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()

@@ -45,11 +45,22 @@ fun OptionsScreen(links: LinkViewModel, language: String, onDismiss: () -> Unit,
         MoreFormatsScreen(links, language, snackbarHost)
         return
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null) {
+        OptionsDragHandle(onDismiss)
         Box {
             OptionsSheetContent(links, language, onDismiss)
             Box(Modifier.align(Alignment.BottomCenter).padding(Space.s)) { snackbarHost() }
         }
+    }
+}
+
+/** Keep the handle's label and dismiss action without Material's focus-triggered tooltip popup. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun OptionsDragHandle(onDismiss: () -> Unit, enabled: Boolean = true) {
+    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, onClick = onDismiss)
+        .semantics { if (enabled) dismiss { onDismiss(); true } }, contentAlignment = Alignment.Center) {
+        BottomSheetDefaults.DragHandle()
     }
 }
 

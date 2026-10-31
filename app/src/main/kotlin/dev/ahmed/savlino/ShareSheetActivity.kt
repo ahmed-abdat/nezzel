@@ -87,7 +87,7 @@ class ShareSheetActivity : AppCompatActivity() {
             LaunchedEffect(links.deferredShare, links.confirmed, links.acceptedJob, links.imageSaving, links.hasPendingNotificationChoice) {
                 links.takeDeferredShare()
             }
-            LaunchedEffect(links.moreFormats) { if (links.moreFormats) openInNezzel() }
+            LaunchedEffect(links.moreFormats) { if (links.moreFormats) openInNezzel(allQualities = true) }
             LaunchedEffect(Unit) { links.imageEvents.collect(::onImageEvent) }
             LaunchedEffect(Unit) { links.soundFailedEvents.collect {
                 Toast.makeText(applicationContext, R.string.sound_save_failed, Toast.LENGTH_LONG).show() } }
@@ -159,10 +159,11 @@ class ShareSheetActivity : AppCompatActivity() {
     private companion object { const val STARTED_MILLIS = 1_500L }
 
     /** The full app takes the same shared text, through the same Share path (explicit, so the moved filter does not matter). */
-    private fun openInNezzel() {
+    private fun openInNezzel(allQualities: Boolean = false) {
         val text = sharedText
         val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (text != null) open.setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        if (allQualities) ShareInput.handoffAllQualities(open)
         startActivity(open)
         finishAndRemoveTask()
     }

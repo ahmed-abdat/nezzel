@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.SideEffect
@@ -85,23 +86,24 @@ class MiniPlayerTest {
     private var mounted by mutableStateOf(true)
     private var taps = 0
 
-    private fun show(reduced: Boolean = false, dark: Boolean = false) {
+    private fun show(reduced: Boolean = false, dark: Boolean = false, tabs: Boolean = true) {
         activity.setContent {
             NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                 CompositionLocalProvider(dev.ahmed.savlino.ui.theme.LocalReducedMotion provides reduced) {
                     val kept = if (saved) rememberViewerHost() else host
                     SideEffect { host = kept }
                     ViewerHost(kept) {
-                        NavigationScaffold("Downloads", { emptyList() }, "en", {}) {
-                            TabContent("Downloads") {
-                                Button({ taps++ }, Modifier.fillMaxSize()) { Text("Below") }
-                                CompositionLocalProvider(LocalMediaPictures provides MediaPictures { _, _, _ -> null },
-                                    LocalPlaybackEnvironment provides playback, LocalAudioConnection provides { audio }) {
-                                    if (open && mounted) MediaViewer(items, start, "en", { open = false }, onShare = {}, onOpenWith = {},
-                                        library = library ?: items.mapTo(HashSet()) { it.uri })
-                                }
+                        val content: @Composable () -> Unit = {
+                            Button({ taps++ }, Modifier.fillMaxSize()) { Text("Below") }
+                            CompositionLocalProvider(LocalMediaPictures provides MediaPictures { _, _, _ -> null },
+                                LocalPlaybackEnvironment provides playback, LocalAudioConnection provides { audio }) {
+                                if (open && mounted) MediaViewer(items, start, "en", { open = false }, onShare = {}, onOpenWith = {},
+                                    library = library ?: items.mapTo(HashSet()) { it.uri })
                             }
                         }
+                        if (tabs) NavigationScaffold("Downloads", { emptyList() }, "en", {}) {
+                            TabContent("Downloads") { content() }
+                        } else content()
                     }
                 }
             }
@@ -118,8 +120,8 @@ class MiniPlayerTest {
         if (compose.onAllNodesWithContentDescription(text(R.string.viewer_pause)).fetchSemanticsNodes().isEmpty()) node(R.string.viewer_play).performClick()
     }
     /** Opens the song and starts it, so the page can shrink. */
-    private fun playSong(dark: Boolean = false) {
-        show(dark = dark); open = true; compose.waitForIdle()
+    private fun playSong(dark: Boolean = false, tabs: Boolean = true) {
+        show(dark = dark, tabs = tabs); open = true; compose.waitForIdle()
         start()
         playback.audioState.value = PlaybackState.Ready
         advance(300)
@@ -585,10 +587,33 @@ class MiniPlayerTest {
         compose.onNodeWithTag(MINI_PLAYER_TAG).assertDoesNotExist()
     }
 
+    @Test fun aNewIntentClosesMusicWhenNoBarSlotWasEverMeasured() {
+        playSong(tabs = false)
+        assertNotNull(host.mini)
+        assertNull(host.slot)
+        assertFalse(host.canCollapse)
+        compose.runOnIdle { host.yieldToApp() }; advance(600)
+        assertFalse(host.open)
+        assertFalse(open)
+        assertEquals(1, audio.closes)
+        compose.onNodeWithTag(MINI_PLAYER_TAG).assertDoesNotExist()
+    }
+
     @Test fun aNewIntentShrinksMusicAndClosesVideo() {
         playSong()
         compose.runOnIdle { host.yieldToApp() }; advance(600)
         assertTrue(host.collapsed)
+        val player = players.last()
+        val slot = host.slot
+        // A returning app can receive its intent before the bar's slot is measured again.
+        compose.runOnIdle { host.slot = null; host.yieldToApp(); host.slot = slot }; advance(300)
+        assertTrue(host.open)
+        assertTrue(host.collapsed)
+        assertTrue(placed(MINI_PLAYER_TAG))
+        assertSame(player, players.last())
+        assertTrue(player.playWhenReady)
+        assertEquals(1, audio.opens)
+        assertEquals(0, audio.closes)
         compose.runOnIdle { host.close() }; advance(300)
         items = listOf(clip); open = true; compose.waitForIdle()
         compose.runOnIdle { host.yieldToApp() }; advance(300)

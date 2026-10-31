@@ -37,6 +37,8 @@ class ShareStateTest {
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
     private fun share(text: String) = ShareInput.from(Intent(Intent.ACTION_SEND)
         .setType("text/plain").putExtra(Intent.EXTRA_TEXT, text))
+    private fun allQualities(text: String) = ShareInput.from(Intent(Intent.ACTION_SEND)
+        .setType("text/plain").putExtra(Intent.EXTRA_TEXT, text).also { ShareInput.handoffAllQualities(it) })
     private fun ready(engine: Engine): LinkViewModel = LinkViewModel(SavedStateHandle(), engine = engine).apply {
         edit(first); checkLink(); idle(); selectFormat("v360")
         assertTrue(optionsState is OptionsState.Ready)
@@ -104,6 +106,85 @@ class ShareStateTest {
         vm.onNewShare(share("$first $first")); idle()
         assertFalse(vm.invalidShare); assertFalse(vm.hasPendingShare)
         assertSame(options, vm.optionsState); assertEquals("v360", vm.selectedFormat?.id)
+        assertEquals(1, engine.inspected.size)
+    }
+
+    @Test fun foreignAllQualitiesExtraDoesNotInspectWithAutomaticLoadingOff() {
+        val engine = Engine()
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine).apply { automaticOptions = false }
+        val foreign = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, first)
+            .putExtra("dev.ahmed.savlino.ALL_QUALITIES", true)
+        vm.onCreateShare(ShareInput.from(foreign)); idle()
+        assertEquals(first, vm.text)
+        assertEquals(OptionsState.Hidden, vm.optionsState)
+        assertTrue(engine.inspected.isEmpty())
+        assertFalse(vm.moreFormats)
+        vm.checkLink(); idle()
+        assertEquals(1, engine.inspected.size)
+        assertTrue(vm.optionsState is OptionsState.Ready)
+        assertFalse(vm.moreFormats)
+    }
+
+    @Test fun allQualitiesHandoffIsBoundToTheTextAndConsumedOnce() {
+        val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, first)
+        ShareInput.handoffAllQualities(intent)
+        assertFalse(ShareInput.from(Intent(intent).putExtra(Intent.EXTRA_TEXT, second))!!.allQualities)
+        assertFalse(share(first)!!.allQualities)
+        assertTrue(ShareInput.from(intent)!!.allQualities)
+        assertFalse(ShareInput.from(intent)!!.allQualities)
+    }
+
+    @Test fun allQualitiesHandoffWaitsForTheInspectionEvenWithAutomaticLoadingOff() {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val engine = Engine()
+        val waiting = object : EngineAdapter by engine {
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+                gate.await()
+                return engine.inspect(source, operationId)
+            }
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = waiting).apply { automaticOptions = false }
+        vm.onCreateShare(allQualities(first)); idle()
+        assertTrue(vm.optionsState is OptionsState.Checking)
+        assertFalse(vm.moreFormats)
+        gate.complete(Unit); idle()
+        assertTrue(vm.optionsState is OptionsState.Ready)
+        assertTrue(vm.moreFormats)
+        assertNull(vm.takeConfirmedCommand())
+    }
+
+    @Test fun allQualitiesHandoffReusesReadyOptionsAndRespectsTheDraftGuard() {
+        val engine = Engine(); val vm = ready(engine)
+        vm.onNewShare(allQualities(first)); idle()
+        assertTrue(vm.moreFormats)
+        assertEquals("v360", vm.selectedFormat?.id)
+        assertEquals(1, engine.inspected.size)
+        vm.automaticOptions = false
+        vm.onNewShare(allQualities(second)); idle()
+        assertTrue(vm.hasPendingShare)
+        assertEquals(first, vm.text)
+        vm.acceptShare(); idle()
+        assertEquals(second, vm.text)
+        assertTrue(vm.moreFormats)
+        assertEquals(listOf(first, second), engine.inspected.map { it.link.rawUrl })
+        assertNull(vm.takeConfirmedCommand())
+    }
+
+    @Test fun failedAllQualitiesHandoffDoesNotOpenTheFullListOnRetry() {
+        val engine = Engine()
+        var fail = true
+        val failing = object : EngineAdapter by engine {
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult =
+                if (fail) InspectResult.Failure(DownloadError.Failed) else engine.inspect(source, operationId)
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = failing).apply { automaticOptions = false }
+        vm.onCreateShare(allQualities(first)); idle()
+        assertTrue(vm.optionsState is OptionsState.Error)
+        assertFalse(vm.moreFormats)
+        fail = false
+        vm.checkLink(); idle()
+        assertTrue(vm.optionsState is OptionsState.Ready)
+        assertFalse(vm.moreFormats)
         assertEquals(1, engine.inspected.size)
     }
 

@@ -237,7 +237,11 @@ class ViewerHostState internal constructor(collapsed: Boolean) {
     /** A screen's tap on a file: with its viewer in the bar, the music there opens again, or the tapped file opens instead. */
     fun reopen(uri: android.net.Uri) { if (request != null) tapped = ViewerTap(uri) }
     /** A new intent brings the app forward: music shrinks into the bar, anything else closes. */
-    fun yieldToApp() { if (request == null) return; if (canCollapse) collapse() else close() }
+    fun yieldToApp() {
+        if (request == null) return
+        // A returning window can reuse its measured slot while the tabs lay out again.
+        if (mini != null && lastSlot != null) { wantBar = true; settle(PlayerSize.Bar) } else close()
+    }
 
     private fun clear(fade: Boolean) {
         // A page pulled out is already gone: it doesn't come back to fade.
