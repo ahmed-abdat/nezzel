@@ -472,6 +472,7 @@
     <string name="update_latest">Nezzel محدّث</string>
     <string name="update_check_failed">تعذّر التحقق من التحديثات، أعد المحاولة لاحقًا</string>
     <string name="update_channel">تحديثات التطبيق</string>
+    <string name="update_card_hint">اضغط للتحديث</string>
     <string name="update_notification_title">نسخة جديدة من Nezzel جاهزة</string>
     <string name="update_notification_ready">التحديث جاهز للتثبيت. اضغط للتحديث</string>
     <string name="update_later">لاحقًا</string>

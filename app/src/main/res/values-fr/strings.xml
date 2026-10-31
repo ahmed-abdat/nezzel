@@ -430,6 +430,7 @@
     <string name="update_latest">Nezzel est à jour</string>
     <string name="update_check_failed">Impossible de rechercher les mises à jour — réessayez plus tard</string>
     <string name="update_channel">Mises à jour de l’application</string>
+    <string name="update_card_hint">Touchez pour mettre à jour</string>
     <string name="update_notification_title">Une mise à jour de Nezzel est prête</string>
     <string name="update_notification_ready">Prêt à être installé. Appuyez pour mettre à jour</string>
     <string name="update_later">Plus tard</string>

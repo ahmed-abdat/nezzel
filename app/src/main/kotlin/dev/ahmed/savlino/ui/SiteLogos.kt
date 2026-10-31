@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -17,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -25,7 +25,6 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.ui.nav.rememberTabLoop
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.sin
 
 /** A site mark drawn the way its app icon looks: [ink] glyph on a [tile], with optional offset [echo] copies or an [outline] behind it. */
@@ -56,7 +55,7 @@ internal object SiteLogos {
     val all = listOf(youtube, facebook, instagram, whatsapp, tiktok, reddit, telegram, x, snapchat, pinterest, soundcloud, vimeo)
 }
 
-// The most used sites take the spots closest to the mark, WhatsApp beside it for Statuses; the newer sites fill the outer ring
+// The six most used sites ride the inner ring, the rest the outer one
 private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, instagram, facebook, snapchat, x, telegram, reddit, pinterest, soundcloud, vimeo) }
 
 /** A tilted wall of every site tile, larger than its parent so it bleeds off the edges. Purely decorative. */
@@ -81,42 +80,38 @@ internal fun SiteLogoWall(modifier: Modifier = Modifier, tile: Dp = 80.dp) {
 }
 
 /**
- * Site tiles on a tilted grid that keeps clear of [clear] (the mark, as an ellipse around the centre shifted
- * down by [markShift]) and of a [topClear] band under the top bar title. The tiles nearest the mark carry real
- * logos; blank tiles in soft theme colours fill the rest. Purely decorative.
+ * The site tiles on two rings around the mark (centre shifted down by [markShift]): six on an inner ellipse, six on a
+ * wider outer one, staggered half a step so no two tiles meet. Both rings turn together, slowly, so the spacing stays
+ * even while they move; tiles stay upright and fade under a [topClear] band. Still when animations are off. Decorative.
  */
 @Composable
 internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, tile: Dp = 58.dp, markShift: Dp = 0.dp,
-    topClear: Dp = 0.dp, clear: DpOffset = DpOffset(100.dp, 82.dp)) {
-    val colors = MaterialTheme.colorScheme
-    val blanks = listOf(colors.primaryContainer.copy(alpha = 0.7f), colors.surfaceContainerHighest,
-        colors.tertiaryContainer.copy(alpha = 0.7f), colors.surfaceContainerLowest)
-    val cells = remember(width, height, tile, markShift, topClear, clear) {
-        val pitch = tile.value * 1.3f
-        val angle = Math.toRadians(-24.0)
-        (-5..5).flatMap { row -> (-6..6).map { column ->
-            val x = column * pitch; val y = row * pitch
-            (x * cos(angle) - y * sin(angle)).toFloat() to (x * sin(angle) + y * cos(angle)).toFloat()
-        } }.filter { (x, y) ->
-            val dx = x / clear.x.value; val dy = (y - markShift.value) / clear.y.value
-            dx * dx + dy * dy > 1f && y - tile.value / 2 > -height.value / 2 + topClear.value &&
-                kotlin.math.abs(x) < width.value / 2 + tile.value && y < height.value / 2 + tile.value
-        // Logos go to the closest tiles that sit above the fade; lower tiles stay blank
-        }.sortedBy { (x, y) -> hypot(x, y - markShift.value) +
-            if (y - markShift.value > tile.value * 1.6f || kotlin.math.abs(x) > width.value / 2 - tile.value * 0.8f) 1000f else 0f }
-    }
-    val drift = rememberTabLoop(-1f, 1f, tween(9_000, easing = FastOutSlowInEasing), RepeatMode.Reverse, rest = 0f, enabled = !rememberReducedMotion())
+    topClear: Dp = 0.dp, @Suppress("UNUSED_PARAMETER") clear: DpOffset = DpOffset(100.dp, 82.dp)) {
+    val half = (height.value - markShift.value) / 2
+    val size = minOf(tile.value, half * 0.36f).dp
+    // Sized so the rings never touch while they turn and the side tiles stay whole: the inner ring clears the 104 dp mark
+    val innerY = maxOf(half * 0.55f, 52f + size.value / 2 + 6f)
+    val innerX = innerY * 1.31f
+    val outerY = half * 0.80f
+    val outerX = minOf(width.value / 2 - size.value * 0.55f, innerX * 1.4f)
+    val turn = rememberTabLoop(0f, 1f, tween(90_000, easing = LinearEasing), RepeatMode.Restart, rest = 0f, enabled = !rememberReducedMotion())
     Box(modifier.requiredSize(width, height), contentAlignment = Alignment.Center) {
-        cells.forEachIndexed { index, (x, y) ->
-            val logo = arcOrder.getOrNull(index)
-            // Alternate tiles float in opposite directions by a few dp, so the arc breathes without crowding the mark
-            val sway = if (index % 2 == 0) 1f else -1f
-            Box(Modifier.offset(x.dp, y.dp).graphicsLayer {
-                rotationZ = -24f
-                translationY = drift.value * sway * 3.dp.toPx()
+        arcOrder.forEachIndexed { index, logo ->
+            val outer = index >= 6
+            val start = (index % 6) * 60.0 + if (outer) 30.0 else 0.0
+            Box(Modifier.size(size).graphicsLayer {
+                val angle = Math.toRadians(start + turn.value * 360.0 - 90.0)
+                val x = (if (outer) outerX else innerX) * cos(angle).toFloat()
+                val y = (if (outer) outerY else innerY) * sin(angle).toFloat() + markShift.value
+                translationX = x.dp.toPx(); translationY = y.dp.toPx()
+                // A touch of depth: tiles nearer the bottom come forward, the ones at the back sit smaller
+                val depth = 0.95f + 0.05f * sin(angle).toFloat()
+                scaleX = depth; scaleY = depth
+                rotationZ = if (index % 2 == 0) -8f else 8f
+                if (topClear.value > 0f) alpha = ((y - size.value / 2 + height.value / 2 - topClear.value) / size.value).coerceIn(0f, 1f)
             }) {
-                if (logo != null) LogoTile(logo, tile)
-                else Box(Modifier.size(tile).background(blanks[index % blanks.size], RoundedCornerShape(tile * 0.275f)))
+                // A soft lift like a launcher icon, so white tiles stand off a light page
+                LogoTile(logo, size, Modifier.shadow(3.dp, RoundedCornerShape(size * 0.275f), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f)))
             }
         }
     }

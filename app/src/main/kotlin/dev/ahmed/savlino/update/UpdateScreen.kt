@@ -10,6 +10,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -43,21 +45,24 @@ import dev.ahmed.savlino.locale.NezzelFormat
 
 @Composable
 internal fun UpdateCard(release: Release, language: String, open: () -> Unit, dismiss: () -> Unit) {
-    // A flat row on the page: the filled Update button is the only emphasis, so there is no box around it.
-    Row(Modifier.fillMaxWidth().testTag("app-update-card"), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Icon(Icons.Default.Refresh, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.update_notification_title),
-                    Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
-                Text(release.notes(language).firstOrNull() ?: stringResource(R.string.update_available_title),
-                    style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    // One tinted card the person notices at once; the whole card opens App update, the notes wait there.
+    val colors = MaterialTheme.colorScheme
+    Surface(onClick = open, modifier = Modifier.fillMaxWidth().testTag("app-update-card"),
+        shape = RoundedCornerShape(24.dp), color = colors.primaryContainer, contentColor = colors.onPrimaryContainer) {
+        Row(Modifier.heightIn(min = 72.dp).padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(44.dp).background(colors.primary, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.ic_download), null, Modifier.size(22.dp), tint = colors.onPrimary)
             }
-            Button(onClick = open, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
-                Text(stringResource(R.string.update_action))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.update_notification_title), Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.update_card_hint), style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onPrimaryContainer.copy(alpha = 0.78f))
             }
-        IconButton(onClick = dismiss, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.Close, stringResource(R.string.update_not_now))
+            IconButton(onClick = dismiss, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Close, stringResource(R.string.update_not_now), Modifier.size(20.dp))
+            }
         }
     }
 }

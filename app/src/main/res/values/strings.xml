@@ -422,6 +422,7 @@
     <string name="update_latest">Nezzel is up to date</string>
     <string name="update_check_failed">Couldn\'t check for updates — try again later</string>
     <string name="update_channel">App updates</string>
+    <string name="update_card_hint">Tap to update</string>
     <string name="update_notification_title">A new Nezzel is ready</string>
     <string name="update_notification_ready">Ready to install. Tap to update</string>
     <string name="update_later">Later</string>

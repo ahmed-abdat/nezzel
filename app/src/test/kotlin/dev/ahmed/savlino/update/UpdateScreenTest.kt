@@ -88,7 +88,10 @@ class UpdateScreenTest {
     }) { a ->
         val all = nodes(a)
         assertTrue(all.any { context.getString(R.string.update_not_now) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
-        assertTrue(texts(all).contains("Improved"))
+        // Notes wait on App update; the card says only that an update is ready and opens it on tap
+        assertTrue(texts(all).none { it == "Improved" })
+        assertTrue(texts(all).contains(context.getString(R.string.update_card_hint)))
+        assertTrue(all.any { it.config.getOrNull(SemanticsProperties.TestTag) == "app-update-card" && it.config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick) })
         assertTrue(texts(all).contains(context.getString(R.string.update_notification_title, dev.ahmed.savlino.locale.NezzelFormat.isolate("0.4.4"))))
         val bounds = all.first { it.config.getOrNull(SemanticsProperties.TestTag) == "app-update-card" }.boundsInRoot
         assertTrue(bounds.height / context.resources.displayMetrics.density <= 88f)
@@ -117,19 +120,6 @@ class UpdateScreenTest {
     }
     @Test fun allNotesAndSecondaryActionsWorkEnglish() = allNotes()
     @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun allNotesAndSecondaryActionsWorkArabic() = allNotes()
-
-    private fun cardFallback() = renderThemed({ nodes(it) }, {
-        UpdateCard(Release("0.4.5", 99999, "update.apk", 100, "https://github.com/asset", "a".repeat(64), emptyList(), emptyList()),
-            context.resources.configuration.locales[0].language, {}, {})
-    }) { a -> assertTrue(texts(nodes(a)).contains(context.getString(R.string.update_available_title))) }
-    @Test fun cardWithoutNotesUsesFallbackEnglish() = cardFallback()
-    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun cardWithoutNotesUsesFallbackArabic() = cardFallback()
-    @Test @Config(qualifiers = "ar-w360dp-h640dp-mdpi") fun cardUsesArabicFirstNote() = renderThemed({ nodes(it) }, {
-        UpdateCard(release, "ar", {}, {})
-    }) { a ->
-        assertTrue(texts(nodes(a)).contains("تحسين"))
-        assertFalse(texts(nodes(a)).contains("Improved"))
-    }
 
     private fun largeText() = renderThemed({ nodes(it) }, {
         val density = androidx.compose.ui.platform.LocalDensity.current
