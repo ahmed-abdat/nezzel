@@ -13,9 +13,13 @@ import dev.ahmed.savlino.engine.reddit.RedditTarget
 import dev.ahmed.savlino.engine.youtube.FastResult
 import dev.ahmed.savlino.engine.youtube.NpeFastSource
 import dev.ahmed.savlino.engine.youtube.NpeInfoJson
+import dev.ahmed.savlino.engine.youtube.NpeSearchSource
 import dev.ahmed.savlino.engine.youtube.YoutubeFastSource
 import java.io.File
+import java.io.IOException
+import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
@@ -61,8 +65,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime),
         reddit = RedditPostReader(MediaHttpClient.create()))
     private val unavailable = UnavailableEngine()
-    /** At most one NPE call in flight; the app holds one engine, so this caps the process. */
+    /** At most one NPE call in flight; the app holds one engine, so this caps the process. Search does not use it. */
     private val fastSourceInFlight = AtomicBoolean()
+    /** Search talks to NewPipe directly and never waits on the engine lock or a yt-dlp init. */
+    private val youtubeSearch by lazy { NpeSearchSource() }
+    private val searchRuns = ConcurrentHashMap<String, () -> Unit>()
     /** Hashed links whose first try failed fast on a dead network; later tries take the full yt-dlp path. Memory only. */
     private val fastFailed = LinkedHashSet<String>()
     /** One extraction per link at a time; a second inspect of the same link waits, then reads [recent]. */
@@ -123,7 +130,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             // Reject unsupported kinds before local initialization or any network request.
             when (YouTubeLinkKind.classify(source.link)) {
                 YouTubeLinkKind.PrivateList -> return@operation PlaylistResult.Failure(DownloadError.LoginRequired)
-                YouTubeLinkKind.Playlist, YouTubeLinkKind.VideoInList -> Unit
+                YouTubeLinkKind.Playlist, YouTubeLinkKind.VideoInList, YouTubeLinkKind.ChannelVideos -> Unit
                 else -> return@operation PlaylistResult.Failure(DownloadError.Unsupported)
             }
             if (!initialize()) return@operation PlaylistResult.Failure(DownloadError.EngineUnavailable)
@@ -136,13 +143,66 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             lister.list(source, page, operationId)
         }
 
-    override suspend fun searchYouTube(query: String, operationId: String, start: Int): SearchOutcome {
+    override suspend fun searchYouTube(query: String, operationId: String, filter: SearchFilter, page: SearchPageToken?): SearchOutcome {
         val words = YouTubeSearch.query(query) ?: return SearchOutcome.Failure(DownloadError.InvalidInput)
-        return operation(operationId, { error, _ -> SearchOutcome.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
-            if (!initialize()) return@operation SearchOutcome.Failure(DownloadError.EngineUnavailable)
-            current.expireIn(limits.inspectMs)
-            version(current)
-            SearchOutcome.Success(YouTubeSearch.parse(execute(current, YouTubeSearch.args(words, start)), start))
+        // Words stay in the extractor call only. Timing below is provider, filter, page and milliseconds.
+        return if (page?.fallback == true) {
+            if (filter != SearchFilter.VIDEOS) SearchOutcome.Failure(DownloadError.Unsupported)
+            else searchYtdlp(words, operationId, page)
+        } else searchNpe(words, operationId, filter, page)
+    }
+
+    /** NewPipe continuation. No engine lock, no yt-dlp init, no fast-source slot. */
+    private suspend fun searchNpe(words: String, operationId: String, filter: SearchFilter, page: SearchPageToken?): SearchOutcome {
+        val started = System.nanoTime()
+        val cancelSearch = {
+            try { youtubeSearch.cancel(operationId) } catch (_: Exception) {} catch (_: LinkageError) {}
+        }
+        searchRuns[operationId] = cancelSearch
+        try {
+            val outcome = try {
+                val result = withContext(Dispatchers.IO) {
+                    ensureActive()
+                    youtubeSearch.search(words, filter, page, operationId, limits.npeBudgetMs)
+                }
+                SearchOutcome.Success(result)
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: IOException) {
+                SearchOutcome.Failure(DownloadError.Network)
+            } catch (_: Exception) {
+                SearchOutcome.Failure(DownloadError.Failed)
+            } catch (_: LinkageError) {
+                SearchOutcome.Failure(DownloadError.Failed)
+            }
+            logSearch("npe", filter, page?.number ?: 1, started)
+            return outcome
+        } finally {
+            searchRuns.remove(operationId, cancelSearch)
+        }
+    }
+
+    /** Video fallback only. Same 20-row pages and 100-row cap as before; this one does take the engine lock. */
+    private suspend fun searchYtdlp(words: String, operationId: String, page: SearchPageToken): SearchOutcome {
+        val started = System.nanoTime()
+        val start = page.ytdlpStart ?: return SearchOutcome.Failure(DownloadError.InvalidInput)
+        val outcome = try {
+            operation(operationId, { error, _ -> SearchOutcome.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+                if (!initialize()) return@operation SearchOutcome.Failure(DownloadError.EngineUnavailable)
+                current.expireIn(limits.inspectMs)
+                version(current)
+                SearchOutcome.Success(YouTubeSearch.parse(execute(current, YouTubeSearch.args(words, start)), start))
+            }
+        } catch (cancel: CancellationException) { throw cancel }
+        logSearch("ytdlp", SearchFilter.VIDEOS, page.number, started)
+        return outcome
+    }
+
+    private fun logSearch(provider: String, filter: SearchFilter, page: Int, started: Long) {
+        if (!InspectionTiming.loggable()) return
+        val ms = (System.nanoTime() - started) / 1_000_000
+        runCatching {
+            android.util.Log.d("NezzelTiming", "search $provider ${filter.name.lowercase(Locale.ROOT)} page=$page ${ms}ms")
         }
     }
 
@@ -924,6 +984,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     override fun stopStaleProcesses(directory: File) = staleProcesses.kill(directory)
 
     override fun cancel(operationId: String) {
+        searchRuns.remove(operationId)?.invoke()
         var stopDirect: (() -> Unit)? = null
         synchronized(lifecycleLock) {
             val current = operations[operationId]

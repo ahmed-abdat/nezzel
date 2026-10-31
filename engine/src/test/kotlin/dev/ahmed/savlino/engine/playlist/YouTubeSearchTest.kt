@@ -1,6 +1,13 @@
 package dev.ahmed.savlino.engine.playlist
 
 import dev.ahmed.savlino.engine.*
+import dev.ahmed.savlino.engine.youtube.NpeSearch
+import org.schabi.newpipe.extractor.Image
+import org.schabi.newpipe.extractor.channel.ChannelInfoItem
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
 import kotlin.test.*
 
 class YouTubeSearchTest {
@@ -31,5 +38,75 @@ class YouTubeSearchTest {
         assertTrue(page.hasMore) // 23 raw rows ≥ one page, even after drops
         assertFalse(YouTubeSearch.parse("""{"_type":"playlist","entries":[${row("abcdefghij1")}]}""", 1).hasMore)
         assertFalse(YouTubeSearch.parse("""{"_type":"playlist","entries":[${rows.joinToString(",")}]}""", 81).hasMore)
+    }
+
+    @Test fun mapsEachKindAndDropsRejectedIds() {
+        val video = stream("https://www.youtube.com/watch?v=abcdefghijk", "Title", "Chan", 95,
+            "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg")
+        val mapped = NpeSearch.item(video, SearchFilter.VIDEOS)!!
+        assertEquals(SearchKind.VIDEO, mapped.kind)
+        assertEquals("abcdefghijk", mapped.id)
+        assertEquals("https://www.youtube.com/watch?v=abcdefghijk", mapped.url)
+        assertEquals("https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg", mapped.thumbnailUrl)
+        assertEquals("Chan", mapped.channel)
+        assertEquals(95L, mapped.durationSeconds)
+
+        val song = NpeSearch.item(stream("https://music.youtube.com/watch?v=bbcdefghijk", "Song", "Artist", 200),
+            SearchFilter.MUSIC)!!
+        assertEquals(SearchKind.VIDEO, song.kind)
+        assertEquals("https://www.youtube.com/watch?v=bbcdefghijk", song.url)
+
+        val listId = "PLabcdefghijklmnopqrstuvwxyz012345"
+        val list = NpeSearch.item(playlist("https://www.youtube.com/playlist?list=$listId", "List", "Owner", 12,
+            "https://yt3.ggpht.com/a=s176"), SearchFilter.PLAYLISTS)!!
+        assertEquals(SearchKind.PLAYLIST, list.kind)
+        assertEquals(listId, list.id)
+        assertEquals("https://www.youtube.com/playlist?list=$listId", list.url)
+        assertEquals("Owner", list.channel)
+        assertEquals(12, list.videoCount)
+        assertEquals("https://yt3.ggpht.com/a=s176", list.thumbnailUrl)
+
+        val channelId = "UCabcdefghijklmnopqrstuv"
+        val channel = NpeSearch.item(channel("https://www.youtube.com/channel/$channelId", "Name",
+            "https://yt3.googleusercontent.com/avatar=s176"), SearchFilter.CHANNELS)!!
+        assertEquals(SearchKind.CHANNEL, channel.kind)
+        assertEquals("https://www.youtube.com/channel/$channelId/videos", channel.url)
+        assertEquals("https://yt3.googleusercontent.com/avatar=s176", channel.thumbnailUrl)
+        assertNull(NpeSearch.item(channel("https://www.youtube.com/channel/$channelId", "Name",
+            "https://yt3.googleusercontent.com/avatar=s176"), SearchFilter.CHANNELS)!!.channel)
+
+        assertNull(NpeSearch.item(stream("https://www.youtube.com/watch?v=short", "T", "C", 1), SearchFilter.VIDEOS))
+        assertNull(NpeSearch.item(stream("https://www.youtube.com/shorts/abcdefghijk", "T", "C", 1), SearchFilter.VIDEOS))
+        assertNull(NpeSearch.item(stream("https://www.youtube.com/watch?v=abcdefghijk&list=RDabcdefghijk", "T", "C", 1), SearchFilter.VIDEOS))
+        assertNull(NpeSearch.item(stream("https://www.youtube.com/watch?v=abcdefghijk", "T", "C", 1).apply { isShortFormContent = true }, SearchFilter.VIDEOS))
+        assertNull(NpeSearch.item(stream("https://www.youtube.com/watch?v=abcdefghijk", "Live", "C", 1, type = StreamType.LIVE_STREAM), SearchFilter.VIDEOS))
+        assertNull(NpeSearch.item(stream("https://evil.example/watch?v=abcdefghijk", "Ad", "C", 1), SearchFilter.VIDEOS))
+        assertNull(NpeSearch.item(playlist("https://www.youtube.com/playlist?list=$listId", "List", "Owner", 3, null), SearchFilter.VIDEOS))
+        val mix = playlist("https://www.youtube.com/playlist?list=RDabcdefghijk", "Mix", "YouTube", 10, null)
+            .apply { playlistType = PlaylistInfo.PlaylistType.MIX_STREAM }
+        assertNull(NpeSearch.item(mix, SearchFilter.PLAYLISTS))
+        assertNull(NpeSearch.item(playlist("https://www.youtube.com/playlist?list=not-a-list", "Bad", "O", 1, null), SearchFilter.PLAYLISTS))
+        assertNull(NpeSearch.item(playlist("https://www.youtube.com/playlist?list=$listId", "List", "Owner", -1,
+            "https://evil.example/a.jpg"), SearchFilter.PLAYLISTS)!!.let { it.videoCount ?: it.thumbnailUrl })
+        assertNull(NpeSearch.item(channel("https://www.youtube.com/channel/UCshort", "Name", null), SearchFilter.CHANNELS))
+        assertNull(NpeSearch.item(channel("https://www.youtube.com/@name", "Name", null), SearchFilter.CHANNELS))
+    }
+
+    private fun stream(url: String, name: String, uploader: String, seconds: Long, thumb: String? = null,
+        type: StreamType = StreamType.VIDEO_STREAM) = StreamInfoItem(0, url, name, type).apply {
+        uploaderName = uploader
+        duration = seconds
+        thumb?.let { thumbnails = listOf(Image(it, Image.HEIGHT_UNKNOWN, Image.WIDTH_UNKNOWN, Image.ResolutionLevel.MEDIUM)) }
+    }
+
+    private fun playlist(url: String, name: String, uploader: String, count: Long, thumb: String?) =
+        PlaylistInfoItem(0, url, name).apply {
+            uploaderName = uploader
+            streamCount = count
+            thumb?.let { thumbnails = listOf(Image(it, Image.HEIGHT_UNKNOWN, Image.WIDTH_UNKNOWN, Image.ResolutionLevel.LOW)) }
+        }
+
+    private fun channel(url: String, name: String, thumb: String?) = ChannelInfoItem(0, url, name).apply {
+        thumb?.let { thumbnails = listOf(Image(it, Image.HEIGHT_UNKNOWN, Image.WIDTH_UNKNOWN, Image.ResolutionLevel.MEDIUM)) }
     }
 }

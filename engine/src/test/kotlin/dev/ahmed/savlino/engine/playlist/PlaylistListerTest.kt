@@ -74,14 +74,25 @@ class PlaylistListerTest {
         assertNull(third.next)
     }
 
-    @Test fun npeFailureFallsBackAndMixPrivateAndChannelsNeverFetch(): Unit = runBlocking {
+    @Test fun npeFailureFallsBackAndMixAndPrivateNeverFetch(): Unit = runBlocking {
         val lister = PlaylistLister({ _, _, _ -> throw IllegalStateException() }, { _, _, _ -> flat(entry(1), 1) })
         assertEquals(1, assertIs<PlaylistResult.Success>(lister.list(source)).page.items.size)
         val blocked = PlaylistLister({ _, _, _ -> error("Must not fetch") }, { _, _, _ -> error("Must not fetch") })
         for ((url, error) in listOf("https://youtube.com/watch?v=abcdefghijk&list=RDabcdefghijk" to DownloadError.Unsupported,
-            "https://youtube.com/playlist?list=WL" to DownloadError.LoginRequired,
-            "https://youtube.com/@fixture/videos" to DownloadError.Unsupported)) {
+            "https://youtube.com/playlist?list=WL" to DownloadError.LoginRequired)) {
             assertEquals(error, assertIs<PlaylistResult.Failure>(blocked.list(LinkRevision(LinkInput.parse(url)!!, 1))).error)
         }
+    }
+
+    @Test fun channelVideosStayOnTheFlatReader(): Unit = runBlocking {
+        val starts = mutableListOf<Int>()
+        val lister = PlaylistLister({ _, _, _ -> error("channel videos are not an NPE playlist") }, { _, start, _ ->
+            starts += start
+            flat(entry(1), 1)
+        })
+        val url = "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/videos"
+        val page = assertIs<PlaylistResult.Success>(lister.list(LinkRevision(LinkInput.parse(url)!!, 1))).page
+        assertEquals(listOf(1), starts)
+        assertEquals(1, page.items.size)
     }
 }

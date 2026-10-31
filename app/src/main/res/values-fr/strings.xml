@@ -666,4 +666,13 @@
     <string name="search_failed">Recherche impossible pour le moment</string>
     <string name="search_failed_body">Un problème est survenu. Réessayez dans un instant.</string>
     <string name="search_more_failed">Impossible de charger plus de résultats</string>
+    <string name="search_filter_videos">Vidéos</string>
+    <string name="search_filter_music">Musique</string>
+    <string name="search_filter_playlists">Playlists</string>
+    <string name="search_filter_channels">Chaînes</string>
+    <plurals name="search_playlist_videos">
+        <item quantity="one">%1$s vidéo</item>
+        <item quantity="many">%1$s vidéos</item>
+        <item quantity="other">%1$s vidéos</item>
+    </plurals>
 </resources>

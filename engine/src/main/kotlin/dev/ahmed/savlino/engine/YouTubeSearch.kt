@@ -3,16 +3,75 @@ package dev.ahmed.savlino.engine
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.domain.PreviewMetadata
+import org.schabi.newpipe.extractor.Page
 
-/** One video yt-dlp's YouTube search returned; opening it is the same path as a pasted watch link. */
-class SearchResult(val id: String, title: String?, channel: String?, val durationSeconds: Long?) {
+/** Which YouTube search tab to read. Videos is the first page of a new search. */
+enum class SearchFilter { VIDEOS, MUSIC, PLAYLISTS, CHANNELS }
+
+/** What opening the row does. Music songs are videos: they open a watch link. */
+enum class SearchKind { VIDEO, PLAYLIST, CHANNEL }
+
+/** One search row. The words that found it are not stored here. */
+class SearchResult(
+    val id: String,
+    title: String?,
+    channel: String?,
+    val durationSeconds: Long? = null,
+    val kind: SearchKind = SearchKind.VIDEO,
+    url: String? = null,
+    thumbnailUrl: String? = null,
+    val videoCount: Int? = null,
+) {
     val title = PreviewMetadata.text(title, 300).orEmpty()
     val channel = PreviewMetadata.text(channel, 100)
-    val url get() = "https://www.youtube.com/watch?v=$id"
-    /** YouTube's own 16:9 still for this id (320×180), small enough for a list. */
-    val thumbnailUrl get() = "https://i.ytimg.com/vi/$id/mqdefault.jpg"
+    val url = url ?: when (kind) {
+        SearchKind.VIDEO -> "https://www.youtube.com/watch?v=$id"
+        SearchKind.PLAYLIST -> "https://www.youtube.com/playlist?list=$id"
+        SearchKind.CHANNEL -> "https://www.youtube.com/channel/$id/videos"
+    }
+    /** Videos use YouTube's own 16:9 still. Other kinds keep a checked thumbnail, or none. */
+    val thumbnailUrl = thumbnailUrl ?: if (kind == SearchKind.VIDEO && id.matches(PlaylistLister.VIDEO_ID))
+        "https://i.ytimg.com/vi/$id/mqdefault.jpg" else null
 }
-class SearchPage(val results: List<SearchResult>, val hasMore: Boolean)
+
+/**
+ * Memory only. An NPE continuation can embed the query in its page URL, so this never prints that page.
+ * [fallback] is the yt-dlp video search, used only after the first NewPipe page fails.
+ */
+class SearchPageToken internal constructor(
+    internal val nativePage: Page?,
+    internal val ytdlpStart: Int?,
+    internal val number: Int,
+) {
+    val fallback: Boolean get() = ytdlpStart != null
+    override fun toString() = "SearchPageToken"
+
+    companion object {
+        fun fallback(start: Int = 1): SearchPageToken {
+            require(start in 1..YouTubeSearch.MAX_RESULTS)
+            return SearchPageToken(null, start, ((start - 1) / YouTubeSearch.PAGE_SIZE) + 1)
+        }
+        /** A stand-in continuation for tests. It carries no query. */
+        fun continuation(number: Int = 2): SearchPageToken {
+            require(number > 1)
+            return SearchPageToken(Page(listOf("p$number")), null, number)
+        }
+        internal fun npe(page: Page, number: Int): SearchPageToken {
+            require(number > 1 && Page.isValid(page))
+            return SearchPageToken(page, null, number)
+        }
+    }
+}
+
+class SearchPage(
+    val results: List<SearchResult>,
+    val next: SearchPageToken? = null,
+    /** First NewPipe page had rows, and every one failed the id check. Videos may fall back. */
+    val unusable: Boolean = false,
+) {
+    val hasMore: Boolean get() = next != null
+}
+
 sealed interface SearchOutcome {
     class Success(val page: SearchPage) : SearchOutcome
     data class Failure(val error: DownloadError) : SearchOutcome
@@ -20,13 +79,14 @@ sealed interface SearchOutcome {
 
 /**
  * yt-dlp reads `ytsearchN:<words>` as a flat playlist. The words are the person's own text: they go after `--` only,
- * and never into logs, errors, diagnostics or usage counts.
+ * and never into logs, errors, diagnostics or usage counts. NewPipe search is the usual path; this one is the
+ * video fallback, still capped here.
  */
 object YouTubeSearch {
     const val PREFIX = "ytsearch"
     const val PAGE_SIZE = 20
     const val MAX_QUERY = 100
-    /** Each page asks YouTube for every result before it again, so the list stops here. */
+    /** Each yt-dlp page asks YouTube for every result before it again, so that fallback stops here. */
     const val MAX_RESULTS = 100
 
     fun query(text: String): String? =
@@ -52,7 +112,8 @@ object YouTubeSearch {
                 row.path("channel").asText("").ifEmpty { row.path("uploader").asText("") },
                 row.path("duration").takeIf { it.isNumber }?.asLong()?.takeIf { it > 0 })
         }.distinctBy { it.id }
-        return SearchPage(results, entries.size() >= PAGE_SIZE && start + PAGE_SIZE <= MAX_RESULTS)
+        val more = entries.size() >= PAGE_SIZE && start + PAGE_SIZE <= MAX_RESULTS
+        return SearchPage(results, if (more) SearchPageToken.fallback(start + PAGE_SIZE) else null)
     }
     private val WHITESPACE = Regex("\\s+")
     private val CONTROL = Regex("\\p{Cntrl}")
