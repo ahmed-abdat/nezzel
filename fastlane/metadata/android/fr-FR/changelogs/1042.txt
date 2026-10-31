@@ -1,0 +1,3 @@
+0.5.5
+• Ouvrir une vidéo enregistrée après qu’Android a fermé Nezzel ne plante plus
+• Un téléchargement en pause garde « Réessayer » pendant 7 jours

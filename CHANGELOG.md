@@ -4,6 +4,16 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.5] - 2026-10-31
+
+### Changed
+
+- A download paused for over a day keeps Try again for 7 days. After that it asks you to share or paste the link again.
+
+### Fixed
+
+- Opening a saved video after Android closed Nezzel in the background no longer crashes.
+
 ## [0.5.4] - 2026-10-31
 
 ### Added
