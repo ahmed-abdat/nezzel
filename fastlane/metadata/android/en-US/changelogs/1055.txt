@@ -1,4 +1,4 @@
 0.5.6
-• Faster YouTube search, with Videos, Music, Playlists and Channels
+• Faster YouTube search, with Videos, Music and Playlists
 • Updates download on their own and install when you leave the app
 • When a site stops working, Nezzel updates itself right away to fix it

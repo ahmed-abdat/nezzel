@@ -9,7 +9,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -125,7 +124,6 @@ private fun filterLabel(filter: SearchFilter) = when (filter) {
     SearchFilter.VIDEOS -> R.string.search_filter_videos
     SearchFilter.MUSIC -> R.string.search_filter_music
     SearchFilter.PLAYLISTS -> R.string.search_filter_playlists
-    SearchFilter.CHANNELS -> R.string.search_filter_channels
 }
 
 @Composable
@@ -173,7 +171,6 @@ private fun ResultList(vm: SearchViewModel, offline: Boolean, thumbnail: suspend
 private fun ResultRow(result: SearchResult, thumbnail: suspend (String) -> Bitmap?, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val language = LocalConfiguration.current.locales[0].language
-    val channel = result.kind == SearchKind.CHANNEL
     Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(MaterialTheme.shapes.medium)
         .clickable(role = Role.Button, onClick = onClick).padding(vertical = Space.s)
         .semantics(mergeDescendants = true) {}.testTag("search_result_${result.id}"),
@@ -183,9 +180,7 @@ private fun ResultRow(result: SearchResult, thumbnail: suspend (String) -> Bitma
         val bitmap by produceState<Bitmap?>(null, thumb) {
             value = if (thumb == null) null else thumbnail(thumb)
         }
-        val shape = if (channel) CircleShape else MaterialTheme.shapes.medium
-        Box((if (channel) Modifier.size(48.dp) else Modifier.width(128.dp).aspectRatio(16f / 9f))
-            .clip(shape).background(colors.surfaceContainerHighest)) {
+        Box(Modifier.width(128.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium).background(colors.surfaceContainerHighest)) {
             bitmap?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
@@ -196,7 +191,6 @@ private fun ResultRow(result: SearchResult, thumbnail: suspend (String) -> Bitma
                 NezzelFormat.firstStrong(pluralStringResource(R.plurals.search_playlist_videos, n, NezzelFormat.count(n, language)))
             }
             val meta = when (result.kind) {
-                SearchKind.CHANNEL -> ""
                 SearchKind.PLAYLIST -> listOfNotNull(result.channel?.let(NezzelFormat::firstStrong), count).joinToString(" · ")
                 SearchKind.VIDEO -> listOfNotNull(result.channel?.let(NezzelFormat::firstStrong),
                     result.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }).joinToString(" · ")

@@ -3,7 +3,6 @@ package dev.ahmed.savlino.engine.playlist
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.youtube.NpeSearch
 import org.schabi.newpipe.extractor.Image
-import org.schabi.newpipe.extractor.channel.ChannelInfoItem
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -66,15 +65,6 @@ class YouTubeSearchTest {
         assertEquals(12, list.videoCount)
         assertEquals("https://yt3.ggpht.com/a=s176", list.thumbnailUrl)
 
-        val channelId = "UCabcdefghijklmnopqrstuv"
-        val channel = NpeSearch.item(channel("https://www.youtube.com/channel/$channelId", "Name",
-            "https://yt3.googleusercontent.com/avatar=s176"), SearchFilter.CHANNELS)!!
-        assertEquals(SearchKind.CHANNEL, channel.kind)
-        assertEquals("https://www.youtube.com/channel/$channelId/videos", channel.url)
-        assertEquals("https://yt3.googleusercontent.com/avatar=s176", channel.thumbnailUrl)
-        assertNull(NpeSearch.item(channel("https://www.youtube.com/channel/$channelId", "Name",
-            "https://yt3.googleusercontent.com/avatar=s176"), SearchFilter.CHANNELS)!!.channel)
-
         assertNull(NpeSearch.item(stream("https://www.youtube.com/watch?v=short", "T", "C", 1), SearchFilter.VIDEOS))
         assertNull(NpeSearch.item(stream("https://www.youtube.com/shorts/abcdefghijk", "T", "C", 1), SearchFilter.VIDEOS))
         assertNull(NpeSearch.item(stream("https://www.youtube.com/watch?v=abcdefghijk&list=RDabcdefghijk", "T", "C", 1), SearchFilter.VIDEOS))
@@ -88,8 +78,6 @@ class YouTubeSearchTest {
         assertNull(NpeSearch.item(playlist("https://www.youtube.com/playlist?list=not-a-list", "Bad", "O", 1, null), SearchFilter.PLAYLISTS))
         assertNull(NpeSearch.item(playlist("https://www.youtube.com/playlist?list=$listId", "List", "Owner", -1,
             "https://evil.example/a.jpg"), SearchFilter.PLAYLISTS)!!.let { it.videoCount ?: it.thumbnailUrl })
-        assertNull(NpeSearch.item(channel("https://www.youtube.com/channel/UCshort", "Name", null), SearchFilter.CHANNELS))
-        assertNull(NpeSearch.item(channel("https://www.youtube.com/@name", "Name", null), SearchFilter.CHANNELS))
     }
 
     private fun stream(url: String, name: String, uploader: String, seconds: Long, thumb: String? = null,
@@ -106,7 +94,4 @@ class YouTubeSearchTest {
             thumb?.let { thumbnails = listOf(Image(it, Image.HEIGHT_UNKNOWN, Image.WIDTH_UNKNOWN, Image.ResolutionLevel.LOW)) }
         }
 
-    private fun channel(url: String, name: String, thumb: String?) = ChannelInfoItem(0, url, name).apply {
-        thumb?.let { thumbnails = listOf(Image(it, Image.HEIGHT_UNKNOWN, Image.WIDTH_UNKNOWN, Image.ResolutionLevel.MEDIUM)) }
-    }
 }

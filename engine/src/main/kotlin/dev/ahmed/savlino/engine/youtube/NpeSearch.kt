@@ -11,7 +11,6 @@ import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
-import org.schabi.newpipe.extractor.channel.ChannelInfoItem
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
@@ -60,7 +59,6 @@ internal object NpeSearch {
     fun item(row: InfoItem, filter: SearchFilter): SearchResult? = when (filter) {
         SearchFilter.VIDEOS, SearchFilter.MUSIC -> video(row, filter)
         SearchFilter.PLAYLISTS -> playlist(row)
-        SearchFilter.CHANNELS -> channel(row)
     }
 
     private fun video(row: InfoItem, filter: SearchFilter): SearchResult? {
@@ -87,17 +85,10 @@ internal object NpeSearch {
             thumbnailUrl = thumb(item.thumbnails), videoCount = count)
     }
 
-    private fun channel(row: InfoItem): SearchResult? {
-        val item = row as? ChannelInfoItem ?: return null
-        val id = channelId(item.url) ?: return null
-        return SearchResult(id, item.name, null, null, SearchKind.CHANNEL, thumbnailUrl = thumb(item.thumbnails))
-    }
-
     private fun content(filter: SearchFilter) = when (filter) {
         SearchFilter.VIDEOS -> YoutubeSearchQueryHandlerFactory.VIDEOS
         SearchFilter.MUSIC -> YoutubeSearchQueryHandlerFactory.MUSIC_SONGS
         SearchFilter.PLAYLISTS -> YoutubeSearchQueryHandlerFactory.PLAYLISTS
-        SearchFilter.CHANNELS -> YoutubeSearchQueryHandlerFactory.CHANNELS
     }
 
     private fun videoId(url: String, filter: SearchFilter): String? {
@@ -122,22 +113,12 @@ internal object NpeSearch {
         return query(uri, "list")?.takeIf { it.matches(PLAYLIST_ID) }
     }
 
-    private fun channelId(url: String): String? {
-        val uri = runCatching { URI(url) }.getOrNull() ?: return null
-        if (!uri.scheme.equals("https", true) || uri.host?.let(::youtubeHost) != true) return null
-        val path = uri.rawPath.orEmpty().trimEnd('/')
-        if (!path.startsWith("/channel/")) return null
-        val id = path.removePrefix("/channel/")
-        if ('/' in id) return null
-        return id.takeIf { it.matches(CHANNEL_ID) }
-    }
-
     private fun thumb(images: List<Image>?): String? = images.orEmpty().sortedBy { image ->
         val width = image.width
         if (width <= 0) Int.MAX_VALUE else kotlin.math.abs(width - 320)
     }.firstNotNullOfOrNull { allowedThumbnail(it.url) }
 
-    /** Same preview gate as the list loader, plus the image hosts a channel avatar or playlist still uses. */
+    /** Same preview gate as the list loader, plus the image hosts a playlist still uses. */
     internal fun allowedThumbnail(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
         val https = when {
@@ -164,7 +145,6 @@ internal object NpeSearch {
     }
 
     private val PLAYLIST_ID = Regex("PL[A-Za-z0-9_-]{10,48}|UU[A-Za-z0-9_-]{22}")
-    private val CHANNEL_ID = Regex("UC[A-Za-z0-9_-]{22}")
     private val THUMBNAIL_HOSTS = setOf("i.ytimg.com", "img.youtube.com", "yt3.ggpht.com", "yt3.googleusercontent.com")
 }
 

@@ -12,7 +12,7 @@ Version entries describe existing builds, not public APK availability.
 
 ### Changed
 
-- YouTube search is faster, with Videos, Music, Playlists and Channels.
+- YouTube search is faster, with Videos, Music and Playlists.
 - Updates are checked every 6 hours on any network, download on their own and install when you leave the app. A manual download installs right away.
 - Skip this update is gone. An earlier skip no longer hides a newer version.
 

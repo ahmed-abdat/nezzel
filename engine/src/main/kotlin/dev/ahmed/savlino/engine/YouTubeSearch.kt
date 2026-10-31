@@ -6,10 +6,10 @@ import dev.ahmed.savlino.domain.PreviewMetadata
 import org.schabi.newpipe.extractor.Page
 
 /** Which YouTube search tab to read. Videos is the first page of a new search. */
-enum class SearchFilter { VIDEOS, MUSIC, PLAYLISTS, CHANNELS }
+enum class SearchFilter { VIDEOS, MUSIC, PLAYLISTS }
 
 /** What opening the row does. Music songs are videos: they open a watch link. */
-enum class SearchKind { VIDEO, PLAYLIST, CHANNEL }
+enum class SearchKind { VIDEO, PLAYLIST }
 
 /** One search row. The words that found it are not stored here. */
 class SearchResult(
@@ -27,7 +27,6 @@ class SearchResult(
     val url = url ?: when (kind) {
         SearchKind.VIDEO -> "https://www.youtube.com/watch?v=$id"
         SearchKind.PLAYLIST -> "https://www.youtube.com/playlist?list=$id"
-        SearchKind.CHANNEL -> "https://www.youtube.com/channel/$id/videos"
     }
     /** Videos use YouTube's own 16:9 still. Other kinds keep a checked thumbnail, or none. */
     val thumbnailUrl = thumbnailUrl ?: if (kind == SearchKind.VIDEO && id.matches(PlaylistLister.VIDEO_ID))
