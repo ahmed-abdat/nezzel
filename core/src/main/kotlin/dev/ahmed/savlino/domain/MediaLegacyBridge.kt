@@ -11,7 +11,7 @@ sealed interface MediaConfirmResult {
 /** Additive audiovisual bridge. Does not inspect, transfer or confirm image downloads. */
 class MediaLegacyBridge private constructor(private val legacy: Inspection, val inspection: MediaInspection) {
     companion object {
-        private val jobIdPattern = Regex("[a-zA-Z0-9_-]{1,128}")
+        private val jobIdPattern = DownloadCommand.JOB_ID
 
         /** returnedItemId must be the adapter's actual source item ID, not a generated placeholder. */
         fun wrap(inspection: Inspection, returnedItemId: String, identity: MediaAdapterIdentity): MediaLegacyBridge {

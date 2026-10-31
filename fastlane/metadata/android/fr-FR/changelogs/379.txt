@@ -1,0 +1,4 @@
+0.4.5
+• Un nouvel écran de mise à jour : un bouton mène du téléchargement à l’installation
+• Les nouveautés s’affichent une fois après chaque mise à jour, et à tout moment dans À propos
+• Un téléchargement de mise à jour interrompu reprend là où il s’était arrêté

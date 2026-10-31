@@ -89,9 +89,10 @@ class ContractsTest {
         val other = source.copy(link = assertNotNull(LinkInput.parse("https://example.org/other")))
         assertEquals(ConfirmResult.Stale, DownloadCommand.confirm("job", inspection(), other, video.id, "x"))
         assertEquals(ConfirmResult.Invalid(DownloadError.FormatExpired), DownloadCommand.confirm("job", inspection(), source, "invented", "x"))
-        for (id in listOf("", "../escape", "a".repeat(129))) {
+        for (id in listOf("", "../escape", "-job", "a".repeat(81), "a".repeat(129))) {
             assertEquals(ConfirmResult.Invalid(DownloadError.InvalidInput), DownloadCommand.confirm(id, inspection(), source, video.id, "x"))
         }
+        assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("a".repeat(80), inspection(), source, video.id, "x"))
         val confirmed = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job-1", inspection(), source, video.id, "عنوان")).command
         assertEquals("job-1", confirmed.jobId)
         assertEquals(source, confirmed.source)

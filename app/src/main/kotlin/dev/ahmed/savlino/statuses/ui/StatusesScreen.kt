@@ -69,6 +69,7 @@ import dev.ahmed.savlino.ui.nav.rememberTabResource
 import dev.ahmed.savlino.ui.ThumbnailCache
 import dev.ahmed.savlino.ui.rememberCachedThumbnail
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.downloads.ScreenHeader
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -96,9 +97,18 @@ fun StatusesScreen(library: StatusLibrary?, language: String, state: StatusesSta
     val context = LocalContext.current
     val media = LocalStatusMedia.current ?: remember(context) { SystemStatusMedia(context) }
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { state.picked(it.data?.data) }
     val openPicker: () -> Unit = {
-        library?.let { try { picker.launch(it.grantIntent()) } catch (_: ActivityNotFoundException) { } }
+        library?.let {
+            try { picker.launch(it.grantIntent()) }
+            catch (_: ActivityNotFoundException) {
+                scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(context.getString(R.string.statuses_no_folder_app))
+                }
+            }
+        }
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val active = LocalTabActive.current

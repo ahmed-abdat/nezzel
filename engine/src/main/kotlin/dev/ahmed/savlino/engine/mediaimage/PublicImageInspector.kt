@@ -81,7 +81,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             if (old != null && old.state == ImageInspectionOperation.State.ACTIVE)
                 old.state = ImageInspectionOperation.State.REPLACED
             current = null
-            references.retire()
+            references.retire(source.link.rawUrl)
             old
         }
         // Free the retired token's transport slot before registering the replacement.

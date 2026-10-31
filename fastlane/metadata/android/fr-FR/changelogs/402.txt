@@ -1,0 +1,7 @@
+0.4.6
+• Réglages et liste des qualités plus simples, en mots clairs
+• Les actions d’un fichier s’ouvrent dans un panneau qui montre le fichier
+• Une nouvelle visite guidée et un écran de mise à jour plus calme
+• Les couleurs du fond d’écran suivent n’importe quel fond
+• La progression du téléchargement est plus claire, dès le début
+• Votre dernier choix de qualité est retenu, même depuis Toutes les qualités

@@ -111,6 +111,7 @@ class ImageRouteTest {
         assertEquals(MediaSourceRoute.DIRECT_IMAGE, route("https://example.com/a/photo.jpeg?w=1080"))
         assertEquals(MediaSourceRoute.DIRECT_IMAGE, route("https://cdn.example.org/x.png"))
         assertEquals(MediaSourceRoute.DIRECT_IMAGE, route("https://scontent.xx.fbcdn.net/v/t39/123_n.webp?stp=dst"))
+        assertEquals(MediaSourceRoute.DIRECT_IMAGE, route("https://cdn.example.org/photo.avif"))
     }
 
     @Test fun xPostShapesGoToTheXReaderFirst() {

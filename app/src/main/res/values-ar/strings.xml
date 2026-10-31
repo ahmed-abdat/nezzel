@@ -507,6 +507,7 @@
     <string name="statuses_intro_body">شاهد الحالة في واتساب، ثم احفظها من هنا.</string>
     <string name="statuses_grant">السماح بالوصول</string>
     <string name="statuses_grant_hint">اضغط «استخدام هذا المجلد» ثم «سماح»</string>
+    <string name="statuses_no_folder_app">لا يوجد تطبيق على هذا الهاتف يفتح المجلدات</string>
     <string name="statuses_not_installed">واتساب غير مثبّت على هذا الهاتف</string>
     <string name="statuses_wrong_folder">ليس هذا هو المجلد. اضغط «استخدام هذا المجلد» في هذه الشاشة.</string>
     <string name="statuses_access_lost">فقد Nezzel الوصول إلى المجلد. اختره من جديد.</string>

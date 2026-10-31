@@ -45,6 +45,22 @@ class PublicImageReferenceTest : PublicImageTestBase() {
         assertTrue(assertNotNull(original.preview).isClosed)
     }
 
+    @Test fun aDifferentLinkKeepsTheFirstSelectionSavable() = fixture { f ->
+        val first = inspected(runBlocking {
+            f.inspector.inspect(f.inspector.newOperation(imageSource("https://media.licdn.com/first-photo?sig=synthetic"), IMAGE_IDENTITY))
+        })
+        val selection = assertNotNull(first.inspection.selection(firstRendition(first).ref))
+        val second = inspected(runBlocking {
+            f.inspector.inspect(f.inspector.newOperation(imageSource("https://media.licdn.com/second-photo?sig=synthetic"), IMAGE_IDENTITY))
+        })
+        assertFalse(assertNotNull(first.preview).isClosed, "another link must not close this preview")
+        assertNotNull(f.store.resolve(selection), "another link must not retire this handle")
+        val saved = runBlocking { f.saver.transfer(f.saver.newOperation(selection), java.io.ByteArrayOutputStream()) }
+        assertIs<ImageSaveResult.Success>(saved)
+        second.close()
+        first.close()
+    }
+
     @Test fun anotherStoreOrProcessCannotResolveSelectionEvenWithMatchingPublicFields() = fixture { f ->
         inspected(runBlocking { f.inspector.inspect(f.inspector.newOperation(imageSource(), IMAGE_IDENTITY)) }).use { result ->
             val selection = assertNotNull(result.inspection.selection(firstRendition(result).ref))

@@ -20,7 +20,7 @@ import java.util.Locale
 
 /** Which inspector a reviewed link goes to. Pure: no network, no engine state. */
 object ImageRoute {
-    private val imageExtensions = listOf(".jpg", ".jpeg", ".png", ".webp", ".gif")
+    private val imageExtensions = listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
 
     /** Video-only Facebook surfaces skip the page fetch: yt-dlp reads them directly. */
     private val facebookVideoKinds = setOf(FacebookLinkKind.REEL, FacebookLinkKind.WATCH, FacebookLinkKind.VIDEO,

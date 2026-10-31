@@ -4,6 +4,72 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.3] - 2026-10-29
+
+### Added
+
+- Hold a video for 2× speed. Swipe a video or photo down to close it, or to leave full screen.
+
+### Changed
+
+- After an update, Nezzel opens on Home. What's new stays in About.
+- A quality you confirm in the share sheet is the one the app picks next.
+- Opening a link again shows its last preview at once, while the options load.
+
+### Fixed
+
+- If saving fails after the file has already downloaded, Retry saves it again without downloading.
+- A failed MP3 conversion keeps the audio and Retry converts it again.
+
+## [0.5.2] - 2026-10-28
+
+### Changed
+
+- The Home logo row adds Reddit, Pinterest, Vimeo and SoundCloud.
+
+### Fixed
+
+- A dropped connection, including airplane mode, says Waiting for connection and keeps the percent and size.
+- A drop while a download is still preparing waits for the network instead of failing.
+
+## [0.5.1] - 2026-10-27
+
+### Added
+
+- Play saved videos and audio in Nezzel. Audio keeps playing from Home or the lock screen, in a bar above the tabs.
+- Player controls: tap to show or hide them, double-tap to skip, speed, full screen and volume.
+- Reddit photos and galleries can be saved. Public Reddit videos load again.
+
+### Changed
+
+- Built-in site support is yt-dlp 2026.10.26.
+- TikTok titles show emoji, and a taller picture is offered when the post has one.
+- The screen stays on while a video plays.
+
+### Fixed
+
+- YouTube Mix links open the video they came from.
+- A Telegram video that's too big for the web says it opens only in Telegram.
+- Reddit links whose titles use accented letters load again. An 18+ photo post asks you to sign in.
+
+## [0.5.0] - 2026-10-25
+
+### Added
+
+- New look: a floating tab bar, with your downloads and recent files on Home.
+- Statuses tab: save WhatsApp statuses you have already opened.
+- Download a YouTube playlist, or several links at once, then retry any that failed.
+- TikTok photo posts: keep the photos, the sound, or both.
+- Downloads: grid view, swipe between files, rename, sort and search. Pause all, resume all and retry all.
+- A Home screen widget, and your old downloads come back after a reinstall.
+- Nezzel can keep itself up to date in the background. On Android 16, a running download can show its percent on the lock screen.
+- While Help improve Nezzel is on, a failed link sends its report on its own.
+
+### Fixed
+
+- Home no longer crashes on the first download after the list was restored.
+- A playlist no longer crashes when one download hands off to the next.
+
 ## [0.4.9] - 2026-10-24
 
 ### Added

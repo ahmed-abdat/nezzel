@@ -1,0 +1,7 @@
+0.4.7
+• Publications Facebook à plusieurs photos : choisissez lesquelles enregistrer
+• Les liens de partage Facebook, les liens vidéo et les publications photo + vidéo fonctionnent à nouveau
+• Enregistre les photos AVIF (Android 12+)
+• Dit clairement quand une publication n’a ni photo ni vidéo
+• Signalez un lien illisible, en un geste, sur WhatsApp
+• Écran d’erreur plus clair

@@ -1,0 +1,3 @@
+0.4.4
+• Nezzel vous prévient quand une nouvelle version est disponible, et la mise à jour se fait en quelques gestes
+• Chaque mise à jour est vérifiée avant l’installation : même appli, même signature. Vous pouvez couper la vérification dans les Réglages

@@ -58,11 +58,11 @@ Check with `apksigner verify --print-certs nezzel-<version>.apk`. Each release a
 
 ## Sites
 
-Tested on a real phone: **YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat, Pinterest, Bluesky, Telegram, Dailymotion, Vimeo**, plus audio from YouTube Music and photos from Facebook, Instagram, X and Bluesky. Many more sites open thanks to [yt-dlp](https://github.com/yt-dlp/yt-dlp), which updates itself weekly inside the app.
+Tested on a real phone: **YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Snapchat, Pinterest, Bluesky, Telegram, Dailymotion, Vimeo**, plus audio from YouTube Music, photos from Facebook, Instagram, X and Bluesky, YouTube playlists, and WhatsApp statuses. Many more sites open thanks to [yt-dlp](https://github.com/yt-dlp/yt-dlp), which updates itself weekly inside the app.
 
 Not supported: private posts, stories, anything behind a login, and DRM-protected content.
 
-A link doesn't work? Tap **Report this link** on the error screen, or [open an issue](https://github.com/ahmed-abdat/nezzel/issues/new/choose).
+A link doesn't work? While Help improve Nezzel is on, Nezzel sends a failure report on its own. You can also [open an issue](https://github.com/ahmed-abdat/nezzel/issues/new/choose).
 
 ## FAQ
 

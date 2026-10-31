@@ -40,8 +40,11 @@ sealed interface ConfirmResult {
 class DownloadCommand private constructor(val jobId: String, val source: LinkRevision,
     val engineVersion: String, val format: Format, val filename: String, val inspectionId: String) {
     companion object {
+        /** Same rule as the job directory: one leading letter or digit, then up to 79 more, 80 in total. */
+        internal val JOB_ID = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}")
+
         fun confirm(jobId: String, inspection: Inspection, current: LinkRevision, formatId: String, title: String): ConfirmResult {
-            if (!jobId.matches(Regex("[a-zA-Z0-9_-]{1,128}"))) return ConfirmResult.Invalid(DownloadError.InvalidInput)
+            if (!jobId.matches(JOB_ID)) return ConfirmResult.Invalid(DownloadError.InvalidInput)
             if (!inspection.source.matches(current)) return ConfirmResult.Stale
             val format = inspection.formats.singleOrNull { it.id == formatId }
                 ?: return ConfirmResult.Invalid(DownloadError.FormatExpired)

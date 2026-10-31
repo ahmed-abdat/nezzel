@@ -454,6 +454,7 @@
     <string name="statuses_intro_body">Watch a status in WhatsApp, then save it here.</string>
     <string name="statuses_grant">Allow access</string>
     <string name="statuses_grant_hint">Tap “Use this folder”, then “Allow”</string>
+    <string name="statuses_no_folder_app">No app on this phone can open folders</string>
     <string name="statuses_not_installed">WhatsApp isn’t on this phone</string>
     <string name="statuses_wrong_folder">That’s not it. Tap “Use this folder” on this screen.</string>
     <string name="statuses_access_lost">Nezzel lost access to the folder. Choose it again.</string>

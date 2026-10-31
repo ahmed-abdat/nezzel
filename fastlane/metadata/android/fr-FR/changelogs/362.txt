@@ -1,0 +1,8 @@
+0.4.3
+• Nouveau look : pages d’accueil plus simples, et Accueil, Réglages et qualités plus clairs.
+• Partagez plusieurs liens à la fois : Nezzel ouvre le premier et propose le suivant.
+• Les liens dans un texte partagé ou une phrase en arabe fonctionnent.
+• Les vidéos Facebook gardent leur vrai titre.
+• Vignettes pour les fichiers enregistrés dans un dossier choisi.
+• Rapports de plantage à partager depuis À propos (jamais envoyés tout seuls).
+• Prêt pour les téléphones récents qui utilisent des pages mémoire de 16 Ko.

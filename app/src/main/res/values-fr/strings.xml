@@ -462,6 +462,7 @@
     <string name="statuses_intro_body">Regardez un statut dans WhatsApp, puis enregistrez-le ici.</string>
     <string name="statuses_grant">Autoriser l’accès</string>
     <string name="statuses_grant_hint">Appuyez sur «\u00A0Utiliser ce dossier\u00A0», puis sur «\u00A0Autoriser\u00A0»</string>
+    <string name="statuses_no_folder_app">Aucune application sur ce téléphone n’ouvre les dossiers</string>
     <string name="statuses_not_installed">WhatsApp n’est pas installé sur ce téléphone</string>
     <string name="statuses_wrong_folder">Ce n’est pas le bon dossier. Appuyez sur «\u00A0Utiliser ce dossier\u00A0» sur cet écran.</string>
     <string name="statuses_access_lost">Nezzel n’a plus accès au dossier. Choisissez-le à nouveau.</string>

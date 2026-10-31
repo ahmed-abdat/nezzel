@@ -1,0 +1,8 @@
+0.4.2
+• Lecture des publications photo de Telegram et Bluesky.
+• Options vidéo progressives sur Facebook et meilleure compatibilité de lecture.
+• Options rétablies pour certains cas Pinterest, Kick et Streamable.
+• Indications plus claires en anglais et en arabe, et visite guidée.
+• Les dimensions d’une image enregistrée ne reprennent plus celles de la vignette.
+• Meilleur choix vidéo par défaut et libellés des fichiers enregistrés.
+Inclut l’enregistrement des GIF d’origine de la 0.4.1. Cette version n’a pas été publiée.

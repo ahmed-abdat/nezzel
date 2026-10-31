@@ -76,7 +76,7 @@ class MediaLegacyBridgeTest {
         val invalid = selection(bridge).copy(source = source.copy(revision = 9), identity = identity.copy(generation = 99),
             renditionRef = MediaRenditionRef(MediaItemRef("other", "absent"), "absent"), outputKind = MediaKind.IMAGE,
             validity = MediaInspectionValidity.processLocal())
-        for (job in listOf("", "../escape", "a".repeat(129))) {
+        for (job in listOf("", "../escape", "-job", "a".repeat(81), "a".repeat(129))) {
             assertEquals(MediaConfirmResult.Invalid(DownloadError.InvalidInput), confirm(bridge, invalid, job, source.copy(revision = 10)))
         }
     }
