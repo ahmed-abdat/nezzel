@@ -70,7 +70,7 @@ A link doesn't work? While Help improve Nezzel is on, Nezzel sends a failure rep
 
 **Android warned me on install.** That's normal for any app installed outside Google Play.
 
-**Is anything sent to a Nezzel server?** No account and no ads. See [PRIVACY.md](PRIVACY.md).
+**Is anything sent to a Nezzel server?** Only while Help improve Nezzel is on (it is on by default): anonymous daily usage counts, and a report with the link when a download fails. Turn it off in Settings → Advanced. Details in [PRIVACY.md](PRIVACY.md#usage-counts-and-reports).
 
 <div dir="rtl">
 
