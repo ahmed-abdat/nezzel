@@ -28,17 +28,7 @@ import java.util.concurrent.TimeUnit
  */
 internal object NpeSearch {
     fun read(query: String, filter: SearchFilter, page: SearchPageToken?): SearchPage {
-        if (page?.nativePage != null) return readPage(query, filter, page, page.musicAsVideos)
-        val first = readPage(query, filter, null, asVideos = false)
-        // YouTube Music answers "no results" where it is not offered: read the same words as a normal YouTube search.
-        return if (filter == SearchFilter.MUSIC && first.results.isEmpty() && !first.unusable) {
-            readPage(query, filter, null, asVideos = true)
-        } else first
-    }
-
-    private fun readPage(query: String, filter: SearchFilter, page: SearchPageToken?, asVideos: Boolean): SearchPage {
-        val content = if (asVideos) YoutubeSearchQueryHandlerFactory.VIDEOS else content(filter)
-        val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf(content), "")
+        val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf(content(filter)), "")
         val fetched = try {
             // The first page needs fetchPage(); without it NewPipe has no initial data and every read throws.
             if (page?.nativePage == null) extractor.run { fetchPage(); initialPage } else extractor.getPage(page.nativePage)
@@ -50,14 +40,14 @@ internal object NpeSearch {
         if (raw.isEmpty() && fetched.errors.orEmpty().isNotEmpty()) throw IOException("Extraction request failed")
         val results = raw.mapNotNull { item(it, filter) }.distinctBy { it.id }
         val more = fetched.nextPage?.takeIf { Page.isValid(it) }
-            ?.let { SearchPageToken.npe(it, (page?.number ?: 1) + 1, asVideos) }
+            ?.let { SearchPageToken.npe(it, (page?.number ?: 1) + 1) }
         val unusable = page?.nativePage == null && raw.isNotEmpty() && results.isEmpty()
         return SearchPage(results, if (unusable) null else more, unusable = unusable)
     }
 
     /** One NewPipe row, or null when its id, kind or host is not one this filter opens. */
     fun item(row: InfoItem, filter: SearchFilter): SearchResult? = when (filter) {
-        SearchFilter.VIDEOS, SearchFilter.MUSIC -> video(row, filter)
+        SearchFilter.VIDEOS -> video(row, filter)
         SearchFilter.PLAYLISTS -> playlist(row)
     }
 
@@ -67,7 +57,6 @@ internal object NpeSearch {
         val type = stream.streamType
         val allowed = when (filter) {
             SearchFilter.VIDEOS -> type == StreamType.VIDEO_STREAM
-            SearchFilter.MUSIC -> type == StreamType.VIDEO_STREAM || type == StreamType.AUDIO_STREAM
             else -> false
         }
         if (!allowed) return null
@@ -87,7 +76,6 @@ internal object NpeSearch {
 
     private fun content(filter: SearchFilter) = when (filter) {
         SearchFilter.VIDEOS -> YoutubeSearchQueryHandlerFactory.VIDEOS
-        SearchFilter.MUSIC -> YoutubeSearchQueryHandlerFactory.MUSIC_SONGS
         SearchFilter.PLAYLISTS -> YoutubeSearchQueryHandlerFactory.PLAYLISTS
     }
 

@@ -122,7 +122,6 @@ private fun SearchFilters(vm: SearchViewModel) {
 
 private fun filterLabel(filter: SearchFilter) = when (filter) {
     SearchFilter.VIDEOS -> R.string.search_filter_videos
-    SearchFilter.MUSIC -> R.string.search_filter_music
     SearchFilter.PLAYLISTS -> R.string.search_filter_playlists
 }
 

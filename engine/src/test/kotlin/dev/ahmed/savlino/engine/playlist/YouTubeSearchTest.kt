@@ -50,11 +50,6 @@ class YouTubeSearchTest {
         assertEquals("Chan", mapped.channel)
         assertEquals(95L, mapped.durationSeconds)
 
-        val song = NpeSearch.item(stream("https://music.youtube.com/watch?v=bbcdefghijk", "Song", "Artist", 200),
-            SearchFilter.MUSIC)!!
-        assertEquals(SearchKind.VIDEO, song.kind)
-        assertEquals("https://www.youtube.com/watch?v=bbcdefghijk", song.url)
-
         val listId = "PLabcdefghijklmnopqrstuvwxyz012345"
         val list = NpeSearch.item(playlist("https://www.youtube.com/playlist?list=$listId", "List", "Owner", 12,
             "https://yt3.ggpht.com/a=s176"), SearchFilter.PLAYLISTS)!!

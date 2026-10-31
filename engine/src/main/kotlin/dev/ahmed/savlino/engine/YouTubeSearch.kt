@@ -6,7 +6,7 @@ import dev.ahmed.savlino.domain.PreviewMetadata
 import org.schabi.newpipe.extractor.Page
 
 /** Which YouTube search tab to read. Videos is the first page of a new search. */
-enum class SearchFilter { VIDEOS, MUSIC, PLAYLISTS }
+enum class SearchFilter { VIDEOS, PLAYLISTS }
 
 /** What opening the row does. Music songs are videos: they open a watch link. */
 enum class SearchKind { VIDEO, PLAYLIST }
@@ -41,8 +41,6 @@ class SearchPageToken internal constructor(
     internal val nativePage: Page?,
     internal val ytdlpStart: Int?,
     internal val number: Int,
-    /** Music read as a normal YouTube search: YouTube Music had nothing (it is not offered in every country). */
-    internal val musicAsVideos: Boolean = false,
 ) {
     val fallback: Boolean get() = ytdlpStart != null
     override fun toString() = "SearchPageToken"
@@ -57,9 +55,9 @@ class SearchPageToken internal constructor(
             require(number > 1)
             return SearchPageToken(Page(listOf("p$number")), null, number)
         }
-        internal fun npe(page: Page, number: Int, musicAsVideos: Boolean = false): SearchPageToken {
+        internal fun npe(page: Page, number: Int): SearchPageToken {
             require(number > 1 && Page.isValid(page))
-            return SearchPageToken(page, null, number, musicAsVideos)
+            return SearchPageToken(page, null, number)
         }
     }
 }

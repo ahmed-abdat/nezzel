@@ -97,11 +97,11 @@ class SearchViewModelTest {
         yield()
         try {
             assertTrue(vm.loading)
-            vm.choose(SearchFilter.MUSIC)
+            vm.choose(SearchFilter.PLAYLISTS)
             yield()
             assertEquals(listOf(operation), cancelled)
-            assertEquals(SearchFilter.MUSIC, vm.filter)
-            assertEquals("cats videos" to SearchFilter.MUSIC, calls.last())
+            assertEquals(SearchFilter.PLAYLISTS, vm.filter)
+            assertEquals("cats videos" to SearchFilter.PLAYLISTS, calls.last())
             assertEquals(listOf(result(1).id), vm.results.map { it.id })
             assertFalse(vm.loading)
         } finally {
@@ -109,7 +109,7 @@ class SearchViewModelTest {
         }
         yield()
         assertEquals(listOf(result(1).id), vm.results.map { it.id })
-        assertEquals(SearchFilter.MUSIC, vm.filter)
+        assertEquals(SearchFilter.PLAYLISTS, vm.filter)
     }
 
     @Test fun videosFirstPageFailureOrUnusablePageFallsBackAndPlaylistsDoNot(): Unit = runBlocking {

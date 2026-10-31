@@ -1,4 +1,4 @@
 0.5.6
-• Recherche YouTube plus rapide, avec Vidéos, Musique et Playlists
+• Recherche YouTube plus rapide, et vous pouvez aussi trouver des playlists
 • Les mises à jour se téléchargent seules et s’installent quand vous quittez l’app
 • Quand un site ne marche plus, Nezzel se met à jour tout de suite pour le réparer
