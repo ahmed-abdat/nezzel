@@ -29,9 +29,20 @@ import java.util.concurrent.TimeUnit
  */
 internal object NpeSearch {
     fun read(query: String, filter: SearchFilter, page: SearchPageToken?): SearchPage {
-        val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf(content(filter)), "")
+        if (page?.nativePage != null) return readPage(query, filter, page, page.musicAsVideos)
+        val first = readPage(query, filter, null, asVideos = false)
+        // YouTube Music answers "no results" where it is not offered: read the same words as a normal YouTube search.
+        return if (filter == SearchFilter.MUSIC && first.results.isEmpty() && !first.unusable) {
+            readPage(query, filter, null, asVideos = true)
+        } else first
+    }
+
+    private fun readPage(query: String, filter: SearchFilter, page: SearchPageToken?, asVideos: Boolean): SearchPage {
+        val content = if (asVideos) YoutubeSearchQueryHandlerFactory.VIDEOS else content(filter)
+        val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf(content), "")
         val fetched = try {
-            if (page?.nativePage == null) extractor.getInitialPage() else extractor.getPage(page.nativePage)
+            // The first page needs fetchPage(); without it NewPipe has no initial data and every read throws.
+            if (page?.nativePage == null) extractor.run { fetchPage(); initialPage } else extractor.getPage(page.nativePage)
         } catch (_: SearchExtractor.NothingFoundException) {
             return SearchPage(emptyList(), null)
         }
@@ -39,7 +50,8 @@ internal object NpeSearch {
         // A real miss is an empty page. Errors with no rows are a failed read, and the message stays here.
         if (raw.isEmpty() && fetched.errors.orEmpty().isNotEmpty()) throw IOException("Extraction request failed")
         val results = raw.mapNotNull { item(it, filter) }.distinctBy { it.id }
-        val more = fetched.nextPage?.takeIf { Page.isValid(it) }?.let { SearchPageToken.npe(it, (page?.number ?: 1) + 1) }
+        val more = fetched.nextPage?.takeIf { Page.isValid(it) }
+            ?.let { SearchPageToken.npe(it, (page?.number ?: 1) + 1, asVideos) }
         val unusable = page?.nativePage == null && raw.isNotEmpty() && results.isEmpty()
         return SearchPage(results, if (unusable) null else more, unusable = unusable)
     }

@@ -42,6 +42,8 @@ class SearchPageToken internal constructor(
     internal val nativePage: Page?,
     internal val ytdlpStart: Int?,
     internal val number: Int,
+    /** Music read as a normal YouTube search: YouTube Music had nothing (it is not offered in every country). */
+    internal val musicAsVideos: Boolean = false,
 ) {
     val fallback: Boolean get() = ytdlpStart != null
     override fun toString() = "SearchPageToken"
@@ -56,9 +58,9 @@ class SearchPageToken internal constructor(
             require(number > 1)
             return SearchPageToken(Page(listOf("p$number")), null, number)
         }
-        internal fun npe(page: Page, number: Int): SearchPageToken {
+        internal fun npe(page: Page, number: Int, musicAsVideos: Boolean = false): SearchPageToken {
             require(number > 1 && Page.isValid(page))
-            return SearchPageToken(page, null, number)
+            return SearchPageToken(page, null, number, musicAsVideos)
         }
     }
 }
