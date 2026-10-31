@@ -129,7 +129,7 @@ private fun GridTile(item: SavedMedia, language: String, selecting: Boolean, sel
             contentColor = Color.White, shape = MaterialTheme.shapes.extraSmall) {
             Row(Modifier.padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
                 if (audio) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(12.dp))
-                item.durationMillis?.let { Text(NezzelFormat.duration(it / 1000), Modifier.padding(start = if (audio) 2.dp else 0.dp),
+                item.durationMillis?.let { Text(NezzelFormat.durationMillis(it), Modifier.padding(start = if (audio) 2.dp else 0.dp),
                     style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr)) }
             }
         }

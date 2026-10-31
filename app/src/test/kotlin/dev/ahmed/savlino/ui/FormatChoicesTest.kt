@@ -58,6 +58,15 @@ class FormatChoicesTest {
         assertEquals(FormatChoices.Tier.entries.size, FormatChoices.Tier.entries.map { it.hint }.toSet().size)
     }
 
+    @Test fun otherVersionsCompareOnlyVisibleFacts() {
+        val row = video("first", 426, 240)
+        assertEquals(FormatChoices.shownKey(row), FormatChoices.shownKey(row.copy(id = "estimate", size = Size.Estimated(500))))
+        val exact = row.copy(size = Size.Exact(1_000_001))
+        assertEquals(FormatChoices.shownKey(exact), FormatChoices.shownKey(exact.copy(size = Size.Exact(1_000_002))))
+        assertNotEquals(FormatChoices.shownKey(exact), FormatChoices.shownKey(exact.copy(size = Size.Exact(2_000_000))))
+        assertNotEquals(FormatChoices.shownKey(row), FormatChoices.shownKey(row.copy(sourceHasNoSound = true, hasAudio = false)))
+    }
+
     @Test fun simpleKeepsOneRealRowPerQualityPreferringPresetThenCompatibleCodec() {
         val av1 = video("av1-1080", 1080, 1920, codec = "av01", size = Size.Exact(5))
         val h264 = video("h264-1080", 1080, 1920, size = Size.Estimated(6))

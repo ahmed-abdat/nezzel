@@ -225,19 +225,12 @@ internal fun OpenInNezzel(onOpenApp: () -> Unit, enabled: Boolean = true) {
 private fun PresetRow(links: LinkViewModel, row: PresetRowChoice, language: String, tiers: Map<String, FormatChoices.Tier?>) {
     val preset = row.preset
     val format = row.format
-    val label = stringResource(when (preset) {
-        Preset.BEST -> R.string.preset_best
-        Preset.BALANCED -> R.string.preset_balanced
-        Preset.SMALL -> R.string.preset_small
-        Preset.AUDIO_M4A, Preset.AUDIO_MP3 -> R.string.audio_only
-    })
-    // Same row as the full list ("Full HD · 1080p"); the preset name leads the hint as a short tag.
+    // Same title and hint as the full list ("Full HD · 1080p").
     // A merged row keeps every member's last-used state; selection follows the actual format.
     // "Last used" is the amber badge (DESIGN.md), not hint text.
     val last = if (links.lastUsedBadge?.id == format.id) stringResource(R.string.last_used) else null
     FormatRow(formatTitle(format, language, tiers), format, links.selectedFormat?.id == format.id, !links.confirmed, language,
-        // One short hint: the title already names the quality, so the tier's description would only repeat it.
-        if (format.hasVideo) label else formatHint(format),
+        formatHint(format, links.formatOptions),
         badge = last) { links.selectPreset(preset) }
 }
 
@@ -303,7 +296,7 @@ private fun FormatList(links: LinkViewModel, formats: List<Format>, language: St
 private fun FormatChoiceRow(links: LinkViewModel, format: Format, language: String,
     tiers: Map<String, FormatChoices.Tier?>?, technical: Boolean) {
     FormatRow(formatTitle(format, language, tiers), format, links.selectedFormat?.id == format.id,
-        !links.confirmed, language, formatHint(format), if (technical) moreFormatDetail(format, language) else null,
+        !links.confirmed, language, formatHint(format, links.formatOptions), if (technical) moreFormatDetail(format, language) else null,
         badge = if (links.lastUsedBadge?.id == format.id) stringResource(R.string.last_used) else null) {
         links.selectFormat(format.id)
     }
@@ -427,14 +420,9 @@ private fun formatTitle(format: Format, language: String, tiers: Map<String, For
 }
 
 @Composable
-private fun formatHint(format: Format): String {
-    val resource = when {
-        format.animatedGif -> R.string.video_animated_gif_hint
-        format.hasVideo -> FormatChoices.quality(format)?.let { FormatChoices.tier(it).hint } ?: R.string.video_unknown_quality_hint
-        format.conversion != null -> R.string.mp3_hint
-        else -> return ""
-    }
-    return stringResource(resource)
+private fun formatHint(format: Format, formats: List<Format>): String {
+    if (!format.hasVideo && format.conversion == null) return ""
+    return stringResource(FormatChoices.hint(format, formats))
 }
 
 /** Actual identifiers and codec/rate tokens stay LTR inside localized descriptions. */
@@ -443,7 +431,7 @@ private fun moreFormatDetail(format: Format, language: String): String = listOfN
     // File type and a short codec name or audio rate tell versions apart; ids, merge partners and video rates stay out (owner 2026-10-21).
     NezzelFormat.isolate(format.container.uppercase(java.util.Locale.ROOT)),
     FormatChoices.codecName(format)?.let(NezzelFormat::isolate),
-    FormatChoices.audioKbps(format)?.let { stringResource(R.string.format_kbps, NezzelFormat.isolate(NezzelFormat.count(it, language))) },
+    FormatChoices.audioKbps(format)?.let { NezzelFormat.isolate(stringResource(R.string.format_kbps, NezzelFormat.count(it, language))) },
 ).joinToString(stringResource(R.string.separator))
 
 /** Truthful copy per failure type; Try again only where a retry can succeed. */

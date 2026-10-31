@@ -61,8 +61,8 @@ class ActualMetadataTest {
             val found = map("""{"format_id":"source","ext":"$ext","vcodec":"${if (ext == "mp4") "h264" else "none"}","acodec":"$codec","abr":96}""")
             assertNotNull(found.formats.singleOrNull { it.id == "source" && it.conversion == null })
             val conversions = found.formats.filter { it.conversion != null }
-            assertEquals(3, conversions.size)
-            assertEquals(setOf(AudioConversion.MP3_128, AudioConversion.MP3_192, AudioConversion.MP3_320), conversions.map { it.conversion }.toSet())
+            assertEquals(2, conversions.size)
+            assertEquals(setOf(AudioConversion.MP3_128, AudioConversion.MP3_192), conversions.map { it.conversion }.toSet())
             for (row in conversions) {
                 assertEquals(ext, row.sourceContainer); assertEquals("source", row.sourceFormatId)
                 assertEquals("mp3", row.audioCodec); assertEquals(Size.Unknown, row.size)
@@ -82,7 +82,7 @@ class ActualMetadataTest {
         // Match complete protocol parts; a containing string is not evidence of the downloader.
         val regular = map("""{"format_id":"source","ext":"mp3","vcodec":"none","acodec":"mp3",
             "protocol":"https+not_websocket_frag"}""")
-        assertEquals(3, regular.formats.count { it.conversion != null })
+        assertEquals(2, regular.formats.count { it.conversion != null })
     }
     @Test fun liveStatusAloneBlocksConversionsOnRootAndSourceButKeepsOriginal() {
         val row = """{"format_id":"source","ext":"mp3","vcodec":"none","acodec":"mp3"%s}"""
@@ -93,7 +93,7 @@ class ActualMetadataTest {
             assertTrue(found.presets.none { it.preset == Preset.AUDIO_MP3 })
         }
         val regular = map(row.format(""), ",\"live_status\":\"not_live\"")
-        assertEquals(3, regular.formats.count { it.conversion != null })
+        assertEquals(2, regular.formats.count { it.conversion != null })
     }
     @Test fun liveDashPeriodsAndWebSocketKeepOriginalButOfferNoMp3Conversions() {
         val base = """{"format_id":"source","ext":"mp3","vcodec":"none","acodec":"mp3"%s}"""
@@ -105,5 +105,17 @@ class ActualMetadataTest {
             val found = map(base.format(extra))
             assertEquals(listOf("source"), found.formats.map { it.id })
         }
+    }
+
+    @Test fun mp3RatesNeverExceedTheSourceExceptTheMain192() {
+        for ((rate, expected) in listOf("49" to listOf(128, 192), "128" to listOf(128, 192), "192" to listOf(128, 192),
+            "319.9" to listOf(128, 192), "320" to listOf(128, 192, 320), "null" to listOf(128, 192))) {
+            val found = map("""{"format_id":"a","ext":"m4a","vcodec":"none","acodec":"aac","abr":$rate}""")
+            assertEquals(expected, found.formats.mapNotNull { it.conversion?.bitrateKbps }, "source rate $rate")
+            val preset = found.formats.single { it.id == found.presets.single { it.preset == Preset.AUDIO_MP3 }.formatId }
+            assertEquals(AudioConversion.MAIN, preset.conversion)
+        }
+        val muxed = map("""{"format_id":"v","ext":"mp4","vcodec":"h264","acodec":"aac","tbr":8000,"abr":49}""")
+        assertEquals(listOf(128, 192), muxed.formats.mapNotNull { it.conversion?.bitrateKbps })
     }
 }

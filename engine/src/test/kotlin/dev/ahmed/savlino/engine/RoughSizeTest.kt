@@ -15,17 +15,20 @@ class RoughSizeTest {
     @Test fun enforcedMp3ConversionEstimatesUseSelectedRateEvenForAlreadyMp3OrMuxedMp3() {
         for (rows in listOf(audio("\"filesize\":123456", "mp3", "mp3"),
             audio("\"filesize_approx\":123456", "mp3", "mp3"),
-            audio("\"abr\":96", "mp3", "mp3"),
-            video("\"tbr\":8000,\"filesize\":1000000,\"abr\":96", "mp3"),
+            audio("\"abr\":320", "mp3", "mp3"),
+            video("\"tbr\":8000,\"filesize\":1000000,\"abr\":320", "mp3"),
             video("\"tbr\":8000", "mp3"))) {
             val found = map(rows)
             val low = found.formats.single { it.conversion == AudioConversion.MP3_128 }
             val mid = found.formats.single { it.conversion == AudioConversion.MP3_192 }
-            val high = found.formats.single { it.conversion == AudioConversion.MP3_320 }
+            // 320 is offered only when the source itself is at least 320 kbps.
+            val high = found.formats.singleOrNull { it.conversion == AudioConversion.MP3_320 }
             assertEquals(168000L, found.roughSizeBytes[low.id])
             assertEquals(252000L, found.roughSizeBytes[mid.id])
-            assertEquals(420000L, found.roughSizeBytes[high.id])
-            assertEquals(Size.Unknown, low.size); assertEquals(Size.Unknown, mid.size); assertEquals(Size.Unknown, high.size)
+            assertEquals(Size.Unknown, low.size); assertEquals(Size.Unknown, mid.size)
+            if (high != null) {
+                assertEquals(420000L, found.roughSizeBytes[high.id]); assertEquals(Size.Unknown, high.size)
+            }
         }
     }
     @Test fun convertedSizeWithoutValidDurationStaysUnknownWhileNativeSizeSurvives() {
@@ -33,7 +36,7 @@ class RoughSizeTest {
             val found = map(audio("\"filesize\":123456", "mp3", "mp3"), "\"duration\":$duration")
             assertEquals(Size.Exact(123456), found.formats.single { it.id == "a1" }.size)
             val converted = found.formats.filter { it.conversion != null }
-            assertEquals(3, converted.size)
+            assertEquals(2, converted.size)
             for (row in converted) {
                 assertEquals(Size.Unknown, row.size)
                 assertFalse(found.roughSizeBytes.containsKey(row.id))

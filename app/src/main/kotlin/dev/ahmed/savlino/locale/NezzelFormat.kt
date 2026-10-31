@@ -28,6 +28,11 @@ object NezzelFormat {
         val minutes = seconds / 60
         return if (minutes < 60) "$minutes:$s" else "${minutes / 60}:${(minutes % 60).toString().padStart(2, '0')}:$s"
     }
+    /** Media metadata and playback use the nearest second, including minute/hour carries. */
+    fun durationMillis(millis: Long): String {
+        require(millis >= 0)
+        return duration(millis / 1000 + if (millis % 1000 >= 500) 1 else 0)
+    }
     fun percent(value: Int, language: String): String = "${number(value.coerceIn(0, 100).toDouble(), language, 0)}%"
     fun count(value: Int, language: String): String = number(value.toDouble(), language, 0)
     /** "Oct 12" / "12 أكتوبر", with Latin digits in every language. */

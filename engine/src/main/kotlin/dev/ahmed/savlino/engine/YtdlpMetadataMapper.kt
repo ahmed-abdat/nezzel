@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.ahmed.savlino.domain.*
 import org.jsoup.parser.Parser
+import kotlin.math.roundToLong
 
 internal class UnsupportedMetadataException(val emptyResult: Boolean = false) : Exception()
 
@@ -146,11 +147,17 @@ object YtdlpMetadataMapper {
         // These sources require fixups that infer the muxer from the staging extension.
         // Keep their actual rows, but do not offer a conversion with an unsafe filename recipe.
         val conversionMetadata = candidates.firstOrNull { it.first.id == conversionSource?.id }?.second
+        val audioRate = conversionMetadata?.finiteNumber("abr")?.takeIf { it > 0 }
+            ?: conversionSource?.takeIf { !it.hasVideo }?.bitrateKbps?.toDouble()
+        // Re-encoding cannot add quality: no rate above the source, except the main 192 (a 128 re-encode of a
+        // 128 AAC source loses audibly). Unknown source rate keeps 128 and 192.
+        val cap = maxOf(audioRate ?: 0.0, AudioConversion.MAIN.bitrateKbps.toDouble())
+        val conversions = AudioConversion.entries.filter { it.bitrateKbps <= cap }
         fun blocksConversion(node: JsonNode) = node.path("is_live").asBoolean(false) ||
             node.text("live_status") == "is_live" || node.path("is_dash_periods").asBoolean(false) ||
             node.text("protocol")?.split('+')?.contains("websocket_frag") == true
         if (!animatedGif && conversionSource != null && !blocksConversion(root) &&
-            conversionMetadata?.let(::blocksConversion) != true) for (conversion in AudioConversion.entries) {
+            conversionMetadata?.let(::blocksConversion) != true) for (conversion in conversions) {
             // Derived rows always retain an actual returned source ID; no invented selector.
             val id = "nezzel:mp3:${conversion.bitrateKbps}:${conversionSource.id}"
             if (raw.none { it.id == id }) rows += Format(id, "mp3", false, true,
@@ -184,7 +191,8 @@ object YtdlpMetadataMapper {
         playable.minWithOrNull(compareBy<Format> { bytes(it.size) ?: roughSizes[it.id] ?: Long.MAX_VALUE }.then(rank))
             ?.let { presets += PresetChoice(Preset.SMALL, it.id) }
         (aac ?: extractedM4a)?.let { presets += PresetChoice(Preset.AUDIO_M4A, it.id) }
-        rows.firstOrNull { it.conversion == AudioConversion.MAIN }
+        (rows.firstOrNull { it.conversion == AudioConversion.MAIN }
+            ?: rows.firstOrNull { it.conversion != null })
             ?.let { presets += PresetChoice(Preset.AUDIO_MP3, it.id) }
         val tiktok = root.text("extractor_key") == "TikTok"
         return Inspection(source, engineVersion, rows, presets,
@@ -192,7 +200,7 @@ object YtdlpMetadataMapper {
                 ?.let { if (root.text("extractor_key")?.startsWith("Facebook") == true) withoutFacebookCounts(it) else it },
             uploader = displayText(root.text("uploader"), 120, tiktok) ?: displayText(root.text("channel"), 120, tiktok),
             durationSeconds = root.get("duration")?.takeIf { it.isNumber }?.doubleValue()
-                ?.takeIf { it.isFinite() && it >= 1 && it <= PreviewMetadata.MAX_DURATION_SECONDS }?.toLong(),
+                ?.takeIf { it.isFinite() && it >= 1 && it <= PreviewMetadata.MAX_DURATION_SECONDS }?.roundToLong(),
             thumbnailUrl = thumbnail(root),
             roughSizeBytes = roughSizes)
     }

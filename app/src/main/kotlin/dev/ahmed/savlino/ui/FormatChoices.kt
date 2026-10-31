@@ -7,6 +7,7 @@ import dev.ahmed.savlino.domain.Format
 import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.domain.VideoCodecs
 import dev.ahmed.savlino.domain.VideoQuality
+import dev.ahmed.savlino.locale.NezzelFormat
 
 /**
  * The list people choose from: one real rendition per picture quality, then plain audio choices.
@@ -29,6 +30,16 @@ internal object FormatChoices {
     }
 
     fun tier(quality: Int): Tier = Tier.entries.first { quality >= it.from }
+
+    /** Both lists describe the rendition, not the preset that picked it. */
+    @StringRes fun hint(format: Format, formats: List<Format>): Int = when {
+        format.animatedGif -> R.string.video_animated_gif_hint
+        format.hasVideo -> quality(format)?.let { side ->
+            if (formats.filter { it.hasVideo && !it.animatedGif }.all { quality(it)?.let { it <= side } == true })
+                R.string.preset_best else tier(side).hint
+        } ?: R.string.video_unknown_quality_hint
+        else -> R.string.mp3_hint
+    }
 
     /**
      * The tier name each video row shows in one list. Two qualities that share a tier (540p and 480p are
@@ -61,7 +72,7 @@ internal object FormatChoices {
         // One audio choice as the site sent it (the best AAC/M4A), then one MP3.
         val m4a = audio.firstOrNull { it.id in preferred && it.conversion == null } ?: audio.filter { it.conversion == null && it.container == "m4a" }
             .maxWithOrNull(compareBy<Format> { sizeRank(it.size) }.thenBy { it.bitrateKbps ?: 0 })
-        // One MP3: 192 kbps, since a 128 re-encode of a 128 AAC source loses audibly; 128 and 320 sit in Other options.
+        // Prefer 192 kbps when the source supports it; otherwise keep the offered fallback.
         val mp3 = audio.firstOrNull { it.conversion == AudioConversion.MAIN }
             ?: audio.filter { it.conversion != null }.minByOrNull { it.conversion!!.bitrateKbps }
         // A site with no M4A still keeps one audio-only row of whatever it does offer.
@@ -78,8 +89,9 @@ internal object FormatChoices {
     fun audioKbps(format: Format): Int? = if (format.hasVideo) null else format.conversion?.bitrateKbps ?: format.bitrateKbps
 
     /** Rows with the same key look identical in "Other versions": title, file type, codec or rate, and size. */
-    fun shownKey(format: Format, roughBytes: Long?): List<Any?> =
-        listOf(labelKey(format), format.container, codecName(format), audioKbps(format), format.size, roughBytes, format.expectsNoSound)
+    fun shownKey(format: Format): List<Any?> =
+        listOf(labelKey(format), format.container.uppercase(java.util.Locale.ROOT), codecName(format), audioKbps(format),
+            exactBytes(format)?.let { NezzelFormat.size(it, "en") }, format.sourceHasNoSound && !format.animatedGif)
 
     /**
      * A fresh read still offers exactly what the user picked on an older sheet: same ids (audio track, dub and

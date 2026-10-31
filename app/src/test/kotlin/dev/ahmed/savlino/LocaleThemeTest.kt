@@ -127,6 +127,12 @@ class LocaleThemeTest {
         assertEquals("1:02:15", NezzelFormat.duration(3735))
         assertEquals("63%", NezzelFormat.percent(63, "ar"))
     }
+    @Test fun mediaDurationsRoundToNearestSecondAcrossMinuteAndHourBoundaries() {
+        for ((millis, label) in listOf(18_400L to "0:18", 18_500L to "0:19", 634_900L to "10:35",
+            59_500L to "1:00", 3_599_500L to "1:00:00")) {
+            assertEquals(label, NezzelFormat.durationMillis(millis))
+        }
+    }
     @Test fun dismissalPersistenceKeepsNewestFiftyInOrderAcrossStores() {
         var p = prefs()
         repeat(55) { index ->

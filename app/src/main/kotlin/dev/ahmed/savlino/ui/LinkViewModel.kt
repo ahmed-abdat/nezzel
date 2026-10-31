@@ -407,8 +407,8 @@ class LinkViewModel(
     /** Every other actual rendition, one tap away under "Other versions"; a row that would look exactly like one already shown is left out. */
     val otherFormats by derivedStateOf {
         val shown = primaryFormats.mapTo(HashSet()) { it.id }
-        val looks = primaryFormats.mapTo(HashSet()) { FormatChoices.shownKey(it, roughSizeBytes(it)) }
-        formatOptions.filter { it.id !in shown && looks.add(FormatChoices.shownKey(it, roughSizeBytes(it))) }
+        val looks = primaryFormats.mapTo(HashSet()) { FormatChoices.shownKey(it) }
+        formatOptions.filter { it.id !in shown && looks.add(FormatChoices.shownKey(it)) }
     }
     fun roughSizeBytes(format: Format): Long? = inspection?.roughSizeBytes?.get(format.id)
     /**

@@ -433,7 +433,7 @@ private fun rememberDuration(item: StatusItem, media: StatusMedia): Long? =
 @Composable
 private fun describe(item: StatusItem, duration: Long?): String = listOfNotNull(
     stringResource(if (item.isVideo) R.string.statuses_video else R.string.statuses_photo),
-    duration?.let { NezzelFormat.isolate(NezzelFormat.duration(it / 1000)) },
+    duration?.let { NezzelFormat.isolate(NezzelFormat.durationMillis(it)) },
     stringResource(R.string.statuses_saved).takeIf { item.saved },
     stringResource(R.string.statuses_new).takeIf { item.isNew },
 ).joinToString(stringResource(R.string.separator))
@@ -475,7 +475,7 @@ private fun StatusTile(item: StatusItem, media: StatusMedia, selecting: Boolean,
             if (selecting && pickable) SelectCircle(selected, Modifier.align(Alignment.TopEnd).padding(Space.xs))
             duration?.let {
                 TileLabel(Modifier.align(Alignment.BottomStart)) {
-                    Text(NezzelFormat.duration(it / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+                    Text(NezzelFormat.durationMillis(it), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
                 }
             }
             // A saved mark on the picture (an icon and a word, never a check circle, so it can't read as selected).

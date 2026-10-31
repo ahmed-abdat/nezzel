@@ -37,7 +37,8 @@ class ActualFormatsTest {
     private val audio = Format("audio-one", "m4a", false, true, audioCodec = "aac", bitrateKbps = 128)
     // An exact twin of the first video (same quality, type, codec and size) is left out of Other versions.
     private val twin = first.copy(id = "video-twin", sourceFormatId = "video-twin")
-    private val rows = listOf(first, second, twin, audio, audio.copy(id = "audio-two", bitrateKbps = 96, sourceFormatId = "audio-two"),
+    private val estimatedTwin = twin.copy(id = "video-estimate", size = Size.Estimated(999_999))
+    private val rows = listOf(first, second, twin, estimatedTwin, audio, audio.copy(id = "audio-two", bitrateKbps = 96, sourceFormatId = "audio-two"),
         Format("convert128", "mp3", false, true, conversion = AudioConversion.MP3_128, sourceFormatId = audio.id, sourceContainer = "m4a"),
         Format("convert320", "mp3", false, true, conversion = AudioConversion.MP3_320, sourceFormatId = audio.id, sourceContainer = "m4a"))
     private fun renderAndChoose() {
@@ -45,7 +46,7 @@ class ActualFormatsTest {
         val context = RuntimeEnvironment.getApplication()
         val language = context.resources.configuration.locales[0].language
         val fake = FakeEngine(InspectResult.Success(Inspection(source, "v1", rows,
-            listOf(PresetChoice(Preset.BALANCED, first.id)))))
+            listOf(PresetChoice(Preset.BALANCED, first.id)), roughSizeBytes = mapOf(twin.id to 123_456L, estimatedTwin.id to 999_999L))))
         var inspections = 0
         val counting = object : EngineAdapter by fake {
             override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
@@ -68,13 +69,16 @@ class ActualFormatsTest {
                 .performScrollTo().performClick()
             compose.onAllNodes(isSelectable()).assertCountEquals(6)
             val descriptions = compose.onAllNodes(isSelectable()).fetchSemanticsNodes().map { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().joinToString(" ") { it.text }
+                node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().joinToString(" ")
             }
             assertEquals("Every rendition must have a distinct description", 6, descriptions.toSet().size)
             // Plain facts only: file type plus a short codec name or audio rate; never ids, merge partners or video rates.
             compose.onNode(isSelectable() and hasText("MP4", substring = true) and hasText("AV1", substring = true)).assertExists()
             compose.onNode(isSelectable() and hasText("M4A", substring = true) and hasText("96", substring = true)).assertExists()
-            listOf("video-two", "audio-two", "video-twin", "1000", "av01").forEach { hidden ->
+            val rate = context.getString(R.string.format_kbps, NezzelFormat.count(96, language))
+            compose.onNodeWithText("\u2066$rate\u2069", substring = true, useUnmergedTree = true).assertExists()
+            compose.onNode(isSelectable() and hasContentDescription("\u2066$rate\u2069", substring = true)).assertExists()
+            listOf("video-two", "audio-two", "video-twin", "video-estimate", "1000", "av01").forEach { hidden ->
                 compose.onAllNodes(hasText(hidden, substring = true), useUnmergedTree = true).assertCountEquals(0)
             }
             val secondRow = compose.onNode(isSelectable() and hasText("AV1", substring = true))
@@ -114,6 +118,35 @@ class ActualFormatsTest {
             assertNull(vm.takeConfirmedCommand()); assertTrue(fake.commands.isEmpty()); assertEquals(1, inspections)
         } finally { controller.pause().stop().destroy(); RuntimeEnvironment.setFontScale(1f) }
     }
+    private fun consistentHint(top: Int, chosen: Int, hint: Int) {
+        val context = RuntimeEnvironment.getApplication()
+        val language = context.resources.configuration.locales[0].language
+        val picked = first.copy(id = "picked", height = chosen)
+        val formats = if (top == chosen) listOf(picked) else listOf(picked, first.copy(id = "top", height = top, videoCodec = "av01"))
+        val vm = LinkViewModel(SavedStateHandle(), engine = FakeEngine(InspectResult.Success(
+            Inspection(source, "v1", formats, listOf(PresetChoice(Preset.BEST, picked.id))))), currentEngineVersion = { "v1" })
+        vm.edit(source.link.rawUrl); vm.checkLink(); shadowOf(Looper.getMainLooper()).idle()
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        try {
+            controller.get().setContent { NezzelTheme(ThemePref.Light, false) {
+                if (vm.moreFormats) MoreFormatsScreen(vm, language) else OptionsSheetContent(vm, language, {})
+            } }
+            compose.waitForIdle()
+            val row = isSelectable() and hasText("${chosen}p", substring = true)
+            compose.onNode(row and hasContentDescription(context.getString(hint), substring = true)).assertExists()
+            if (top != chosen) compose.onNode(row and hasContentDescription(context.getString(R.string.preset_best), substring = true)).assertDoesNotExist()
+            vm.showMoreFormats(); compose.waitForIdle()
+            compose.onNode(row and hasContentDescription(context.getString(hint), substring = true)).assertExists()
+            if (top != chosen) compose.onNode(isSelectable() and hasText("${top}p", substring = true) and
+                hasContentDescription(context.getString(R.string.preset_best), substring = true)).assertExists()
+        } finally { controller.pause().stop().destroy() }
+    }
+    @Test fun cappedBestHasATrueHintOnBothSurfaces() = consistentHint(2160, 1080, R.string.quality_full_hd_hint)
+    @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi")
+    fun lowOnlyBestHasTheSameHintOnBothSurfaces() = consistentHint(240, 240, R.string.preset_best)
+    @Test @Config(qualifiers = "fr-w320dp-h1600dp-mdpi")
+    fun frenchCappedBestHasATrueHintOnBothSurfaces() = consistentHint(2160, 1080, R.string.quality_full_hd_hint)
+
     private fun conversionSizeLabel(rough: Long?) {
         val context = RuntimeEnvironment.getApplication()
         val language = context.resources.configuration.locales[0].language

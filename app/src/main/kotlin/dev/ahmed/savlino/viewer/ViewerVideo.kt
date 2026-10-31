@@ -262,7 +262,7 @@ internal fun ViewerVideo(item: ViewerItem, current: Boolean, owner: PlaybackCoor
     val ring = loading && slow
     val resume: @Composable (Modifier) -> Unit = { modifier ->
         if (resumedAt > 0 && showResume) Row(modifier.padding(horizontal = Space.s), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.viewer_resumed_at, "\u2066${NezzelFormat.duration(resumedAt / 1000)}\u2069"), Modifier.weight(1f, fill = false),
+            Text(stringResource(R.string.viewer_resumed_at, "\u2066${NezzelFormat.durationMillis(resumedAt)}\u2069"), Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             TextButton({ controls.touched(); owner.startOver() }, Modifier.heightIn(min = 48.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = colors.accent)) { Text(stringResource(R.string.viewer_start_over)) }
@@ -596,10 +596,10 @@ private fun RowScope.TimeRow(times: VideoTimes, pinned: () -> Long?, seekable: B
                              style: androidx.compose.ui.text.TextStyle, onChange: (Float) -> Unit, onDone: () -> Unit) {
     val duration = times.duration
     val shown = pinned() ?: times.position
-    Text(NezzelFormat.duration(shown / 1000), style = style)
+    Text(NezzelFormat.durationMillis(shown), style = style)
     SeekBar(shown.coerceAtMost(duration.coerceAtLeast(0)).toFloat(), duration, seekable, colors,
         Modifier.weight(1f).padding(horizontal = Space.s), onChange, onDone)
-    Text(duration.takeIf { it > 0 }?.let { NezzelFormat.duration(it / 1000) } ?: "", style = style, color = Color.White.copy(alpha = .72f))
+    Text(duration.takeIf { it > 0 }?.let { NezzelFormat.durationMillis(it) } ?: "", style = style, color = Color.White.copy(alpha = .72f))
 }
 
 /** A thin teal line with a round thumb: progress reads at a glance on black, played part bright, the rest dim. */

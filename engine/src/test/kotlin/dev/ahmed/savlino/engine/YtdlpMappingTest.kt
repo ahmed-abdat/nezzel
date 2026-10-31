@@ -101,7 +101,7 @@ class YtdlpMappingTest {
         assertEquals("137", inspection.presets.single { it.preset == Preset.BEST }.formatId)
         assertEquals("136", inspection.presets.single { it.preset == Preset.BALANCED }.formatId)
         assertEquals("18", inspection.presets.single { it.preset == Preset.SMALL }.formatId)
-        val mp3 = inspection.formats.single { it.conversion == AudioConversion.MP3_320 }
+        val mp3 = inspection.formats.single { it.conversion == AudioConversion.MP3_192 }
         assertEquals("140", mp3.sourceFormatId); assertEquals(Size.Unknown, mp3.size)
     }
     @Test fun presetsPreferPlainAudioOverHigherBitrateDrcCounterparts() {
@@ -137,7 +137,7 @@ class YtdlpMappingTest {
         """)
         assertEquals("original", inspection.formats.single { it.id == "video" }.audioFormatId)
         assertEquals("original", inspection.presets.single { it.preset == Preset.AUDIO_M4A }.formatId)
-        assertEquals(listOf("original", "original", "original"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
+        assertEquals(listOf("original", "original"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
         // owner 2026-10-18: auto-dubbed tracks (negative language_preference) hidden; app has no language picker.
         assertEquals(setOf("original"), inspection.formats.filter { !it.hasVideo && it.conversion == null }.map { it.id }.toSet())
     }
@@ -291,7 +291,7 @@ class YtdlpMappingTest {
             {"format_id":"original-opus","ext":"webm","vcodec":"none","acodec":"opus","abr":96,"language_preference":10}
         """, "webm")
         assertEquals("original-opus", inspection.formats.single { it.id == "video" }.audioFormatId)
-        assertEquals(listOf("original-opus", "original-opus", "original-opus"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
+        assertEquals(listOf("original-opus", "original-opus"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
     }
     @Test fun muxedPreferredAacFeedsBothM4aAndMp3Extraction() {
         val inspection = YtdlpMetadataMapper.map("""{"formats":[
@@ -299,7 +299,7 @@ class YtdlpMappingTest {
             {"format_id":"original-muxed","ext":"mp4","vcodec":"h264","acodec":"aac","height":480,"language_preference":10}
         ]}""", source, "v1")
         assertEquals("original-muxed", inspection.formats.single { !it.hasVideo && it.container == "m4a" }.sourceFormatId)
-        assertEquals(listOf("original-muxed", "original-muxed", "original-muxed"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
+        assertEquals(listOf("original-muxed", "original-muxed"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
     }
     @Test fun muxedSourcesWithoutPreferenceKeepFirstRowEvenWhenSecondHasHigherBitrate() {
         for (codec in listOf("aac", "opus")) {
@@ -307,7 +307,7 @@ class YtdlpMappingTest {
                 {"format_id":"first","ext":"mp4","vcodec":"h264","acodec":"$codec","height":480,"tbr":100},
                 {"format_id":"second","ext":"mp4","vcodec":"h264","acodec":"$codec","height":720,"tbr":999}
             ]}""", source, "v1")
-            assertEquals(listOf("first", "first", "first"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
+            assertEquals(listOf("first", "first"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
             if (codec == "aac") assertEquals("first", inspection.formats.single { !it.hasVideo && it.container == "m4a" }.sourceFormatId)
         }
     }
@@ -316,7 +316,7 @@ class YtdlpMappingTest {
             {"format_id":"dub","ext":"webm","vcodec":"vp9","acodec":"opus","height":720,"language_preference":-1},
             {"format_id":"original","ext":"webm","vcodec":"vp9","acodec":"opus","height":480,"language_preference":10}
         ]}""", source, "v1")
-        assertEquals(listOf("original", "original", "original"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
+        assertEquals(listOf("original", "original"), inspection.formats.filter { it.conversion != null }.map { it.sourceFormatId })
     }
     @Test fun sourceHttpFailuresAndGenericDownloadFailuresAreNotConnectivityErrors() {
         val cases = listOf(
@@ -458,7 +458,9 @@ class YtdlpMappingTest {
     @Test fun audioConversionsAreExplicitAndM4aIsNotTranscoded() {
         val dir = temp.newFolder().canonicalFile
         val audio = map("audio").formats
-        for (conversion in AudioConversion.entries) {
+        // The 128 kbps source offers 128 and 192 only; 320 would be an upsample.
+        assertEquals(setOf(AudioConversion.MP3_128, AudioConversion.MP3_192), audio.mapNotNull { it.conversion }.toSet())
+        for (conversion in audio.mapNotNull { it.conversion }) {
             val args = YtdlpCommand.download(command(audio.single { it.conversion == conversion }), dir)
             assertEquals("audio-128", args[args.indexOf("-f") + 1])
             assertEquals(mp3SourceArgs(dir), args.subList(args.indexOf("--write-thumbnail") - 2, args.indexOf("--")))

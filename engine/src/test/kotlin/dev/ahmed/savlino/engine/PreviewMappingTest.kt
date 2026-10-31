@@ -10,7 +10,10 @@ class PreviewMappingTest {
         val result = map(""""title":"عنوان 🌊","fulltitle":"fallback","uploader":"قناة","channel":"fallback",
             "duration":225.9,"thumbnail":"https://i.ytimg.com/preview.jpg"""")
         assertEquals("عنوان 🌊", result.title); assertEquals("قناة", result.uploader)
-        assertEquals(225L, result.durationSeconds); assertEquals("https://i.ytimg.com/preview.jpg", result.thumbnailUrl)
+        assertEquals(226L, result.durationSeconds); assertEquals("https://i.ytimg.com/preview.jpg", result.thumbnailUrl)
+        for ((seconds, expected) in listOf(18.4 to 18L, 18.5 to 19L, 634.9 to 635L, 59.5 to 60L)) {
+            assertEquals(expected, map("\"duration\":$seconds").durationSeconds)
+        }
     }
     @Test fun htmlEntitiesInTitleAndUploaderAreDecodedOnceAndStillCleaned() {
         val result = map(""""title":"commence!! &#128074;&#128075; | Beast Camp Training",

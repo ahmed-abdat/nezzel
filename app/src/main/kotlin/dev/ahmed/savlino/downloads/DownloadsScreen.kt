@@ -831,7 +831,7 @@ fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose
                     Row(Modifier.padding(horizontal = Space.xs), verticalAlignment = Alignment.CenterVertically) {
                         // Only over a cover: without one the centred music icon already says "audio".
                         if (item.kind == SavedMediaKind.AUDIO && loaded != null) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(12.dp).padding(end = 2.dp))
-                        Text(NezzelFormat.duration(duration / 1000), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
+                        Text(NezzelFormat.durationMillis(duration), style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr))
                     }
                 }
             }

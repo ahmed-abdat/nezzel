@@ -119,12 +119,12 @@ class SavedImageUiTest {
         assertEquals(listOf(NezzelFormat.isolate(context.getString(R.string.saved_size_unknown))), text)
     }
     @Test fun audiovisualMetadataAndDurationRemainVisible() = render({
-        Column { Text(mediaMeta(video, "en")); MediaThumbnail(video, Modifier.size(112.dp, 63.dp)); Text(mediaMeta(audio, "en")) }
+        Column { Text(mediaMeta(video, "en")); MediaThumbnail(video.copy(durationMillis = 18_500), Modifier.size(112.dp, 63.dp)); Text(mediaMeta(audio, "en")) }
     }) { a ->
         val text = texts(nodes(a))
         assertTrue(text.toString(), text.any { it.contains("720p") })
         assertTrue(text.toString(), text.any { it.contains("Audio") && !it.contains("kbps") && !it.contains("M4A") })
-        assertTrue(text.toString(), text.contains("1:24"))
+        assertTrue(text.toString(), text.contains("0:19"))
     }
     @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi")
     fun savedAudioSaysAudioInArabic() = render({ Text(mediaMeta(audio, "ar")) }) { a ->
