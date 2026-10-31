@@ -156,7 +156,17 @@ open class AudioPlaybackService : MediaSessionService() {
         super.onStartCommand(intent, flags, startId)
         return START_NOT_STICKY
     }
-    override fun onTaskRemoved(rootIntent: Intent?) { shutdown() }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // The share sheet removes its own task on handoff/dismissal. That is not a dismissal of the
+        // app's playback task; its Open-with alias has the same affinity as the sheet itself.
+        val root = rootIntent?.component
+        if (root?.packageName == packageName) {
+            val affinity = try { packageManager.getActivityInfo(root, 0).taskAffinity }
+                catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
+            if (affinity == "$packageName.share") return
+        }
+        shutdown()
+    }
     internal fun foregroundChanged(foreground: Boolean) { inForeground = foreground; updateBackgroundPolicy() }
     private fun updateBackgroundPolicy() {
         if (stopped) return

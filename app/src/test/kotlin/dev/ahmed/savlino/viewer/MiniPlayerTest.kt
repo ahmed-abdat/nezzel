@@ -86,7 +86,7 @@ class MiniPlayerTest {
     private var mounted by mutableStateOf(true)
     private var taps = 0
 
-    private fun show(reduced: Boolean = false, dark: Boolean = false, tabs: Boolean = true) {
+    private fun show(reduced: Boolean = false, dark: Boolean = false, tabs: Boolean = true, connection: AudioConnection = audio) {
         activity.setContent {
             NezzelTheme(if (dark) ThemePref.Dark else ThemePref.Light, false) {
                 CompositionLocalProvider(dev.ahmed.savlino.ui.theme.LocalReducedMotion provides reduced) {
@@ -96,7 +96,7 @@ class MiniPlayerTest {
                         val content: @Composable () -> Unit = {
                             Button({ taps++ }, Modifier.fillMaxSize()) { Text("Below") }
                             CompositionLocalProvider(LocalMediaPictures provides MediaPictures { _, _, _ -> null },
-                                LocalPlaybackEnvironment provides playback, LocalAudioConnection provides { audio }) {
+                                LocalPlaybackEnvironment provides playback, LocalAudioConnection provides { connection }) {
                                 if (open && mounted) MediaViewer(items, start, "en", { open = false }, onShare = {}, onOpenWith = {},
                                     library = library ?: items.mapTo(HashSet()) { it.uri })
                             }
@@ -619,6 +619,57 @@ class MiniPlayerTest {
         compose.runOnIdle { host.yieldToApp() }; advance(300)
         assertFalse(open)
         assertFalse(host.open)
+    }
+
+    @Test fun aShareHandoffKeepsLateAttachedMusicWhenTheSheetTaskIsRemoved() {
+        val serviceController = Robolectric.buildService(dev.ahmed.savlino.playback.TestAudioService::class.java).create()
+        val service = serviceController.get()
+        var attach: (() -> Unit)? = null
+        var connected = false
+        val connection = object : AudioConnection {
+            override fun open(item: ViewerItem, onPlayer: (Player) -> Unit, onFailure: () -> Unit) {
+                // MediaController connects after the viewer's initial composition on a phone.
+                attach = {
+                    connected = true
+                    service.playbackSession!!.player.let { player ->
+                        player.setMediaItem(MediaItem.fromUri(item.uri))
+                        onPlayer(player)
+                        player.prepare()
+                    }
+                }
+            }
+            override fun close() { if (connected) { connected = false; service.shutdown() } }
+        }
+        try {
+            show(connection = connection); open = true; advance(100)
+            assertNotNull(attach)
+            assertNull("The first frame has no attached player", host.mini!!.owner.player.value)
+            compose.runOnIdle { attach!!.invoke() }
+            playback.audioState.value = PlaybackState.Ready; advance(300)
+            val session = service.playbackSession!!
+            service.addSession(session)
+            val player = session.player
+            assertTrue(player.isPlaying)
+            collapse()
+            compose.runOnIdle { host.yieldToApp() }; advance(300)
+            assertTrue(host.open)
+            assertTrue(placed(MINI_PLAYER_TAG))
+            // Both handoff buttons finishAndRemoveTask(): Android notifies the running service too.
+            compose.runOnIdle {
+                service.onTaskRemoved(android.content.Intent(activity, dev.ahmed.savlino.ShareSheetActivity::class.java)
+                    .setAction(android.content.Intent.ACTION_SEND).setType("text/plain"))
+            }
+            advance(300)
+            assertFalse("Removing the share task must not release the music", service.recording.released)
+            assertSame(session, service.playbackSession)
+            assertTrue(player.isPlaying)
+            assertTrue(host.open)
+            assertTrue(host.collapsed)
+            assertTrue(placed(MINI_PLAYER_TAG))
+            compose.runOnIdle { service.onTaskRemoved(android.content.Intent(activity, dev.ahmed.savlino.MainActivity::class.java)) }
+            assertTrue("Dismissing the main task still releases playback", service.recording.released)
+            assertNull(service.playbackSession)
+        } finally { serviceController.destroy() }
     }
 
     /** What the Downloads list does on a tap: tells the host, then opens the file. */
