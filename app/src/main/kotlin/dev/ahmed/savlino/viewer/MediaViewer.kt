@@ -83,17 +83,19 @@ fun MediaViewer(items: List<ViewerItem>, start: Int, language: String, onClose: 
     val host = LocalViewerHost.current
     // Tests and captures without the app host draw the viewer where it is composed.
     if (host == null) { if (items.isNotEmpty()) ViewerScreen(items, start, language, onClose, onShare, onOpenWith, actions); return }
+    // These three share one restore slot and are handed back in order: all of them before any return, or a restore
+    // with an empty list (library not loaded yet) leaves `shown` for the next viewer's `id` (field crash, 0.5.2-0.5.4).
     val id = androidx.compose.runtime.saveable.rememberSaveable { java.util.UUID.randomUUID().toString() }
+    // A file tapped in the screen while its music sits in the bar: the music playing there just opens again; any other
+    // file opens in its place, full screen (a new page, so the music stops).
+    var shown by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(start) }
+    var turn by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(0) }
     val request = remember(id) { ViewerRequest(id) }
     // The file playing in the bar was deleted: the bar and its music go with it. A filter or search that only hides it doesn't.
     val playing = host.mini?.item?.uri
     if (playing != null && library != null && playing !in library && host.collapsed && host.request === request) SideEffect { host.close() }
     if (items.isEmpty()) return
     val locals = currentCompositionLocalContext
-    // A file tapped in the screen while its music sits in the bar: the music playing there just opens again; any other
-    // file opens in its place, full screen (a new page, so the music stops).
-    var shown by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(start) }
-    var turn by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableIntStateOf(0) }
     // A filter or search that hides the music in the bar leaves the viewer's own list as it was, so its page stays; the
     // screen's list applies again once the song shows, nothing plays, or a tap opens another file.
     val kept = remember(id) { KeptPages(items, turn) }

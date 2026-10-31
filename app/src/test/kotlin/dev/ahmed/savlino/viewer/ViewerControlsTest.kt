@@ -506,6 +506,36 @@ class ViewerControlsTest {
         node(R.string.viewer_speed).assertTextEquals("1.25×")
     }
 
+    @Test fun restoredEmptyLibraryCanCloseAndReopenTheViewer() {
+        controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+        playback = PlaybackEnvironment(activity, PlayerFactory { _, _ -> ViewerTestPlayer() }, sizeOf = { 10L })
+        val saved = (1..3).map { n -> dev.ahmed.savlino.downloads.SavedMedia(
+            Uri.parse("content://media/external/images/$n"), "$n.jpg", "$n", "image/jpeg", null, 0, null, null, null) }
+        var library by mutableStateOf(saved)
+        fun content() {
+            activity.setContent {
+                NezzelTheme(ThemePref.Dark, false) {
+                    ViewerHost {
+                        CompositionLocalProvider(LocalMediaPictures provides pictures, LocalPlaybackEnvironment provides playback) {
+                            if (open) dev.ahmed.savlino.downloads.LibraryViewer(library, library, saved[1].uri.toString(),
+                                "en", { open = false }, {}, {})
+                        }
+                    }
+                }
+            }
+            compose.waitForIdle()
+        }
+        content()
+        compose.onNodeWithContentDescription(text(R.string.viewer_image_n, "2", "3")).assertExists()
+        controller.recreate()
+        library = emptyList()
+        content()
+        assertFalse("The restored library has not loaded yet, so its viewer closes", open)
+        compose.runOnIdle { library = saved; open = true }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(text(R.string.viewer_image_n, "2", "3")).assertExists()
+    }
+
     @Test fun anotherFileStartsAtNormalSpeed() {
         val two = listOf(video(1), video(2))
         show(two, 0)
