@@ -1,0 +1,6 @@
+0.5.4
+• Search YouTube right from Home: type words instead of a link
+• Music keeps playing in the mini player when you share a link to Nezzel
+• If the network drops while a download gets ready, it waits instead of failing
+• Statuses save into the folder you chose in Settings
+• Photo fixes: Pinterest pins, AVIF images, and previews keep their real shape

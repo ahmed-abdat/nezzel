@@ -4,6 +4,35 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.4] - 2026-10-31
+
+### Added
+
+- Type words on Home to search YouTube, then open a result's download options.
+- Share a file to WhatsApp from the viewer. The next audio file plays when one ends.
+- Playlists and many links at once can be saved as Small or MP3. A photo carousel can save only its sound.
+- A video with no sound at all says No sound.
+
+### Changed
+
+- Statuses save into the folder you chose in Settings, like every other download.
+- A download paused for over a day shows as failed, with Try again.
+- A playlist card says when some items used another quality or MP3.
+- Quality names say what you really get, and MP3 never goes above what the source has (except the usual 192 kbps).
+- Saved files share one menu on Home, and a failed download offers Change quality.
+- Match wallpaper colors follows the phone's own palette on Samsung too.
+
+### Fixed
+
+- Music keeps playing in the mini player when you share a link to Nezzel.
+- Losing the network while a download is still getting ready now waits for it to come back.
+- An always-on VPN with no network under it counts as offline, so downloads wait.
+- Photos keep their real shape in the preview. Pinterest photo pins save again, full size. AVIF images are recognised.
+- Saving a photo still works after you share another one.
+- Removing a failed download no longer leaves a half-saved file behind.
+- Opening the keyboard on Home no longer pushes the page under the status bar.
+- Clearer messages for a TikTok post blocked in your region and a Reddit post that links to a private video or an article.
+
 ## [0.5.3] - 2026-10-29
 
 ### Added

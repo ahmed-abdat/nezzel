@@ -1,0 +1,6 @@
+0.5.4
+• Cherchez sur YouTube depuis l’accueil : tapez des mots au lieu d’un lien
+• La musique continue dans le mini-lecteur quand vous partagez un lien vers Nezzel
+• Si le réseau coupe pendant la préparation d’un téléchargement, il attend au lieu d’échouer
+• Les statuts s’enregistrent dans le dossier choisi dans les réglages
+• Photos : épingles Pinterest, images AVIF, et l’aperçu garde la vraie forme de la photo
