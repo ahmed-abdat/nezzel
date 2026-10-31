@@ -1,10 +1,13 @@
 package dev.ahmed.savlino.update
 
+import android.app.Activity
 import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.work.ListenableWorker
 import androidx.work.WorkManager
+import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import dev.ahmed.savlino.locale.AppPreferences
 import kotlinx.coroutines.*
@@ -34,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowPackageInstaller
+import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], application = Application::class)
@@ -65,7 +69,7 @@ class AppUpdatesTest {
         assertTrue(AppPreferences(context).helpImprove)
         assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork(AppUpdates.WORK).get().any { !it.state.isFinished })
     }
-    @Test fun schedulingUpdatesExistingPeriodToTwelveHours() {
+    @Test fun schedulingUpdatesExistingPeriodToSixHours() {
         val updates = AppUpdates(production, scope)
         val work = WorkManager.getInstance(context)
         val old = androidx.work.PeriodicWorkRequestBuilder<AppUpdateWorker>(24, java.util.concurrent.TimeUnit.HOURS)
@@ -74,24 +78,56 @@ class AppUpdatesTest {
         updates.setAutomatic(true)
         val updated = work.getWorkInfosForUniqueWork(AppUpdates.WORK).get().single { !it.state.isFinished }
         assertEquals(old.id, updated.id)
-        assertTrue(updated.initialDelayMillis in 21_600_000L..43_200_000L)
-        assertEquals(43_200_000L, updated.periodicityInfo!!.repeatIntervalMillis)
+        assertTrue(updated.initialDelayMillis in 0L..1_800_000L)
+        assertEquals(21_600_000L, updated.periodicityInfo!!.repeatIntervalMillis)
         assertEquals(androidx.work.NetworkType.CONNECTED, updated.constraints.requiredNetworkType)
         assertTrue(updated.constraints.requiresBatteryNotLow())
     }
-    @Test fun sixHourSuccessGateChecksOnlyWhenOlder() = runBlocking {
+    @Test fun fiveHourSuccessGateAllowsEverySixHourPeriodicCheck() = runBlocking {
         var now = 100_000_000L
         var requests = 0
         val updates = AppUpdates(production, scope, { now }) { object : UpdateHttp("test") {
             override suspend fun manifest(): ByteArray { requests++; return manifestBytes() }
         } }
         updates.check(manual = false)
-        now += 21_600_000L
+        now += 18_000_000L
         updates.check(manual = false)
         assertEquals(1, requests)
-        now++
+        now += 3_600_000L
         updates.check(manual = false)
         assertEquals(2, requests)
+    }
+    @Test fun closingWithAnOfferEnqueuesOneConnectedDelayedWorkerAndSwitchOffCancelsIt() {
+        val updates = cachedRelease()
+        val work = WorkManager.getInstance(context)
+        fun pending() = work.getWorkInfosForUniqueWork(AppUpdates.CLOSE_WORK).get().filter { !it.state.isFinished }
+        updates.onAppOpen(); updates.onAppClosed()
+        val first = pending().single()
+        assertEquals(60_000L, first.initialDelayMillis)
+        assertTrue(AppUpdates.CLOSE_RUN in first.tags)
+        assertEquals(androidx.work.NetworkType.CONNECTED, first.constraints.requiredNetworkType)
+        assertTrue(first.constraints.requiresBatteryNotLow())
+        assertNull(first.periodicityInfo)
+        updates.onAppOpen(); updates.onAppClosed()
+        assertEquals(first.id, pending().single().id)
+        updates.setAutomatic(false)
+        assertTrue(pending().isEmpty())
+    }
+    @Test fun closingWithoutANewerUnskippedAutomaticOfferNeverEnqueuesWork() {
+        val work = WorkManager.getInstance(context)
+        fun close(updates: AppUpdates) {
+            updates.onAppOpen(); updates.onAppClosed()
+            assertTrue(work.getWorkInfosForUniqueWork(AppUpdates.CLOSE_WORK).get().none { !it.state.isFinished })
+        }
+        close(AppUpdates(production, scope))
+        close(cachedRelease().also { it.skip(99999) })
+        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().remove("skipped").commit()
+        close(cachedRelease().also { it.setAutomatic(false) })
+        AppPreferences(context).appUpdates = true
+        val manifest = JSONObject(manifestBytes().toString(Charsets.UTF_8)).put("versionCode", BuildConfig.VERSION_CODE)
+        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit()
+            .putString("release", manifest.toString()).putString("release-format", "manifest").commit()
+        close(AppUpdates(production, scope))
     }
     @Test fun onlyTheFirstCheckOfAUtcDayIsCounted() = runBlocking {
         var now = 10 * UpdatePolicy.DAY + 1_000L
@@ -181,10 +217,10 @@ class AppUpdatesTest {
             override fun nextLong(until: Long): Long = if (upper) until - 1 else 0
         }
         assertEquals(0L, updateCheckJitterMillis(fixed(false)))
-        assertEquals(21_600_000L, updateCheckJitterMillis(fixed(true)))
+        assertEquals(1_800_000L, updateCheckJitterMillis(fixed(true)))
         val random = kotlin.random.Random(42)
         val values = List(1000) { updateCheckJitterMillis(random) }
-        assertTrue(values.all { it in 0L..21_600_000L })
+        assertTrue(values.all { it in 0L..1_800_000L })
         assertTrue(values.distinct().size > 1)
     }
     @Test fun allocatableSpaceMustFitTwoCopiesAndMargin() {
@@ -243,6 +279,7 @@ class AppUpdatesTest {
     }
 
     @Test fun cancellationWinsOverIoFailureDuringTeardown() = runBlocking {
+        shadowOf(context.packageManager).setCanRequestPackageInstalls(true)
         cachedRelease()
         val entered = CompletableDeferred<Unit>()
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -260,6 +297,8 @@ class AppUpdatesTest {
             assertEquals(UpdateStage.IDLE, updates.state.value.stage)
             assertNull(updates.state.value.failure)
             assertTrue(updates.directory.listFiles().orEmpty().isEmpty())
+            assertFalse(updates.prefs.contains("install-session"))
+            assertTrue(context.packageManager.packageInstaller.allSessions.isEmpty())
         } finally { owner.cancel() }
     }
     @Test fun cancelledManualCheckCanBeRetried() = runBlocking {
@@ -446,7 +485,8 @@ class AppUpdatesTest {
         manager.installPackage(identity(dev.ahmed.savlino.BuildConfig.VERSION_CODE.toLong()))
         manager.setPackageArchiveInfo(file.absolutePath, identity(code))
     }
-    private suspend fun downloaded(): AppUpdates {
+    private suspend fun downloaded(install: Boolean = false, foreground: Boolean = false): AppUpdates {
+        shadowOf(context.packageManager).setCanRequestPackageInstalls(install)
         val bytes = "verified apk".toByteArray()
         val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val manifest = org.json.JSONObject(manifestBytes().toString(Charsets.UTF_8))
@@ -460,9 +500,25 @@ class AppUpdatesTest {
             }
         } }
         updates.check(manual = true)
+        if (foreground) updates.onAppOpen()
         updates.download(); settle()
-        assertEquals(UpdateStage.READY, updates.state.value.stage)
+        assertEquals(if (install && foreground) UpdateStage.INSTALLING else UpdateStage.READY, updates.state.value.stage)
         return updates
+    }
+    @Test @Config(sdk = [29, 33])
+    fun manualDownloadCommitsInstallationAsSoonAsTheFileIsVerified() = runBlocking {
+        val updates = downloaded(install = true, foreground = true)
+        val id = updates.prefs.getInt("install-session", -1)
+        assertTrue(id >= 0)
+        assertNotNull(context.packageManager.packageInstaller.getSessionInfo(id))
+        assertFalse(updates.prefs.getBoolean("install-silent", true))
+        assertEquals(99999L, updates.prefs.getLong("install-code", -1))
+    }
+    @Test @Config(sdk = [33])
+    fun manualDownloadInTheBackgroundStaysReadyWithoutASession() = runBlocking {
+        val updates = downloaded(install = true)
+        assertFalse(updates.prefs.contains("install-session"))
+        assertTrue(context.packageManager.packageInstaller.allSessions.isEmpty())
     }
     private suspend fun backgroundOffer(valid: Boolean, canPrepare: Boolean = true): AppUpdates {
         val bytes = "verified apk".toByteArray()
@@ -505,7 +561,7 @@ class AppUpdatesTest {
         assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
             notification.extras.getString(android.app.Notification.EXTRA_TEXT))
     }
-    @Test fun meteredOrLowBatteryOnlyNotifiesAvailableWithoutDownloading() = runBlocking {
+    @Test fun unavailableNetworkOrLowBatteryOnlyNotifiesAvailableWithoutDownloading() = runBlocking {
         val updates = backgroundOffer(valid = true, canPrepare = false)
         assertEquals(UpdateStage.IDLE, updates.state.value.stage)
         assertNull(updates.readyFile)
@@ -524,7 +580,7 @@ class AppUpdatesTest {
         assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
             notification.extras.getString(android.app.Notification.EXTRA_TEXT))
     }
-    @Test fun preparationNeedsAnUnmeteredNetworkAndKnownNotLowBattery() {
+    @Test fun preparationAcceptsMeteredNetworksButNeedsANetworkAndKnownNotLowBattery() {
         val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
         val network = org.robolectric.Shadows.shadowOf(manager)
         fun connection(type: Int) {
@@ -544,7 +600,8 @@ class AppUpdatesTest {
         assertFalse(canPrepareUpdate(context))
         battery(false)
         connection(android.net.ConnectivityManager.TYPE_MOBILE)
-        assertFalse(canPrepareUpdate(context))
+        assertTrue(manager.isActiveNetworkMetered)
+        assertTrue(canPrepareUpdate(context))
         network.setActiveNetworkInfo(null)
         assertFalse(canPrepareUpdate(context))
     }
@@ -617,6 +674,7 @@ class AppUpdatesTest {
         assertEquals(listOf(0L, 7L, 0L), lengths)
     }
     @Test fun verificationFailureDeletesPartInsteadOfResumingIt() = runBlocking {
+        shadowOf(context.packageManager).setCanRequestPackageInstalls(true)
         cachedRelease()
         val updates = AppUpdates(production, scope) { object : UpdateHttp("test") {
             override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
@@ -626,6 +684,8 @@ class AppUpdatesTest {
         updates.download(); settle()
         assertEquals(UpdateFailure.VERIFY, updates.state.value.failure)
         assertTrue(updates.directory.listFiles().orEmpty().isEmpty())
+        assertFalse(updates.prefs.contains("install-session"))
+        assertTrue(context.packageManager.packageInstaller.allSessions.isEmpty())
     }
     @Test fun badgeSurvivesCardDismissalButNotSkipOrInstalledVersion() {
         val updates = cachedRelease()
@@ -791,6 +851,16 @@ class AppUpdatesTest {
 }
 
 @Implements(PackageInstaller::class)
+class RecordingPackageInstaller : ShadowPackageInstaller() {
+    @Implementation override fun createSession(params: PackageInstaller.SessionParams): Int {
+        RuntimeEnvironment.getApplication().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(ACTION, ReflectionHelpers.getField<Int>(params, "requireUserAction")).commit()
+        return super.createSession(params)
+    }
+    companion object { const val PREFS = "recording-installer"; const val ACTION = "requireUserAction" }
+}
+
+@Implements(PackageInstaller::class)
 class ChangedUpdateInstaller : ShadowPackageInstaller() {
     @Implementation override fun createSession(params: PackageInstaller.SessionParams): Int {
         // The archive was verified, but its bytes change before the installer reads it.
@@ -833,6 +903,58 @@ class SilentUpdateIntegrationTest {
         assertTrue(id >= 0)
         assertNotNull(app.packageManager.packageInstaller.getSessionInfo(id))
         assertTrue(updates.prefs.getBoolean("install-silent", false))
+    }
+    @Test @Config(shadows = [RecordingPackageInstaller::class])
+    fun manualUpdateUsesTheVerifiedCachedFileWhileForegroundAndAutomaticIsOff() = runBlocking {
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        app.getSharedPreferences(RecordingPackageInstaller.PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        try {
+            val updates = prepared(owner)
+            updates.setAutomatic(false)
+            updates.onAppOpen()
+            updates.download()
+            withTimeout(5000) { owner.coroutineContext[Job]!!.children.toList().joinAll() }
+            val id = updates.prefs.getInt("install-session", -1)
+            assertTrue(id >= 0)
+            assertNotNull(app.packageManager.packageInstaller.getSessionInfo(id))
+            assertFalse(updates.prefs.getBoolean("install-silent", true))
+            assertEquals(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED,
+                app.getSharedPreferences(RecordingPackageInstaller.PREFS, Context.MODE_PRIVATE)
+                    .getInt(RecordingPackageInstaller.ACTION, -1))
+        } finally { owner.cancel() }
+    }
+    @Test fun manualDownloadWhileAStatusSaveIsBusyStaysReadyWithoutASession() = runBlocking {
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val updates = prepared(owner)
+            updates.onAppOpen()
+            dev.ahmed.savlino.statuses.StatusSaver.reserveSave().use {
+                updates.download()
+                withTimeout(5000) { owner.coroutineContext[Job]!!.children.toList().joinAll() }
+                assertEquals(UpdateStage.READY, updates.state.value.stage)
+                assertFalse(updates.prefs.contains("install-session"))
+                assertTrue(app.packageManager.packageInstaller.allSessions.isEmpty())
+            }
+        } finally { owner.cancel() }
+    }
+    @Test fun closeWorkRetriesAForegroundSkipAndThePeriodicRunDoesNot() = runBlocking {
+        WorkManagerTestInitHelper.initializeTestWorkManager(app)
+        try {
+            prepared(this).prefs.edit().putLong("success", System.currentTimeMillis()).commit()
+            app.preferences.helpImprove = false
+            app.visibility.onActivityStarted(Activity())
+            fun run(close: Boolean, attempt: Int = 0) = TestListenableWorkerBuilder<AppUpdateWorker>(app).apply {
+                if (close) setTags(listOf(AppUpdates.CLOSE_RUN))
+                setRunAttemptCount(attempt)
+            }.build()
+            assertEquals(ListenableWorker.Result.retry(), withTimeout(5000) { run(close = true).doWork() })
+            assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { run(close = false).doWork() })
+            assertEquals(ListenableWorker.Result.retry(), withTimeout(5000) { run(close = true, attempt = 4).doWork() })
+            assertEquals(ListenableWorker.Result.success(), withTimeout(5000) { run(close = true, attempt = 5).doWork() })
+            assertFalse(app.appUpdates.prefs.contains("install-session"))
+            assertEquals(UpdateStage.READY, app.appUpdates.state.value.stage)
+            assertTrue(app.packageManager.packageInstaller.allSessions.isEmpty())
+        } finally { WorkManagerTestInitHelper.closeWorkDatabase() }
     }
     @Test fun foregroundDefersAndNextBackgroundRunUsesTheSameVerifiedFile() = runBlocking {
         val updates = prepared(this)

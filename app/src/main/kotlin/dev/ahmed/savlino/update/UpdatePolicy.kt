@@ -8,7 +8,7 @@ data class ArchiveIdentity(val packageName: String, val versionCode: Long, val s
 object UpdatePolicy {
     const val PACKAGE = "dev.ahmed.savlino"
     const val DAY = 86_400_000L
-    const val CHECK_AGE = 21_600_000L
+    const val CHECK_AGE = 18_000_000L
     const val REMINDER_AGE = 259_200_000L
     val hosts = setOf("github.com", "api.github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
     fun enabled(packageName: String) = packageName == PACKAGE

@@ -275,6 +275,13 @@ internal fun AppUpdateRoute(updates: AppUpdates, language: String, back: () -> U
     val state by updates.state.collectAsState()
     val context = LocalContext.current
     var canInstall by remember { mutableStateOf(context.packageManager.canRequestPackageInstalls()) }
+    var awaitingInstallPermission by remember { mutableStateOf(false) }
+    LaunchedEffect(canInstall, awaitingInstallPermission, state.stage) {
+        if (canInstall && awaitingInstallPermission && state.stage == UpdateStage.READY) {
+            awaitingInstallPermission = false
+            updates.install()
+        }
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(updates, lifecycle, context) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -293,7 +300,8 @@ internal fun AppUpdateRoute(updates: AppUpdates, language: String, back: () -> U
         onDispose { lifecycle.removeObserver(observer) }
     }
     UpdateScreen(state, language, canInstall, back, updates::download, updates::cancel, { updates.skip(it); back() }, updates::install, {
+        awaitingInstallPermission = true
         try { context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))) }
-        catch (_: Exception) { updates.fail(UpdateFailure.INSTALL) }
+        catch (_: Exception) { awaitingInstallPermission = false; updates.fail(UpdateFailure.INSTALL) }
     })
 }

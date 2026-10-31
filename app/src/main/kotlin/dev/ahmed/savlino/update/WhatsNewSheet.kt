@@ -62,7 +62,7 @@ internal fun AppUpdateSheets(updates: AppUpdates, state: AppUpdateState, links: 
     else if (offered != null) {
         LaunchedEffect(offered.code) { updates.offerSheetShown(offered.code) }
         WhatsNewSheet(WhatsNew(offered.version, offered.english, offered.arabic, offered.french), language,
-            update = { updates.dismissOfferSheet(); links.navigate("AppUpdate") }, onDismiss = updates::dismissOfferSheet)
+            update = { updates.dismissOfferSheet(); updates.download(); links.navigate("AppUpdate") }, onDismiss = updates::dismissOfferSheet)
     }
 }
 

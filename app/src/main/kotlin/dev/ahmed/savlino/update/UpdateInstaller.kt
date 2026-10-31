@@ -12,10 +12,10 @@ import kotlinx.coroutines.sync.withLock
 /** The status PendingIntent is explicit and private; only this session can change updater state. */
 internal object UpdateInstaller {
     const val STATUS = "dev.ahmed.savlino.UPDATE_INSTALL_STATUS"
-    internal fun sessionParams(context: Context, release: Release, silent: Boolean = false) = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+    internal fun sessionParams(context: Context, release: Release) = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
         setAppPackageName(context.packageName); setSize(release.size)
         setInstallReason(PackageManager.INSTALL_REASON_USER)
-        if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(if (silent) PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED else PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+        if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         if (Build.VERSION.SDK_INT >= 33) setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE)
     }
     suspend fun install(context: Context, updates: AppUpdates, silent: Boolean = false): Boolean = updates.installGate.withLock { withContext(Dispatchers.IO) {
@@ -36,7 +36,7 @@ internal object UpdateInstaller {
                 if (installer.getSessionInfo(existing) != null) installer.abandonSession(existing)
                 updates.clearInstall()
             }
-            val params = sessionParams(context, release, silent)
+            val params = sessionParams(context, release)
             val sessionId = installer.createSession(params); id = sessionId
             installer.openSession(sessionId).use { session ->
                 val digest = java.security.MessageDigest.getInstance("SHA-256")

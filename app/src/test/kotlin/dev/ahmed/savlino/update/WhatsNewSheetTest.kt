@@ -151,7 +151,13 @@ class WhatsNewSheetTest {
                 .put("ar", org.json.JSONArray().put("تحسين جديد")))
         app.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().putString("release", manifest.toString())
             .putString("release-format", "manifest").commit()
-        val updates = AppUpdates(production, owner)
+        val downloading = CompletableDeferred<Unit>()
+        val updates = AppUpdates(production, owner) { object : UpdateHttp("test") {
+            override suspend fun download(release: Release, file: java.io.File, progress: (Long) -> Unit) {
+                downloading.complete(Unit)
+                awaitCancellation()
+            }
+        } }
         val links = LinkViewModel(SavedStateHandle())
         var rationale by mutableStateOf(true)
         updates.onAppOpen()
@@ -179,6 +185,8 @@ class WhatsNewSheetTest {
                 click(a, app.getString(R.string.update_action))
                 assertFalse(visible()) // Waits for the hide animation that precedes navigation.
                 assertEquals("AppUpdate", links.destination)
+                runBlocking { withTimeout(5000) { downloading.await() } }
+                assertEquals(UpdateStage.DOWNLOADING, updates.state.value.stage)
             }
         } finally { owner.cancel() }
     }

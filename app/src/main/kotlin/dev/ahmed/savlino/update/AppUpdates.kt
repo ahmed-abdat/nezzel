@@ -19,7 +19,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
-internal fun updateCheckJitterMillis(random: Random = Random.Default): Long = random.nextLong(TimeUnit.HOURS.toMillis(6) + 1)
+internal fun updateCheckJitterMillis(random: Random = Random.Default): Long = random.nextLong(TimeUnit.MINUTES.toMillis(30) + 1)
 internal fun requiredUpdateSpace(size: Long): Long = 2 * size + AppUpdates.MARGIN
 internal fun hasUpdateSpace(context: Context, size: Long, allocatable: () -> Long = {
     val storage = context.getSystemService(StorageManager::class.java)
@@ -30,7 +30,7 @@ internal fun hasUpdateSpace(context: Context, size: Long, allocatable: () -> Lon
 internal fun canPrepareUpdate(context: Context): Boolean = try {
     val network = context.getSystemService(ConnectivityManager::class.java)
     val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-    network.activeNetwork != null && !network.isActiveNetworkMetered &&
+    network.activeNetwork != null &&
         battery != null && !battery.getBooleanExtra(BatteryManager.EXTRA_BATTERY_LOW, true)
 } catch (_: Exception) { false }
 
@@ -77,6 +77,8 @@ class AppUpdates internal constructor(private val context: Context, private val 
     private val scheduleLock = Any()
     private var transfer: Job? = null
     private var installation: Job? = null
+    /** Set by the silent gate: install did not start only because the app is open or media work is busy. */
+    @Volatile private var deferredForPresenceOrWork = false
     @Volatile private var http: UpdateHttp? = null
     internal val directory get() = File(context.cacheDir, "updates")
     internal var readyFile: File? = null; private set
@@ -128,21 +130,22 @@ class AppUpdates internal constructor(private val context: Context, private val 
     // Reads the switch under the lock, so a toggle during start-up's background schedule still ends in the switch's state.
     private fun schedule(): Unit = synchronized(scheduleLock) {
         val work = WorkManager.getInstance(context)
+        if (!available || !appPrefs.appUpdates) work.cancelUniqueWork(CLOSE_WORK)
         // The same periodic work carries the usage send, so it stays while either switch is on.
         if (!available || !appPrefs.appUpdates && !appPrefs.helpImprove) { work.cancelUniqueWork(WORK); return }
         work.enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<AppUpdateWorker>(12, TimeUnit.HOURS)
-                .setInitialDelay(UpdatePolicy.CHECK_AGE + updateCheckJitterMillis(), TimeUnit.MILLISECONDS)
+            PeriodicWorkRequestBuilder<AppUpdateWorker>(6, TimeUnit.HOURS)
+                .setInitialDelay(updateCheckJitterMillis(), TimeUnit.MILLISECONDS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
                 .build())
     }
     fun reschedule() { if (available) scope.launch { schedule() } }
     fun checkNow() { scope.launch { check(manual = true) } }
-    suspend fun check(manual: Boolean, notify: Boolean = false) = checkGate.withLock {
-        if (!available || (!manual && !appPrefs.appUpdates)) return@withLock
+    /** True when a background notify left a ready update uninstalled only because the app is open or media work is busy. */
+    suspend fun check(manual: Boolean, notify: Boolean = false): Boolean = checkGate.withLock {
+        if (!available || (!manual && !appPrefs.appUpdates)) return@withLock false
         if (!manual && prefs.contains("success") && now() - prefs.getLong("success", 0) <= UpdatePolicy.CHECK_AGE) {
-            if (notify) notifyInBackground()
-            return@withLock
+            return@withLock if (notify) notifyInBackground() else false
         }
         if (manual) mutable.update { it.copy(check = UpdateCheck.CHECKING) }
         try {
@@ -159,12 +162,15 @@ class AppUpdates internal constructor(private val context: Context, private val 
             mutable.update { it.copy(release = release, lastChecked = checked,
                 check = if (manual) { if (release == null) UpdateCheck.LATEST else UpdateCheck.AVAILABLE } else it.check) }
             refreshPresentation()
-            if (notify) notifyInBackground()
+            if (notify) notifyInBackground() else false
         } catch (cancelled: CancellationException) {
             if (manual) mutable.update { it.copy(check = UpdateCheck.NONE) }
             throw cancelled
         }
-        catch (_: Exception) { if (manual) mutable.update { it.copy(check = UpdateCheck.FAILED) } }
+        catch (_: Exception) {
+            if (manual) mutable.update { it.copy(check = UpdateCheck.FAILED) }
+            false
+        }
     }
     @Synchronized internal fun postNotification(ready: Boolean = false, confirmation: Intent? = null): Boolean {
         val release = (if (confirmation != null) state.value.transfer else null) ?: state.value.release ?: return false
@@ -193,6 +199,17 @@ class AppUpdates internal constructor(private val context: Context, private val 
     @Synchronized fun onAppClosed() {
         foreground = false
         mutable.update { it.copy(offerSheet = null) }
+        synchronized(scheduleLock) {
+            if (available && appPrefs.appUpdates && state.value.badge(BuildConfig.VERSION_CODE.toLong())) {
+                WorkManager.getInstance(context).enqueueUniqueWork(CLOSE_WORK, ExistingWorkPolicy.KEEP,
+                    OneTimeWorkRequestBuilder<AppUpdateWorker>()
+                        .setInitialDelay(1, TimeUnit.MINUTES)
+                        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED)
+                            .setRequiresBatteryNotLow(true).build())
+                        .addTag(CLOSE_RUN)
+                        .build())
+            }
+        }
     }
     fun offerSheetShown(code: Long) { prefs.edit().putBoolean("sheet-$code", true).commit() }
     @Synchronized fun dismissOfferSheet() {
@@ -218,32 +235,58 @@ class AppUpdates internal constructor(private val context: Context, private val 
         mutable.update { it.copy(dismissedAt = dismissedAt, offerSheet = sheet) }
     }
     internal suspend fun silentInstallAllowed(verified: Boolean = readyFile != null && state.value.stage == UpdateStage.READY): Boolean {
-        val app = context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication ?: return false
-        if (android.os.Build.VERSION.SDK_INT < 31 || !appPrefs.appUpdates || app.visibility.foreground || foreground || !verified) return false
+        val app = context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication
+            ?: return false.also { deferredForPresenceOrWork = false }
+        if (android.os.Build.VERSION.SDK_INT < 31 || !appPrefs.appUpdates || !verified) {
+            deferredForPresenceOrWork = false
+            return false
+        }
+        if (app.visibility.foreground || foreground) {
+            deferredForPresenceOrWork = context.packageManager.canRequestPackageInstalls()
+            return false
+        }
+        val busy = mediaBusy(app)
+        // Read the switch and visibility after the IO suspension, immediately before the caller commits.
+        val present = app.visibility.foreground || foreground
+        val allowed = canSilentlyUpdate(android.os.Build.VERSION.SDK_INT, appPrefs.appUpdates, present, busy, verified)
+        deferredForPresenceOrWork = !allowed && appPrefs.appUpdates && (present || busy) &&
+            context.packageManager.canRequestPackageInstalls()
+        return allowed
+    }
+    internal fun isAppForeground() = foreground || (context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication)?.visibility?.foreground == true
+    private suspend fun mediaBusy(app: dev.ahmed.savlino.jobs.NezzelApplication): Boolean {
         val downloads = app.downloads
-        val busy = downloads.hasQueuedOrRunning() ||
+        return downloads.hasQueuedOrRunning() ||
             downloads.maintenance.state.value.status == dev.ahmed.savlino.jobs.EngineUpdateStatus.UPDATING ||
             app.imageSaver.outcome.value is dev.ahmed.savlino.media.ImageSaveState.Saving ||
             dev.ahmed.savlino.statuses.StatusSaver.busy
-        // Read the switch and visibility after the IO suspension, immediately before the caller commits.
-        return canSilentlyUpdate(android.os.Build.VERSION.SDK_INT, appPrefs.appUpdates, app.visibility.foreground || foreground, busy, verified)
     }
-    internal fun isAppForeground() = foreground || (context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication)?.visibility?.foreground == true
+    /** Manual auto-install only while someone is in Nezzel and no media transfer would be killed by the process swap. */
+    private suspend fun manualInstallAllowed(): Boolean {
+        if (!isAppForeground()) return false
+        val app = context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication ?: return true
+        return isAppForeground() && !mediaBusy(app)
+    }
     /** The same download and verifier precede both manual and owner-enabled background installation. */
-    internal suspend fun notifyInBackground(canPrepare: Boolean = canPrepareUpdate(context)) {
-        val release = state.value.release ?: return
-        if (!appPrefs.appUpdates || !state.value.badge(BuildConfig.VERSION_CODE.toLong())) return
+    internal suspend fun notifyInBackground(canPrepare: Boolean = canPrepareUpdate(context)): Boolean {
+        val release = state.value.release ?: return false
+        if (!appPrefs.appUpdates || !state.value.badge(BuildConfig.VERSION_CODE.toLong())) return false
         withContext(Dispatchers.IO) { filesGate.withLock { sweepOnce() } }
         if (canPrepare) launchDownload()?.join()
         val current = state.value
         val ready = readyFile != null && current.stage == UpdateStage.READY &&
             current.transfer?.code == release.code && current.transfer?.digest == release.digest
         if (ready && android.os.Build.VERSION.SDK_INT >= 31 && !silentAttempted(release.code)) {
-            if (silentInstallAllowed() && UpdateInstaller.install(context, this, silent = true)) return
+            if (silentInstallAllowed() && UpdateInstaller.install(context, this, silent = true)) return false
+            if (deferredForPresenceOrWork) {
+                // Someone using Nezzel sees the in-app update card; a notification on top would only interrupt.
+                if (!isAppForeground()) postNotification(readyFile != null && state.value.stage == UpdateStage.READY)
+                return true
+            }
         }
-        // Someone using Nezzel sees the in-app update card; a notification on top would only interrupt.
-        if (isAppForeground()) return
+        if (isAppForeground()) return false
         postNotification(readyFile != null && state.value.stage == UpdateStage.READY)
+        return false
     }
     @Synchronized fun skip(code: Long) {
         if (!available) return
@@ -256,7 +299,19 @@ class AppUpdates internal constructor(private val context: Context, private val 
         if (installation?.isActive == true) return
         installation = scope.launch { UpdateInstaller.install(context, this@AppUpdates) }
     }
-    fun download() { launchDownload() }
+    @Synchronized fun download() {
+        if (installation?.isActive == true) return
+        val release = state.value.release ?: return
+        installation = scope.launch {
+            val download = launchDownload() ?: return@launch
+            download.join()
+            currentCoroutineContext().ensureActive()
+            val current = state.value
+            if (current.stage == UpdateStage.READY && current.transfer?.code == release.code &&
+                current.transfer?.digest == release.digest && manualInstallAllowed())
+                UpdateInstaller.install(context, this@AppUpdates)
+        }
+    }
     @Synchronized private fun launchDownload(): Job? {
         if (!available || state.value.stage == UpdateStage.INSTALLING) return null
         transfer?.takeIf { it.isActive }?.let { return it }
@@ -320,6 +375,10 @@ class AppUpdates internal constructor(private val context: Context, private val 
         return transfer
     }
     fun cancel() {
+        // The button exists only during download. Once the session is copying, cancel would abandon it or delete the APK.
+        if (state.value.stage == UpdateStage.INSTALLING || installGate.isLocked) return
+        installation?.cancel()
+        if (state.value.stage == UpdateStage.INSTALLING || installGate.isLocked) return
         val cancelled = transfer
         cancelled?.cancel()
         // close() evicts TLS connections, which is network I/O: keep it off the main thread.
@@ -431,15 +490,22 @@ class AppUpdates internal constructor(private val context: Context, private val 
     private fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.take(10).any {
         it is android.system.ErrnoException && it.errno == android.system.OsConstants.ENOSPC || it.message?.contains("ENOSPC") == true
     }
-    companion object { const val WORK = "app-updates"; internal const val MARGIN = 64L * 1024 * 1024 }
+    companion object {
+        const val WORK = "app-updates"
+        internal const val CLOSE_WORK = "app-updates-on-close"
+        /** Marks the one-shot enqueued from [onAppClosed], so a skipped silent install can retry without changing the periodic run. */
+        internal const val CLOSE_RUN = "close-run"
+        internal const val MARGIN = 64L * 1024 * 1024
+    }
 }
 
 class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         if (!UpdatePolicy.enabled(applicationContext.packageName)) return Result.success()
         val app = applicationContext as dev.ahmed.savlino.jobs.NezzelApplication
-        app.appUpdates.check(manual = false, notify = true)
+        val deferred = app.appUpdates.check(manual = false, notify = true)
         app.usageStore.sendDaily()
+        if (AppUpdates.CLOSE_RUN in tags && deferred && runAttemptCount < 5) return Result.retry()
         return Result.success()
     }
 }

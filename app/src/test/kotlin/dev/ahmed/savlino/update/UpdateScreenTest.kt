@@ -186,6 +186,60 @@ class UpdateScreenTest {
             }
         } finally { owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel() }
     }
+    @Test fun grantingInstallPermissionResumesTheManualUpdateWithoutAnotherTap() = kotlinx.coroutines.runBlocking {
+        val owner = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Unconfined)
+        val production = object : android.content.ContextWrapper(context) {
+            override fun getPackageName() = UpdatePolicy.PACKAGE
+        }
+        val bytes = "verified update".toByteArray()
+        val file = java.io.File(context.cacheDir, "updates/update.apk").apply { parentFile!!.mkdirs(); writeBytes(bytes) }
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        val manifest = org.json.JSONObject().put("schema", 1).put("version", "0.5.0").put("versionCode", 99999)
+            .put("apk", org.json.JSONObject().put("name", file.name).put("size", bytes.size).put("sha256", digest))
+            .put("notes", org.json.JSONObject().put("en", org.json.JSONArray().put("Improved")))
+        val prefs = context.getSharedPreferences("app-updates", android.content.Context.MODE_PRIVATE)
+        prefs.edit().clear().putString("release", manifest.toString()).putString("release-format", "manifest")
+            .putLong("ready-code", 99999).putString("ready-file", file.name).commit()
+        fun identity(code: Long) = android.content.pm.PackageInfo().apply {
+            packageName = UpdatePolicy.PACKAGE; longVersionCode = code
+            signingInfo = android.content.pm.SigningInfo().also {
+                org.robolectric.Shadows.shadowOf(it).setSignatures(arrayOf(android.content.pm.Signature("01020304")))
+            }
+        }
+        val manager = org.robolectric.Shadows.shadowOf(context.packageManager)
+        manager.installPackage(identity(BuildConfig.VERSION_CODE.toLong()))
+        manager.setPackageArchiveInfo(file.absolutePath, identity(99999))
+        manager.setCanRequestPackageInstalls(false)
+        val updates = AppUpdates(production, owner) { error("A cached update must not need network") }
+        suspend fun settle() = kotlinx.coroutines.withTimeout(5000) {
+            owner.coroutineContext[kotlinx.coroutines.Job]!!.children.toList().forEach { it.join() }
+        }
+        try {
+            updates.download(); settle()
+            assertEquals(UpdateStage.READY, updates.state.value.stage)
+            assertFalse(updates.prefs.contains("install-session"))
+            renderThemed({ nodes(it) }, { AppUpdateRoute(updates, "en") {} }) { activity ->
+                val button = nodes(activity).last { it.config.getOrNull(SemanticsActions.OnClick) != null &&
+                    context.getString(R.string.update_permission_action) in texts(descendants(it)) }
+                assertEquals(true, button.config[SemanticsActions.OnClick].action!!.invoke())
+                assertEquals(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    org.robolectric.Shadows.shadowOf(activity).nextStartedActivity?.action)
+                val lifecycle = activity.lifecycle as androidx.lifecycle.LifecycleRegistry
+                lifecycle.currentState = androidx.lifecycle.Lifecycle.State.STARTED
+                nodes(activity)
+                manager.setCanRequestPackageInstalls(true)
+                lifecycle.currentState = androidx.lifecycle.Lifecycle.State.RESUMED
+                nodes(activity)
+                kotlinx.coroutines.runBlocking { settle() }
+                assertTrue(updates.prefs.getInt("install-session", -1) >= 0)
+                assertEquals(UpdateStage.INSTALLING, updates.state.value.stage)
+            }
+        } finally {
+            owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            prefs.edit().clear().commit()
+            file.parentFile!!.deleteRecursively()
+        }
+    }
     private fun lastChecked(shown: Boolean) {
         val prefs = context.getSharedPreferences("app-updates", android.content.Context.MODE_PRIVATE)
         prefs.edit().clear().commit()

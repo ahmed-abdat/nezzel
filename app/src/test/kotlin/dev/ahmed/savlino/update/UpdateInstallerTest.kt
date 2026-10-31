@@ -15,14 +15,7 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29, 33, 35], application = Application::class)
 class UpdateInstallerTest {
-    @Test fun automaticSessionRequestsNoPromptOnSupportedAndroid() {
-        val context = RuntimeEnvironment.getApplication()
-        val release = Release("0.5.0", 99999, "update.apk", 100, "https://github.com/asset", "a".repeat(64), emptyList(), emptyList())
-        val params = UpdateInstaller.sessionParams(context, release, silent = true)
-        if (Build.VERSION.SDK_INT >= 31)
-            assertEquals(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED, ReflectionHelpers.getField<Int>(params, "requireUserAction"))
-    }
-    @Test fun sessionDescribesUserDownloadedUpdateAndRequiresConfirmation() {
+    @Test fun manualSessionDescribesDownloadedUpdateAndRequestsNoPromptWhenSupported() {
         val context = RuntimeEnvironment.getApplication()
         val release = Release("0.4.5", 99999, "update.apk", 100, "https://github.com/asset", "a".repeat(64), emptyList(), emptyList())
         val params = UpdateInstaller.sessionParams(context, release)
@@ -31,7 +24,7 @@ class UpdateInstallerTest {
         assertEquals(100L, ReflectionHelpers.getField<Long>(params, "sizeBytes"))
         assertEquals(PackageManager.INSTALL_REASON_USER, ReflectionHelpers.getField<Int>(params, "installReason"))
         if (Build.VERSION.SDK_INT >= 31)
-            assertEquals(PackageInstaller.SessionParams.USER_ACTION_REQUIRED, ReflectionHelpers.getField<Int>(params, "requireUserAction"))
+            assertEquals(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED, ReflectionHelpers.getField<Int>(params, "requireUserAction"))
         if (Build.VERSION.SDK_INT >= 33)
             assertEquals(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE, ReflectionHelpers.getField<Int>(params, "packageSource"))
     }
