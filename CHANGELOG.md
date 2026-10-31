@@ -4,6 +4,18 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.6] - 2026-10-31
+
+### Added
+
+- When a site stops working because yt-dlp needs a fix, Nezzel updates it right away (at most once a day) and reads the link again.
+
+### Changed
+
+- YouTube search is faster, with Videos, Music, Playlists and Channels.
+- Updates are checked every 6 hours on any network, download on their own and install when you leave the app. A manual download installs right away.
+- Skip this update is gone. An earlier skip no longer hides a newer version.
+
 ## [0.5.5] - 2026-10-31
 
 ### Changed
