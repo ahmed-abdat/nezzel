@@ -324,7 +324,8 @@ class LinkedInPostAttachmentParser {
     private fun attachmentUrl(item: Element, index: Int): String? {
         if (item.tagName() != "li" || item.ownText().isNotBlank()) return null
         if (item.attributes().any { !itemAttribute(it.key, it.value, index) }) return null
-        val children = item.children()
+        if (item.children().count(::contentCredentials) > 1) return null
+        val children = tileChildren(item)
         // An image, plus at most LinkedIn's exact "+N" overlay after it.
         if (children.size == 2 && overlayCount(item) == null || children.size !in 1..2) return null
         val image: Element = children[0].takeIf { it.tagName() == "img" } ?: return null
@@ -335,9 +336,15 @@ class LinkedInPostAttachmentParser {
         return url
     }
 
+    /** A tile's children without LinkedIn's Content Credentials badge (AI-made images get one); the badge carries no media. */
+    private fun tileChildren(item: Element): List<Element> = item.children().filterNot(::contentCredentials)
+
+    private fun contentCredentials(element: Element) =
+        element.tagName() == "button" && element.attr("data-test-id") == CONTENT_CREDENTIALS_TEST_ID
+
     /** N from a tile's `<div data-test-id="feed-images-content__overlay"> +N </div>` second child, else null. */
     private fun overlayCount(item: Element): Int? {
-        val children = item.children()
+        val children = tileChildren(item)
         if (children.size != 2) return null
         val overlay: Element = children[1]
         if (overlay.tagName() != "div" || overlay.children().isNotEmpty()) return null
@@ -451,6 +458,7 @@ class LinkedInPostAttachmentParser {
         val HIDDEN_CONTAINERS = setOf("template", "noscript", "script", "style", "textarea")
         const val ATTACHMENT_ITEM_TEST_ID = "feed-images-content__list-item"
         const val OVERLAY_TEST_ID = "feed-images-content__overlay"
+        const val CONTENT_CREDENTIALS_TEST_ID = "public_post__c2pa-overlay"
         val IMAGE_ATTRIBUTES = setOf("class", "alt", "src", "data-delayed-url", "loading", "width", "height")
         val json: JsonFactory = JsonFactory().disable(JsonParser.Feature.AUTO_CLOSE_SOURCE)
     }
