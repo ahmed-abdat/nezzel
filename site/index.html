@@ -7,7 +7,7 @@
 <meta name="description" content="تطبيق أندرويد مجاني يحفظ لك الفيديو والصوت والصور من روابطها، بلا إعلانات">
 <meta name="theme-color" content="#F5FBF8">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://api.github.com; base-uri 'self'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.github.com https://cloudflareinsights.com; base-uri 'self'; form-action 'none'; object-src 'none'">
 <link rel="canonical" href="https://nezzel.hululsoft.mr/">
 <link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/">
 <link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/">
@@ -692,7 +692,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   <nav class="bar" aria-label="Nezzel">
     <a class="brand" href="#top" aria-label="Nezzel"><img src="/img/icon.svg" alt="" width="34" height="34"><span class="bn">Nezzel</span></a>
     <span class="sp"></span>
-    <a class="mini dl-link" href="/download?src=site" tabindex="-1" data-i-aria="get" aria-label="تنزيل"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="get">تنزيل</span></a>
+    <a class="mini dl-link" data-place="nav" href="/download?src=nav-ar" tabindex="-1" data-i-aria="get" aria-label="تنزيل"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="get">تنزيل</span></a>
     <button class="theme" type="button" id="theme" data-i-aria="to-dark" aria-label="الوضع الداكن"><svg class="moon i" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg><svg class="sun i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
     <details class="locale-switch" id="locale-switch">
       <summary class="lang" id="lang" data-i-aria="language" aria-haspopup="menu" aria-controls="lang-menu" aria-label="اللغة">
@@ -708,7 +708,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
 </div>
 
 <main id="main">
-<header class="hero wrap" id="top">
+<header class="hero wrap" id="top" data-reach="hero">
   <span class="ghost" aria-hidden="true">Nezzel</span>
   <div class="copy">
     <h1 id="h1" data-i="h1"><span class="ln" style="--k:0"><span>انسخ الرابط</span></span> <span class="ln" style="--k:1"><span>وخلي الباقي على</span></span> <span class="ln" style="--k:2"><span><bdi>Nezzel</bdi></span></span></h1>
@@ -716,7 +716,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     <div class="cta">
       <p class="iab" data-i="iab">افتح الصفحة في Chrome<br><span class="iah"><b>⋮</b> ← فتح في المتصفح</span></p>
       <div class="ioc"><p class="iot" data-i="ios-t">Nezzel متوفر على أندرويد فقط</p><button class="btn iob" type="button"><svg class="i"><use href="#share"/></svg><span data-i="ios-share">شاركه مع أصحابك</span></button></div>
-      <a class="btn dl-link" href="/download?src=site">
+      <a class="btn dl-link" data-place="hero" href="/download?src=hero-ar">
         <svg class="i"><use href="#dl"/></svg>
         <span class="roll"><span data-i="cta">تنزيل التطبيق</span></span> <span class="sz ltr num size" data-mb="64.3">64.3 MB</span>
       </a>
@@ -862,7 +862,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   </ol>
 </section>
 
-<section class="wrap faqs" aria-labelledby="faq-h">
+<section class="wrap faqs" id="faq" aria-labelledby="faq-h">
   <h2 id="faq-h" data-i="faq-h">أسئلة سريعة</h2>
   <div class="faq">
     <details><summary data-i="f1">هل هو مجاني؟</summary><p data-i="f1a">نعم، مجاني تمامًا، بلا إعلانات ولا اشتراكات</p></details>
@@ -878,10 +878,10 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
 </section>
 </main>
 
-<footer class="end" id="final" aria-labelledby="fin-h">
+<footer class="end" id="final" data-reach="end" aria-labelledby="fin-h">
   <div class="wrap">
     <h2 id="fin-h" class="fe" data-i="fin-h">مجاني وبلا إعلانات</h2>
-    <a class="go dl-link fe" style="--f:1" href="/download?src=site"><span data-i="get-big">حمّل Nezzel</span><svg class="i"><use href="#arr"/></svg></a>
+    <a class="go dl-link fe" style="--f:1" data-place="footer" href="/download?src=footer-ar"><span data-i="get-big">حمّل Nezzel</span><svg class="i"><use href="#arr"/></svg></a>
     <button class="go iob fe" style="--f:1" type="button"><span data-i="ios-share">شاركه مع أصحابك</span><svg class="i"><use href="#share"/></svg></button>
     <p class="gm fe" style="--f:2"><span data-i="meta">لأندرويد 10 أو أحدث · الإصدار</span> <span class="ltr num vtxt">0.5.5</span> · <span class="ltr num size" data-mb="64.3">64.3 MB</span></p>
     <hr class="sep">
@@ -899,13 +899,66 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
   </div>
 </footer>
-<div class="sbar" id="sbar" inert><a class="sbg dl-link" href="/download?src=site"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="cta">تنزيل التطبيق</span></a><a class="sbh" href="#install" data-i="howto">كيف أثبّته؟</a></div>
+<div class="sbar" id="sbar" inert><a class="sbg dl-link" data-place="sticky" href="/download?src=sticky-ar"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="cta">تنزيل التطبيق</span></a><a class="sbh" href="#install" data-i="howto">كيف أثبّته؟</a></div>
 <p class="tst" id="tst" role="status" aria-live="polite"></p>
 
 <script>
 (() => {
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // ---------- cookieless visit beacon, once per view ----------
+  try {
+    const bot = /bot|crawl|spider|facebookexternalhit|WhatsApp|TelegramBot|Slackbot|Twitterbot|preview|HeadlessChrome/i;
+    if (navigator.sendBeacon && !bot.test(navigator.userAgent || "")) {
+      const lg = document.documentElement.lang;
+      const pageLang = lg === "en" || lg === "fr" ? lg : "ar";
+      const dev = matchMedia("(pointer: coarse)").matches ? "phone" : "computer";
+      const ev = ["view"], seen = new Set(ev);
+      const add = n => { if (ev.length < 40 && !seen.has(n)) { seen.add(n); ev.push(n); } };
+      const buck = s => s < 10 ? "0-10" : s < 30 ? "10-30" : s < 60 ? "30-60" : s < 180 ? "60-180" : "180+";
+      let openAt = document.hidden ? null : 0, vis = 0, sent = false, tapped = false;
+      const pause = () => { if (openAt != null) { vis += performance.now() - openAt; openAt = null; } };
+      const flush = () => {
+        try {
+          if (sent) return;
+          sent = true;
+          pause();
+          add("stay:" + buck(vis / 1000));
+          let e = ev, body = JSON.stringify({ v: 1, lang: pageLang, dev, e });
+          while (body.length > 2048 && e.length > 1) { e.pop(); body = JSON.stringify({ v: 1, lang: pageLang, dev, e }); }
+          navigator.sendBeacon("/api/site-event", new Blob([body], { type: "text/plain;charset=UTF-8" }));
+        } catch (err) {}
+      };
+      addEventListener("pagehide", flush);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) flush();
+        else if (!sent) openAt = performance.now();
+      });
+      const io = new IntersectionObserver(es => es.forEach(x => {
+        if (x.intersectionRatio < 0.4) return;
+        add("reach:" + x.target.dataset.reach);
+        io.unobserve(x.target);
+      }), { threshold: 0.4 });
+      [["[data-reach=hero]", "hero"], ["#how", "how"], ["#net", "net"], ["#more", "more"], ["#apps", "apps"], ["#install", "install"], ["#faq", "faq"], ["[data-reach=end]", "end"]].forEach(([sel, name]) => {
+        const el = $(sel); if (!el) return;
+        el.dataset.reach = name;
+        io.observe(el);
+      });
+      $$("#faq details").forEach((d, i) => {
+        if (i < 8) d.addEventListener("toggle", () => { if (d.open) add("faq:" + (i + 1)); });
+      });
+      $$("details.locale-switch a[data-locale]").forEach(a => a.addEventListener("click", () => {
+        const c = a.dataset.locale;
+        if (c === "ar" || c === "en" || c === "fr") add("lang:" + c);
+      }));
+      $$(".dl-link").forEach(a => a.addEventListener("click", () => {
+        if (a.dataset.place) add("cta:" + a.dataset.place);
+        if (!tapped) { tapped = true; add("tap:" + buck(performance.now() / 1000)); }
+      }));
+      const tb = $("#theme");
+      if (tb) tb.addEventListener("click", () => add("theme"));
+    }
+  } catch (e) {}
   const EN = {
     "w-left": "<span class=\"ltr num wt\">0:08</span> left",
     language:"Language", "og-alt":"Nezzel: save videos straight from a link. A phone showing the qualities on offer",
@@ -1258,10 +1311,14 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     else copy(text + " " + url);
   }));
 
-  // ---------- download: every button goes through /download, tagged with the page's own ?src= (an ad, a post) ----------
-  const src = new URLSearchParams(location.search).get("src");
-  const dlHref = "https://nezzel.hululsoft.mr/download?src=" + (/^[a-z0-9-]{1,24}$/.test(src || "") ? src : "site");
-  $$(".dl-link").forEach(a => { a.href = dlHref; });
+  // ---------- download: /download?src=<place>-<lang> (nav, hero, footer, sticky). A valid ?src= on this page (an ad, a post) still wins ----------
+  const incoming = new URLSearchParams(location.search).get("src");
+  const campaign = /^[a-z0-9-]{1,24}$/.test(incoming || "") ? incoming : "";
+  const dlLang = document.documentElement.lang;
+  const tagLang = dlLang === "en" || dlLang === "fr" ? dlLang : "ar";
+  $$(".dl-link").forEach(a => {
+    a.href = "https://nezzel.hululsoft.mr/download?src=" + (campaign || (a.dataset.place || "nav") + "-" + tagLang);
+  });
 
   // ---------- latest release ----------
   function applyRelease() {
@@ -1568,5 +1625,6 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   }
 })();
 </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "086f7d596c654fc6b2891067e27f5bd5"}'></script>
 </body>
 </html>

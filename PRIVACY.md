@@ -41,3 +41,5 @@ While Settings → Advanced → Help improve Nezzel is on:
 - Your IP address is never stored.
 
 Turn it off and nothing is sent; anything not yet sent is deleted.
+
+The website (nezzel.hululsoft.mr) counts visits anonymously: which parts of the page were seen and which buttons were tapped, as daily totals, with no cookies and no IP address. It also uses Cloudflare Web Analytics, which counts page views without cookies.
