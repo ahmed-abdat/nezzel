@@ -33,14 +33,16 @@ class DownloadProgressTest {
     private val active get() = DownloadProgress("a", "Actual-file.mp4", DownloadPhase.DOWNLOADING,
         bytes = 25_000_000, total = Size.Exact(100_000_000), bytesPerSecond = 2_500_000.0,
         remainingTransferSeconds = 30, stalled = false)
-    private fun render(initial: DownloadProgress, strip: Boolean = false, check: ((DownloadProgress) -> Unit) -> Unit) {
+    private fun render(initial: DownloadProgress, strip: Boolean = false, offline: Boolean = false, check: ((DownloadProgress) -> Unit) -> Unit) {
         RuntimeEnvironment.setFontScale(2f)
         val c = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         var progress by mutableStateOf(initial)
         try {
             c.get().setContent { NezzelTheme(ThemePref.Light, false) {
-                if (strip) HomeRecents(emptyList(), language, {}, { listOf(progress) }) {}
-                else DownloadsScreen(listOf(progress), language, {}, {}, {}, {}, {}, null, {}, {})
+                CompositionLocalProvider(LocalOffline provides offline) {
+                    if (strip) HomeRecents(emptyList(), language, {}, { listOf(progress) }) {}
+                    else DownloadsScreen(listOf(progress), language, {}, {}, {}, {}, {}, null, {}, {})
+                }
             } }
             compose.waitForIdle()
             check { next -> compose.runOnIdle { progress = next }; compose.waitForIdle() }
@@ -221,5 +223,17 @@ class DownloadProgressTest {
     }
     @Test fun hlsReportedFragmentsGivePercentAndMissingFragmentsStayIndeterminateEnglish() = hlsFragments()
     @Test @Config(qualifiers = "ar-w320dp-h1600dp-mdpi") fun hlsReportedFragmentsGivePercentAndMissingFragmentsStayIndeterminateArabic() = hlsFragments()
+
+    @Test fun homeCardKeepsTheSamePercentWhileWaitingForNetwork() {
+        val held = active.copy(stalled = true, bytes = 6_000_000, total = Size.Exact(100_000_000),
+            bytesPerSecond = null, remainingTransferSeconds = null)
+        render(held, strip = true, offline = true) {
+            text(context.getString(R.string.download_waiting_network)).assertExists()
+            compose.onNode(SemanticsMatcher("kept percent") {
+                it.config.getOrNull(SemanticsProperties.StateDescription)?.contains("6%") == true
+            }).assertExists()
+            assertTrue(bars().any { kotlin.math.abs(it.config[SemanticsProperties.ProgressBarRangeInfo].current - .06f) < .001f })
+        }
+    }
 
 }

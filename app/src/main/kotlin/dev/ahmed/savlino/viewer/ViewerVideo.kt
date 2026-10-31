@@ -612,9 +612,12 @@ private fun SeekBar(value: Float, duration: Long, enabled: Boolean, colors: View
         disabledThumbColor = Color.White.copy(alpha = .6f), disabledActiveTrackColor = Color.White.copy(alpha = .6f),
         disabledInactiveTrackColor = Color.White.copy(alpha = .24f))
     val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    // The line and the round thumb stay thin. The thumb's slot is 48dp tall, so the slider (which ignores outer
+    // height modifiers) is tall enough to tap and TalkBack reports a full-size target.
     Slider(value, onChange, modifier.semantics { contentDescription = label }, enabled = enabled,
         valueRange = 0f..duration.coerceAtLeast(1).toFloat(), onValueChangeFinished = onDone, colors = slider, interactionSource = interaction,
-        thumb = { Box(Modifier.size(16.dp).background(if (enabled) colors.accent else Color.White.copy(alpha = .6f), CircleShape)) },
+        thumb = { Box(Modifier.size(16.dp, 48.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(16.dp).background(if (enabled) colors.accent else Color.White.copy(alpha = .6f), CircleShape)) } },
         track = { state -> SliderDefaults.Track(state, Modifier.height(4.dp), enabled = enabled, colors = slider,
             drawStopIndicator = null, thumbTrackGapSize = 0.dp) })
 }

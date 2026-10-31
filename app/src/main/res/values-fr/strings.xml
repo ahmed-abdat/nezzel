@@ -547,7 +547,8 @@
     <string name="saved_rename">Renommer</string>
     <string name="saved_rename_name">Nom du fichier</string>
     <string name="saved_rename_extension">Extension\u00A0: %1$s</string>
-    <string name="saved_rename_invalid">Saisissez de 1 à 200 caractères, sans / ni caractère nul.</string>
+    <string name="saved_rename_invalid">Écrivez un nom pour le fichier</string>
+    <string name="saved_rename_slash">N’écrivez ni / ni \\ dans le nom</string>
     <string name="saved_rename_failed">Le nom n’a pas pu être modifié. Réessayez.</string>
     <string name="saved_renamed">Renommé en %1$s</string>
 

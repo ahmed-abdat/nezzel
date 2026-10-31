@@ -40,6 +40,9 @@ class SettingsScreenTest {
     @Test fun tipsCanBeTurnedOffWithoutAnAvailableUpdater() = renderThemed({ nodes(it) }, {
         AdvancedSettings(null, {}, null) {}
     }) { a ->
+        // No updater: the section is Tips, not App updates.
+        assertFalse(texts(nodes(a)).contains(context.getString(R.string.settings_updates_heading)))
+        assertTrue(texts(nodes(a)).contains(context.getString(R.string.tips_title)))
         click(clickable(a, context.getString(R.string.tips_title)))
         assertFalse(dev.ahmed.savlino.locale.AppPreferences(context).tips)
     }
@@ -48,6 +51,7 @@ class SettingsScreenTest {
         val prefs = dev.ahmed.savlino.locale.AppPreferences(context)
         assertTrue(prefs.tips)
         renderThemed({ nodes(it) }, { AdvancedSettings(null, {}, updates) {} }) { a ->
+            assertTrue(texts(nodes(a)).contains(context.getString(R.string.settings_updates_heading)))
             val row = clickable(a, context.getString(R.string.tips_title))
             assertEquals(ToggleableState.On, row.config[SemanticsProperties.ToggleableState])
             assertTrue(row.layoutInfo.height / context.resources.displayMetrics.density >= 48f)

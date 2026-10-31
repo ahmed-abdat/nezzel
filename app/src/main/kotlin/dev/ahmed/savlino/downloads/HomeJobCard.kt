@@ -84,15 +84,16 @@ internal fun homeSlots(jobs: List<DownloadProgress>, recent: List<SavedMedia>, l
 /**
  * A download as a recents card, the same size as a saved file's card, so the row never changes height (owner 2026-10-25):
  * the job's picture with the ring and big percent over it, the title, then time left or the phase word. Phases without
- * real numbers spin; waiting shows the bare track. No buttons: the card opens Downloads, where pause, cancel and retry live.
+ * real numbers spin. A network wait keeps the last real percent, the same one Downloads shows. No buttons: the card
+ * opens Downloads, where pause, cancel and retry live.
  */
 @Composable
 internal fun HomeJobCard(job: DownloadProgress, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val language = LocalConfiguration.current.locales[0].language
     val failed = job.phase == DownloadPhase.FAILED && !job.awaitingSchedule
-    // Paused keeps its last real fraction on the arc only; the words say Paused.
-    val fraction = if (job.paused && !job.terminal) null else job.ringFraction()
+    // Paused keeps its last real fraction on the arc only; the words say Paused. A network wait keeps the number too.
+    val fraction = if (job.paused && !job.terminal) null else job.ringFraction() ?: job.frozenFraction(LocalOffline.current)
     val word = DownloadNotifications.phase(context, job, LocalOffline.current, LocalHot.current)
     // Time left only beside a real fraction, as the Downloads row prints it; at 100% "Finishing…" says more.
     val left = job.remainingTransferSeconds?.takeIf { fraction != null && job.percent != 100 &&

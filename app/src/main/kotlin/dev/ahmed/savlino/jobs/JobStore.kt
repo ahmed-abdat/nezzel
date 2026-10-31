@@ -221,9 +221,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
      */
     @Synchronized fun savedFormats(normalizedUrl: String): Map<String, SavedBefore> {
         val found = LinkedHashMap<String, SavedBefore>()
-        val key = tag(normalizedUrl) ?: return found
-        readableDatabase.query("jobs", arrayOf("format_json", "pending_uri", "updated_at"), "stage = ? AND source_key = ?",
-            arrayOf(JobStage.COMPLETED.name, key), null, null, "updated_at DESC, rowid DESC").use { cursor ->
+        // Lookup only: the stored tag stays the URL that was saved. A pasted variant (t, si, www/m, youtu.be) also finds a file saved from its clean link.
+        val keys = savedLookupUrls(normalizedUrl).mapNotNull(::tag).distinct()
+        if (keys.isEmpty()) return found
+        val marks = keys.joinToString(",") { "?" }
+        readableDatabase.query("jobs", arrayOf("format_json", "pending_uri", "updated_at"),
+            "stage = ? AND source_key IN ($marks)",
+            arrayOf(JobStage.COMPLETED.name, *keys.toTypedArray()), null, null, "updated_at DESC, rowid DESC").use { cursor ->
             while (cursor.moveToNext()) {
                 val id = decodeFormat(cursor.getString(0)).id
                 val uri = cursor.getString(1)?.let(Uri::parse) ?: continue
@@ -705,6 +709,35 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 }
 
+
+private val youtubeVideoId = Regex("[A-Za-z0-9_-]{11}")
+
+/**
+ * Forms a saved file may have been tagged with. Used only when looking up "saved before": enqueue still tags the
+ * exact normalized URL, so a timestamp or share token never rewrites what was stored.
+ */
+internal fun savedLookupUrls(normalizedUrl: String): List<String> {
+    val uri = try { java.net.URI(normalizedUrl) } catch (_: java.net.URISyntaxException) { return listOf(normalizedUrl) }
+    val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return listOf(normalizedUrl)
+    val watch = host == "youtube.com" || host == "www.youtube.com" || host == "m.youtube.com" || host == "music.youtube.com"
+    val id = when {
+        host == "youtu.be" || host == "www.youtu.be" -> uri.rawPath?.trim('/')?.takeIf(youtubeVideoId::matches)
+        watch && uri.rawPath?.trimEnd('/') == "/watch" -> uri.rawQuery.orEmpty().split('&').firstNotNullOfOrNull { param ->
+            param.removePrefix("v=").takeIf { param.startsWith("v=") && youtubeVideoId.matches(it) }
+        }
+        else -> null
+    } ?: return listOf(normalizedUrl)
+    return listOf(normalizedUrl,
+        "https://youtu.be/$id",
+        "https://youtu.be/$id?feature=shared",
+        "https://www.youtube.com/watch?v=$id",
+        "https://youtube.com/watch?v=$id",
+        "https://m.youtube.com/watch?v=$id",
+        "https://music.youtube.com/watch?v=$id",
+        "https://www.youtube.com/watch?v=$id&feature=shared",
+        "https://youtube.com/watch?v=$id&feature=shared",
+        "https://m.youtube.com/watch?v=$id&feature=shared").distinct()
+}
 
 /** Delete one valid private job directory through the storage capability, never through a URI. */
 internal fun cleanupJobStaging(root: File, id: String): Boolean = try {

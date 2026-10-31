@@ -111,6 +111,13 @@ class DownloadsTest {
         val repo = SavedMediaRepository(RuntimeEnvironment.getApplication().contentResolver, RuntimeEnvironment.getApplication().packageName)
         screen(media = listOf(video), delete = { repo.delete(it.uri) }) { a ->
             click(a, "More actions"); click(a, "Delete")
+            val named = texts(nodes(a)).single { it.contains("Family") && it.contains("\u2066") }
+            assertEquals("\u2066Family\u2069", named)
+            val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            val nameNode = nodes(a).first { named in texts(listOf(it)) }
+            assertEquals(true, nameNode.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts))
+            assertEquals(2, layouts.single().layoutInput.maxLines)
+            assertEquals(androidx.compose.ui.text.style.TextOverflow.Ellipsis, layouts.single().layoutInput.overflow)
             assertEquals(1, repo.query().size)
             click(a, "Cancel")
             assertEquals(1, repo.query().size)

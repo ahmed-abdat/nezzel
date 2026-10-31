@@ -604,7 +604,8 @@
     <string name="saved_rename">إعادة تسمية</string>
     <string name="saved_rename_name">اسم الملف</string>
     <string name="saved_rename_extension">الامتداد: %1$s</string>
-    <string name="saved_rename_invalid">أدخل من 1 إلى 200 حرف، دون / أو المحرف الفارغ.</string>
+    <string name="saved_rename_invalid">اكتب اسمًا للملف</string>
+    <string name="saved_rename_slash">لا تضع / أو \\ في الاسم</string>
     <string name="saved_rename_failed">تعذّرت إعادة تسمية الملف. أعد المحاولة.</string>
     <string name="saved_renamed">تمت إعادة التسمية إلى %1$s</string>
 

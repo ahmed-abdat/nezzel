@@ -229,8 +229,10 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                     if (updating) dev.ahmed.savlino.ui.nav.TabProgressBar(Modifier.fillMaxWidth().padding(horizontal = Space.l))
                 }
             }
-            SettingsGroup(stringResource(R.string.settings_updates_heading)) {
-                updates?.let { UpdateAutoSetting(it) }
+            updates?.let { updates ->
+                SettingsGroup(stringResource(R.string.settings_updates_heading)) { UpdateAutoSetting(updates) }
+            }
+            SettingsGroup(stringResource(R.string.tips_title)) {
                 val context = LocalContext.current
                 val preferences = remember(context) { dev.ahmed.savlino.locale.AppPreferences(context) }
                 var tips by remember { mutableStateOf(preferences.tips) }

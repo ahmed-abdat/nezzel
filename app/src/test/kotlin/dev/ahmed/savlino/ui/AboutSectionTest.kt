@@ -176,6 +176,19 @@ class AboutSectionTest {
     }
 
     @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
+    @Test fun arabicLicenceBlocksAlignToTheStartAndStayLtr() = render { a ->
+        click(clickable(a, context.getString(R.string.about_licences)))
+        for (sample in listOf("yt-dlp", "The Unlicense", "https://ffmpeg.org/legal.html")) {
+            val node = nodes(a).first { texts(listOf(it)).any { text -> text.trimStart('\u2066', '\u2067', '\u2068').startsWith(sample) } }
+            val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            assertEquals(sample, true, node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts))
+            val style = layouts.single().layoutInput.style
+            assertEquals(sample, androidx.compose.ui.text.style.TextDirection.Ltr, style.textDirection)
+            assertEquals(sample, androidx.compose.ui.text.style.TextAlign.Right, style.textAlign)
+        }
+    }
+
+    @Config(qualifiers = "ar-w360dp-h1600dp-mdpi")
     @Test fun arabicKeepsTheCompanyNameInLatinScript() = render { a ->
         val all = texts(nodes(a))
         assertTrue(all.any { madeBy() in it && "\u2066Hululsoft\u2069" in it })

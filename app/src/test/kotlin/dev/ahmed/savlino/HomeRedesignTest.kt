@@ -160,7 +160,27 @@ class HomeRedesignTest {
             show { HomeShell("en", false, withDownloads = false, copied = false, route = "Home", load = load) }.use {
                 compose.onAllNodesWithText(context.getString(R.string.home_hero_title)).assertCountEquals(0)
                 compose.onAllNodesWithText(context.getString(R.string.home_hero_sites)).assertCountEquals(0)
+                // Loading has not decided Earlier yet, so the footer stays out of its place.
+                val footers = if (load is LibraryLoadState.Loading) 0 else 1
+                compose.onAllNodesWithTag("home_footer").assertCountEquals(footers)
             }
+        }
+    }
+
+    @Test fun footerAppearsWithEarlierOnceSavedFilesAreKnown() {
+        val context = RuntimeEnvironment.getApplication()
+        var load by mutableStateOf<LibraryLoadState>(LibraryLoadState.Loading())
+        val vm = LinkViewModel(SavedStateHandle(), engine = dev.ahmed.savlino.engine.FakeEngine()).apply { automaticOptions = false }
+        show {
+            val library = remember(load) { LibraryState(load, {}, {}, {}, null, {}, {}, {}, { _, _ -> }) }
+            NezzelTheme(ThemePref.Light, false) { HomeScreen(vm, { emptyList() }, library, "en", {}, {}, {}, {}) }
+        }.use {
+            compose.onAllNodesWithTag("home_footer").assertCountEquals(0)
+            compose.onAllNodesWithText(context.getString(R.string.home_earlier)).assertCountEquals(0)
+            compose.runOnIdle { load = LibraryLoadState.Ready(HomeFixtures.library) }
+            compose.waitForIdle()
+            compose.onNodeWithText(context.getString(R.string.home_earlier)).assertExists()
+            compose.onNodeWithTag("home_footer").assertExists()
         }
     }
 

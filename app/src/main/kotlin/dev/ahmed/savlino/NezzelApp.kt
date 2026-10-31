@@ -441,6 +441,8 @@ internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>
     val firstRun by remember(library) {
         derivedStateOf { currentJobs().isEmpty() && library.load is LibraryLoadState.Ready && library.media.isEmpty() }
     }
+    // A cold start lists saved files a moment later. Until then the footer would sit where Earlier belongs, then jump.
+    val libraryKnown = library.load !is LibraryLoadState.Loading || library.media.isNotEmpty()
     // The coordinator drops a job from its list the moment it completes. Home keeps the last few completions, so a job's
     // card knows the file it became and hands its slot to that file instead of leaving and sliding the row.
     val completedJobs = remember { mutableStateOf(emptyList<DownloadProgress>()) }
@@ -489,7 +491,7 @@ internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>
                         if (links.engineUnavailable) Box(Modifier.padding(horizontal = Space.l)) { EngineUnavailableNote() }
                     }
                     NotificationsOffNote(currentJobs, firstRun, onAllowNotifications)
-                    Crossfade(firstRun, Modifier.miniPlayerReveal(), animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
+                    if (libraryKnown) Crossfade(firstRun, Modifier.miniPlayerReveal(), animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
                         if (first) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
                         else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
                     }

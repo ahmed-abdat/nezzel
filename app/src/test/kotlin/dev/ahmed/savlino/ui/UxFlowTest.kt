@@ -235,6 +235,40 @@ class UxFlowTest {
     private fun storedKeys(store: JobStore): List<String?> = store.readableDatabase.rawQuery("SELECT source_key FROM jobs", null)
         .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
+    @Test fun savedLookupMatchesYoutubeVariantsWithoutRewritingTheStoredUrl() {
+        val id = "abcdefghijk"
+        val savedForms = listOf("https://youtu.be/$id", "https://www.youtube.com/watch?v=$id")
+        val lookups = listOf(
+            "https://youtu.be/$id?t=2",
+            "https://youtu.be/$id?si=sharetoken",
+            "https://www.youtube.com/watch?v=$id&feature=shared",
+            "https://m.youtube.com/watch?v=$id",
+            "https://youtube.com/watch?v=$id",
+            "https://www.youtube.com/watch?v=$id&t=2&si=sharetoken&feature=shared",
+            "https://youtu.be/$id",
+            "https://m.youtube.com/watch?v=$id&feature=shared",
+        )
+        savedForms.forEachIndexed { index, saved ->
+            app.deleteDatabase(JobStore.DATABASE_NAME)
+            JobStore(app, keyer).use { store ->
+                val source = LinkRevision(LinkInput.parse(saved)!!, 1)
+                val uri = Uri.parse("content://media/external/downloads/${index + 20}")
+                complete(store, "done", v720, source, uri)
+                assertEquals(saved, source.link.normalizedUrl)
+                assertNull(store.get("done")!!.sourceUrl)
+                val stored = storedKeys(store).single()
+                assertEquals(keyer.key(LinkKeyer.JOB_SOURCE, source.link.normalizedUrl), stored)
+                val timed = LinkInput.parse("https://youtu.be/$id?t=2")!!.normalizedUrl
+                assertNotEquals(keyer.key(LinkKeyer.JOB_SOURCE, timed), stored)
+                for (lookup in lookups) {
+                    val normalized = LinkInput.parse(lookup)!!.normalizedUrl
+                    assertEquals(lookup, uri, store.savedFormats(normalized)["v720"]?.uri)
+                }
+                assertTrue(store.savedFormats(LinkInput.parse("https://youtu.be/zzzzzzzzzzz")!!.normalizedUrl).isEmpty())
+            }
+        }
+    }
+
     @Test fun journalMatchesSavedFilesByAKeyedTagWithoutKeepingTheLink() {
         app.deleteDatabase(JobStore.DATABASE_NAME)
         JobStore(app, keyer).use { store ->

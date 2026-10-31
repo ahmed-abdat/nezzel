@@ -412,6 +412,13 @@ class ViewerControlsTest {
         return watch
     }
 
+    @Test fun seekBarTouchTargetIsAtLeast48dp() {
+        show(); advance(300)
+        val bounds = seekBar().fetchSemanticsNode().boundsInRoot
+        val height = bounds.height / activity.resources.displayMetrics.density
+        assertTrue("Seek touch height ${height}dp", height >= 47.5f)
+    }
+
     @Test fun draggingTheSeekBarScrubsUntilRelease() {
         val watch = scrubbed()
         assertTrue(watch.scrubbing)

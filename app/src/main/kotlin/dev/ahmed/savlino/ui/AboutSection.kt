@@ -14,9 +14,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -77,6 +80,10 @@ internal object OpenSourceNotices {
 
 private val ltr = TextDirection.Ltr
 
+/** Latin blocks stay left-to-right, and the block itself sits on the layout's start edge. */
+@Composable
+private fun startAlign() = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextAlign.Right else TextAlign.Left
+
 /**
  * About group at the bottom of Settings: how-to, notes, maker and a small version line for support.
  */
@@ -128,10 +135,11 @@ private fun LicencesDialog(onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.about_licences), modifier = Modifier.semantics { heading() }) },
         text = {
+            val align = startAlign()
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.l)) {
-                Text(stringResource(R.string.about_body), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.about_body), style = MaterialTheme.typography.bodyMedium.copy(textAlign = align))
                 OpenSourceNotices.components.forEach { NoticeRow(it) }
-                Text(stringResource(R.string.about_warranty), style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.about_warranty), style = MaterialTheme.typography.bodySmall.copy(textAlign = align),
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
@@ -143,11 +151,12 @@ private fun LicencesDialog(onDismiss: () -> Unit) {
 @Composable
 private fun NoticeRow(component: NoticeComponent) {
     val context = LocalContext.current
+    val align = startAlign()
     var expanded by rememberSaveable(component.name) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        Text(NezzelFormat.isolate(component.name), style = MaterialTheme.typography.titleSmall)
-        Text("${component.licence} (${component.spdx})", style = MaterialTheme.typography.bodyMedium.copy(textDirection = ltr))
-        Text(NezzelFormat.isolate(component.url), style = MaterialTheme.typography.bodySmall.copy(textDirection = ltr),
+        Text(NezzelFormat.isolate(component.name), style = MaterialTheme.typography.titleSmall.copy(textDirection = ltr, textAlign = align))
+        Text(NezzelFormat.isolate("${component.licence} (${component.spdx})"), style = MaterialTheme.typography.bodyMedium.copy(textDirection = ltr, textAlign = align))
+        Text(NezzelFormat.isolate(component.url), style = MaterialTheme.typography.bodySmall.copy(textDirection = ltr, textAlign = align),
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (component.large) component.asset?.let { asset ->
             var open by rememberSaveable(component.name) { mutableStateOf(false) }
@@ -168,7 +177,7 @@ private fun NoticeRow(component: NoticeComponent) {
                 val text by produceState<String?>(null, context, asset) {
                     value = loadLicenceText { context.assets.open(asset) }
                 }
-                text?.let { Text(it, style = MaterialTheme.typography.bodySmall.copy(textDirection = ltr)) }
+                text?.let { Text(NezzelFormat.isolate(it), style = MaterialTheme.typography.bodySmall.copy(textDirection = ltr, textAlign = align)) }
             }
         }
     }
@@ -181,16 +190,17 @@ private fun LicenceTextScreen(name: String, asset: String, onDismiss: () -> Unit
     val chunks by produceState<List<String>?>(null, context, asset) {
         value = loadLicenceText { context.assets.open(asset) }?.let(::licenceChunks)
     }
+    val align = startAlign()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.s), verticalAlignment = Alignment.CenterVertically) {
-                    Text(NezzelFormat.isolate(name), style = MaterialTheme.typography.titleMedium,
+                    Text(NezzelFormat.isolate(name), style = MaterialTheme.typography.titleMedium.copy(textDirection = ltr, textAlign = align),
                         modifier = Modifier.weight(1f).semantics { heading() })
                     TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.nezzel_close)) }
                 }
                 LazyColumn(contentPadding = PaddingValues(horizontal = Space.l, vertical = Space.s)) {
-                    items(chunks.orEmpty()) { Text(it, style = MaterialTheme.typography.bodySmall.copy(textDirection = ltr)) }
+                    items(chunks.orEmpty()) { Text(NezzelFormat.isolate(it), style = MaterialTheme.typography.bodySmall.copy(textDirection = ltr, textAlign = align)) }
                 }
             }
         }

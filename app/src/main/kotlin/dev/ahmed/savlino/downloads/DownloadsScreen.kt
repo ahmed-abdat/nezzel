@@ -442,10 +442,9 @@ fun DownloadsScreen(
             confirmButton = { TextButton(onClick = { deleteSelection = null; deleteSelected(items) }) { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deleteSelection = null }) { Text(stringResource(R.string.cancel)) } })
     }
-    if (deleting != null) AlertDialog(onDismissRequest = { deletingUri = null },
-        title = { Text(stringResource(R.string.saved_delete_title)) }, text = { Text(stringResource(R.string.saved_delete_body)) },
-        confirmButton = { TextButton(onClick = { deletingUri = null; onDelete(deleting) }) { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { deletingUri = null }) { Text(stringResource(R.string.cancel)) } })
+    deleting?.let { item ->
+        ConfirmDeleteFile(item, onDismiss = { deletingUri = null }) { deletingUri = null; onDelete(item) }
+    }
 }
 
 @Composable
@@ -511,7 +510,11 @@ internal fun SavedRenameDialog(item: SavedMedia, onDismiss: () -> Unit, onRename
                 val extension = savedExtension(item.filename)
                 if (extension.isNotEmpty()) Text(stringResource(R.string.saved_rename_extension, NezzelFormat.isolate(extension)),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (!valid || failed) Text(stringResource(if (!valid) R.string.saved_rename_invalid else R.string.saved_rename_failed),
+                if (!valid || failed) Text(stringResource(when {
+                    !valid && name.text.any { it == '/' || it == '\\' } -> R.string.saved_rename_slash
+                    !valid -> R.string.saved_rename_invalid
+                    else -> R.string.saved_rename_failed
+                }),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
@@ -1024,11 +1027,25 @@ fun HomeRecents(media: List<SavedMedia>, language: String, onOpen: (SavedMedia) 
             onComplete = { renamingUri = null })
     }
     media.find { it.uri.toString() == deletingUri }?.let { item ->
-        AlertDialog(onDismissRequest = { deletingUri = null },
-            title = { Text(stringResource(R.string.saved_delete_title)) }, text = { Text(stringResource(R.string.saved_delete_body)) },
-            confirmButton = { TextButton(onClick = { deletingUri = null; onDelete(item) }) { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { deletingUri = null }) { Text(stringResource(R.string.cancel)) } })
+        ConfirmDeleteFile(item, onDismiss = { deletingUri = null }) { deletingUri = null; onDelete(item) }
     }
+}
+
+/** Names the file, LTR and ellipsized, so a mis-tap is obvious before it is deleted. */
+@Composable
+private fun ConfirmDeleteFile(item: SavedMedia, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val align = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextAlign.Right else TextAlign.Left
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.saved_delete_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                Text(NezzelFormat.isolate(item.displayName), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Ltr, textAlign = align))
+                Text(stringResource(R.string.saved_delete_body))
+            }
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.saved_delete), color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
 }
 
 /** A saved file's recents card: 196dp wide, 16:10 picture, title and meta. [HomeJobCard] keeps the same box. */
