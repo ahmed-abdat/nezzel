@@ -28,10 +28,10 @@ object UpdatePolicy {
             else -> next
         }
     } catch (_: Exception) { null }
-    fun offer(remote: Long, current: Long, skipped: Long?) = remote > current && remote != skipped
-    fun notify(packageName: String, automatic: Boolean, remote: Long, current: Long, skipped: Long?, notified: Long?,
+    fun offer(remote: Long, current: Long) = remote > current
+    fun notify(packageName: String, automatic: Boolean, remote: Long, current: Long, notified: Long?,
                important: Boolean = false, notifiedAt: Long? = null, now: Long = System.currentTimeMillis()) =
-        enabled(packageName) && automatic && offer(remote, current, skipped) &&
+        enabled(packageName) && automatic && offer(remote, current) &&
             (notified == null || remote > notified || important && (notifiedAt == null || now - notifiedAt >= DAY))
     fun verified(actualDigest: String, expectedDigest: String, archive: ArchiveIdentity,
                  installed: ArchiveIdentity, expectedCode: Long): Boolean =

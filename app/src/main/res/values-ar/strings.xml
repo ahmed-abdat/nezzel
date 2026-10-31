@@ -453,7 +453,6 @@
     <string name="update_whats_new">ما الجديد</string>
     <string name="update_keeps_data">تبقى ملفاتك وإعداداتك كما هي</string>
     <string name="update_download">تنزيل التحديث · %1$s</string>
-    <string name="update_skip">تخطّ هذا التحديث</string>
     <string name="update_progress">%1$s من %2$s</string>
     <string name="update_verifying">جارٍ التحقق من التحديث…</string>
     <string name="update_installing">جارٍ تثبيت التحديث…</string>

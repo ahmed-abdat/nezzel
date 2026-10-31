@@ -73,10 +73,9 @@ internal fun UpdateSettings(updates: AppUpdates?, open: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val language = LocalConfiguration.current.locales[0].language
     val state = updates?.takeIf { it.available }?.state?.collectAsState()?.value
-    // The nav dot follows any cached offer (automatic or restored), so Settings must expose it whatever the manual check did;
-    // a manual check also reveals a skipped version
+    // The nav dot follows any cached offer (automatic or restored), so Settings must expose it whatever the manual check did.
     val offer = state?.release?.takeIf { state.check == UpdateCheck.AVAILABLE || state.badge(BuildConfig.VERSION_CODE.toLong()) }
-    // "Latest" only when no newer release is known (a skipped one is still newer).
+    // "Latest" only when no newer release is known.
     val latest = state != null && (state.check == UpdateCheck.LATEST ||
         (state.lastChecked != null && (state.release?.code ?: 0L) <= BuildConfig.VERSION_CODE.toLong()))
     val checking = state?.check == UpdateCheck.CHECKING
@@ -132,7 +131,7 @@ internal fun UpdateAutoSetting(updates: AppUpdates) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: Boolean,
-    back: () -> Unit, download: () -> Unit, cancel: () -> Unit, skip: (Long) -> Unit, install: () -> Unit, permission: () -> Unit) {
+    back: () -> Unit, download: () -> Unit, cancel: () -> Unit, install: () -> Unit, permission: () -> Unit) {
     val release = if (state.stage == UpdateStage.IDLE) state.release else state.transfer ?: state.release
     val compact = LocalConfiguration.current.screenHeightDp < 480
     val colors = MaterialTheme.colorScheme
@@ -192,13 +191,8 @@ internal fun UpdateScreen(state: AppUpdateState, language: String, canInstall: B
                 }
                 UpdateStage.IDLE -> {
                     Button(onClick = download, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.update_download, size)) }
-                    Row(Modifier.fillMaxWidth()) {
-                        TextButton(onClick = back, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.update_not_now), textAlign = TextAlign.Center, maxLines = 2)
-                        }
-                        TextButton(onClick = { skip(release.code) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.update_skip), textAlign = TextAlign.Center, maxLines = 2)
-                        }
+                    TextButton(onClick = back, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.update_not_now), textAlign = TextAlign.Center, maxLines = 2)
                     }
                 }
             }
@@ -299,7 +293,7 @@ internal fun AppUpdateRoute(updates: AppUpdates, language: String, back: () -> U
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    UpdateScreen(state, language, canInstall, back, updates::download, updates::cancel, { updates.skip(it); back() }, updates::install, {
+    UpdateScreen(state, language, canInstall, back, updates::download, updates::cancel, updates::install, {
         awaitingInstallPermission = true
         try { context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))) }
         catch (_: Exception) { awaitingInstallPermission = false; updates.fail(UpdateFailure.INSTALL) }

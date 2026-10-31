@@ -403,7 +403,6 @@
     <string name="update_whats_new">What\'s new</string>
     <string name="update_keeps_data">Your files and settings stay as they are</string>
     <string name="update_download">Download update · %1$s</string>
-    <string name="update_skip">Skip this update</string>
     <string name="update_progress">%1$s of %2$s</string>
     <string name="update_verifying">Checking the update…</string>
     <string name="update_installing">Installing the update…</string>

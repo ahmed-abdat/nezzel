@@ -411,7 +411,6 @@
     <string name="update_whats_new">Nouveautés</string>
     <string name="update_keeps_data">Vos fichiers et paramètres sont conservés</string>
     <string name="update_download">Télécharger la mise à jour · %1$s</string>
-    <string name="update_skip">Ignorer cette mise à jour</string>
     <string name="update_progress">%1$s sur %2$s</string>
     <string name="update_verifying">Vérification de la mise à jour…</string>
     <string name="update_installing">Installation de la mise à jour…</string>

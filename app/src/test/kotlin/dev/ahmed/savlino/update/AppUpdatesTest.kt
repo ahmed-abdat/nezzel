@@ -113,15 +113,13 @@ class AppUpdatesTest {
         updates.setAutomatic(false)
         assertTrue(pending().isEmpty())
     }
-    @Test fun closingWithoutANewerUnskippedAutomaticOfferNeverEnqueuesWork() {
+    @Test fun closingWithoutANewerAutomaticOfferNeverEnqueuesWork() {
         val work = WorkManager.getInstance(context)
         fun close(updates: AppUpdates) {
             updates.onAppOpen(); updates.onAppClosed()
             assertTrue(work.getWorkInfosForUniqueWork(AppUpdates.CLOSE_WORK).get().none { !it.state.isFinished })
         }
         close(AppUpdates(production, scope))
-        close(cachedRelease().also { it.skip(99999) })
-        context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().remove("skipped").commit()
         close(cachedRelease().also { it.setAutomatic(false) })
         AppPreferences(context).appUpdates = true
         val manifest = JSONObject(manifestBytes().toString(Charsets.UTF_8)).put("versionCode", BuildConfig.VERSION_CODE)
@@ -150,8 +148,6 @@ class AppUpdatesTest {
         assertFalse(restored.state.value.card(1, dismissed + 259_199_999L))
         assertTrue(restored.state.value.card(1, dismissed + 259_200_000L))
         assertTrue(restored.state.value.badge(1))
-        restored.skip(99999)
-        assertFalse(restored.state.value.card(1, dismissed + 259_200_000L))
     }
     @Test fun reminderWaitsThreeDaysAndIsConsumedOnlyWhenActuallyShown() {
         val updates = cachedRelease()
@@ -176,12 +172,10 @@ class AppUpdatesTest {
             .putString("release", manifest.toString()).putString("release-format", "manifest").commit()
         return AppUpdates(production, scope)
     }
-    @Test fun importantSheetReturnsEachOpenEvenWhenSkippedButSwitchWins() {
+    @Test fun importantSheetReturnsEachOpenButSwitchWins() {
         val updates = importantRelease()
-        updates.skip(99999)
         updates.onAppOpen()
         assertNotNull(updates.state.value.offerSheet)
-        assertFalse(updates.state.value.badge(1))
         updates.offerSheetShown(99999); updates.dismissOfferSheet()
         assertNull(updates.state.value.offerSheet)
         updates.onAppOpen() // A configuration change/resume within the same open is not a new reminder.
@@ -193,7 +187,7 @@ class AppUpdatesTest {
         updates.onAppClosed(); updates.onAppOpen()
         assertNull(updates.state.value.offerSheet)
     }
-    @Test fun importantRenotifiesAtMostOncePerDayAndSkipStillWins() {
+    @Test fun importantRenotifiesAtMostOncePerDay() {
         val first = importantRelease()
         val manager = context.getSystemService(NotificationManager::class.java)
         first.postNotification(); manager.cancel(UpdateNotifications.ID)
@@ -206,10 +200,6 @@ class AppUpdatesTest {
         now++
         updates.postNotification()
         assertEquals(1, manager.activeNotifications.size)
-        manager.cancel(UpdateNotifications.ID)
-        updates.skip(99999); now += 86_400_000L
-        updates.postNotification()
-        assertTrue(manager.activeNotifications.isEmpty())
     }
     @Test fun jitterIncludesBothBoundsAndUsesInjectedRandom() {
         fun fixed(upper: Boolean) = object : kotlin.random.Random() {
@@ -243,13 +233,14 @@ class AppUpdatesTest {
         assertNull(updates.state.value.release)
         assertTrue(WorkManager.getInstance(context).getWorkInfosForUniqueWork(AppUpdates.WORK).get().none { !it.state.isFinished })
     }
-    @Test fun skippingPersistsAndRemovesPostedNotification() {
+    @Test fun legacySkippedPrefNoLongerHidesTheOfferAndIsRemoved() {
+        val prefs = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE)
+        prefs.edit().putLong("skipped", 99999L).commit()
         val updates = cachedRelease()
-        updates.postNotification()
-        assertTrue(context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == UpdateNotifications.ID })
-        updates.skip(99999)
-        assertEquals(99999L, AppUpdates(production, scope).state.value.skipped)
-        assertTrue(context.getSystemService(NotificationManager::class.java).activeNotifications.none { it.id == UpdateNotifications.ID })
+        assertEquals(99999L, updates.state.value.release?.code)
+        assertTrue(updates.state.value.badge(1))
+        assertTrue(updates.state.value.card(1))
+        assertFalse(prefs.contains("skipped"))
     }
     private fun cachedRelease(): AppUpdates {
         val json = org.json.JSONObject().put("tag_name", "v0.4.4").put("body", "<!-- nezzel:versionCode=99999 -->")
@@ -258,16 +249,12 @@ class AppUpdatesTest {
         context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).edit().putString("release", json.toString()).commit()
         return AppUpdates(production, scope)
     }
-    @Test fun notificationIsPostedOnceAndSkipCancelsIt() {
+    @Test fun notificationIsPostedOnce() {
         val updates = cachedRelease()
         val manager = context.getSystemService(NotificationManager::class.java)
         updates.postNotification()
         assertEquals(1, manager.activeNotifications.count { it.id == UpdateNotifications.ID })
         manager.cancel(UpdateNotifications.ID)
-        updates.postNotification()
-        assertTrue(manager.activeNotifications.none { it.id == UpdateNotifications.ID })
-        updates.skip(99999)
-        assertNotNull(updates.state.value.release) // Manual check can still open the skipped release.
         updates.postNotification()
         assertTrue(manager.activeNotifications.none { it.id == UpdateNotifications.ID })
     }
@@ -314,7 +301,7 @@ class AppUpdatesTest {
         assertEquals(UpdateCheck.NONE, updates.state.value.check)
     }
 
-    @Test fun manualCheckStillOffersSkippedVersionWhenAutomaticIsOff() = runBlocking {
+    @Test fun manualCheckStillRunsWhenAutomaticIsOff() = runBlocking {
         cachedRelease()
         val bytes = context.getSharedPreferences("app-updates", Context.MODE_PRIVATE).getString("release", null)!!.toByteArray()
         var requests = 0
@@ -322,14 +309,13 @@ class AppUpdatesTest {
             override suspend fun manifest(): ByteArray = throw java.io.IOException()
             override suspend fun latest(): ByteArray { requests++; return bytes }
         } }
-        updates.skip(99999); updates.setAutomatic(false)
+        updates.setAutomatic(false)
         updates.check(manual = false)
         assertEquals(0, requests)
         updates.check(manual = true)
         assertEquals(1, requests)
         assertEquals(UpdateCheck.AVAILABLE, updates.state.value.check)
         assertNotNull(updates.state.value.release)
-        assertFalse(updates.state.value.card(1))
     }
     @Test fun successfulStartupCheckIsThrottledAndStaleFilesAreRemoved() = runBlocking {
         cachedRelease()
@@ -619,15 +605,8 @@ class AppUpdatesTest {
         assertEquals(context.getString(dev.ahmed.savlino.R.string.update_notification_text),
             notification.extras.getString(android.app.Notification.EXTRA_TEXT))
     }
-    @Test fun skippedOrDisabledBackgroundNeverTransfersOrNotifies() = runBlocking {
-        val updates = cachedRelease()
-        updates.skip(99999)
-        updates.notifyInBackground(true)
-        assertEquals(UpdateStage.IDLE, updates.state.value.stage)
-        assertFalse(updates.directory.exists())
-        assertTrue(context.getSystemService(NotificationManager::class.java).activeNotifications.isEmpty())
-        updates.prefs.edit().remove("skipped").commit()
-        val disabled = AppUpdates(production, scope)
+    @Test fun disabledBackgroundNeverTransfersOrNotifies() = runBlocking {
+        val disabled = cachedRelease()
         disabled.setAutomatic(false)
         disabled.notifyInBackground(true)
         assertEquals(UpdateStage.IDLE, disabled.state.value.stage)
@@ -687,15 +666,13 @@ class AppUpdatesTest {
         assertFalse(updates.prefs.contains("install-session"))
         assertTrue(context.packageManager.packageInstaller.allSessions.isEmpty())
     }
-    @Test fun badgeSurvivesCardDismissalButNotSkipOrInstalledVersion() {
+    @Test fun badgeSurvivesCardDismissalButNotTheInstalledVersion() {
         val updates = cachedRelease()
         assertTrue(updates.state.value.badge(1))
         updates.dismiss()
         assertFalse(updates.state.value.card(1))
         assertTrue(updates.state.value.badge(1))
         assertFalse(updates.state.value.badge(99999))
-        updates.skip(99999)
-        assertFalse(updates.state.value.badge(1))
         assertFalse(AppUpdateState().badge(1))
     }
     @Test fun lastCheckedOnlyAdvancesOnSuccessfulCheckAndRestores() = runBlocking {

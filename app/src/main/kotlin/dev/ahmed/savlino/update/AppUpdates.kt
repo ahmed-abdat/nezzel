@@ -44,12 +44,12 @@ class WhatsNew(val version: String, val english: List<String>, val arabic: List<
         else -> english
     })
 }
-data class AppUpdateState(val automatic: Boolean = true, val release: Release? = null, val skipped: Long? = null,
+data class AppUpdateState(val automatic: Boolean = true, val release: Release? = null,
     val dismissedAt: Long? = null, val check: UpdateCheck = UpdateCheck.NONE, val stage: UpdateStage = UpdateStage.IDLE,
     val bytes: Long = 0, val failure: UpdateFailure? = null, val transfer: Release? = null,
     val confirmation: Intent? = null, val lastChecked: Long? = null, val whatsNew: WhatsNew? = null,
     val offerSheet: Release? = null) {
-    fun badge(current: Long) = release?.let { UpdatePolicy.offer(it.code, current, skipped) } == true
+    fun badge(current: Long) = release?.let { UpdatePolicy.offer(it.code, current) } == true
     fun card(current: Long, now: Long = System.currentTimeMillis()) =
         badge(current) && (dismissedAt == null || now - dismissedAt >= UpdatePolicy.REMINDER_AGE)
 }
@@ -63,14 +63,16 @@ class AppUpdates internal constructor(private val context: Context, private val 
     private val appPrefs = AppPreferences(context)
     private val mutable = MutableStateFlow(AppUpdateState(automatic = appPrefs.appUpdates,
         release = if (available) cachedRelease()?.takeIf { it.code > BuildConfig.VERSION_CODE } else null,
-        skipped = prefs.getLong("skipped", -1).takeIf { it > 0 },
         lastChecked = prefs.getLong("success", 0).takeIf { prefs.contains("success") },
         whatsNew = readWhatsNew()))
     val state: StateFlow<AppUpdateState> = mutable.asStateFlow()
     @Volatile private var foreground = false
     private var handledInOpen: Long? = null
     private val bundledNotes by lazy { BundledWhatsNew.read(context.assets) }
-    init { currentNotes(); refreshPresentation() } // Discard notes retained by an older build, even before About opens
+    init {
+        if (prefs.contains("skipped")) prefs.edit().remove("skipped").apply() // Skip was removed in 0.5.6
+        currentNotes(); refreshPresentation() // Discard notes retained by an older build, even before About opens
+    }
     private val checkGate = Mutex()
     private val filesGate = Mutex()
     internal val installGate = Mutex()
@@ -177,7 +179,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
         if (prefs.contains("dismissed-${release.code}") &&
             now() - prefs.getLong("dismissed-${release.code}", 0) < UpdatePolicy.REMINDER_AGE) return false
         if (UpdatePolicy.notify(context.packageName, appPrefs.appUpdates, release.code, BuildConfig.VERSION_CODE.toLong(),
-                state.value.skipped, prefs.getLong("notified", -1), release.important,
+                prefs.getLong("notified", -1), release.important,
                 prefs.getLong("notified-at-${release.code}", 0).takeIf { prefs.contains("notified-at-${release.code}") }, now()) &&
             UpdateNotifications(context).post(ready, confirmation)) {
             prefs.edit().putLong("notified", release.code).putLong("notified-at-${release.code}", now()).commit()
@@ -287,13 +289,6 @@ class AppUpdates internal constructor(private val context: Context, private val 
         if (isAppForeground()) return false
         postNotification(readyFile != null && state.value.stage == UpdateStage.READY)
         return false
-    }
-    @Synchronized fun skip(code: Long) {
-        if (!available) return
-        prefs.edit().putLong("skipped", code).commit()
-        mutable.update { it.copy(skipped = code) }
-        refreshPresentation()
-        UpdateNotifications(context).cancel()
     }
     @Synchronized fun install() {
         if (installation?.isActive == true) return

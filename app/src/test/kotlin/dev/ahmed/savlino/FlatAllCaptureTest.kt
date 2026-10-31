@@ -126,11 +126,11 @@ class FlatAllCaptureTest {
     }
 
     @Test fun updateIdle() = shoot("update-idle", 832) { lang ->
-        UpdateScreen(AppUpdateState(release = release), lang, true, {}, {}, {}, {}, {}, {})
+        UpdateScreen(AppUpdateState(release = release), lang, true, {}, {}, {}, {}, {})
     }
 
     @Test fun updatePermission() = shoot("update-permission", 900) { lang ->
-        UpdateScreen(AppUpdateState(release = release, transfer = release, stage = UpdateStage.READY), lang, false, {}, {}, {}, {}, {}, {})
+        UpdateScreen(AppUpdateState(release = release, transfer = release, stage = UpdateStage.READY), lang, false, {}, {}, {}, {}, {})
     }
 
     @Test @Config(sdk = [29])

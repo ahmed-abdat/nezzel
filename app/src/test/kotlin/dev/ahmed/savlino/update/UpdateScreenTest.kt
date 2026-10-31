@@ -26,12 +26,12 @@ class UpdateScreenTest {
     private fun renderState(stage: UpdateStage, canInstall: Boolean = true, failure: UpdateFailure? = null) =
         renderThemed({ nodes(it) }, {
             UpdateScreen(AppUpdateState(release = release, transfer = release, stage = stage, failure = failure, bytes = 524_288),
-                context.resources.configuration.locales[0].language, canInstall, {}, {}, {}, {}, {}, {})
+                context.resources.configuration.locales[0].language, canInstall, {}, {}, {}, {}, {})
         }) { a ->
             val all = nodes(a)
             val shown = texts(all)
             val expected = when (stage) {
-                UpdateStage.IDLE -> R.string.update_skip
+                UpdateStage.IDLE -> R.string.update_not_now
                 UpdateStage.DOWNLOADING -> R.string.cancel
                 UpdateStage.VERIFYING -> R.string.update_verifying
                 UpdateStage.READY -> if (canInstall) R.string.update_install else R.string.update_permission_action
@@ -98,10 +98,9 @@ class UpdateScreenTest {
         val language = context.resources.configuration.locales[0].language
         val many = Release("0.4.5", 99999, "update.apk", 1_048_576, "https://github.com/asset", "a".repeat(64),
             (1..8).map { "Improvement $it" }, (1..8).map { "تحسين $it" })
-        var skipped: Long? = null
         var backed = false
         renderThemed({ nodes(it) }, {
-            UpdateScreen(AppUpdateState(release = many), language, true, { backed = true }, {}, {}, { skipped = it }, {}, {})
+            UpdateScreen(AppUpdateState(release = many), language, true, { backed = true }, {}, {}, {}, {})
         }) { a ->
             val all = nodes(a)
             val prefix = if (language == "ar") "تحسين" else "Improvement"
@@ -114,7 +113,6 @@ class UpdateScreenTest {
             assertFalse(texts(all).any { "GitHub" in it })
             assertNull(org.robolectric.Shadows.shadowOf(a).nextStartedActivity)
             click(context.getString(R.string.update_not_now)); assertTrue(backed)
-            click(context.getString(R.string.update_skip)); assertEquals(99999L, skipped)
         }
     }
     @Test fun allNotesAndSecondaryActionsWorkEnglish() = allNotes()
@@ -139,7 +137,7 @@ class UpdateScreenTest {
             androidx.compose.ui.unit.Density(density.density, 2f)) {
             dev.ahmed.savlino.ui.theme.NezzelTheme(dev.ahmed.savlino.locale.ThemePref.Dark, false) {
                 UpdateScreen(AppUpdateState(release = release), context.resources.configuration.locales[0].language,
-                    true, {}, {}, {}, {}, {}, {})
+                    true, {}, {}, {}, {}, {})
             }
         }
     }) { a ->
@@ -306,10 +304,6 @@ class UpdateScreenTest {
                 val offer = nodes(a).single { it.config.getOrNull(SemanticsProperties.TestTag) == "settings_update_offer" }
                 offer.config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action!!.invoke()
                 assertEquals(1, opened)
-            }
-            updates.skip(99999)
-            renderThemed({ nodes(it) }, { UpdateSettings(updates) {} }) { a ->
-                assertTrue(nodes(a).none { it.config.getOrNull(SemanticsProperties.TestTag) == "settings_update_offer" })
             }
         } finally { owner.coroutineContext[kotlinx.coroutines.Job]!!.cancel(); prefs.edit().clear().commit() }
     }
