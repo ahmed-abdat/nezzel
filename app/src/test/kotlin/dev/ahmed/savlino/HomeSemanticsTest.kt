@@ -258,7 +258,7 @@ class HomeSemanticsTest {
                     androidx.compose.ui.platform.LocalConfiguration provides configuration,
                     androidx.compose.ui.platform.LocalLayoutDirection provides if (configuration.locales[0].language == "ar") androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
                     dev.ahmed.savlino.ui.theme.NezzelTheme(theme, false) {
-                        HomeLinkCard(vm) { pasteClicks++; vm.paste("not a URL") }
+                        HomeLinkCard(vm) { pasteClicks++; vm.paste("ftp://not a URL") }
                     }
                 }
             }

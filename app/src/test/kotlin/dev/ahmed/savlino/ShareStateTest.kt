@@ -43,6 +43,18 @@ class ShareStateTest {
         assertEquals("v360", selectedFormat?.id)
     }
 
+    @Test fun singleAndMultiLinkSharesCloseSearch() {
+        for (input in listOf(first, "$first $second")) {
+            val vm = LinkViewModel(SavedStateHandle(), engine = Engine())
+            vm.automaticOptions = false
+            vm.search.open("cats"); idle()
+            assertTrue(vm.search.visible)
+            vm.onNewShare(share(input)); idle()
+            assertFalse(vm.search.visible)
+            assertEquals(input != first, vm.multi.visible)
+        }
+    }
+
     @Test fun invalidSharePreservesInspectionSelectionAndExpandedOptions() {
         val engine = Engine(); val vm = ready(engine)
         vm.showMoreFormats()

@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -60,10 +61,13 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
     val reduced = LocalReducedMotion.current
     val colors = MaterialTheme.colorScheme
     val check = { focus.clearFocus(); keyboard?.hide(); links.checkLink() }
+    // Words that aren't a link become a YouTube search; a link keeps View options.
+    val words = links.searchWords
+    val search = { focus.clearFocus(); keyboard?.hide(); links.openSearch() }
     val paste = { focus.clearFocus(); keyboard?.hide(); onPaste() }
     DisposableEffect(links) { onDispose { links.editorFocused = false } }
     // The placeholder disappears once there is text; this name stays for TalkBack. Entry itself stays LTR.
-    val fieldLabel = stringResource(R.string.link_field_label)
+    val fieldLabel = stringResource(if (words != null) R.string.search_field_label else R.string.link_field_label)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
         // Keep the last host so the card still has its text while it fades out.
         var shownHost by remember { mutableStateOf(copiedHost) }
@@ -79,7 +83,10 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
             modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).shadow(Dock.SHADOW, Dock.SHAPE)
                 .onFocusChanged { links.editorFocused = it.isFocused }.semantics { contentDescription = fieldLabel },
             shape = Dock.SHAPE,
-            leadingIcon = { Icon(painterResource(R.drawable.ic_link), null, Modifier.padding(start = Space.s)) },
+            leadingIcon = {
+                if (words != null) Icon(Icons.Default.Search, null, Modifier.padding(start = Space.s))
+                else Icon(painterResource(R.drawable.ic_link), null, Modifier.padding(start = Space.s))
+            },
             trailingIcon = {
                 if (links.text.isEmpty()) PasteButton(paste, Modifier.padding(end = Space.s))
                 else IconButton(onClick = { links.edit("") }, modifier = Modifier.padding(end = Space.xs)) {
@@ -87,9 +94,10 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
                 }
             },
             placeholder = { Text(stringResource(R.string.link_field_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Ltr),
+            // A link starts with a Latin letter, so it stays LTR; Arabic words read RTL.
+            textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (links.text.isNotEmpty()) check() }),
+            keyboardActions = KeyboardActions(onDone = { if (words != null) search() else if (links.text.isNotEmpty()) check() }),
             singleLine = true, isError = links.invalid,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Dock.color,
@@ -104,7 +112,12 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
         // Fade only: the action keeps its full 56dp from the first frame, so it is never a sliver to tap.
         AnimatedVisibility(links.text.isNotEmpty(),
             enter = fadeIn(easeOut(reduced, Motion.FADE_IN)), exit = fadeOut(easeOut(reduced, Motion.FADE_OUT))) {
-            Button(onClick = check, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            if (words != null) Button(onClick = search, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Icon(Icons.Default.Search, null, Modifier.size(20.dp))
+                Spacer(Modifier.width(Space.s))
+                // The words are their own first-strong run, so Arabic words in the English label (or the reverse) keep their order.
+                Text(stringResource(R.string.search_youtube_for, NezzelFormat.firstStrong(words)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else Button(onClick = check, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text(stringResource(R.string.check_link))
             }
         }

@@ -35,6 +35,9 @@ interface EngineAdapter {
     /** Explicit playlist-listing path; ordinary inspection remains single-video. */
     suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken? = null): PlaylistResult =
         PlaylistResult.Failure(DownloadError.Unsupported)
+    /** YouTube search words typed on Home; one page of video rows from 1-based [start]. Never logged. */
+    suspend fun searchYouTube(query: String, operationId: String, start: Int = 1): SearchOutcome =
+        SearchOutcome.Failure(DownloadError.Unsupported)
     suspend fun inspect(source: LinkRevision, operationId: String): InspectResult
     /** Renew a lazy playlist selection after interruption; bypass reusable inspection results. */
     suspend fun inspectFresh(source: LinkRevision, operationId: String): InspectResult = inspect(source, operationId)

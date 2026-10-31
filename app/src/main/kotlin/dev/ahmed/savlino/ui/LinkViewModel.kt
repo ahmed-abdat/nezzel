@@ -453,6 +453,25 @@ class LinkViewModel(
         },
         onAccepted = { acceptedJob = playlistSubmissionId; dismissOptions(); clearField() },
         preferredPreset = ::preferredBatchPreset, rememberPreset = ::rememberBatchPreset)
+    val search = SearchViewModel(engine, viewModelScope)
+    /** Home's words, when they aren't a link: offered as a YouTube search instead of View options. */
+    val searchWords get() = SearchViewModel.wordsOf(text)
+    fun openSearch() { searchWords?.let(search::open) }
+    /** A result is the same path as a pasted watch link: the options sheet, no download. */
+    fun openSearchResult(result: dev.ahmed.savlino.engine.SearchResult) {
+        dismissShare()
+        suggestion = null
+        edit(result.url)
+        setTyped(false)
+        checkLink()
+    }
+    /** Back to Home with the searched words in the field again. */
+    fun closeSearch() {
+        val words = search.query
+        search.close()
+        dismissOptions()
+        edit(words)
+    }
     /** Handled-link marks for the clipboard after the confirm, like a single Download. */
     private fun markAllHandled(chosen: List<ValidatedLink>) {
         if (!clipboardReady) return
@@ -569,7 +588,7 @@ class LinkViewModel(
     var automaticOptions by mutableStateOf(true)
     var editorFocused by mutableStateOf(false)
     val clipboardEligible get() = clipboardReady && clipboardForeground && suggestionsEnabled && !editorFocused && destination == "Home" &&
-        !hasSuggestion && !hasPendingShare && linkQueue == null && !multi.visible && !invalidShare && !shareActive && text.isEmpty() &&
+        !hasSuggestion && !hasPendingShare && linkQueue == null && !multi.visible && !search.visible && !invalidShare && !shareActive && text.isEmpty() &&
         optionsState == OptionsState.Hidden && !hasPendingNotificationChoice
     var destination by mutableStateOf(saved.get<String>("destination") ?: "Home")
         private set
@@ -591,7 +610,7 @@ class LinkViewModel(
     }
 
     fun navigate(destination: String) {
-        if (destination != "Home") { dismissSuggestion(); dismissOptions() }
+        if (destination != "Home") { dismissSuggestion(); dismissOptions(); search.close() }
         if (destination == "Statuses" && this.destination != destination) usage.count(UsageKeys.STATUSES_OPENED)
         editorFocused = false
         this.destination = destination; saved["destination"] = destination
@@ -603,6 +622,7 @@ class LinkViewModel(
     }
     fun onNewShare(input: ShareInput?) {
         if (input == null) return
+        search.close()
         if (acceptedJob != null && optionsState == OptionsState.Hidden) {
             acceptedJob = null
             submitted = false

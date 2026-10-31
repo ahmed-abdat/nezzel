@@ -8,8 +8,8 @@ internal class YtdlpDebugDiagnostics(
     args: List<String> = emptyList(),
     private val log: (String, String) -> Unit = { tag, message -> Log.d(tag, message); Unit },
 ) {
-    // Info parsing and tag replacement may echo private titles. Suppress the entire attempt.
-    private val privateInput = "--load-info-json" in args || "--embed-metadata" in args
+    // Info parsing and tag replacement may echo private titles, and a search echoes the person's words. Suppress the entire attempt.
+    private val privateInput = "--load-info-json" in args || "--embed-metadata" in args || args.any { it.startsWith(YouTubeSearch.PREFIX) }
     private val tail = ArrayDeque<String>()
     @Synchronized fun accept(output: String) {
         if (!enabled || privateInput) return

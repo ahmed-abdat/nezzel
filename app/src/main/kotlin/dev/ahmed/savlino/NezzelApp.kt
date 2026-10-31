@@ -327,7 +327,8 @@ fun NezzelApp(
         val appUpdate = links.destination == "AppUpdate" && updates != null
         val moreFormats = links.moreFormats && !links.hasPendingShare
         // A full page in front keeps the tabs composed behind it, off-window and inert: coming back composes nothing again.
-        val covered = appUpdate || moreFormats
+        val searching = links.search.visible && !links.hasPendingShare
+        val covered = appUpdate || moreFormats || searching
         val tab = lastTab.also { if (links.destination in PrewarmTabs) it[0] = links.destination }[0]
         Box(Modifier.fillMaxSize().then(if (covered) OffWindow else Modifier)) {
             NavigationScaffold(tab, liveJobs, language, onNavigate, onReselect = onReselect,
@@ -368,6 +369,8 @@ fun NezzelApp(
         } else if (moreFormats) {
             OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
         } else {
+            // Results stay under the options sheet, so closing the sheet returns to them.
+            if (searching) dev.ahmed.savlino.ui.SearchScreen(links, snackbarHost = { if (!showOptions) SnackbarHost(snackbar) })
             if (showOptions) OptionsScreen(links, language, onDismissOptions) { SnackbarHost(snackbar) }
             if (links.multi.visible) dev.ahmed.savlino.ui.MultiLinkSheet(links.multi, language, links::dismissMulti)
         }

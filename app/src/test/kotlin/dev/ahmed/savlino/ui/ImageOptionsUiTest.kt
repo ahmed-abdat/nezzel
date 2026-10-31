@@ -142,8 +142,6 @@ class ImageOptionsUiTest {
                 R.string.image_thumbnail_desc, NezzelFormat.count(n, language), NezzelFormat.count(3, language))))
             assertTrue(labels.toString(), labels.contains(context.resources.getQuantityString(R.plurals.image_available_count,
                 3, NezzelFormat.count(3, language))))
-            assertEquals(if (language == "ar") "الصق رابطًا عامًا" else "Paste a public link",
-                context.getString(R.string.link_field_hint))
             assertFalse(labels.toString(), labels.contains(context.getString(R.string.image_preview_quality)))
             val save = clickable(nodes, context.resources.getQuantityString(R.plurals.image_save_count, 3, NezzelFormat.count(3, language)))
             val density = context.resources.displayMetrics.density

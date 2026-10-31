@@ -257,7 +257,7 @@
     <string name="automatic_options">عرض الخيارات تلقائيًا</string>
     <string name="automatic_options_help">لا يبدأ الحفظ إلا بضغطة منك</string>
     <string name="not_now">ليس الآن</string>
-    <string name="link_field_hint">الصق رابطًا عامًا</string>
+    <string name="link_field_hint">رابط أو بحث في يوتيوب</string>
     <string name="link_field_label">الرابط</string>
     <string name="copied_chip">استخدم الرابط المنسوخ</string>
     <string name="home_active_header">قيد التنزيل</string>
@@ -719,4 +719,11 @@
     <string name="tip_pause_title">أوقف التنزيلات بلمسة</string>
     <string name="tip_pause_body">من التنزيلات، أوقف كل تنزيلاتك مؤقتًا ثم استأنفها معًا.</string>
     <string name="download_post_transfer_error">تعذّر إكمال الملف</string>
+    <string name="search_youtube_for">ابحث في يوتيوب عن «%1$s»</string>
+    <string name="search_field_label">ابحث في يوتيوب</string>
+    <string name="search_no_results">لا توجد نتائج</string>
+    <string name="search_no_results_body">جرّب كلمات أخرى.</string>
+    <string name="search_failed">تعذّر البحث الآن</string>
+    <string name="search_failed_body">حدث خطأ أثناء البحث. أعد المحاولة بعد قليل.</string>
+    <string name="search_more_failed">تعذّر تحميل المزيد من النتائج</string>
 </resources>

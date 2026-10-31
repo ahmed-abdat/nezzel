@@ -134,6 +134,16 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             lister.list(source, page, operationId)
         }
 
+    override suspend fun searchYouTube(query: String, operationId: String, start: Int): SearchOutcome {
+        val words = YouTubeSearch.query(query) ?: return SearchOutcome.Failure(DownloadError.InvalidInput)
+        return operation(operationId, { error, _ -> SearchOutcome.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+            if (!initialize()) return@operation SearchOutcome.Failure(DownloadError.EngineUnavailable)
+            current.expireIn(limits.inspectMs)
+            version(current)
+            SearchOutcome.Success(YouTubeSearch.parse(execute(current, YouTubeSearch.args(words, start)), start))
+        }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun fastPlaylist(current: Operation, source: LinkRevision, page: PlaylistPageToken?, id: String): PlaylistPage? {
         val fast = fastSource ?: return null

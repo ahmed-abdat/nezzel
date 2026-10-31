@@ -233,7 +233,7 @@
     <string name="automatic_options">Show options automatically</string>
     <string name="automatic_options_help">Saving still waits for your tap</string>
     <string name="not_now">Not now</string>
-    <string name="link_field_hint">Paste a public link</string>
+    <string name="link_field_hint">Link or YouTube search</string>
     <string name="link_field_label">Link</string>
     <string name="copied_chip">Use copied link</string>
     <string name="home_active_header">In progress</string>
@@ -639,4 +639,11 @@
     <string name="tip_pause_title">Pause everything with one tap</string>
     <string name="tip_pause_body">In Downloads, you can pause all your downloads and resume them together.</string>
     <string name="download_post_transfer_error">Couldn’t finish the file</string>
+    <string name="search_youtube_for">Search YouTube for “%1$s”</string>
+    <string name="search_field_label">Search YouTube</string>
+    <string name="search_no_results">No results</string>
+    <string name="search_no_results_body">Try other words.</string>
+    <string name="search_failed">Couldn’t search right now</string>
+    <string name="search_failed_body">Something went wrong on the way. Try again in a moment.</string>
+    <string name="search_more_failed">Couldn’t load more results</string>
 </resources>
