@@ -484,34 +484,62 @@ html:not(.js) .amk{display:none}
 @media (prefers-reduced-motion:reduce){.apf.on .amr{animation:none}}
 
 .tl-rd{--tb:#fff;--tg:#FF4500;--gs:.7}
-.viz:has(.lk){container-type:normal}
-.lkf{position:relative;height:min(100%,640px);max-width:100%;aspect-ratio:1000/2046;padding:2.3%;border-radius:12.5% / 6.1%;background:#0A0A0C;box-shadow:0 0 0 1.5px #3A3B40,0 0 0 3px #17181B,0 34px 70px -30px rgb(0 0 0/.75)}
-.lkf::before,.lkf::after{content:"";position:absolute;right:-4px;width:3px;border-radius:0 2px 2px 0;background:#2B2C31}
-.lkf::before{top:20%;height:9%}.lkf::after{top:32%;height:5%}
-.lk{width:100%;height:100%;container-type:size;position:relative;direction:ltr;overflow:hidden;border-radius:10.8% / 5.2%;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(60% 45% at 100% 40%,#B89A92,transparent 70%),radial-gradient(70% 40% at 0% 100%,#3D86DA,transparent 70%),linear-gradient(170deg,#2E56A8,#5C7CC0 45%,#8C8DB8 70%,#4C82D4)}
+.viz:has(.vp){container-type:normal}
+.vp{--u:calc(100cqw / 923);width:100%;height:100%;container-type:size;position:relative;overflow:hidden;border-radius:10.8% / 5.2%;background:#000;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.vp svg{fill:currentColor;flex:none}
+.vpcam{position:absolute;left:50%;top:calc(24 * var(--u));width:calc(33 * var(--u));height:calc(33 * var(--u));translate:-50% 0;border-radius:50%;background:#111;box-shadow:0 0 0 calc(3 * var(--u)) rgb(255 255 255/.06)}
+.vpbar{position:absolute;inset-inline:calc(24 * var(--u));top:calc(80 * var(--u));height:calc(108 * var(--u));display:flex;align-items:center}
+.vpbar i{flex:1}
+.vpbar svg{width:calc(54 * var(--u));height:calc(54 * var(--u));margin:0 calc(27 * var(--u))}
+.vpbar svg:first-child{width:calc(66 * var(--u));height:calc(66 * var(--u));margin:0 calc(21 * var(--u))}
+[dir=rtl] .vpmir{scale:-1 1}
+.vpbd{position:absolute;inset:calc(190 * var(--u)) calc(54 * var(--u)) calc(70 * var(--u));display:flex;flex-direction:column;align-items:center;justify-content:center}
+.vpcv{width:calc(846 * var(--u));max-width:none;aspect-ratio:1;flex:none;border-radius:calc(44 * var(--u));overflow:hidden;background:#222}
+.vpcv img{width:100%;height:100%;object-fit:cover}
+.vpt{margin-top:calc(54 * var(--u));max-width:100%;font-size:calc(50 * var(--u));line-height:1.3;font-weight:500;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vprs{margin-top:calc(54 * var(--u));width:100%;height:calc(108 * var(--u));padding-inline:calc(18 * var(--u));display:flex;align-items:center;gap:calc(14 * var(--u));font-size:calc(33 * var(--u));white-space:nowrap}
+.vprs>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vprs b{padding:0 calc(27 * var(--u));font-weight:500;color:#80D5C6}
+.vpsk{direction:ltr;width:100%;height:calc(108 * var(--u));display:flex;align-items:center;gap:calc(36 * var(--u));font-size:calc(31 * var(--u))}
+.vpe{color:rgb(255 255 255/.72)}
+.vptr{--v:.62;position:relative;flex:1;height:calc(8 * var(--u));border-radius:calc(4 * var(--u));background:rgb(255 255 255/.28)}
+.vptr i{position:absolute;inset:0;border-radius:inherit;background:#80D5C6;transform-origin:left;transform:scaleX(var(--v))}
+.vpk{position:absolute;inset:0;transform:translateX(calc(var(--v) * 100%))}
+.vpk::after{content:"";position:absolute;left:calc(-23 * var(--u));top:50%;width:calc(46 * var(--u));height:calc(46 * var(--u));translate:0 -50%;border-radius:50%;background:#80D5C6}
+.vpcl{direction:ltr;margin-block:calc(18 * var(--u));display:flex;align-items:center;gap:calc(90 * var(--u))}
+.vpcl>svg{width:calc(70 * var(--u));height:calc(70 * var(--u))}
+.vppl{width:calc(172 * var(--u));height:calc(172 * var(--u));display:grid;place-items:center;border-radius:50%;background:#80D5C6;color:#003731}
+.vppl svg{width:calc(80 * var(--u));height:calc(80 * var(--u))}
+.vpft{width:100%;height:calc(117 * var(--u));display:flex;align-items:center;justify-content:space-between;padding-inline:calc(22 * var(--u));font-size:calc(36 * var(--u));font-weight:500}
+.vpft svg{width:calc(56 * var(--u));height:calc(56 * var(--u))}
+.vpa,.vpdk{position:absolute;inset:0}
+.vpdk{background:#000;opacity:0;pointer-events:none}
+.vptr,.lkb{--v:.4}
+.lk{container-type:size;position:absolute;inset:0;opacity:0;direction:ltr;overflow:hidden;border-radius:10.8% / 5.2%;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(60% 45% at 100% 40%,#B89A92,transparent 70%),radial-gradient(70% 40% at 0% 100%,#3D86DA,transparent 70%),linear-gradient(170deg,#2E56A8,#5C7CC0 45%,#8C8DB8 70%,#4C82D4)}
 .lk>*{position:absolute}
-.lkcam{left:50%;top:calc(24 * 100cqw / 954);width:calc(34 * 100cqw / 954);height:calc(34 * 100cqw / 954);translate:-50% 0;border-radius:50%;background:#050506;box-shadow:0 0 0 calc(3 * 100cqw / 954) rgb(255 255 255/.06)}
 .lki{left:50%;top:calc(88 * 100cqw / 954);width:calc(44 * 100cqw / 954);height:calc(50 * 100cqw / 954);translate:-50% 0;fill:#EEF1FA}
-.lkd{left:0;right:0;top:calc(188 * 100cqw / 954);display:flex;justify-content:center;align-items:center;gap:calc(10 * 100cqw / 954);font-size:calc(32 * 100cqw / 954)}.lkd svg{width:calc(36 * 100cqw / 954);height:calc(36 * 100cqw / 954);fill:#fff;margin-inline-start:calc(14 * 100cqw / 954)}
 .lkc{left:0;right:0;top:calc(222 * 100cqw / 954);display:grid;justify-items:center;font-size:calc(158 * 100cqw / 954);font-weight:800;line-height:.85;letter-spacing:calc(4 * 100cqw / 954);background:linear-gradient(180deg,#fff,#D9DEF0);-webkit-background-clip:text;background-clip:text;color:transparent}
 .lka{left:calc(53 * 100cqw / 954);top:calc(528 * 100cqw / 954);width:calc(847 * 100cqw / 954);height:calc(827 * 100cqw / 954);border-radius:calc(64 * 100cqw / 954);overflow:hidden}
 .lka img{width:100%;height:100%;object-fit:cover}
-.lkt{direction:rtl;left:calc(120 * 100cqw / 954);right:calc(120 * 100cqw / 954);top:calc(1405 * 100cqw / 954);font-size:calc(44 * 100cqw / 954);font-weight:500;white-space:nowrap;overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);text-align:center}
+.lkt{unicode-bidi:plaintext;left:calc(120 * 100cqw / 954);right:calc(120 * 100cqw / 954);top:calc(1405 * 100cqw / 954);font-size:calc(44 * 100cqw / 954);font-weight:500;white-space:nowrap;overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);text-align:center}
 .lks{left:0;right:0;top:calc(1478 * 100cqw / 954);text-align:center;font-size:calc(37 * 100cqw / 954)}
 .lkm{left:calc(53 * 100cqw / 954);top:calc(1560 * 100cqw / 954);width:calc(847 * 100cqw / 954);height:calc(368 * 100cqw / 954);border-radius:calc(64 * 100cqw / 954);background:rgb(150 150 165/.55)}
 .lkm>*{position:absolute}
 .lkh{left:calc(57 * 100cqw / 954);right:calc(57 * 100cqw / 954);top:calc(30 * 100cqw / 954);height:calc(70 * 100cqw / 954);display:flex;align-items:center;gap:calc(14 * 100cqw / 954);font-size:calc(30 * 100cqw / 954)}
 .lkn{width:calc(34 * 100cqw / 954);height:calc(34 * 100cqw / 954);fill:#fff}
-.lko{margin-left:auto;padding:0 calc(38 * 100cqw / 954);height:100%;display:grid;place-items:center;border-radius:calc(35 * 100cqw / 954);background:rgb(90 90 105/.45);font-size:calc(32 * 100cqw / 954)}
 .lkb{left:calc(57 * 100cqw / 954);right:calc(62 * 100cqw / 954);top:calc(157 * 100cqw / 954);height:calc(14 * 100cqw / 954);border-radius:calc(7 * 100cqw / 954);background:rgb(255 255 255/.32)}
-.lkb i{position:absolute;inset:0 auto 0 0;width:16%;border-radius:inherit;background:#F5C6AE}
-.lkb i::after{content:"";position:absolute;right:calc(-17 * 100cqw / 954);top:50%;width:calc(34 * 100cqw / 954);height:calc(34 * 100cqw / 954);translate:0 -50%;border-radius:50%;background:#F5C6AE}
+.lkb i{position:absolute;inset:0;border-radius:inherit;background:#F5C6AE;transform-origin:left;transform:scaleX(var(--v,.4))}
+.lkk{position:absolute;inset:0;transform:translateX(calc(var(--v,.4) * 100%))}
+.lkk::after{content:"";position:absolute;left:calc(-17 * 100cqw / 954);top:50%;width:calc(34 * 100cqw / 954);height:calc(34 * 100cqw / 954);translate:0 -50%;border-radius:50%;background:#F5C6AE}
 .lkx{left:calc(57 * 100cqw / 954);right:calc(68 * 100cqw / 954);top:calc(185 * 100cqw / 954);display:flex;justify-content:space-between;font-size:calc(26 * 100cqw / 954);color:rgb(255 255 255/.75)}
 .lkr{left:calc(195 * 100cqw / 954);right:calc(140 * 100cqw / 954);top:calc(250 * 100cqw / 954);height:calc(70 * 100cqw / 954);display:flex;justify-content:space-between;align-items:center}
 .lkr svg{width:calc(58 * 100cqw / 954);height:calc(58 * 100cqw / 954);fill:#fff}
 .lkr svg:first-child{width:calc(44 * 100cqw / 954);height:calc(44 * 100cqw / 954)}
 .lkr text{fill:#fff;font-family:inherit}
-@media (max-width:1023px){.viz:has(.lk){padding-top:20px}}
+.lkf{position:relative;height:min(100%,640px);max-width:100%;aspect-ratio:1000/2046;padding:2.3%;border-radius:12.5% / 6.1%;background:#0A0A0C;box-shadow:0 0 0 1.5px #3A3B40,0 0 0 3px #17181B,0 34px 70px -30px rgb(0 0 0/.75)}
+.lkf::before,.lkf::after{content:"";position:absolute;right:-4px;width:3px;border-radius:0 2px 2px 0;background:#2B2C31}
+.lkf::before{top:20%;height:9%}.lkf::after{top:32%;height:5%}
+@media (max-width:1023px){.viz:has(.vp){padding-top:20px}}
 /* install: four numbered steps in a row, one Android switch */
 .ins{padding-top:clamp(104px,12vw,150px)}
 .ih{display:grid;gap:32px;align-items:end}
@@ -637,8 +665,9 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   html.ios .sbar{display:none}
 }
 .sbg{flex:1;min-width:0;min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding-inline:16px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:16px;white-space:nowrap}
-.sbg .i{width:20px;height:20px}
-.sbh{flex:none;min-height:48px;display:inline-flex;align-items:center;padding-inline:12px;color:var(--primary);font-weight:600;font-size:15px;white-space:nowrap}
+.sbg .i{width:20px;height:20px;flex:none}
+.sbg>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sbh{flex:0 1 auto;max-width:42%;min-height:48px;display:inline-flex;align-items:center;justify-content:center;padding-inline:8px;color:var(--primary);font-weight:600;font-size:15px;line-height:1.25;text-align:center;text-wrap:balance}
 
 @media (max-width:520px){
   body{font-size:16.5px}
@@ -712,7 +741,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   <span class="ghost" aria-hidden="true">Nezzel</span>
   <div class="copy">
     <h1 id="h1" data-i="h1"><span class="ln" style="--k:0"><span>انسخ الرابط</span></span> <span class="ln" style="--k:1"><span>وخلي الباقي على</span></span> <span class="ln" style="--k:2"><span><bdi>Nezzel</bdi></span></span></h1>
-    <p class="lede" data-i="lede">شاهدت فيديو أعجبك؟ احتفظ به على هاتفك، من واتساب ويوتيوب وفيسبوك وتيك توك</p>
+    <p class="lede" data-i="lede">احفظ على هاتفك الفيديوهات والأغاني بصيغة MP3، وحتى صور منشورات إنستغرام وX وتيك توك</p>
     <div class="cta">
       <p class="iab" data-i="iab">افتح الصفحة في Chrome<br><span class="iah"><b>⋮</b> ← فتح في المتصفح</span></p>
       <div class="ioc"><p class="iot" data-i="ios-t">Nezzel متوفر على أندرويد فقط</p><button class="btn iob" type="button"><svg class="i"><use href="#share"/></svg><span data-i="ios-share">شاركه مع أصحابك</span></button></div>
@@ -814,13 +843,28 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     <span class="dim" aria-hidden="true"></span>
   </div></article>
   <article class="card" style="--i:4"><div class="pnl t-tl">
-    <div class="cx"><h3 data-i="x7">اسمع وشاشتك مقفلة</h3><p data-i="x7p">شغّل الصوت اللي نزلته في Nezzel، ويكمل حتى لو قفلت الشاشة</p></div>
-    <div class="viz"><div class="lkf" aria-hidden="true"><div class="lk"><span class="lkcam"></span><svg class="lki" viewBox="0 0 24 24"><path d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-8-2a3 3 0 0 1 6 0v2H9V7z"/></svg><small class="lkd">Tue, Oct 27 <svg viewBox="0 0 24 24"><path d="M7 19a5 5 0 0 1-.6-9.96A6 6 0 0 1 17.7 10 4.5 4.5 0 0 1 17.5 19z"/></svg>29°</small><b class="lkc num"><span>11</span><span>11</span></b>
-      <span class="lka"><img src="/img/films/sintel.webp" alt="" width="480" height="270" loading="lazy" decoding="async"></span>
-      <b class="lkt" data-i="au-t">حلقة البودكاست</b><small class="lks">Nezzel</small>
-      <span class="lkm"><span class="lkh"><svg class="lkn" viewBox="0 0 24 24"><path d="M3 4h4.2l7.3 10.2V4H18v8h3l-4.75 6.5L11.5 12v4.6L7.2 10.5V20H3z"/></svg><span>This phone</span><span class="lko">Media output</span></span>
-        <span class="lkb"><i></i></span><span class="lkx num"><span>20:03</span><span>2:07:42</span></span>
-        <span class="lkr"><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="16.2" text-anchor="middle" font-size="6.4" font-weight="700">10</text></svg><svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg><svg viewBox="0 0 24 24" style="scale:-1 1"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="16.2" text-anchor="middle" font-size="6.4" font-weight="700" style="scale:-1 1;transform-origin:12px 12px">10</text></svg></span></span>
+    <div class="cx"><h3 data-i="x7">شاهد واسمع داخل Nezzel</h3><p data-i="x7p">يكمّل من حيث توقفت، والأغاني تبقى شغّالة حتى والشاشة مطفأة</p></div>
+    <div class="viz"><div class="lkf" aria-hidden="true"><div class="vp">
+      <span class="vpa">
+      <span class="vpbar"><svg viewBox="0 0 24 24"><path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg><i></i><svg viewBox="0 -960 960 960"><path d="M686-80q-47.5 0-80.75-33.25T572-194q0-8 5-34L278-403q-16.28 17.34-37.640 27.17Q219-366 194-366q-47.5 0-80.75-33T80-480q0-48 33.25-81T194-594q24 0 45 9.3 21 9.29 37 25.7l301-173q-2-8-3.5-16.5T572-766q0-47.5 33.25-80.75T686-880q47.5 0 80.75 33.25T800-766q0 47.5-33.25 80.75T686-652q-23.27 0-43.64-9Q622-670 606-685L302-516q3 8 4.5 17.5t1.5 18q0 8.5-1 16t-3 15.5l303 173q16-15 36.090-23.5 20.1-8.5 43.070-8.5Q734-308 767-274.750T800-194q0 47.5-33.25 80.75T686-80Zm.04-60q22.96 0 38.46-15.54 15.5-15.53 15.5-38.5 0-22.96-15.54-38.46-15.53-15.5-38.5-15.5-22.96 0-38.46 15.54-15.5 15.53-15.5 38.5 0 22.96 15.54 38.46 15.53 15.5 38.5 15.5Zm-492-286q22.96 0 38.46-15.54 15.5-15.53 15.5-38.5 0-22.96-15.54-38.46-15.53-15.5-38.5-15.5-22.96 0-38.46 15.54-15.5 15.53-15.5 38.5 0 22.96 15.54 38.46 15.53 15.5 38.5 15.5ZM724.5-727.54q15.5-15.53 15.5-38.5 0-22.96-15.54-38.46-15.53-15.5-38.5-15.5-22.96 0-38.46 15.54-15.5 15.53-15.5 38.5 0 22.96 15.54 38.46 15.53 15.5 38.5 15.5 22.96 0 38.46-15.54Z"/></svg><svg class="vpmir" viewBox="0 -960 960 960"><path d="M180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h249q12.75 0 21.38 8.68 8.62 8.67 8.62 21.5 0 12.82-8.62 21.32-8.630 8.5-21.38 8.5H180v600h600v-249q0-12.75 8.68-21.38 8.67-8.62 21.5-8.62 12.82 0 21.32 8.62 8.5 8.63 8.5 21.38v249q0 24-18 42t-42 18H180Zm600-617L403-360q-9 9-21 8.5t-21-9.5q-9-9-9-21t9-21l377-377H549q-12.75 0-21.37-8.68-8.63-8.67-8.63-21.5 0-12.82 8.63-21.32 8.62-8.5 21.37-8.5h261q12.75 0 21.38 8.62Q840-822.75 840-810v261q0 12.75-8.68 21.37-8.67 8.63-21.5 8.63-12.82 0-21.32-8.63-8.5-8.62-8.5-21.37v-188Z"/></svg></span>
+      <span class="vpbd">
+        <span class="vpcv"><img src="/img/films/sintel.webp" alt="" width="480" height="270" loading="lazy" decoding="async"></span>
+        <b class="vpt" data-i="vp-t">أغنيتي المفضلة</b>
+        <span class="vprs"><span data-i="vp-res">تم الاستئناف من <span class="ltr num vpn">1:24</span></span><b data-i="vp-over">البدء من جديد</b></span>
+        <span class="vpsk num"><span class="vpc">1:24</span><span class="vptr"><i></i><b class="vpk"></b></span><span class="vpe">3:30</span></span>
+        <span class="vpcl"><svg viewBox="0 0 960 960"><path d="M480,880Q405,880 339.5,851.5Q274,823 225.5,774.5Q177,726 148.5,660.5Q120,595 120,520L200,520Q200,637 281.5,718.5Q363,800 480,800Q597,800 678.5,718.5Q760,637 760,520Q760,403 678.5,321.5Q597,240 480,240L474,240L536,302L480,360L320,200L480,40L536,98L474,160L480,160Q555,160 620.5,188.5Q686,217 734.5,265.5Q783,314 811.5,379.5Q840,445 840,520Q840,595 811.5,660.5Q783,726 734.5,774.5Q686,823 620.5,851.5Q555,880 480,880ZM360,640L360,460L300,460L300,400L420,400L420,640L360,640ZM500,640Q483,640 471.5,628.5Q460,617 460,600L460,440Q460,423 471.5,411.5Q483,400 500,400L580,400Q597,400 608.5,411.5Q620,423 620,440L620,600Q620,617 608.5,628.5Q597,640 580,640L500,640ZM520,580L560,580L560,460L520,460L520,580Z"/></svg><span class="vppl"><svg viewBox="0 0 960 960"><path d="M560,760L560,200L720,200L720,760L560,760ZM240,760L240,200L400,200L400,760L240,760Z"/></svg></span><svg viewBox="0 0 960 960"><path d="M360,640L360,460L300,460L300,400L420,400L420,640L360,640ZM500,640Q483,640 471.5,628.5Q460,617 460,600L460,440Q460,423 471.5,411.5Q483,400 500,400L580,400Q597,400 608.5,411.5Q620,423 620,440L620,600Q620,617 608.5,628.5Q597,640 580,640L500,640ZM520,580L560,580L560,460L520,460L520,580ZM480,880Q405,880 339.5,851.5Q274,823 225.5,774.5Q177,726 148.5,660.5Q120,595 120,520Q120,445 148.5,379.5Q177,314 225.5,265.5Q274,217 339.5,188.5Q405,160 480,160L486,160L424,98L480,40L640,200L480,360L424,302L486,240L480,240Q363,240 281.5,321.5Q200,403 200,520Q200,637 281.5,718.5Q363,800 480,800Q597,800 678.5,718.5Q760,637 760,520L840,520Q840,595 811.5,660.5Q783,726 734.5,774.5Q686,823 620.5,851.5Q555,880 480,880Z"/></svg></span>
+        <span class="vpft"><span class="ltr num">1×</span><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></span>
+      </span>
+      </span>
+      <span class="lk"><svg class="lki" viewBox="0 0 24 24"><path d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-8-2a3 3 0 0 1 6 0v2H9V7z"/></svg><b class="lkc num"><span>11</span><span>11</span></b>
+        <span class="lka"><img src="/img/films/sintel.webp" alt="" width="480" height="270" loading="lazy" decoding="async"></span>
+        <b class="lkt" data-i="vp-t">أغنيتي المفضلة</b><small class="lks">Nezzel</small>
+        <span class="lkm"><span class="lkh"><svg class="lkn" viewBox="0 0 24 24"><path d="M3 4h4.2l7.3 10.2V4H18v8h3l-4.75 6.5L11.5 12v4.6L7.2 10.5V20H3z"/></svg></span>
+          <span class="lkb"><i></i><b class="lkk"></b></span><span class="lkx num"><span class="lkcur">1:24</span><span>3:30</span></span>
+          <span class="lkr"><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="16.2" text-anchor="middle" font-size="6.4" font-weight="700">10</text></svg><svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg><svg viewBox="0 0 24 24" style="scale:-1 1"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="16.2" text-anchor="middle" font-size="6.4" font-weight="700" style="scale:-1 1;transform-origin:12px 12px">10</text></svg></span></span>
+      </span>
+      <span class="vpdk"></span>
+      <span class="vpcam"></span>
     </div></div></div>
     <span class="dim" aria-hidden="true"></span>
   </div></article>
@@ -851,14 +895,14 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
 
 <section class="wrap ins" id="install" aria-labelledby="ins-h">
   <div class="ih">
-    <div><h2 id="ins-h" data-i="ins-h">التثبيت سهل، خطوة بخطوة</h2><p class="sub" data-i="ins-sub">ليس في متجر Play، لذا يستأذنك أندرويد أولًا. هذا عادي</p></div>
+    <div><h2 id="ins-h" data-i="ins-h">ثبت <bdi>Nezzel</bdi> من الموقع</h2></div>
     <div class="adlg" aria-hidden="true"><b data-i="sys-t2">تثبيت التطبيقات غير المعروفة</b><small data-i="sys-browser">المتصفح</small><span class="setrow"><span data-i="sys-allow">السماح من هذا المصدر</span><span class="tg"></span></span></div>
   </div>
   <ol class="strip">
-    <li style="--k:0"><b data-i="i1">حمّل الملف وافتحه</b><p data-i="i1p">اضغط «تنزيل التطبيق» ثم افتح الملف. إن ظهرت لك صفحة GitHub فاختر ملف APK. وقد يحذّرك المتصفح من نوع الملف</p></li>
-    <li style="--k:1"><b data-i="i2">اسمح بالتثبيت</b><p data-i="i2p">إن طلب أندرويد ذلك، فعّل «السماح من هذا المصدر» ثم ارجع</p></li>
-    <li style="--k:2"><b data-i="i3">اضغط تثبيت</b><p data-i="i3p">قد يعرض عليك <bdi>Play Protect</bdi> فحص التطبيق. وافق واتبع ما يظهر لك</p></li>
-    <li style="--k:3"><b data-i="i4">افتح Nezzel وجرّب</b><p data-i="i4p">انسخ أي رابط ثم افتح التطبيق، أو الصق الرابط فيه</p></li>
+    <li style="--k:0"><p data-i="i1p">ابدأ التنزيل: اضغط «تنزيل التطبيق»، ثم اختار «التنزيل على أيّ حال» فالتحذير عادي</p></li>
+    <li style="--k:1"><p data-i="i2p">اضغط «فتح»، ثم «الإعدادات» وفعل السماح مرة وحدة</p></li>
+    <li style="--k:2"><p data-i="i3p">اضغط «تثبيت»، وإذا ظهر (فحص من جوجل بلاي) <bdi>Play Protect</bdi> كمل الفحص</p></li>
+    <li style="--k:3"><p data-i="i4p">افتح <bdi>Nezzel</bdi> وجرب اول رابط لك</p></li>
   </ol>
 </section>
 
@@ -899,7 +943,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
   </div>
 </footer>
-<div class="sbar" id="sbar" inert><a class="sbg dl-link" data-place="sticky" href="/download?src=sticky-ar"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="cta">تنزيل التطبيق</span></a><a class="sbh" href="#install" data-i="howto">كيف أثبّته؟</a></div>
+<div class="sbar" id="sbar" inert><a class="sbg dl-link" data-place="sticky" href="/download?src=sticky-ar"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="cta-s">تنزيل التطبيق</span></a><a class="sbh" href="#install" data-i="howto">كيف أثبّته؟</a></div>
 <p class="tst" id="tst" role="status" aria-live="polite"></p>
 
 <script>
@@ -974,13 +1018,12 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "how-h":"From link to phone", 
     s1:"Copy the link",
     s2:"Pick the quality you want",
-    s3:"Tap Download. It’s saved on your phone", "more-h":"There’s more", x1:"WhatsApp statuses you’ve watched?", x2:"Or a whole playlist", x3:"Got lots of links?", x4:"Just the audio", x5:"Nezzel on your home screen", x7:"Keep listening with your screen locked",
-    "ins-h":"Easy to install, step by step",
-    "ins-sub":"It’s not on the Play Store, so Android checks with you first. That’s normal",
-    i1:"Get the file and open it", i1p:"Tap “Download the app”, then open the file. If GitHub opens, choose the APK. Your browser may warn you about the file type",
-    i2:"Allow the install", i2p:"If Android asks, switch on “Allow from this source”, then go back",
-    i3:"Tap Install", i3p:"Play Protect may offer to scan the app. Let it, and go with what it says",
-    i4:"Open Nezzel and try it", i4p:"Copy any link, then open the app, or paste the link in",
+    s3:"Tap Download. It’s saved on your phone", "more-h":"There’s more", x1:"WhatsApp statuses you’ve watched?", x2:"Or a whole playlist", x3:"Got lots of links?", x4:"Just the audio", x5:"Nezzel on your home screen", x7:"Watch and listen right in Nezzel",
+    "ins-h":"Install Nezzel from the site",
+    i1p:"Start the download: tap “Download the app”, then “Download anyway”. The warning is normal",
+    i2p:"Tap “Open”, then “Settings”, and allow it. Only the first time",
+    i3p:"Tap “Install”. If Play Protect offers a scan, let it finish",
+    i4p:"Open Nezzel and try your first link",
     "sys-done":"Download complete", "sys-t2":"Install unknown apps", "sys-browser":"Browser", "sys-allow":"Allow from this source",
     "sys-q":"Do you want to install this app?", "sys-cancel":"Cancel", "sys-install":"Install",
     "ap-h":"From the apps you love",
@@ -1002,14 +1045,14 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     gh:"GitHub", rel:"Releases",
     "fin-h":"Free, with no ads",
     foot:"Made by <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Security",
-    lede:"Seen a video you like? Keep it on your phone, from WhatsApp, YouTube, Facebook or TikTok",
+    lede:"Keep videos, MP3 songs and even photo posts from Instagram, TikTok and X on your phone",
     credit:"Video stills: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation, <a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></bdi>",
     "x1p": "Save them in one tap",
     "x2p": "Paste its link and Nezzel saves them one by one",
     "x3p": "Download them all at once",
     "x4p": "For songs and podcasts, in a smaller file",
     "x5p": "Follow your downloads without opening the app",
-    "x7p": "Play your downloaded audio in Nezzel, then lock your phone",
+    "x7p": "It picks up where you left off, and music keeps playing with the screen off",
     "x6": "Everything you saved, in one place",
     "x6p": "Search your files, or show just the videos, the audio or the statuses",
     "lb-t": "Downloads", "lb-q": "Search saved files", "lb-all": "All", "lb-v": "Videos", "lb-a": "Audio", "lb-p": "Photos", "lb-s": "Statuses", "lb-d": "Today",
@@ -1027,6 +1070,10 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "pl-pause": "Pause all",
     "ml-dl": "Download 3 videos",
     "au-t": "Podcast episode",
+    "vp-res": "Resumed at <span class=\"ltr num vpn\">1:24</span>",
+    "vp-over": "Start over",
+    "vp-t": "My favourite song",
+    "cta-s": "Download the app",
     "get-big": "Get Nezzel",
     "priv": "Privacy"
   };
@@ -1074,17 +1121,12 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
       "x3": "عندك روابط كثيرة؟",
       "x4": "الصوت فقط",
       "x5": "Nezzel على شاشتك الرئيسية",
-      "x7": "اسمع وشاشتك مقفلة",
-      "ins-h": "التثبيت سهل، خطوة بخطوة",
-      "ins-sub": "ليس في متجر Play، لذا يستأذنك أندرويد أولًا. هذا عادي",
-      "i1": "حمّل الملف وافتحه",
-      "i1p": "اضغط «تنزيل التطبيق» ثم افتح الملف. إن ظهرت لك صفحة GitHub فاختر ملف APK. وقد يحذّرك المتصفح من نوع الملف",
-      "i2": "اسمح بالتثبيت",
-      "i2p": "إن طلب أندرويد ذلك، فعّل «السماح من هذا المصدر» ثم ارجع",
-      "i3": "اضغط تثبيت",
-      "i3p": "قد يعرض عليك <bdi>Play Protect</bdi> فحص التطبيق. وافق واتبع ما يظهر لك",
-      "i4": "افتح Nezzel وجرّب",
-      "i4p": "انسخ أي رابط ثم افتح التطبيق، أو الصق الرابط فيه",
+      "x7": "شاهد واسمع داخل Nezzel",
+      "ins-h": "ثبت <bdi>Nezzel</bdi> من الموقع",
+      "i1p": "ابدأ التنزيل: اضغط «تنزيل التطبيق»، ثم اختار «التنزيل على أيّ حال» فالتحذير عادي",
+      "i2p": "اضغط «فتح»، ثم «الإعدادات» وفعل السماح مرة وحدة",
+      "i3p": "اضغط «تثبيت»، وإذا ظهر (فحص من جوجل بلاي) <bdi>Play Protect</bdi> كمل الفحص",
+      "i4p": "افتح <bdi>Nezzel</bdi> وجرب اول رابط لك",
       "sys-done": "اكتمل التنزيل",
       "sys-t2": "تثبيت التطبيقات غير المعروفة",
       "sys-browser": "المتصفح",
@@ -1123,7 +1165,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
       "rel": "الإصدارات",
       "fin-h": "مجاني وبلا إعلانات",
       "foot": "من تطوير <a href=\"https://hululsoft.mr\">Hululsoft</a>",
-      "lede": "شاهدت فيديو أعجبك؟ احتفظ به على هاتفك، من واتساب ويوتيوب وفيسبوك وتيك توك",
+      "lede": "احفظ على هاتفك الفيديوهات والأغاني بصيغة MP3، وحتى صور منشورات إنستغرام وX وتيك توك",
       "credit": "صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation، <a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></bdi>",
       "lic": "التراخيص",
       "sec": "الأمان",
@@ -1136,7 +1178,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "x3p": "نزلها كلها دفعة واحدة",
     "x4p": "للأغاني والبودكاست، بملف أصغر",
     "x5p": "تابع تحميلاتك دون أن تفتح التطبيق",
-    "x7p": "شغّل الصوت اللي نزلته في Nezzel، ويكمل حتى لو قفلت الشاشة",
+    "x7p": "يكمّل من حيث توقفت، والأغاني تبقى شغّالة حتى والشاشة مطفأة",
     "x6": "وكل اللي نزلته تجبرو في مكان واحد",
     "x6p": "ابحث في ملفاتك، أو اعرض الفيديوهات أو الصوت أو الحالات وحدها",
     "lb-t": "التنزيلات", "lb-q": "البحث في الملفات المحفوظة", "lb-all": "الكل", "lb-v": "الفيديوهات", "lb-a": "صوت", "lb-p": "الصور", "lb-s": "الحالات", "lb-d": "اليوم",
@@ -1154,6 +1196,10 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "pl-pause": "إيقاف الكل مؤقتًا",
     "ml-dl": "تنزيل 3 فيديوهات",
     "au-t": "حلقة البودكاست",
+    "vp-res": "تم الاستئناف من <span class=\"ltr num vpn\">1:24</span>",
+    "vp-over": "البدء من جديد",
+    "vp-t": "أغنيتي المفضلة",
+    "cta-s": "تنزيل التطبيق",
     "get-big": "حمّل Nezzel",
     "priv": "الخصوصية"
   };
@@ -1172,13 +1218,12 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "how-h":"Du lien à votre téléphone", 
     s1:"Copiez le lien",
     s2:"Choisissez la qualité qui vous va",
-    s3:"Touchez Télécharger, c’est enregistré", "more-h":"Et ce n’est pas tout", x1:"Les statuts WhatsApp que vous avez vus ?", x2:"Ou une playlist entière", x3:"Beaucoup de liens ?", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil", x7:"Écran verrouillé, l’écoute continue",
-    "ins-h":"Facile à installer, étape par étape",
-    "ins-sub":"Nezzel n’est pas sur le Play Store : Android vous demandera d’abord votre accord. C’est normal",
-    i1:"Téléchargez le fichier, puis ouvrez-le", i1p:"Appuyez sur « Télécharger l’application », puis ouvrez le fichier. Si GitHub s’ouvre, prenez le fichier APK. Votre navigateur peut vous mettre en garde sur ce type de fichier",
-    i2:"Autorisez l’installation", i2p:"Si Android vous le demande, activez « Autoriser cette source », puis revenez",
-    i3:"Appuyez sur Installer", i3p:"Play Protect peut proposer d’analyser l’appli : acceptez et suivez son avis",
-    i4:"Ouvrez Nezzel et essayez", i4p:"Copiez un lien puis ouvrez l’appli, ou collez-y directement le lien",
+    s3:"Touchez Télécharger, c’est enregistré", "more-h":"Et ce n’est pas tout", x1:"Les statuts WhatsApp que vous avez vus ?", x2:"Ou une playlist entière", x3:"Beaucoup de liens ?", x4:"Juste le son", x5:"Nezzel sur votre écran d’accueil", x7:"Regardez et écoutez dans Nezzel",
+    "ins-h":"Installez Nezzel depuis le site",
+    i1p:"Lancez le téléchargement : appuyez sur « Télécharger l’application », puis « Télécharger quand même ». L’avertissement est normal",
+    i2p:"Appuyez sur « Ouvrir », puis « Paramètres », et autorisez. Une seule fois",
+    i3p:"Tap “Install”. If Play Protect offers a scan, let it finish",
+    i4p:"Ouvrez Nezzel et essayez votre premier lien",
     "sys-done":"Téléchargement terminé", "sys-t2":"Installation d’applis inconnues", "sys-browser":"Navigateur", "sys-allow":"Autoriser cette source",
     "sys-q":"Voulez-vous installer cette application ?", "sys-cancel":"Annuler", "sys-install":"Installer",
     "ap-h":"Vos applis préférées",
@@ -1200,14 +1245,14 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     gh:"GitHub", rel:"Versions",
     "fin-h":"Gratuit et sans pub",
     foot:"Développé par <a href=\"https://hululsoft.mr\">Hululsoft</a>", lic:"Licences", sec:"Sécurité",
-    lede:"Une vidéo vous plaît ? Gardez-la sur votre téléphone, depuis WhatsApp, YouTube, Facebook ou TikTok",
+    lede:"Gardez sur votre téléphone vidéos, musique en MP3 et même les posts photo d’Instagram, TikTok ou X",
     credit:"Images vidéo : <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation, <a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></bdi>",
     "x1p": "Enregistrez-les d’un geste",
     "x2p": "Collez son lien, Nezzel enregistre les vidéos une à une",
     "x3p": "Téléchargez-les tous d’un coup",
     "x4p": "Pour la musique et les podcasts, en plus léger",
     "x5p": "Suivez vos téléchargements sans ouvrir l’appli",
-    "x7p": "Lancez votre audio téléchargé dans Nezzel, puis verrouillez l’écran",
+    "x7p": "Ça reprend là où vous en étiez, et la musique continue même écran éteint",
     "x6": "Tout ce que vous avez enregistré, au même endroit",
     "x6p": "Cherchez dans vos fichiers, ou n’affichez que les vidéos, l’audio ou les statuts",
     "lb-t": "Téléchargements", "lb-q": "Rechercher dans les fichiers enregistrés", "lb-all": "Tous", "lb-v": "Vidéos", "lb-a": "Audio", "lb-p": "Photos", "lb-s": "Statuts", "lb-d": "Aujourd’hui",
@@ -1225,6 +1270,10 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "pl-pause": "Tout mettre en pause",
     "ml-dl": "Télécharger 3 vidéos",
     "au-t": "Épisode de podcast",
+    "vp-res": "Reprise à <span class=\"ltr num vpn\">1:24</span>",
+    "vp-over": "Recommencer",
+    "vp-t": "Ma chanson préférée",
+    "cta-s": "Télécharger",
     "get-big": "Télécharger Nezzel",
     "priv": "Confidentialité"
   };
@@ -1406,6 +1455,29 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     wtime.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   }
   widget(.75);
+  // the player: a 12 s loop of the real screens. The song opens back at 1:24 (the app's resume note shows), plays,
+  // the screen goes dark and wakes on the lock screen, where the media notification keeps counting. Plain time, so
+  // the bars move at the song's own pace; transform/opacity only; runs while on screen; reduced motion keeps 1:24
+  const vpx = $(".vp"), vbars = [$(".vptr", vpx), $(".lkb", vpx)], vtimes = [$(".vpc", vpx), $(".lkcur", vpx)];
+  const vres = $(".vprs", vpx), vlock = $(".lk", vpx), vdark = $(".vpdk", vpx);
+  const ramp = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+  const inOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  function player(t) {
+    const pos = t < 1.1 ? 84 * inOut(ramp(t, .3, 1.1)) : 84 + (t - 1.1), v = (pos / 210).toFixed(4);
+    const mm = Math.floor(pos / 60) + ":" + String(Math.floor(pos % 60)).padStart(2, "0");
+    vbars.forEach(b => b.style.setProperty("--v", v));
+    if (vtimes[0].textContent !== mm) vtimes.forEach(e => { e.textContent = mm; });
+    vres.style.opacity = ramp(t, .9, 1.3);
+    vdark.style.opacity = ramp(t, 5, 5.6) - ramp(t, 6, 6.5) + ramp(t, 10.8, 11.4) - ramp(t, 11.5, 12);
+    vlock.style.opacity = t >= 6 && t < 11.4 ? 1 : 0;
+  }
+  if (!still) {
+    let vOn = false, vRaf = 0, vT0 = 0;
+    const vLoop = now => { if (!vT0) vT0 = now; player((now - vT0) / 1000 % 12); vRaf = vOn && !document.hidden ? requestAnimationFrame(vLoop) : 0; };
+    const vGo = () => { if (vOn && !document.hidden && !vRaf) { vT0 = 0; vRaf = requestAnimationFrame(vLoop); } };
+    new IntersectionObserver(([e]) => { vOn = e.isIntersecting; vGo(); }, { threshold: .3 }).observe(vpx);
+    document.addEventListener("visibilitychange", vGo);
+  }
   function deck() {
     const { gsap, ScrollTrigger, Lenis } = window;
     waveTheme();
