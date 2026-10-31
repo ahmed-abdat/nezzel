@@ -100,8 +100,9 @@ private fun MainSettings(
                 SettingsNavRow(stringResource(R.string.appearance), R.drawable.ic_ms_contrast,
                     value = themes.first { it.first == theme }.second) { picker = "theme" }
                 if (Build.VERSION.SDK_INT >= 31) {
-                    // Wallpaper colors exist from Android 12; the title says the rest.
-                    SwitchSetting(stringResource(R.string.match_wallpaper), null, wallpaper, R.drawable.ic_ms_palette, onWallpaper)
+                    // Wallpaper colors exist from Android 12 and come from the phone's own color settings (Samsung: Color palette).
+                    SwitchSetting(stringResource(R.string.match_wallpaper), stringResource(R.string.match_wallpaper_help), wallpaper,
+                        R.drawable.ic_ms_palette, onWallpaper)
                 }
             }
             SettingsGroup(stringResource(R.string.link_handling)) {

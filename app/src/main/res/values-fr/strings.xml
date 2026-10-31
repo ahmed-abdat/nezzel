@@ -23,6 +23,7 @@
     <string name="theme_light">Clair</string>
     <string name="theme_dark">Sombre</string>
     <string name="match_wallpaper">Couleurs du fond d’écran</string>
+    <string name="match_wallpaper_help">Suit les réglages de couleur du téléphone</string>
     <string name="copied_suggestions">Lire les liens copiés</string>
     <string name="copied_help">Seulement quand Nezzel est ouvert</string>
     <string name="save_location">Dossier d’enregistrement</string>

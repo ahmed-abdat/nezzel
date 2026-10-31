@@ -23,6 +23,7 @@
     <string name="theme_light">فاتح</string>
     <string name="theme_dark">داكن</string>
     <string name="match_wallpaper">مطابقة ألوان الخلفية</string>
+    <string name="match_wallpaper_help">يتبع إعدادات الألوان في هاتفك</string>
     <string name="copied_suggestions">قراءة الروابط المنسوخة</string>
     <string name="copied_help">أثناء فتح Nezzel فقط</string>
     <string name="save_location">مكان الحفظ</string>

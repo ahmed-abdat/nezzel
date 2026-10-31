@@ -149,9 +149,27 @@ class LocaleThemeTest {
         assertEquals(purple.primary, scheme.primary)
         assertEquals(purple.tertiary, scheme.tertiary)
     }
+    @Test fun paletteAccentsUseWallpaperTonesNotRoleDefaults() {
+        // Samsung: palettes orange, role colors still default blue.
+        val shade = { palette: Int, tone: Int -> Color(0xff000000 or (palette.toLong() shl 16) or tone.toLong()) }
+        val blue = NezzelLightColors.copy(primary = Color(0xff387aff))
+        val light = paletteAccents(blue, false, shade)
+        assertEquals(shade(1, 600), light.primary)
+        assertEquals(shade(1, 100), light.primaryContainer)
+        assertEquals(shade(3, 900), light.onTertiaryContainer)
+        assertEquals(blue.surface, light.surface)
+        val dark = paletteAccents(blue, true, shade)
+        assertEquals(shade(1, 200), dark.primary)
+        assertEquals(shade(2, 700), dark.secondaryContainer)
+        assertEquals(shade(1, 600), dark.inversePrimary)
+    }
     @Test fun dynamicSchemeKeepsStaticErrorRoles() {
         val candidate = NezzelDarkColors.copy(error = Color.Green, onError = Color.Blue)
         assertEquals(NezzelDarkColors.error, wallpaperScheme(candidate, true).error)
         assertEquals(NezzelDarkColors.onError, wallpaperScheme(candidate, true).onError)
+    }
+    @Test fun wallpaperPageMatchesSurfaceSoStickyHeadersShowNoStrip() {
+        val candidate = NezzelLightColors.copy(background = Color(0xfff1f1f3), surface = Color(0xfffafafc))
+        assertEquals(candidate.surface, wallpaperScheme(candidate, false).background)
     }
 }

@@ -23,6 +23,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="match_wallpaper">Match wallpaper colors</string>
+    <string name="match_wallpaper_help">Follows your phone’s color settings</string>
     <string name="copied_suggestions">Read copied links</string>
     <string name="copied_help">Only while Nezzel is open</string>
     <string name="save_location">Save location</string>
