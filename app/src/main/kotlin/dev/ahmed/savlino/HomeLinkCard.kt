@@ -11,7 +11,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -79,8 +78,8 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
             shownHost?.let { host -> CopiedChip(host, onUseCopied, onDismissCopied) }
         }
         OutlinedTextField(value = links.text, onValueChange = links::edit,
-            // Same shape, colour and shadow as the music bar and the tabs below it.
-            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).shadow(Dock.SHADOW, Dock.SHAPE)
+            // Same shape as the dock, and flat: the tab bar below is the one that casts a shadow.
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
                 .onFocusChanged { links.editorFocused = it.isFocused }.semantics { contentDescription = fieldLabel },
             shape = Dock.SHAPE,
             leadingIcon = {
@@ -106,7 +105,7 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
                 focusedBorderColor = colors.primary,
                 unfocusedBorderColor = Color.Transparent,
                 unfocusedLeadingIconColor = colors.onSurfaceVariant))
-        // Under the field rather than inside it, so the field's shadow stays the pill's.
+        // Under the field, so the error does not sit inside the pill.
         if (links.invalid) Text(stringResource(R.string.invalid_link), Modifier.padding(horizontal = Space.l)
             .semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = MaterialTheme.typography.bodySmall)
         // Fade only: the action keeps its full 56dp from the first frame, so it is never a sliver to tap.

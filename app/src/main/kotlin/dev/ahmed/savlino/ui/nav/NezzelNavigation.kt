@@ -24,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -147,9 +146,9 @@ fun NezzelNavigation(
 }
 
 /**
- * T1: a pill floating above the content (owner pick B, 2026-10-25). The raised inner pill travels on a spatial
- * spring; it is placed in the layout's placement step only, so moving it never recomposes the tabs. Badges sit on the
- * icon and never shift a label.
+ * T1: a pill floating above the content (owner pick B, 2026-10-25). The inner pill travels on a spatial
+ * spring; it is placed in the layout's placement step only, so moving it never recomposes the tabs. It is a flat
+ * fill. Badges sit on the icon and never shift a label.
  */
 @Composable
 private fun TabBar(destinations: List<NavigationDestination>, selected: String, modifier: Modifier,
@@ -166,7 +165,7 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
             val cell = constraints.maxWidth / count
             val pill = measurable.measure(Constraints.fixed(cell, constraints.maxHeight))
             layout(constraints.maxWidth, constraints.maxHeight) { pill.placeRelative((position.value * cell).roundToInt(), 0) }
-        }.shadow(1.dp, RoundedCornerShape(27.dp)).background(colors.surfaceBright, RoundedCornerShape(27.dp)))
+        }.background(colors.surfaceBright, RoundedCornerShape(27.dp)))
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             destinations.forEachIndexed { i, destination -> item(destination, i, destination.route == selected) }
         }
@@ -176,7 +175,7 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
         Column {
             dev.ahmed.savlino.viewer.MiniPlayerSlot()
             // Bound the corners: a growing capsule cuts off large labels near its outer edges.
-            Surface(Modifier.fillMaxWidth().miniPlayerTabs(), shape = Dock.SHAPE, color = Dock.color, shadowElevation = Dock.SHADOW) {
+            Surface(Modifier.fillMaxWidth().miniPlayerTabs(), shape = Dock.SHAPE, color = Dock.barColor, shadowElevation = Dock.SHADOW) {
                 Box(Modifier.padding(Space.xs)) { tabs() }
             }
         }
