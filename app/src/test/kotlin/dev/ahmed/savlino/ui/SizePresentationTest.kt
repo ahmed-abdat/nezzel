@@ -57,16 +57,24 @@ class SizePresentationTest {
     private fun direct() = Format("v", "mp4", true, true, height = 720, size = Size.Exact(100_000_000))
     private fun extracted() = Format("nezzel:m4a:v", "m4a", false, true, size = Size.Exact(100_000_000), sourceFormatId = "v")
     private fun converted() = Format("nezzel:mp3:128:a", "mp3", false, true, size = Size.Exact(8_000_000), sourceFormatId = "a", conversion = AudioConversion.MP3_128)
-    @Test fun exactMergedInputsShowNoSizeEnglish() = verify(merged(), false)
-    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi") fun exactMergedInputsShowNoSizeArabic() = verify(merged(), false)
-    @Test fun directExactFileRetainsExactLabelEnglish() = verify(direct(), true)
-    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi") fun directExactFileRetainsExactLabelArabic() = verify(direct(), true)
-    @Test fun exactExtractedSourceNeverPromisesExactOutputEnglish() = verify(extracted(), false)
-    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi") fun exactExtractedSourceNeverPromisesExactOutputArabic() = verify(extracted(), false)
-    @Test fun exactConversionSourceNeverPromisesExactOutputEnglish() = verify(converted(), false)
-    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi") fun exactConversionSourceNeverPromisesExactOutputArabic() = verify(converted(), false)
-    @Test fun derivedAudioRoughSizeHiddenEnglish() = verify(extracted().copy(size = Size.Unknown), false, 2_000_000)
-    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi") fun derivedAudioRoughSizeHiddenArabic() = verify(extracted().copy(size = Size.Unknown), false, 2_000_000)
-    @Test fun derivedAudioUnknownShowsNoSizeEnglish() = verify(extracted().copy(size = Size.Unknown), false)
-    @Test @Config(qualifiers = "ar-w400dp-h1200dp-mdpi") fun derivedAudioUnknownShowsNoSizeArabic() = verify(extracted().copy(size = Size.Unknown), false)
+    @Test fun sizeLabelFollowsExactFileOnly() {
+        data class Case(val qualifiers: String, val shown: Boolean, val format: () -> Format, val rough: Long? = null)
+        listOf(
+            Case("en-w400dp-h1200dp-mdpi", false, ::merged),
+            Case("ar-w400dp-h1200dp-mdpi", false, ::merged),
+            Case("en-w400dp-h1200dp-mdpi", true, ::direct),
+            Case("ar-w400dp-h1200dp-mdpi", true, ::direct),
+            Case("en-w400dp-h1200dp-mdpi", false, ::extracted),
+            Case("ar-w400dp-h1200dp-mdpi", false, ::extracted),
+            Case("en-w400dp-h1200dp-mdpi", false, ::converted),
+            Case("ar-w400dp-h1200dp-mdpi", false, ::converted),
+            Case("en-w400dp-h1200dp-mdpi", false, { extracted().copy(size = Size.Unknown) }, 2_000_000),
+            Case("ar-w400dp-h1200dp-mdpi", false, { extracted().copy(size = Size.Unknown) }, 2_000_000),
+            Case("en-w400dp-h1200dp-mdpi", false, { extracted().copy(size = Size.Unknown) }),
+            Case("ar-w400dp-h1200dp-mdpi", false, { extracted().copy(size = Size.Unknown) }),
+        ).forEach { case ->
+            RuntimeEnvironment.setQualifiers(case.qualifiers)
+            verify(case.format(), case.shown, case.rough)
+        }
+    }
 }

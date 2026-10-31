@@ -69,3 +69,30 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.junit)
 }
+
+// Push suite. -PnezzelNightly=true runs the wall-clock transport and timeout tier.
+// Fast contract and parser cases in these classes stay on the push suite.
+tasks.withType<Test>().configureEach {
+    if (providers.gradleProperty("nezzelNightly").orNull != "true") {
+        filter.excludeTestsMatching("*.EngineTimeoutRecoveryTest") // stall and watchdog recovery
+        filter.excludeTestsMatching("*.InstagramCarouselParallelTest") // slept parallel photo timing
+        filter.excludeTestsMatching("*.TikTokParallelPhotosTest") // slept parallel photo timing
+        filter.excludeTestsMatching("*.ProcessTreeTest") // process-tree signals, not user data or a parser
+        filter.excludeTestsMatching("*.MediaHttpClientTest.dnsWholeDeadline*") // DNS deadline ignores interruption
+        filter.excludeTestsMatching("*.MediaHttpClientTest.wholeOperationDeadline*") // whole-operation deadline
+        filter.excludeTestsMatching("*.MediaHttpClientTest.readTimeout*") // stalled-header read timeout
+        filter.excludeTestsMatching("*.MediaHttpImageTransferTest.saveFiveSecondIdleTimeout*") // 5s idle body
+        filter.excludeTestsMatching("*.YouTubeOEmbedTransportTest.stalledOembed*") // stalled oEmbed; metadata cases stay
+        filter.excludeTestsMatching("*.XInspectionTest.syndicationTransportFailures*") // transport phase; page parsing stays
+        filter.excludeTestsMatching("*.NpeInspectTest.npeTimeout*") // NPE timeout versus the yt-dlp budget
+        filter.excludeTestsMatching("*.NpeInspectTest.timedOutWorker*") // timed-out worker holds a slot
+        filter.excludeTestsMatching("*.NpeInspectTest.joinerWaits*") // joiner waits out a slow owner
+        filter.excludeTestsMatching("*.NpeInspectTest.lateUnreachable*") // grace-window unreachable verdict
+        filter.excludeTestsMatching("*.NpeDownloadTest.timeoutAndOccupied*") // occupied fast slot uses the full budget
+        filter.excludeTestsMatching("*.NpeDownloaderTest.operationTimeout*") // operation timeout bounds later calls
+        filter.excludeTestsMatching("*.NpeFastSourceTest.budgetSpent*") // budget spent while connecting
+        filter.excludeTestsMatching("*.YtdlpUpdateStageTest.inspectionAfterTheCallerStoppedWaiting*") // waits out the install
+        filter.excludeTestsMatching("*.Mp3EncoderTest.waitingForAnotherJobsEncoders*") // stall window while permits are held
+        filter.excludeTestsMatching("*.Mp3EncoderTest.aSlowSinglePass*") // stall window while a pass keeps writing
+    }
+}

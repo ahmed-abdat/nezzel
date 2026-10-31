@@ -197,10 +197,52 @@ tasks.withType<Test>().configureEach {
         filter.excludeTestsMatching("*.HomeStackTest.captures")
         filter.excludeTestsMatching("*.MultiLinkSheetTest.captures")
     }
-    // Recomposition budgets run explicitly on the nightly path: -PnezzelNightly=true.
+    // Push suite. -PnezzelNightly=true runs this slow tier plus the recomposition budgets.
+    // Each line is one class or method that is not the only home of a permission, integrity, parser, RTL, or contract rule.
     if (providers.gradleProperty("nezzelNightly").orNull != "true") {
-        filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.TabSwitchCostTest")
-        filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.ProgressTickCostTest")
+        filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.TabSwitchCostTest") // recomposition budget
+        filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.ProgressTickCostTest") // recomposition budget
+        filter.excludeTestsMatching("*.ThumbnailLoaderTest") // 10s whole-load deadline
+        filter.excludeTestsMatching("*.HomeInPlaceTest") // slot transitions; Arabic home rules stay in HomeStack and HomeSemantics
+        filter.excludeTestsMatching("*.ActivityEntryTest") // activity recreation, not a permission or integrity rule
+        filter.excludeTestsMatching("*.HomeFirstRunFlipTest") // hero swap; tour RTL stays in OnboardingTest
+        filter.excludeTestsMatching("*.EngineUpdateFlowTest") // maintenance deferral while an inspection is running
+        filter.excludeTestsMatching("*.LibraryLoadTest") // library load frames
+        filter.excludeTestsMatching("*.StatusesScreenTest") // statuses UI, no locale or permission rule
+        filter.excludeTestsMatching("*.AutomaticIntakeTest") // intake UI; link parsing stays in core IntakeTest
+        filter.excludeTestsMatching("*.LibraryPolishUiTest") // library polish UI
+        filter.excludeTestsMatching("*.EngineMaintenanceIntegrationTest") // maintenance integration
+        filter.excludeTestsMatching("*.MediaHttpCompatibilityTest") // API 33 client construction
+        filter.excludeTestsMatching("*.ViewerPullTest") // pull gesture; Arabic viewer rules stay in ViewerControlsTest
+        filter.excludeTestsMatching("*.OnboardingStartupTest") // startup maintenance deferral
+        filter.excludeTestsMatching("*.ShortcutEntryTest") // shortcut entry
+        filter.excludeTestsMatching("*.ShortcutMaintenanceTest") // shortcut maintenance
+        filter.excludeTestsMatching("*.LibraryStateTest") // library list state
+        filter.excludeTestsMatching("*.EngineMaintenanceTest") // maintenance state
+        filter.excludeTestsMatching("*.LinkPreviewsTest") // preview rows; cache integrity stays in PreviewCacheStorageTest
+        filter.excludeTestsMatching("*.SilentUpdateIntegrationTest") // silent update; schedule rules stay in AppUpdatesTest
+        filter.excludeTestsMatching("*.TabContentTest") // tab content
+        filter.excludeTestsMatching("*.CopyLinkUiTest") // copy-link UI
+        filter.excludeTestsMatching("*.ViewerHostTest") // viewer host
+        filter.excludeTestsMatching("*.StartupMaintenanceTest") // startup maintenance
+        filter.excludeTestsMatching("*.MediaViewerTest") // viewer shell; Arabic controls stay in ViewerControlsTest
+        filter.excludeTestsMatching("*.ImageInspectionFlowTest") // inspection flow; pixel parsing stays in MediaImageDecoderTest
+        filter.excludeTestsMatching("*.EngineUpdatePreemptionTest") // update preemption
+        filter.excludeTestsMatching("*.InstagramPostFlowTest") // post flow; Instagram parsing stays in the engine
+        filter.excludeTestsMatching("*.LinkViewModelRaceTest") // view-model races
+        filter.excludeTestsMatching("*.AudioPlaybackServiceTest") // playback service
+        filter.excludeTestsMatching("*.FacebookVideoHandoffTest") // video handoff; Facebook parsing stays in the engine
+        filter.excludeTestsMatching("*.SavedListTopTest") // saved-list scroll
+        filter.excludeTestsMatching("*.ViewInputTest") // view input
+        filter.excludeTestsMatching("*.ThumbnailCacheTest") // thumbnail cache
+        filter.excludeTestsMatching("*.PauseRowTest") // pause row
+        filter.excludeTestsMatching("*.UnreportedDirectMp4Test") // direct mp4 UI; mapping stays in UnreportedDirectMp4MappingTest
+        filter.excludeTestsMatching("*.ShareSheetPhotoFlowTest") // photo share flow; Arabic sheet stays in ShareSheetFlowTest
+        filter.excludeTestsMatching("*.StatusesStateTest") // statuses state
+        // Layout fixtures. Capture shots of this class stay available with -PnezzelCapture=true.
+        if (providers.gradleProperty("nezzelCapture").orNull != "true") {
+            filter.excludeTestsMatching("*.HomeRedesignTest")
+        }
     }
 }
 
