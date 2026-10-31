@@ -3,6 +3,7 @@ package dev.ahmed.savlino.statuses
 import android.content.ContentProvider
 import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.ProviderInfo
 import android.database.Cursor
 import android.database.MatrixCursor
@@ -14,7 +15,10 @@ import android.os.Environment
 import android.media.MediaMetadataRetriever
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract.Document
+import android.provider.DocumentsContract
 import android.provider.MediaStore
+import dev.ahmed.savlino.downloads.SavedMediaRepository
+import dev.ahmed.savlino.downloads.fromStatuses
 import dev.ahmed.savlino.media.ownPendingImages
 import dev.ahmed.savlino.storage.*
 import java.io.ByteArrayOutputStream
@@ -72,10 +76,10 @@ class StatusSaverTest {
 
     private fun request() = StatusSaveSource(sourceUri, "image/png", bytes.size.toLong(), 1_700_000_000_000L)
 
-    @Test fun savesOriginalBytesToStatusesWithSourceTimestampAndKeepsSource() = runBlocking {
+    @Test fun savesOriginalBytesToDefaultFolderWithSourceTimestampAndKeepsSource() = runBlocking {
         val saved = saver.save(request()) as StatusSaveResult.Saved
         val row = provider.rows.getValue(ContentUris.parseId(saved.uri))
-        assertEquals("Download/Nezzel/Statuses/", row.getAsString(MediaStore.Downloads.RELATIVE_PATH))
+        assertEquals("Download/Nezzel/", row.getAsString(MediaStore.Downloads.RELATIVE_PATH))
         assertEquals("image/png", row.getAsString(MediaStore.Downloads.MIME_TYPE))
         assertEquals(0, row.getAsInteger(MediaStore.Downloads.IS_PENDING))
         val formatter = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT)
@@ -83,6 +87,50 @@ class StatusSaverTest {
         assertArrayEquals(bytes, provider.file(saved.uri).readBytes())
         assertArrayEquals(bytes, source.readBytes())
         assertEquals(bytes.size.toLong(), source.length())
+        assertTrue(File(staging, "downloads").listFiles().orEmpty().isEmpty())
+        assertTrue(SavedMediaRepository(app.contentResolver, app.packageName, SaveDestinations(app)).query().single().fromStatuses)
+    }
+
+    @Test fun chosenTreeKeepsSavedStatusListedAndMarkedAndNeverFallsBackWhenUnavailable() = runBlocking {
+        val folder = SaveDestinationTest.Provider().also {
+            it.attachInfo(app, ProviderInfo().apply {
+                authority = "test.documents"; exported = true; grantUriPermissions = true
+                readPermission = "android.permission.MANAGE_DOCUMENTS"; writePermission = readPermission
+            })
+            ShadowContentResolver.registerProviderInternal("test.documents", it)
+        }
+        val tree = SaveDestinationTest.tree
+        val settings = SaveDestinations(app)
+        // The saver already exists when Settings changes the destination.
+        settings.choose(tree)
+        provider.sourceMime = "video/mp4"
+        provider.onSourceOpen = {
+            val stagedVideo = File(staging, "downloads").listFiles()!!.single().resolve("output.mp4")
+            ShadowMediaMetadataRetriever.addMetadata(stagedVideo.canonicalPath, MediaMetadataRetriever.METADATA_KEY_DURATION, "1200")
+        }
+        folder.onOpen = { assertTrue(SaveDestinations(app).pendingJobFiles().isEmpty()) }
+        val requested = request().copy(mimeType = "video/mp4")
+        val saved = saver.save(requested) as StatusSaveResult.Saved
+        assertTrue(DocumentsContract.isTreeUri(saved.uri))
+        assertArrayEquals(bytes, folder.files.values.single().readBytes())
+        assertTrue(provider.rows.isEmpty())
+        val listed = SavedMediaRepository(app.contentResolver, app.packageName, SaveDestinations(app)).query().single()
+        assertEquals(saved.uri, listed.uri)
+        assertTrue(listed.fromStatuses)
+        val marks = StatusMarks(app.getSharedPreferences("nezzel-status-marks", Context.MODE_PRIVATE))
+        marks.markSaved("status", bytes.size.toLong(), 1_700_000_000_000L, saved.uri)
+        assertTrue(marks.isSaved(marks.saved(app.contentResolver), "status", bytes.size.toLong(), 1_700_000_000_000L))
+        folder.denied = true
+        assertTrue(marks.isSaved(marks.saved(app.contentResolver), "status", bytes.size.toLong(), 1_700_000_000_000L))
+        assertEquals(StatusSaveResult.Failed, saver.save(requested))
+        assertEquals(tree, (settings.destination as SaveDestination.Tree).uri)
+        assertTrue(provider.rows.isEmpty())
+        assertEquals(1, folder.files.size)
+        folder.denied = false
+        assertTrue(DocumentsContract.deleteDocument(app.contentResolver, saved.uri))
+        assertFalse(marks.isSaved(marks.saved(app.contentResolver), "status", bytes.size.toLong(), 1_700_000_000_000L))
+        assertTrue(SaveDestinations(app).savedFiles().isEmpty())
+        assertArrayEquals(bytes, source.readBytes())
         assertTrue(File(staging, "downloads").listFiles().orEmpty().isEmpty())
     }
 
@@ -175,11 +223,19 @@ class StatusSaverTest {
         val committed = provider.seed("kept.png", "Download/Nezzel/Statuses/", 0, app.packageName, "image/png")
         val video = provider.seed("pending.mp4", "Download/Nezzel/", 1, app.packageName, "video/mp4")
         val pendingVideo = provider.seed("status.mp4", "Download/Nezzel/Statuses/", 1, app.packageName, "video/mp4")
+        val newPendingVideo = provider.seed("new-status.mp4", "Download/Nezzel/", 1, app.packageName, "video/mp4")
+        val newCommitted = provider.seed("saved-status.mp4", "Download/Nezzel/", 0, app.packageName, "video/mp4")
+        val settings = SaveDestinations(app)
+        settings.recordStatus(newPendingVideo, published = false)
+        settings.recordStatus(newCommitted, published = false) // Death after commit, before acknowledging it.
         val unrelated = provider.seed("other.png", "Download/Other/", 1, app.packageName, "image/png")
         assertTrue(ownPendingImages(app.contentResolver, app.packageName).contains(pending.uri))
         runBlocking { saver.sweep() }
-        assertEquals(setOf(foreign, committed, video, unrelated).map(ContentUris::parseId).toSet(), provider.rows.keys)
+        assertEquals(setOf(foreign, committed, video, newCommitted, unrelated).map(ContentUris::parseId).toSet(), provider.rows.keys)
         assertFalse(provider.rows.containsKey(ContentUris.parseId(pendingVideo)))
+        assertFalse(settings.isStatus(newPendingVideo))
+        assertTrue(settings.isStatus(newCommitted))
+        assertTrue(settings.pendingStatuses().isEmpty())
         assertFalse(job.directory.exists())
     }
 
@@ -300,7 +356,7 @@ class StatusSaverTest {
             } else {
                 rows.forEach { (id, value) ->
                     val selected = if (uri.lastPathSegment?.toLongOrNull() != null) id == ContentUris.parseId(uri)
-                        else if (selection?.contains("is_pending") == true) {
+                        else if (selection?.startsWith("is_pending") == true) {
                             assertEquals("is_pending = ? AND owner_package_name = ? AND " +
                                 "((relative_path = ? AND mime_type LIKE ?) OR (relative_path = ? AND (mime_type LIKE ? OR mime_type LIKE ?)))", selection)
                             assertEquals(listOf("1", app.packageName, "Download/Nezzel/", "image/%", "Download/Nezzel/Statuses/", "image/%", "video/%"), args?.toList())

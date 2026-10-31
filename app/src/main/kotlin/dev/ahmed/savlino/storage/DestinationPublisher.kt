@@ -14,7 +14,8 @@ import java.nio.file.LinkOption
 
 /** One destination seam; MediaStore's publication protocol remains unchanged. */
 class DestinationPublisher(context: Context, space: SpaceGate,
-    private val destinations: SaveDestinations = SaveDestinations(context)) : Publisher {
+    private val destinations: SaveDestinations = SaveDestinations(context),
+    private val statusOrigin: Boolean = false) : Publisher {
     private val resolver = context.contentResolver
     private val default = MediaStorePublisher(resolver, space, context.packageName)
 
@@ -24,7 +25,16 @@ class DestinationPublisher(context: Context, space: SpaceGate,
         return insertPendingAt(destinations.destination, job, name, mimeType)
     }
     private fun insertPendingAt(destination: SaveDestination, job: JobDirectory.Job, name: String, mimeType: String): PendingPublication {
-        if (destination is SaveDestination.Default) return default.insertPending(job, name, mimeType)
+        if (destination is SaveDestination.Default) {
+            val pending = default.insertPending(job, name, mimeType)
+            try {
+                if (statusOrigin) destinations.recordStatus(pending.uri, published = false)
+                return pending
+            } catch (failure: Exception) {
+                try { default.abandon(pending.uri) } catch (_: Exception) { }
+                throw failure
+            }
+        }
         destination as SaveDestination.Tree
         return folderOperation {
             job.requireActive()
@@ -33,6 +43,9 @@ class DestinationPublisher(context: Context, space: SpaceGate,
             val uri = DocumentsContract.createDocument(resolver, parent, mimeType, name)
                 ?: throw StorageException(StorageError.FolderUnavailable)
             try {
+                // The status saver owns cleanup before a job-recovery sweep can see this receipt.
+                if (statusOrigin) destinations.recordStatus(uri, published = false)
+                else if (destinations.isStatus(uri)) destinations.forgetStatus(uri)
                 // Before any bytes. This URI includes the chosen tree; recovery never consults the current selection.
                 destinations.record(uri, name, mimeType, false, folderName)
                 destinations.recordPendingState(uri)
@@ -187,7 +200,8 @@ class DestinationPublisher(context: Context, space: SpaceGate,
     override fun publish(job: JobDirectory.Job, stagedFile: File, title: String, extension: String, mimeType: String,
         cancellation: CancellationSignal): PublicationResult {
         val destination = destinations.destination
-        if (destination is SaveDestination.Default) return default.publish(job, stagedFile, title, extension, mimeType, cancellation)
+        if (destination is SaveDestination.Default && !statusOrigin)
+            return default.publish(job, stagedFile, title, extension, mimeType, cancellation)
         var pending: PendingPublication? = null
         try {
             cancellation.throwIfCanceled()
@@ -197,6 +211,10 @@ class DestinationPublisher(context: Context, space: SpaceGate,
             cancellation.throwIfCanceled()
             return when (val result = commit(pending)) {
                 is PublishedFile -> result.copy(cleanupFailed = try { job.cleanup(); false } catch (_: Exception) { true })
+                is CommitFailed -> {
+                    try { abandon(pending.uri) } catch (_: Exception) { }
+                    result
+                }
                 else -> result
             }
         } catch (failure: Exception) {

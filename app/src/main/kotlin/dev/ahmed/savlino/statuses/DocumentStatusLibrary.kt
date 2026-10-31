@@ -210,28 +210,53 @@ class DocumentStatusLibrary(
 
 /**
  * Saved marks (provider document id + size + time, hashed; unknown fields are never marked) and the ids seen on the
- * previous load. New marks also retain the saved MediaStore URI; legacy hash-only marks remain saved.
+ * previous load. New marks also retain the saved file URI; legacy hash-only marks remain saved.
  * Prefs, not the job database: no schema migration. No names are stored.
  */
 internal class StatusMarks(private val prefs: SharedPreferences) {
     /** Called on the library's IO dispatcher. Only a successful query can prove a saved copy is gone. */
     @Synchronized fun saved(resolver: ContentResolver): Set<String> {
         val saved = savedEntries()
-        // A row whose uri has no numeric id can't be checked: it stays saved, like a legacy mark.
+        // Batch only primary MediaStore rows. A document id may also be numeric, but belongs to its own provider.
         val ids = saved.values.filterNotNull().distinct()
-            .mapNotNull { uri -> Uri.parse(uri).lastPathSegment?.toLongOrNull()?.let { uri to it } }.toMap()
-        if (ids.isEmpty()) return saved.keys
-        val present = try {
-            // StatusSaver publishes only to primary Downloads. Numeric ids avoid the SQLite bind-argument limit.
+            .mapNotNull { value ->
+                val uri = Uri.parse(value)
+                if (uri.authority == MediaStore.AUTHORITY && uri.pathSegments.size == 3 &&
+                    uri.pathSegments[0] == MediaStore.VOLUME_EXTERNAL_PRIMARY && uri.pathSegments[1] == "downloads")
+                    uri.lastPathSegment?.toLongOrNull()?.let { value to it } else null
+            }.toMap()
+        val present = if (ids.isEmpty()) emptySet() else try {
+            // Numeric ids avoid the SQLite bind-argument limit.
             resolver.query(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
                 arrayOf(MediaStore.MediaColumns._ID),
                 "${MediaStore.MediaColumns._ID} IN (${ids.values.distinct().joinToString(",")})", null, null)?.use { cursor ->
                 buildSet<Long> { while (cursor.moveToNext()) add(cursor.getLong(0)) }
-            } ?: return saved.keys
+            }
         } catch (_: SecurityException) {
-            return saved.keys
+            null
         }
-        val kept = saved.filterValues { uri -> val id = uri?.let(ids::get); id == null || id in present }
+        val missingDocuments = saved.values.filterNotNull().distinct().filter { value ->
+            val uri = Uri.parse(value)
+            if (!DocumentsContract.isTreeUri(uri)) return@filter false
+            val missing = try {
+                // DocumentsProvider.query turns FileNotFoundException into a null cursor.
+                resolver.query(uri, arrayOf(Document.COLUMN_DOCUMENT_ID), android.os.Bundle.EMPTY, null)?.use { !it.moveToFirst() } ?: true
+            } catch (_: java.io.FileNotFoundException) {
+                true
+            } catch (_: Exception) {
+                false // An unavailable folder is not proof that the copy was deleted.
+            }
+            if (!missing) return@filter false
+            // Some providers also report an offline volume as FileNotFoundException.
+            val root = DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri))
+            try {
+                resolver.query(root, arrayOf(Document.COLUMN_DOCUMENT_ID), android.os.Bundle.EMPTY, null)?.use { it.moveToFirst() } == true
+            } catch (_: Exception) { false }
+        }.toSet()
+        val kept = saved.filterValues { uri ->
+            val id = uri?.let(ids::get)
+            (id == null || present == null || id in present) && uri !in missingDocuments
+        }
         if (kept.size != saved.size) writeSaved(kept)
         return kept.keys
     }

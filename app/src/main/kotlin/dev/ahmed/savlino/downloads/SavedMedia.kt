@@ -49,6 +49,7 @@ data class SavedMedia(
     val postPosition: SavedPostPosition? = null,
     val postAddedSeconds: Long? = null,
     val modifiedMillis: Long? = null,
+    val statusOrigin: Boolean = false,
 ) {
     /** File labels follow DISPLAY_NAME without the " (1)" a name clash added; provider TITLE remains available to search. */
     val displayName: String get() = filename.removeSuffix(savedExtension(filename)).let { stem ->
@@ -129,8 +130,8 @@ enum class SavedMediaKind { IMAGE, VIDEO, AUDIO }
 /** STATUSES stays last: its chip ends the row. */
 enum class MediaFilter { ALL, VIDEO, AUDIO, IMAGE, STATUSES }
 
-/** Saved from the Statuses tab: StatusSaver always publishes into its own MediaStore folder, which marks the file for good. */
-val SavedMedia.fromStatuses: Boolean get() = relativePath?.trimEnd('/') == StatusSaver.RELATIVE_PATH.trimEnd('/')
+/** New saves retain their origin locally; older copies are identified by their original folder. */
+val SavedMedia.fromStatuses: Boolean get() = statusOrigin || relativePath?.trimEnd('/') == StatusSaver.RELATIVE_PATH.trimEnd('/')
 enum class SavedSort { NEWEST, LARGEST, NAME }
 
 /** A grouped post is an indivisible display block, including when only one sibling matches. */
@@ -212,16 +213,20 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
             buildList { while(c.moveToNext()) {
                 val mime = string("mime_type") ?: continue
                 val filename = string("_display_name") ?: continue
+                val id = number("_id") ?: continue
+                val volume = string(MediaStore.MediaColumns.VOLUME_NAME)
                 // The confirmed filename survives provider scans that replace TITLE with an extractor id.
                 val title = string("title")?.takeUnless { it.isBlank() || it.trim().all(Char::isDigit) }
                     ?: filename.substringBeforeLast('.')
-                add(SavedMedia(ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, number("_id") ?: continue),
+                add(SavedMedia(ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id),
                     filename, title, mime,
                     number("_size")?.takeIf { it >= 0 }, number("date_added") ?: 0,
                     dimension("height"), number("bitrate")?.takeIf { it > 0 }?.div(1000)?.toInt(),
                     number("duration")?.takeIf { it > 0 }, width = dimension("width"), relativePath = string(MediaStore.MediaColumns.RELATIVE_PATH),
-                    volumeName = string(MediaStore.MediaColumns.VOLUME_NAME),
-                    modifiedMillis = number(MediaStore.MediaColumns.DATE_MODIFIED)?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000)))
+                    volumeName = volume,
+                    modifiedMillis = number(MediaStore.MediaColumns.DATE_MODIFIED)?.takeIf { it in 1..Long.MAX_VALUE / 1000 }?.times(1000),
+                    statusOrigin = destinations?.isStatus(ContentUris.withAppendedId(MediaStore.Downloads.getContentUri(
+                        volume ?: MediaStore.VOLUME_EXTERNAL_PRIMARY), id)) == true))
             } }
         }
     }
@@ -343,7 +348,7 @@ class SavedMediaRepository(private val resolver: ContentResolver, private val ow
             return deleted
         }
         requireMediaUri(uri)
-        return resolver.delete(uri, null, null) == 1
+        return (resolver.delete(uri, null, null) == 1).also { if (it) destinations?.forgetStatus(uri) }
     }
     @androidx.annotation.RequiresApi(30)
     fun deleteRequest(item: SavedMedia): android.content.IntentSender {

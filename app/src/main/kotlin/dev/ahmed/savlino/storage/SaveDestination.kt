@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.util.LruCache
 import dev.ahmed.savlino.downloads.SavedMedia
 import java.io.File
@@ -88,6 +89,25 @@ class SaveDestinations(private val context: Context) {
     }
 
     internal fun receipt(uri: Uri): JSONObject? = prefs.getString("file:$uri", null)?.let(::JSONObject)
+    /** Status origin survives folder changes and renames; false also journals an unfinished publication. */
+    internal fun recordStatus(uri: Uri, published: Boolean) = synchronized(lock) {
+        check(prefs.edit().putBoolean(statusKey(uri), published).commit())
+    }
+    internal fun isStatus(uri: Uri): Boolean = prefs.contains(statusKey(uri))
+    internal fun pendingStatuses(): List<Uri> = synchronized(lock) {
+        prefs.all.filter { (key, value) -> key.startsWith("status:") && value == false }
+            .keys.map { Uri.parse(it.removePrefix("status:")) }
+    }
+    internal fun forgetStatus(uri: Uri) = synchronized(lock) {
+        check(prefs.edit().remove(statusKey(uri)).commit())
+    }
+    private fun statusKey(uri: Uri): String {
+        // The library reads the aggregate volume; new MediaStore saves use primary Downloads.
+        val canonical = if (uri.authority == MediaStore.AUTHORITY && uri.pathSegments.firstOrNull() == MediaStore.VOLUME_EXTERNAL)
+            uri.buildUpon().path("/${MediaStore.VOLUME_EXTERNAL_PRIMARY}/${uri.pathSegments.drop(1).joinToString("/")}").build()
+            else uri
+        return "status:$canonical"
+    }
     internal fun record(uri: Uri, name: String, mime: String, published: Boolean, folderName: String? = null) = synchronized(lock) {
         val record = (if (published) receipt(uri) else null) ?: JSONObject()
             .put("nonce", java.util.UUID.randomUUID().toString())
@@ -164,7 +184,7 @@ class SaveDestinations(private val context: Context) {
         ?: context.getString(dev.ahmed.savlino.R.string.save_path)
 
     internal fun forget(uri: Uri) = synchronized(lock) {
-        check(prefs.edit().remove("file:$uri").commit())
+        check(prefs.edit().remove("file:$uri").remove(statusKey(uri)).commit())
         pruneCopySources()
         boundsCache.remove(uri)
         fileCache.remove(uri)
@@ -176,7 +196,9 @@ class SaveDestinations(private val context: Context) {
     }
     internal fun pendingJobFiles(): List<Uri> = synchronized(lock) {
         pruneCopySources()
-        receipts().filter { (_, r) -> !r.getBoolean("published") && !r.getString("mime").startsWith("image/") }.map { it.first }
+        // Status videos have no download job; their saver owns cleanup under its save lock.
+        receipts().filter { (uri, r) -> !r.getBoolean("published") && !r.getString("mime").startsWith("image/") && !isStatus(uri) }
+            .map { it.first }
     }
     private fun receipts() = prefs.all.keys.filter { it.startsWith("file:") }.mapNotNull { key ->
         val uri = Uri.parse(key.removePrefix("file:")); receipt(uri)?.let { uri to it }
@@ -189,7 +211,7 @@ class SaveDestinations(private val context: Context) {
         fileCache.get(uri)?.let { return@mapNotNull it.media }
         val name = record.getString("name")
         SavedMedia(uri, name, name.substringBeforeLast('.').ifBlank { name }, record.getString("mime"),
-            null, record.getLong("time"), null, null, null)
+            null, record.getLong("time"), null, null, null, statusOrigin = isStatus(uri))
     }
 
     /** Blocking explicit verification; observation reconciles each URI separately after its first emission. */
@@ -212,7 +234,8 @@ class SaveDestinations(private val context: Context) {
                 cancellation.throwIfCanceled()
                 val bounds = fileBounds(uri, size, modified, mime)
                 SavedMedia(uri, name, name.substringBeforeLast('.').ifBlank { name }, mime, size,
-                    record.getLong("time"), bounds.height, null, bounds.durationMillis, width = bounds.width, modifiedMillis = modified)
+                    record.getLong("time"), bounds.height, null, bounds.durationMillis, width = bounds.width, modifiedMillis = modified,
+                    statusOrigin = isStatus(uri))
             }
         } catch (cancelled: OperationCanceledException) { throw cancelled }
         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }

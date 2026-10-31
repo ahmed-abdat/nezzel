@@ -47,10 +47,13 @@ class StatusSaver(context: Context,
 ) {
     private val resolver = context.contentResolver
     private val owner = context.packageName
+    private val destinations = SaveDestinations(context)
     private val directories = JobDirectory(stagingRoot)
     private val space = SpaceBudget(stagingRoot,
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS))
-    private val publisher = MediaStorePublisher(resolver, space, owner, relativePath = RELATIVE_PATH)
+    private val privateSpace = SpaceBudget(stagingRoot, stagingRoot)
+    private val publisher = DestinationPublisher(context, space, destinations, statusOrigin = true)
+    private val legacyPublisher = MediaStorePublisher(resolver, space, owner, relativePath = RELATIVE_PATH)
 
     suspend fun save(source: StatusSaveSource, cancellation: CancellationSignal = CancellationSignal()): StatusSaveResult =
         whileSaving { saveActive(source, cancellation) }
@@ -69,7 +72,8 @@ class StatusSaver(context: Context,
                     val extension = KNOWN_EXTENSIONS[mime] ?: MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
                         ?: return@withLock StatusSaveResult.Failed
                     if (!stagingRoot.isDirectory && !stagingRoot.mkdirs()) return@withLock StatusSaveResult.Failed
-                    space.beforeTransfer(before.size, before.size, UNKNOWN_SIZE_BOUND)
+                    val preflight = if (destinations.destination is SaveDestination.Default) space else privateSpace
+                    preflight.beforeTransfer(before.size, before.size, UNKNOWN_SIZE_BOUND)
                     val stage = directories.createOrAdopt("status-${nextId.incrementAndGet()}")
                     job = stage
                     val file = stage.file("output", extension)
@@ -100,10 +104,10 @@ class StatusSaver(context: Context,
                     when (val result = publisher.publish(stage, file, title, extension,
                         // MediaProvider only knows the standard JPEG type.
                         if (mime == "image/jpg") "image/jpeg" else mime, cancellation)) {
-                        is PublishedFile -> StatusSaveResult.Saved(result.uri)
+                        is PublishedFile -> saved(result.uri)
                         is CommitFailed -> if (result.error == StorageError.InsufficientSpace) StatusSaveResult.NoSpace else StatusSaveResult.Failed
-                        is CommitUncertain -> when (val recovered = publisher.abandon(result.pending.uri)) {
-                            is PublishedFile -> StatusSaveResult.Saved(recovered.uri)
+                        is CommitUncertain -> when (val recovered = abandonNew(result.pending.uri)) {
+                            is PublishedFile -> saved(recovered.uri)
                             else -> StatusSaveResult.Failed
                         }
                     }
@@ -114,13 +118,30 @@ class StatusSaver(context: Context,
                 } catch (_: SourceGone) {
                     StatusSaveResult.Gone
                 } catch (error: Exception) {
-                    if (TransferSpacePolicy.isNoSpace(error)) StatusSaveResult.NoSpace else StatusSaveResult.Failed
+                    when {
+                        error is StorageException && error.error == StorageError.Cancelled -> StatusSaveResult.Cancelled
+                        TransferSpacePolicy.isNoSpace(error) -> StatusSaveResult.NoSpace
+                        else -> StatusSaveResult.Failed
+                    }
                 } finally {
                     // A failed cleanup stays confined to this root and is retried by the startup sweep.
                     job?.let { try { it.cleanup() } catch (_: Exception) { } }
                 }
             }
         }
+
+    private fun saved(uri: Uri): StatusSaveResult.Saved {
+        destinations.recordStatus(uri, published = true)
+        return StatusSaveResult.Saved(uri)
+    }
+
+    private fun abandonNew(uri: Uri): RecoveryResult = publisher.abandon(uri).also {
+        when (it) {
+            MissingPublication -> destinations.forgetStatus(uri)
+            is PublishedFile -> destinations.recordStatus(uri, published = true)
+            is PendingPublication -> Unit
+        }
+    }
 
     /** Same lock as save: startup/image cleanup cannot erase an in-flight status or its pending row. */
     suspend fun sweep() = withContext(Dispatchers.IO) {
@@ -138,6 +159,7 @@ class StatusSaver(context: Context,
                     }
                 }
             }
+            for (uri in destinations.pendingStatuses()) abandonNew(uri)
             for (uri in ownPendingImages(resolver, owner)) abandonIfStatusLocked(uri)
         }
     }
@@ -148,7 +170,7 @@ class StatusSaver(context: Context,
     }
 
     private fun abandonIfStatusLocked(uri: Uri): RecoveryResult? = try {
-        publisher.abandon(uri)
+        if (destinations.isStatus(uri)) abandonNew(uri) else legacyPublisher.abandon(uri)
     } catch (failure: StorageException) {
         if (failure.error == StorageError.InvalidPublication) null else throw failure
     }
@@ -188,6 +210,7 @@ class StatusSaver(context: Context,
     }
 
     companion object {
+        /** Older saves remain discoverable and their interrupted publications still need cleanup. */
         const val RELATIVE_PATH = "Download/Nezzel/Statuses/"
         // Status files are almost always these; the platform table is only the fallback.
         private val KNOWN_EXTENSIONS = mapOf("image/jpeg" to "jpg", "image/jpg" to "jpg", "image/png" to "png",
