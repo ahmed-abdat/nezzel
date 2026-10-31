@@ -260,7 +260,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         }
     }
 
-    /** Remove local terminal metadata and its private staging, never a published MediaStore file. */
+    /** Remove terminal metadata/staging; unresolved MediaStore ownership stays as a hidden cancellation. */
     fun remove(jobId: String): Boolean = synchronized(terminalLock) {
         val removed = synchronized(this) {
             val db = writableDatabase
@@ -272,9 +272,17 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 db.execSQL("UPDATE batch_items SET state='DONE', error=NULL, retryable=0, source_url=NULL " +
                     "WHERE job_id=? AND state IN ('WAITING','QUEUED','FAILED') AND job_id IN " +
                     "(SELECT job_id FROM jobs WHERE stage='COMPLETED')", arrayOf(jobId))
-                val deleted = db.delete("jobs", "job_id = ? AND stage IN ('COMPLETED','FAILED','CANCELLED')", arrayOf(jobId)) == 1
+                // No receipt sweep finds a MediaStore pending item: keep its owner until recovery resolves it.
+                val retained = db.update("jobs", ContentValues().apply {
+                    put("stage", JobStage.CANCELLED.name); put("error", DownloadError.Cancelled.name)
+                    putNull("source_url"); putNull("source_key"); put("retryable", 0)
+                    put("updated_at", System.currentTimeMillis())
+                }, "job_id = ? AND stage IN ('FAILED','CANCELLED') AND pending_uri IS NOT NULL " +
+                    "AND pending_uri NOT LIKE '%/tree/%'", arrayOf(jobId)) == 1
+                val removed = retained || db.delete("jobs",
+                    "job_id = ? AND stage IN ('COMPLETED','FAILED','CANCELLED')", arrayOf(jobId)) == 1
                 db.setTransactionSuccessful()
-                deleted
+                removed
             } finally { db.endTransaction() }
         }
         if (removed) { cleanupJobStaging(jobRoot, jobId); artwork.delete(jobId) }

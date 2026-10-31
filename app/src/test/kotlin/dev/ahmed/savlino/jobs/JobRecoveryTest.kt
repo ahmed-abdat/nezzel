@@ -3,7 +3,9 @@ package dev.ahmed.savlino.jobs
 import android.net.Uri
 import android.os.CancellationSignal
 import dev.ahmed.savlino.domain.*
+import dev.ahmed.savlino.engine.FakeEngine
 import dev.ahmed.savlino.storage.*
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -515,6 +517,41 @@ class JobRecoveryTest {
         assertNull(store.get("owner")!!.pendingUri)
         assertTrue(publisher.files.isEmpty())
         assertTrue(store.remove("owner"))
+    }
+
+    @Test fun removeFailedRetainsUnresolvedMediaStoreOwnershipUntilRecovery() = runBlocking {
+        val (job, staged) = staged("remove-unresolved")
+        publisher.boundary = "copy"
+        die { JobRecovery(store, publisher, root).publish(job, staged, "video/mp4") }
+        publisher.boundary = "delete-fails"
+        reopen()
+        val coordinator = DownloadCoordinator(app, engine = FakeEngine(), store = store, publisher = publisher)
+        coordinator.initialize()
+        val uri = store.get("remove-unresolved")!!.pendingUri!!
+        assertEquals(JobStage.FAILED, store.get("remove-unresolved")!!.stage)
+        assertEquals("remove-unresolved", coordinator.progress.value.single().jobId)
+
+        coordinator.removeFailed("remove-unresolved")
+
+        val retained = store.get("remove-unresolved")
+        assertNotNull("Unacknowledged deletion must retain the pending item's owner", retained)
+        assertEquals(uri, retained!!.pendingUri)
+        assertEquals(JobStage.CANCELLED, retained.stage)
+        assertNull(retained.sourceUrl)
+        assertFalse(retained.retryable)
+        assertTrue(publisher.hasPending())
+        assertTrue(coordinator.progress.value.isEmpty())
+        val restored = DownloadCoordinator(app, engine = FakeEngine(), store = store, publisher = publisher)
+        restored.initialize()
+        assertTrue(restored.progress.value.isEmpty())
+        assertEquals(uri, store.get("remove-unresolved")!!.pendingUri)
+
+        publisher.boundary = ""
+        reopen()
+        recoverTwice()
+        assertNull(store.get("remove-unresolved")!!.pendingUri)
+        assertFalse(publisher.hasPending())
+        assertTrue(publisher.files.isEmpty())
     }
 
     // G3: a cancel during a provider outage whose save committed anyway keeps the saved file (commit wins a late cancel).
