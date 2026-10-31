@@ -192,7 +192,7 @@ class DownloadCoordinator(
             // update() reads the store in the opposite order on native callback threads.
             val expired = fromRecord(row)
             // Aging out is a local confirmation timeout, not a failed site/transfer or a reportable link.
-            if (row.error == DownloadError.FormatExpired) accounting.remove(row.jobId)?.reportLink = null
+            if (row.error?.confirmationExpired == true) accounting.remove(row.jobId)?.reportLink = null
             mutableProgress.update { old ->
                 if (old.any { it.jobId == row.jobId && it.restartEpoch > row.restartEpoch }) old
                 else if (old.any { it.jobId == row.jobId }) old.map { if (it.jobId == row.jobId) expired else it }
@@ -461,7 +461,7 @@ class DownloadCoordinator(
 
     private suspend fun waitingResult(id: String, finished: suspend (DownloadProgress) -> Unit): JobRecord? {
         val row = queuedRow(id) ?: return null
-        if (row.stage.terminal && (row.error == DownloadError.FormatExpired || id in userCancellation)) {
+        if (row.stage.terminal && (row.error?.confirmationExpired == true || id in userCancellation)) {
             val result = fromRecord(row)
             update(result)
             withContext(NonCancellable) { finished(result) }
@@ -512,7 +512,7 @@ class DownloadCoordinator(
             currentCoroutineContext().ensureActive()
             val row = store.get(id) ?: return@withContext null
             if (row.stage != JobStage.ENQUEUED) {
-                if (row.error == DownloadError.FormatExpired || id in userCancellation) {
+                if (row.error?.confirmationExpired == true || id in userCancellation) {
                     val result = fromRecord(row)
                     update(result)
                     withContext(NonCancellable) { finished(result) }
@@ -669,7 +669,7 @@ class DownloadCoordinator(
                                 checkedAt = now
                                 val current = store.get(id)
                                 stale = current == null || current.restartEpoch != epoch || current.stage != JobStage.TRANSFERRING
-                                if (current?.error == DownloadError.FormatExpired) stopEngine(id, cancelUnregistered = false)
+                                if (current?.error?.confirmationExpired == true) stopEngine(id, cancelUnregistered = false)
                             }
                             if (stale) return@synchronized
                             if (event is EngineEvent.Restarting) {
@@ -938,7 +938,7 @@ class DownloadCoordinator(
         if (!event.terminal) {
             val row = store.get(event.jobId)
             if (row?.stage?.terminal == true) {
-                if (row.error == DownloadError.FormatExpired) stopEngine(event.jobId, cancelUnregistered = false)
+                if (row.error?.confirmationExpired == true) stopEngine(event.jobId, cancelUnregistered = false)
                 return
             }
             if (!event.paused && row?.stage == JobStage.PAUSED) return
@@ -953,7 +953,7 @@ class DownloadCoordinator(
         }
         mutableProgress.update { old ->
             // An expiry callback can win after the journal check above; never resurrect that confirmation.
-            if (!event.terminal && old.any { it.jobId == event.jobId && it.error == DownloadError.FormatExpired &&
+            if (!event.terminal && old.any { it.jobId == event.jobId && it.error?.confirmationExpired == true &&
                     it.restartEpoch >= event.restartEpoch }) old
             else if (event.phase in setOf(DownloadPhase.COMPLETED, DownloadPhase.CANCELLED)) old.filterNot { it.jobId == event.jobId }
             else if (old.any { it.jobId == event.jobId }) old.map { if(it.jobId == event.jobId) event else it }

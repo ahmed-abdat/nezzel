@@ -112,6 +112,7 @@
     <string name="download_space_error">المساحة غير كافية</string>
     <string name="download_save_error">تعذّر حفظ الملف</string>
     <string name="download_expired_error">تحقّق من خيارات الجودة المتاحة مجددًا</string>
+    <string name="download_paused_expired_error">توقّف التنزيل لأكثر من يوم. حاول مجددًا.</string>
     <string name="download_interrupted_error">توقّف التنزيل</string>
     <string name="open_file">فتح</string>
     <string name="share_file">مشاركة</string>
@@ -637,6 +638,8 @@
     <string name="playlist_retry">إعادة المحاولة (%1$s)</string>
     <string name="playlist_waiting_network">في انتظار الاتصال</string>
     <string name="playlist_slowed">طلب يوتيوب التمهّل، فأوقفنا التنزيل مؤقتًا.</string>
+    <string name="playlist_quality_fallback">بعض الفيديوهات بجودة مختلفة</string>
+    <string name="playlist_audio_fallback">بعض الملفات الصوتية بصيغة MP3 بدلًا من M4A</string>
     <string name="playlist_stop">إيقاف</string>
     <string name="playlist_stop_confirm">هل تريد إيقاف قائمة التشغيل؟ تبقى الفيديوهات المحفوظة.</string>
     <string name="playlist_done">اكتمل: تم حفظ %1$s، وتعذّر حفظ %2$s</string>

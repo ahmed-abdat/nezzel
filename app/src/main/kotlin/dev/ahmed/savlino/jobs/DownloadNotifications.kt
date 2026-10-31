@@ -342,6 +342,7 @@ class DownloadNotifications(private val base: Context,
             DownloadError.FolderUnavailable -> R.string.save_folder_error
             DownloadError.SaveFailed -> R.string.download_save_error
             DownloadError.FormatExpired -> R.string.download_expired_error
+            DownloadError.PausedExpired -> R.string.download_paused_expired_error
             DownloadError.Interrupted -> R.string.download_interrupted_error
             DownloadError.StoppedByBattery -> BatterySettings.errorText
             DownloadError.MergeFailed -> R.string.download_merge_error

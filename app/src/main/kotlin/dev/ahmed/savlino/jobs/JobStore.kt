@@ -24,7 +24,7 @@ enum class JobStage(val terminal: Boolean = false) {
     COMPLETED(true), FAILED(true), CANCELLED(true)
 }
 
-/** URL has no generated toString; only retryable failures retain it, for the confirmation lifetime. */
+/** URL has no generated toString; retryable failures retain it until confirmation expiry, except a paused-expiry Retry. */
 class JobRecord internal constructor(
     val jobId: String, val stage: JobStage, val sourceUrl: String?, val revision: Long,
     val engineVersion: String, val format: Format, val filename: String, val preset: Preset?,
@@ -250,13 +250,19 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             !(keepsPartial(row) || cleanupJobStaging(jobRoot, jobId))) return@synchronized false
         if (!infoCache.remove(jobId)) return@synchronized false
         synchronized(this) {
-            // CAS also protects calls through another SQLite helper. Keep created_at: formats expire.
+            // A paused expiry starts a fresh inspection lifetime; every other Retry keeps its original deadline.
+            val pausedExpiry = row.error == DownloadError.PausedExpired
             writableDatabase.update("jobs", ContentValues().apply {
                 put("stage", JobStage.ENQUEUED.name); put("updated_at", System.currentTimeMillis())
+                if (pausedExpiry) {
+                    put("created_at", System.currentTimeMillis())
+                    put("restart_epoch", Math.addExact(row.restartEpoch, 1))
+                }
                 putNull("error"); put("retryable", 0); putNull("pending_uri"); putNull("display_name")
                 put("transport_resumes", 0); put("stall_restarts", 0); put("resume_reset_bytes", 0)
-            }, "job_id = ? AND stage = 'FAILED' AND retryable = 1 AND source_url IS NOT NULL AND created_at >= ?",
-                arrayOf(jobId, (System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS).toString())) == 1
+            }, "job_id = ? AND stage = 'FAILED' AND retryable = 1 AND source_url IS NOT NULL " +
+                "AND (created_at >= ? OR error = ?)",
+                arrayOf(jobId, (System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS).toString(), DownloadError.PausedExpired.name)) == 1
         }
     }
 
@@ -618,17 +624,20 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         val cutoff = (System.currentTimeMillis() - CONFIRMATION_LIFETIME_MS).toString()
         val live = "stage IN ('ENQUEUED','PAUSED','TRANSFERRING') AND created_at < ?"
         val db = writableDatabase
-        fun expired() = db.query("jobs", arrayOf("job_id"), live, arrayOf(cutoff), null, null, null)
-            .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
+        fun expired() = db.query("jobs", arrayOf("job_id", "stage"), live, arrayOf(cutoff), null, null, null)
+            .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0) to JobStage.valueOf(cursor.getString(1))) } }
         val changed = ArrayList<String>()
         if (expired().isNotEmpty()) {
             // Another helper (own monitor) may move a row to STAGED meanwhile: only rows this UPDATE changed lose staging.
             db.beginTransaction()
             try {
-                for (id in expired()) {
+                for ((id, stage) in expired()) {
+                    val paused = stage == JobStage.PAUSED
                     if (db.update("jobs", ContentValues().apply {
-                            put("stage", JobStage.FAILED.name); put("error", DownloadError.FormatExpired.name)
-                            putNull("source_url"); put("retryable", 0); put("has_partial", 0)
+                            put("stage", JobStage.FAILED.name)
+                            put("error", (if (paused) DownloadError.PausedExpired else DownloadError.FormatExpired).name)
+                            if (!paused) putNull("source_url")
+                            put("retryable", if (paused) 1 else 0); put("has_partial", 0)
                             put("updated_at", System.currentTimeMillis())
                         }, "job_id = ? AND $live", arrayOf(id, cutoff)) == 1) {
                         changed += id
@@ -646,7 +655,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             if (row != null) onExpired(row)
         }
         db.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0 " +
-            "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ?", arrayOf(cutoff))
+            "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ? AND (error IS NULL OR error != ?)",
+            arrayOf(cutoff, DownloadError.PausedExpired.name))
     }
 
     private fun read(cursor: Cursor): JobRecord {

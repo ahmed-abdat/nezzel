@@ -112,6 +112,7 @@
     <string name="download_space_error">Espace libre insuffisant</string>
     <string name="download_save_error">Impossible d’enregistrer le fichier</string>
     <string name="download_expired_error">Vérifiez à nouveau les qualités disponibles</string>
+    <string name="download_paused_expired_error">En pause depuis plus d’un jour. Réessayez.</string>
     <string name="download_interrupted_error">Téléchargement arrêté</string>
     <string name="open_file">Ouvrir</string>
     <string name="share_file">Partager</string>
@@ -577,6 +578,8 @@
     <string name="playlist_retry">Réessayer (%1$s)</string>
     <string name="playlist_waiting_network">En attente du réseau</string>
     <string name="playlist_slowed">YouTube nous demande de ralentir. En pause.</string>
+    <string name="playlist_quality_fallback">Certaines vidéos ont une qualité différente</string>
+    <string name="playlist_audio_fallback">Certains fichiers audio sont en MP3 plutôt qu’en M4A</string>
     <string name="playlist_stop">Arrêter</string>
     <string name="playlist_stop_confirm">Arrêter cette playlist\u00A0? Les vidéos enregistrées restent.</string>
     <string name="playlist_done">Terminé\u00A0: %1$s enregistrées, %2$s n’ont pas pu être enregistrées</string>

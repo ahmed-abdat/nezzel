@@ -16,7 +16,7 @@ class BatchRecord(val id: String, val title: String, val preset: Preset, val sta
     val createdAt: Long, val error: DownloadError?)
 class BatchItemRecord(val batchId: String, val position: Int, val itemId: String, val title: String,
     val state: BatchItemState, val jobId: String, val error: DownloadError?, val retryable: Boolean,
-    /** A BALANCED request had to use SMALL; the later batch card can disclose this. */
+    /** The requested preset was unavailable: BALANCED used SMALL, or AUDIO_M4A used AUDIO_MP3. */
     val fallback: Boolean,
     /** Its sealed link is still stored, so a person's Retry can resolve it again. */
     val hasSource: Boolean = retryable)

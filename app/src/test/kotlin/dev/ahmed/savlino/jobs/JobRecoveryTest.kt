@@ -72,6 +72,44 @@ class JobRecoveryTest {
         assertEquals(JobStage.ENQUEUED, store.get("fresh")!!.stage)
     }
 
+    @Test @Config(qualifiers = "en") fun expiredPausedJobKeepsItsReasonAndFreshRetryButCleansStaging() {
+        val id = "expired-pause"
+        val original = command(id)
+        assertTrue(store.enqueue(original))
+        assertTrue(store.startTransfer(id))
+        val directory = directories.create(id).directory
+        File(directory, "output.mp4.part").writeBytes(bytes)
+        val cachedInspection = File(app.noBackupFilesDir, "ytdlp-info/$id.json").apply {
+            parentFile!!.mkdirs()
+            writeText("{}")
+        }
+        assertTrue(store.pause(id, true))
+        store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+            arrayOf<Any>(System.currentTimeMillis() - 86_401_000L, id))
+        reopen()
+        recoverTwice()
+        val row = store.all().single { it.jobId == id }
+        assertEquals(JobStage.FAILED, row.stage)
+        assertEquals(DownloadError.PausedExpired, row.error)
+        assertEquals("Paused for over a day. Try again.", DownloadNotifications.phase(app,
+            DownloadProgress(id, row.filename, DownloadPhase.FAILED, error = row.error, retryable = row.retryable)))
+        assertTrue(row.retryable)
+        assertEquals(original.source.link.rawUrl, row.sourceUrl)
+        assertFalse(row.hasPartial)
+        assertFalse(directory.exists())
+        assertFalse(cachedInspection.exists())
+        assertTrue(store.retry(id))
+        assertFalse(store.retry(id))
+        val retried = store.get(id)!!
+        assertEquals(JobStage.ENQUEUED, retried.stage)
+        assertTrue(retried.createdAt > row.createdAt)
+        assertTrue(retried.restartEpoch > row.restartEpoch)
+        assertNull(retried.error)
+        assertFalse(retried.hasPartial)
+        assertEquals(original.format, retried.command()!!.format)
+        assertEquals(0, publisher.inserts)
+    }
+
     @Test fun interruptedVerifiedPublicationCommitsButUserCancelledDiscards() {
         for ((id, reason) in listOf("interrupted-copy" to DownloadError.Interrupted,
             "cancelled-copy" to DownloadError.Cancelled)) {

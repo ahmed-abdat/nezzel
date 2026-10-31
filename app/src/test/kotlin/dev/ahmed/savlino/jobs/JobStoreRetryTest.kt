@@ -148,7 +148,7 @@ class JobStoreRetryTest {
         val retryable = setOf(DownloadError.Network, DownloadError.Offline, DownloadError.InsufficientSpace,
             DownloadError.MergeFailed, DownloadError.ConvertFailed, DownloadError.PostTransferFailed, DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted,
             DownloadError.Interrupted, DownloadError.StoppedByBattery, DownloadError.ForegroundDenied, DownloadError.Failed,
-            DownloadError.EngineUnavailable)
+            DownloadError.EngineUnavailable, DownloadError.PausedExpired)
         JobStore(app).use { store ->
             for (error in DownloadError.entries) {
                 val id = "failure-${error.name}"

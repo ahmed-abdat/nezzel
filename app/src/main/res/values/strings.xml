@@ -112,6 +112,7 @@
     <string name="download_space_error">Not enough free space</string>
     <string name="download_save_error">Couldn’t save the file</string>
     <string name="download_expired_error">Check the available quality options again</string>
+    <string name="download_paused_expired_error">Paused for over a day. Try again.</string>
     <string name="download_interrupted_error">Download stopped</string>
     <string name="open_file">Open</string>
     <string name="share_file">Share</string>
@@ -565,6 +566,8 @@
     <string name="playlist_retry">Retry failed (%1$s)</string>
     <string name="playlist_waiting_network">Waiting for network</string>
     <string name="playlist_slowed">YouTube asked us to slow down. Paused.</string>
+    <string name="playlist_quality_fallback">Some videos use a different quality</string>
+    <string name="playlist_audio_fallback">Some audio files use MP3 instead of M4A</string>
     <string name="playlist_stop">Stop</string>
     <string name="playlist_stop_confirm">Stop this playlist? Saved videos stay.</string>
     <string name="playlist_done">Done: %1$s saved, %2$s couldn\'t be saved</string>

@@ -22,7 +22,11 @@ enum class DownloadError {
     /** The audio was downloaded but its conversion (MP3 encode, audio extraction) failed; not an audio+video merge. */
     ConvertFailed,
     /** Transfer finished, but preparing or publishing the file failed; Retry keeps the completed bytes. */
-    PostTransferFailed;
+    PostTransferFailed,
+    /** A paused job's confirmation aged out; its files are discarded, but an explicit Retry can inspect its link again. */
+    PausedExpired;
+
+    val confirmationExpired: Boolean get() = this == FormatExpired || this == PausedExpired
 
     /** Default for adapters that already return concrete connectivity errors. */
     val cause: DownloadFailureCause get() = when (this) {
@@ -41,13 +45,13 @@ enum class DownloadError {
         PostTransferFailed, SaveFailed, FolderUnavailable -> FailureStage.SAVE
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, Network, Offline,
         FormatExpired, InsufficientSpace, ExecutionRestricted, Interrupted, Failed, Cancelled, NoVideo, Unavailable,
-        NotAPost, SourceRefused, StoppedByBattery, ForegroundDenied, PhotoPost -> FailureStage.TRANSFER
+        NotAPost, SourceRefused, StoppedByBattery, ForegroundDenied, PhotoPost, PausedExpired -> FailureStage.TRANSFER
     }
 
     /** The person may Retry the same confirmed download. A row's stored retryable flag never exceeds this. */
     val retryable: Boolean get() = when (this) {
         Network, Offline, InsufficientSpace, MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, FolderUnavailable,
-        ExecutionRestricted, Interrupted, StoppedByBattery, ForegroundDenied, Failed, EngineUnavailable -> true
+        ExecutionRestricted, Interrupted, StoppedByBattery, ForegroundDenied, Failed, EngineUnavailable, PausedExpired -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, NoFormats, FormatExpired, Cancelled, NoVideo,
         Unavailable, NotAPost, SourceRefused, PhotoPost -> false
     }
@@ -61,7 +65,7 @@ enum class DownloadError {
         StoppedByBattery, ForegroundDenied, ConvertFailed, PostTransferFailed -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, Network, Offline,
         FormatExpired, InsufficientSpace, MergeFailed, SaveFailed, FolderUnavailable, ExecutionRestricted, Interrupted,
-        Failed, Cancelled, NoVideo, Unavailable, NotAPost, SourceRefused, PhotoPost -> false
+        Failed, Cancelled, NoVideo, Unavailable, NotAPost, SourceRefused, PhotoPost, PausedExpired -> false
     }
 
     /**
@@ -73,7 +77,7 @@ enum class DownloadError {
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, FormatExpired,
         InsufficientSpace, MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, FolderUnavailable, ExecutionRestricted,
         Interrupted, Failed, Cancelled, NoVideo, Unavailable, NotAPost, SourceRefused, StoppedByBattery,
-        ForegroundDenied, PhotoPost -> false
+        ForegroundDenied, PhotoPost, PausedExpired -> false
     }
 
     /** A stop from outside the save (system, battery, network, space, folder grant): an unfinished save keeps it as its reason. */
@@ -81,7 +85,7 @@ enum class DownloadError {
         Interrupted, StoppedByBattery, Network, InsufficientSpace, FolderUnavailable -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, Offline, FormatExpired,
         MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, ExecutionRestricted, Failed, Cancelled, NoVideo, Unavailable,
-        NotAPost, SourceRefused, ForegroundDenied, PhotoPost -> false
+        NotAPost, SourceRefused, ForegroundDenied, PhotoPost, PausedExpired -> false
     }
 
     /** The device or a later step ended it, not the link: reading the link again (re-extraction) would not help. */
@@ -89,7 +93,7 @@ enum class DownloadError {
         Network, Offline, InsufficientSpace, MergeFailed, ConvertFailed, PostTransferFailed, SaveFailed, FolderUnavailable,
         ExecutionRestricted, Interrupted, Cancelled -> true
         InvalidInput, Unsupported, LoginRequired, DrmProtected, EngineUnavailable, NoFormats, FormatExpired, Failed,
-        NoVideo, Unavailable, NotAPost, SourceRefused, StoppedByBattery, ForegroundDenied, PhotoPost -> false
+        NoVideo, Unavailable, NotAPost, SourceRefused, StoppedByBattery, ForegroundDenied, PhotoPost, PausedExpired -> false
     }
 
     companion object {

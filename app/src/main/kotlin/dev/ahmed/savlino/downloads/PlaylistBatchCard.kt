@@ -102,6 +102,7 @@ internal fun PlaylistBatchRow(batch: PlaylistBatch, language: String, onAction: 
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
                     Text(batchMeta(batch, language), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    BatchFallbackLine(batch)
                 }
                 if (!batch.terminal) BatchBar(batch)
             }
@@ -140,6 +141,7 @@ internal fun PlaylistFailureRow(batch: PlaylistBatch, jobs: List<DownloadProgres
                 Text(NezzelFormat.isolate(title), style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(meta, style = MaterialTheme.typography.bodyMedium, color = scheme.error, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                BatchFallbackLine(batch)
             }
             if (batch.canRetryFailed) {
                 val retry = stringResource(R.string.playlist_retry, NezzelFormat.count(batch.userRetryable, language))
@@ -149,6 +151,14 @@ internal fun PlaylistFailureRow(batch: PlaylistBatch, jobs: List<DownloadProgres
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(24.dp), tint = scheme.onSurfaceVariant)
         }
     }
+}
+
+@Composable
+private fun BatchFallbackLine(batch: PlaylistBatch) {
+    if (batch.items.none { it.fallback }) return
+    Text(stringResource(if (batch.record.preset == dev.ahmed.savlino.domain.Preset.AUDIO_M4A)
+        R.string.playlist_audio_fallback else R.string.playlist_quality_fallback),
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

@@ -18,6 +18,7 @@ class DownloadErrorPolicyTest {
         Network to p(TRANSFER, retry = true, budget = true, stops = true, local = true),
         Offline to p(TRANSFER, retry = true, budget = true, local = true),
         FormatExpired to p(TRANSFER),
+        PausedExpired to p(TRANSFER, retry = true),
         InsufficientSpace to p(TRANSFER, retry = true, stops = true, local = true),
         MergeFailed to p(CONVERT, retry = true, local = true),
         ConvertFailed to p(CONVERT, retry = true, keep = true, local = true),

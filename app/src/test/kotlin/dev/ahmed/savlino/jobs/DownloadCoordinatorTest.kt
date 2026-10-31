@@ -278,10 +278,15 @@ class DownloadCoordinatorTest {
             assertFalse(f.coordinator.resume("expired-pause"))
             val progress = f.coordinator.progress.value.single()
             assertEquals(DownloadPhase.FAILED, progress.phase)
-            assertEquals(DownloadError.FormatExpired, progress.error)
+            assertEquals(DownloadError.PausedExpired, progress.error)
             assertFalse(progress.paused)
-            assertFalse(progress.retryable)
+            assertTrue(progress.retryable)
             assertFalse(staging.exists())
+            assertTrue(f.coordinator.retry("expired-pause"))
+            val retried = f.coordinator.progress.value.single()
+            assertTrue(retried.waiting)
+            assertFalse(retried.terminal)
+            assertTrue(retried.restartEpoch > progress.restartEpoch)
         }
     }
 
@@ -296,7 +301,7 @@ class DownloadCoordinatorTest {
             assertFalse(f.coordinator.resume("expiry-race"))
             val progress = f.coordinator.progress.value.single()
             assertEquals(DownloadPhase.FAILED, progress.phase)
-            assertEquals(DownloadError.FormatExpired, progress.error)
+            assertEquals(DownloadError.PausedExpired, progress.error)
             assertFalse(progress.paused)
         }
     }
@@ -314,8 +319,9 @@ class DownloadCoordinatorTest {
             assertEquals(2, f.coordinator.progress.value.size)
             for (progress in f.coordinator.progress.value) {
                 assertEquals(DownloadPhase.FAILED, progress.phase)
-                assertEquals(DownloadError.FormatExpired, progress.error)
+                assertEquals(DownloadError.PausedExpired, progress.error)
                 assertFalse(progress.paused)
+                assertTrue(progress.retryable)
             }
         }
     }

@@ -154,6 +154,32 @@ class PlaylistBatchCardTest {
     @Test fun slowedDownIsExplicit() = row(playlistFixture(BatchState.PAUSED, DownloadError.SourceRefused)) {
         compose.onNodeWithText(context.getString(R.string.playlist_slowed), substring = true).assertExists()
     }
+    @Test fun fallbackLineAppearsOnlyWhenUsedAndDescribesTheRequestedPreset() {
+        val original = playlistFixture()
+        val batch = mutableStateOf(original)
+        val quality = "Some videos use a different quality"
+        val audio = "Some audio files use MP3 instead of M4A"
+        host(content = {
+            Column {
+                PlaylistBatchRow(batch.value, "en", {}, {})
+                PlaylistFailureRow(batch.value, emptyList(), "en", {}, {})
+            }
+        }) {
+            compose.onNodeWithText(quality).assertDoesNotExist()
+            compose.onNodeWithText(audio).assertDoesNotExist()
+            val items = original.items.map { item -> BatchItemRecord(item.batchId, item.position, item.itemId, item.title,
+                item.state, item.jobId, item.error, item.retryable, item.position == 0, item.hasSource) }
+            compose.runOnIdle { batch.value = PlaylistBatch(original.record, items) }
+            compose.onAllNodesWithText(quality).assertCountEquals(2)
+            compose.onNodeWithText(audio).assertDoesNotExist()
+            compose.runOnIdle {
+                batch.value = PlaylistBatch(BatchRecord("list", "Coastal walks", Preset.AUDIO_M4A,
+                    BatchState.ACTIVE, 0, null), items)
+            }
+            compose.onAllNodesWithText(audio).assertCountEquals(2)
+            compose.onNodeWithText(quality).assertDoesNotExist()
+        }
+    }
     @Test fun finishedRowShowsOnlyTheResult() = row(playlistFixture(BatchState.COMPLETED)) {
         compose.onNodeWithText("Saved 2").assertExists()
         compose.onNodeWithTag("playlist_pause").assertDoesNotExist()
