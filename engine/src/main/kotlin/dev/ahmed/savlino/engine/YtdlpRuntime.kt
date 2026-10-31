@@ -364,7 +364,14 @@ internal class YtdlpDiagnostics {
             if (httpFailure.get() && cause.get() == DownloadFailureCause.HTTP &&
                 it.spendsResumeBudget) DownloadError.Failed else it
         }
-        return YtdlpExecutionFailure(mapped, expired.get(), !httpFailure.get(), cause.get(), reextractionBlocked.get(),
+        // A socket exception has no ERROR line, so the mapper never sees it. Prepare fails as Failed
+        // and the job ends instead of waiting. An ERROR line the mapper already classified stays as it is.
+        val bare = if (mapped == DownloadError.Failed && !httpFailure.get()) bareConnection(fallback?.message) else null
+        val named = bare ?: mapped
+        val namedCause = if (bare != null && cause.get() == DownloadFailureCause.OTHER) DownloadFailureCause.TRANSPORT
+            else cause.get()
+        return YtdlpExecutionFailure(named, expired.get(), !httpFailure.get(), namedCause,
+            reextractionBlocked.get() || bare?.blocksReextraction == true,
             (fallback as? YtdlpExecutionFailure)?.reason ?: ExecutionFailureReason.UNKNOWN)
     }
     companion object {
@@ -379,6 +386,18 @@ internal class YtdlpDiagnostics {
         /** ERROR lines without URLs (a path may spell an error code), lowercased. */
         private fun errorLines(message: String) = message.lineSequence().filter { it.startsWith("ERROR:") }
             .map { it.replace(URL, "").lowercase(java.util.Locale.ROOT) }
+        /** A thrown socket error, not an engine ERROR line. Null when the mapper already decided. */
+        private fun bareConnection(message: String?): DownloadError? {
+            if (message.isNullOrBlank()) return null
+            val text = message.replace(URL, "").lowercase(java.util.Locale.ROOT)
+            if (text.lineSequence().any { it.trimStart().startsWith("error:") }) return null
+            val offline = text.contains("network is unreachable") || text.contains("network is down")
+            if (offline) return DownloadError.Offline
+            val network = listOf("connection reset", "connection refused", "connection abort", "timed out",
+                "name or service not known", "name resolution", "no route to host", "host is unreachable",
+                "failed to resolve", "network unreachable", "enetunreach").any(text::contains)
+            return if (network) DownloadError.Network else null
+        }
         private val URL = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
         private val HTTP_NO_RESUME = Regex("\\bhttp error (429|5\\d\\d)\\b")
         private val HTTP_EXPIRED = Regex("\\bhttp error (401|403|410)\\b")

@@ -2436,6 +2436,85 @@ class DownloadWorkerTest {
         }
     }
 
+    @Test fun offlineDuringPreparingWaitsThenResumesWhenOnline() = runBlocking {
+        val network = TestNetwork()
+        var first = true
+        fixture(FakeEngine(), network = network, script = { _, dir, _ ->
+            if (first) {
+                first = false
+                // Snapshot is already offline; the loss callback has not run. No bytes, still preparing.
+                network.connected = false
+                TransferResult.Failure(DownloadError.Failed)
+            } else {
+                check(network.connected) { "An offline attempt must not reach the engine" }
+                val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }
+        }).use { f ->
+            val id = "prep-offline"
+            f.store.enqueue(command(id, Size.Unknown))
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            val row = f.store.get(id)!!
+            assertEquals(JobStage.ENQUEUED, row.stage); assertNull(row.error)
+            assertEquals(0, row.transportResumes)
+            val waiting = f.coordinator.progress.value.single()
+            assertEquals(DownloadPhase.PREPARING, waiting.phase)
+            assertTrue(waiting.waiting); assertFalse(waiting.terminal); assertTrue(waiting.networkWait)
+            assertEquals(app.getString(dev.ahmed.savlino.R.string.download_waiting_network),
+                DownloadNotifications.phase(app, waiting, offline = true))
+            assertFalse(f.phases.contains("FAILED"))
+            assertEquals(1, f.attempts.get())
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(1, f.attempts.get())
+            network.connected = true
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+            assertEquals(2, f.attempts.get())
+        }
+    }
+
+    @Test fun unreachableWhilePreparingRetriesWhileTheSnapshotSaysOnline() = runBlocking {
+        val network = TestNetwork()
+        var runs = 0
+        fixture(FakeEngine(), network = network, script = { _, dir, _ ->
+            runs++
+            if (runs == 1) TransferResult.Failure(DownloadError.Offline)
+            else {
+                val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            }
+        }).use { f ->
+            val id = "prep-unreachable"
+            f.store.enqueue(command(id, Size.Unknown))
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            val waiting = f.coordinator.progress.value.single()
+            assertEquals(JobStage.ENQUEUED, f.store.get(id)!!.stage)
+            assertEquals(0, f.store.get(id)!!.transportResumes)
+            assertTrue(waiting.networkWait); assertFalse(waiting.terminal)
+            assertEquals(DownloadPhase.PREPARING, waiting.phase)
+            assertFalse(f.phases.contains("FAILED"))
+            // Snapshot still online: the next run really tries again (a transient error must not fail the job).
+            assertEquals(ListenableWorker.Result.success(), f.worker(id).doWork())
+            assertEquals(JobStage.COMPLETED, f.store.get(id)!!.stage)
+            assertEquals(2, f.attempts.get())
+        }
+    }
+
+    @Test fun nonNetworkPrepareErrorStillFailsWhileOffline() = runBlocking {
+        val network = TestNetwork()
+        fixture(FakeEngine(), network = network, script = { _, _, _ ->
+            network.connected = false
+            TransferResult.Failure(DownloadError.Unsupported)
+        }).use { f ->
+            f.store.enqueue(command("prep-unsupported", Size.Unknown))
+            assertEquals(ListenableWorker.Result.failure(), f.worker("prep-unsupported").doWork())
+            val row = f.store.get("prep-unsupported")!!
+            assertEquals(JobStage.FAILED, row.stage)
+            assertEquals(DownloadError.Unsupported, row.error)
+            assertEquals(1, f.phases.count { it == "FAILED" })
+        }
+    }
+
     @Test fun runStartingOfflineWaitsBehindTheGateWithoutTransfer() = runBlocking {
         val network = TestNetwork(connected = false)
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4)))), network = network).use { f ->

@@ -162,6 +162,8 @@ class DownloadCoordinator(
     private val progressed = ConcurrentHashMap.newKeySet<String>()
     /** Requeued because the network went away: the next attempt waits behind the network gate, never a retry. */
     private val networkWait = ConcurrentHashMap.newKeySet<String>()
+    /** Prepare said the network was unreachable while the snapshot still said online: the next run is a counted retry. */
+    private val unreachableHold = ConcurrentHashMap.newKeySet<String>()
     /** Consecutive attempts that passed the network gate but found no usable network. */
     private val offlineStarts = ConcurrentHashMap<String, Int>()
     private val mutableProgress = MutableStateFlow<List<DownloadProgress>>(emptyList())
@@ -573,13 +575,21 @@ class DownloadCoordinator(
                     // keeps passing while this process sees no network (background restriction) would spin: after
                     // OFFLINE_GATE_PASSES the runner backs off through WorkManager's retry instead.
                     if (!network.online()) {
+                        unreachableHold.remove(id)
                         if (offlineStarts.merge(id, 1, Int::plus)!! <= OFFLINE_GATE_PASSES) {
                             networkStopped.set(true)
                             finishStopped()
                         } else finishStopped(id, DownloadError.Network, systemStopped = true)
                         return@coroutineScope
                     }
-                    offlineStarts.remove(id)
+                    // Prepare found the network unreachable while the snapshot said online: try again, but only
+                    // OFFLINE_GATE_PASSES times in a row, so a wrong snapshot cannot spin forever.
+                    if (unreachableHold.remove(id)) {
+                        if (offlineStarts.merge(id, 1, Int::plus)!! > OFFLINE_GATE_PASSES) {
+                            finishStopped(id, DownloadError.Network, systemStopped = true)
+                            return@coroutineScope
+                        }
+                    } else offlineStarts.remove(id)
                     var command = row.command() ?: error("Invalid job command")
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
                     val engineVersion = engine.installedVersion() ?: row.engineVersion
@@ -805,7 +815,10 @@ class DownloadCoordinator(
                         store.get(id)?.let(::fromRecord)
                     } else null
                     active.remove(id, signal); userCancellation.remove(id); pauseRequests.remove(id); postProcessing.remove(id)
-                    if (store.get(id)?.stage?.terminal != false) offlineStarts.remove(id) // A reused id starts its count over.
+                    if (store.get(id)?.stage?.terminal != false) {
+                        offlineStarts.remove(id) // A reused id starts its count over.
+                        unreachableHold.remove(id)
+                    }
                     // Expiry skipped this staging while the writer was live; the writer has exited now.
                     JobStore.liveWriters.remove(id)
                     if (store.get(id)?.let { it.stage.terminal && !JobStore.keepsPartial(it) } == true) {
@@ -843,15 +856,22 @@ class DownloadCoordinator(
         val bytes = stagingBytes(stagingRoot(id))
         // The engine may return before Android delivers the loss callback, even before its first byte.
         // Offline waits use the CONNECTED gate; only failures with a usable network spend retry budget.
-        val offlineFailure = !systemStopped && error.spendsResumeBudget &&
-            cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) && !network.online()
+        // Before the first byte of the job: a resumed partial that stalls spends its resume budget instead.
+        val preparing = startBytes == 0L && bytes == 0L
+        val namedTransport = error.spendsResumeBudget &&
+            cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL)
+        // No byte yet: an unnamed failure while offline, or "network unreachable" before the snapshot
+        // flips, waits like a drop mid-transfer. A typed non-network error still fails.
+        val prepareWait = preparing && !systemStopped && (error == DownloadError.Offline ||
+            !network.online() && error == DownloadError.Failed)
+        val offlineFailure = (!systemStopped && namedTransport && !network.online()) || prepareWait
         store.resetAutomaticResumes(id, bytes)
         if (id !in userCancellation && (id in pauseRequests || row.stage == JobStage.PAUSED)) {
             store.pausedPartial(id, bytes > 0)
         } else if (id in userCancellation || error == DownloadError.Cancelled) {
             store.cancel(id)
             recovery.reconcile(id, cancellationRequested = true)
-        } else if ((systemStopped || offlineFailure) && (error.spendsResumeBudget ||
+        } else if ((systemStopped || offlineFailure) && (error.spendsResumeBudget || prepareWait ||
                 keepOutput && error in setOf(DownloadError.Interrupted, DownloadError.StoppedByBattery)) &&
             row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             // A scheduler stop waits for its constraints; it is not an engine failure episode. A stop during a
@@ -862,7 +882,10 @@ class DownloadCoordinator(
                 if (store.requeue(id, true) && bytes > startBytes) progressed += id
             } else if (cleanupJobStaging(File(context.filesDir.canonicalFile, "downloads"), id)) store.requeue(id)
             else store.fail(id, DownloadError.SaveFailed)
-            if (offlineFailure && store.get(id)?.stage == JobStage.ENQUEUED) networkWait += id
+            if (offlineFailure && store.get(id)?.stage == JobStage.ENQUEUED) {
+                networkWait += id
+                if (prepareWait && error == DownloadError.Offline && network.online()) unreachableHold += id
+            }
         } else if (resumeAllowed && cause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL) &&
             error.spendsResumeBudget && row.stage in setOf(JobStage.ENQUEUED, JobStage.TRANSFERRING)) {
             // Cold probes/first-byte timeouts may have no partial yet; still allow one bounded resume.

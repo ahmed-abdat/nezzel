@@ -579,6 +579,18 @@ class YtdlpMappingTest {
             "ERROR: [TikTok] id: No video formats found!" to DownloadError.NoVideo)
         for ((stderr, expected) in cases) assertEquals(expected, YtdlpErrorMapper.map(stderr), stderr)
     }
+    @Test fun bareSocketFailureIsAConnectionErrorAndAnErrorLineStaysClassified() {
+        val offline = YtdlpDiagnostics().failure(java.io.IOException("Network is unreachable"))
+        assertEquals(DownloadError.Offline, offline.error)
+        assertEquals(DownloadFailureCause.TRANSPORT, offline.failureCause)
+        val named = YtdlpDiagnostics().failure(java.io.IOException("Name or service not known"))
+        assertEquals(DownloadError.Network, named.error)
+        assertEquals(DownloadFailureCause.TRANSPORT, named.failureCause)
+        val classified = YtdlpDiagnostics().failure(java.io.IOException("ERROR: unknown failure"))
+        assertEquals(DownloadError.Failed, classified.error)
+        assertEquals(DownloadFailureCause.OTHER, classified.failureCause)
+    }
+
     @Test fun redirectedTransferDiagnosticsKeepTypedFailuresWithoutRetainingRawOutput() {
         val diagnostics = YtdlpDiagnostics()
         diagnostics.accept("[Merger] Destination: output.mp4")
