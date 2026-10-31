@@ -110,6 +110,26 @@ class JobRecoveryTest {
         assertEquals(0, publisher.inserts)
     }
 
+    @Test fun pausedExpiryDropsItsLinkAfterSevenDays() {
+        for (id in listOf("old-pause", "recent-pause")) {
+            assertTrue(store.enqueue(command(id))); assertTrue(store.startTransfer(id)); assertTrue(store.pause(id, true))
+        }
+        store.writableDatabase.execSQL("UPDATE jobs SET created_at = ?", arrayOf<Any>(System.currentTimeMillis() - 86_401_000L))
+        reopen(); recoverTwice()
+        val day = 24L * 60 * 60 * 1000
+        store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+            arrayOf<Any>(System.currentTimeMillis() - 7 * day - 1000, "old-pause"))
+        store.writableDatabase.execSQL("UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+            arrayOf<Any>(System.currentTimeMillis() - 6 * day, "recent-pause"))
+        reopen(); recoverTwice()
+        val old = store.get("old-pause")!!
+        assertNull(old.sourceUrl); assertFalse(old.retryable); assertEquals(DownloadError.FormatExpired, old.error)
+        assertFalse(store.retry("old-pause"))
+        val recent = store.get("recent-pause")!!
+        assertEquals(DownloadError.PausedExpired, recent.error); assertTrue(recent.retryable)
+        assertEquals(command("recent-pause").source.link.rawUrl, recent.sourceUrl)
+    }
+
     @Test fun interruptedVerifiedPublicationCommitsButUserCancelledDiscards() {
         for ((id, reason) in listOf("interrupted-copy" to DownloadError.Interrupted,
             "cancelled-copy" to DownloadError.Cancelled)) {

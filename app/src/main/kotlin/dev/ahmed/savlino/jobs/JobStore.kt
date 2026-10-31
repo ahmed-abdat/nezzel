@@ -24,7 +24,7 @@ enum class JobStage(val terminal: Boolean = false) {
     COMPLETED(true), FAILED(true), CANCELLED(true)
 }
 
-/** URL has no generated toString; retryable failures retain it until confirmation expiry, except a paused-expiry Retry. */
+/** URL has no generated toString; retryable failures retain it until confirmation expiry; a paused expiry keeps it 7 days for Retry. */
 class JobRecord internal constructor(
     val jobId: String, val stage: JobStage, val sourceUrl: String?, val revision: Long,
     val engineVersion: String, val format: Format, val filename: String, val preset: Preset?,
@@ -657,6 +657,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         db.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0 " +
             "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND created_at < ? AND (error IS NULL OR error != ?)",
             arrayOf(cutoff, DownloadError.PausedExpired.name))
+        // A paused-expiry link is kept for Try again only for a bounded time; then it reads like any expired job.
+        db.execSQL("UPDATE jobs SET source_url = NULL, retryable = 0, error = ? " +
+            "WHERE stage = 'FAILED' AND source_url IS NOT NULL AND error = ? AND updated_at < ?",
+            arrayOf(DownloadError.FormatExpired.name, DownloadError.PausedExpired.name,
+                (System.currentTimeMillis() - PAUSED_EXPIRED_LINK_MS).toString()))
     }
 
     private fun read(cursor: Cursor): JobRecord {
@@ -677,6 +682,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
 
         internal const val RESUME_PROGRESS_STEP_BYTES = 1024L * 1024
         internal const val CONFIRMATION_LIFETIME_MS = 24L * 60 * 60 * 1000
+        /** How long a [DownloadError.PausedExpired] row keeps its encrypted link after it failed. */
+        internal const val PAUSED_EXPIRED_LINK_MS = 7 * CONFIRMATION_LIFETIME_MS
         /**
          * An error that keeps its source ([DownloadError.keepsSource]: battery, refused foreground, failed conversion or local finalization) fails at once
          * but keeps its staging so Retry continues from it (has_partial stays 0 on FAILED rows: the staging bytes are the record;
