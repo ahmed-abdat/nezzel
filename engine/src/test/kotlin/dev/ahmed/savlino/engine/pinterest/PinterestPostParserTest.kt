@@ -27,6 +27,39 @@ class PinterestPostParserTest {
         </script>
     """.trimIndent().toByteArray()
 
+    @Test fun pidgetsAcceptsOnlyTheRequestedPinsOwnImageOrVideo() {
+        val largest = large.replace("736x", "564x")
+        val entries = """"236x":{"url":"$preview","width":236,"height":335},
+            "564x":{"url":"$largest","width":564,"height":846},
+            "736x":{"url":"$large","width":500,"height":700}"""
+        val image = """{"id":"$pin","is_video":false,"description":"Synthetic pin",
+            "pinner":{"full_name":"Synthetic author"},"images":{$entries}}"""
+        val cases = listOf(
+            """{"status":"success","data":[$image]}""" to "image",
+            """{"status":"success","data":[{"id":"$pin","is_video":true,"images":{$entries}}]}""" to "video",
+            """{"status":"success","data":[${image.replace(pin, "999")},$image]}""" to "failure",
+            """{"status":"success","data":[]}""" to "failure",
+            """{"status":"success","data":[${image.replace("i.pinimg.com", "evil.example")}]}""" to "failure",
+            """{"status":"failure","data":[$image]}""" to "failure",
+            """{"status":"success","data":[""" to "failure")
+        for ((json, expected) in cases) {
+            val result = PinterestPostParser().parsePidgets(json.toByteArray(), pin)
+            when (expected) {
+                "image" -> {
+                    val parsed = assertIs<PinterestParseResult.Image>(result)
+                    assertEquals(largest, parsed.candidate)
+                    assertEquals(preview, parsed.preview)
+                    assertEquals("Synthetic pin", parsed.title)
+                    assertEquals("Synthetic author", parsed.author)
+                    assertEquals(DiscoveryCompleteness.COMPLETE, parsed.discovery.completeness)
+                    assertTrue(parsed.discovery.previewQuality)
+                }
+                "video" -> assertIs<PinterestParseResult.Video>(result)
+                else -> assertIs<PinterestParseResult.Failure>(result)
+            }
+        }
+    }
+
     @Test fun reduxPageKeepsTheUploadAndASmallerPreview() {
         val image = assertIs<PinterestParseResult.Image>(parse("redux-image"))
         assertEquals(original, image.candidate)

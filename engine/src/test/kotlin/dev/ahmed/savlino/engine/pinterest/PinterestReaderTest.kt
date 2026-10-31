@@ -58,8 +58,46 @@ class PinterestReaderTest : PublicImageTestBase() {
         }) { f ->
             f.http.client.newOperation(PinterestReader.operation).use { token ->
                 failure(reader.read(f.http.client, token, ::readPage), reason)
-                assertEquals(listOf("/pin/$pin/"), f.server.requests.map { it.target }, location)
+                val expected = if (reason == ImageFailure.PRIVATE)
+                    listOf("/pin/$pin/", "/v3/pidgets/pins/info/?pin_ids=$pin") else listOf("/pin/$pin/")
+                assertEquals(expected, f.server.requests.map { it.target }, location)
             }
+        }
+    }
+
+    @Test fun widgetRedirectsNeverFetchAnotherHostOrPinAndKeepThePageFailure() {
+        for (location in listOf("https://evil.example/info/", "https://www.pinterest.com/pin/$pin/",
+                "https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=999")) fixture(respond = { request, socket ->
+            socket.reply(302, headers = mapOf("Location" to if (request.target.startsWith("/pin/"))
+                "https://www.pinterest.com/login/" else location))
+        }) { f ->
+            f.http.client.newOperation(PinterestReader.operation).use { token ->
+                failure(reader.read(f.http.client, token, ::readPage), ImageFailure.PRIVATE)
+                assertEquals(listOf("www.pinterest.com", "widgets.pinterest.com"), f.server.requests.map { it.headers["host"] })
+            }
+        }
+    }
+
+    @Test fun aGenericPageReadCannotEnterTheWidgetEndpoint() = fixture(respond = { _, socket ->
+        socket.reply(302, headers = mapOf("Location" to "https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=$pin"))
+    }) { f ->
+        for (url in listOf("https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=$pin", "https://media.test/page")) {
+            f.http.client.newOperation(PinterestReader.operation).use { token ->
+                val result = f.http.client.fetch(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE))
+                assertEquals(MediaHttpFailure.INVALID_CONTEXT, assertIs<MediaHttpResult.Failure>(result).reason)
+            }
+        }
+        assertEquals(listOf("media.test"), f.server.requests.map { it.headers["host"] })
+    }
+
+    @Test fun aMalformedWidgetResponseKeepsTheOriginalPrivateFailure() = fixture(respond = { request, socket ->
+        if (request.target.startsWith("/pin/"))
+            socket.reply(302, headers = mapOf("Location" to "https://www.pinterest.com/login/"))
+        else socket.reply(body = "not json".toByteArray(), headers = mapOf("Content-Type" to "application/json"))
+    }) { f ->
+        f.http.client.newOperation(PinterestReader.operation).use { token ->
+            failure(reader.read(f.http.client, token, ::readPage), ImageFailure.PRIVATE)
+            assertEquals(2, f.server.requests.size)
         }
     }
 

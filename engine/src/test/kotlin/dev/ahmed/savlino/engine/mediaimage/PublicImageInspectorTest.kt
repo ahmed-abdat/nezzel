@@ -10,6 +10,52 @@ import java.io.ByteArrayOutputStream
 import kotlin.test.*
 
 class PublicImageInspectorTest : PublicImageTestBase() {
+    @Test fun pinterestSignInWallFallsBackToTheSamePinsPublicWidget() {
+        val pin = "100000000000000001"
+        val widget = "/v3/pidgets/pins/info/?pin_ids=$pin"
+        val image = "/564x/01/23/45/0123456789abcdef0123456789abcdef.jpg"
+        val bytes = raster(40, 30, "jpg")
+        for (status in listOf(302, 401, 403)) fixture(respond = { request, socket ->
+            when (request.target) {
+                "/pin/$pin/" -> socket.reply(status, headers = mapOf(
+                    "Location" to "https://www.pinterest.com/login/", "Set-Cookie" to "session=ignored"))
+                widget -> socket.reply(body = """{"status":"success","data":[{"id":"$pin","is_video":false,
+                    "images":{"564x":{"url":"https://i.pinimg.com$image","width":564,"height":423}}}]}""".toByteArray(),
+                    headers = mapOf("Content-Type" to "application/json"))
+                image -> socket.reply(body = bytes, headers = mapOf("Content-Type" to "image/jpeg"))
+                else -> error("unexpected fixture request")
+            }
+        }) { f ->
+            val operation = f.inspector.newOperation(imageSource("https://www.pinterest.com/pin/$pin/"), IMAGE_IDENTITY)
+            inspected(runBlocking { f.inspector.inspect(operation, ImageSourceType.PINTEREST) }).use { result ->
+                val rendition = firstRendition(result)
+                assertEquals(40, rendition.image.width)
+                assertEquals(30, rendition.image.height)
+                assertEquals(Size.Exact(bytes.size.toLong()), rendition.size)
+                assertEquals("https://i.pinimg.com$image", f.store.resolve(
+                    assertNotNull(result.inspection.selection(rendition.ref)))?.url)
+            }
+            assertEquals(listOf("/pin/$pin/", widget, image), f.server.requests.map { it.target })
+            assertEquals("widgets.pinterest.com", f.server.requests[1].headers["host"])
+            assertTrue(f.server.requests.all { it.headers["cookie"] == null })
+        }
+    }
+
+    @Test fun pinterestWidgetFailurePreservesTheOriginalPageFailure() {
+        val pin = "100000000000000001"
+        for (status in listOf(302, 401, 403, 404, 500)) fixture(respond = { request, socket ->
+            if (request.target == "/pin/$pin/") socket.reply(status,
+                headers = mapOf("Location" to "https://www.pinterest.com/login/"))
+            else socket.reply(500)
+        }) { f ->
+            val operation = f.inspector.newOperation(imageSource("https://www.pinterest.com/pin/$pin/"), IMAGE_IDENTITY)
+            val result = failed(runBlocking { f.inspector.inspect(operation, ImageSourceType.PINTEREST) },
+                if (status == 302) ImageFailure.PRIVATE else ImageFailure.HTTP, ImagePhase.PAGE)
+            assertEquals(if (status == 302) null else status, result.statusCode)
+            assertEquals(if (status in listOf(302, 401, 403)) 2 else 1, f.server.requests.size)
+        }
+    }
+
     @Test fun linkedInFivePhotoPostReturnsEveryRealImageInPageOrderWithOneSaveContext() {
         linkedInPhotos()
     }

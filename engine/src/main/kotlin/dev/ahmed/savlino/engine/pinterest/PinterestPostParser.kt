@@ -48,6 +48,28 @@ class PinterestPostParser {
         PinterestParseResult.Failure(ImageFailure.BUDGET)
     }
 
+    /** The public widget's first result must name this pin; related pins and outside images are never candidates. */
+    fun parsePidgets(bytes: ByteArray, pinId: String, length: Int = bytes.size): PinterestParseResult = try {
+        if (length !in 0..bytes.size || length > MediaPageLimits.PINTEREST) throw Budget()
+        val root = readJson(String(bytes, 0, length, Charsets.UTF_8), TokenBudget()) as? Map<*, *> ?: throw Refusal()
+        if (root["status"] != "success") throw Refusal()
+        val pin = (root["data"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: throw Refusal()
+        if (pin["id"] != pinId) throw Refusal()
+        if (pin["is_video"] == true) PinterestParseResult.Video
+        else {
+            val images = renditions(mapOf("images" to pin["images"]))
+                .filter { HttpsUrl.parse(it.url)?.let(MediaHttpPolicy::isPinterestImage) == true }.distinctBy { it.url }
+            if (images.isEmpty()) throw Refusal()
+            choose(images, text(pin), author(pin))
+        }
+    } catch (_: Budget) {
+        PinterestParseResult.Failure(ImageFailure.BUDGET)
+    } catch (_: Refusal) {
+        PinterestParseResult.Failure(ImageFailure.SOURCE_REFUSED)
+    } catch (_: StackOverflowError) {
+        PinterestParseResult.Failure(ImageFailure.BUDGET)
+    }
+
     private fun parseBounded(html: ByteArray, pinId: String, length: Int): PinterestParseResult {
         if (length !in 0..html.size || length > MediaPageLimits.PINTEREST) throw Budget()
         val page = String(html, 0, length, Charsets.UTF_8)

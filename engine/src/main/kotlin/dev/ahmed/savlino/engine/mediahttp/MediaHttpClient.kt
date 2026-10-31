@@ -75,7 +75,8 @@ internal sealed interface MediaHttpImageTransferResult {
     data class Failure(val reason: MediaHttpFailure, val statusCode: Int? = null) : MediaHttpImageTransferResult
 }
 
-private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST, YOUTUBE_OEMBED, SHORT_LINK }
+private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST,
+    PINTEREST_WIDGET, YOUTUBE_OEMBED, SHORT_LINK }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -180,7 +181,13 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
      * A same-pin redirect may drop its query; a login redirect is not followed. Cap [MediaPageLimits.PINTEREST].
      */
     internal fun fetchPinterestPost(token: OperationToken, identity: PinterestPostIdentity): MediaHttpResult =
-        fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.PINTEREST)
+        // A login wall or HTTP 401/403 may be answered by the public widget using the same live budget.
+        fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.PINTEREST, optional = true)
+
+    /** Same-pin public JSON only; no redirects/cookies, with the page's cap, DNS guards and operation budget. */
+    internal fun fetchPinterestPidgets(token: OperationToken, identity: PinterestPostIdentity): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(identity.pidgetsUrl, MediaHttpPurpose.PAGE), PageSite.PINTEREST_WIDGET,
+            optional = true)
 
     internal fun newYouTubeOEmbedOperation(): OperationToken =
         createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false, deadlineSeconds = 4)
@@ -430,6 +437,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val tiktokPage = site == PageSite.TIKTOK
         val redditPage = site == PageSite.REDDIT
         val pinterestPage = site == PageSite.PINTEREST
+        val pinterestWidget = site == PageSite.PINTEREST_WIDGET
         val oembed = site == PageSite.YOUTUBE_OEMBED
         val shortLink = site == PageSite.SHORT_LINK
         val browserPage = facebookPage || instagramPage || telegramPage || tiktokPage || redditPage
@@ -482,9 +490,15 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||
                     RedditPostIdentity.parse(url)?.fetchUrl != url.toString())) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (pinterestPage && (request.purpose != MediaHttpPurpose.PAGE ||
-                    token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL) ||
+                    token.operation !in setOf(MediaHttpOperation.PAGE_AND_IMAGE, MediaHttpOperation.PAGE_AND_CAROUSEL,
+                        MediaHttpOperation.PAGES_AND_CAROUSEL) ||
                     !PinterestPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (pinterestWidget && (request.purpose != MediaHttpPurpose.PAGE ||
+                    token.operation != MediaHttpOperation.PAGES_AND_CAROUSEL ||
+                    !PinterestPostIdentity.isPidgetsRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (!pinterestPage && request.purpose == MediaHttpPurpose.PAGE && PinterestPostIdentity.isPinterestHost(url.host))
+                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (!pinterestWidget && request.purpose == MediaHttpPurpose.PAGE && url.host == PinterestPostIdentity.WIDGET_HOST)
                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             requireHostRule(request, url)
             val entry = if (linkedInPage) HttpsUrl.withoutQuery(url) else null
@@ -504,7 +518,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 token.budget.requireRequestRoom()
                 val wireRequest = Request.Builder().url(url).get()
                     .header("User-Agent", if (browserPage) DESKTOP_BROWSER_AGENT else if (shortLink) SHORT_LINK_AGENT else PUBLIC_USER_AGENT)
-                    .header("Accept", if (browserPage) BROWSER_PAGE_ACCEPT else if (xPost || blueskyPage || oembed) JSON_ACCEPT
+                    .header("Accept", if (browserPage) BROWSER_PAGE_ACCEPT else if (xPost || blueskyPage || oembed || pinterestWidget) JSON_ACCEPT
                         else if (request.purpose == MediaHttpPurpose.PAGE) PAGE_ACCEPT else IMAGE_ACCEPT)
                     .header("Accept-Encoding", "identity")
                     .apply {
@@ -538,7 +552,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                     throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             }
                             if (telegramPage) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
-                            if (xPost || blueskyPage || oembed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                            if (xPost || blueskyPage || oembed || pinterestWidget) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (instagramPage) throw MediaHttpException(
                                 if (HttpsUrl.resolve(url, response.header("Location").orEmpty())
                                         ?.let(InstagramPostIdentity::isLoginWall) == true) MediaHttpFailure.LOGIN_REQUIRED
@@ -580,6 +594,8 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
                             if (linkedInPage && !MediaHttpPolicy.allowsLinkedInPageHop(url, next))
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                            if (request.purpose == MediaHttpPurpose.PAGE && next.host == PinterestPostIdentity.WIDGET_HOST)
+                                throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             requireHostRule(request, next)
                             if (request.pageContext != null && next.host != "media.licdn.com")
                                 throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
@@ -603,7 +619,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 else if (instagramPage) MediaPageLimits.INSTAGRAM
                                 else if (tiktokPage) MediaPageLimits.TIKTOK
                                 else if (redditPage) MediaPageLimits.REDDIT
-                                else if (pinterestPage) MediaPageLimits.PINTEREST
+                                else if (pinterestPage || pinterestWidget) MediaPageLimits.PINTEREST
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN
                                 else imageCap?.let { minOf(it, token.budget.imageLimit()) })
