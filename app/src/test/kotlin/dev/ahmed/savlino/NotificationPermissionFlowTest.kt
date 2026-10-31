@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Looper
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.test.*
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.jobs.*
@@ -24,7 +25,10 @@ import org.robolectric.annotation.Config
 class NotificationPermissionFlowTest {
     // Installs the test frame policy, so a Popup's every-frame position poll (Compose 1.12) can't spin the looper forever.
     @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
-    private fun nodes(activity: MainActivity): List<SemanticsNode> = semanticsNodes(activity, rounds = 4, idleMillis = 150)
+    // The rule settles composition/layout across all windows without four forced 150ms looper advances.
+    private fun nodes(): List<SemanticsNode> = compose.onAllNodes(
+        SemanticsMatcher("all nodes") { true }, useUnmergedTree = true,
+    ).fetchSemanticsNodes()
     private fun click(nodes: List<SemanticsNode>, label: String) {
         nodes.first { node -> node.config.getOrNull(SemanticsActions.OnClick) != null &&
             descendants(node).any { it.config.getOrNull(SemanticsProperties.Text)?.any { t -> t.text == label } == true }
@@ -75,7 +79,7 @@ class NotificationPermissionFlowTest {
                     assertNotSame(originalActivity, activity)
                     assertSame(original, activity.links)
                 }
-                val all = nodes(activity)
+                val all = nodes()
                 assertTrue(all.map { it.config }.toString(), all.any { it.config.getOrNull(SemanticsProperties.Text)?.any { t ->
                     t.text == activity.getString(R.string.notification_rationale_body) } == true })
                 assertTrue(store.all().isEmpty())

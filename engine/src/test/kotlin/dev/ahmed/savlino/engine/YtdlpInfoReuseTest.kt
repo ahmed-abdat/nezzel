@@ -44,14 +44,14 @@ class YtdlpInfoReuseTest {
     @Test fun freshInspectionUsesItsRawJsonAndExactSelectorAfterProcessRestart() = runBlocking {
         val root = temp.newFolder()
         val runtime = Runtime(json)
-        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(root))
+        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(root), cancellationPollMs = 1)
         val inspection = assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection
         assertTrue(root.listFiles()!!.isEmpty(), "inspection must stay memory-only")
         val command = confirm(inspection)
         engine.prepareDownload(command)
         // Journal restoration has a new inspection identity; only the job file survives.
         val restored = confirm(Inspection(source, "version", inspection.formats))
-        val other = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(root))
+        val other = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(root), cancellationPollMs = 1)
         assertIs<TransferResult.Success>(other.download(restored, temp.newFolder()) {})
         val args = runtime.transfers.single()
         assertTrue("--load-info-json" in args)
@@ -64,7 +64,7 @@ class YtdlpInfoReuseTest {
             var now = 10_000_000L
             val runtime = Runtime(json)
             val cache = YtdlpInfoCache(temp.newFolder()) { now }
-            val engine = YoutubedlEngine(runtime, infoCache = cache)
+            val engine = YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1)
             val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
             engine.prepareDownload(command)
             now += age
@@ -73,7 +73,7 @@ class YtdlpInfoReuseTest {
             assertEquals(2, runtime.extractions)
         }
         val runtime = Runtime(json)
-        assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
+        assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()), cancellationPollMs = 1)
             .download(confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true)))), temp.newFolder()) {})
         assertPage(runtime.transfers.single())
     }
@@ -82,7 +82,7 @@ class YtdlpInfoReuseTest {
             "ERROR: unable to download video data: HTTP Error 404: Not Found",
             "ERROR: media URL has expired", "ERROR: HTTP Error 403: Forbidden")) {
             val runtime = Runtime(json)
-            val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
+            val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()), cancellationPollMs = 1)
             val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
             runtime.action = { args, line ->
                 if (runtime.transfers.size == 1) {
@@ -101,7 +101,7 @@ class YtdlpInfoReuseTest {
     @Test fun secondFailureNeverLoopsAndCancellationSuppressesFallback() = runBlocking {
         for (mode in listOf("twice", "progress", "disk", "cancel", "unrelated")) {
             val runtime = Runtime(json)
-            val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
+            val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()), cancellationPollMs = 1)
             val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
             runtime.action = { args, line ->
                 if (mode == "progress") line("nezzel:18:1:NA:NA")
@@ -118,7 +118,7 @@ class YtdlpInfoReuseTest {
         for (code in listOf(401, 403, 404, 410)) {
             val runtime = Runtime(json)
             val cache = YtdlpInfoCache(temp.newFolder())
-            val engine = YoutubedlEngine(runtime, infoCache = cache)
+            val engine = YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1)
             val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
             val dir = temp.newFolder()
             val events = mutableListOf<EngineEvent>()
@@ -153,7 +153,7 @@ class YtdlpInfoReuseTest {
 
     @Test fun adoptedBytesWithoutCachedInfoWipeBeforeTheFirstUrlTransfer() = runBlocking {
         val runtime = Runtime(json)
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         val command = confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true))))
         val dir = temp.newFolder()
         File(dir, "output.mp4.part").writeText("old bytes")
@@ -174,7 +174,7 @@ class YtdlpInfoReuseTest {
         var now = 10_000_000L
         val runtime = Runtime(json)
         val cache = YtdlpInfoCache(temp.newFolder()) { now }
-        val engine = YoutubedlEngine(runtime, infoCache = cache)
+        val engine = YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1)
         val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
         engine.prepareDownload(command)
         val dir = temp.newFolder()
@@ -197,7 +197,7 @@ class YtdlpInfoReuseTest {
     @Test fun httpRateLimitAndServerErrorsNeverResumeEvenAfterTransportDiagnostics() = runBlocking {
         for (code in listOf(429, 500, 503)) {
             val runtime = Runtime(json)
-            val engine = YoutubedlEngine(runtime)
+            val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
             val command = confirm(Inspection(source, "version", listOf(Format("18", "mp4", true, true))))
             runtime.action = { _, line ->
                 line("ERROR: connection reset")
@@ -215,7 +215,7 @@ class YtdlpInfoReuseTest {
         val runtime = Runtime(json)
         var now = 10_000_000L
         val cache = YtdlpInfoCache(root) { now }
-        val engine = YoutubedlEngine(runtime, infoCache = cache)
+        val engine = YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1)
         val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
         engine.prepareDownload(command)
         val fresh = File(root, "ytdlp-info/job.json")
@@ -226,7 +226,7 @@ class YtdlpInfoReuseTest {
         now += 3_600_000; cache.sweep(); assertFalse(fresh.exists())
         val blocked = temp.newFolder()
         File(blocked, "ytdlp-info").writeText("not a directory")
-        val other = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(blocked))
+        val other = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(blocked), cancellationPollMs = 1)
         val failedCache = confirm(assertIs<InspectResult.Success>(other.inspect(source, "inspect")).inspection)
         assertIs<TransferResult.Success>(other.download(failedCache, temp.newFolder()) {})
         assertFalse("--load-info-json" in runtime.transfers.single())
@@ -234,7 +234,7 @@ class YtdlpInfoReuseTest {
     @Test fun consumedInspectionCannotRestoreADeletedFileOnRetry() = runBlocking {
         val cache = YtdlpInfoCache(temp.newFolder())
         val runtime = Runtime(json)
-        val engine = YoutubedlEngine(runtime, infoCache = cache)
+        val engine = YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1)
         val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
         engine.prepareDownload(command); cache.remove(command.jobId)
         assertIs<TransferResult.Success>(engine.download(command, temp.newFolder()) {})
@@ -252,7 +252,7 @@ class YtdlpInfoReuseTest {
     @Test fun unconfirmedExpiryAndDifferentInspectionNeverReuseJson() = runBlocking {
         var now = 10_000_000L
         val runtime = Runtime(json)
-        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()) { now })
+        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()) { now }, cancellationPollMs = 1)
         val inspection = assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection
         // An independently created inspection of the same URL must not borrow its JSON.
         engine.download(confirm(Inspection(source, "version", inspection.formats), "other"), temp.newFolder()) {}

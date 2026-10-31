@@ -37,11 +37,14 @@ import org.robolectric.shadows.ShadowContentResolver
 @Config(sdk = [35], qualifiers = "en-w384dp-h832dp")
 class LibraryGridTest {
     @get:Rule val compose = createEmptyComposeRule()
-    private val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+    private val controllerDelegate = lazy {
+        dev.ahmed.savlino.playback.registerAudioServiceBinding()
+        Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
+    }
+    private val controller by controllerDelegate
     private val activity get() = controller.get()
     private fun s(id: Int) = activity.getString(id)
-    @org.junit.Before fun bindAudio() { dev.ahmed.savlino.playback.registerAudioServiceBinding() }
-    @After fun close() { controller.pause().stop().destroy() }
+    @After fun close() { if (controllerDelegate.isInitialized()) controller.pause().stop().destroy() }
 
     private fun media(n: Int, name: String, mime: String) = SavedMedia(Uri.parse("content://media/external/downloads/$n"), name,
         name.substringBeforeLast('.'), mime, 1000L * n, 1000L - n, null, null, if (mime.startsWith("video")) 21_000L else null)
@@ -57,16 +60,17 @@ class LibraryGridTest {
     }
 
     @Test fun viewIsRememberedPerFilterWithGridForImagesAndStatuses() {
-        val prefs = AppPreferences(activity)
+        val context = RuntimeEnvironment.getApplication()
+        val prefs = AppPreferences(context)
         assertTrue(prefs.libraryGrid(MediaFilter.IMAGE.name))
         assertTrue(prefs.libraryGrid(MediaFilter.STATUSES.name))
         assertFalse(prefs.libraryGrid(MediaFilter.ALL.name))
         assertFalse(prefs.libraryGrid(MediaFilter.VIDEO.name))
         LibraryView(prefs, MediaFilter.VIDEO).toggle()
         LibraryView(prefs, MediaFilter.IMAGE).toggle()
-        assertTrue(AppPreferences(activity).libraryGrid(MediaFilter.VIDEO.name))
-        assertFalse(AppPreferences(activity).libraryGrid(MediaFilter.IMAGE.name))
-        assertFalse(AppPreferences(activity).libraryGrid(MediaFilter.ALL.name))
+        assertTrue(AppPreferences(context).libraryGrid(MediaFilter.VIDEO.name))
+        assertFalse(AppPreferences(context).libraryGrid(MediaFilter.IMAGE.name))
+        assertFalse(AppPreferences(context).libraryGrid(MediaFilter.ALL.name))
         assertTrue(LibraryView(prefs, MediaFilter.VIDEO).grid)
     }
 

@@ -44,7 +44,7 @@ class RecentInspectionsTest {
     }
 
     private fun engine(runtime: Runtime, cache: YtdlpInfoCache? = null, limits: EngineLimits = EngineLimits()) =
-        YoutubedlEngine(runtime, limits, cache, recent = recent())
+        YoutubedlEngine(runtime, limits, cache, recent = recent(), cancellationPollMs = 1)
 
     private fun confirm(inspection: Inspection, at: LinkRevision = source, id: String = "job") =
         assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(id, inspection, at, "18", "title")).command
@@ -106,7 +106,7 @@ class RecentInspectionsTest {
         runtime.initialization.installedVersion = "next"
         val updated = YoutubedlEngine(runtime, recent = recent().also {
             it.put(link, json(), RecentInspections.Provenance.YTDLP, "version", null)
-        })
+        }, cancellationPollMs = 1)
         assertEquals("next", assertIs<InspectResult.Success>(updated.inspect(source, "d")).inspection.engineVersion)
         assertEquals(3, runtime.inspections.size)
     }

@@ -54,7 +54,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     },
     private val staleProcesses: StaleProcesses = StaleProcesses(),
-    private val reddit: RedditPostReader? = null) : EngineAdapter {
+    private val reddit: RedditPostReader? = null,
+    // Tests can poll promptly without paying a full production tick when joining an already-finished operation.
+    private val cancellationPollMs: Long = 50) : EngineAdapter {
     constructor(context: Context) : this(AndroidYtdlpRuntime(context), infoCache = YtdlpInfoCache(context.noBackupFilesDir),
         fastSource = NpeFastSource(), recent = RecentInspections(elapsed = SystemClock::elapsedRealtime),
         reddit = RedditPostReader(MediaHttpClient.create()))
@@ -1018,7 +1020,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 if (current.cancelled.get() && !destroyed) {
                     destroyed = try { runtime.destroy(current.processId) } catch (_: Exception) { false }
                 }
-                delay(50)
+                delay(cancellationPollMs)
             }
         }
         var permits = 0

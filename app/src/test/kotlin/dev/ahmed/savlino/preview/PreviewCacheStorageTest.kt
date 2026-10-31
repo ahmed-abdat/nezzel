@@ -460,18 +460,21 @@ internal class PreviewCacheStorageTest : PreviewCacheTestSupport() {
         assertEquals("Display second", hit(cache, second).title)
     }
 
-    @Test fun defaultDiskBudgetEvictsActualEncodedArtworkEvenBelowThirtyTwoEntries() {
-        val cache = open()
-        val bitmap = image(480, 480, noisy = true)
+    @Test fun diskBudgetEvictsActualEncodedArtworkEvenBelowThirtyTwoEntries() {
+        assertEquals(16L * 1024 * 1024, PreviewCacheLimits().diskBytes)
+        // Scale the bytes and real pixels together; eviction must still precede the unchanged 32-entry cap.
+        val budget = 512L * 1024
+        val cache = open(limits = PreviewCacheLimits(diskBytes = budget))
+        val bitmap = image(96, 96, noisy = true)
         val oldest = store(cache, "0", bitmap)
         for (i in 1..30) {
             now++
             store(cache, "$i", bitmap)
-            assertDiskBounds(cache)
+            assertDiskBounds(cache, maxBytes = budget)
         }
         assertNull("real encoded bytes must evict before the entry cap", cache.get(oldest, cache.token()))
         assertTrue(cache.usage().entries < 31)
-        assertTrue(ownedBytes() > 8L * 1024 * 1024)
+        assertTrue(ownedBytes() > budget / 2)
     }
 
     @Test fun peakBudgetCountsLiveEntryIncomingTempAndControlTempBeforeCreation() {

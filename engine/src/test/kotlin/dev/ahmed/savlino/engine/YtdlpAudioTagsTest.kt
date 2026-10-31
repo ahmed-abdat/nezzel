@@ -131,7 +131,7 @@ class YtdlpAudioTagsTest {
                 File(dir, "result-path.txt").writeText(File(dir, "output.m4a").path)
                 ""
             } }
-            assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = cache).download(command, dir) {})
+            assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1).download(command, dir) {})
         }
     }
 
@@ -154,7 +154,7 @@ class YtdlpAudioTagsTest {
                     File(dir, "result-path.txt").writeText(output.path)
                     ""
                 } }
-                val result = YoutubedlEngine(runtime).download(command(format), dir) {}
+                val result = YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(format), dir) {}
                 assertEquals(950L, assertIs<TransferResult.Success>(result).output.file.length())
                 assertEquals(if (taggingFails) 2 else 1, runtime.calls.size)
             }
@@ -174,7 +174,7 @@ class YtdlpAudioTagsTest {
             ""
         } }
         val format = Format("native-audio", "mp3", false, true, size = Size.Exact(1000))
-        val result = YoutubedlEngine(runtime).download(command(format), dir) {}
+        val result = YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(format), dir) {}
         assertEquals(950L, assertIs<TransferResult.Success>(result).output.file.length())
     }
 
@@ -191,7 +191,7 @@ class YtdlpAudioTagsTest {
         } }
         val format = Format("native-audio", "mp3", false, true, size = Size.Exact(1000))
         assertEquals(TransferResult.Failure(DownloadError.MergeFailed),
-            YoutubedlEngine(runtime).download(command(format), dir) {})
+            YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(format), dir) {})
     }
 
     @Test fun taggingFailureRetriesOnceOnSameAudioAndPublishesWithoutArtworkSidecars() = runBlocking {
@@ -215,7 +215,7 @@ class YtdlpAudioTagsTest {
                 ""
             } }
             val events = mutableListOf<EngineEvent>()
-            val result = YoutubedlEngine(runtime).download(command(format), dir, events::add)
+            val result = YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(format), dir, events::add)
             assertEquals(output, assertIs<TransferResult.Success>(result).output.file)
             assertEquals(2, runtime.calls.size)
             val first = runtime.calls.first()
@@ -251,7 +251,7 @@ class YtdlpAudioTagsTest {
             val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(
                 "job-audio", inspection, source, format.id, "title")).command
             val cache = YtdlpInfoCache(temp.newFolder()).apply { remember(inspection, """{"uploader":"Channel"}""") }
-            val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = cache).download(command, dir) {})
+            val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime, infoCache = cache, cancellationPollMs = 1).download(command, dir) {})
             assertEquals(File(dir, "output.mp3"), result.output.file)
             assertEquals("mp3", result.output.file.readText())
             assertEquals(setOf("output.mp3", "result-path.txt"), dir.list()!!.toSet())
@@ -267,13 +267,13 @@ class YtdlpAudioTagsTest {
     @Test fun secondPostprocessingFailureRemainsMergeFailed() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> error("ERROR: Postprocessing: failed") } }
         assertEquals(TransferResult.Failure(DownloadError.MergeFailed),
-            YoutubedlEngine(runtime).download(command(audio.first()), temp.newFolder()) {})
+            YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(audio.first()), temp.newFolder()) {})
         assertEquals(2, runtime.calls.size)
     }
 
     @Test fun cancellationWinsOverTaggingFallback() = runBlocking {
         val runtime = Runtime()
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         runtime.action = { _, _ -> engine.cancel("job-audio"); error("ERROR: Postprocessing: failed") }
         assertEquals(TransferResult.Failure(DownloadError.Cancelled), engine.download(command(audio.first()), temp.newFolder()) {})
         assertEquals(1, runtime.calls.size)
@@ -287,14 +287,14 @@ class YtdlpAudioTagsTest {
             File(dir, "result-path.txt").writeText(File(dir, "output.m4a").path)
             ""
         } }
-        assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command(audio.first()), dir) {})
+        assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(audio.first()), dir) {})
         assertEquals(1, runtime.calls.size)
         for ((format, message, expected) in listOf(
             Triple(audio.first(), "ERROR: Connection reset by peer", DownloadError.Network),
             Triple(Format("18", "mp4", true, true), "ERROR: Postprocessing: failed", DownloadError.MergeFailed))) {
             val failed = Runtime().apply { action = { _, _ -> error(message) } }
             assertEquals(expected, assertIs<TransferResult.Failure>(
-                YoutubedlEngine(failed).download(command(format), temp.newFolder()) {}).error)
+                YoutubedlEngine(failed, cancellationPollMs = 1).download(command(format), temp.newFolder()) {}).error)
             assertEquals(1, failed.calls.size)
         }
     }
@@ -308,7 +308,7 @@ class YtdlpAudioTagsTest {
         val runtime = Runtime().apply { action = { _, _ -> fail("A kept-source retry must not run yt-dlp") } }
         val ffmpeg = mutableListOf<List<String>>()
         runtime.ffmpeg = { args -> ffmpeg += args; File(args.last().removePrefix("file:")).writeText("mp3"); Exited() }
-        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).convertKept(command(format), dir) {})
+        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).convertKept(command(format), dir) {})
         assertEquals(File(dir, "output.mp3"), result.output.file)
         assertTrue(runtime.calls.isEmpty())
         val single = ffmpeg.single()
@@ -316,8 +316,8 @@ class YtdlpAudioTagsTest {
         // Retry dropped the info JSON: the printed tags still say the artist is real.
         assertTrue("artist=Singer" in single)
         // No kept source (or not an MP3 row): the caller downloads in full.
-        assertNull(YoutubedlEngine(runtime).convertKept(command(format), temp.newFolder()) {})
-        assertNull(YoutubedlEngine(runtime).convertKept(command(audio.first()), dir) {})
+        assertNull(YoutubedlEngine(runtime, cancellationPollMs = 1).convertKept(command(format), temp.newFolder()) {})
+        assertNull(YoutubedlEngine(runtime, cancellationPollMs = 1).convertKept(command(audio.first()), dir) {})
     }
 
     @Test fun finishedMp3RetryValidatesAndReturnsWithoutYtdlpOrEncoding() = runBlocking {
@@ -331,7 +331,7 @@ class YtdlpAudioTagsTest {
             action = { _, _ -> fail("Finished output must not transfer") }
             ffmpeg = { fail("Finished output must not encode") }
         }
-        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).convertKept(command(format), dir) {})
+        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).convertKept(command(format), dir) {})
         assertEquals(output, result.output.file)
         assertEquals("finished mp3", output.readText())
         assertEquals(setOf("output.mp3", "result-path.txt"), dir.list()!!.toSet())
@@ -354,7 +354,7 @@ class YtdlpAudioTagsTest {
                 else -> manifest.writeText(output.path)
             }
             val runtime = Runtime().apply { ffmpeg = { fail("Unconfirmed target must not encode") } }
-            assertNull(YoutubedlEngine(runtime).convertKept(command(format), dir) {}, proof)
+            assertNull(YoutubedlEngine(runtime, cancellationPollMs = 1).convertKept(command(format), dir) {}, proof)
             assertTrue(runtime.calls.isEmpty())
         }
     }
@@ -373,7 +373,7 @@ class YtdlpAudioTagsTest {
             }
             ffmpeg = { args -> File(args.last().removePrefix("file:")).writeText("finished mp3"); Exited() }
         }
-        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command(format), dir) {})
+        val result = assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(format), dir) {})
         assertEquals("finished mp3", result.output.file.readText())
         assertEquals(setOf("output.mp3", "result-path.txt"), dir.list()!!.toSet())
         assertEquals(1, runtime.calls.size)
@@ -397,7 +397,7 @@ class YtdlpAudioTagsTest {
                 Exited()
             }
         }
-        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(format), dir) {})
+        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(format), dir) {})
         assertEquals(DownloadError.PostTransferFailed, result.error)
         assertEquals(ExecutionFailureReason.STORAGE_STAGING, result.reason)
         assertEquals("finished mp3", File(dir, "output.mp3").readText())
@@ -411,7 +411,7 @@ class YtdlpAudioTagsTest {
         File(dir, "output.m4a").writeText("downloaded audio")
         val runtime = Runtime().apply { ffmpeg = { Failed() } }
         assertEquals(DownloadError.ConvertFailed, assertIs<TransferResult.Failure>(
-            YoutubedlEngine(runtime).convertKept(command(format), dir) {}).error)
+            YoutubedlEngine(runtime, cancellationPollMs = 1).convertKept(command(format), dir) {}).error)
         assertTrue(File(dir, "output.m4a").isFile)
     }
 

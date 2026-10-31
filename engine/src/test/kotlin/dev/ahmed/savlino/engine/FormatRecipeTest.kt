@@ -44,7 +44,7 @@ class FormatRecipeTest {
         read: ((Runtime) -> ((String) -> Unit) -> String)? = null): Pair<TransferResult, Runtime> = runBlocking {
         var now = 10_000_000L
         val runtime = Runtime(inspected)
-        val engine = YoutubedlEngine(runtime, limits, infoCache = YtdlpInfoCache(temp.newFolder()) { now })
+        val engine = YoutubedlEngine(runtime, limits, infoCache = YtdlpInfoCache(temp.newFolder()) { now }, cancellationPollMs = 1)
         val inspection = assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection
         val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, "18", "t")).command
         engine.prepareDownload(command)
@@ -115,7 +115,7 @@ class FormatRecipeTest {
 
     @Test fun expiredUrlRetryReadsThePageAgainAndStopsOnAChangedRow() = runBlocking {
         val runtime = Runtime(page(row()))
-        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()))
+        val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()), cancellationPollMs = 1)
         val inspection = assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection
         val command = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, "18", "t")).command
         runtime.action = { args, line ->

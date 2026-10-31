@@ -40,7 +40,7 @@ class ClipboardEntryTest {
             fun frames() = repeat(4) {
                 androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
                 clock.sendFrame(System.nanoTime())
-                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
             }
             frames(); assertEquals(0, shadow.reads)
             vm.navigate("Home"); frames()
@@ -88,7 +88,7 @@ class ClipboardEntryTest {
             fun frames() = repeat(4) {
                 androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
                 clock.sendFrame(System.nanoTime())
-                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
+                org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
             }
             read(); frames()
             assertEquals(0, shadow.reads); assertEquals(0, inspections)

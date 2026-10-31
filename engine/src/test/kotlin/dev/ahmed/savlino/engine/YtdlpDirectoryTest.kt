@@ -85,7 +85,7 @@ class YtdlpDirectoryTest {
             for (materialize in listOf(false, true)) {
                 dir.deleteRecursively(); executable.writeBytes(bytes.copyOf(size))
                 val native = Native() // Fresh process: no in-memory initialization failure to trigger reset.
-                val engine = YoutubedlEngine(repairingRuntime(native, bytes.size.toLong(), materialize))
+                val engine = YoutubedlEngine(repairingRuntime(native, bytes.size.toLong(), materialize), cancellationPollMs = 1)
                 assertEquals("bundled", engine.installedVersion(), "truncated at $size, materialize=$materialize")
                 assertEquals(bytes.size.toLong(), (if (materialize) archive else executable).length())
                 val source = LinkRevision(assertNotNull(LinkInput.parse("https://example.org/video")), 1)
@@ -109,7 +109,7 @@ class YtdlpDirectoryTest {
                 override fun bundledYtdlpSizeForRepair() =
                     YtdlpStagedInstall.expectedSize(native.prefs["dlpVersion"], update.length(), { bundle.length() })
             }, dir, materialize)
-            assertEquals("bundled", YoutubedlEngine(runtime).installedVersion(), "materialize=$materialize")
+            assertEquals("bundled", YoutubedlEngine(runtime, cancellationPollMs = 1).installedVersion(), "materialize=$materialize")
             assertTrue(native.prefs.isEmpty())
         }
     }
@@ -135,7 +135,7 @@ class YtdlpDirectoryTest {
             val retiredSize = File(retired, "yt-dlp").length()
             zip(executable, "2026.11.02")
             val native = Native(mutableMapOf("dlpVersion" to "2026.10.21", "dlpVersionName" to "stable"))
-            val engine = YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize, retiredSize))
+            val engine = YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize, retiredSize), cancellationPollMs = 1)
             val label = "materialize=$materialize"
             // The unrecorded new binary cannot be trusted, so the bundled copy runs; the retired update is gone.
             assertEquals("bundled", engine.installedVersion(), label)
@@ -155,7 +155,7 @@ class YtdlpDirectoryTest {
             upgradingRuntime(Native(), old.length(), materialize).initialize()
             assertEquals(materialize, executable.isDirectory)
             val native = Native()
-            assertEquals("bundled", YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize))
+            assertEquals("bundled", YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize), cancellationPollMs = 1)
                 .installedVersion(), "materialize=$materialize")
             // Fixture zips carry their creation second; the bundled copy is identified by size, as on the phone.
             assertEquals(bundle.length(), (if (materialize) archive else executable).length())
@@ -172,7 +172,7 @@ class YtdlpDirectoryTest {
                 val update = executable.readBytes()
                 val native = Native(mutableMapOf("dlpVersion" to tag, "dlpVersionName" to "stable"))
                 // The archive differs from the bundle: the bundle-size check must never touch a recorded update.
-                val engine = YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize, update.size.toLong()))
+                val engine = YoutubedlEngine(upgradingRuntime(native, bundle.length(), materialize, update.size.toLong()), cancellationPollMs = 1)
                 val label = "$tag materialize=$materialize"
                 assertEquals(if (kept) tag else "bundled", engine.installedVersion(), label)
                 val installed = if (materialize) archive else executable
@@ -228,7 +228,7 @@ class YtdlpDirectoryTest {
             assertNull(native.prefs["dlpVersion"])
             assertNull(native.prefs["dlpVersionName"])
             runtime.initialize()
-            assertEquals("bundled", YoutubedlEngine(runtime).installedVersion())
+            assertEquals("bundled", YoutubedlEngine(runtime, cancellationPollMs = 1).installedVersion())
         }
     }
     @Test fun initClearsStalePreferencesForBundledZipAndMaterializedBundle() {
@@ -288,7 +288,7 @@ class YtdlpDirectoryTest {
     @Test fun freshInstallMaterializesBeforeFirstWarmProbe() = runBlocking {
         val native = Native()
         assertFalse(executable.exists())
-        val engine = YoutubedlEngine(runtime(native))
+        val engine = YoutubedlEngine(runtime(native), cancellationPollMs = 1)
         assertTrue(engine.warmUp())
         assertTrue(native.directoryAtProbe)
         assertEquals(1, native.probes)
@@ -319,7 +319,7 @@ class YtdlpDirectoryTest {
         val timing = YtdlpPreparationTiming(true, { tag, line -> logs += tag to line },
             { now.also { now += 3_000_000 } })
         val runtime = DirectoryYtdlpRuntime(Native(), dir, true, timing)
-        assertTrue(YoutubedlEngine(runtime).warmUp())
+        assertTrue(YoutubedlEngine(runtime, cancellationPollMs = 1).warmUp())
         val second = DirectoryYtdlpRuntime(Native(), dir, true, timing)
         second.execute(listOf("--ignore-config", "--version"), "second", {})
         assertEquals(listOf("NezzelTiming" to "ytdlp_materialize ok 3ms",
@@ -386,7 +386,7 @@ class YtdlpDirectoryTest {
     }
     @Test fun corruptDirectoryIsRebuiltFromArchiveAndRewarmsSameVersion() = runBlocking {
         val native = Native(); val runtime = runtime(native)
-        assertTrue(YoutubedlEngine(runtime).warmUp())
+        assertTrue(YoutubedlEngine(runtime, cancellationPollMs = 1).warmUp())
         val oldStamp = ytdlpInstallationStamp(dir)
         File(executable, "__main__.py").delete()
         runtime.initialize()
@@ -395,7 +395,7 @@ class YtdlpDirectoryTest {
         assertEquals("bundled", File(executable, "__main__.py").readText())
     }
     @Test fun updateAndRestoreMaterializeBeforeTheirVersionSelfTests() = runBlocking {
-        val native = Native(); val runtime = runtime(native); val engine = YoutubedlEngine(runtime)
+        val native = Native(); val runtime = runtime(native); val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertTrue(engine.warmUp()); assertTrue(native.directoryAtProbe)
         assertIs<EngineUpdateResult.Success>(engine.updateYtdlp())
         assertTrue(native.directoryAtProbe)
@@ -408,7 +408,7 @@ class YtdlpDirectoryTest {
     @Test fun warmProbeRunsAfterMaterializeAndCacheWritesDoNotInvalidateIt() = runBlocking {
         val native = Native(); val runtime = runtime(native)
         native.initialize(); native.rememberWarmedVersion("bundled") // Old zipapp warm marker.
-        assertTrue(YoutubedlEngine(runtime).warmUp())
+        assertTrue(YoutubedlEngine(runtime, cancellationPollMs = 1).warmUp())
         assertTrue(native.directoryAtProbe); assertEquals(1, native.probes)
         File(executable, "__pycache__").mkdirs()
         assertEquals("bundled", runtime.warmedVersion())

@@ -35,7 +35,7 @@ class YoutubedlEngineTest {
     }
     @Test fun genericExecutionFailureHasOnlyABoundedEngineRunReason() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> throw IllegalStateException("private diagnostics must not escape") } }
-        val failure = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), temp.newFolder()) {})
+        val failure = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), temp.newFolder()) {})
         assertEquals(DownloadError.Failed, failure.error)
         assertEquals(ExecutionFailureReason.ENGINE_RUN, failure.reason)
         assertFalse(failure.toString().contains("private diagnostics"))
@@ -79,7 +79,7 @@ class YoutubedlEngineTest {
             override fun read(pid: Int): ProcProcess? = null
             override fun signal(pid: Int, signal: Int) = Unit
         }) { false } }, pause = {})
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         val firstEvents = java.util.concurrent.CopyOnWriteArrayList<EngineEvent>()
         val secondEvents = java.util.concurrent.CopyOnWriteArrayList<EngineEvent>()
         fun selected(id: String) = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(id,
@@ -113,7 +113,7 @@ class YoutubedlEngineTest {
                     File(dir, "result-path.txt").writeText(File(dir, "output.mp3").path)
                     ""
                 } }
-                assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, dir) {})
+                assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command, dir) {})
                 val args = runtime.calls.single { "--no-simulate" in it }
                 assertEquals("exact-source", args[args.indexOf("-f") + 1])
                 // yt-dlp only downloads; Mp3Encoder runs LAME (Mp3EncoderTest).
@@ -134,7 +134,7 @@ class YoutubedlEngineTest {
                     if (callback) { line("ERROR: $message"); throw YtdlpDiagnostics().apply { accept("ERROR: $message") }.failure() }
                     else error("ERROR: $message")
                 } }
-                val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), temp.newFolder()) {})
+                val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), temp.newFolder()) {})
                 assertEquals(if (message.startsWith("HTTP")) DownloadFailureCause.HTTP else DownloadFailureCause.TRANSPORT, result.cause)
                 assertEquals(if (message.startsWith("HTTP")) DownloadError.Failed
                     else if (message.startsWith("Network")) DownloadError.Offline else DownloadError.Network, result.error)
@@ -162,7 +162,7 @@ class YoutubedlEngineTest {
             }
             try {
                 val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime,
-                    EngineLimits(stallMs = 100, firstByteMs = 3000)).download(command(), temp.newFolder()) {})
+                    EngineLimits(stallMs = 100, firstByteMs = 3000), cancellationPollMs = 1).download(command(), temp.newFolder()) {})
                 assertEquals(DownloadError.Failed, result.error)
                 assertEquals(DownloadFailureCause.HTTP, result.cause)
                 assertFalse(result.resumeAllowed)
@@ -177,7 +177,7 @@ class YoutubedlEngineTest {
                 line("ERROR: Connection reset by peer")
                 error("ERROR: fragment 3 not found, unable to continue")
             } }
-            val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), temp.newFolder()) {})
+            val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), temp.newFolder()) {})
             assertEquals(DownloadFailureCause.HTTP, result.cause); assertFalse(result.resumeAllowed)
         }
         assertEquals(DownloadFailureCause.OTHER, YtdlpErrorMapper.cause("WARNING: Connection timed out"))
@@ -187,7 +187,7 @@ class YoutubedlEngineTest {
     }
 
     @Test fun initializationIsLazyAndFailureUsesUnavailableFallbackDuringBackoff() = runBlocking {
-        val runtime = Runtime(); val engine = YoutubedlEngine(runtime)
+        val runtime = Runtime(); val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertTrue(engine.isAvailable); assertEquals(0, runtime.starts)
         val initialization = EngineInitialization()
         val count = AtomicInteger()
@@ -199,18 +199,18 @@ class YoutubedlEngineTest {
         assertTrue(runtime.calls.isEmpty())
     }
     @Test fun warmUpInitializesOnceAndOnlyRunsLocalVersionWithoutUpdating() = runBlocking {
-        val runtime = Runtime(); val engine = YoutubedlEngine(runtime)
+        val runtime = Runtime(); val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         repeat(3) { assertEquals(true, engine.warmUp()) }
         assertEquals(1, runtime.starts)
         assertEquals(listOf(listOf("--ignore-config", "--version")), runtime.calls); assertEquals(0, runtime.updates)
         val failed = Runtime().apply { failsInitialization = true }
-        assertEquals(false, YoutubedlEngine(failed).warmUp())
+        assertEquals(false, YoutubedlEngine(failed, cancellationPollMs = 1).warmUp())
         assertEquals(1, failed.starts); assertFalse(failed.initialization.isAvailable); assertTrue(failed.calls.isEmpty())
         assertEquals(false, UnavailableEngine().warmUp())
     }
     @Test fun inspectUsesMetadataOnlyAndInitializesOnceAcrossCalls() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> """{"formats":[{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac"}]}""" } }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         repeat(2) {
             engine.clearRecentLinks() // each call extracts
             assertEquals("18", assertIs<InspectResult.Success>(engine.inspect(source, "inspect-$it")).inspection.formats.single { it.id == "18" }.id)
@@ -227,7 +227,7 @@ class YoutubedlEngineTest {
                     line("WARNING: Extractor $extractor returned nothing")
                     output
                 } }
-                assertEquals(InspectResult.Failure(DownloadError.NoVideo), YoutubedlEngine(runtime).inspect(source, "photo"),
+                assertEquals(InspectResult.Failure(DownloadError.NoVideo), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(source, "photo"),
                     "$extractor / $output")
             }
         }
@@ -239,11 +239,11 @@ class YoutubedlEngineTest {
             val runtime = Runtime().apply { action = { _, line ->
                 if (callback) { line("[download] 1%"); "" } else throw error()
             } }
-            val engine = YoutubedlEngine(runtime)
+            val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
             if (callback) {
                 // The progress callback itself fails on the reader thread.
                 val failing = Runtime().apply { action = { _, line -> line("x"); "" } }
-                val result = YoutubedlEngine(failing).download(command(), temp.newFolder()) { throw error() }
+                val result = YoutubedlEngine(failing, cancellationPollMs = 1).download(command(), temp.newFolder()) { throw error() }
                 assertIs<TransferResult.Failure>(result)
             } else assertIs<InspectResult.Failure>(engine.inspect(source, "error"))
         }
@@ -255,7 +255,7 @@ class YoutubedlEngineTest {
                 if (callback) line(warning)
                 throw IllegalStateException(if (callback) "" else warning)
             } }
-            assertEquals(InspectResult.Failure(DownloadError.NoVideo), YoutubedlEngine(runtime).inspect(source, "photo"))
+            assertEquals(InspectResult.Failure(DownloadError.NoVideo), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(source, "photo"))
         }
     }
     @Test fun emptyInspectionOfBareSiteRootMapsToNotAPost() = runBlocking {
@@ -263,10 +263,10 @@ class YoutubedlEngineTest {
             val root = LinkRevision(assertNotNull(LinkInput.parse(url)), 1)
             for (output in listOf("", """{"formats":[]}""", """{"_type":"playlist","entries":[]}""")) {
                 val runtime = Runtime().apply { action = { _, _ -> output } }
-                assertEquals(InspectResult.Failure(DownloadError.NotAPost), YoutubedlEngine(runtime).inspect(root, "root"), url)
+                assertEquals(InspectResult.Failure(DownloadError.NotAPost), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(root, "root"), url)
             }
             val runtime = Runtime().apply { action = { _, _ -> throw IllegalStateException("") } }
-            assertEquals(InspectResult.Failure(DownloadError.NotAPost), YoutubedlEngine(runtime).inspect(root, "root-error"))
+            assertEquals(InspectResult.Failure(DownloadError.NotAPost), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(root, "root-error"))
         }
     }
     @Test fun emptyInspectionKeepsContentQueriesUnknownExtractorsAndRealErrorsUnchanged() = runBlocking {
@@ -277,7 +277,7 @@ class YoutubedlEngineTest {
                     val runtime = Runtime().apply { action = { _, line ->
                         line("WARNING: Extractor $extractor returned nothing"); output
                     } }
-                    assertEquals(InspectResult.Failure(expected), YoutubedlEngine(runtime).inspect(post, "unknown"), url)
+                    assertEquals(InspectResult.Failure(expected), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(post, "unknown"), url)
                 }
             }
         }
@@ -289,7 +289,7 @@ class YoutubedlEngineTest {
                 line("WARNING: Extractor telegram:embed returned nothing")
                 throw IllegalStateException(error)
             } }
-            assertEquals(InspectResult.Failure(expected), YoutubedlEngine(runtime).inspect(root, "error"), error)
+            assertEquals(InspectResult.Failure(expected), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(root, "error"), error)
         }
         // A warning must not replace real formats, malformed JSON, or nonempty playlist rejection.
         for ((output, expected) in listOf("{" to DownloadError.Failed,
@@ -297,7 +297,7 @@ class YoutubedlEngineTest {
             val runtime = Runtime().apply { action = { _, line ->
                 line("WARNING: Extractor telegram:embed returned nothing"); output
             } }
-            assertEquals(InspectResult.Failure(expected), YoutubedlEngine(runtime).inspect(root, "invalid"))
+            assertEquals(InspectResult.Failure(expected), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(root, "invalid"))
         }
         for (output in listOf("", """{"formats":[]}""")) {
             val runtime = Runtime().apply { action = { _, line ->
@@ -305,13 +305,13 @@ class YoutubedlEngineTest {
                 line("ERROR: Unknown failure"); output
             } }
             assertEquals(InspectResult.Failure(if (output.isEmpty()) DownloadError.Failed else DownloadError.NoFormats),
-                YoutubedlEngine(runtime).inspect(root, "error-output"))
+                YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(root, "error-output"))
         }
         val runtime = Runtime().apply { action = { _, line ->
             line("WARNING: Extractor telegram:embed returned nothing")
             """{"formats":[{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac"}]}"""
         } }
-        assertIs<InspectResult.Success>(YoutubedlEngine(runtime).inspect(root, "success"))
+        assertIs<InspectResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(root, "success"))
         Unit
     }
     @Test fun downloadReturnsActualContainedNonemptyOutputAndRealByteEvents() = runBlocking {
@@ -322,7 +322,7 @@ class YoutubedlEngineTest {
             line("nezzel:18:3:3:NA"); ""
         } }
         val events = mutableListOf<EngineEvent>()
-        val result = YoutubedlEngine(runtime).download(command(), dir, events::add)
+        val result = YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), dir, events::add)
         assertEquals(File(dir, "output.mp4").canonicalFile, assertIs<TransferResult.Success>(result).output.file)
         assertEquals<List<EngineEvent>>(listOf(EngineEvent.Progress(3, Size.Exact(3)), EngineEvent.Merging), events)
         assertEquals("18", runtime.calls.last().let { it[it.indexOf("-f") + 1] })
@@ -333,7 +333,7 @@ class YoutubedlEngineTest {
             File(dir, "output.mp4").writeText("inside")
             File(dir, "result-path.txt").writeText(outside.path); ""
         } }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertEquals(TransferResult.Failure(DownloadError.FormatExpired), engine.download(command("old"), dir) {})
         assertTrue(runtime.calls.none { it.contains("--no-simulate") })
         assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING), engine.download(command(), dir) {})
@@ -354,7 +354,7 @@ class YoutubedlEngineTest {
                     // A final progress report must not override the exact inspection size.
                     line("nezzel:${format.id}:$actual:$actual:NA"); ""
                 } }
-                val result = YoutubedlEngine(runtime).download(command, dir) {}
+                val result = YoutubedlEngine(runtime, cancellationPollMs = 1).download(command, dir) {}
                 if (succeeds) assertEquals(actual.toLong(), assertIs<TransferResult.Success>(result).output.file.length())
                 else assertEquals(TransferResult.Failure(DownloadError.MergeFailed), result)
             }
@@ -374,7 +374,7 @@ class YoutubedlEngineTest {
                 File(dir, "output.${format.container}").writeBytes(ByteArray(10))
                 File(dir, "result-path.txt").writeText(File(dir, "output.${format.container}").path); ""
             } }
-            assertEquals(10L, assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, dir) {}).output.file.length())
+            assertEquals(10L, assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command, dir) {}).output.file.length())
         }
     }
     @Test fun extraOutputsAndNonliteralExtensionsFailWithoutDeletingAnything() = runBlocking {
@@ -386,7 +386,7 @@ class YoutubedlEngineTest {
                 File(dir, "result-path.txt").writeText(File(dir, names.first()).path)
                 ""
             } }
-            assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING), YoutubedlEngine(runtime).download(command(), dir) {})
+            assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING), YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), dir) {})
             names.forEach { assertEquals("preserve", File(dir, it).readText()) }
         }
     }
@@ -394,7 +394,7 @@ class YoutubedlEngineTest {
         val dir = temp.newFolder()
         File(dir, "unexpected.txt").writeText("not transfer output")
         val runtime = Runtime()
-        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), dir) {})
+        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), dir) {})
         assertEquals(DownloadError.ExecutionRestricted, result.error)
         assertFalse(result.error.keepsSource)
         assertTrue(runtime.calls.none { "--no-simulate" in it })
@@ -409,7 +409,7 @@ class YoutubedlEngineTest {
             java.nio.file.Files.createSymbolicLink(File(dir, "output.mp4.part").toPath(), outside.toPath())
             ""
         } }
-        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime).download(command(), dir) {})
+        val result = assertIs<TransferResult.Failure>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), dir) {})
         assertEquals(DownloadError.PostTransferFailed, result.error)
         assertEquals("media", File(dir, "output.mp4").readText())
         assertEquals("private", outside.readText())
@@ -433,12 +433,12 @@ class YoutubedlEngineTest {
                 ""
             } }
             assertEquals(TransferResult.Failure(DownloadError.PostTransferFailed, reason = ExecutionFailureReason.STORAGE_STAGING),
-                YoutubedlEngine(runtime).download(command(), dir) {})
+                YoutubedlEngine(runtime, cancellationPollMs = 1).download(command(), dir) {})
             assertEquals(if (symlinkManifest) File(dir, "output.mp4").path else "preserve", outside.readText())
         }
     }
     @Test fun cancelBeforeStartPreventsNativeInitializationAndExecution() = runBlocking {
-        val runtime = Runtime(); val engine = YoutubedlEngine(runtime)
+        val runtime = Runtime(); val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         engine.cancel("job-1"); engine.cancel("inspect")
         assertEquals(TransferResult.Failure(DownloadError.Cancelled), engine.download(command(), temp.newFolder()) {})
         assertEquals(InspectResult.Failure(DownloadError.Cancelled), engine.inspect(source, "inspect"))
@@ -463,7 +463,7 @@ class YoutubedlEngineTest {
             }
             override fun update() = Unit
         }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         val transfer = async(Dispatchers.Default) { engine.download(command(), temp.newFolder()) { fail("late progress") } }
         assertTrue(withContext(Dispatchers.IO) { entered.await(3, TimeUnit.SECONDS) })
         engine.cancel("job-1")
@@ -484,7 +484,7 @@ class YoutubedlEngineTest {
             override fun destroy(processId: String): Boolean { destroyed.countDown(); return true }
             override fun update() = Unit
         }
-        val task = async(Dispatchers.Default) { YoutubedlEngine(runtime).inspect(source, "inspect") }
+        val task = async(Dispatchers.Default) { YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(source, "inspect") }
         assertTrue(withContext(Dispatchers.IO) { entered.await(3, TimeUnit.SECONDS) })
         withTimeout(4000) { task.cancelAndJoin() }
         assertEquals(0, destroyed.count); assertTrue(task.isCancelled)
@@ -494,12 +494,12 @@ class YoutubedlEngineTest {
         for (metadata in listOf("$document\n$document", "$document $document",
             """{"_type":"playlist","entries":[]}""", """{"_type":"multi_video","entries":[]}""")) {
             val runtime = Runtime().apply { action = { _, _ -> metadata } }
-            assertEquals(InspectResult.Failure(DownloadError.Unsupported), YoutubedlEngine(runtime).inspect(source, "inspect"))
+            assertEquals(InspectResult.Failure(DownloadError.Unsupported), YoutubedlEngine(runtime, cancellationPollMs = 1).inspect(source, "inspect"))
         }
     }
     @Test fun unknownCancellationExpiresAndCannotPoisonLaterReuse() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> """{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac"}""" } }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         engine.cancel("never-registered")
         delay(750)
         assertIs<InspectResult.Success>(engine.inspect(source, "never-registered"))
@@ -510,7 +510,7 @@ class YoutubedlEngineTest {
     }
     @Test fun cancellationAfterExitDoesNotPoisonImmediateIdReuse() = runBlocking {
         val runtime = Runtime().apply { action = { _, _ -> """{"format_id":"18","ext":"mp4","vcodec":"h264","acodec":"aac"}""" } }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertIs<InspectResult.Success>(engine.inspect(source, "finished"))
         engine.cancel("finished")
         assertIs<InspectResult.Success>(engine.inspect(source, "finished"))
@@ -532,7 +532,7 @@ class YoutubedlEngineTest {
             }
             override fun update() = Unit
         }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         val task = async(Dispatchers.Default) { engine.inspect(source, "inspect") }
         try {
             assertTrue(withContext(Dispatchers.IO) { entered.await(3, TimeUnit.SECONDS) })
@@ -544,7 +544,7 @@ class YoutubedlEngineTest {
         assertEquals(InspectResult.Failure(DownloadError.Cancelled), withTimeout(3000) { task.await() })
     }
     @Test fun updateIsExplicitAndReturnsActualOldAndNewVersions() = runBlocking {
-        val runtime = Runtime(); val engine = YoutubedlEngine(runtime)
+        val runtime = Runtime(); val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertEquals(0, runtime.updates)
         assertEquals(EngineUpdateResult.Success("2025.11.12", "2026.08.19"), engine.updateYtdlp())
         assertEquals(1, runtime.updates); assertEquals(2, runtime.calls.count { it.contains("--version") })
@@ -552,7 +552,7 @@ class YoutubedlEngineTest {
     @Test fun installedVersionCachesActualBinaryAcrossCallsAndSharedInstancesAndInvalidatesOnUpdate() = runBlocking {
         val initialization = EngineInitialization()
         val first = Runtime(initialization); val second = Runtime(initialization)
-        val engine = YoutubedlEngine(first); val other = YoutubedlEngine(second)
+        val engine = YoutubedlEngine(first, cancellationPollMs = 1); val other = YoutubedlEngine(second, cancellationPollMs = 1)
         assertTrue(engine.isAvailable); assertEquals(0, first.starts); assertTrue(first.calls.isEmpty())
         repeat(3) { assertEquals("2025.11.12", engine.installedVersion()) }
         assertEquals("2025.11.12", other.installedVersion())
@@ -561,7 +561,7 @@ class YoutubedlEngineTest {
         assertEquals("2026.08.19", other.installedVersion())
         assertEquals(2, first.calls.size); assertTrue(second.calls.isEmpty())
         val failed = Runtime().apply { this.initialization.ensure { error("missing ABI") } }
-        assertNull(YoutubedlEngine(failed).installedVersion()); assertTrue(failed.calls.isEmpty())
+        assertNull(YoutubedlEngine(failed, cancellationPollMs = 1).installedVersion()); assertTrue(failed.calls.isEmpty())
         assertNull(UnavailableEngine().installedVersion())
     }
     @Test fun cachedInstalledVersionReturnsWhileNativeDownloadHoldsTheLock() = runBlocking {
@@ -569,7 +569,7 @@ class YoutubedlEngineTest {
         val runtime = Runtime().apply { action = { _, _ ->
             entered.countDown(); check(release.await(3, TimeUnit.SECONDS)); ""
         } }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertEquals("2025.11.12", engine.installedVersion())
         val task = async(Dispatchers.Default) { engine.download(command(), temp.newFolder()) {} }
         try {
@@ -586,7 +586,7 @@ class YoutubedlEngineTest {
             override fun destroy(processId: String) = false
             override fun update() { version = "new"; error("failed after replacement") }
         }
-        val engine = YoutubedlEngine(runtime)
+        val engine = YoutubedlEngine(runtime, cancellationPollMs = 1)
         assertEquals("old", engine.installedVersion())
         assertIs<EngineUpdateResult.Failure>(engine.updateYtdlp())
         assertEquals("new", engine.installedVersion()); assertEquals(2, runtime.reads)
@@ -612,7 +612,7 @@ class YoutubedlEngineTest {
                 } else line("[ExtractAudio] Destination: output.${format.container}")
                 ""
             } }
-            assertIs<TransferResult.Success>(YoutubedlEngine(runtime).download(command, dir, events::add))
+            assertIs<TransferResult.Success>(YoutubedlEngine(runtime, cancellationPollMs = 1).download(command, dir, events::add))
             val conversion = format.conversion
             val post = when {
                 format.requiresMerge -> listOf("--merge-output-format", "mp4")

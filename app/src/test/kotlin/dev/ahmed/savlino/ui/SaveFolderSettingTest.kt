@@ -77,7 +77,9 @@ class SaveFolderSettingTest {
         } finally { controller.pause().stop().destroy() }
     }
     // Lead condition: the folder check keeps its rules (every resume, a minute's staleness) and a tab switch alone never re-runs it.
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test fun aQuickReturnKeepsTheLastFolderCheckWhileAResumeOrAMinuteRechecks() {
+        val io = kotlinx.coroutines.test.StandardTestDispatcher()
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         val activity = controller.get()
         val provider = SaveDestinationTest.Provider()
@@ -90,27 +92,34 @@ class SaveFolderSettingTest {
         var route by mutableStateOf("Settings")
         val unavailable = activity.getString(R.string.save_folder_unavailable)
         fun shown() = compose.onAllNodesWithText(unavailable).fetchSemanticsNodes().isNotEmpty()
-        fun visit(destination: String) { compose.runOnIdle { route = destination }; compose.waitForIdle() }
-        // The first check runs on an IO thread, so idle compose does not mean it has read the provider yet.
+        fun settle() {
+            compose.waitForIdle()
+            io.scheduler.runCurrent()
+            compose.waitForIdle()
+        }
+        fun visit(destination: String) { compose.runOnIdle { route = destination }; settle() }
+        // Drive the provider dispatcher as well as Compose before checking the first result.
         val firstCheck = java.util.concurrent.CountDownLatch(1)
         provider.afterSnapshot = { firstCheck.countDown() }
         try {
             activity.setContent {
                 MaterialTheme {
-                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Settings") SaveFolderSetting() else androidx.compose.material3.Text(it) }
+                    dev.ahmed.savlino.ui.nav.TabContent(route) { if (it == "Settings") SaveFolderSetting(ioDispatcher = io) else androidx.compose.material3.Text(it) }
                 }
             }
-            compose.waitForIdle()
+            settle()
             compose.waitUntil(5000) { firstCheck.count == 0L }
             assertFalse(shown())
             provider.denied = true
             visit("Home"); visit("Settings")
-            assertFalse("a quick return re-checked the folder", runCatching { compose.waitUntil(1500) { shown() } }.isSuccess)
+            // All dispatched provider work has run: an incorrect refresh would already expose the denied folder.
+            assertFalse("a quick return re-checked the folder", shown())
             org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(61))
             visit("Home"); visit("Settings")
             compose.waitUntil(5000) { shown() }
             provider.denied = false
             controller.pause(); controller.resume()
+            settle()
             compose.waitUntil(5000) { !shown() }
         } finally { controller.pause().stop().destroy() }
     }

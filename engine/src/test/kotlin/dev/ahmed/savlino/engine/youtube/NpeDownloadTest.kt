@@ -61,11 +61,11 @@ class NpeDownloadTest {
     }
     private inner class Run(var cmd: DownloadCommand = command(), val root: File = temp.newFolder(),
         val dir: File = temp.newFolder(), val fast: Fast? = Fast { json() },
-        val clock: () -> Long = System::currentTimeMillis, limits: EngineLimits = EngineLimits()) {
+        val clock: () -> Long = System::currentTimeMillis, limits: EngineLimits = EngineLimits(), cancellationPollMs: Long = 50) {
         val cache = YtdlpInfoCache(root, clock)
         val runtime = Runtime()
         val events = mutableListOf<EngineEvent>()
-        val engine = YoutubedlEngine(runtime, limits, cache, fast)
+        val engine = YoutubedlEngine(runtime, limits, cache, fast, cancellationPollMs = cancellationPollMs)
         init { runtime.page = { json() } }
         suspend fun download() = engine.download(cmd, dir) { events += it }
         fun inspected(npe: Boolean = true) {
@@ -93,7 +93,7 @@ class NpeDownloadTest {
     private fun ids(file: File) = ObjectMapper().readTree(file).path("formats").map { it.path("format_id").asText() }.toSet()
 
     @Test fun missingInfoWipesAndRestartsBeforeRebuildThenUsesOnlyConfirmedIds() = runBlocking {
-        val run = Run()
+        val run = Run(cancellationPollMs = 1)
         run.partial()
         run.fast!!.action = { run.assertClean(1); json() }
         run.runtime.action = { args, line ->
@@ -111,7 +111,7 @@ class NpeDownloadTest {
     @Test fun rebuiltRowWithAnotherRecipeIsNeverDownloaded() = runBlocking {
         // NPE now returns 137 at another height: the checked page read decides, and it changed too.
         val confirmed = row.copy(height = 720)
-        val run = Run(command(confirmed))
+        val run = Run(command(confirmed), cancellationPollMs = 1)
         run.runtime.action = { _, _ -> fail("no transfer for a changed row") }
         assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(run.download()).error)
         assertEquals(1, run.fast!!.calls.size)
@@ -123,12 +123,12 @@ class NpeDownloadTest {
     @Test fun fullDrcAndTrackIdsMustMatchInsteadOfBorrowingThePlainItag() = runBlocking {
         for (audio in listOf("140-drc", "251-ten.4", "251-ten.4-drc")) {
             val chosen = row.copy(id = "137+$audio", audioFormatId = audio, container = if (audio.startsWith("251")) "mkv" else "mp4") // Opus merges are MKV.
-            val run = Run(command(chosen))
+            val run = Run(command(chosen), cancellationPollMs = 1)
             assertIs<TransferResult.Success>(run.download())
             assertEquals(setOf("137", audio), ids(assertNotNull(info(run.runtime.transfers.single()))))
         }
         for (chosen in listOf(row.copy(audioFormatId = "140-drc"), row.copy(audioFormatId = "251-ten.4-drc", container = "mkv"))) {
-            val run = Run(command(chosen))
+            val run = Run(command(chosen), cancellationPollMs = 1)
             run.fast!!.action = { NpeInfoJson.build(NpeFixtures.info()) }
             assertIs<TransferResult.Success>(run.download())
             assertPage(run.runtime.transfers.single())
@@ -137,7 +137,7 @@ class NpeDownloadTest {
                 run.runtime.transfers.single().let { it[it.indexOf("-f") + 1] })
         }
         // The page no longer returns the confirmed video id: nothing else is downloaded in its place.
-        val run = Run(command(row.copy(sourceFormatId = "missing")))
+        val run = Run(command(row.copy(sourceFormatId = "missing")), cancellationPollMs = 1)
         run.fast!!.action = { NpeInfoJson.build(NpeFixtures.info()) }
         assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(run.download()).error)
         assertTrue(run.runtime.transfers.isEmpty())
@@ -146,7 +146,7 @@ class NpeDownloadTest {
 
     @Test fun nullThrowMalformedAndUnwritableRebuildsFallBackWithoutPrivateDetails() = runBlocking {
         for (action in listOf<() -> String?>({ null }, { error("private fixture") }, { "{" })) {
-            val run = Run(fast = Fast(action))
+            val run = Run(fast = Fast(action), cancellationPollMs = 1)
             // Before the output lands in staging.
             val expected = YtdlpCommand.download(run.cmd, run.dir, File(run.root, "ytdlp-info/job.json"))
             assertIs<TransferResult.Success>(run.download())
@@ -155,14 +155,14 @@ class NpeDownloadTest {
         }
         val root = temp.newFolder()
         File(root, "ytdlp-info").writeText("blocked")
-        val run = Run(root = root)
+        val run = Run(root = root, cancellationPollMs = 1)
         assertIs<TransferResult.Success>(run.download())
         assertNull(info(run.runtime.transfers.single()))
     }
 
     @Test fun nonYoutubeAndNullFastSourceUseTheCheckedPageAndNeverRebuild() = runBlocking {
         val other = LinkRevision(LinkInput.parse("https://example.org/video")!!, 1)
-        for (run in listOf(Run(command(link = other)), Run(fast = null))) {
+        for (run in listOf(Run(command(link = other), cancellationPollMs = 1), Run(fast = null, cancellationPollMs = 1))) {
             val expected = YtdlpCommand.download(run.cmd, run.dir, File(run.root, "ytdlp-info/job.json"))
             assertIs<TransferResult.Success>(run.download())
             assertEquals(expected, run.runtime.transfers.single())
@@ -174,7 +174,7 @@ class NpeDownloadTest {
         val original = command(version = "previous-version")
         val updated = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm(original.jobId,
             Inspection(source, "fixture-version", listOf(original.format)), source, original.format.id, "Fixture")).command
-        val run = Run(updated)
+        val run = Run(updated, cancellationPollMs = 1)
         assertIs<TransferResult.Success>(run.download())
         assertEquals(setOf("137", "140"), ids(assertNotNull(info(run.runtime.transfers.single()))))
         assertEquals(1, run.fast!!.calls.size)
@@ -182,7 +182,7 @@ class NpeDownloadTest {
 
     @Test fun inspectedExpiryRebuildsOnceThenSecondExpiryFallsToPage() = runBlocking {
         for (npe in listOf(true, false)) {
-            val run = Run()
+            val run = Run(cancellationPollMs = 1)
             run.inspected(npe)
             run.fast!!.action = { run.assertClean(1); json() }
             run.runtime.action = { args, line ->
@@ -205,7 +205,7 @@ class NpeDownloadTest {
 
     @Test fun inspectedNpeRejectionFallsDirectlyToPageWithoutRebuild() = runBlocking {
         for (error in listOf(DownloadError.FormatExpired, DownloadError.Failed, DownloadError.Unsupported, DownloadError.NoFormats)) {
-            val run = Run()
+            val run = Run(cancellationPollMs = 1)
             run.inspected()
             run.runtime.action = { args, _ ->
                 if (run.runtime.transfers.size == 1) { run.partial(); throw YtdlpExecutionFailure(error) }
@@ -221,7 +221,7 @@ class NpeDownloadTest {
 
     @Test fun unavailablePrivateAndLoginRejectionsAreSurfacedWithoutFallback() = runBlocking {
         for (error in listOf(DownloadError.Unavailable, DownloadError.LoginRequired, DownloadError.SourceRefused)) {
-            val run = Run(); run.inspected()
+            val run = Run(cancellationPollMs = 1); run.inspected()
             run.runtime.action = { _, _ -> throw YtdlpExecutionFailure(error) }
             assertEquals(error, assertIs<TransferResult.Failure>(run.download()).error)
             assertEquals(1, run.runtime.transfers.size); assertTrue(run.fast!!.calls.isEmpty())
@@ -229,7 +229,7 @@ class NpeDownloadTest {
     }
 
     @Test fun pageMissingMultiAudioIdSurfacesFormatExpiredWithoutSubstitution() = runBlocking {
-        val run = Run(command(row.copy(id = "137+251-ten.4", audioFormatId = "251-ten.4", container = "mkv")))
+        val run = Run(command(row.copy(id = "137+251-ten.4", audioFormatId = "251-ten.4", container = "mkv")), cancellationPollMs = 1)
         run.inspected()
         run.runtime.page = { NpeInfoJson.build(NpeFixtures.info())!! }
         run.runtime.action = { _, _ -> throw YtdlpExecutionFailure(DownloadError.Unsupported) }
@@ -240,7 +240,7 @@ class NpeDownloadTest {
     }
 
     @Test fun rebuildRejectionThenTwoPageExpiriesStopsAtThreeTransfers() = runBlocking {
-        val run = Run()
+        val run = Run(cancellationPollMs = 1)
         run.runtime.action = { args, line ->
             when (run.runtime.transfers.size) {
                 1 -> { assertNotNull(info(args)); run.failAttempt(line, "ERROR: Requested format is not available") }
@@ -259,7 +259,7 @@ class NpeDownloadTest {
     }
 
     @Test fun failedRebuildThenTwoPageExpiriesStopsAfterOnePageRetry() = runBlocking {
-        val run = Run(fast = Fast { null })
+        val run = Run(fast = Fast { null }, cancellationPollMs = 1)
         run.runtime.action = { args, line ->
             assertPage(args)
             run.failAttempt(line, if (run.runtime.transfers.size == 2) "ERROR: HTTP Error 403"
@@ -280,7 +280,7 @@ class NpeDownloadTest {
             "[download] Got error: HTTP Error 503. Retrying (1/5)",
             "[download] Got error: connection reset. Retrying (1/5)")
         for (excluded in exclusions) for (expiryFirst in listOf(true, false)) {
-            val run = Run(); run.inspected()
+            val run = Run(cancellationPollMs = 1); run.inspected()
             run.runtime.action = { _, line ->
                 val expiry = "ERROR: unable to download video data: HTTP Error 403"
                 (if (expiryFirst) listOf(expiry, excluded) else listOf(excluded, expiry)).forEach(line)
@@ -294,7 +294,7 @@ class NpeDownloadTest {
         }
         for (error in listOf(DownloadError.SaveFailed, DownloadError.FolderUnavailable, DownloadError.ExecutionRestricted,
             DownloadError.Interrupted, DownloadError.Cancelled, DownloadError.MergeFailed, DownloadError.Network, DownloadError.Offline)) {
-            val run = Run(); run.inspected()
+            val run = Run(cancellationPollMs = 1); run.inspected()
             run.runtime.action = { _, line ->
                 line("ERROR: unable to download video data: HTTP Error 403")
                 run.partial()
@@ -308,7 +308,7 @@ class NpeDownloadTest {
 
     @Test fun exclusionsAlsoBlockRejectionAndLegacyPageExpiryRecovery() = runBlocking {
         for (inspected in listOf(true, false)) {
-            val run = Run(fast = if (inspected) Fast { json() } else null)
+            val run = Run(fast = if (inspected) Fast { json() } else null, cancellationPollMs = 1)
             if (inspected) run.inspected()
             run.runtime.action = { _, line ->
                 line("ERROR: HTTP Error 503")
@@ -323,14 +323,14 @@ class NpeDownloadTest {
     }
 
     @Test fun unreachableRebuildFailsAsTransportWithoutPageTransfer() = runBlocking {
-        val unreachable = Run(fast = Fast { FastResult.Unreachable })
+        val unreachable = Run(fast = Fast { FastResult.Unreachable }, cancellationPollMs = 1)
         val failure = assertIs<TransferResult.Failure>(unreachable.download())
         assertEquals(DownloadError.Network, failure.error)
         assertEquals(DownloadFailureCause.TRANSPORT, failure.cause)
         assertTrue(unreachable.runtime.transfers.isEmpty())
         assertNull(unreachable.cache.freshFile("job"))
         // Expiry recovery: the rebuild sees a dead network, so no page-URL attempt follows.
-        val run = Run(); run.inspected()
+        val run = Run(cancellationPollMs = 1); run.inspected()
         run.fast!!.action = { FastResult.Unreachable }
         run.runtime.action = { _, line -> run.failAttempt(line) }
         assertEquals(DownloadError.Network, assertIs<TransferResult.Failure>(run.download()).error)
@@ -343,7 +343,7 @@ class NpeDownloadTest {
         var armed = false
         lateinit var run: Run
         // The cache reads the clock inside store(): cancel exactly between NPE's return and the post-store check.
-        run = Run(clock = { if (armed) { armed = false; run.engine.cancel("job") }; System.currentTimeMillis() })
+        run = Run(clock = { if (armed) { armed = false; run.engine.cancel("job") }; System.currentTimeMillis() }, cancellationPollMs = 1)
         run.fast!!.action = { armed = true; json() }
         assertEquals(DownloadError.Cancelled, assertIs<TransferResult.Failure>(run.download()).error)
         assertFalse(armed)
@@ -364,7 +364,7 @@ class NpeDownloadTest {
     }
 
     @Test fun tagRetryOnThirdTransferKeepsCompletedAudioWithoutSpendingRecoveryBudget() = runBlocking {
-        val run = Run(command(Format("140", "m4a", false, true)))
+        val run = Run(command(Format("140", "m4a", false, true)), cancellationPollMs = 1)
         run.inspected()
         val output = File(run.dir, "output.m4a")
         run.runtime.action = { args, line ->
@@ -396,7 +396,7 @@ class NpeDownloadTest {
 
     @Test fun rejectionAndRebuildExpiryRemoveDurableOriginBeforeInterruptedPageAndRestart() = runBlocking {
         for (expiry in listOf(true, false)) {
-            val run = Run()
+            val run = Run(cancellationPollMs = 1)
             run.runtime.action = { args, line ->
                 if (run.runtime.transfers.size == 1) {
                     assertNotNull(info(args))
@@ -408,7 +408,7 @@ class NpeDownloadTest {
             }
             assertEquals(DownloadError.Interrupted, assertIs<TransferResult.Failure>(run.download()).error)
             // The checked page JSON is durable: a resume continues its bytes without another page read.
-            val resumed = Run(run.cmd, run.root, run.dir, fast = null)
+            val resumed = Run(run.cmd, run.root, run.dir, fast = null, cancellationPollMs = 1)
             resumed.runtime.action = { args, _ ->
                 assertPage(args)
                 assertTrue(File(resumed.dir, "output.f137.mp4.part").delete()) // yt-dlp finishes the kept part.
@@ -422,7 +422,7 @@ class NpeDownloadTest {
 
     @Test fun removalFailureStopsPageFallbackWithExecutionRestricted() = runBlocking {
         for (expiry in listOf(true, false)) {
-            val run = Run()
+            val run = Run(cancellationPollMs = 1)
             if (!expiry) run.inspected()
             run.runtime.action = { args, line ->
                 val file = assertNotNull(info(args))
@@ -437,7 +437,7 @@ class NpeDownloadTest {
     }
 
     @Test fun survivingStaleOriginStopsInitialPageFallbackBeforeAnyTransfer() = runBlocking {
-        val run = Run(fast = Fast { null })
+        val run = Run(fast = Fast { null }, cancellationPollMs = 1)
         File(run.root, "ytdlp-info/job.npe.json").apply {
             mkdirs(); File(this, "blocked").writeText("fixture")
         }
@@ -447,11 +447,11 @@ class NpeDownloadTest {
 
     @Test fun rebuiltInfoAndOriginSurviveNewCacheWithinTtlButExpiredResumeRebuilds() = runBlocking {
         var now = 10_000_000L
-        val run = Run(clock = { now })
+        val run = Run(clock = { now }, cancellationPollMs = 1)
         run.runtime.action = { _, _ -> run.partial(); throw YtdlpExecutionFailure(DownloadError.Interrupted) }
         assertEquals(DownloadError.Interrupted, assertIs<TransferResult.Failure>(run.download()).error)
         val stored = assertNotNull(run.cache.freshFile("job"))
-        val resume = Run(run.cmd, run.root, run.dir, clock = { now })
+        val resume = Run(run.cmd, run.root, run.dir, clock = { now }, cancellationPollMs = 1)
         resume.runtime.action = { args, _ ->
             assertEquals(stored, info(args))
             assertTrue(resume.dir.listFiles()!!.isNotEmpty())
@@ -467,11 +467,11 @@ class NpeDownloadTest {
         assertIs<TransferResult.Success>(resume.download())
         assertTrue(resume.fast!!.calls.isEmpty())
 
-        val paused = Run(clock = { now })
+        val paused = Run(clock = { now }, cancellationPollMs = 1)
         paused.runtime.action = { _, _ -> paused.partial(); throw YtdlpExecutionFailure(DownloadError.Interrupted) }
         assertIs<TransferResult.Failure>(paused.download())
         now += YtdlpInfoCache.TTL_MS
-        val expired = Run(paused.cmd, paused.root, paused.dir, clock = { now })
+        val expired = Run(paused.cmd, paused.root, paused.dir, clock = { now }, cancellationPollMs = 1)
         expired.fast!!.action = { expired.assertClean(1); json() }
         assertIs<TransferResult.Success>(expired.download())
         assertEquals(1, expired.fast.calls.size)
@@ -481,7 +481,7 @@ class NpeDownloadTest {
     @Test fun cancelDuringRebuildLeavesNoInfoAndDoesNotLaunchTransfer() = runBlocking {
         for (inspected in listOf(false, true)) {
             val entered = CountDownLatch(1); val release = CountDownLatch(1)
-            val run = Run(fast = Fast { entered.countDown(); check(release.await(5, TimeUnit.SECONDS)); json() })
+            val run = Run(fast = Fast { entered.countDown(); check(release.await(5, TimeUnit.SECONDS)); json() }, cancellationPollMs = 1)
             if (inspected) {
                 run.inspected()
                 run.runtime.action = { _, line -> run.failAttempt(line) }
@@ -499,7 +499,7 @@ class NpeDownloadTest {
     }
 
     @Test fun rebuildDisarmsTheFailedTransfersDeadline() = runBlocking {
-        val run = Run(limits = EngineLimits(firstByteMs = 150, npeBudgetMs = 1000))
+        val run = Run(limits = EngineLimits(firstByteMs = 150, npeBudgetMs = 1000), cancellationPollMs = 1)
         run.inspected()
         run.fast!!.action = {
             // Longer than the previous attempt's byte budget, shorter than NPE's own budget.
@@ -534,7 +534,7 @@ class NpeDownloadTest {
     }
 
     @Test fun formatExpiredAfterExpiryDropsTheRecentReadSoTheSameLinkIsReadAgain() = runBlocking {
-        val run = Run()
+        val run = Run(cancellationPollMs = 1)
         val inspection = assertIs<InspectResult.Success>(run.engine.inspect(source, "first")).inspection
         val chosen = inspection.formats.first { it.requiresMerge }
         run.cmd = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, chosen.id, "Fixture")).command
@@ -558,7 +558,7 @@ class NpeDownloadTest {
     }
 
     @Test fun aFinal403OnThePagePathStillDropsTheRecentRead() = runBlocking {
-        val run = Run()
+        val run = Run(cancellationPollMs = 1)
         val inspection = assertIs<InspectResult.Success>(run.engine.inspect(source, "first")).inspection
         val chosen = inspection.formats.first { it.requiresMerge }
         run.cmd = assertIs<ConfirmResult.Confirmed>(DownloadCommand.confirm("job", inspection, source, chosen.id, "Fixture")).command

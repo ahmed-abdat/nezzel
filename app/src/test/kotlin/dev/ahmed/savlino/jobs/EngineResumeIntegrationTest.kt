@@ -253,7 +253,7 @@ class EngineResumeIntegrationTest {
         val runtime = Runtime(cold)
         // Robolectric shares process-wide engine state per SDK sandbox; a share stranded by another class would
         // block this fixture's exclusive updater.
-        val engine = YoutubedlEngine(runtime, limits, YtdlpInfoCache(app.noBackupFilesDir), native = NativeState())
+        val engine = YoutubedlEngine(runtime, limits, YtdlpInfoCache(app.noBackupFilesDir), native = NativeState(), cancellationPollMs = 1)
         val store = JobStore(app, null)
         val provider = TestDownloadsProvider(File(app.cacheDir, "$id-published"), app.packageName)
         val part = File(app.filesDir, "downloads/$id/output.mp4.part")

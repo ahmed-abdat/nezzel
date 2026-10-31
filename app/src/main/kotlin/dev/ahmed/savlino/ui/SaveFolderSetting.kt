@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 private const val FOLDER_STALE_MS = 60_000L
 
 @Composable
-internal fun SaveFolderSetting() {
+internal fun SaveFolderSetting(ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO) {
     val context = LocalContext.current
     val destinations = remember(context) { SaveDestinations(context) }
     val scope = rememberCoroutineScope()
@@ -43,14 +43,14 @@ internal fun SaveFolderSetting() {
     var failed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     suspend fun refresh() {
-        available = withContext(Dispatchers.IO) { destinations.available() }
+        available = withContext(ioDispatcher) { destinations.available() }
         custom = destinations.destination is SaveDestination.Tree
         name = destinations.displayName
     }
     fun choose(uri: android.net.Uri?) {
         busy = true
         scope.launch {
-            failed = try { withContext(Dispatchers.IO) { destinations.choose(uri) }; false } catch (_: Exception) { true }
+            failed = try { withContext(ioDispatcher) { destinations.choose(uri) }; false } catch (_: Exception) { true }
             refresh()
             busy = false
         }
