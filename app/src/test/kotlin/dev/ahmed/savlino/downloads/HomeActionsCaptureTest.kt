@@ -21,6 +21,8 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.jobs.DownloadPhase
 import dev.ahmed.savlino.jobs.DownloadProgress
+import dev.ahmed.savlino.jobs.PlaylistBatch
+import dev.ahmed.savlino.jobs.BatchItemRecord
 import dev.ahmed.savlino.locale.ThemePref
 import dev.ahmed.savlino.ui.theme.NezzelTheme
 import dev.ahmed.savlino.viewer.LocalMediaPictures
@@ -111,5 +113,25 @@ class HomeActionsCaptureTest {
                 error = DownloadError.Network, retryable = true)), "ar", {}, {}, {}, {}, {}, null, {}, {},
                 oldDownloads = OldDownloadsOffer(false, false, {}, {}))
         }
+    }
+
+    @Composable private fun failedRow(error: DownloadError, retryable: Boolean) =
+        DownloadsScreen(listOf(DownloadProgress("paused", "رحلة إلى البحر.mp4", DownloadPhase.FAILED,
+            error = error, retryable = retryable)), "ar", {}, {}, {}, {}, {}, null, {}, {},
+            oldDownloads = OldDownloadsOffer(false, false, {}, {}))
+
+    @Test fun pausedExpiredRow() = shoot("paused-expired", after = {
+        compose.onNodeWithTag("tab_running").performClick()
+    }) { failedRow(DownloadError.PausedExpired, true) }
+
+    @Test fun pausedExpiredAfterSevenDays() = shoot("paused-expired-7-days", after = {
+        compose.onNodeWithTag("tab_running").performClick()
+    }) { failedRow(DownloadError.FormatExpired, false) }
+
+    @Test fun playlistFallbackLine() = shoot("playlist-fallback") {
+        val base = playlistFixture()
+        val batch = PlaylistBatch(base.record, base.items.map { item -> BatchItemRecord(item.batchId, item.position,
+            item.itemId, item.title, item.state, item.jobId, item.error, item.retryable, item.position == 0, item.hasSource) })
+        Column(Modifier.padding(top = 24.dp)) { PlaylistBatchRow(batch, "ar", {}, {}) }
     }
 }
