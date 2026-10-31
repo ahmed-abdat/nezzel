@@ -200,10 +200,15 @@ tasks.withType<Test>().configureEach {
     // Push suite. -PnezzelNightly=true runs this slow tier plus the recomposition budgets.
     // Each line is one class or method that is not the only home of a permission, integrity, parser, RTL, or contract rule.
     if (providers.gradleProperty("nezzelNightly").orNull != "true") {
+        filter.excludeTestsMatching("*.DownloadsTest.finishOnSettingsHonorsAccessibilityTimeoutAndShareUsesPublishedUri") // 7s snackbar; URI sharing stays in FileShareTest
+        filter.excludeTestsMatching("*.DownloadCoordinatorTest.unfinishedOldWorkTimeoutPreservesFailedJournalAndStaging") // 5s deadline; old-worker journal barrier stays in retryWaitsForOldWorkerToFinishFailureBeforeChangingJournal
+        filter.excludeTestsMatching("*.DownloadCoordinatorTest.hungOrphanCleanupCannotBlockStartupOrDownloadAdmission") // 3s cleanup deadline; startup recovery stays in startupRecoversInterruptedRowsBeforeReschedulingQueuedWork
+        filter.excludeTestsMatching("*.SaveDestinationTest.hungOrphanQueryTimesOutAndCannotDeleteAfterStartup") // 3s provider deadline; receipt reuse stays in orphanSweepPreserves* methods
+        filter.excludeTestsMatching("*.NotificationPermissionFlowTest.api35RequestsPermissionBeforeDownload") // API35 UI repeat; API33 permission/denial and pre33 cases stay on push
         filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.TabSwitchCostTest") // recomposition budget
         filter.excludeTestsMatching("dev.ahmed.savlino.ui.nav.ProgressTickCostTest") // recomposition budget
         filter.excludeTestsMatching("*.ThumbnailLoaderTest") // 10s whole-load deadline
-        filter.excludeTestsMatching("*.HomeInPlaceTest") // slot transitions; Arabic home rules stay in HomeStack and HomeSemantics
+        filter.excludeTestsMatching("*.HomeInPlaceTest") // slot transitions; intake privacy stays in EntryFlowTest, Arabic layout in NavigationLayoutTest
         filter.excludeTestsMatching("*.ActivityEntryTest") // activity recreation, not a permission or integrity rule
         filter.excludeTestsMatching("*.HomeFirstRunFlipTest") // hero swap; tour RTL stays in OnboardingTest
         filter.excludeTestsMatching("*.EngineUpdateFlowTest") // maintenance deferral while an inspection is running
@@ -213,7 +218,7 @@ tasks.withType<Test>().configureEach {
         filter.excludeTestsMatching("*.LibraryPolishUiTest") // library polish UI
         filter.excludeTestsMatching("*.EngineMaintenanceIntegrationTest") // maintenance integration
         filter.excludeTestsMatching("*.MediaHttpCompatibilityTest") // API 33 client construction
-        filter.excludeTestsMatching("*.ViewerPullTest") // pull gesture; Arabic viewer rules stay in ViewerControlsTest
+        filter.excludeTestsMatching("*.ViewerPullTest") // pull gesture; Arabic layout stays in NavigationLayoutTest
         filter.excludeTestsMatching("*.OnboardingStartupTest") // startup maintenance deferral
         filter.excludeTestsMatching("*.ShortcutEntryTest") // shortcut entry
         filter.excludeTestsMatching("*.ShortcutMaintenanceTest") // shortcut maintenance
@@ -225,7 +230,7 @@ tasks.withType<Test>().configureEach {
         filter.excludeTestsMatching("*.CopyLinkUiTest") // copy-link UI
         filter.excludeTestsMatching("*.ViewerHostTest") // viewer host
         filter.excludeTestsMatching("*.StartupMaintenanceTest") // startup maintenance
-        filter.excludeTestsMatching("*.MediaViewerTest") // viewer shell; Arabic controls stay in ViewerControlsTest
+        filter.excludeTestsMatching("*.MediaViewerTest") // viewer shell; playback stays in PlaybackCoordinatorTest, Arabic layout in NavigationLayoutTest
         filter.excludeTestsMatching("*.ImageInspectionFlowTest") // inspection flow; pixel parsing stays in MediaImageDecoderTest
         filter.excludeTestsMatching("*.EngineUpdatePreemptionTest") // update preemption
         filter.excludeTestsMatching("*.InstagramPostFlowTest") // post flow; Instagram parsing stays in the engine
@@ -239,6 +244,33 @@ tasks.withType<Test>().configureEach {
         filter.excludeTestsMatching("*.UnreportedDirectMp4Test") // direct mp4 UI; mapping stays in UnreportedDirectMp4MappingTest
         filter.excludeTestsMatching("*.ShareSheetPhotoFlowTest") // photo share flow; Arabic sheet stays in ShareSheetFlowTest
         filter.excludeTestsMatching("*.StatusesStateTest") // statuses state
+        filter.excludeTestsMatching("*.ViewerControlsTest") // virtual-time control UI; playback integrity/privacy stay in Playback*Test, RTL in NavigationLayoutTest
+        filter.excludeTestsMatching("*.UpdateScreenTest") // update UI/lifecycle; installer permission contract stays in UpdateInstallerTest, state in AppUpdatesTest
+        filter.excludeTestsMatching("*.SettingsScreenTest") // settings controls; preferences stay in LocaleThemeTest/TipsPolicyTest, French rendering in DownloadsTabsTest
+        filter.excludeTestsMatching("*.HomeSemanticsTest") // intake UI; clipboard privacy stays in EntryFlowTest/ClipboardEntryTest, multi-link consent in MultiLinkIntakeTest
+        filter.excludeTestsMatching("*.HomeStackTest") // home/player layout; locale rendering stays in NavigationLayoutTest/DownloadsTabsTest
+        filter.excludeTestsMatching("*.ResponsiveRowsTest") // row geometry; queue ordering stays in DownloadCoordinatorTest, locale rendering in NavigationLayoutTest
+        filter.excludeTestsMatching("*.MiniPlayerTest") // player gestures/layout; playback persistence/privacy stay in PlaybackResumeStoreTest/PlaybackPrivacyTest
+        filter.excludeTestsMatching("*.SelectionReturnTest") // returned radio highlight; exact format selection stays in SelectionFlowTest
+        filter.excludeTestsMatching("*.SelectionSemanticsTest") // option semantics; explicit confirmation stays in SelectionFlowTest, preview integrity in PreviewCacheStorageTest
+        filter.excludeTestsMatching("*.JobCardUxTest") // job card layout; battery policy stays in BatterySettingsTest, locale rendering in NavigationLayoutTest
+        filter.excludeTestsMatching("*.DownloadsScreenWarningsTest") // warning rows; late probe results stay in DownloadCoordinatorTest, quality selection in BetterQualityFlowTest
+        filter.excludeTestsMatching("*.PlaylistBatchCardTest") // batch card layout; durable batch rules stay in BatchCoordinatorTest/BatchStoreTest
+        filter.excludeTestsMatching("*.TabBarLargeTextTest") // tab geometry; Arabic/French large-text rendering stays in NavigationLayoutTest/DownloadsTabsTest
+        filter.excludeTestsMatching("*.ImageOptionsUiTest") // image copy/layout; returned-image facts stay in ImageOptionsMappingTest, parsers in the engine
+        filter.excludeTestsMatching("*.WhatsNewSheetTest") // release-note surfaces; retained notes stay in AppUpdatesTest, bundled content in BundledWhatsNewTest
+        filter.excludeTestsMatching("*.DownloadsFailuresTest") // failure rows; retry eligibility stays in DownloadCoordinatorTest/BatchCoordinatorTest
+        filter.excludeTestsMatching("*.DownloadsLayoutTest") // loading/empty layout; saved-file integrity stays in SavedMediaRepositoryTest, RTL in NavigationLayoutTest
+        filter.excludeTestsMatching("*.ViewerAudioTest") // audio layout/screen flags; playback lifecycle stays in PlaybackCoordinatorTest, RTL in NavigationLayoutTest
+        filter.excludeTestsMatching("*.BatchHeaderUiTest") // batch header layout; batch state stays in BatchCoordinatorTest/BatchStoreTest
+        filter.excludeTestsMatching("*.SharedAxisTest") // navigation animation; locale layout stays in NavigationLayoutTest
+        filter.excludeTestsMatching("*.SavedMomentTest") // date labels; date/locale rules stay in ShortDateTest/LocaleThemeTest
+        filter.excludeTestsMatching("*.FillRowTest") // row fill/layout; progress honesty stays in ProgressHonestyTest, RTL in NavigationLayoutTest
+        filter.excludeTestsMatching("*.FilterRowTest") // chip geometry; Arabic large-text rendering stays in NavigationLayoutTest
+        filter.excludeTestsMatching("*.ThumbRowTest") // thumbnail geometry; artwork integrity stays in PreviewCacheStorageTest
+        filter.excludeTestsMatching("*.AboutSectionTest") // about/licence surfaces; bundled licence loading stays in LicenceLoaderTest, locale rendering in NavigationLayoutTest
+        filter.excludeTestsMatching("*.OptionsFooterTest") // footer placement; Arabic large-text rendering stays in NavigationLayoutTest
+        filter.excludeTestsMatching("*.DownloadsTabIndicatorTest") // tab animation; tab state and French rendering stay in DownloadsTabsTest
         // Layout fixtures. Capture shots of this class stay available with -PnezzelCapture=true.
         if (providers.gradleProperty("nezzelCapture").orNull != "true") {
             filter.excludeTestsMatching("*.HomeRedesignTest")

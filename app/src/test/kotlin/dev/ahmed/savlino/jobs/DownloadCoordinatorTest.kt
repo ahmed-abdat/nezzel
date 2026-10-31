@@ -879,7 +879,7 @@ class DownloadCoordinatorTest {
         val entered = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
         val probes = java.util.concurrent.atomic.AtomicInteger()
-        fixture(timeoutMs = 4000, graceMs = 2000) { MediaProbe {
+        fixture(timeoutMs = 4000, graceMs = 25) { MediaProbe {
             if (probes.incrementAndGet() == 1) {
                 entered.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)); ProbeFacts(1, 0, 5000, 4)
             } else ProbeFacts(1, 1, 5000, 4)
