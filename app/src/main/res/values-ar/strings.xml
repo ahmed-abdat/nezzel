@@ -733,4 +733,16 @@
     <string name="search_failed">تعذّر البحث الآن</string>
     <string name="search_failed_body">حدث خطأ أثناء البحث. أعد المحاولة بعد قليل.</string>
     <string name="search_more_failed">تعذّر تحميل المزيد من النتائج</string>
+    <string name="search_filter_videos">فيديو</string>
+    <string name="search_filter_music">موسيقى</string>
+    <string name="search_filter_playlists">قوائم تشغيل</string>
+    <string name="search_filter_channels">قنوات</string>
+    <plurals name="search_playlist_videos">
+        <item quantity="zero">%1$s فيديو</item>
+        <item quantity="one">فيديو واحد</item>
+        <item quantity="two">فيديوهان</item>
+        <item quantity="few">%1$s فيديوهات</item>
+        <item quantity="many">%1$s فيديو</item>
+        <item quantity="other">%1$s فيديو</item>
+    </plurals>
 </resources>

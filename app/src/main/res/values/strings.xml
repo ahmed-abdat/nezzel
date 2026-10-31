@@ -653,4 +653,12 @@
     <string name="search_failed">Couldn’t search right now</string>
     <string name="search_failed_body">Something went wrong on the way. Try again in a moment.</string>
     <string name="search_more_failed">Couldn’t load more results</string>
+    <string name="search_filter_videos">Videos</string>
+    <string name="search_filter_music">Music</string>
+    <string name="search_filter_playlists">Playlists</string>
+    <string name="search_filter_channels">Channels</string>
+    <plurals name="search_playlist_videos">
+        <item quantity="one">%1$s video</item>
+        <item quantity="other">%1$s videos</item>
+    </plurals>
 </resources>

@@ -744,7 +744,7 @@ class LinkViewModel(
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
         val kind = YouTubeLinkKind.classify(source.link)
-        if (kind == YouTubeLinkKind.Playlist) {
+        if (kind == YouTubeLinkKind.Playlist || kind == YouTubeLinkKind.ChannelVideos) {
             optionsState = OptionsState.Checking(source, newOperationId())
             playlist.open(source)
             return

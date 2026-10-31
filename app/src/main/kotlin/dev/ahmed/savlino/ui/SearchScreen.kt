@@ -5,7 +5,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -24,9 +28,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -38,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.downloads.LocalOffline
+import dev.ahmed.savlino.engine.SearchFilter
+import dev.ahmed.savlino.engine.SearchKind
 import dev.ahmed.savlino.engine.SearchResult
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.theme.Dock
@@ -54,7 +62,12 @@ internal fun SearchScreen(links: LinkViewModel, thumbnail: suspend (String) -> B
     val vm = links.search
     BackHandler { links.closeSearch() }
     Scaffold(Modifier.testTag("search_screen"), snackbarHost = snackbarHost,
-        topBar = { SearchField(vm, links::closeSearch) }) { insets ->
+        topBar = {
+            Column {
+                SearchField(vm, links::closeSearch)
+                SearchFilters(vm)
+            }
+        }) { insets ->
         Box(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets)) {
             SearchContent(vm, LocalOffline.current, thumbnail, links::openSearchResult)
         }
@@ -88,6 +101,31 @@ private fun SearchField(vm: SearchViewModel, onBack: () -> Unit) {
                 focusedContainerColor = Dock.color, unfocusedContainerColor = Dock.color,
                 focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = Color.Transparent))
     }
+}
+
+@Composable
+private fun SearchFilters(vm: SearchViewModel) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        .padding(start = Space.l, end = Space.l, bottom = Space.s).selectableGroup().testTag("search_filters"),
+        horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+        SearchFilter.entries.forEach { filter ->
+            val selected = vm.filter == filter
+            FilterChip(selected, { vm.choose(filter) },
+                modifier = Modifier.heightIn(min = 48.dp).semantics { this.selected = selected }
+                    .testTag("search_filter_${filter.name}"),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer),
+                label = { Text(stringResource(filterLabel(filter))) })
+        }
+    }
+}
+
+private fun filterLabel(filter: SearchFilter) = when (filter) {
+    SearchFilter.VIDEOS -> R.string.search_filter_videos
+    SearchFilter.MUSIC -> R.string.search_filter_music
+    SearchFilter.PLAYLISTS -> R.string.search_filter_playlists
+    SearchFilter.CHANNELS -> R.string.search_filter_channels
 }
 
 @Composable
@@ -134,23 +172,35 @@ private fun ResultList(vm: SearchViewModel, offline: Boolean, thumbnail: suspend
 @Composable
 private fun ResultRow(result: SearchResult, thumbnail: suspend (String) -> Bitmap?, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val language = LocalConfiguration.current.locales[0].language
+    val channel = result.kind == SearchKind.CHANNEL
     Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(MaterialTheme.shapes.medium)
         .clickable(role = Role.Button, onClick = onClick).padding(vertical = Space.s)
         .semantics(mergeDescendants = true) {}.testTag("search_result_${result.id}"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
         // Lazy rows own at most a screenful of bounded bitmaps; leaving composition cancels the loader.
-        val bitmap by produceState<Bitmap?>(null, result.thumbnailUrl) {
-            value = thumbnail(result.thumbnailUrl)
+        val thumb = result.thumbnailUrl
+        val bitmap by produceState<Bitmap?>(null, thumb) {
+            value = if (thumb == null) null else thumbnail(thumb)
         }
-        Box(Modifier.width(128.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium).background(colors.surfaceContainerHighest)) {
+        val shape = if (channel) CircleShape else MaterialTheme.shapes.medium
+        Box((if (channel) Modifier.size(48.dp) else Modifier.width(128.dp).aspectRatio(16f / 9f))
+            .clip(shape).background(colors.surfaceContainerHighest)) {
             bitmap?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             Text(NezzelFormat.firstStrong(result.title), maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))
             // Channel and length are separate runs: an Arabic channel name never pulls the time across.
-            val meta = listOfNotNull(result.channel?.let(NezzelFormat::firstStrong),
-                result.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }).joinToString(" · ")
+            val count = result.videoCount?.takeIf { result.kind == SearchKind.PLAYLIST }?.let { n ->
+                NezzelFormat.firstStrong(pluralStringResource(R.plurals.search_playlist_videos, n, NezzelFormat.count(n, language)))
+            }
+            val meta = when (result.kind) {
+                SearchKind.CHANNEL -> ""
+                SearchKind.PLAYLIST -> listOfNotNull(result.channel?.let(NezzelFormat::firstStrong), count).joinToString(" · ")
+                SearchKind.VIDEO -> listOfNotNull(result.channel?.let(NezzelFormat::firstStrong),
+                    result.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }).joinToString(" · ")
+            }
             if (meta.isNotEmpty()) Text(meta, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }

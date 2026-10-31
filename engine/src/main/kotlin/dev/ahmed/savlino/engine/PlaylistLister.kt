@@ -11,14 +11,15 @@ internal class PlaylistLister(
 ) {
     suspend fun list(source: LinkRevision, token: PlaylistPageToken? = null,
         operationId: String = java.util.UUID.randomUUID().toString()): PlaylistResult {
-        when (YouTubeLinkKind.classify(source.link)) {
+        val kind = YouTubeLinkKind.classify(source.link)
+        when (kind) {
             YouTubeLinkKind.PrivateList -> return PlaylistResult.Failure(DownloadError.LoginRequired)
-            YouTubeLinkKind.Playlist, YouTubeLinkKind.VideoInList -> Unit
+            YouTubeLinkKind.Playlist, YouTubeLinkKind.VideoInList, YouTubeLinkKind.ChannelVideos -> Unit
             else -> return PlaylistResult.Failure(DownloadError.Unsupported)
         }
         if (token != null && token.link != source.link.normalizedUrl) return PlaylistResult.Failure(DownloadError.InvalidInput)
-        // A flat continuation stays flat. NPE offsets omit extraction errors, so switching backends restarts at 1.
-        val native = if (token == null || token.nativePage != null) try { primary(source, token, operationId) }
+        // A flat continuation stays flat. Channel /videos is not an NPE playlist, so it stays on the flat reader.
+        val native = if (kind != YouTubeLinkKind.ChannelVideos && (token == null || token.nativePage != null)) try { primary(source, token, operationId) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { null }
             catch (_: LinkageError) { null } else null
