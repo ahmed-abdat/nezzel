@@ -304,14 +304,19 @@ internal fun matchesYtdlpChild(row: ProcProcess, parent: Int, python: String, sc
 internal class YtdlpExecutionFailure(val error: DownloadError, val expiredUrl: Boolean = false,
     val resumeAllowed: Boolean = true, val failureCause: DownloadFailureCause = error.cause,
     val reextractionBlocked: Boolean = false,
-    val reason: ExecutionFailureReason = ExecutionFailureReason.UNKNOWN) : Exception()
+    val reason: ExecutionFailureReason = ExecutionFailureReason.UNKNOWN,
+    val extractorBroken: Boolean = false) : Exception()
 internal class YtdlpDiagnostics {
     private val error = AtomicReference(DownloadError.Failed)
     private val cause = AtomicReference(DownloadFailureCause.OTHER)
     private val expired = java.util.concurrent.atomic.AtomicBoolean()
     private val httpFailure = java.util.concurrent.atomic.AtomicBoolean()
     private val reextractionBlocked = java.util.concurrent.atomic.AtomicBoolean()
+    private val extractorBrokenFlag = AtomicBoolean()
+    private val sawTraceback = AtomicBoolean()
+    private val sawExtractorFrame = AtomicBoolean()
     fun accept(line: String) {
+        noteExtractorBreakage(line)
         if (expiredUrl(line)) expired.set(true)
         if (blocksResume(line)) httpFailure.set(true)
         // Inspect each diagnostic independently: a later 403 or generic failure must never erase
@@ -354,6 +359,7 @@ internal class YtdlpDiagnostics {
             if (fallback is YtdlpExecutionFailure) {
                 if (fallback.expiredUrl) expired.set(true)
                 if (!fallback.resumeAllowed) httpFailure.set(true)
+                if (fallback.extractorBroken) extractorBrokenFlag.set(true)
                 if (fallback.reextractionBlocked || !fallback.resumeAllowed || fallback.error.blocksReextraction ||
                     fallback.failureCause in setOf(DownloadFailureCause.TRANSPORT, DownloadFailureCause.STALL))
                     reextractionBlocked.set(true)
@@ -372,7 +378,17 @@ internal class YtdlpDiagnostics {
             else cause.get()
         return YtdlpExecutionFailure(named, expired.get(), !httpFailure.get(), namedCause,
             reextractionBlocked.get() || bare?.blocksReextraction == true,
-            (fallback as? YtdlpExecutionFailure)?.reason ?: ExecutionFailureReason.UNKNOWN)
+            (fallback as? YtdlpExecutionFailure)?.reason ?: ExecutionFailureReason.UNKNOWN,
+            extractorBrokenFlag.get())
+    }
+    /** Boolean only: a traceback can arrive one line at a time, and the text is not kept. */
+    private fun noteExtractorBreakage(chunk: String) {
+        if (YtdlpErrorMapper.extractorBroken(chunk)) extractorBrokenFlag.set(true)
+        val text = chunk.replace(URL, "").lowercase(java.util.Locale.ROOT)
+        if (text.contains("traceback (most recent call last)")) sawTraceback.set(true)
+        if (sawTraceback.get() && text.contains("extractor")) sawExtractorFrame.set(true)
+        if (sawTraceback.get() && sawExtractorFrame.get() &&
+            Regex("""\b(?:keyerror|typeerror|indexerror)\b""").containsMatchIn(text)) extractorBrokenFlag.set(true)
     }
     companion object {
         fun blocksResume(message: String): Boolean = errorLines(message).any(HTTP_NO_RESUME::containsMatchIn)

@@ -2,6 +2,7 @@ package dev.ahmed.savlino.ui
 
 import android.os.Looper
 import androidx.lifecycle.SavedStateHandle
+import java.util.concurrent.atomic.AtomicInteger
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.engine.mediaimage.*
@@ -230,5 +231,61 @@ class LinkViewModelRaceTest {
         settle { !updating.isActive && vm.optionsState !is OptionsState.Checking }
         assertTrue(vm.optionsState.toString(), vm.optionsState is OptionsState.Ready)
         assertEquals(listOf(canonicalPost), engine.inspected)
+    }
+
+    @Test fun aBreakageFailureStartsOneEarlyUpdateAndOtherFailuresDoNot() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        fun engine(broken: Boolean, reads: AtomicInteger, updates: AtomicInteger) = object : EngineAdapter by FakeEngine() {
+            override suspend fun installedVersion() = "2026.08.19"
+            override suspend fun inspect(source: LinkRevision, operationId: String): InspectResult {
+                reads.incrementAndGet()
+                return InspectResult.Failure(DownloadError.Failed, extractorBroken = broken)
+            }
+            override suspend fun updateYtdlp(): EngineUpdateResult {
+                updates.incrementAndGet()
+                return EngineUpdateResult.Success("2026.08.19", "2026.10.31")
+            }
+        }
+        fun await(scopeJob: Job) = runBlocking {
+            withTimeout(5000) { while (scopeJob.children.any { it.isActive }) { pump(); delay(10) } }
+        }
+        try {
+            val plainReads = AtomicInteger(); val plainUpdates = AtomicInteger()
+            val plain = engine(false, plainReads, plainUpdates)
+            val plainCoordinator = DownloadCoordinator(RuntimeEnvironment.getApplication(), plain, store,
+                workManager = { error("No background scheduler in this fixture") })
+            val plainVm = LinkViewModel(SavedStateHandle(), engine = plain, downloads = plainCoordinator,
+                coordinatorScope = scope, currentEngineVersion = { "2026.08.19" })
+            plainVm.edit("https://youtu.be/sample"); plainVm.checkLink(); pump()
+            settle { plainVm.optionsState is OptionsState.Error }
+            await(scope.coroutineContext[Job]!!)
+            repeat(8) { pump() }
+            assertEquals(1, plainReads.get())
+            assertEquals(0, plainUpdates.get())
+            assertFalse(RuntimeEnvironment.getApplication().getSharedPreferences("engine-maintenance", 0).contains("early-attempt"))
+
+            val reads = AtomicInteger(); val updates = AtomicInteger()
+            val broken = engine(true, reads, updates)
+            val coordinator = DownloadCoordinator(RuntimeEnvironment.getApplication(), broken, store,
+                workManager = { error("No background scheduler in this fixture") })
+            val model = LinkViewModel(SavedStateHandle(), engine = broken, downloads = coordinator,
+                coordinatorScope = scope, currentEngineVersion = { "2026.08.19" })
+            model.edit("https://youtu.be/sample"); model.checkLink(); pump()
+            settle { model.optionsState is OptionsState.Error }
+            await(scope.coroutineContext[Job]!!)
+            repeat(8) { pump() }
+            // The update's success re-reads the failed link once; that read fails again but cannot start a 2nd update.
+            settle { reads.get() >= 2 }
+            await(scope.coroutineContext[Job]!!)
+            repeat(8) { pump() }
+            assertEquals(2, reads.get())
+            assertEquals(1, updates.get())
+            model.checkLink(); pump()
+            settle { reads.get() >= 3 }
+            await(scope.coroutineContext[Job]!!)
+            assertEquals(3, reads.get())
+            assertEquals(1, updates.get())
+            plainVm.dismissOptions(); model.dismissOptions()
+        } finally { scope.cancel() }
     }
 }

@@ -253,4 +253,144 @@ class EngineMaintenanceTest {
         assertFalse(maintenance.state.value.usingBuiltIn)
         assertFalse(EngineMaintenance(app, engine, { false }, { 20 * day }).state.value.usingBuiltIn)
     }
+
+    private class EarlyEngine : EngineAdapter by FakeEngine() {
+        var version = "2025.11.12"
+        var fail = false
+        var runs = 0
+        var prepares = 0
+        var blockNetwork = false
+        val fetching = CompletableDeferred<Unit>()
+        val fetchCancelled = CompletableDeferred<Unit>()
+        override suspend fun installedVersion() = version
+        override suspend fun prepareYtdlpUpdate(): PreparedUpdate {
+            prepares++
+            if (!fetching.isCompleted) fetching.complete(Unit)
+            if (blockNetwork) try { awaitCancellation() } catch (error: CancellationException) {
+                if (!fetchCancelled.isCompleted) fetchCancelled.complete(Unit)
+                throw error
+            }
+            return PreparedUpdate.Unstaged
+        }
+        override suspend fun updateYtdlp(): EngineUpdateResult {
+            runs++
+            if (fail) return EngineUpdateResult.Failure(DownloadError.Network)
+            version = "2026.08.19"
+            return EngineUpdateResult.Success("2025.11.12", version)
+        }
+    }
+    private val prefs get() = app.getSharedPreferences("engine-maintenance", 0)
+
+    @Test fun earlyUpdateRunsDespiteASuccessThreeDaysAgoAndResetsTheWeeklyCadence() = runBlocking {
+        val now = 20 * day
+        prefs.edit().putLong("success", now - 3 * day).putLong("attempt", now).putBoolean("using-built-in", true).commit()
+        val engine = EarlyEngine()
+        val maintenance = EngineMaintenance(app, engine, { false }, { now })
+        assertTrue(maintenance.state.value.usingBuiltIn)
+        assertTrue(maintenance.updateAfterBreakage())
+        assertEquals(1, engine.runs)
+        assertEquals("2026.08.19", engine.version)
+        assertEquals(now, prefs.getLong("success", -1))
+        assertEquals(now, prefs.getLong("attempt", -1)) // Weekly stamp is not rewritten.
+        assertEquals(now, prefs.getLong("early-attempt", -1))
+        assertFalse(maintenance.state.value.usingBuiltIn)
+        assertFalse(prefs.contains("using-built-in"))
+        val later = EarlyEngine()
+        assertFalse(EngineMaintenance(app, later, { false }, { now }).checkOnStartup())
+        assertEquals(0, later.runs)
+    }
+
+    @Test fun secondEarlyAttemptWithinADayDoesNothing() = runBlocking {
+        var now = 20 * day
+        val engine = EarlyEngine().apply { fail = true }
+        assertFalse(EngineMaintenance(app, engine, { false }, { now }).updateAfterBreakage())
+        assertEquals(1, engine.runs)
+        assertEquals(now, prefs.getLong("early-attempt", -1))
+        val again = EarlyEngine()
+        assertFalse(EngineMaintenance(app, again, { false }, { now + day - 1 }).updateAfterBreakage())
+        assertEquals(0, again.runs)
+        assertFalse(prefs.contains("attempt"))
+        now += day
+        val later = EarlyEngine()
+        assertTrue(EngineMaintenance(app, later, { false }, { now }).updateAfterBreakage())
+        assertEquals(1, later.runs)
+    }
+
+    @Test fun earlyUpdateRunsWithAPendingLinkOnFirstLaunch() = runBlocking {
+        prefs.edit().clear().commit()
+        val engine = EarlyEngine()
+        val maintenance = EngineMaintenance(app, engine, { false }, { 20 * day })
+        maintenance.setPendingLink(true)
+        assertTrue(maintenance.updateAfterBreakage())
+        assertEquals(1, engine.runs)
+        assertTrue(prefs.contains("early-attempt"))
+    }
+
+    @Test fun queuedDownloadBlocksEarlyUpdateWithoutConsumingTheStamp() = runBlocking {
+        var queued = true
+        val engine = EarlyEngine()
+        val maintenance = EngineMaintenance(app, engine, { queued }, { 20 * day })
+        assertFalse(maintenance.updateAfterBreakage())
+        assertEquals(EngineUpdateStatus.BUSY, maintenance.state.value.status)
+        assertEquals(0, engine.prepares)
+        assertEquals(0, engine.runs)
+        assertFalse(prefs.contains("early-attempt"))
+        queued = false
+        assertTrue(maintenance.updateAfterBreakage())
+        assertEquals(1, engine.runs)
+    }
+
+    @Test fun earlyUpdateSkipsWhenSuccessIsUnderADayOld() = runBlocking {
+        val now = 20 * day
+        prefs.edit().putLong("success", now - 3_600_000).commit()
+        val engine = EarlyEngine()
+        assertFalse(EngineMaintenance(app, engine, { false }, { now }).updateAfterBreakage())
+        assertEquals(0, engine.prepares)
+        assertEquals(0, engine.runs)
+        assertFalse(prefs.contains("early-attempt"))
+        assertEquals(now - 3_600_000, prefs.getLong("success", -1))
+    }
+
+    @Test fun earlyStampIsWrittenBeforeNetworkSoProcessDeathDoesNotRetry() = runBlocking {
+        val now = 20 * day
+        val engine = EarlyEngine().apply { blockNetwork = true }
+        val maintenance = EngineMaintenance(app, engine, { false }, { now })
+        val job = launch { maintenance.updateAfterBreakage() }
+        withTimeout(2000) { engine.fetching.await() }
+        assertEquals(now, prefs.getLong("early-attempt", -1))
+        assertFalse(prefs.contains("attempt"))
+        job.cancelAndJoin()
+        withTimeout(2000) { engine.fetchCancelled.await() }
+        assertEquals(now, prefs.getLong("early-attempt", -1))
+        val restarted = EarlyEngine()
+        assertFalse(EngineMaintenance(app, restarted, { false }, { now + day - 1 }).updateAfterBreakage())
+        assertEquals(0, restarted.prepares)
+        assertEquals(0, restarted.runs)
+    }
+
+    @Test fun preemptionRestoresTheEarlyStamp() = runBlocking {
+        val now = 20 * day
+        val previous = now - 3 * day
+        prefs.edit().putLong("early-attempt", previous).commit()
+        val engine = EarlyEngine().apply { blockNetwork = true }
+        val maintenance = EngineMaintenance(app, engine, { false }, { now })
+        val update = async { maintenance.updateAfterBreakage() }
+        withTimeout(2000) { engine.fetching.await() }
+        assertEquals(now, prefs.getLong("early-attempt", -1))
+        var entered = false
+        withTimeout(5000) { maintenance.withInspection { entered = true } }
+        assertTrue(entered)
+        withTimeout(2000) { engine.fetchCancelled.await() }
+        assertFalse(withTimeout(2000) { update.await() })
+        assertEquals(previous, prefs.getLong("early-attempt", -1))
+        assertFalse(prefs.contains("attempt"))
+        assertFalse(prefs.contains("success"))
+        assertEquals(EngineUpdateStatus.IDLE, maintenance.state.value.status)
+        assertFalse(maintenance.updateAfterBreakage())
+        assertEquals(1, engine.prepares)
+        engine.blockNetwork = false
+        assertTrue(EngineMaintenance(app, engine, { false }, { now }).updateAfterBreakage())
+        assertEquals(2, engine.prepares)
+        assertEquals(1, engine.runs)
+    }
 }

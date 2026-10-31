@@ -1022,7 +1022,7 @@ class LinkViewModel(
             LegacyRead(result, generation.takeIf { result is InspectResult.Failure },
                 if (currentEngineVersion == null && result is InspectResult.Success) engine.installedVersion() to generation else null)
         }
-        return try {
+        val read = try {
             downloads?.maintenance?.withInspection(waiting = { waiting ->
                 if (id == raceOperationId) raceWaiting = waiting
                 if (operationId == id) (optionsState as? OptionsState.Checking)?.let {
@@ -1032,6 +1032,12 @@ class LinkViewModel(
         }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { LegacyRead(InspectResult.Failure(DownloadError.Failed)) }
+        // Admission has ended, so inspections is 0. The application scope outlives this screen.
+        if ((read.result as? InspectResult.Failure)?.extractorBroken == true) downloads?.maintenance?.let { maintenance ->
+            // Success re-reads the failed link once via retryAfterEngineUpdate, like any other engine update.
+            (coordinatorScope ?: viewModelScope).launch { maintenance.updateAfterBreakage() }
+        }
+        return read
     }
     private fun startRace(source: LinkRevision) {
         val id = newOperationId()

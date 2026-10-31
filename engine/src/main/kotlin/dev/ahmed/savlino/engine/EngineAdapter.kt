@@ -76,7 +76,8 @@ private val notPreparing: StateFlow<Boolean> = MutableStateFlow(false).asStateFl
 
 sealed interface InspectResult {
     data class Success(val inspection: Inspection, val provenance: InspectionProvenance? = null) : InspectResult
-    data class Failure(val error: DownloadError) : InspectResult
+    /** [extractorBroken]: stderr looked like a broken extractor. No diagnostic text is kept. */
+    data class Failure(val error: DownloadError, val extractorBroken: Boolean = false) : InspectResult
 }
 
 sealed interface EngineEvent {
