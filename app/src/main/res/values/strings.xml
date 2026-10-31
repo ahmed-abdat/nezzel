@@ -95,6 +95,7 @@
     <string name="read_failed_title">Couldn’t read this link</string>
     <string name="read_failed_body">Check that the link opens in the app or browser, then try again</string>
     <string name="try_again">Try again</string>
+    <string name="open_app">Open</string>
     <string name="download_channel">Downloads</string>
     <string name="download_preparing">Preparing…</string>
     <string name="download_transferring">Downloading</string>

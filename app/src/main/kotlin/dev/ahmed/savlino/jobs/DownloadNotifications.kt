@@ -180,7 +180,7 @@ class DownloadNotifications(private val base: Context,
                 .addAction(0, ctx.getString(R.string.share_file), PendingIntent.getActivity(base, activeId(progress.jobId), share, FLAGS))
         } else if (progress.phase == DownloadPhase.FAILED) {
             // Opens the app for explicit review. No notification action silently retries retained failed URLs.
-            builder.addAction(0, ctx.getString(R.string.try_again), PendingIntent.getActivity(base, 0,
+            builder.addAction(0, ctx.getString(R.string.open_app), PendingIntent.getActivity(base, 0,
                 Intent(base, MainActivity::class.java), FLAGS))
         }
         return live(ctx, progress, builder.build())

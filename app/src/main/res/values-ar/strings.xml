@@ -95,6 +95,7 @@
     <string name="read_failed_title">تعذّرت قراءة هذا الرابط</string>
     <string name="read_failed_body">تأكد من أن الرابط يفتح في التطبيق أو المتصفح، ثم أعد المحاولة</string>
     <string name="try_again">إعادة المحاولة</string>
+    <string name="open_app">فتح</string>
     <string name="download_channel">التنزيلات</string>
     <string name="download_preparing">جارٍ التحضير…</string>
     <string name="download_transferring">جارٍ التنزيل</string>

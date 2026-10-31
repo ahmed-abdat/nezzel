@@ -1,7 +1,7 @@
 package dev.ahmed.savlino.domain
 
 /**
- * Playback-compatible codecs (OPEN_DECISIONS 2026-10-19). Within one height H.264 wins, then HEVC, AV1, VP9.
+ * Within one height, prefer the codec that plays on more phones: H.264, then HEVC, AV1, then VP9.
  * MP4 merges use these playback-safe video codecs with AAC; VP9/Opus merges use MKV.
  * An absent codec is unknown, never evidence of either.
  */

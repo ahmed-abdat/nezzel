@@ -41,7 +41,7 @@
     <string name="all_formats">Toutes les qualités</string>
     <string name="unknown_size">Taille inconnue</string>
     <string name="download_size">Télécharger · %1$s</string>
-    <string name="saves_to">Enregistré dans %1$s</string>
+    <string name="saves_to">Sera enregistré dans %1$s</string>
     <string name="mobile_data_large">Consomme beaucoup de données mobiles</string>
     <string name="mobile_data_exact">Consomme %1$s de données mobiles</string>
     <string name="choice_confirmed">Choix confirmé</string>
@@ -95,6 +95,7 @@
     <string name="read_failed_title">Impossible de lire ce lien</string>
     <string name="read_failed_body">Vérifiez que le lien s’ouvre dans l’application ou le navigateur, puis réessayez</string>
     <string name="try_again">Réessayer</string>
+    <string name="open_app">Ouvrir</string>
     <string name="download_channel">Téléchargements</string>
     <string name="download_preparing">Préparation…</string>
     <string name="download_transferring">Téléchargement</string>

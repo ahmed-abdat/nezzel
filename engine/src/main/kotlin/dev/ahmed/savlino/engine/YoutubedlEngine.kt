@@ -32,7 +32,7 @@ sealed interface EngineUpdateResult {
     data class Failure(val error: DownloadError, val usingBuiltIn: Boolean = false) : EngineUpdateResult
 }
 
-/** Engine timeouts and recovery (lead 2026-10-19, docs/OPEN_DECISIONS.md). */
+/** Deadlines so a hung inspect, update, self-test, or stalled transfer ends. */
 internal class EngineLimits(val inspectMs: Long = 60_000, val updateMs: Long = 120_000, val stallMs: Long = 45_000,
     val selfTestMs: Long = 30_000, val maintenanceWaitMs: Long = 90_000, val firstByteMs: Long = 180_000,
     val npeBudgetMs: Long = NPE_BUDGET_MS,

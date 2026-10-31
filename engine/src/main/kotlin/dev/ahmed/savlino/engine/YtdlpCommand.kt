@@ -17,7 +17,7 @@ object YtdlpCommand {
     fun isExactId(id: String): Boolean = id.matches(Regex("[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,255}")) &&
         !reservedId.matches(id) && id !in selectorExtensions && id !in setOf("all", "mergeall")
     internal fun isDirectVideoId(id: String, container: String) = id == container && id in setOf("mp4", "mov", "webm")
-    /** Bounded network waits (lead 2026-10-19, OPEN_DECISIONS): a dead socket ends in 20 s, transient errors retry. */
+    /** A dead socket ends in 20 s; transient errors retry. */
     val NETWORK = listOf("--socket-timeout", "20", "--retries", "5", "--fragment-retries", "10")
     internal fun isYouTube(source: LinkRevision): Boolean = source.link.host == Host.YOUTUBE
     /** [target]: what yt-dlp reads in place of the post link (a Reddit post's own video), never user input. */

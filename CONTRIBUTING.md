@@ -65,7 +65,7 @@ Start under `engine/src/main/kotlin/dev/ahmed/savlino/engine/`:
 - `YtdlpErrorMapper.kt`: sanitized error classification; `YtdlpMetadataMapper.kt` and `YtdlpProgressMapper.kt`: returned formats and measured progress.
 - `YtdlpCommand.kt`, `YoutubedlEngine.kt`, `YtdlpRuntime.kt`: execution, admission and runtime integration.
 - `MediaSourceInspector.kt`, `mediaimage/PublicImageInspector.kt`: route selection and public-image inspection.
-- `facebook/`, `instagram/`, `linkedin/`, `x/`: post identity and attachment parsers; `mediahttp/` enforces transport, origin and size/time budgets.
+- `bluesky/`, `facebook/`, `instagram/`, `linkedin/`, `pinterest/`, `reddit/`, `telegram/`, `tiktok/`, `x/`: post identity and attachment parsers; `mediahttp/` enforces transport, origin and size/time budgets.
 
 Tests mirror those packages in `engine/src/test/kotlin/`; reduced fixtures and provenance notes live in `engine/src/test/resources/`. Use the existing mapper/parser tests as examples. Error messages from extractors are untrusted and can contain private URLs: reproduce with synthetic diagnostics and check the typed error. A new mapping does not prove a site works. Add a supported-site claim only after a device test; in the PR, record the link type, result, app/engine version and saved-file check, without the original URL or device serial.
 
