@@ -430,8 +430,9 @@ class DownloadWorkerTest {
                     System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, id))
                 val expired = f.store.get(id)!! // Real automatic expiry/scrub and observer delivery.
                 assertEquals(JobStage.FAILED, expired.stage)
-                assertEquals(DownloadError.FormatExpired, expired.error)
-                assertNull(expired.sourceUrl)
+                val paused = state == "paused"
+                assertEquals(if (paused) DownloadError.PausedExpired else DownloadError.FormatExpired, expired.error)
+                assertEquals(paused, expired.sourceUrl != null) // Kept only for the person's Try again, never reported.
                 f.coordinator.execute(id, {}, {}) // A stale worker delivery cannot report it afterwards either.
                 usage.sendDaily()
                 assertTrue(posts.none { it.first == dev.ahmed.savlino.report.InboxClient.REPORT })

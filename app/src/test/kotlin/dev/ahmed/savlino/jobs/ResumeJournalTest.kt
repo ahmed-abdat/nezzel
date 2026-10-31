@@ -205,9 +205,12 @@ class ResumeJournalTest {
                 store.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id=?",
                     arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000, id))
                 val row = store.get(id)!!
-                assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.FormatExpired, row.error)
-                assertNull(row.sourceUrl); assertFalse(row.retryable); assertFalse(row.hasPartial)
-                assertFalse(dir.exists()); assertFalse(store.resume(id)); assertFalse(store.retry(id))
+                val paused = stage == JobStage.PAUSED
+                assertEquals(JobStage.FAILED, row.stage)
+                assertEquals(if (paused) DownloadError.PausedExpired else DownloadError.FormatExpired, row.error)
+                // A paused expiry keeps only the link, so Try again can read it again; its files still go.
+                assertEquals(paused, row.sourceUrl != null); assertEquals(paused, row.retryable); assertFalse(row.hasPartial)
+                assertFalse(dir.exists()); assertFalse(store.resume(id)); assertEquals(paused, store.retry(id))
             }
         }
     }
