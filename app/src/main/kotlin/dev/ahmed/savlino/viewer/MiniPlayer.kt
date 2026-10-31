@@ -32,11 +32,9 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.changedToDown
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.ObserverModifierNode
@@ -140,10 +138,13 @@ internal data class MiniPlayerLayout(val sheet: Rect, val topCorner: Dp, val cor
 
 private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
 
-/** Name and controls riding on the sheet: once faded out, TalkBack skips them and a new press doesn't reach them. */
+/** Keep the name and controls' space, but stop placing them once faded: no touches or TalkBack, and no recomposition. */
 internal fun Modifier.fadesWithSheet(host: ViewerHostState?): Modifier =
-    if (host?.faded != true) this else clearAndSetSemantics {}.pointerInput(Unit) {
-        awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { if (it.changedToDown()) it.consume() } }
+    if (host == null) this else layout { measurable, constraints ->
+        val content = measurable.measure(constraints)
+        layout(content.width, content.height) {
+            if (!host.faded) content.place(0, 0)
+        }
     }
 
 /** The music page's colour, the sheet that shrinks into the bar. */

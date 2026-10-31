@@ -78,7 +78,13 @@ class SelectionSemanticsTest {
                 }
                 val nodes = semantics(activity)
                 val labels = texts(nodes)
-                assertTrue(labels.toString(), labels.any { it == context.getString(R.string.preset_balanced) })
+                val rows = nodes.filter { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton }
+                assertEquals(labels.toString(), 3, rows.size)
+                val best = rows.single { texts(descendants(it)).any { text -> text.contains("1080p") } }
+                val balanced = rows.single { texts(descendants(it)).any { text -> text.contains("720p") } }
+                assertTrue(texts(descendants(best)).contains(context.getString(R.string.preset_best)))
+                assertTrue(texts(descendants(balanced)).contains(context.getString(R.string.quality_hd_hint)))
+                assertFalse(texts(descendants(balanced)).contains(context.getString(R.string.preset_best)))
                 assertTrue(labels.contains("رحلة بحرية 🌊"))
                 assertTrue(labels.any { it.contains("قناة البحر") })
                 assertTrue(labels.any { it.contains("3:45") && it.contains("youtube.com") })
@@ -101,7 +107,7 @@ class SelectionSemanticsTest {
             } finally { vm.dismissOptions(); controller.pause().stop().destroy() }
         }
     }
-    /** Phone finding: BALANCED and SMALL resolving to one format showed "360p" twice. One row, first label, last-used kept. */
+    /** BALANCED and SMALL resolving to one format keep one quality row with its last-used badge. */
     @Test fun presetsSharingAFormatRenderOneRowWithTheLastUsedMarker() {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).create().start().resume().visible()
         val inspection = Inspection(LinkRevision(LinkInput.parse(url)!!, 1), "fixture-v1", formats,
@@ -115,17 +121,20 @@ class SelectionSemanticsTest {
             activity.setContent { NezzelTheme(ThemePref.Dark, false) { OptionsSheetContent(vm, "en", vm::dismissOptions) } }
             val nodes = semantics(activity)
             val labels = texts(nodes)
-            val balanced = labels.filter { it == activity.getString(R.string.preset_balanced) }
+            val balanced = nodes.filter { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
+                texts(descendants(it)).any { text -> text.contains("720p") } }
             assertEquals(labels.toString(), 1, balanced.size)
+            val rowLabels = texts(descendants(balanced.single()))
+            assertTrue(rowLabels.toString(), rowLabels.contains(activity.getString(R.string.quality_hd_hint)))
+            assertFalse(rowLabels.contains(activity.getString(R.string.preset_best)))
             // "Last used" is the amber badge inside that row, not hint text.
-            assertFalse(balanced.single(), balanced.single().contains(activity.getString(R.string.last_used)))
             val badge = nodes.single { it.config.getOrNull(SemanticsProperties.TestTag) == "last_used_badge" }
             assertEquals(listOf(activity.getString(R.string.last_used)), texts(descendants(badge)))
-            assertTrue(nodes.any { row -> row.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                descendants(row).any { it.id == badge.id } && texts(descendants(row)).any { t -> t in balanced } })
+            assertTrue(descendants(balanced.single()).any { it.id == badge.id })
             assertFalse(labels.toString(), labels.any { it == activity.getString(R.string.preset_small) })
+            assertEquals(true, balanced.single().config.getOrNull(SemanticsProperties.Selected))
             assertEquals(1, nodes.count { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                it.config.getOrNull(SemanticsProperties.Selected) == true && texts(descendants(it)).any { t -> t in balanced } })
+                it.config.getOrNull(SemanticsProperties.Selected) == true })
         } finally { vm.dismissOptions(); controller.pause().stop().destroy() }
     }
 
