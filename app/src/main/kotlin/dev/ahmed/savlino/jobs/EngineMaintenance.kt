@@ -38,6 +38,8 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     private var preemptible: Job? = null
     /** A link pre-empted this process's automatic update; the next launch retries under the usual cadence. */
     private var preempted = false
+    /** This process's early update was pre-empted; do not start another until the next launch. */
+    private var earlyPreempted = false
     /** Local discovery only; publish startup warm-up's installed version without attempting an update. */
     suspend fun refreshVersion() = withContext(Dispatchers.IO) {
         gate.withLock {
@@ -121,7 +123,9 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     suspend fun checkOnStartup(): Boolean = update(false) == UpdateDecision.UPDATED
     /** [includePaused]: the user confirmed that paused downloads start over (their resume recipe pins the engine). */
     suspend fun updateNow(includePaused: Boolean = false): Boolean = update(true, includePaused) == UpdateDecision.UPDATED
-    private suspend fun update(manual: Boolean, includePaused: Boolean = false): UpdateDecision = withContext(Dispatchers.IO) {
+    /** One STABLE fetch after an inspection that looks like a broken extractor. Skips the weekly cadence. */
+    suspend fun updateAfterBreakage(): Boolean = update(manual = false, early = true) == UpdateDecision.UPDATED
+    private suspend fun update(manual: Boolean, includePaused: Boolean = false, early: Boolean = false): UpdateDecision = withContext(Dispatchers.IO) {
         if (!manual) onLaunch()
         if (!gate.tryLock()) return@withContext busy()
         var locked = true
@@ -135,16 +139,21 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
                 mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.BUSY)
                 return@withContext if (manual) UpdateDecision.NO_UPDATE else UpdateDecision.INSPECTION_BUSY
             }
-            if (!manual && inspectionBusy()) return@withContext UpdateDecision.INSPECTION_BUSY
+            // The failed link is still on screen, so pendingLink and first launch must not block an early update.
+            if (!manual && !early && inspectionBusy()) return@withContext UpdateDecision.INSPECTION_BUSY
             mutableState.value = mutableState.value.copy(version = engine.installedVersion())
             // Version discovery can await first extraction. A link arriving meanwhile wins over automatic maintenance.
-            if (!manual && inspectionBusy()) return@withContext UpdateDecision.INSPECTION_BUSY
+            if (!manual && !early && inspectionBusy()) return@withContext UpdateDecision.INSPECTION_BUSY
             val time = now()
-            if (!manual && (preempted || (prefs.contains("success") && time - prefs.getLong("success", 0) < 7 * DAY) ||
+            if (!manual && !early && (preempted || (prefs.contains("success") && time - prefs.getLong("success", 0) < 7 * DAY) ||
                     (prefs.contains("attempt") && time - prefs.getLong("attempt", 0) < DAY))) return@withContext UpdateDecision.NO_UPDATE
-            val previousAttempt = if (prefs.contains("attempt")) prefs.getLong("attempt", 0) else null
+            if (early && (earlyPreempted || (prefs.contains("success") && time - prefs.getLong("success", 0) < DAY) ||
+                    (prefs.contains(EARLY) && time - prefs.getLong(EARLY, 0) < DAY))) return@withContext UpdateDecision.NO_UPDATE
+            // Manual and weekly updates share the attempt stamp. An early update has its own, and does not consume attempt.
+            val stamp = if (early) EARLY else "attempt"
+            val previousAttempt = if (prefs.contains(stamp)) prefs.getLong(stamp, 0) else null
             // Persist before network work so process death cannot cause an automatic retry loop.
-            if (!prefs.edit().putLong("attempt", time).commit()) {
+            if (!prefs.edit().putLong(stamp, time).commit()) {
                 mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.FAILED)
                 return@withContext UpdateDecision.NO_UPDATE
             }
@@ -168,8 +177,9 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
                     if (prepared == null || inspections > 0 || downloads > 0 || hasDownloads()) {
                         prepared?.let(engine::discardYtdlpUpdate)
                         // A pre-empted attempt is not an attempt: restore the stamp, never retry in this process.
-                        prefs.edit().apply { if (previousAttempt == null) remove("attempt") else putLong("attempt", previousAttempt) }.commit()
-                        preempted = true; preemptedNow = true
+                        prefs.edit().apply { if (previousAttempt == null) remove(stamp) else putLong(stamp, previousAttempt) }.commit()
+                        if (early) earlyPreempted = true else preempted = true
+                        preemptedNow = true
                         mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.IDLE)
                         return@withContext UpdateDecision.PREEMPTED
                     }
@@ -203,5 +213,5 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
             mutableState.value = mutableState.value.copy(status = EngineUpdateStatus.BUSY)
         return UpdateDecision.NO_UPDATE
     }
-    private companion object { const val DAY = 86_400_000L; const val BUILT_IN = "using-built-in" }
+    private companion object { const val DAY = 86_400_000L; const val BUILT_IN = "using-built-in"; const val EARLY = "early-attempt" }
 }

@@ -635,4 +635,55 @@ class YtdlpMappingTest {
         assertEquals(EngineEvent.Progress(10, Size.Unknown), YtdlpProgressMapper().map("nezzel:a:10:NA:NA"))
         assertEquals(EngineEvent.Progress(10, Size.Estimated(99)), YtdlpProgressMapper().map("nezzel:a:10:NA:99"))
     }
+
+    @Test fun extractorBreakageIsABooleanSeparateFromTheMappedError() {
+        val broken = listOf(
+            "ERROR: [youtube] id: Unable to extract player response; please report this issue on https://example.org/issues , filling out the appropriate issue template. Confirm you are on the latest version using yt-dlp -U",
+            "ERROR: [youtube] id: Unable to extract uploader id; please report this issue on https://example.org/issues. Confirm you are on the latest version using  yt-dlp -U",
+            "ERROR: please report this issue on https://example.org/issues , filling out the appropriate issue template. Confirm you are on the latest version",
+            "ERROR: [youtube] id: Unable to extract initial data",
+            "ERROR: [generic] id: Unable to download JSON metadata",
+            "ERROR: [youtube] id: 'streamingData' (caused by KeyError('streamingData'))",
+            "ERROR: [youtube] id: bad player (caused by TypeError('NoneType'))",
+            "ERROR: [youtube] id: bad player (caused by IndexError('list'))",
+            "WARNING: [youtube] nsig extraction failed: Some exception",
+            "ERROR: [youtube] id: Signature extraction failed",
+            "ERROR: [youtube] id: Unable to download JSON metadata\nTraceback (most recent call last):\n  File \"yt_dlp/extractor/youtube.py\", line 1, in _real_extract\nKeyError: 'streamingData'",
+            "Traceback (most recent call last):\n  File \"yt_dlp/extractor/common.py\", line 2, in _real_extract\nTypeError: 'NoneType'",
+            "Traceback (most recent call last):\n  File \"yt_dlp/extractor/youtube.py\", line 3, in _real_extract\nIndexError: list index out of range")
+        val intact = listOf(
+            "ERROR: Network is unreachable",
+            "ERROR: Unable to download webpage: The read operation timed out",
+            "ERROR: Unable to download webpage: [Errno 111] Connection refused",
+            "ERROR: HTTP Error 403: Forbidden",
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+            "ERROR: Unable to download webpage: HTTP Error 404: Not Found",
+            "ERROR: Unable to download JSON metadata: HTTP Error 404: Not Found",
+            "ERROR: Unable to download JSON metadata: HTTP Error 410: Gone",
+            "ERROR: Unable to extract player response: HTTP Error 403: Forbidden",
+            "ERROR: [youtube] id: Private video. Sign in if you've been granted access",
+            "ERROR: [youtube] id: Sign in to confirm your age",
+            "ERROR: This video is private",
+            "ERROR: Login required",
+            "ERROR: Video has been removed",
+            "ERROR: [youtube] id: This video is unavailable",
+            "ERROR: This video is not available in your country",
+            "ERROR: [TikTok] id: Your IP address is blocked from accessing this post",
+            "ERROR: Unsupported URL: https://example.org/watch/1",
+            "ERROR: No suitable extractor",
+            "ERROR: [generic] id: This video is DRM protected",
+            "ERROR: [Instagram] id: No video formats found!; please report this issue",
+            "ERROR: Requested format is not available")
+        for (stderr in broken) assertTrue(YtdlpErrorMapper.extractorBroken(stderr), stderr)
+        for (stderr in intact) assertFalse(YtdlpErrorMapper.extractorBroken(stderr), stderr)
+        // A traceback can arrive one line at a time. Only the boolean is kept.
+        val split = YtdlpDiagnostics()
+        split.accept("Traceback (most recent call last):")
+        split.accept("  File \"yt_dlp/extractor/youtube.py\", line 1, in _real_extract")
+        split.accept("KeyError: 'streamingData'")
+        val failure = split.failure()
+        assertTrue(failure.extractorBroken)
+        assertNull(failure.message)
+        assertFalse(YtdlpDiagnostics().failure(java.io.IOException("ERROR: HTTP Error 404: Not Found")).extractorBroken)
+    }
 }

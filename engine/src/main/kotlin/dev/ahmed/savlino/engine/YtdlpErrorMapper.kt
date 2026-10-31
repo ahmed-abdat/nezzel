@@ -80,6 +80,38 @@ object YtdlpErrorMapper {
         }
     }
 
+    /**
+     * Inspection stderr that points at a broken extractor, so maintenance may fetch STABLE early.
+     * Callers keep the boolean only. Exclusions win over the weaker phrases, so a 404 page or a
+     * private video is never treated as breakage even when the wording overlaps.
+     */
+    fun extractorBroken(stderr: String): Boolean {
+        val text = stderr.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "").lowercase(Locale.ROOT)
+        if (text.isBlank()) return false
+        val reported = text.contains("please report this issue on") &&
+            (text.contains("confirm you are on the latest version") || Regex("""yt-dlp\s+-u\b""").containsMatchIn(text))
+        val traceback = Regex("""traceback \(most recent call last\):[\s\S]*\b(?:keyerror|typeerror|indexerror)\b""")
+            .containsMatchIn(text) && text.contains("extractor")
+        val causedBy = Regex("""\bcaused by (?:keyerror|typeerror|indexerror)\b""").containsMatchIn(text)
+        if (reported || traceback || causedBy || text.contains("nsig extraction failed") ||
+            text.contains("signature extraction failed")) return true
+        if (notExtractorBreakage(text)) return false
+        return text.contains("unable to extract") || text.contains("unable to download json metadata")
+    }
+
+    private fun notExtractorBreakage(text: String): Boolean {
+        if (Regex("""\bhttp error (403|404|410)\b""").containsMatchIn(text)) return true
+        if (Regex("""\b(403: forbidden|404: not found|410: gone)\b""").containsMatchIn(text)) return true
+        if (Regex("""\bdrm\b""").containsMatchIn(text) || text.contains("digital rights management")) return true
+        return listOf("network is unreachable", "network is down", "timed out", "connection refused", "connection reset",
+            "connection abort", "name resolution", "unable to resolve", "no route to host", "getaddrinfo",
+            "name or service not known", "no address associated", "private video", "video is private", "members-only",
+            "login required", "sign in", "log in to", "please log in", "confirm your age", "age-restricted", "age restricted",
+            "has been removed", "video unavailable", "video is unavailable", "video not available", "no longer available",
+            "not available in your country", "geo restricted", "geo-restricted", "not available from your location",
+            "unsupported url", "no suitable extractor").any(text::contains)
+    }
+
     fun cause(stderr: String): DownloadFailureCause {
         val text = stderr.lineSequence().filter { it.startsWith("ERROR:") }
             .joinToString("\n") { it.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "") }
@@ -94,10 +126,12 @@ object YtdlpErrorMapper {
         "\\bfragment(?: \\d+)? (?:not found|failed|is unavailable)\\b")
 
     /** Inspection-only facts: retain no raw diagnostics, identifiers or URLs. */
-    internal class EmptyInspection {
+    internal class EmptyInspection(private val signal: java.util.concurrent.atomic.AtomicBoolean? = null) {
+        val extractorBroken: Boolean get() = signal?.get() == true
         @Volatile private var hasError = false
         @Volatile private var photoExtractorReturnedNothing = false
         fun accept(output: String) {
+            if (YtdlpErrorMapper.extractorBroken(output)) signal?.set(true)
             output.lineSequence().forEach { line ->
                 if (line.startsWith("ERROR:")) hasError = true
                 if (returnedNothing.matches(line)) photoExtractorReturnedNothing = true

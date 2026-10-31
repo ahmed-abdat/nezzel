@@ -630,4 +630,19 @@ class YoutubedlEngineTest {
             assertEquals(EngineEvent.Merging, events.last())
         }
     }
+
+    @Test fun inspectionFailureCarriesExtractorBreakageAndDropsTheStderr() = runBlocking {
+        val broken = Runtime().apply { action = { _, _ -> throw IllegalStateException(
+            "ERROR: [youtube] id: Unable to extract player response; please report this issue on https://example.org/issues , filling out the appropriate issue template. Confirm you are on the latest version using yt-dlp -U") } }
+        val failure = assertIs<InspectResult.Failure>(YoutubedlEngine(broken, cancellationPollMs = 1).inspect(source, "broken"))
+        assertEquals(DownloadError.Failed, failure.error)
+        assertTrue(failure.extractorBroken)
+        val lines = Runtime().apply { action = { _, line ->
+            line("WARNING: [youtube] nsig extraction failed: Some exception")
+            throw IllegalStateException("yt-dlp failed")
+        } }
+        assertTrue(assertIs<InspectResult.Failure>(YoutubedlEngine(lines, cancellationPollMs = 1).inspect(source, "lines")).extractorBroken)
+        val offline = Runtime().apply { action = { _, _ -> throw IllegalStateException("ERROR: Network is unreachable") } }
+        assertFalse(assertIs<InspectResult.Failure>(YoutubedlEngine(offline, cancellationPollMs = 1).inspect(source, "offline")).extractorBroken)
+    }
 }

@@ -249,13 +249,15 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private suspend fun inspect(source: LinkRevision, operationId: String, fresh: Boolean): InspectResult {
         // Read before any wait: a Clear link history after this call began keeps its result out of [recent].
         val epoch = recent.epoch()
-        return operation(operationId, { error, _ -> InspectResult.Failure(error) }, lockTimeoutMs = limits.maintenanceWaitMs) { current ->
+        val broken = AtomicBoolean(false)
+        return operation(operationId, { error, _ -> InspectResult.Failure(error, broken.get()) },
+            lockTimeoutMs = limits.maintenanceWaitMs, extractorSignal = broken) { current ->
             if (!initialize()) return@operation unavailable.inspect(source, operationId)
             // After initialization: a one-time extraction must not consume the network budget.
             current.expireIn(limits.inspectMs)
             val version = version(current)
             joined(current, source) {
-                (if (fresh) null else recentHit(source, version)) ?: extract(current, source, operationId, version, epoch)
+                (if (fresh) null else recentHit(source, version)) ?: extract(current, source, operationId, version, epoch, broken)
             }
         }
     }
@@ -308,13 +310,13 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
 
     /** [epoch]: a Clear link history after it started keeps this result out of [recent] and [fastFailed]. */
     private suspend fun extract(current: Operation, source: LinkRevision, operationId: String, version: String,
-        epoch: Long): InspectResult {
+        epoch: Long, broken: AtomicBoolean): InspectResult {
         if (YtdlpCommand.isYouTube(source) && fastSource != null) {
             val key = RecentInspections.key(source.link)
             // A retry after a fast failure goes straight to yt-dlp; only a success clears the key.
             if (synchronized(fastFailed) { key in fastFailed }) {
                 current.expireIn(limits.inspectMs)
-                return inspectOnce(current, source, version, epoch).also {
+                return inspectOnce(current, source, version, epoch, broken).also {
                     if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
                 }
             }
@@ -345,11 +347,11 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             }
             // yt-dlp gets a full inspection budget from its own start, including after a cap skip.
             current.expireIn(limits.inspectMs)
-            return inspectOnce(current, source, version, epoch).also {
+            return inspectOnce(current, source, version, epoch, broken).also {
                 if (it is InspectResult.Success) synchronized(fastFailed) { fastFailed.remove(key) }
             }
         }
-        return inspectOnce(current, source, version, epoch)
+        return inspectOnce(current, source, version, epoch, broken)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -406,8 +408,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         }
     }
 
-    private suspend fun inspectOnce(current: Operation, source: LinkRevision, version: String, epoch: Long): InspectResult {
-        val empty = YtdlpErrorMapper.EmptyInspection()
+    private suspend fun inspectOnce(current: Operation, source: LinkRevision, version: String, epoch: Long,
+        broken: AtomicBoolean): InspectResult {
+        val empty = YtdlpErrorMapper.EmptyInspection(broken)
         val target = redditTarget(current, source)
         if (target is RedditTarget.Failed) return InspectResult.Failure(target.error)
         val read = target as? RedditTarget.Read
@@ -421,8 +424,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                         else YtdlpDiagnostics().failure(error).error
                     if (mapped in LINKED_PAGE_NO_VIDEO) InspectResult.Failure(DownloadError.NoVideo) else throw error
                 }
-            return if (result is InspectResult.Failure && result.error in LINKED_PAGE_NO_VIDEO) InspectResult.Failure(DownloadError.NoVideo)
-                else result
+            return if (result is InspectResult.Failure && result.error in LINKED_PAGE_NO_VIDEO)
+                InspectResult.Failure(DownloadError.NoVideo, result.extractorBroken) else result
         }
         return inspectRead(current, source, version, epoch, empty, read)
     }
@@ -442,14 +445,14 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             }
             throw error
         }
-        if (json.isBlank()) return InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.Failed))
+        if (json.isBlank()) return InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.Failed), empty.extractorBroken)
         val inspection = try {
             YtdlpMetadataMapper.map(json, source, version)
         } catch (error: UnsupportedMetadataException) {
             if (!error.emptyResult) throw error
-            return InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.Unsupported))
+            return InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.Unsupported), empty.extractorBroken)
         }
-        return if (inspection.formats.isEmpty()) InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.NoFormats))
+        return if (inspection.formats.isEmpty()) InspectResult.Failure(empty.error(source.link.rawUrl, DownloadError.NoFormats), empty.extractorBroken)
         else {
             val signed = signedUntil(json)
             infoCache?.remember(inspection, json, expiresAt = signed)
@@ -1053,7 +1056,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     private class EngineError(cause: Throwable) : Exception(cause.javaClass.name, cause)
 
     private suspend fun <T> operation(id: String, failure: (DownloadError, DownloadFailureCause) -> T, lockTimeoutMs: Long? = null,
-        executionFailure: (ExecutionFailureReason) -> Unit = {}, exclusive: Boolean = false, gated: Boolean = true, body: suspend (Operation) -> T): T = coroutineScope {
+        executionFailure: (ExecutionFailureReason) -> Unit = {}, exclusive: Boolean = false, gated: Boolean = true,
+        extractorSignal: AtomicBoolean? = null, body: suspend (Operation) -> T): T = coroutineScope {
         val current = Operation()
         synchronized(lifecycleLock) {
             if (operations.containsKey(id)) return@coroutineScope failure(DownloadError.ExecutionRestricted, DownloadFailureCause.OTHER)
@@ -1143,6 +1147,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             }
             executionFailure(diagnostic.reason.takeUnless { it == ExecutionFailureReason.UNKNOWN }
                 ?: if (mapped in setOf(DownloadError.ExecutionRestricted, DownloadError.Failed)) ExecutionFailureReason.ENGINE_RUN else ExecutionFailureReason.UNKNOWN)
+            // A timeout or cancel replaces the read; do not treat that as a broken extractor.
+            if (current.timedOut.get() || current.cancelled.get()) extractorSignal?.set(false)
+            else if (diagnostic.extractorBroken) extractorSignal?.set(true)
             failure(mapped, cause)
         } finally {
             synchronized(lifecycleLock) {
