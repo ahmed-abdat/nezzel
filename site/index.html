@@ -1013,6 +1013,9 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
       const dev = matchMedia("(pointer: coarse)").matches ? "phone" : "computer";
       const ev = ["view"], seen = new Set(ev);
       const add = n => { if (ev.length < 40 && !seen.has(n)) { seen.add(n); ev.push(n); } };
+      // Campaign tag from ?src= (or the older ?ref=): visits per tag, the same tag /download counts.
+      const q = new URLSearchParams(location.search), tag = q.get("src") || q.get("ref") || "";
+      if (/^[a-z0-9-]{1,24}$/.test(tag)) add("src:" + tag);
       const buck = s => s < 10 ? "0-10" : s < 30 ? "10-30" : s < 60 ? "30-60" : s < 180 ? "60-180" : "180+";
       let openAt = document.hidden ? null : 0, vis = 0, sent = false, tapped = false;
       const pause = () => { if (openAt != null) { vis += performance.now() - openAt; openAt = null; } };
@@ -1421,7 +1424,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   }));
 
   // ---------- download: /download?src=<place>-<lang> (nav, hero, footer, sticky). A valid ?src= on this page (an ad, a post) still wins ----------
-  const incoming = new URLSearchParams(location.search).get("src");
+  const params = new URLSearchParams(location.search), incoming = params.get("src") || params.get("ref");
   const campaign = /^[a-z0-9-]{1,24}$/.test(incoming || "") ? incoming : "";
   const dlLang = document.documentElement.lang;
   const tagLang = dlLang === "en" || dlLang === "fr" ? dlLang : "ar";
