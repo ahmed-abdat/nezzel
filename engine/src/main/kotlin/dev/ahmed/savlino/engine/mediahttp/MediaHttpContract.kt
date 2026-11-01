@@ -43,7 +43,7 @@ enum class MediaHttpFailure {
  * PINTEREST_CDN: `i.pinimg.com` originals and sized image paths whose signature matches the folders.
  */
 enum class MediaHostRule { ANY, FACEBOOK_CDN, X_MEDIA, INSTAGRAM_CDN, TELEGRAM_CDN, BLUESKY_CDN, TIKTOK_CDN, REDDIT_MEDIA,
-    PINTEREST_CDN }
+    PINTEREST_CDN, THREADS_CDN }
 
 class PublicMediaRequest(val url: String, val purpose: MediaHttpPurpose,
     val pageContext: MediaHttpTarget? = null, val hostRule: MediaHostRule = MediaHostRule.ANY) {

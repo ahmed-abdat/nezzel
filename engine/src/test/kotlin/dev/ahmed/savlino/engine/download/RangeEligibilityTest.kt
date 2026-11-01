@@ -8,7 +8,7 @@ class RangeEligibilityTest {
     private val row = Format("progressive", "mp4", true, true)
     private val json = """{"http_headers":{"User-Agent":"base","Cookie":"secret"},"formats":[{"format_id":"progressive","url":"https://example.com/video.mp4","protocol":"https","ext":"mp4","vcodec":"h264","acodec":"aac","http_headers":{"User-Agent":"row"}}]}"""
     @Test fun acceptsOnlyConfirmedProgressiveRowsWithoutSizeThreshold() {
-        for (site in listOf(Host.TIKTOK, Host.FACEBOOK, Host.INSTAGRAM, Host.X)) {
+        for (site in listOf(Host.TIKTOK, Host.FACEBOOK, Host.INSTAGRAM, Host.X, Host.THREADS)) {
             val request = assertNotNull(RangeEligibility.select(site, row, json) { true })
             assertEquals("row", request.headers["User-Agent"])
             assertEquals("secret", request.headers["Cookie"])

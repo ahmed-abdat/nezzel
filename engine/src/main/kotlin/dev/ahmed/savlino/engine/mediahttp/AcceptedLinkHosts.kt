@@ -2,6 +2,7 @@ package dev.ahmed.savlino.engine.mediahttp
 
 import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
+import dev.ahmed.savlino.engine.threads.ThreadsPostIdentity
 import dev.ahmed.savlino.engine.facebook.FacebookPostIdentity
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
@@ -19,6 +20,7 @@ object AcceptedLinkHosts {
         BlueskyPostIdentity.ENTRY_HOST, FacebookPostIdentity.SHORT_HOST, ShortLinks.PINTEREST_HOST,
     ) + XPostIdentity.hosts + InstagramPostIdentity.hosts + FacebookPostIdentity.inputHosts +
         RedditPostIdentity.inputHosts + TikTokPostIdentity.hosts + TelegramPostIdentity.hosts +
+        ThreadsPostIdentity.hosts +
         LinkedInPostIdentity.entryHosts + ShortLinks.hosts + ShortLinks.instagramShareHosts +
         LinkInput.FACEBOOK_WRAPPER_HOSTS + LinkInput.FACEBOOK_ALIAS_HOSTS
 

@@ -20,7 +20,8 @@ object HostDetector {
             "youtube-nocookie.com" to Host.YOUTUBE,
             "tiktok.com" to Host.TIKTOK, "instagram.com" to Host.INSTAGRAM,
             "facebook.com" to Host.FACEBOOK, "fb.watch" to Host.FACEBOOK,
-            "x.com" to Host.X, "twitter.com" to Host.X, "linkedin.com" to Host.LINKEDIN)
+            "x.com" to Host.X, "twitter.com" to Host.X, "linkedin.com" to Host.LINKEDIN,
+            "threads.com" to Host.THREADS, "threads.net" to Host.THREADS)
         return domains.firstOrNull { (domain, _) -> value == domain || value.endsWith(".$domain") }?.second ?: Host.OTHER
     }
 }
