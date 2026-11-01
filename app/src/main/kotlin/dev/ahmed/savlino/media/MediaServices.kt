@@ -31,6 +31,8 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
     suspend fun earlyPreview(link: dev.ahmed.savlino.domain.ValidatedLink) = oembed.load(link.rawUrl)
     private val shortLinks by lazy { ShortLinkResolver(http) }
     suspend fun resolveShortLink(link: dev.ahmed.savlino.domain.ValidatedLink) = shortLinks.resolve(link)
+    private val spotify by lazy { dev.ahmed.savlino.engine.spotify.SpotifyReader(http) }
+    suspend fun readSpotify(link: String) = spotify.load(link)
     private val references by lazy { MediaReferenceStore() }
     private val inspector by lazy {
         MediaSourceInspector(PublicImageInspector(http, AndroidImagePreviewDecoder(), references,

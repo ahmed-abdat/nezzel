@@ -743,4 +743,15 @@
         <item quantity="many">%1$s فيديو</item>
         <item quantity="other">%1$s فيديو</item>
     </plurals>
+    <string name="spotify_search_youtube_for">لا يمكن حفظ أغاني سبوتيفاي مباشرة. ابحث في يوتيوب عن «%1$s»</string>
+    <string name="spotify_choose_song">اختر أغنية للبحث عنها في يوتيوب.</string>
+    <plurals name="spotify_first_songs">
+        <item quantity="zero">لا أغاني</item>
+        <item quantity="one">نعرض أول أغنية</item>
+        <item quantity="two">نعرض أول أغنيتين</item>
+        <item quantity="few">نعرض أول %1$d أغانٍ</item>
+        <item quantity="many">نعرض أول %1$d أغنية</item>
+        <item quantity="other">نعرض أول %1$d أغنية</item>
+    </plurals>
+    <string name="spotify_failed">تعذّرت قراءة رابط سبوتيفاي</string>
 </resources>

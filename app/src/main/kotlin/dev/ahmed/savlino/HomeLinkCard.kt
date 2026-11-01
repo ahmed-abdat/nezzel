@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -31,6 +33,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.input.ImeAction
@@ -108,16 +111,50 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
         // Under the field, so the error does not sit inside the pill.
         if (links.invalid) Text(stringResource(R.string.invalid_link), Modifier.padding(horizontal = Space.l)
             .semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = MaterialTheme.typography.bodySmall)
+        if (links.spotifyFailed) Text(stringResource(R.string.spotify_failed), Modifier.padding(horizontal = Space.l)
+            .semantics { liveRegion = LiveRegionMode.Polite }, color = colors.error, style = MaterialTheme.typography.bodyMedium)
+        links.spotify?.takeIf { it.isList }?.let { list ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Text(NezzelFormat.firstStrong(list.title), style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.semantics { heading() })
+                    Text(stringResource(R.string.spotify_choose_song), style = MaterialTheme.typography.bodyMedium)
+                    // Only a list at the reader's cap can be cut short; a full album is shown as it is.
+                    if (list.tracks.size >= dev.ahmed.savlino.engine.spotify.SpotifyMetadata.MAX_TRACKS)
+                        Text(pluralStringResource(R.plurals.spotify_first_songs, list.tracks.size, list.tracks.size),
+                            style = MaterialTheme.typography.bodySmall)
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp)) {
+                        items(list.tracks) { track ->
+                            Surface(onClick = {
+                                focus.clearFocus(); keyboard?.hide(); links.openSpotifyTrack(track)
+                            }, color = colors.surfaceContainerLow, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                                Column(Modifier.padding(horizontal = Space.m, vertical = Space.s)) {
+                                    Text(NezzelFormat.firstStrong(track.title), style = MaterialTheme.typography.bodyLarge)
+                                    Text(NezzelFormat.firstStrong(track.artist), style = MaterialTheme.typography.bodyMedium,
+                                        color = colors.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // Fade only: the action keeps its full 56dp from the first frame, so it is never a sliver to tap.
-        AnimatedVisibility(links.text.isNotEmpty(),
+        AnimatedVisibility(links.text.isNotEmpty() && links.spotify?.isList != true,
             enter = fadeIn(easeOut(reduced, Motion.FADE_IN)), exit = fadeOut(easeOut(reduced, Motion.FADE_OUT))) {
             if (words != null) Button(onClick = search, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Icon(Icons.Default.Search, null, Modifier.size(20.dp))
                 Spacer(Modifier.width(Space.s))
                 // The words are their own first-strong run, so Arabic words in the English label (or the reverse) keep their order.
-                Text(stringResource(R.string.search_youtube_for, NezzelFormat.firstStrong(words)), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            } else Button(onClick = check, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.check_link))
+                Text(stringResource(if (links.spotify != null) R.string.spotify_search_youtube_for else R.string.search_youtube_for,
+                    NezzelFormat.firstStrong(words)), maxLines = if (links.spotify != null) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
+            } else Button(onClick = check, enabled = !links.spotifyLoading, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                if (links.spotifyLoading) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(Space.s))
+                    Text(stringResource(R.string.checking_link))
+                }
+                else Text(stringResource(R.string.check_link))
             }
         }
     }

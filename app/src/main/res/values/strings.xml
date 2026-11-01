@@ -659,4 +659,11 @@
         <item quantity="one">%1$s video</item>
         <item quantity="other">%1$s videos</item>
     </plurals>
+    <string name="spotify_search_youtube_for">Spotify songs can\'t be saved directly. Search YouTube for “%1$s”</string>
+    <string name="spotify_choose_song">Pick a song to search for on YouTube.</string>
+    <plurals name="spotify_first_songs">
+        <item quantity="one">Showing the first %1$d song</item>
+        <item quantity="other">Showing the first %1$d songs</item>
+    </plurals>
+    <string name="spotify_failed">Couldn\'t read this Spotify link</string>
 </resources>

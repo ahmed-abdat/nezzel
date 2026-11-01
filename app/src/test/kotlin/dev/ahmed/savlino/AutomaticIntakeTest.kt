@@ -34,6 +34,31 @@ class AutomaticIntakeTest {
     private fun share(value: String = url) = ShareInput.from(Intent(Intent.ACTION_SEND)
         .setType("text/plain").putExtra(Intent.EXTRA_TEXT, value))
 
+    @Test fun spotifyIntakeWaitsForConsentAndOnlyTheChosenYoutubeResultIsInspected() {
+        val spotify = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL"
+        val engine = Engine()
+        var reads = 0
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine, readSpotify = {
+            reads++
+            dev.ahmed.savlino.engine.spotify.SpotifyMetadata("Song", null,
+                listOf(dev.ahmed.savlino.engine.spotify.SpotifyTrack("Song", "Artist", 123000)), isList = false)
+        }).apply { automaticOptions = false }
+        vm.paste(spotify); idle()
+        assertEquals(0, reads); assertTrue(engine.inspected.isEmpty())
+        vm.checkLink(); idle()
+        assertEquals("Artist Song", vm.searchWords)
+        assertEquals(1, reads); assertTrue(engine.inspected.isEmpty()); assertFalse(vm.downloadEnabled)
+        assertFalse(vm.search.visible)
+        vm.openSearch(); idle()
+        assertTrue(vm.search.visible); assertEquals("Artist Song", vm.search.query)
+        assertTrue(engine.inspected.isEmpty())
+        val chosen = SearchResult("abcdefghijk", "YouTube title", "Channel", 123)
+        vm.openSearchResult(chosen); idle()
+        assertEquals(listOf(chosen.url), engine.inspected.map { it.link.rawUrl })
+        assertNull(vm.spotify); assertNull(vm.searchWords)
+        vm.dismissOptions()
+    }
+
     @Test fun pendingDurableWriteBlocksNetworkAndRevalidatesEveryIntakeGuard() {
         val changes: List<(LinkViewModel) -> Unit> = listOf(
             { it.edit("https://youtu.be/edited") }, { it.navigate("Settings") },

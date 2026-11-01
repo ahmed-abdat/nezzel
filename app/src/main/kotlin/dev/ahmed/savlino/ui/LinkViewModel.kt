@@ -25,6 +25,9 @@ import dev.ahmed.savlino.engine.mediahttp.EarlyPreview
 import dev.ahmed.savlino.engine.mediahttp.ShortLinkOutcome
 import dev.ahmed.savlino.engine.mediahttp.ShortLinks
 import dev.ahmed.savlino.engine.mediahttp.YouTubeOEmbed
+import dev.ahmed.savlino.engine.spotify.SpotifyLink
+import dev.ahmed.savlino.engine.spotify.SpotifyMetadata
+import dev.ahmed.savlino.engine.spotify.SpotifyTrack
 import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
 import dev.ahmed.savlino.engine.MediaSourceRoute
 import dev.ahmed.savlino.engine.UnavailableEngine
@@ -142,6 +145,7 @@ class LinkViewModel(
     /** Daily usage counts and automatic failure reports; both no-ops while Help improve Nezzel is off. */
     private val usage: UsageEvents = UsageEvents.None,
     private val previews: LinkPreviews? = null,
+    private val readSpotify: suspend (String) -> SpotifyMetadata? = { null },
 ) : ViewModel() {
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
@@ -460,8 +464,16 @@ class LinkViewModel(
         preferredPreset = ::preferredBatchPreset, rememberPreset = ::rememberBatchPreset)
     val search = SearchViewModel(engine, viewModelScope)
     /** Home's words, when they aren't a link: offered as a YouTube search instead of View options. */
-    val searchWords get() = SearchViewModel.wordsOf(text)
+    var spotify by mutableStateOf<SpotifyMetadata?>(null); private set
+    var spotifyLoading by mutableStateOf(false); private set
+    var spotifyFailed by mutableStateOf(false); private set
+    private var spotifyJob: Job? = null
+    private var spotifyRequest: Any? = null
+    val searchWords get() = spotify?.searchWords ?: SearchViewModel.wordsOf(text)
     fun openSearch() { searchWords?.let(search::open) }
+    fun openSpotifyTrack(track: SpotifyTrack) {
+        if (spotify?.tracks?.any { it === track } == true) search.open(track.searchWords)
+    }
     /** A result is the same path as a pasted watch link: the options sheet, no download. */
     fun openSearchResult(result: dev.ahmed.savlino.engine.SearchResult) {
         dismissShare()
@@ -474,6 +486,7 @@ class LinkViewModel(
     fun closeSearch() {
         val words = search.query
         search.close()
+        if (spotify != null) return
         dismissOptions()
         edit(words)
     }
@@ -487,6 +500,8 @@ class LinkViewModel(
     /** True when [text] opened the multi-link sheet; the single-link intake below is then skipped entirely. */
     private fun openMulti(text: String?): Boolean {
         val found = MultiLinks.from(text) ?: return false
+        // Spotify has no batch path: mixed input keeps the existing one-link-at-a-time intake.
+        if (found.links.any { SpotifyLink.owns(it.rawUrl) }) return false
         if (optionsState != OptionsState.Hidden) dismissOptions()
         dismissShare()
         skipRemainingLinks()
@@ -743,6 +758,10 @@ class LinkViewModel(
         val source = currentSource()
         invalid = source == null; saved["invalid"] = invalid
         if (source == null) return
+        if (SpotifyLink.owns(source.link.rawUrl)) {
+            startSpotify(source, source)
+            return
+        }
         val kind = YouTubeLinkKind.classify(source.link)
         if (kind == YouTubeLinkKind.Playlist || kind == YouTubeLinkKind.ChannelVideos) {
             optionsState = OptionsState.Checking(source, newOperationId())
@@ -804,6 +823,10 @@ class LinkViewModel(
     }
     /** [input] is what gets read; [origin] is the intake link every staleness check binds to. */
     private fun route(input: LinkRevision, origin: LinkRevision) {
+        if (SpotifyLink.owns(input.link.rawUrl)) {
+            startSpotify(input, origin)
+            return
+        }
         val readerOrigin = origin.takeUnless { it.matches(input) }
         if (ImageRoute.isUnsupported(input.link)) {
             optionsState = if (FacebookPostIdentity.isStoryLink(input.link.rawUrl))
@@ -821,6 +844,28 @@ class LinkViewModel(
                 startImageInspection(images, input, route, origin)
         }
     }
+    private fun startSpotify(input: LinkRevision, origin: LinkRevision) {
+        optionsState = OptionsState.Hidden
+        spotifyLoading = true
+        val request = Any()
+        spotifyRequest = request
+        spotifyJob = viewModelScope.launch {
+            val result = try {
+                if (SpotifyLink.parse(input.link.rawUrl) == null) null else readSpotify(input.link.rawUrl)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+            if (spotifyRequest !== request || currentSource()?.matches(origin) != true) return@launch
+            spotifyLoading = false
+            spotify = result
+            spotifyFailed = result == null
+            usage.count(when {
+                result == null -> UsageKeys.SPOTIFY_FAILED
+                SpotifyLink.parse(input.link.rawUrl)?.type == "track" -> UsageKeys.SPOTIFY_TRACK
+                else -> UsageKeys.SPOTIFY_LIST
+            })
+        }
+    }
+
     private fun startImageInspection(images: ImageInspect, source: LinkRevision, route: MediaSourceRoute,
         origin: LinkRevision = source, legacyFallback: Inspection? = null,
         selectedPositions: Set<Int>? = null) {
@@ -1247,6 +1292,9 @@ class LinkViewModel(
         if (next.normalizedUrl != failed) paste(value)
     }
     private fun invalidateOptions() {
+        spotifyRequest = null
+        spotifyJob?.cancel(); spotifyJob = null
+        spotify = null; spotifyLoading = false; spotifyFailed = false
         previewRequest = null
         cachedPreviewJob?.cancel(); cachedPreviewJob = null
         previewSession?.cancel(); previewSession = null
