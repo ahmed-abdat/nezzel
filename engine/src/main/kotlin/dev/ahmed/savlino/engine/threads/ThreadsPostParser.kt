@@ -136,7 +136,7 @@ class ThreadsPostParser {
         val height = if (chosen.width != null && chosen.height != null) chosen.height
             else if (chosen.width == null && chosen.height == null) originalHeight else null
         return VideoPick(chosen.url, width, height, chosen.bytes,
-            node.path("has_audio").takeIf { it.isBoolean }?.booleanValue())
+            node.path("has_audio").takeIf { it.isBoolean }?.booleanValue(), imageNode(node)?.first)
     }
 
     private fun info(code: String, pick: VideoPick, title: String?, author: String?): String {
@@ -144,6 +144,8 @@ class ThreadsPostParser {
         root.put("id", code)
         title?.let { root.put("title", it) }
         author?.let { root.put("uploader", it) }
+        // The post's own poster frame, so the sheet shows a picture instead of an empty video tile
+        pick.thumbnail?.let { root.put("thumbnail", it) }
         root.put("extractor_key", "Threads")
         val format = root.putArray("formats").addObject()
         format.put("format_id", "progressive")
@@ -223,7 +225,8 @@ class ThreadsPostParser {
     }
 
     private class Row(val area: Long, val url: String, val width: Int?, val height: Int?, val bytes: Long?)
-    private class VideoPick(val url: String, val width: Int?, val height: Int?, val bytes: Long?, val hasAudio: Boolean?)
+    private class VideoPick(val url: String, val width: Int?, val height: Int?, val bytes: Long?, val hasAudio: Boolean?,
+        val thumbnail: String?)
 
     private companion object {
         val json: ObjectMapper = ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)

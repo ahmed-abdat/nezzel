@@ -39,6 +39,7 @@ class ThreadsPostParserTest {
         assertFalse(format.has("filesize"))
         assertFalse(video.infoJson.contains("MPD"))
         assertFalse(video.infoJson.contains("synthetic_small"))
+        assertTrue(json.readTree(video.infoJson).path("thumbnail").asText().endsWith("synthetic_poster.jpg"))
     }
 
     @Test fun imageCarouselAndMixedCarousel() {
