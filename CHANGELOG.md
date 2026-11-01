@@ -4,6 +4,21 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.7] - 2026-11-01
+
+### Added
+
+- Public Threads posts open in Nezzel: photos, videos and albums (threads.com and threads.net links).
+
+### Changed
+
+- The update card on Home is one card you tap to update, without release notes.
+- The first onboarding page shows the same turning site logos as Home.
+
+### Fixed
+
+- LinkedIn images marked as AI-made (Content Credentials) download again.
+
 ## [0.5.6] - 2026-10-31
 
 ### Added

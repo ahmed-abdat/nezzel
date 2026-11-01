@@ -1,0 +1,4 @@
+0.5.7
+• Threads posts now download: photos, videos and albums
+• A simpler update card on Home: just tap it to update
+• AI-made LinkedIn images download again
