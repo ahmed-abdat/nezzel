@@ -97,9 +97,9 @@ class PreviewStreamTest(private val case: Case) {
                 url = "https://media.example/direct.mp4",
             ),
             Case(
-                "preserves request headers except cookies",
+                "keeps only safe request headers",
                 formats(
-                    """{"url":"https://media.example/headers.mp4","ext":"mp4","height":360,"vcodec":"avc1","acodec":"aac","http_headers":{"User-Agent":"Preview fixture","Referer":"https://media.example/watch","Cookie":"fixture=value"}}""",
+                    """{"url":"https://media.example/headers.mp4","ext":"mp4","height":360,"vcodec":"avc1","acodec":"aac","http_headers":{"User-Agent":"Preview fixture","Referer":"https://media.example/watch","Cookie":"fixture=value","Authorization":"Bearer fixture"}}""",
                 ),
                 url = "https://media.example/headers.mp4",
                 headers = mapOf("User-Agent" to "Preview fixture", "Referer" to "https://media.example/watch"),
@@ -107,6 +107,25 @@ class PreviewStreamTest(private val case: Case) {
             Case(
                 "rejects playlists even with a playable root file",
                 """{"_type":"playlist","url":"https://media.example/playlist.mp4","ext":"mp4","vcodec":"avc1","acodec":"aac"}""",
+            ),
+            Case(
+                "plays the smaller unlabelled file when the site gives no codecs or height",
+                formats(
+                    """{"format_id":"hd","url":"https://media.example/hd.mp4","ext":"mp4"}""",
+                    """{"format_id":"sd","url":"https://media.example/sd.mp4","ext":"mp4"}""",
+                    """{"format_id":"thumb","url":"https://media.example/poster.jpg","ext":"jpg"}""",
+                ),
+                url = "https://media.example/sd.mp4",
+            ),
+            Case(
+                "prefers a sized video and audio pair over an unlabelled file",
+                formats(
+                    """{"format_id":"sd","url":"https://media.example/sd.mp4","ext":"mp4"}""",
+                    """{"url":"https://media.example/360.mp4","ext":"mp4","height":360,"vcodec":"avc1","acodec":"none"}""",
+                    """{"url":"https://media.example/48.m4a","ext":"m4a","abr":48,"vcodec":"none","acodec":"aac"}""",
+                ),
+                url = "https://media.example/360.mp4",
+                audioUrl = "https://media.example/48.m4a",
             ),
             Case("rejects malformed JSON", "{\"formats\":["),
             Case(

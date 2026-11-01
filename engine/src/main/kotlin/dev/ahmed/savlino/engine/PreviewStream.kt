@@ -8,18 +8,24 @@ import java.net.URI
  * A small stream to play before saving: one file with sound, or a video track plus a separate audio track.
  * Only after the user taps Play; never saved, never logged.
  */
-class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<String, String>, val hasVideo: Boolean) {
+class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<String, String>, val hasVideo: Boolean,
+    val audioHeaders: Map<String, String> = emptyMap()) {
     override fun toString() = "PreviewStream(redacted)"
 
-    /** Every stream host resolves to public addresses only (no LAN, loopback or link-local). Blocking: call on IO. */
-    fun publicOnly(): Boolean = listOfNotNull(url, audioUrl).all { raw ->
-        try {
-            val host = URI(raw).host ?: return@all false
-            java.net.InetAddress.getAllByName(host).let { it.isNotEmpty() && it.all(dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy::allows) }
-        } catch (_: Exception) { false }
-    }
-
     companion object {
+        /**
+         * The player's resolver: public addresses only (no LAN, loopback or link-local). OkHttp connects to exactly these
+         * addresses, on the first request and on every redirect, so a later DNS answer cannot point elsewhere.
+         */
+        val publicDns = okhttp3.Dns { host ->
+            java.net.InetAddress.getAllByName(host).toList().also { found ->
+                if (found.isEmpty() || !found.all(dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy::allows))
+                    throw java.net.UnknownHostException("not public")
+            }
+        }
+        /** Request headers a preview may replay; site auth/session headers stay with yt-dlp. */
+        private val SAFE_HEADERS = setOf("user-agent", "referer", "origin", "accept", "accept-language")
+
         private const val TARGET_HEIGHT = 360
         private const val MAX_HEIGHT = 480
         private val mapper = ObjectMapper()
@@ -30,21 +36,24 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
         private fun pick(root: JsonNode): PreviewStream? {
             if (root.path("_type").asText("video") != "video") return null
             val formats = root.path("formats").filter(::playable)
-            val muxed = formats.filter { video(it) && audio(it) }
-            closest(muxed)?.let { return stream(it, null) }
+            val muxed = formats.filter { (video(it) && audio(it)) || unlabelled(it) }
+            closest(muxed.filter { it.path("height").asInt(0) in 1..MAX_HEIGHT })?.let { return stream(it, null) }
             val videos = formats.filter { video(it) && !audio(it) && it.path("ext").asText() == "mp4" }
             val audioOnly = formats.none(::video)
             val audios = formats.filter { audio(it) && !video(it) && (audioOnly || it.path("ext").asText() in setOf("m4a", "mp4")) }
             val audio = audios.minByOrNull { it.path("abr").asDouble(Double.MAX_VALUE).let { abr -> if (abr < 48) 1e6 + abr else abr } }
             val video = closest(videos)
             if (video != null && audio != null) return stream(video, audio)
+            // Files with no height (Facebook's sd/hd pair): the smallest one, "sd" before "hd".
+            muxed.filter { !it.hasNonNull("height") }.minWithOrNull(compareBy<JsonNode> { !it.path("format_id").asText().startsWith("sd") }
+                .thenBy { it.path("filesize").asLong(it.path("tbr").asLong(Long.MAX_VALUE)) })?.let { return stream(it, null) }
             if (video == null && audioOnly && audio != null) return stream(audio, null, hasVideo = false)
             // A single direct file (TikTok-style roots carry the chosen file itself).
             if (formats.isEmpty() && playable(root) && root.path("vcodec").asText() != "none") return stream(root, null)
             return null
         }
 
-        /** Nearest to 360p within 480p, H.264 first; heightless muxed files count as one candidate. */
+        /** Nearest to 360p within 480p, H.264 first; heightless files only when nothing has a height. */
         private fun closest(list: List<JsonNode>): JsonNode? {
             val sized = list.filter { it.path("height").asInt(0) in 1..MAX_HEIGHT }
             val pool = sized.ifEmpty { list.filter { !it.hasNonNull("height") } }
@@ -54,6 +63,9 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
 
         private fun video(node: JsonNode) = node.path("vcodec").asText("").let { it.isNotEmpty() && it != "none" } ||
             (!node.has("vcodec") && node.path("height").asInt(0) > 0)
+        /** A plain video file the site gave without codecs or height; such files carry sound. */
+        private fun unlabelled(node: JsonNode) = !node.has("vcodec") && !node.has("acodec") && !node.hasNonNull("height") &&
+            node.path("ext").asText() in setOf("mp4", "webm", "mov")
         private fun audio(node: JsonNode) = node.path("acodec").asText("").let { it.isNotEmpty() && it != "none" }
 
         private fun playable(node: JsonNode): Boolean {
@@ -64,12 +76,12 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
         }
 
         private fun stream(main: JsonNode, audio: JsonNode?, hasVideo: Boolean = true) =
-            PreviewStream(main.path("url").asText(), audio?.path("url")?.asText(), headers(main), hasVideo)
+            PreviewStream(main.path("url").asText(), audio?.path("url")?.asText(), headers(main), hasVideo, audio?.let(::headers).orEmpty())
 
         private fun headers(node: JsonNode): Map<String, String> = buildMap {
             node.path("http_headers").fields().forEach { (name, value) ->
-                // Cookies stay with yt-dlp; a preview never replays a session.
-                if (value.isTextual && !name.equals("Cookie", ignoreCase = true)) put(name, value.asText())
+                // Cookies and auth stay with yt-dlp; a preview never replays a session.
+                if (value.isTextual && name.lowercase() in SAFE_HEADERS) put(name, value.asText())
             }
         }
     }

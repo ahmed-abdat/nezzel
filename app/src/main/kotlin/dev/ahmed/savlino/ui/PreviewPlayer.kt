@@ -41,7 +41,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -71,12 +70,10 @@ internal fun DurationChip(seconds: Long, modifier: Modifier = Modifier) {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun previewPlayer(context: Context, stream: PreviewStream): ExoPlayer {
-    val http = DefaultHttpDataSource.Factory().setDefaultRequestProperties(stream.headers)
-        .apply { stream.headers.entries.firstOrNull { it.key.equals("User-Agent", true) }?.let { setUserAgent(it.value) } }
-        .setConnectTimeoutMs(10_000).setReadTimeoutMs(10_000)
-    val factory = ProgressiveMediaSource.Factory(http)
-    val main = factory.createMediaSource(MediaItem.fromUri(stream.url))
-    val source = stream.audioUrl?.let { MergingMediaSource(main, factory.createMediaSource(MediaItem.fromUri(it))) } ?: main
+    val main = ProgressiveMediaSource.Factory(PreviewDataSource.Factory(stream.headers)).createMediaSource(MediaItem.fromUri(stream.url))
+    val source = stream.audioUrl?.let {
+        MergingMediaSource(main, ProgressiveMediaSource.Factory(PreviewDataSource.Factory(stream.audioHeaders)).createMediaSource(MediaItem.fromUri(it)))
+    } ?: main
     return ExoPlayer.Builder(context)
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         .setHandleAudioBecomingNoisy(true).build().apply {
@@ -85,32 +82,15 @@ private fun previewPlayer(context: Context, stream: PreviewStream): ExoPlayer {
 }
 
 /**
- * Plays [stream] in place, full width, before anything is saved. Poster until the first picture, a spinner while
- * buffering, tap for play/pause and the seek bar; [onClose] folds it back into the header row.
+ * Plays [stream] inside the poster's own box (the caller sizes it), so nothing around it moves. Poster until the first
+ * picture, a spinner while buffering, tap for play/pause and the seek bar; [onClose] goes back to the poster.
+ * Local-network hosts never connect: [PreviewDataSource] resolves through PreviewStream.publicDns.
  */
-@Composable
-internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -> Unit, onResult: (failed: Boolean) -> Unit) {
-    // Hosts are checked first: a page's stream address never reaches a device on the local network.
-    val allowed by produceState<Boolean?>(null, stream) { value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { stream.publicOnly() } }
-    when (allowed) {
-        true -> PreviewPlayerBody(stream, poster, onClose, onResult)
-        else -> {
-            LaunchedEffect(allowed) { if (allowed == false) onResult(true) }
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(MaterialTheme.shapes.medium).background(Color.Black),
-                contentAlignment = Alignment.Center) {
-                poster?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-                if (allowed == null) CircularProgressIndicator(Modifier.size(44.dp), color = Color.White, strokeWidth = 3.dp)
-                else Text(stringResource(R.string.preview_failed), Modifier.background(Color.Black.copy(alpha = .7f)).fillMaxSize().padding(16.dp),
-                    color = Color.White, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-}
-
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PreviewPlayerBody(stream: PreviewStream, poster: Bitmap?, onClose: () -> Unit, onResult: (failed: Boolean) -> Unit) {
+internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -> Unit, onResult: (failed: Boolean) -> Unit,
+    modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val player = remember(stream) { previewPlayer(context, stream) }
     val report by rememberUpdatedState(onResult)
@@ -155,11 +135,12 @@ private fun PreviewPlayerBody(stream: PreviewStream, poster: Bitmap?, onClose: (
     LaunchedEffect(controls, playing, dragging) { if (controls && playing && dragging == null) { delay(2_500); controls = false } }
 
     val description = stringResource(R.string.preview_player)
-    Box(Modifier.fillMaxWidth().aspectRatio(ratio.coerceAtLeast(1f)).clip(MaterialTheme.shapes.medium).background(Color.Black)
+    Box(modifier.clip(MaterialTheme.shapes.medium).background(Color.Black)
         .semantics { contentDescription = description }.testTag("preview_player")
         .clickable(remember { MutableInteractionSource() }, indication = null) { controls = !controls },
         contentAlignment = Alignment.Center) {
-        if (stream.hasVideo) PlayerSurface(player, Modifier.fillMaxSize().then(if (playing) Modifier.keepScreenOn() else Modifier),
+        // The picture keeps its own shape inside the fixed box: tall videos get side bars, like YouTube's player.
+        if (stream.hasVideo) PlayerSurface(player, Modifier.aspectRatio(ratio).then(if (playing) Modifier.keepScreenOn() else Modifier),
             surfaceType = SURFACE_TYPE_TEXTURE_VIEW)
         if (poster != null && (!firstFrame || !stream.hasVideo)) Image(poster.asImageBitmap(), null, Modifier.fillMaxSize(),
             contentScale = if (stream.hasVideo) ContentScale.Crop else ContentScale.Fit)
@@ -196,7 +177,7 @@ private fun PreviewPlayerBody(stream: PreviewStream, poster: Bitmap?, onClose: (
                     Slider(value = dragging ?: if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
                         onValueChange = { dragging = it }, enabled = duration > 0,
                         onValueChangeFinished = { dragging?.let { player.seekTo((it * duration).toLong()) }; dragging = null },
-                        modifier = Modifier.fillMaxWidth().height(32.dp).testTag("preview_seek"),
+                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("preview_seek"),
                         // A thin line with a small round thumb, like the big video apps; no Material 3 gap or stop dot.
                         thumb = { Box(Modifier.size(14.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) },
                         track = { state ->
