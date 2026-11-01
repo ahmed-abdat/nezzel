@@ -674,4 +674,13 @@
         <item quantity="many">%1$s vidéos</item>
         <item quantity="other">%1$s vidéos</item>
     </plurals>
+    <string name="spotify_search_youtube_for">La chercher sur YouTube : %1$s</string>
+    <string name="spotify_choose_song">Choisissez un titre à chercher sur YouTube.</string>
+    <plurals name="spotify_first_songs">
+        <item quantity="one">Voici le premier titre (%1$d)</item>
+        <item quantity="many">Voici les %1$d premiers titres</item>
+        <item quantity="other">Voici les %1$d premiers titres</item>
+    </plurals>
+    <string name="spotify_search_note">Depuis Spotify. Choisissez le bon titre.</string>
+    <string name="spotify_failed">Impossible de lire ce lien Spotify</string>
 </resources>

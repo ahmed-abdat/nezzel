@@ -26,6 +26,7 @@ internal fun linkViewModel(activity: ComponentActivity, preferences: AppPreferen
                 rememberHandledClipboard = clipboard::store, initializeClipboard = clipboard::load,
                 images = application.imageInspect, imageSaver = application.imageSaver, earlyPreview = media::earlyPreview,
                 resolveShortLink = media::resolveShortLink,
+                readSpotify = media::readSpotify,
                 usage = application.usage,
                 previews = dev.ahmed.savlino.preview.LinkPreviews(cache = {
                     dev.ahmed.savlino.preview.PreviewCache.shared(application)
