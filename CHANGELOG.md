@@ -18,6 +18,7 @@ Version entries describe existing builds, not public APK availability.
 ### Fixed
 
 - LinkedIn images marked as AI-made (Content Credentials) download again.
+- A TikTok video that is removed or blocked shows "not available" instead of "couldn't read this link".
 
 ## [0.5.6] - 2026-10-31
 

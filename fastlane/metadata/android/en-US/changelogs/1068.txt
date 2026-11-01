@@ -2,3 +2,4 @@
 • Threads posts now download: photos, videos and albums
 • A simpler update card on Home: just tap it to update
 • AI-made LinkedIn images download again
+• Clearer message when a TikTok video is removed or blocked
