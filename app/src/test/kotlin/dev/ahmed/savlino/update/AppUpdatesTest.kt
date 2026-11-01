@@ -790,6 +790,23 @@ class AppUpdatesTest {
         assertFalse(AppUpdates(production, scope).consumeUpdated())
     }
 
+    @Test fun updateStepsAreCountedOncePerOfferWithTheFailureReason() = runBlocking {
+        var now = 100_000_000L
+        val counted = mutableListOf<String>()
+        val updates = AppUpdates(production, scope, { now }) { object : UpdateHttp("test") {
+            override suspend fun manifest(): ByteArray = manifestBytes()
+        } }.apply { count = { counted += it } }
+        updates.check(manual = true)
+        now += 86_400_000L
+        updates.check(manual = true)
+        updates.fail(UpdateFailure.NETWORK)
+        updates.fail(UpdateFailure.INSTALL)
+        val release = updates.state.value.release!!
+        updates.recordInstall(1, release, silent = true)
+        updates.recordInstall(2, release)
+        assertEquals(listOf("update.offered", "update.failed.network", "update.failed.install", "update.install.silent", "update.install.manual"), counted)
+        assertTrue(counted.all { it in dev.ahmed.savlino.usage.UsageKeys.fixed })
+    }
     @Test fun failedInstallClearsPendingWhatsNewAndSnackbar() {
         pendingInstall(listOf("Fixed"))
         val updates = AppUpdates(production, scope)

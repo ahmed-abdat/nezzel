@@ -290,6 +290,7 @@ class UsageTest {
         assertEquals("options.npe.t0-2", UsageKeys.options(UsageKeys.Path.NPE, 1_999))
         assertEquals("speed.s1m-5m", UsageKeys.speed(2_000_000.0))
         assertEquals("age.day0", UsageKeys.age(0)); assertEquals("age.d31up", UsageKeys.age(31))
+        assertEquals("engine.fresh.bundled", UsageKeys.engineFresh(null)); assertEquals("engine.fresh.d8-30", UsageKeys.engineFresh(8))
         // Time until options per site: the domain only, never a path, query or whole link.
         assertEquals("opt:t2-5:example.com", UsageKeys.optionsSite("https://www.example.com/watch/v1?id=secret&t=9", 3_000))
         assertNull(UsageKeys.optionsSite(null, 3_000))
@@ -318,6 +319,7 @@ class UsageTest {
         val keys = PhoneSnapshot(app, app.preferences).keys()
         assertTrue(keys.toString(), keys.all(UsageKeys::allowed))
         assertTrue(keys.any { it.startsWith(UsageKeys.BRAND) } && keys.any { it.startsWith("age.") })
+        assertTrue(keys.toString(), "engine.fresh.bundled" in keys)
     }
 
     @Test fun switchingOffInSettingsClearsCountersAndTheCrashFile() {

@@ -23,6 +23,9 @@ internal class PhoneSnapshot(private val context: Context, private val preferenc
             installed?.let { UsageKeys.age((now() - it).coerceAtLeast(0) / 86_400_000L) },
             UsageKeys.brand(Build.MANUFACTURER),
             UsageKeys.screen(context.resources.configuration.smallestScreenWidthDp),
+            context.getSharedPreferences("engine-maintenance", Context.MODE_PRIVATE)
+                .let { if (it.contains("success")) it.getLong("success", 0) else null }
+                .let { UsageKeys.engineFresh(it?.let { at -> (now() - at).coerceAtLeast(0) / 86_400_000L }) },
         )
     }
 }

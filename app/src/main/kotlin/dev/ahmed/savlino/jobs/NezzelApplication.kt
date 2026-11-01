@@ -18,7 +18,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
     private val thermalStatus = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE)
     private val thermalListener = android.os.PowerManager.OnThermalStatusChangedListener { thermalStatus.value = it }
     open val downloads by lazy { DownloadCoordinator(this, parallelDownloads = preferences.parallelDownloadsFlow,
-        thermalStatus = thermalStatus, usage = usage) }
+        thermalStatus = thermalStatus, usage = usage).also { it.maintenance.onResult = { key -> usage.count(key) } } }
     // A failed background step (job store, widget, update schedule) must not close the app; the next launch retries it.
     private val contained = CoroutineExceptionHandler { _, _ -> }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + contained)
@@ -32,7 +32,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
     open val usage: dev.ahmed.savlino.usage.UsageEvents by lazy { usageStore }
     internal val usageStore by lazy {
         val crashes = dev.ahmed.savlino.diagnostics.CrashReports.store(this)
-        dev.ahmed.savlino.usage.Usage(getSharedPreferences("usage", MODE_PRIVATE), { preferences.helpImprove },
+        dev.ahmed.savlino.usage.Usage(getSharedPreferences("usage", MODE_PRIVATE), { preferences.helpImprove && dev.ahmed.savlino.update.UpdatePolicy.enabled(packageName) },
             { path, json -> reports.post(path, json) }, scope, dev.ahmed.savlino.BuildConfig.VERSION_NAME,
             dev.ahmed.savlino.BuildConfig.VERSION_CODE, android.os.Build.VERSION.SDK_INT,
             dev.ahmed.savlino.usage.PhoneSnapshot(this, preferences), object : dev.ahmed.savlino.usage.Usage.Crashes {

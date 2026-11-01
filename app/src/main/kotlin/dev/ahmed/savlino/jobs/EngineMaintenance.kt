@@ -27,6 +27,8 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
     /** Downloads that would lose more than their partial bytes: everything except paused rows. */
     private val hasRunningDownloads: () -> Boolean = hasDownloads) {
     private val prefs = context.getSharedPreferences("engine-maintenance", Context.MODE_PRIVATE)
+    /** Usage count per finished yt-dlp update attempt (not pre-empted ones): ok, or failed with the bundled copy kept. */
+    var onResult: (String) -> Unit = {}
     private val gate = Mutex()
     private val changes = MutableStateFlow(0L)
     @Volatile private var pendingLink = false
@@ -189,6 +191,7 @@ class EngineMaintenance(context: Context, private val engine: EngineAdapter,
                 succeeded = result is EngineUpdateResult.Success
                 if (succeeded) succeeded = prefs.edit().putLong("success", now()).remove(BUILT_IN).commit()
                 else if ((result as? EngineUpdateResult.Failure)?.usingBuiltIn == true) prefs.edit().putBoolean(BUILT_IN, true).commit()
+                onResult(if (succeeded) "engine.update.ok" else "engine.update.failed")
             } finally {
                 // A failed updater can still replace the binary. Refresh even on cancellation.
                 if (!preemptedNow) withContext(NonCancellable) {

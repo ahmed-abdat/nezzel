@@ -25,6 +25,13 @@ object UsageKeys {
     const val OLD_DOWNLOADS_FOUND = "old_downloads.found"
     const val WIDGET_ADDED = "widget.added"
     const val UPDATE_INSTALLED = "update.installed"
+    /** Update steps, so a stuck update shows where it stops: offered once per version, then tap, verified file,
+     *  install session opened (silent = no tap), and each failure reason. */
+    const val UPDATE_OFFERED = "update.offered"
+    const val UPDATE_TAPPED = "update.tapped"
+    const val UPDATE_READY = "update.ready"
+    const val UPDATE_INSTALL_MANUAL = "update.install.manual"
+    const val UPDATE_INSTALL_SILENT = "update.install.silent"
     /** Sites past the local cap of distinct sites between sends. */
     const val SITE_OTHER = "site.other"
     const val FUNNEL_LINK = "funnel.link"
@@ -65,19 +72,23 @@ object UsageKeys {
     /** Every fixed key; [SITE], [OPTIONS_SITE], [SDK] and [BRAND] are the only patterned ones. */
     val fixed: Set<String> = buildSet {
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
-            STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, SITE_OTHER,
+            STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, UPDATE_OFFERED, UPDATE_TAPPED, UPDATE_READY,
+            UPDATE_INSTALL_MANUAL, UPDATE_INSTALL_SILENT, SITE_OTHER,
             FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, FUNNEL_BATCH, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO,
             PLAYER_OPEN_VIDEO, PLAYER_OPEN_AUDIO, PLAYER_SEEK, PLAYER_SPEED, PLAYER_FULLSCREEN, PLAYER_BACKGROUND, PLAYER_FAILED,
             STATUSES_READY, STATUSES_SAVE_FAILED, SHARE_WHATSAPP))
         for (event in events) for ((kind, names) in tiers) for (tier in names) add("dl.$event.$kind.$tier")
         for (path in Path.entries) for (time in optionTimes) add("options.${path.key}.$time")
         addAll(speeds.map { "speed.$it" })
+        addAll(listOf("network", "space", "verify", "install").map { "update.failed.$it" })
         addAll(listOf("auto", "ar", "en", "fr").map { "set.lang.$it" })
         addAll(listOf("system", "light", "dark").map { "set.theme.$it" })
         addAll(listOf("on", "off").flatMap { listOf("set.autoload.$it", "set.wallpaper.$it") })
         addAll((1..3).map { "set.parallel.$it" })
         addAll(listOf("ar", "en", "fr").map { "lang.$it" })
         addAll(listOf("day0", "d1-7", "d8-30", "d31up").map { "age.$it" })
+        addAll(listOf("ok", "failed").map { "engine.update.$it" })
+        addAll(listOf("d0-7", "d8-30", "d31up", "bundled").map { "engine.fresh.$it" })
         addAll(listOf("compact", "medium", "expanded").map { "screen.$it" })
     }
 
@@ -147,6 +158,9 @@ object UsageKeys {
     }
 
     fun age(days: Long) = "age." + when { days < 1 -> "day0"; days <= 7 -> "d1-7"; days <= 30 -> "d8-30"; else -> "d31up" }
+
+    /** Days since this phone's last good yt-dlp update; bundled = never updated (the copy inside the APK). */
+    fun engineFresh(days: Long?) = "engine.fresh." + when { days == null -> "bundled"; days <= 7 -> "d0-7"; days <= 30 -> "d8-30"; else -> "d31up" }
 
     fun screen(smallestWidthDp: Int) = "screen." + when { smallestWidthDp < 600 -> "compact"; smallestWidthDp < 840 -> "medium"; else -> "expanded" }
 }

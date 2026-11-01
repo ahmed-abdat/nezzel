@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+import dev.ahmed.savlino.usage.UsageKeys
 
 internal fun updateCheckJitterMillis(random: Random = Random.Default): Long = random.nextLong(TimeUnit.MINUTES.toMillis(30) + 1)
 internal fun requiredUpdateSpace(size: Long): Long = 2 * size + AppUpdates.MARGIN
@@ -157,6 +158,8 @@ class AppUpdates internal constructor(private val context: Context, private val 
             val (parsed, bytes, format) = withContext(Dispatchers.IO) { httpFactory(count).use { it.latestRelease() } }
             if (count && format == "manifest") prefs.edit().putLong("counted-day", day).apply()
             val release = parsed.takeIf { it.code > BuildConfig.VERSION_CODE }
+            if (release != null && !prefs.getBoolean("counted-offer-${release.code}", false) &&
+                prefs.edit().putBoolean("counted-offer-${release.code}", true).commit()) count(UsageKeys.UPDATE_OFFERED)
             val checked = now()
             if (!prefs.edit().putLong("success", checked).putString("release", bytes.toString(Charsets.UTF_8))
                     .putString("release-format", format).commit())
@@ -297,6 +300,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
     @Synchronized fun download() {
         if (installation?.isActive == true) return
         val release = state.value.release ?: return
+        count(UsageKeys.UPDATE_TAPPED)
         installation = scope.launch {
             val download = launchDownload() ?: return@launch
             download.join()
@@ -350,12 +354,16 @@ class AppUpdates internal constructor(private val context: Context, private val 
                     File(directory, release.name + ".part.json").delete()
                     readyFile = ready
                     mutable.update { it.copy(stage = UpdateStage.READY, bytes = release.size) }
+                    count(UsageKeys.UPDATE_READY)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (failure: Exception) {
                     currentCoroutineContext().ensureActive()
                     val reason = if (isNoSpace(failure)) UpdateFailure.SPACE else UpdateFailure.NETWORK
                     keepPart = reason == UpdateFailure.NETWORK && file?.isFile == true && file.length() in 1..release.size
-                    if (keepPart) mutable.update { it.copy(stage = UpdateStage.ERROR, failure = reason, confirmation = null) }
+                    if (keepPart) {
+                        countFailure(reason)
+                        mutable.update { it.copy(stage = UpdateStage.ERROR, failure = reason, confirmation = null) }
+                    }
                     else fail(reason)
                 }
                 finally {
@@ -386,10 +394,12 @@ class AppUpdates internal constructor(private val context: Context, private val 
     }
     internal fun fail(failure: UpdateFailure) {
         if (failure == UpdateFailure.INSTALL) { installFailed(failure); return }
+        countFailure(failure)
         cleanFiles()
         mutable.update { it.copy(stage = UpdateStage.ERROR, failure = failure, confirmation = null) }
     }
     internal fun installFailed(failure: UpdateFailure) {
+        countFailure(failure)
         stopSilentAttempts()
         clearInstall()
         mutable.update { it.copy(stage = if (readyFile?.isFile == true) UpdateStage.READY else UpdateStage.ERROR,
@@ -420,11 +430,14 @@ class AppUpdates internal constructor(private val context: Context, private val 
         prefs.edit().remove("ready-file").remove("ready-code").commit()
         directory.listFiles()?.filter { it.name !in keep }?.forEach { it.delete() }
     }
+    internal var count: (String) -> Unit = { key -> (context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication)?.usage?.count(key) }
+    private fun countFailure(failure: UpdateFailure) = count("update.failed." + failure.name.lowercase())
     internal fun recordInstall(session: Int, release: Release, silent: Boolean = false): Boolean = prefs.edit()
         .putInt("install-session", session).putLong("install-code", release.code)
         .putBoolean("install-silent", silent)
         .putString("install-notes", JSONObject().put("version", release.version)
             .put("en", JSONArray(release.english)).put("ar", JSONArray(release.arabic)).put("fr", JSONArray(release.french)).toString()).commit()
+        .also { if (it) count(if (silent) UsageKeys.UPDATE_INSTALL_SILENT else UsageKeys.UPDATE_INSTALL_MANUAL) }
     internal fun clearInstall(): Boolean {
         val editor = prefs.edit()
         // Only a completed update to this build can become About's retained notes.
@@ -480,7 +493,7 @@ class AppUpdates internal constructor(private val context: Context, private val 
         if (!available || state.value.whatsNew != null || prefs.getLong("install-code", -1) != BuildConfig.VERSION_CODE.toLong()) return false
         cleanFiles()
         return clearInstall().also { if (it) (context.applicationContext as? dev.ahmed.savlino.jobs.NezzelApplication)
-            ?.usage?.count(dev.ahmed.savlino.usage.UsageKeys.UPDATE_INSTALLED) }
+            ?.usage?.count(UsageKeys.UPDATE_INSTALLED) }
     }
     private fun isNoSpace(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.take(10).any {
         it is android.system.ErrnoException && it.errno == android.system.OsConstants.ENOSPC || it.message?.contains("ENOSPC") == true
