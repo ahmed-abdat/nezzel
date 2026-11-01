@@ -102,7 +102,7 @@ class TikTokImageRouteTest {
         assertEquals(listOf("Post.jpg"), publisher.names)
     }
     @Test fun audioOnlyVideoTriesPhotosOnceAndReaderFailureShowsItsErrorNotTheSoundAlone() {
-        for (reason in listOf(ImageFailure.SOURCE_REFUSED, ImageFailure.NETWORK)) {
+        for (reason in listOf(ImageFailure.SOURCE_REFUSED, ImageFailure.NETWORK, ImageFailure.GONE)) {
             reads.clear()
             val images = FakeImages { MediaInspectResult.Failure(reason, ImagePhase.PAGE) }
             val vm = model(images)
@@ -124,7 +124,7 @@ class TikTokImageRouteTest {
         assertEquals(listOf(MediaSourceRoute.TIKTOK), images.routes)
     }
     @Test fun photoPageFailureShowsItsErrorAndNeverFallsBackToTheSoundAlone() {
-        for (reason in listOf(ImageFailure.SOURCE_REFUSED, ImageFailure.NO_MEDIA, ImageFailure.NETWORK)) {
+        for (reason in listOf(ImageFailure.SOURCE_REFUSED, ImageFailure.NO_MEDIA, ImageFailure.NETWORK, ImageFailure.GONE)) {
             reads.clear()
             val images = FakeImages { MediaInspectResult.Failure(reason, ImagePhase.PAGE) }
             val vm = model(images)

@@ -12,7 +12,7 @@ internal fun tikTokPage(json: String = tikTokFixture()): ByteArray =
 class TikTokPostParserTest {
     @Test fun onlyKnownPrivateStatusesArePrivate() {
         for ((status, reason) in listOf(10216 to ImageFailure.PRIVATE, 10222 to ImageFailure.PRIVATE,
-            10204 to ImageFailure.NO_MEDIA, 99999 to ImageFailure.NO_MEDIA)) {
+            10204 to ImageFailure.GONE, 99999 to ImageFailure.NO_MEDIA)) {
             val json = """{"__DEFAULT_SCOPE__":{"webapp.video-detail":{"statusCode":$status}}}"""
             assertEquals(reason, assertIs<TikTokParseResult.Failure>(TikTokPostParser().parse(tikTokPage(json), "900000001")).reason)
         }

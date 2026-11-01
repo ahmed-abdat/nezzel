@@ -55,7 +55,7 @@ class TikTokPostParser {
             val detail = root.path("__DEFAULT_SCOPE__").path("webapp.video-detail")
             val status = detail.path("statusCode").asInt(0)
             if (status != 0) return TikTokParseResult.Failure(
-                if (status in setOf(10216, 10222)) ImageFailure.PRIVATE else ImageFailure.NO_MEDIA)
+                when (status) { 10216, 10222 -> ImageFailure.PRIVATE; 10204 -> ImageFailure.GONE; else -> ImageFailure.NO_MEDIA })
             val item = detail.path("itemInfo").path("itemStruct")
             if (item.path("id").asText() != postId) return TikTokParseResult.Failure(ImageFailure.SOURCE_REFUSED)
             val post = item.path("imagePost")

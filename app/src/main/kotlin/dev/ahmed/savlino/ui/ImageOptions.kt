@@ -218,6 +218,7 @@ internal fun imageErrorCopy(state: OptionsState.ImageError, offline: Boolean = f
         Triple(R.string.image_refused_title, R.string.image_refused_body, true)
         else Triple(R.string.image_source_refused_title, R.string.image_source_refused_body, true)
     ImageFailure.PRIVATE -> Triple(R.string.image_private_title, R.string.private_body, false)
+    ImageFailure.GONE -> Triple(R.string.video_gone_title, R.string.video_gone_body, false)
     ImageFailure.FACEBOOK_STORY -> Triple(R.string.facebook_story_title, R.string.facebook_story_body, false)
     ImageFailure.APP_ONLY -> Triple(R.string.telegram_app_only_title, R.string.telegram_app_only_body, false)
     ImageFailure.HTTP -> if (state.statusCode == 401 || state.statusCode == 403)

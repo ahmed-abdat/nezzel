@@ -973,6 +973,8 @@ class LinkViewModel(
             result.phase == ImagePhase.PAGE && !tikTokPhotoLink(route, source) && when (result.reason) {
             ImageFailure.HTTP -> result.statusCode != 404 && result.statusCode != 410 && !facebookShare(route, source)
             ImageFailure.SOURCE_REFUSED, ImageFailure.BUDGET, ImageFailure.UNAVAILABLE, ImageFailure.NETWORK -> !facebookShare(route, source)
+            // yt-dlp may still reach a post the web page calls gone; if it fails too, the page's answer is shown.
+            ImageFailure.GONE -> true
             ImageFailure.NO_MEDIA -> route in setOf(MediaSourceRoute.FACEBOOK, MediaSourceRoute.LINKEDIN,
                 MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK)
             else -> false
@@ -1089,7 +1091,12 @@ class LinkViewModel(
             is InspectResult.Failure -> {
                 optionsState = if (noMedia && result.error in setOf(
                     DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
-                    OptionsState.ImageError(ImageFailure.NO_MEDIA) else OptionsState.Error(result.error)
+                    OptionsState.ImageError(ImageFailure.NO_MEDIA)
+                    // The page already said removed/blocked: a generic yt-dlp failure is that, not "couldn't read".
+                    else if (photoFailure?.failure == ImageFailure.GONE && result.error !in setOf(
+                        DownloadError.Offline, DownloadError.Network, DownloadError.LoginRequired))
+                    OptionsState.Error(DownloadError.Unavailable)
+                    else OptionsState.Error(result.error)
                 failedReadGeneration = read.readGeneration
             }
             is InspectResult.Success -> {

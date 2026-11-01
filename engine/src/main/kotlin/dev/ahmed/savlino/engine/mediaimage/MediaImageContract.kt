@@ -11,6 +11,8 @@ enum class ImageFailure {
     PRIVATE,
     /** Facebook stories cannot be read without signing in. */
     FACEBOOK_STORY,
+    /** The page itself says the post is removed or blocked for this network/region (TikTok status 10204). */
+    GONE,
     /** A signed photo expired or was removed; reopening the post may refresh its capability. */
     EXPIRED,
     /** The site keeps this media in its app; its public page offers no file (Telegram's "Media is too big"). */
