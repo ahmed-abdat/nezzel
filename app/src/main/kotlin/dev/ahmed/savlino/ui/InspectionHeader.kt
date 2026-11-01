@@ -98,7 +98,7 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
             }
             // duration · site; the host stays an LTR island.
             val duration = if (inspection != null) inspection.durationSeconds else cachedPreview?.durationSeconds
-            val facts = listOfNotNull(duration?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }, NezzelFormat.isolate(host))
+            val facts = listOfNotNull(duration?.takeIf { stream == null || playing }?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }, NezzelFormat.isolate(host))
             Text(facts.joinToString(" · "), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

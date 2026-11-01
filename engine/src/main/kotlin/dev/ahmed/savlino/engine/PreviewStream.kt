@@ -11,6 +11,14 @@ import java.net.URI
 class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<String, String>, val hasVideo: Boolean) {
     override fun toString() = "PreviewStream(redacted)"
 
+    /** Every stream host resolves to public addresses only (no LAN, loopback or link-local). Blocking: call on IO. */
+    fun publicOnly(): Boolean = listOfNotNull(url, audioUrl).all { raw ->
+        try {
+            val host = URI(raw).host ?: return@all false
+            java.net.InetAddress.getAllByName(host).let { it.isNotEmpty() && it.all(dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy::allows) }
+        } catch (_: Exception) { false }
+    }
+
     companion object {
         private const val TARGET_HEIGHT = 360
         private const val MAX_HEIGHT = 480
