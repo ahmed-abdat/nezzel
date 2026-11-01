@@ -377,6 +377,9 @@ class LinkViewModel(
     /** The link the timing above belongs to; only its registrable name is ever counted. */
     private var inspectionLink: String? = null
     /** The options sheet drew the preview image (timing journal only). */
+    /** Play before saving: a small stream from this sheet's own result, or null (no Play button). */
+    fun previewStream(inspection: dev.ahmed.savlino.domain.Inspection): dev.ahmed.savlino.engine.PreviewStream? = engine.previewStream(inspection.inspectionId)
+    fun previewPlayed(failed: Boolean) = usage.count(if (failed) UsageKeys.PREVIEW_FAILED else UsageKeys.PREVIEW_PLAY)
     fun thumbnailShown() { inspectionTiming?.record(InspectionPhase.THUMBNAIL_SHOWN) }
     internal fun optionsShown() {
         val timing = inspectionTiming

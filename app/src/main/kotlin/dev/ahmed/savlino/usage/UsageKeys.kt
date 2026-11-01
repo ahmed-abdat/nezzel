@@ -13,6 +13,8 @@ object UsageKeys {
     const val SPOTIFY_TRACK = "spotify.track"
     const val SPOTIFY_LIST = "spotify.list"
     const val SPOTIFY_FAILED = "spotify.failed"
+    const val PREVIEW_PLAY = "preview.play"
+    const val PREVIEW_FAILED = "preview.failed"
     const val OPEN = "open"
     const val ACTIVE = "active"
     const val SHARE = "share"
@@ -75,7 +77,7 @@ object UsageKeys {
 
     /** Every fixed key; [SITE], [OPTIONS_SITE], [SDK] and [BRAND] are the only patterned ones. */
     val fixed: Set<String> = buildSet {
-        addAll(listOf(SPOTIFY_TRACK, SPOTIFY_LIST, SPOTIFY_FAILED))
+        addAll(listOf(SPOTIFY_TRACK, SPOTIFY_LIST, SPOTIFY_FAILED, PREVIEW_PLAY, PREVIEW_FAILED))
         addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
             STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, UPDATE_OFFERED, UPDATE_TAPPED, UPDATE_READY,
             UPDATE_INSTALL_MANUAL, UPDATE_INSTALL_SILENT, SITE_OTHER,

@@ -48,6 +48,8 @@ interface EngineAdapter {
     fun prepareDownload(command: DownloadCommand) = Unit
     /** yt-dlp-shaped JSON a native reader already fetched for [link]; a later inspect may use it. Memory only. */
     fun prefetched(link: ValidatedLink, json: String) = Unit
+    /** A small stream from [inspectionId]'s own result, for an explicit Play. Memory only; no extraction, no network. */
+    fun previewStream(inspectionId: String): PreviewStream? = null
     /** Clear link history: forget every link's recent result. */
     fun clearRecentLinks() = Unit
     /** Local selection only; transfer ownership is durable in staging, never inferred from byte names alone. */

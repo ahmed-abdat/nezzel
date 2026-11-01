@@ -667,4 +667,10 @@
     </plurals>
     <string name="spotify_search_note">From Spotify. Pick the matching song.</string>
     <string name="spotify_failed">Couldn\'t read this Spotify link</string>
+    <string name="preview_player">Video preview</string>
+    <string name="preview_failed">Couldn\'t play a preview. You can still download it.</string>
+    <string name="preview_close">Close preview</string>
+    <string name="preview_play">Play</string>
+    <string name="preview_pause">Pause</string>
+    <string name="preview_tap">Play preview</string>
 </resources>

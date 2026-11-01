@@ -683,4 +683,10 @@
     </plurals>
     <string name="spotify_search_note">Depuis Spotify. Choisissez le bon titre.</string>
     <string name="spotify_failed">Impossible de lire ce lien Spotify</string>
+    <string name="preview_player">Aperçu de la vidéo</string>
+    <string name="preview_failed">Impossible de lire l’aperçu. Vous pouvez quand même la télécharger.</string>
+    <string name="preview_close">Fermer l’aperçu</string>
+    <string name="preview_play">Lire</string>
+    <string name="preview_pause">Pause</string>
+    <string name="preview_tap">Lire l’aperçu</string>
 </resources>

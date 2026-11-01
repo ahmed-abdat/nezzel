@@ -17,7 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.*
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,7 +36,10 @@ import dev.ahmed.savlino.ui.theme.Space
 @Composable
 internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null,
     load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }, onThumbnail: () -> Unit = {}, hint: String? = null,
-    cachedPreview: CachedPreview? = null, onArtwork: (Bitmap) -> Unit = {}) {
+    cachedPreview: CachedPreview? = null, onArtwork: (Bitmap) -> Unit = {},
+    stream: dev.ahmed.savlino.engine.PreviewStream? = null, onPlayed: (failed: Boolean) -> Unit = {}) {
+    // Tapping the poster plays the video full width above the title; Close folds it back.
+    var playing by remember(stream) { mutableStateOf(false) }
     // The sender's own words stand in until a real title arrives; the title skeleton shows only without them.
     val title = if (inspection != null) inspection.title else cachedPreview?.title ?: earlyPreview?.title ?: hint
     // The early (oEmbed) preview and the engine name different images of the same video. Once one has drawn,
@@ -60,8 +65,13 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
         SheetArtwork.show(inspectionId, bitmap)
         withContext(Dispatchers.Default) { SheetArtwork.take(inspectionId) }
     }
+    if (playing && stream != null) {
+        PreviewPlayer(stream, shown, onClose = { playing = false }, onResult = onPlayed)
+        Spacer(Modifier.height(Space.s))
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-        PreviewThumbnail(thumbnail, load = load, fallback = fallback,
+        if (!playing) PreviewThumbnail(thumbnail, load = load, fallback = fallback,
+            playable = stream != null, duration = inspection?.durationSeconds, onPlay = { playing = true },
             audioOnly = inspection?.formats?.all { !it.hasVideo } == true, onBitmap = {
                 shown = it
                 if (it != null) {
@@ -97,7 +107,8 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
 
 @Composable
 internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) },
-    onBitmap: (Bitmap?) -> Unit = {}, fallback: Bitmap? = null) {
+    onBitmap: (Bitmap?) -> Unit = {}, fallback: Bitmap? = null, playable: Boolean = false, duration: Long? = null,
+    onPlay: () -> Unit = {}) {
     val report by rememberUpdatedState(onBitmap)
     // Reset the old bitmap immediately on URL change, including null; produceState alone retains it.
     // The coroutine is cancelled on URL change or sheet disposal; cached display pixels may bridge a live refresh.
@@ -110,10 +121,13 @@ internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: su
             finished = true
         }
         val current = bitmap
-        Box(Modifier.width(96.dp).aspectRatio(16f / 9).clip(MaterialTheme.shapes.medium)
+        val playLabel = stringResource(R.string.preview_tap)
+        Box(Modifier.width(if (playable) 128.dp else 96.dp).aspectRatio(16f / 9).clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .then(if (current == null) Modifier.testTag(if (finished) "preview_thumbnail_fallback" else "preview_thumbnail_placeholder") else Modifier)
-            .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+            .then(if (playable) Modifier.clickable(onClickLabel = playLabel, onClick = onPlay).testTag("preview_play")
+                .clearAndSetSemantics { contentDescription = playLabel; role = Role.Button; onClick(playLabel) { onPlay(); true } }
+                else Modifier.clearAndSetSemantics { }), contentAlignment = Alignment.Center) {
             if (current != null) Image(current.asImageBitmap(), contentDescription = null,
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else if (finished) {
@@ -122,6 +136,10 @@ internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: su
                 else Icon(Icons.Default.PlayArrow, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else Spacer(Modifier.fillMaxSize())
+            if (playable) {
+                PlayBadge(40.dp)
+                duration?.let { DurationChip(it, Modifier.align(Alignment.BottomEnd).padding(4.dp)) }
+            }
         }
     }
 }

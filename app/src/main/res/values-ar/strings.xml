@@ -755,4 +755,10 @@
     </plurals>
     <string name="spotify_search_note">من سبوتيفاي. اختر الأغنية المطابقة.</string>
     <string name="spotify_failed">تعذّرت قراءة رابط سبوتيفاي</string>
+    <string name="preview_player">معاينة الفيديو</string>
+    <string name="preview_failed">تعذّر تشغيل المعاينة، ويمكنك تنزيله مع ذلك.</string>
+    <string name="preview_close">إغلاق المعاينة</string>
+    <string name="preview_play">تشغيل</string>
+    <string name="preview_pause">إيقاف مؤقت</string>
+    <string name="preview_tap">شغّل المعاينة</string>
 </resources>
