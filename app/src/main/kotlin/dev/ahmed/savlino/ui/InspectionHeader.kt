@@ -74,12 +74,12 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
     }
     val audioOnly = inspection?.formats?.all { !it.hasVideo } == true
     // One layout from the first frame to the last: the poster box is there while loading, so nothing jumps when the
-    // options land; a sound-only result and the network-free share preview keep the small tile.
-    val hero = !audioOnly && !compact
+    // options land; only the network-free share preview (no picture yet) keeps the small tile.
+    val hero = !compact
     if (hero) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9)) {
             PreviewThumbnail(thumbnail, load = load, fallback = fallback, playable = stream != null && !playing, wide = true,
-                duration = inspection?.durationSeconds, onPlay = { playing = true }, onBitmap = onBitmap)
+                duration = inspection?.durationSeconds, onPlay = { playing = true }, audioOnly = audioOnly, onBitmap = onBitmap)
             if (stream != null) androidx.compose.animation.AnimatedVisibility(playing, Modifier.matchParentSize(),
                 enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
                 PreviewPlayer(stream, shown, onClose = { playing = false }, onResult = onPlayed, modifier = Modifier.fillMaxSize())
@@ -138,8 +138,9 @@ internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: su
             .then(if (playable) Modifier.clickable(onClickLabel = playLabel, onClick = onPlay).testTag("preview_play")
                 .clearAndSetSemantics { contentDescription = playLabel; role = Role.Button; onClick(playLabel) { onPlay(); true } }
                 else Modifier.clearAndSetSemantics { }), contentAlignment = Alignment.Center) {
+            // Cover art for sound is square: shown whole in the wide box rather than cut.
             if (current != null) Image(current.asImageBitmap(), contentDescription = null,
-                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                modifier = Modifier.fillMaxSize(), contentScale = if (wide && audioOnly) ContentScale.Fit else ContentScale.Crop)
             else if (finished && !(wide && playable)) {
                 val icon = if (wide) 40.dp else 24.dp
                 if (audioOnly) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(icon),

@@ -69,7 +69,10 @@ internal fun DurationChip(seconds: Long, modifier: Modifier = Modifier) {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun previewPlayer(context: Context, stream: PreviewStream): ExoPlayer {
-    val main = ProgressiveMediaSource.Factory(PreviewDataSource.Factory(stream.headers)).createMediaSource(MediaItem.fromUri(stream.url))
+    // Playlist, segments and keys all go through PreviewDataSource, so every HLS request gets the public-address check too.
+    val main = if (stream.hls) androidx.media3.exoplayer.hls.HlsMediaSource.Factory(PreviewDataSource.Factory(stream.headers))
+        .createMediaSource(MediaItem.fromUri(stream.url))
+    else ProgressiveMediaSource.Factory(PreviewDataSource.Factory(stream.headers)).createMediaSource(MediaItem.fromUri(stream.url))
     val source = stream.audioUrl?.let {
         MergingMediaSource(main, ProgressiveMediaSource.Factory(PreviewDataSource.Factory(stream.audioHeaders)).createMediaSource(MediaItem.fromUri(it)))
     } ?: main

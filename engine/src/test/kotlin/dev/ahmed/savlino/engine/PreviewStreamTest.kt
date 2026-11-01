@@ -14,6 +14,7 @@ class PreviewStreamTest(private val case: Case) {
         val hasVideo: Boolean = true,
         val headers: Map<String, String> = emptyMap(),
         val checkRedaction: Boolean = false,
+        val hls: Boolean = false,
     ) {
         override fun toString() = name
     }
@@ -29,6 +30,7 @@ class PreviewStreamTest(private val case: Case) {
         assertEquals(case.audioUrl, actual.audioUrl, case.name)
         assertEquals(case.hasVideo, actual.hasVideo, case.name)
         assertEquals(case.headers, actual.headers, case.name)
+        assertEquals(case.hls, actual.hls, case.name)
         if (case.checkRedaction) {
             val description = actual.toString()
             assertFalse(actual.url in description, case.name)
@@ -65,11 +67,40 @@ class PreviewStreamTest(private val case: Case) {
                 audioUrl = "https://media.example/48.m4a",
             ),
             Case(
-                "rejects HLS and DASH manifests",
+                "rejects DASH manifests and plain-HTTP playlists",
                 formats(
-                    """{"url":"https://media.example/video.m3u8","protocol":"m3u8_native","ext":"mp4","height":360,"vcodec":"avc1","acodec":"aac"}""",
                     """{"url":"https://media.example/video.mpd","protocol":"http_dash_segments","ext":"mp4","height":360,"vcodec":"avc1","acodec":"aac"}""",
+                    """{"url":"http://media.example/video.m3u8","protocol":"m3u8_native","ext":"mp4","height":360,"vcodec":"avc1","acodec":"aac"}""",
                 ),
+            ),
+            Case(
+                "plays the HLS variant nearest 360p when there is no plain file",
+                formats(
+                    """{"url":"https://media.example/288.m3u8","protocol":"m3u8_native","ext":"mp4","height":288,"vcodec":"avc1","acodec":"mp4a"}""",
+                    """{"url":"https://media.example/480.m3u8","protocol":"m3u8_native","ext":"mp4","height":480,"vcodec":"avc1","acodec":"mp4a"}""",
+                    """{"url":"https://media.example/1080.m3u8","protocol":"m3u8_native","ext":"mp4","height":1080,"vcodec":"avc1","acodec":"mp4a"}""",
+                ),
+                url = "https://media.example/288.m3u8",
+                hls = true,
+            ),
+            Case(
+                "prefers a small HLS variant over a big plain file",
+                formats(
+                    """{"url":"https://media.example/640.m3u8","protocol":"m3u8_native","ext":"mp4","height":640,"vcodec":"avc1","acodec":"mp4a"}""",
+                    """{"url":"https://media.example/1280.m3u8","protocol":"m3u8_native","ext":"mp4","height":1280,"vcodec":"avc1","acodec":"mp4a"}""",
+                    """{"url":"https://media.example/blob.mp4","protocol":"https","ext":"mp4","height":1920,"vcodec":null,"acodec":null}""",
+                ),
+                url = "https://media.example/640.m3u8",
+                hls = true,
+            ),
+            Case(
+                "plays an HLS sound-only playlist",
+                formats(
+                    """{"url":"https://media.example/aac.m3u8","protocol":"m3u8_native","ext":"m4a","vcodec":"none","acodec":"mp4a","abr":96}""",
+                ),
+                url = "https://media.example/aac.m3u8",
+                hasVideo = false,
+                hls = true,
             ),
             Case(
                 "rejects DRM streams",
@@ -140,7 +171,7 @@ class PreviewStreamTest(private val case: Case) {
             Case(
                 "plays the smallest big file when no small one has sound",
                 formats(
-                    """{"url":"https://media.example/hls.m3u8","protocol":"m3u8_native","ext":"mp4","vcodec":"avc1","acodec":"mp4a","height":424}""",
+                    """{"url":"https://media.example/video.mpd","protocol":"http_dash_segments","ext":"mp4","vcodec":"avc1","acodec":"mp4a","height":424}""",
                     """{"url":"https://media.example/1138.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":1138}""",
                     """{"url":"https://media.example/1920.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":1920}""",
                 ),

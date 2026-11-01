@@ -301,6 +301,7 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.compose)
     // Local saved-file playback only (owner 2026-10-26): no DASH/HLS/RTSP, Cast or decoder extensions.
     implementation(libs.media3.exoplayer)
+    implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.session)
     implementation(libs.media3.ui.compose)
     // Installs the bundled baseline profile on sideloaded installs, where no store does it.
