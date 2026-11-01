@@ -147,7 +147,7 @@ internal fun HomeLinkCard(links: LinkViewModel, copiedHost: String? = null, onUs
                 Spacer(Modifier.width(Space.s))
                 // The words are their own first-strong run, so Arabic words in the English label (or the reverse) keep their order.
                 Text(stringResource(if (links.spotify != null) R.string.spotify_search_youtube_for else R.string.search_youtube_for,
-                    NezzelFormat.firstStrong(words)), maxLines = if (links.spotify != null) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
+                    NezzelFormat.firstStrong(words)), maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else Button(onClick = check, enabled = !links.spotifyLoading, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 if (links.spotifyLoading) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)

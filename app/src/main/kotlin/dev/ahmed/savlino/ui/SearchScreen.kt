@@ -65,6 +65,9 @@ internal fun SearchScreen(links: LinkViewModel, thumbnail: suspend (String) -> B
             Column {
                 SearchField(vm, links::closeSearch)
                 SearchFilters(vm)
+                if (links.spotify != null) Text(stringResource(R.string.spotify_search_note),
+                    Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, bottom = Space.s).testTag("spotify_search_note"),
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }) { insets ->
         Box(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets)) {

@@ -858,6 +858,8 @@ class LinkViewModel(
             spotifyLoading = false
             spotify = result
             spotifyFailed = result == null
+            // One song has one obvious next step: its YouTube search opens by itself; the user still picks.
+            if (result != null && !result.isList && result.tracks.size == 1 && !hasPendingShare) result.searchWords?.let(search::open)
             usage.count(when {
                 result == null -> UsageKeys.SPOTIFY_FAILED
                 SpotifyLink.parse(input.link.rawUrl)?.type == "track" -> UsageKeys.SPOTIFY_TRACK
