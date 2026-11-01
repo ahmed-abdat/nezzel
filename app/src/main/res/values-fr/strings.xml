@@ -25,7 +25,7 @@
     <string name="match_wallpaper">Couleurs du fond d’écran</string>
     <string name="match_wallpaper_help">Suit les réglages de couleur du téléphone</string>
     <string name="copied_suggestions">Lire les liens copiés</string>
-    <string name="copied_help">Seulement quand Nezzel est ouvert</string>
+    <string name="copied_help">Propose le lien copié, seulement quand Nezzel est ouvert</string>
     <string name="save_location">Dossier d’enregistrement</string>
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">Sans publicité ni compte</string>
@@ -240,7 +240,7 @@
         <item quantity="other">%1$s téléchargements en cours</item>
     </plurals>
     <string name="automatic_options">Afficher les options automatiquement</string>
-    <string name="automatic_options_help">Rien ne s’enregistre sans votre accord</string>
+    <string name="automatic_options_help">Analyse le lien dès qu’il arrive. Rien ne s’enregistre sans votre accord</string>
     <string name="not_now">Plus tard</string>
     <string name="link_field_hint">Lien ou recherche YouTube</string>
     <string name="link_field_label">Lien</string>
@@ -425,7 +425,7 @@
     <string name="update_done">Nezzel est à jour</string>
     <string name="settings_updates_heading">Mises à jour de l’application</string>
     <string name="settings_updates_auto">Mises à jour automatiques</string>
-    <string name="settings_updates_auto_body">Nezzel reste à jour quand vous ne l’utilisez pas</string>
+    <string name="settings_updates_auto_body">Vérifie et installe les mises à jour. Désactivez-le pour ne plus être prévenu</string>
     <string name="settings_updates_check_now">Vérifier</string>
     <string name="update_latest">Nezzel est à jour</string>
     <string name="update_check_failed">Impossible de rechercher les mises à jour — réessayez plus tard</string>
@@ -646,7 +646,7 @@
 
     <!-- Local feature reminders. -->
     <string name="tips_title">Astuces</string>
-    <string name="tips_help">Une astuce après quelques jours sans ouvrir Nezzel</string>
+    <string name="tips_help">Une astuce en notification après quelques jours sans ouvrir Nezzel</string>
     <string name="tip_links_title">Enregistrez jusqu’à 50 liens</string>
     <string name="tip_links_body">Copiez vos liens ensemble, puis collez-les dans Nezzel.</string>
     <string name="tip_playlist_title">Enregistrez toute une playlist</string>

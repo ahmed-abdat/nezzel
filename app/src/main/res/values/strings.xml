@@ -25,7 +25,7 @@
     <string name="match_wallpaper">Match wallpaper colors</string>
     <string name="match_wallpaper_help">Follows your phone’s color settings</string>
     <string name="copied_suggestions">Read copied links</string>
-    <string name="copied_help">Only while Nezzel is open</string>
+    <string name="copied_help">Suggests a link you copied, only while Nezzel is open</string>
     <string name="save_location">Save location</string>
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">No ads, no account</string>
@@ -234,7 +234,7 @@
         <item quantity="other">%1$s downloads running</item>
     </plurals>
     <string name="automatic_options">Show options automatically</string>
-    <string name="automatic_options_help">Saving still waits for your tap</string>
+    <string name="automatic_options_help">Checks a link as soon as it arrives. Saving still waits for your tap</string>
     <string name="not_now">Not now</string>
     <string name="link_field_hint">Link or YouTube search</string>
     <string name="link_field_label">Link</string>
@@ -417,7 +417,7 @@
     <string name="update_done">Nezzel is up to date</string>
     <string name="settings_updates_heading">App updates</string>
     <string name="settings_updates_auto">Automatic updates</string>
-    <string name="settings_updates_auto_body">Keeps Nezzel up to date while you’re away</string>
+    <string name="settings_updates_auto_body">Checks and installs updates for you. Turn off for no update notices</string>
     <string name="settings_updates_check_now">Check now</string>
     <string name="update_latest">Nezzel is up to date</string>
     <string name="update_check_failed">Couldn\'t check for updates — try again later</string>
@@ -632,7 +632,7 @@
 
     <!-- Local feature reminders. -->
     <string name="tips_title">Tips</string>
-    <string name="tips_help">A helpful tip when you haven’t opened Nezzel for a few days</string>
+    <string name="tips_help">A short tip notification if you haven’t opened Nezzel for a few days</string>
     <string name="tip_links_title">Save up to 50 links</string>
     <string name="tip_links_body">Copy your links together, then paste them in Nezzel.</string>
     <string name="tip_playlist_title">Save a whole playlist</string>

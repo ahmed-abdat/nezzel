@@ -25,7 +25,7 @@
     <string name="match_wallpaper">مطابقة ألوان الخلفية</string>
     <string name="match_wallpaper_help">يتبع إعدادات الألوان في هاتفك</string>
     <string name="copied_suggestions">قراءة الروابط المنسوخة</string>
-    <string name="copied_help">أثناء فتح Nezzel فقط</string>
+    <string name="copied_help">يقترح الرابط الذي نسخته، أثناء فتح Nezzel فقط</string>
     <string name="save_location">مكان الحفظ</string>
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">بلا إعلانات ولا حساب</string>
@@ -258,7 +258,7 @@
         <item quantity="other">%1$s تنزيل جارٍ</item>
     </plurals>
     <string name="automatic_options">عرض الخيارات تلقائيًا</string>
-    <string name="automatic_options_help">لا يبدأ الحفظ إلا بضغطة منك</string>
+    <string name="automatic_options_help">يفحص الرابط فور وصوله، ولا يبدأ الحفظ إلا بضغطة منك</string>
     <string name="not_now">ليس الآن</string>
     <string name="link_field_hint">رابط أو بحث في يوتيوب</string>
     <string name="link_field_label">الرابط</string>
@@ -467,7 +467,7 @@
     <string name="update_done">Nezzel محدّث</string>
     <string name="settings_updates_heading">تحديثات التطبيق</string>
     <string name="settings_updates_auto">التحديثات التلقائية</string>
-    <string name="settings_updates_auto_body">يبقى Nezzel محدّثًا حين لا تستخدمه</string>
+    <string name="settings_updates_auto_body">يفحص التحديثات ويثبّتها لك. أوقفه لتتوقف تنبيهات التحديث</string>
     <string name="settings_updates_check_now">تحقق الآن</string>
     <string name="update_latest">Nezzel محدّث</string>
     <string name="update_check_failed">تعذّر التحقق من التحديثات، أعد المحاولة لاحقًا</string>
@@ -712,7 +712,7 @@
 
     <!-- Local feature reminders. -->
     <string name="tips_title">نصائح</string>
-    <string name="tips_help">نصيحة مفيدة إن لم تفتح Nezzel منذ أيام</string>
+    <string name="tips_help">إشعار بنصيحة قصيرة إن لم تفتح Nezzel منذ أيام</string>
     <string name="tip_links_title">حمّل حتى 50 رابطًا معًا</string>
     <string name="tip_links_body">انسخ الروابط معًا، ثم الصقها في Nezzel.</string>
     <string name="tip_playlist_title">حمّل قائمة تشغيل كاملة</string>
