@@ -47,7 +47,11 @@ fun OptionsScreen(links: LinkViewModel, language: String, onDismiss: () -> Unit,
         MoreFormatsScreen(links, language, snackbarHost)
         return
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null) {
+    // Bottom insets only: the default top inset follows the sheet's own position, and with a near full-height sheet
+    // (the poster) that feeds back into its height and snap point, so the sheet bounced forever after a small drag.
+    // The 90% cap keeps it clear of the status bar.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null,
+        contentWindowInsets = { WindowInsets.navigationBars }) {
         OptionsDragHandle(onDismiss)
         Box {
             OptionsSheetContent(links, language, onDismiss)

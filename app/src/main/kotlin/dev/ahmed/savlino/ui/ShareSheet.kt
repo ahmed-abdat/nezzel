@@ -38,7 +38,9 @@ fun ShareSheet(links: LinkViewModel, language: String, hooks: ShareSheetHooks) {
     // The sheet window has its own Back; this one catches a Back that reaches the activity window.
     BackHandler(enabled = saving) { }
     ModalBottomSheet(onDismissRequest = { if (!links.imageSaving) hooks.onFinish() }, sheetState = state,
-        dragHandle = null, properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !saving)) {
+        dragHandle = null, properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !saving),
+        // Bottom insets only, as in OptionsScreen: the position-based top inset made the near full-height sheet bounce.
+        contentWindowInsets = { WindowInsets.navigationBars }) {
         OptionsDragHandle({ if (!links.imageSaving) hooks.onFinish() }, enabled = !saving)
         BackHandler(enabled = saving) { }
         ShareSheetBody(links, language, hooks)
