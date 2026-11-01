@@ -9,7 +9,7 @@ class ValidatedLink internal constructor(val rawUrl: String, val normalizedUrl: 
     // Avoid leaking a reviewed URL through generated data-class toString/logging.
     override fun toString(): String = "ValidatedLink(host=$host)"
 }
-enum class Host { YOUTUBE, TIKTOK, INSTAGRAM, FACEBOOK, X, LINKEDIN, OTHER }
+enum class Host { YOUTUBE, TIKTOK, INSTAGRAM, FACEBOOK, X, LINKEDIN, THREADS, OTHER }
 
 object LinkInput {
     val FACEBOOK_WRAPPER_HOSTS: Set<String> = setOf("l.facebook.com", "lm.facebook.com")

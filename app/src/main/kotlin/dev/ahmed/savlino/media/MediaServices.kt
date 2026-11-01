@@ -33,7 +33,8 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
     suspend fun resolveShortLink(link: dev.ahmed.savlino.domain.ValidatedLink) = shortLinks.resolve(link)
     private val references by lazy { MediaReferenceStore() }
     private val inspector by lazy {
-        MediaSourceInspector(PublicImageInspector(http, AndroidImagePreviewDecoder(), references), LegacyMediaInspectionAdapter(engine()))
+        MediaSourceInspector(PublicImageInspector(http, AndroidImagePreviewDecoder(), references,
+            threadsVideo = { link, json -> engine().prefetched(link, json) }), LegacyMediaInspectionAdapter(engine()))
     }
     val inspect: ImageInspect = object : ImageInspect {
         override suspend fun inspect(source: LinkRevision, operationId: String, route: MediaSourceRoute) =

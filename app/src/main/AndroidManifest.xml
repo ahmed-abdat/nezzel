@@ -130,6 +130,8 @@
                 <data android:host="sh.reddit.com" />
                 <data android:host="t.me" />
                 <data android:host="telegram.me" />
+                <data android:host="threads.com" />
+                <data android:host="threads.net" />
                 <data android:host="tiktok.com" />
                 <data android:host="touch.facebook.com" />
                 <data android:host="twitter.com" />
@@ -147,6 +149,8 @@
                 <data android:host="www.instagram.com" />
                 <data android:host="www.linkedin.com" />
                 <data android:host="www.reddit.com" />
+                <data android:host="www.threads.com" />
+                <data android:host="www.threads.net" />
                 <data android:host="www.tiktok.com" />
                 <data android:host="www.twitter.com" />
                 <data android:host="www.vxtwitter.com" />

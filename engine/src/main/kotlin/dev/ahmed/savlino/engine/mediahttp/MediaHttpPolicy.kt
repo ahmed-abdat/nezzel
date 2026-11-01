@@ -44,6 +44,18 @@ internal object MediaHttpPolicy {
         Regex("cdn[0-9]{1,5}\\.(?:telesco\\.pe|cdn-telegram\\.org)").matches(url.host) &&
         Regex("/file/[A-Za-z0-9_-]{1,2048}={0,2}(?:\\.(?:jpg|jpeg|png|webp|gif|avif))?").matches(url.encodedPath) && url.encodedQuery == null
 
+    /**
+     * Threads photo CDN hosts only: a `cdninstagram.com` or `fbcdn.net` suffix, https, an image path.
+     * Signed query parameters stay; a lookalike host does not match.
+     */
+    internal fun isThreadsImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 && isThreadsCdn(url.host) &&
+        !url.encodedPath.contains("..") && threadsImagePath.matches(url.encodedPath)
+
+    internal fun isThreadsCdn(host: String): Boolean =
+        host.endsWith(".cdninstagram.com") || host.endsWith(".fbcdn.net")
+
+    private val threadsImagePath = Regex("/[A-Za-z0-9_./%-]{1,2048}\\.(?:jpg|jpeg|png|webp|gif|avif)")
+
     /** Bluesky's returned fullsize/thumbnail blob views, including its explicit JPEG conversion. */
     internal fun isBlueskyImage(url: HttpUrl): Boolean = url.isHttps && url.port == 443 && url.host == "cdn.bsky.app" &&
         Regex("/img/(?:feed_fullsize|feed_thumbnail)/plain/(?:${BlueskyPostIdentity.DID})/[A-Za-z0-9_-]{1,256}(?:@(?:jpeg|png|webp|avif))?")

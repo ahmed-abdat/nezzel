@@ -15,6 +15,7 @@ internal object VideoCdnPolicy {
             Host.INSTAGRAM -> (facebook(host) || Regex("scontent[a-z0-9.-]*\\.cdninstagram\\.com").matches(host)) && videoPath(path)
             Host.TIKTOK -> Regex("[a-z0-9][a-z0-9.-]*\\.(?:tiktokcdn(?:-us)?\\.com|tiktokcdn-eu\\.com|tiktokv\\.com|byteoversea\\.com|ibytedtos\\.com|ibyteimg\\.com|muscdn\\.com)").matches(host) &&
                 Regex("/[A-Za-z0-9_./%=-]+").matches(path)
+            Host.THREADS -> MediaHttpPolicy.isThreadsCdn(host) && Regex("/[A-Za-z0-9_./%-]+\\.mp4").matches(path)
             else -> false
         }
     }

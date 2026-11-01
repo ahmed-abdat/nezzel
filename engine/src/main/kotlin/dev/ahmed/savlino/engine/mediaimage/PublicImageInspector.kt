@@ -15,6 +15,8 @@ import dev.ahmed.savlino.engine.x.XReader
 import dev.ahmed.savlino.engine.instagram.InstagramReader
 import dev.ahmed.savlino.engine.pinterest.PinterestReader
 import dev.ahmed.savlino.engine.bluesky.BlueskyReader
+import dev.ahmed.savlino.engine.threads.ThreadsPostIdentity
+import dev.ahmed.savlino.engine.threads.ThreadsReader
 import dev.ahmed.savlino.engine.reddit.RedditPost
 import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import dev.ahmed.savlino.engine.reddit.RedditPostParser
@@ -48,6 +50,8 @@ class ImageInspectionOperation internal constructor(val source: LinkRevision,
  */
 class PublicImageInspector(private val http: MediaHttpClient, private val decoder: ImagePreviewDecoder,
     private val references: MediaReferenceStore,
+    /** Threads progressive MP4 info, yt-dlp-shaped, before a video sheet or a mixed post's video button. */
+    private val threadsVideo: (ValidatedLink, String) -> Unit = { _, _ -> },
     /** Receives the yt-dlp-shaped info of an X video post before its redirect (memory only; never logged). */
     private val xVideoInfo: (XPostIdentity, String) -> Unit = { _, _ -> }) : Closeable {
     private val lock = Any()
@@ -71,6 +75,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             InstagramReader.accepts(source.link.rawUrl) -> InstagramReader.operation
             TelegramReader.accepts(source.link.rawUrl) -> TelegramReader.operation
             BlueskyReader.accepts(source.link.rawUrl) -> BlueskyReader.operation
+            ThreadsReader.accepts(source.link.rawUrl) -> ThreadsReader.operation
             TikTokPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL
             RedditPostIdentity.parse(source.link.rawUrl) != null -> MediaHttpOperation.PAGE_AND_CAROUSEL
             PinterestReader.accepts(source.link.rawUrl) -> PinterestReader.operation
@@ -128,6 +133,10 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                     ImageSourceType.BLUESKY -> {
                         val reader = BlueskyReader(operation.source.link)
                         mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, BlueskyReader.imageRule)
+                    }
+                    ImageSourceType.THREADS -> {
+                        val reader = ThreadsReader(operation.source.link)
+                        mapPlan(operation, reader.read(http, operation.token) { readPage(operation, it) }, ThreadsReader.imageRule)
                     }
                     ImageSourceType.TIKTOK -> fetchTikTok(operation)
                     ImageSourceType.REDDIT -> fetchReddit(operation)
@@ -331,12 +340,16 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
                 operation.fetchPhase = ImagePhase.IMAGE
                 // X/Instagram checked retirement in PAGE before entering the carousel; keep that failure phase.
                 if (checkPageTerminal) terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
+                if (plan.videoInfoJson != null && terminal(operation) == null)
+                    threadsVideo(operation.source.link, plan.videoInfoJson)
                 fetchCarousel(operation, plan.candidates, plan.discovery, rule, plan.metadata, plan.previewCandidates,
                     plan.pageContext, plan.videoTarget?.let { LinkRevision(it, operation.source.revision) })
             }
             is ImageReadPlan.Video -> {
                 if (plan.infoJson != null && plan.xIdentity != null && terminal(operation) == null)
                     xVideoInfo(plan.xIdentity, plan.infoJson)
+                if (plan.infoJson != null && ThreadsPostIdentity.parse(plan.target.rawUrl) != null && terminal(operation) == null)
+                    threadsVideo(plan.target, plan.infoJson)
                 redirectTo(operation, plan.target, plan.photosUnavailable)
             }
             is ImageReadPlan.Failure -> Fetched.Failed(MediaInspectResult.Failure(plan.reason, plan.phase, plan.statusCode,
@@ -459,7 +472,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val assets = ArrayList<Fetched.Asset>()
         val linkedIn = pageContext != null
         val optionalPreviews = rule == MediaHostRule.TELEGRAM_CDN || rule == MediaHostRule.BLUESKY_CDN ||
-            rule == MediaHostRule.REDDIT_MEDIA || rule == MediaHostRule.PINTEREST_CDN
+            rule == MediaHostRule.REDDIT_MEDIA || rule == MediaHostRule.PINTEREST_CDN ||
+            rule == MediaHostRule.THREADS_CDN
         val thumbnails = !linkedIn && (optionalPreviews || urls.size > 1 || discovery.cappedCount > 0 || discovery.unavailableCount > 0)
         val candidates = urls.take(operation.token.operation.maxImages)
         var postContext: MediaHttpPostContext? = null

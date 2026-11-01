@@ -817,7 +817,7 @@ class LinkViewModel(
             MediaSourceRoute.LEGACY -> startLegacyInspection(input, readerOrigin)
             MediaSourceRoute.DIRECT_IMAGE, MediaSourceRoute.LINKEDIN, MediaSourceRoute.FACEBOOK, MediaSourceRoute.X,
             MediaSourceRoute.INSTAGRAM, MediaSourceRoute.TELEGRAM, MediaSourceRoute.BLUESKY, MediaSourceRoute.TIKTOK,
-            MediaSourceRoute.REDDIT, MediaSourceRoute.PINTEREST ->
+            MediaSourceRoute.REDDIT, MediaSourceRoute.PINTEREST, MediaSourceRoute.THREADS ->
                 startImageInspection(images, input, route, origin)
         }
     }
@@ -931,6 +931,12 @@ class LinkViewModel(
                         else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
                         return@launch
                     }
+                    // Threads video is already read: one progressive MP4, then the existing direct download.
+                    if (route == MediaSourceRoute.THREADS) {
+                        if (watch.matches(source)) startLegacyInspection(watch, origin)
+                        else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
+                        return@launch
+                    }
                     if (route == MediaSourceRoute.TIKTOK && watch.revision == source.revision &&
                         TikTokPostIdentity.parse(watch.link.rawUrl)?.videoUrl == watch.link.rawUrl &&
                         TikTokPostIdentity.parse(watch.link.rawUrl)?.postId == TikTokPostIdentity.parse(source.link.rawUrl)?.postId) {
@@ -963,7 +969,8 @@ class LinkViewModel(
     /** Only pre-verdict post-page failures get one legacy inspection; media verdicts stay terminal.
      *  yt-dlp cannot read a Facebook /share/ link, so a failed share-page read shows its own error (with Retry). */
     private fun readerFallsBack(route: MediaSourceRoute, result: MediaInspectResult.Failure, source: LinkRevision): Boolean =
-        route != MediaSourceRoute.DIRECT_IMAGE && result.phase == ImagePhase.PAGE && !tikTokPhotoLink(route, source) && when (result.reason) {
+        route != MediaSourceRoute.DIRECT_IMAGE && route != MediaSourceRoute.THREADS &&
+            result.phase == ImagePhase.PAGE && !tikTokPhotoLink(route, source) && when (result.reason) {
             ImageFailure.HTTP -> result.statusCode != 404 && result.statusCode != 410 && !facebookShare(route, source)
             ImageFailure.SOURCE_REFUSED, ImageFailure.BUDGET, ImageFailure.UNAVAILABLE, ImageFailure.NETWORK -> !facebookShare(route, source)
             ImageFailure.NO_MEDIA -> route in setOf(MediaSourceRoute.FACEBOOK, MediaSourceRoute.LINKEDIN,

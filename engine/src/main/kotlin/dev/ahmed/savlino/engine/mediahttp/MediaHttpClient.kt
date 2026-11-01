@@ -35,6 +35,7 @@ import dev.ahmed.savlino.engine.instagram.InstagramLinkKind
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
+import dev.ahmed.savlino.engine.threads.ThreadsPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.pinterest.PinterestPostIdentity
 import dev.ahmed.savlino.engine.reddit.RedditJsChallenge
@@ -76,7 +77,7 @@ internal sealed interface MediaHttpImageTransferResult {
 }
 
 private enum class PageSite { LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST,
-    PINTEREST_WIDGET, YOUTUBE_OEMBED, SHORT_LINK }
+    PINTEREST_WIDGET, YOUTUBE_OEMBED, SHORT_LINK, THREADS }
 private class LinkedInPageAdmission(val operationId: OperationId, val entry: String, val canonicalPost: String)
 private class ImageSaveState {
     val writeLock = Any()
@@ -166,6 +167,13 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
     internal fun fetchBlueskyApi(token: OperationToken, url: String): MediaHttpResult =
         fetchInternal(token, PublicMediaRequest(url, MediaHttpPurpose.PAGE), PageSite.BLUESKY)
 
+    /**
+     * The one logged-out read of a public Threads post: `https://www.threads.com/@user/post/code`,
+     * navigation headers, no cookie. No redirect is followed. Cap [MediaPageLimits.THREADS].
+     */
+    internal fun fetchThreadsPost(token: OperationToken, identity: ThreadsPostIdentity): MediaHttpResult =
+        fetchInternal(token, PublicMediaRequest(identity.fetchUrl, MediaHttpPurpose.PAGE), PageSite.THREADS)
+
     internal fun newRedditOperation(): OperationToken = createOperation(MediaHttpOperation.PAGE_AND_IMAGE, save = false)
 
     /**
@@ -221,7 +229,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 request.pageContext == null || request.hostRule != MediaHostRule.ANY
             else request.hostRule !in setOf(MediaHostRule.FACEBOOK_CDN, MediaHostRule.X_MEDIA, MediaHostRule.INSTAGRAM_CDN,
                 MediaHostRule.TELEGRAM_CDN, MediaHostRule.BLUESKY_CDN, MediaHostRule.TIKTOK_CDN, MediaHostRule.REDDIT_MEDIA,
-                MediaHostRule.PINTEREST_CDN)))
+                MediaHostRule.PINTEREST_CDN, MediaHostRule.THREADS_CDN)))
             MediaHttpResult.Failure(MediaHttpFailure.INVALID_CONTEXT)
         else fetchInternal(token, request, null, optional = true, imageCap = cap)
 
@@ -434,6 +442,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
         val instagramPage = site == PageSite.INSTAGRAM
         val telegramPage = site == PageSite.TELEGRAM
         val blueskyPage = site == PageSite.BLUESKY
+        val threadsPage = site == PageSite.THREADS
         val tiktokPage = site == PageSite.TIKTOK
         val redditPage = site == PageSite.REDDIT
         val pinterestPage = site == PageSite.PINTEREST
@@ -480,8 +489,11 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                     !TelegramPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (blueskyPage && (request.purpose != MediaHttpPurpose.PAGE || token.operation != MediaHttpOperation.PAGES_AND_CAROUSEL ||
                     !BlueskyPostIdentity.isApiRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+            if (threadsPage && (request.purpose != MediaHttpPurpose.PAGE || token.operation != MediaHttpOperation.PAGE_AND_CAROUSEL ||
+                    !ThreadsPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (request.purpose == MediaHttpPurpose.PAGE && ((!telegramPage && url.host in setOf("t.me", "telegram.me")) ||
-                    (!blueskyPage && url.host == BlueskyPostIdentity.API_HOST))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                    (!blueskyPage && url.host == BlueskyPostIdentity.API_HOST) ||
+                    (!threadsPage && url.host in ThreadsPostIdentity.hosts))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (tiktokPage && (request.purpose != MediaHttpPurpose.PAGE || token.operation != MediaHttpOperation.TIKTOK_PAGE_AND_CAROUSEL ||
                     !TikTokPostIdentity.isPageRequest(url))) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
             if (!tiktokPage && request.purpose == MediaHttpPurpose.PAGE && url.host in setOf("www.tiktok.com", "tiktok.com", "m.tiktok.com"))
@@ -518,12 +530,15 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                 token.budget.requireRequestRoom()
                 val wireRequest = Request.Builder().url(url).get()
                     .header("User-Agent", if (browserPage) DESKTOP_BROWSER_AGENT else if (shortLink) SHORT_LINK_AGENT else PUBLIC_USER_AGENT)
-                    .header("Accept", if (browserPage) BROWSER_PAGE_ACCEPT else if (xPost || blueskyPage || oembed || pinterestWidget) JSON_ACCEPT
+                    .header("Accept", if (threadsPage) "text/html" else if (browserPage) BROWSER_PAGE_ACCEPT
+                        else if (xPost || blueskyPage || oembed || pinterestWidget) JSON_ACCEPT
                         else if (request.purpose == MediaHttpPurpose.PAGE) PAGE_ACCEPT else IMAGE_ACCEPT)
                     .header("Accept-Encoding", "identity")
                     .apply {
                         // Facebook answers 400 without Sec-Fetch-Mode and a data-less shell without text/html.
-                        if (browserPage) BROWSER_NAVIGATION_HEADERS.forEach { (name, value) -> header(name, value) }
+                        // Threads serves a data-less shell unless the request looks like a document navigation.
+                        if (threadsPage) THREADS_NAVIGATION_HEADERS.forEach { (name, value) -> header(name, value) }
+                        else if (browserPage) BROWSER_NAVIGATION_HEADERS.forEach { (name, value) -> header(name, value) }
                         tikTokChallenge?.let { header("Cookie", it) }
                     }
                     .tag(MediaHttpAttempt::class.java, MediaHttpAttempt())
@@ -552,7 +567,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                     throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             }
                             if (telegramPage) throw MediaHttpException(MediaHttpFailure.LOGIN_REQUIRED)
-                            if (xPost || blueskyPage || oembed || pinterestWidget) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
+                            if (xPost || blueskyPage || threadsPage || oembed || pinterestWidget) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
                             if (instagramPage) throw MediaHttpException(
                                 if (HttpsUrl.resolve(url, response.header("Location").orEmpty())
                                         ?.let(InstagramPostIdentity::isLoginWall) == true) MediaHttpFailure.LOGIN_REQUIRED
@@ -621,6 +636,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
                                 else if (redditPage) MediaPageLimits.REDDIT
                                 else if (pinterestPage || pinterestWidget) MediaPageLimits.PINTEREST
                                 else if (telegramPage) MediaPageLimits.TELEGRAM else if (blueskyPage) MediaPageLimits.BLUESKY
+                                else if (threadsPage) MediaPageLimits.THREADS
                                 else if (linkedInPage) MediaPageLimits.LINKEDIN
                                 else imageCap?.let { minOf(it, token.budget.imageLimit()) })
                             if (tiktokPage && tikTokChallenge == null) {
@@ -700,6 +716,7 @@ class MediaHttpClient private constructor(environment: MediaHttpEnvironment?) : 
             MediaHostRule.TIKTOK_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isTikTokImage(url)
             MediaHostRule.REDDIT_MEDIA -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isRedditImage(url)
             MediaHostRule.PINTEREST_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isPinterestImage(url)
+            MediaHostRule.THREADS_CDN -> request.purpose == MediaHttpPurpose.IMAGE && MediaHttpPolicy.isThreadsImage(url)
         }
         if (!allowed) throw MediaHttpException(MediaHttpFailure.INVALID_CONTEXT)
     }
@@ -872,6 +889,8 @@ private const val BROWSER_PAGE_ACCEPT = "text/html,application/xhtml+xml,applica
 private const val DESKTOP_BROWSER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 private val BROWSER_NAVIGATION_HEADERS = listOf("Accept-Language" to "en-US,en;q=0.9", "Sec-Fetch-Mode" to "navigate",
     "Sec-Fetch-Site" to "none", "Sec-Fetch-Dest" to "document", "Sec-Fetch-User" to "?1", "Upgrade-Insecure-Requests" to "1")
+private val THREADS_NAVIGATION_HEADERS = listOf("Sec-Fetch-Dest" to "document", "Sec-Fetch-Mode" to "navigate",
+    "Sec-Fetch-Site" to "none")
 private const val IMAGE_ACCEPT = "image/jpeg,image/png,image/gif,image/webp;q=0.9"
 private const val SAVE_BODY_CAP = 20L * 1024 * 1024
 /** Shorteners (t.co, Instagram /share/) answer a browser with an HTML interstitial and anything else with the redirect. */

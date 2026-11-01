@@ -6,7 +6,7 @@ import dev.ahmed.savlino.engine.mediahttp.MediaHttpFailure
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.delay
 
-enum class MediaSourceRoute { DIRECT_IMAGE, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST, LEGACY }
+enum class MediaSourceRoute { DIRECT_IMAGE, LINKEDIN, FACEBOOK, X, INSTAGRAM, TELEGRAM, BLUESKY, TIKTOK, REDDIT, PINTEREST, THREADS, LEGACY }
 
 /**
  * Additive, explicit routing facade; EngineAdapter and the audiovisual command path remain untouched.
@@ -38,6 +38,7 @@ class MediaSourceInspector(private val images: PublicImageInspector, private val
                 MediaSourceRoute.TIKTOK -> ImageSourceType.TIKTOK
                 MediaSourceRoute.REDDIT -> ImageSourceType.REDDIT
                 MediaSourceRoute.PINTEREST -> ImageSourceType.PINTEREST
+                MediaSourceRoute.THREADS -> ImageSourceType.THREADS
                 else -> ImageSourceType.DIRECT
             })
         } finally { operations.remove(operationId, operation) }

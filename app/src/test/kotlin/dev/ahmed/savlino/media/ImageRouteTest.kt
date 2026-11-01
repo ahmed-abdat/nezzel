@@ -48,6 +48,17 @@ class ImageRouteTest {
             assertEquals(url, MediaSourceRoute.LEGACY, route(url))
     }
 
+    @Test fun threadsPostLinksUseTheThreadsReader() {
+        val post = "@synthetic_user/post/SynthPost01"
+        for (url in listOf("https://www.threads.com/$post", "https://threads.com/$post/",
+            "https://www.threads.net/$post/media", "https://threads.net/$post?x=1#top"))
+            assertEquals(url, MediaSourceRoute.THREADS, route(url))
+        for (url in listOf("https://www.threads.com/@synthetic_user", "https://www.threads.com/@synthetic_user/post",
+            "https://www.threads.net/p/SynthPost01/", "https://threads.com.evil.example/$post",
+            "https://www.instagram.com/$post"))
+            assertEquals(url, MediaSourceRoute.LEGACY, route(url))
+    }
+
     @Test fun narrowExtensionlessCdnAndPrefixedInstagramShapes() {
         for (url in listOf("https://pbs.twimg.com/media/Synthetic?format=jpg&name=orig", "https://example.com/photo.jpg#x"))
             assertEquals(MediaSourceRoute.DIRECT_IMAGE, ImageRoute.of(dev.ahmed.savlino.domain.LinkInput.parse(url)!!))

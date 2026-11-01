@@ -21,11 +21,13 @@ internal sealed interface ImageReadPlan {
      * plus TikTok's sound capability. [metadata] carries titles (all sites) and authors (e.g. X).
      * [pageContext] binds LinkedIn images/Save to the fetched post.
      * [videoTarget] carries Facebook's canonical watch link or TikTok's post-bound sound link.
+     * [videoInfoJson] is a Threads mixed post's first progressive MP4, yt-dlp-shaped, for the direct download.
      * TikTok mirrors, positions and resize retry remain in its existing pipeline until step 1c.
      */
     class Photos(val candidates: List<String>, val previewCandidates: List<String>,
         val discovery: ImageDiscovery, val metadata: MediaMetadata,
-        val pageContext: MediaHttpTarget? = null, val videoTarget: ValidatedLink? = null) : ImageReadPlan {
+        val pageContext: MediaHttpTarget? = null, val videoTarget: ValidatedLink? = null,
+        val videoInfoJson: String? = null) : ImageReadPlan {
         override fun toString() = "ImageReadPlan.Photos(redacted)"
     }
 

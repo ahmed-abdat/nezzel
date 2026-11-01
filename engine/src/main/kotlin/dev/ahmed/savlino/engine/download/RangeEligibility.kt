@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 
 internal object RangeEligibility {
     fun select(site: Host, row: Format, json: String, allows: (String) -> Boolean): DirectRequest? = try {
-        if (site !in setOf(Host.TIKTOK, Host.FACEBOOK, Host.INSTAGRAM, Host.X) || row.container != "mp4" ||
+        if (site !in setOf(Host.TIKTOK, Host.FACEBOOK, Host.INSTAGRAM, Host.X, Host.THREADS) || row.container != "mp4" ||
             !row.hasVideo || row.requiresMerge || row.conversion != null) null
         else {
             val root = ObjectMapper().readTree(json)

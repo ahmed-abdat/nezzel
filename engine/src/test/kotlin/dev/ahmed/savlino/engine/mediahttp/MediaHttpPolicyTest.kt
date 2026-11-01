@@ -27,6 +27,16 @@ class MediaHttpPolicyTest {
         for (did in listOf("did:web:localhost", "did:web:Evil.Test", "did:web:evil.test%3A8080", "did:key:z6Mk"))
             assertFalse(MediaHttpPolicy.isBlueskyImage(assertNotNull(HttpsUrl.parse(
                 "https://cdn.bsky.app/img/feed_fullsize/plain/$did/synthetic"))), did)
+        assertTrue(MediaHttpPolicy.isThreadsImage(assertNotNull(HttpsUrl.parse(
+            "https://scontent.cdninstagram.com/v/t51/synthetic.jpg?oe=6F000000"))))
+        assertTrue(MediaHttpPolicy.isThreadsImage(assertNotNull(HttpsUrl.parse(
+            "https://instagram.fexample.fna.fbcdn.net/o1/v/t2/synthetic.png"))))
+        assertFalse(MediaHttpPolicy.isThreadsImage(assertNotNull(HttpsUrl.parse(
+            "https://scontent.cdninstagram.com.evil.example/v/t51/synthetic.jpg"))))
+        assertFalse(MediaHttpPolicy.isThreadsImage(assertNotNull(HttpsUrl.parse(
+            "https://notfbcdn.net/v/t51/synthetic.jpg"))))
+        assertFalse(MediaHttpPolicy.isThreadsImage(assertNotNull(HttpsUrl.parse(
+            "https://scontent.cdninstagram.com/v/t51/synthetic.mp4"))))
     }
 
     @Test fun linkedinEntryHostsAreBroaderThanRedirectHops() {

@@ -14,6 +14,12 @@ class VideoCdnPolicyTest {
         assertTrue(VideoCdnPolicy.hostPath(Host.FACEBOOK, "video.example.fbcdn.net", "/o1/v/t2/f2/video.mp4"))
         assertTrue(VideoCdnPolicy.hostPath(Host.INSTAGRAM, "scontent-example.cdninstagram.com", "/o1/v/t2/f2/video.mp4"))
         assertTrue(VideoCdnPolicy.hostPath(Host.TIKTOK, "v-example.tiktokcdn.com", "/video/example"))
+        assertTrue(VideoCdnPolicy.hostPath(Host.THREADS, "scontent.cdninstagram.com", "/o1/v/t2/f2/synthetic.mp4"))
+        assertTrue(VideoCdnPolicy.hostPath(Host.THREADS, "instagram.fexample.fna.fbcdn.net", "/o1/v/t2/f2/synthetic.mp4"))
+        assertFalse(VideoCdnPolicy.hostPath(Host.THREADS, "cdninstagram.com.evil.example", "/o1/v/t2/synthetic.mp4"))
+        assertFalse(VideoCdnPolicy.hostPath(Host.THREADS, "notfbcdn.net", "/o1/v/t2/synthetic.mp4"))
+        assertFalse(VideoCdnPolicy.hostPath(Host.THREADS, "scontent.cdninstagram.com", "/o1/v/t2/synthetic.jpg"))
+        assertFalse(VideoCdnPolicy.hostPath(Host.OTHER, "scontent.cdninstagram.com", "/o1/v/t2/synthetic.mp4"))
         assertFalse(VideoCdnPolicy.hostPath(Host.YOUTUBE, "video.twimg.com", "/ext_tw_video/video.mp4"))
     }
     @Test fun privateAndSpecialAddressesFailClosed() {

@@ -26,6 +26,14 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class ViewInputTest {
+    @Test fun threadsHostsAreAcceptedOpenWithTargets() {
+        for (host in listOf("threads.com", "www.threads.com", "threads.net", "www.threads.net")) {
+            assertTrue(AcceptedLinkHosts.exactHosts.contains(host))
+            assertTrue(ShareInput.VIEW_HOSTS.contains(host))
+            assertNotNull(LinkInput.parse("https://$host/@synthetic_user/post/SynthPost01"))
+        }
+    }
+
     @Test fun manifestHostsEqualAcceptedHostsMinusShareOnlyAndStaticShortcutsTargetForegroundActions() {
         val main = java.io.File("src/main").takeIf { it.isDirectory } ?: java.io.File("app/src/main")
         val xml = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()

@@ -104,9 +104,10 @@ class ImageInspectionFlowTest {
         assertEquals(OptionsState.Hidden, vm.optionsState)
     }
 
-    @Test fun telegramAndBlueskyAlbumsPublishOnlyConfirmedPhotosThroughTheSharedSaver() {
+    @Test fun telegramBlueskyAndThreadsAlbumsPublishOnlyConfirmedPhotosThroughTheSharedSaver() {
         for ((route, url) in listOf(MediaSourceRoute.TELEGRAM to "https://t.me/synthetic_channel/123",
-            MediaSourceRoute.BLUESKY to "https://bsky.app/profile/synthetic.test/post/3synthetic001")) {
+            MediaSourceRoute.BLUESKY to "https://bsky.app/profile/synthetic.test/post/3synthetic001",
+            MediaSourceRoute.THREADS to "https://www.threads.com/@synthetic_user/post/SynthPost01")) {
             val images = FakeImages { imageSuccess(it, found = 3, metadata = MediaMetadata("Album")) }
             val vm = model(images)
             val beforeFetch = fetch.selections.size
