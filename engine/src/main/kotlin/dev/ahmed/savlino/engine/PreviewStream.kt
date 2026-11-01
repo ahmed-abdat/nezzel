@@ -23,6 +23,9 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
                     throw java.net.UnknownHostException("not public")
             }
         }
+        /** True for a public address only; the player checks every connected socket with it (IP-literal hosts skip DNS). */
+        fun isPublic(address: java.net.InetAddress) = dev.ahmed.savlino.engine.mediahttp.MediaHttpPolicy.allows(address)
+
         /** Request headers a preview may replay; site auth/session headers stay with yt-dlp. */
         private val SAFE_HEADERS = setOf("user-agent", "referer", "origin", "accept", "accept-language")
 
@@ -36,10 +39,10 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
         private fun pick(root: JsonNode): PreviewStream? {
             if (root.path("_type").asText("video") != "video") return null
             val formats = root.path("formats").filter(::playable)
-            val muxed = formats.filter { (video(it) && audio(it)) || unlabelled(it) }
+            val muxed = formats.filter { (video(it) && audio(it)) || bare(it) }
             closest(muxed.filter { it.path("height").asInt(0) in 1..MAX_HEIGHT })?.let { return stream(it, null) }
-            val videos = formats.filter { video(it) && !audio(it) && it.path("ext").asText() == "mp4" }
-            val audioOnly = formats.none(::video)
+            val videos = formats.filter { video(it) && !audio(it) && !bare(it) && it.path("ext").asText() == "mp4" }
+            val audioOnly = formats.none { video(it) || bare(it) }
             val audios = formats.filter { audio(it) && !video(it) && (audioOnly || it.path("ext").asText() in setOf("m4a", "mp4")) }
             val audio = audios.minByOrNull { it.path("abr").asDouble(Double.MAX_VALUE).let { abr -> if (abr < 48) 1e6 + abr else abr } }
             val video = closest(videos)
@@ -47,7 +50,11 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
             // Files with no height (Facebook's sd/hd pair): the smallest one, "sd" before "hd".
             muxed.filter { !it.hasNonNull("height") }.minWithOrNull(compareBy<JsonNode> { !it.path("format_id").asText().startsWith("sd") }
                 .thenBy { it.path("filesize").asLong(it.path("tbr").asLong(Long.MAX_VALUE)) })?.let { return stream(it, null) }
+            // Only big files with sound (Pinterest): the smallest of them.
+            muxed.filter { it.path("height").asInt(0) > MAX_HEIGHT }.minByOrNull { it.path("height").asInt() }?.let { return stream(it, null) }
             if (video == null && audioOnly && audio != null) return stream(audio, null, hasVideo = false)
+            // The site gave no sound at all (Instagram signed out): the saved file is silent too, so the preview may be.
+            if (root.path("formats").none(::audio)) (video ?: videos.minByOrNull { it.path("height").asInt(Int.MAX_VALUE) })?.let { return stream(it, null) }
             // A single direct file (TikTok-style roots carry the chosen file itself).
             if (formats.isEmpty() && playable(root) && root.path("vcodec").asText() != "none") return stream(root, null)
             return null
@@ -61,12 +68,13 @@ class PreviewStream(val url: String, val audioUrl: String?, val headers: Map<Str
                 .thenBy { if (it.hasNonNull("height")) kotlin.math.abs(it.path("height").asInt() - TARGET_HEIGHT) else 0 })
         }
 
-        private fun video(node: JsonNode) = node.path("vcodec").asText("").let { it.isNotEmpty() && it != "none" } ||
-            (!node.has("vcodec") && node.path("height").asInt(0) > 0)
-        /** A plain video file the site gave without codecs or height; such files carry sound. */
-        private fun unlabelled(node: JsonNode) = !node.has("vcodec") && !node.has("acodec") && !node.hasNonNull("height") &&
+        /** The codec yt-dlp named, or null when it left the field out or null ("none" means the track is absent). */
+        private fun codec(node: JsonNode, field: String): String? = node.get(field)?.takeIf { it.isTextual }?.asText()?.takeIf { it.isNotEmpty() }
+        private fun video(node: JsonNode) = codec(node, "vcodec")?.let { it != "none" } ?: (node.path("height").asInt(0) > 0)
+        /** A plain video file with no codec named at all (X, Twitch clips, Pinterest, Facebook); such files carry sound. */
+        private fun bare(node: JsonNode) = codec(node, "vcodec") == null && codec(node, "acodec") == null &&
             node.path("ext").asText() in setOf("mp4", "webm", "mov")
-        private fun audio(node: JsonNode) = node.path("acodec").asText("").let { it.isNotEmpty() && it != "none" }
+        private fun audio(node: JsonNode) = codec(node, "acodec")?.let { it != "none" } ?: false
 
         private fun playable(node: JsonNode): Boolean {
             val url = node.path("url").asText("")

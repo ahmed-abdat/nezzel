@@ -127,6 +127,41 @@ class PreviewStreamTest(private val case: Case) {
                 url = "https://media.example/360.mp4",
                 audioUrl = "https://media.example/48.m4a",
             ),
+            Case(
+                "plays plain files whose codecs are null, nearest to 360p",
+                formats(
+                    """{"url":"https://media.example/a.m3u8","protocol":"m3u8_native","ext":"mp4","vcodec":"none","acodec":null}""",
+                    """{"url":"https://media.example/270.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":270}""",
+                    """{"url":"https://media.example/360.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":360}""",
+                    """{"url":"https://media.example/720.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":720}""",
+                ),
+                url = "https://media.example/360.mp4",
+            ),
+            Case(
+                "plays the smallest big file when no small one has sound",
+                formats(
+                    """{"url":"https://media.example/hls.m3u8","protocol":"m3u8_native","ext":"mp4","vcodec":"avc1","acodec":"mp4a","height":424}""",
+                    """{"url":"https://media.example/1138.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":1138}""",
+                    """{"url":"https://media.example/1920.mp4","protocol":"https","ext":"mp4","vcodec":null,"acodec":null,"height":1920}""",
+                ),
+                url = "https://media.example/1138.mp4",
+            ),
+            Case(
+                "plays silent video when the site gives no sound at all",
+                formats(
+                    """{"url":"https://media.example/nosize.mp4","ext":"mp4","vcodec":null,"acodec":"none"}""",
+                    """{"url":"https://media.example/840.mp4","ext":"mp4","vcodec":"avc1","acodec":"none","height":840}""",
+                    """{"url":"https://media.example/1280.mp4","ext":"mp4","vcodec":"avc1","acodec":"none","height":1280}""",
+                ),
+                url = "https://media.example/840.mp4",
+            ),
+            Case(
+                "never plays silent video when the sound is only in a playlist",
+                formats(
+                    """{"url":"https://media.example/audio.m3u8","protocol":"m3u8_native","ext":"mp4","vcodec":"none","acodec":"mp4a"}""",
+                    """{"url":"https://media.example/360.mp4","ext":"mp4","vcodec":"avc1","acodec":"none","height":360}""",
+                ),
+            ),
             Case("rejects malformed JSON", "{\"formats\":["),
             Case(
                 "redacts both stream URLs from toString",

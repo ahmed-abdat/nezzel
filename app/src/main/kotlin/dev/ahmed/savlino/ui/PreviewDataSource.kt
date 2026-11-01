@@ -20,7 +20,7 @@ import okhttp3.Response
 
 /**
  * Plain HTTPS reads for the preview player over OkHttp with [PreviewStream.publicDns]: every connect, redirects included,
- * goes only to the public addresses that were checked. No proxy (a proxy would resolve the host itself), no https→http.
+ * goes only to the public addresses that were checked, and the connected socket is checked again. No proxy (a proxy would resolve the host itself), no https→http.
  */
 @UnstableApi
 internal class PreviewDataSource(private val call: Call.Factory, private val headers: Map<String, String>) : BaseDataSource(true) {
@@ -92,6 +92,12 @@ internal class PreviewDataSource(private val call: Call.Factory, private val hea
     companion object {
         private val client by lazy {
             OkHttpClient.Builder().dns(PreviewStream.publicDns).proxy(Proxy.NO_PROXY).followSslRedirects(false)
+                // IP-literal hosts never reach the Dns: check the socket actually connected, on every hop.
+                .addNetworkInterceptor { chain ->
+                    val address = chain.connection()?.route()?.socketAddress?.address
+                    if (address == null || !PreviewStream.isPublic(address)) throw IOException("not public")
+                    chain.proceed(chain.request())
+                }
                 .connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).build()
         }
     }

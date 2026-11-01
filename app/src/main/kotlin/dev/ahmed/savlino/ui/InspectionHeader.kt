@@ -37,7 +37,7 @@ import dev.ahmed.savlino.ui.theme.Space
 internal fun InspectionHeader(inspection: Inspection?, host: String, checking: Boolean, earlyPreview: EarlyPreview? = null,
     load: suspend (String) -> Bitmap? = { ThumbnailLoader().load(it) }, onThumbnail: () -> Unit = {}, hint: String? = null,
     cachedPreview: CachedPreview? = null, onArtwork: (Bitmap) -> Unit = {},
-    stream: dev.ahmed.savlino.engine.PreviewStream? = null, onPlayed: (failed: Boolean) -> Unit = {}) {
+    stream: dev.ahmed.savlino.engine.PreviewStream? = null, onPlayed: (failed: Boolean) -> Unit = {}, compact: Boolean = false) {
     // A playable video gets a full-width poster; tapping it plays in that same box and Close returns to the poster.
     var playing by remember(stream) { mutableStateOf(false) }
     // The sender's own words stand in until a real title arrives; the title skeleton shows only without them.
@@ -73,11 +73,14 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
         }
     }
     val audioOnly = inspection?.formats?.all { !it.hasVideo } == true
-    if (stream != null) {
+    // One layout from the first frame to the last: the poster box is there while loading, so nothing jumps when the
+    // options land; a sound-only result and the network-free share preview keep the small tile.
+    val hero = !audioOnly && !compact
+    if (hero) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9)) {
-            PreviewThumbnail(thumbnail, load = load, fallback = fallback, playable = !playing, wide = true,
-                duration = inspection?.durationSeconds, onPlay = { playing = true }, audioOnly = audioOnly, onBitmap = onBitmap)
-            androidx.compose.animation.AnimatedVisibility(playing, Modifier.matchParentSize(),
+            PreviewThumbnail(thumbnail, load = load, fallback = fallback, playable = stream != null && !playing, wide = true,
+                duration = inspection?.durationSeconds, onPlay = { playing = true }, onBitmap = onBitmap)
+            if (stream != null) androidx.compose.animation.AnimatedVisibility(playing, Modifier.matchParentSize(),
                 enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
                 PreviewPlayer(stream, shown, onClose = { playing = false }, onResult = onPlayed, modifier = Modifier.fillMaxSize())
             }
@@ -85,7 +88,7 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
         Spacer(Modifier.height(Space.m))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-        if (stream == null) PreviewThumbnail(thumbnail, load = load, fallback = fallback, audioOnly = audioOnly, onBitmap = onBitmap)
+        if (!hero) PreviewThumbnail(thumbnail, load = load, fallback = fallback, audioOnly = audioOnly, onBitmap = onBitmap)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             title?.let {
                 Text(it, style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
@@ -105,7 +108,7 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
             }
             // duration · site; the host stays an LTR island.
             val duration = if (inspection != null) inspection.durationSeconds else cachedPreview?.durationSeconds
-            val facts = listOfNotNull(duration?.takeIf { stream == null }?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }, NezzelFormat.isolate(host))
+            val facts = listOfNotNull(duration?.takeIf { !hero }?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }, NezzelFormat.isolate(host))
             Text(facts.joinToString(" · "), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -137,14 +140,16 @@ internal fun PreviewThumbnail(url: String?, audioOnly: Boolean = false, load: su
                 else Modifier.clearAndSetSemantics { }), contentAlignment = Alignment.Center) {
             if (current != null) Image(current.asImageBitmap(), contentDescription = null,
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else if (finished && !wide) {
-                if (audioOnly) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(24.dp),
+            else if (finished && !(wide && playable)) {
+                val icon = if (wide) 40.dp else 24.dp
+                if (audioOnly) Icon(painterResource(R.drawable.ic_music), null, Modifier.size(icon),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                else Icon(Icons.Default.PlayArrow, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                else Icon(Icons.Default.PlayArrow, null, Modifier.size(icon), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else Spacer(Modifier.fillMaxSize())
-            if (playable) {
-                PlayBadge(56.dp)
+            if (wide) {
+                androidx.compose.animation.AnimatedVisibility(playable, enter = androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.fadeOut()) { PlayBadge(56.dp) }
                 duration?.let { DurationChip(it, Modifier.align(Alignment.BottomEnd).padding(8.dp)) }
             }
         }

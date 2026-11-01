@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -44,8 +45,6 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.ui.compose.PlayerSurface
-import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.engine.PreviewStream
 import dev.ahmed.savlino.locale.NezzelFormat
@@ -104,6 +103,14 @@ internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -
     var controls by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf<Float?>(null) }
     var ratio by remember { mutableFloatStateOf(16f / 9) }
+    // The last picture, frozen while the video moves to the other screen, so the switch never shows black.
+    var still by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val surface = remember { arrayOfNulls<android.view.TextureView>(1) }
+    val freeze = {
+        still = surface[0]?.takeIf { firstFrame && it.isAvailable && it.width > 0 }?.let { v ->
+            val w = minOf(v.width, 960); v.getBitmap(w, (w.toLong() * v.height / v.width).toInt().coerceAtLeast(1))?.asImageBitmap()
+        }
+    }
     DisposableEffect(player) {
         var counted = false
         val listener = object : Player.Listener {
@@ -114,7 +121,8 @@ internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -
                 if (state == Player.STATE_READY) { duration = player.duration.coerceAtLeast(0); if (!counted) { counted = true; report(false) } }
                 if (ended) controls = true
             }
-            override fun onRenderedFirstFrame() { firstFrame = true }
+            // Fires again after every surface change: the new screen has a real picture, so the frozen one goes.
+            override fun onRenderedFirstFrame() { firstFrame = true; still = null }
             override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
                 if (size.width > 0 && size.height > 0) ratio = (size.width * size.pixelWidthHeightRatio / size.height).coerceIn(.5f, 2.4f)
             }
@@ -134,14 +142,22 @@ internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -
     // Controls hide 2.5 s after a tap while playing; paused or ended keeps them.
     LaunchedEffect(controls, playing, dragging) { if (controls && playing && dragging == null) { delay(2_500); controls = false } }
 
+    var fullscreen by remember { mutableStateOf(false) }
+    var returns by remember { mutableIntStateOf(0) }
     val description = stringResource(R.string.preview_player)
-    Box(modifier.clip(MaterialTheme.shapes.medium).background(Color.Black)
+    // One frame, drawn in the sheet or in the full-screen window; the newest TextureView owns the video.
+    val frame: @Composable (Modifier, Boolean) -> Unit = { frameModifier, full ->
+    Box(frameModifier.then(if (full) Modifier else Modifier.clip(MaterialTheme.shapes.medium)).background(Color.Black)
         .semantics { contentDescription = description }.testTag("preview_player")
         .clickable(remember { MutableInteractionSource() }, indication = null) { controls = !controls },
         contentAlignment = Alignment.Center) {
         // The picture keeps its own shape inside the fixed box: tall videos get side bars, like YouTube's player.
-        if (stream.hasVideo) PlayerSurface(player, Modifier.aspectRatio(ratio).then(if (playing) Modifier.keepScreenOn() else Modifier),
-            surfaceType = SURFACE_TYPE_TEXTURE_VIEW)
+        if (stream.hasVideo) Box(Modifier.aspectRatio(ratio).then(if (playing) Modifier.keepScreenOn() else Modifier)) {
+            androidx.compose.ui.viewinterop.AndroidView(factory = { c ->
+                android.view.TextureView(c).also { surface[0] = it; player.setVideoTextureView(it) }
+            }, Modifier.fillMaxSize(), onRelease = { player.clearVideoTextureView(it); if (surface[0] === it) surface[0] = null })
+            still?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds) }
+        }
         if (poster != null && (!firstFrame || !stream.hasVideo)) Image(poster.asImageBitmap(), null, Modifier.fillMaxSize(),
             contentScale = if (stream.hasVideo) ContentScale.Crop else ContentScale.Fit)
         if (failed) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.background(Color.Black.copy(alpha = .7f)).fillMaxSize().padding(16.dp),
@@ -172,8 +188,14 @@ internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .6f))))
                     .padding(horizontal = 12.dp)) {
                     val shown = dragging?.let { (it * duration).toLong() } ?: position
-                    Text(NezzelFormat.isolate("${NezzelFormat.durationMillis(shown)} / ${NezzelFormat.durationMillis(duration)}"),
-                        color = Color.White, style = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(NezzelFormat.isolate("${NezzelFormat.durationMillis(shown)} / ${NezzelFormat.durationMillis(duration)}"),
+                            Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.labelMedium.copy(textDirection = TextDirection.Ltr))
+                        if (stream.hasVideo) IconButton(onClick = { freeze(); if (full) returns++; fullscreen = !full }, Modifier.testTag("preview_fullscreen")) {
+                            Icon(painterResource(if (full) R.drawable.ic_fullscreen_exit else R.drawable.ic_fullscreen),
+                                stringResource(if (full) R.string.preview_fullscreen_exit else R.string.preview_fullscreen), tint = Color.White)
+                        }
+                    }
                     Slider(value = dragging ?: if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
                         onValueChange = { dragging = it }, enabled = duration > 0,
                         onValueChangeFinished = { dragging?.let { player.seekTo((it * duration).toLong()) }; dragging = null },
@@ -192,5 +214,38 @@ internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -
         if (!controls && !failed && duration > 0) LinearProgressIndicator(progress = { (position.toFloat() / duration).coerceIn(0f, 1f) },
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp), color = MaterialTheme.colorScheme.primary,
             trackColor = Color.White.copy(alpha = .25f), gapSize = 0.dp, drawStopIndicator = {})
+    }
+    }
+    // The sheet's picture stays put under the full-screen window, so the video moves straight from one surface to the
+    // other with no gap. Coming back gives the sheet a fresh surface (keyed), which takes the video over again.
+    key(returns) { frame(modifier, false) }
+    if (fullscreen) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { freeze(); returns++; fullscreen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            FullScreenWindow()
+            // Wide videos turn sideways inside this window instead of rotating the app: no relayout, so it opens at once.
+            BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+                if (ratio > 1.05f && maxHeight > maxWidth)
+                    frame(Modifier.requiredSize(maxHeight, maxWidth).graphicsLayer { rotationZ = 90f }, true)
+                else frame(Modifier.fillMaxSize(), true)
+            }
+        }
+    }
+}
+
+/** Edge to edge with the system bars hidden (a swipe shows them). */
+@Composable
+private fun FullScreenWindow() {
+    val view = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(view) {
+        (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let {
+            it.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+            it.setWindowAnimations(0)
+            androidx.core.view.WindowCompat.getInsetsController(it, view).apply {
+                systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose { }
     }
 }

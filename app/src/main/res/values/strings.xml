@@ -673,4 +673,6 @@
     <string name="preview_play">Play</string>
     <string name="preview_pause">Pause</string>
     <string name="preview_tap">Play preview</string>
+    <string name="preview_fullscreen">Full screen</string>
+    <string name="preview_fullscreen_exit">Exit full screen</string>
 </resources>

@@ -761,4 +761,6 @@
     <string name="preview_play">تشغيل</string>
     <string name="preview_pause">إيقاف مؤقت</string>
     <string name="preview_tap">شغّل المعاينة</string>
+    <string name="preview_fullscreen">ملء الشاشة</string>
+    <string name="preview_fullscreen_exit">الخروج من ملء الشاشة</string>
 </resources>
