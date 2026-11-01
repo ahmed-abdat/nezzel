@@ -3,7 +3,7 @@ Nezzel is an ad-free Android app for saving videos, audio and photos from suppor
 Processing runs on your device, in Arabic, French and English, with no Nezzel account — some links won’t work, and private, sign-in-required and protected content aren’t supported
 
 Features
-• Video and audio options come from the download engine, with unknown sizes left unknown and estimates labelled
+• Video and audio options come from the download engine, with a size shown only when it's exact
 • Audio extraction and MP3 conversion
 • Public photo posts, photo selection for supported carousels, and original GIF image saves, with still GIF previews
 • Download queue, cancellation, manual retry, notifications, and Open, Share and Delete for saved files

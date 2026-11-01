@@ -32,7 +32,7 @@ No ads, no account. In Arabic, English and French.
 2. Open Nezzel. It offers the link you just copied (or share the link to Nezzel).
 3. Pick a quality and tap **Download**. Files go to `Download/Nezzel`.
 
-You only see qualities the site really offers. Sizes are real; estimates are marked ≈.
+You only see qualities the site really offers. A size is shown only when it's exact; otherwise none is shown.
 
 ## Install
 
@@ -76,17 +76,21 @@ A link doesn't work? While Help improve Nezzel is on, Nezzel sends a failure rep
 
 ## بالعربية
 
-تطبيق **Nezzel** لأندرويد يحفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب ولا تتبّع.
+تطبيق **Nezzel** لأندرويد يحفظ الفيديو والصوت والصور من الروابط العامة، بلا إعلانات ولا حساب.
 
 انسخ الرابط، وافتح Nezzel، واختر الجودة، ثم اضغط «تنزيل». حمّل التطبيق من [صفحة الإصدارات](https://github.com/ahmed-abdat/nezzel/releases/latest) أو من [موقع Nezzel](https://nezzel.hululsoft.mr).
+
+ما دام خيار «ساعد في تحسين Nezzel» مفعّلًا (وهو مفعّل افتراضيًا)، يرسل التطبيق إحصاءات استخدام يومية مجهولة، وتقريرًا فيه الرابط عند فشل التنزيل. يمكنك إيقافه من الإعدادات ← إعدادات متقدمة. التفاصيل في [PRIVACY.md](PRIVACY.md#usage-counts-and-reports).
 
 </div>
 
 ## En français
 
-**Nezzel** est une application Android sans publicité pour enregistrer vidéos, sons et photos depuis des liens publics, sans compte ni pistage.
+**Nezzel** est une application Android sans publicité pour enregistrer vidéos, sons et photos depuis des liens publics, sans compte.
 
 Copiez un lien, ouvrez Nezzel, choisissez la qualité, puis touchez «&nbsp;Télécharger&nbsp;». Téléchargez l’APK depuis la [page des versions](https://github.com/ahmed-abdat/nezzel/releases/latest) ou le [site de Nezzel](https://nezzel.hululsoft.mr).
+
+Tant que « Aider à améliorer Nezzel » est activé (par défaut), l’application envoie des statistiques d’utilisation anonymes une fois par jour, et un rapport avec le lien quand un téléchargement échoue. Désactivez-le dans Paramètres → Avancé. Détails dans [PRIVACY.md](PRIVACY.md#usage-counts-and-reports).
 
 ## For developers
 

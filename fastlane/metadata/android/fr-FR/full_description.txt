@@ -1,9 +1,9 @@
 Nezzel est une application Android sans publicité pour enregistrer des vidéos, de l’audio et des photos depuis des liens publics compatibles — partagez ou collez un lien, consultez les options disponibles, puis appuyez sur Télécharger ou Enregistrer
 
-Tout est traité sur votre appareil, avec une interface en arabe, anglais et français, sans compte Nezzel ni suivi — certains liens ne fonctionnent pas, et les contenus privés, protégés ou nécessitant une connexion à un compte ne sont pas pris en charge
+Tout est traité sur votre appareil, avec une interface en arabe, anglais et français, sans compte Nezzel — certains liens ne fonctionnent pas, et les contenus privés, protégés ou nécessitant une connexion à un compte ne sont pas pris en charge
 
 Fonctionnalités
-• Les options vidéo et audio proviennent du moteur de téléchargement ; les tailles inconnues restent inconnues et les estimations sont signalées
+• Les options vidéo et audio proviennent du moteur de téléchargement ; la taille n'est affichée que si elle est exacte
 • Extraction audio et conversion en MP3
 • Photos de publications publiques, sélection de photos dans les carrousels compatibles et enregistrement des GIF originaux, avec des aperçus fixes
 • File de téléchargements, annulation, nouvel essai manuel, notifications et actions Ouvrir, Partager et Supprimer pour les fichiers enregistrés
