@@ -492,9 +492,9 @@ html[dir=ltr] .cx h3{max-width:16ch;letter-spacing:-.04em;line-height:1.04}
 /* F: the app's own logo wall, tilted like on its Update screen, every tile a site Nezzel works with; the rows drift on their own, alternating, and fade out in a clearing round the Nezzel mark */
 .amw{--t:clamp(56px,6.4vw,88px);--m:clamp(96px,11.5vw,148px);--g:calc(var(--t) * .3);position:relative;height:clamp(460px,50vw,600px);margin-top:clamp(4px,1.5vw,16px);direction:ltr}
 .amf{position:absolute;inset:0;overflow:hidden;
-  -webkit-mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 62% 48% at 50% 50%,#000 50%,transparent 100%);-webkit-mask-composite:source-in;
-  mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 62% 48% at 50% 50%,#000 50%,transparent 100%);mask-composite:intersect}
-@media (max-width:759px){.amw{--t:58px;height:500px}.amf{-webkit-mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 95% 50% at 50% 50%,#000 56%,transparent 100%);-webkit-mask-composite:source-in;mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .78),#000 calc(var(--m) * .78 + var(--t) * .75)),radial-gradient(ellipse 95% 50% at 50% 50%,#000 56%,transparent 100%);mask-composite:intersect}}
+  -webkit-mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .66),#000 calc(var(--m) * .66 + var(--t) * .5)),radial-gradient(ellipse 62% 48% at 50% 50%,#000 50%,transparent 100%);-webkit-mask-composite:source-in;
+  mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .66),#000 calc(var(--m) * .66 + var(--t) * .5)),radial-gradient(ellipse 62% 48% at 50% 50%,#000 50%,transparent 100%);mask-composite:intersect}
+@media (max-width:759px){.amw{--t:58px;height:500px}.amf{-webkit-mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .66),#000 calc(var(--m) * .66 + var(--t) * .5)),radial-gradient(ellipse 95% 50% at 50% 50%,#000 56%,transparent 100%);-webkit-mask-composite:source-in;mask:radial-gradient(circle at 50% 50%,transparent calc(var(--m) * .66),#000 calc(var(--m) * .66 + var(--t) * .5)),radial-gradient(ellipse 95% 50% at 50% 50%,#000 56%,transparent 100%);mask-composite:intersect}}
 html:not(.js) .amw{height:auto}
 html:not(.js) .amf{position:static;-webkit-mask:none;mask:none}
 html:not(.js) .atl{position:static;translate:none;rotate:none;display:block;padding-inline:16px}
@@ -506,7 +506,8 @@ html:not(.js) .amk{display:none}
 .apf.on .amr{animation:amr var(--d,60s) linear infinite}
 .apf.on .amr:nth-child(even){animation-direction:reverse}
 @keyframes amr{to{transform:translateX(calc(-50% - var(--g) / 2))}}
-.amk{position:absolute;left:50%;top:50%;width:var(--m);aspect-ratio:1;translate:-50% -50%;border-radius:22.2%;box-shadow:0 34px 60px -26px rgb(0 60 50/.6)}
+.amk{position:absolute;left:50%;top:50%;width:var(--m);aspect-ratio:1;translate:-50% -50%;border-radius:22.2%;box-shadow:0 0 0 1px rgb(0 60 50/.08),0 20px 36px -22px rgb(0 60 50/.35)}
+:root[data-mode=dark] .amk{box-shadow:0 0 0 1px rgb(158 242 225/.2),0 22px 40px -20px rgb(0 0 0/.55)}
 .amk img{display:block;width:100%;height:100%;border-radius:inherit}
 @media (prefers-reduced-motion:reduce){.apf.on .amr{animation:none}}
 
