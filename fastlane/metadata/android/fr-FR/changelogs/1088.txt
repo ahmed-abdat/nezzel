@@ -1,0 +1,5 @@
+0.5.8
+• Lancez une vidéo ou un morceau avant de l’enregistrer
+• Les liens Spotify ouvrent une recherche YouTube du morceau
+• Les 17 sites pris en charge s’affichent sur l’accueil
+• Une fenêtre d’options plus fluide et des corrections issues de vos signalements

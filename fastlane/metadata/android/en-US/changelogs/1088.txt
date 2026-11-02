@@ -1,0 +1,5 @@
+0.5.8
+• Play a video or song before you save it
+• Spotify links open a YouTube search for the song
+• All 17 supported sites now show on Home
+• A smoother options sheet, plus fixes from your reports

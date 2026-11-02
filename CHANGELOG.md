@@ -4,6 +4,24 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.8] - 2026-11-02
+
+### Added
+
+- Play before download: a video or song plays inside the options sheet before you save it, with full screen; streaming playlists (Bluesky, Dailymotion, SoundCloud) play too.
+- A Spotify song link opens a YouTube search for that song, with a one-line note.
+
+### Changed
+
+- Home shows all 17 supported sites on the logo ring; onboarding pages each tell their own short story.
+- Home and the site say videos, music and photos, not only videos.
+- Settings switch descriptions say what each one does.
+
+### Fixed
+
+- The options sheet no longer bounces after a small drag when it is nearly full height.
+- A preview that fails to play shows Try again and Close; preview streams use HTTPS only.
+
 ## [0.5.7] - 2026-11-01
 
 ### Added
