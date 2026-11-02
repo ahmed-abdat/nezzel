@@ -26,6 +26,9 @@ class YtdlpInfoCache(noBackupFilesDir: File, private val now: () -> Long = Syste
         inspections[inspection.inspectionId] = Entry(inspection, json, effective, trimToChosen)
     }
 
+    /** The recent result's JSON without consuming it (Play before saving). */
+    @Synchronized internal fun peek(inspectionId: String): String? = inspections[inspectionId]?.takeIf { fresh(it.createdAt) }?.json
+
     /** Consume once; a later explicit Retry must never resurrect this inspection. Best-effort IO. */
     @Synchronized internal fun prepare(command: DownloadCommand) {
         val entry = inspections.remove(command.inspectionId) ?: return

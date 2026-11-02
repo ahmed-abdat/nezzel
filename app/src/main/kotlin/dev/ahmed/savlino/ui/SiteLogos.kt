@@ -4,10 +4,12 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,7 +31,10 @@ import kotlin.math.sin
 
 /** A site mark drawn the way its app icon looks: [ink] glyph on a [tile], with optional offset [echo] copies or an [outline] behind it. */
 internal class SiteLogo(@DrawableRes val glyph: Int, val tile: Brush, val ink: Color, val glyphSize: Dp = 46.dp,
-    val echo: List<Pair<Color, Offset>> = emptyList(), val outline: Color? = null)
+    val echo: List<Pair<Color, Offset>> = emptyList(), val outline: Color? = null) {
+    /** Near-black tiles (X, TikTok, Threads, Dailymotion) get a faint light edge so they don't vanish on the dark theme. */
+    val dark = tile == black || (tile as? SolidColor)?.value?.let { it.red + it.green + it.blue < 0.2f } == true
+}
 
 private val white = SolidColor(Color.White)
 private val black = SolidColor(Color.Black)
@@ -51,12 +56,23 @@ internal object SiteLogos {
     val pinterest = SiteLogo(R.drawable.logo_pinterest, white, Color(0xFFE60023), 62.dp)
     val vimeo = SiteLogo(R.drawable.logo_vimeo, SolidColor(Color(0xFF1AB7EA)), Color.White, 48.dp)
     val soundcloud = SiteLogo(R.drawable.logo_soundcloud, Brush.verticalGradient(listOf(Color(0xFFFF8800), Color(0xFFFF3300))), Color.White, 56.dp)
+    val bluesky = SiteLogo(R.drawable.logo_bluesky, white, Color(0xFF0085FF), 52.dp)
+    val threads = SiteLogo(R.drawable.logo_threads, black, Color.White, 44.dp)
+    // LinkedIn's mark is its own blue square; drawn edge to edge it becomes the tile.
+    val linkedin = SiteLogo(R.drawable.logo_linkedin, white, Color(0xFF0A66C2), 80.dp)
+    val dailymotion = SiteLogo(R.drawable.logo_dailymotion, SolidColor(Color(0xFF0D0D0D)), Color.White, 46.dp)
+    val twitch = SiteLogo(R.drawable.logo_twitch, SolidColor(Color(0xFF9146FF)), Color.White, 44.dp)
     // Order decides where each tile falls on the wall: WhatsApp (Statuses) lands on clear cells, not under the mark
-    val all = listOf(youtube, facebook, instagram, whatsapp, tiktok, reddit, telegram, x, snapchat, pinterest, soundcloud, vimeo)
+    val all = listOf(youtube, facebook, instagram, whatsapp, tiktok, reddit, telegram, x, snapchat, pinterest, soundcloud, vimeo,
+        bluesky, threads, linkedin, dailymotion, twitch)
 }
 
 // The six most used sites ride the inner ring, the rest the outer one
-private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, instagram, facebook, snapchat, x, telegram, reddit, pinterest, soundcloud, vimeo) }
+private val arcOrder = with(SiteLogos) { listOf(youtube, whatsapp, tiktok, instagram, facebook, snapchat,
+    x, threads, telegram, linkedin, reddit, bluesky, pinterest, twitch, soundcloud, dailymotion, vimeo) }
+private const val INNER = 6
+/** The ring's entrance plays once per process, not on every return to Home. */
+private var arcShown = false
 
 /** A tilted wall of every site tile, larger than its parent so it bleeds off the edges. Purely decorative. */
 @Composable
@@ -80,35 +96,52 @@ internal fun SiteLogoWall(modifier: Modifier = Modifier, tile: Dp = 80.dp) {
 }
 
 /**
- * The site tiles on two rings around the mark (centre shifted down by [markShift]): six on an inner ellipse, six on a
- * wider outer one, staggered half a step so no two tiles meet. Both rings turn together, slowly, so the spacing stays
+ * The site tiles on two rings around the mark (centre shifted down by [markShift]): six on an inner ellipse, the rest
+ * spread evenly on a wider outer one, offset half a step so no two tiles meet. Both rings turn together, slowly, so the spacing stays
  * even while they move; tiles stay upright and fade under a [topClear] band. Still when animations are off. Decorative.
  */
 @Composable
-internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, tile: Dp = 58.dp, markShift: Dp = 0.dp,
+internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, tile: Dp = 58.dp, markShift: Dp = 0.dp, mark: Dp = 104.dp,
     topClear: Dp = 0.dp, @Suppress("UNUSED_PARAMETER") clear: DpOffset = DpOffset(100.dp, 82.dp)) {
     val half = (height.value - markShift.value) / 2
-    val size = minOf(tile.value, half * 0.36f).dp
-    // Sized so the rings never touch while they turn and the side tiles stay whole: the inner ring clears the 104 dp mark
-    val innerY = maxOf(half * 0.55f, 52f + size.value / 2 + 6f)
+    // Seventeen tiles: a little smaller than a 12-tile ring so the outer ring can sit a full tile beyond the inner one
+    val size = minOf(tile.value, half * 0.30f).dp
+    // Sized so the rings never touch while they turn and the side tiles stay whole: the inner ring clears the [mark]
+    val innerY = maxOf(half * 0.55f, mark.value / 2 + size.value / 2 + 6f)
     val innerX = innerY * 1.31f
-    val outerY = half * 0.80f
-    val outerX = minOf(width.value / 2 - size.value * 0.55f, innerX * 1.4f)
-    val turn = rememberTabLoop(0f, 1f, tween(90_000, easing = LinearEasing), RepeatMode.Restart, rest = 0f, enabled = !rememberReducedMotion())
+    // At least a tile and a quarter beyond the inner ring on every side; a narrow box crops side tiles rather than overlap them
+    val outerY = maxOf(half * 0.86f, innerY + size.value * 1.25f)
+    val outerX = maxOf(innerX + size.value * 1.3f, minOf(width.value / 2 - size.value * 0.55f, innerX * 1.5f))
+    val reduced = rememberReducedMotion()
+    val turn = rememberTabLoop(0f, 1f, tween(90_000, easing = LinearEasing), RepeatMode.Restart, rest = 0f, enabled = !reduced)
+    // First sight only (once per process): the tiles start hidden behind the mark and fan out one after another, inner ring first.
+    val entrance = remember { Animatable(if (reduced || arcShown) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        arcShown = true
+        if (entrance.value == 1f) return@LaunchedEffect
+        // Wait out the first frames: a cold start drops them, and the fan-out would be half over before it shows
+        repeat(3) { androidx.compose.runtime.withFrameNanos { } }
+        kotlinx.coroutines.delay(120)
+        entrance.animateTo(1f, tween(1100, easing = LinearEasing))
+    }
     Box(modifier.requiredSize(width, height), contentAlignment = Alignment.Center) {
         arcOrder.forEachIndexed { index, logo ->
-            val outer = index >= 6
-            val start = (index % 6) * 60.0 + if (outer) 30.0 else 0.0
+            val outer = index >= INNER
+            val outerCount = arcOrder.size - INNER
+            val start = if (outer) (index - INNER) * 360.0 / outerCount + 180.0 / outerCount else index * 360.0 / INNER
             Box(Modifier.size(size).graphicsLayer {
                 val angle = Math.toRadians(start + turn.value * 360.0 - 90.0)
                 val x = (if (outer) outerX else innerX) * cos(angle).toFloat()
                 val y = (if (outer) outerY else innerY) * sin(angle).toFloat() + markShift.value
-                translationX = x.dp.toPx(); translationY = y.dp.toPx()
+                // Each tile's own 0..1 share of the entrance, eased out so it settles softly
+                val step = ((entrance.value - index * 0.025f) / 0.55f).coerceIn(0f, 1f).let { 1f - (1f - it) * (1f - it) * (1f - it) }
+                val reach = step
+                translationX = (x * reach).dp.toPx(); translationY = (y * reach + markShift.value * (1f - reach)).dp.toPx()
                 // A touch of depth: tiles nearer the bottom come forward, the ones at the back sit smaller
-                val depth = 0.95f + 0.05f * sin(angle).toFloat()
+                val depth = (0.95f + 0.05f * sin(angle).toFloat()) * (0.5f + 0.5f * step)
                 scaleX = depth; scaleY = depth
                 rotationZ = if (index % 2 == 0) -8f else 8f
-                if (topClear.value > 0f) alpha = ((y - size.value / 2 + height.value / 2 - topClear.value) / size.value).coerceIn(0f, 1f)
+                alpha = minOf(1f, step * 3f) * if (topClear.value > 0f) ((y - size.value / 2 + height.value / 2 - topClear.value) / size.value).coerceIn(0f, 1f) else 1f
             }) {
                 // A soft lift like a launcher icon, so white tiles stand off a light page
                 LogoTile(logo, size, Modifier.shadow(3.dp, RoundedCornerShape(size * 0.275f), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f)))
@@ -121,7 +154,9 @@ internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, t
 internal fun LogoTile(logo: SiteLogo, size: Dp = 80.dp, modifier: Modifier = Modifier) {
     // Glyph sizes are tuned for an 80 dp tile and scale with it
     val scale = size / 80.dp
-    Box(modifier.size(size).background(logo.tile, RoundedCornerShape(size * 0.275f)), contentAlignment = Alignment.Center) {
+    val shape = RoundedCornerShape(size * 0.275f)
+    Box(modifier.size(size).background(logo.tile, shape)
+        .then(if (logo.dark) Modifier.border(1.dp, Color.White.copy(alpha = 0.16f), shape) else Modifier), contentAlignment = Alignment.Center) {
         logo.echo.forEach { (color, shift) ->
             Image(painterResource(logo.glyph), null, Modifier.size(logo.glyphSize * scale).offset((shift.x * scale).dp, (shift.y * scale).dp),
                 colorFilter = ColorFilter.tint(color))

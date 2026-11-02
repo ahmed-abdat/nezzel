@@ -263,6 +263,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
     }
 
     override fun prefetched(link: ValidatedLink, json: String) = recent.putPrefetched(link, json)
+    override fun previewStream(inspectionId: String) = infoCache?.peek(inspectionId)?.let(PreviewStream::pick)
 
     override fun clearRecentLinks() {
         recent.clear()

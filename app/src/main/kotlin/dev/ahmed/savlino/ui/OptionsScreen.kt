@@ -1,5 +1,7 @@
 package dev.ahmed.savlino.ui
 
+import androidx.compose.animation.animateContentSize
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -45,7 +47,11 @@ fun OptionsScreen(links: LinkViewModel, language: String, onDismiss: () -> Unit,
         MoreFormatsScreen(links, language, snackbarHost)
         return
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null) {
+    // Bottom insets only: the default top inset follows the sheet's own position, and with a near full-height sheet
+    // (the poster) that feeds back into its height and snap point, so the sheet bounced forever after a small drag.
+    // The 90% cap keeps it clear of the status bar.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null,
+        contentWindowInsets = { WindowInsets.navigationBars }) {
         OptionsDragHandle(onDismiss)
         Box {
             OptionsSheetContent(links, language, onDismiss)
@@ -76,7 +82,8 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
         return
     }
     androidx.compose.runtime.SideEffect { links.optionsShown() }
-    Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)) {
+    // The list can be a row longer or shorter than the grey rows; the sheet glides to its new height instead of jumping.
+    Column(Modifier.fillMaxWidth().animateContentSize().heightIn(max = (LocalConfiguration.current.screenHeightDp * .9f).dp)) {
         // A footer (Download or Save bar) brings its own 16dp top padding; the body doesn't add a second one.
         val footer = links.optionsState is OptionsState.Ready || links.optionsState is OptionsState.ImageReady ||
             links.optionsState is OptionsState.Checking
@@ -95,7 +102,11 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
                 key(links.text) {
                     InspectionHeader(inspection, host, links.optionsState is OptionsState.Checking,
                         (links.optionsState as? OptionsState.Checking)?.earlyPreview, onThumbnail = links::thumbnailShown,
-                        hint = links.shareHint, cachedPreview = links.cachedPreview, onArtwork = links::previewArtworkShown)
+                        hint = links.shareHint, cachedPreview = links.cachedPreview, onArtwork = links::previewArtworkShown,
+                        stream = produceState<dev.ahmed.savlino.engine.PreviewStream?>(null, inspection?.inspectionId) {
+                            // Parsing the extraction JSON can take a moment on big pages: never on the main thread.
+                            value = inspection?.let { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { links.previewStream(it) } }
+                        }.value, onPlayed = links::previewPlayed)
                 }
             }
             if (YouTubeLinkKind.classify(links.text) == YouTubeLinkKind.VideoInList) {
@@ -178,13 +189,17 @@ internal fun OptionsSheetBody(links: LinkViewModel, language: String, onDismiss:
 }
 
 /**
- * Three still rows where the qualities will appear: same height as a quality row, no shimmer (nothing moves under
+ * A heading line and three still rows where the qualities will appear: same height as a quality row, no shimmer (nothing moves under
  * reduced motion) and silent for TalkBack, which reads the status line under them instead.
  */
 @Composable
 private fun SkeletonRows() {
     val block = MaterialTheme.colorScheme.surfaceContainerHighest
     Column(Modifier.fillMaxWidth().testTag("options_skeleton").clearAndSetSemantics { }) {
+        // The "Video" heading line the real list starts with, at its height, so the rows land where the grey ones were.
+        Row(Modifier.fillMaxWidth().padding(top = Space.s).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(56.dp).height(14.dp).clip(MaterialTheme.shapes.small).background(block))
+        }
         repeat(3) {
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Space.l, vertical = Space.s),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {

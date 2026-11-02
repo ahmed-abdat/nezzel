@@ -38,7 +38,9 @@ fun ShareSheet(links: LinkViewModel, language: String, hooks: ShareSheetHooks) {
     // The sheet window has its own Back; this one catches a Back that reaches the activity window.
     BackHandler(enabled = saving) { }
     ModalBottomSheet(onDismissRequest = { if (!links.imageSaving) hooks.onFinish() }, sheetState = state,
-        dragHandle = null, properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !saving)) {
+        dragHandle = null, properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !saving),
+        // Bottom insets only, as in OptionsScreen: the position-based top inset made the near full-height sheet bounce.
+        contentWindowInsets = { WindowInsets.navigationBars }) {
         OptionsDragHandle({ if (!links.imageSaving) hooks.onFinish() }, enabled = !saving)
         BackHandler(enabled = saving) { }
         ShareSheetBody(links, language, hooks)
@@ -71,7 +73,7 @@ private fun PreviewBody(links: LinkViewModel, language: String, hooks: ShareShee
         } else {
             Text(stringResource(R.string.shared_video), Modifier.fillMaxWidth().semantics { heading() },
                 style = MaterialTheme.typography.titleSmall)
-            key(links.text) { InspectionHeader(null, host, checking = false, hint = links.shareHint) }
+            key(links.text) { InspectionHeader(null, host, checking = false, hint = links.shareHint, compact = true) }
             links.savedLink?.let { SavedBeforeNotice(it, language, onOpened = { links.dismissOptions(); hooks.onFinish() }) }
             Button(onClick = links::checkLink, modifier = Modifier.fillMaxWidth().padding(top = Space.s).heightIn(min = 56.dp)) {
                 Text(stringResource(R.string.check_link))

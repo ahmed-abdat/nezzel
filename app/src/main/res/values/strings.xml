@@ -82,7 +82,7 @@
     <string name="not_a_post_title">This link doesn’t lead to a post</string>
     <string name="not_a_post_body">This link opens the site’s home page — the post may have been removed, so copy its link again</string>
     <string name="private_title">Sign-in needed</string>
-    <string name="private_body">This content needs sign-in — Nezzel only saves public videos and images</string>
+    <string name="private_body">This content needs sign-in — Nezzel only saves public posts</string>
     <string name="source_refused_title">The site refused access</string>
     <string name="source_refused_body">The site blocked Nezzel’s request — try another public link</string>
     <string name="protected_title">This video is protected</string>
@@ -624,8 +624,8 @@
     <string name="old_downloads_setting">Show old downloads</string>
     <string name="old_downloads_setting_body">Files saved before you reinstalled Nezzel</string>
     <string name="paste">Paste</string>
-    <string name="home_hero_title">Save videos to your phone</string>
-    <string name="home_hero_line">Copy a video link in any app, then tap Paste.</string>
+    <string name="home_hero_title">Save videos, music and photos</string>
+    <string name="home_hero_line">Copy a link in any app, then tap Paste.</string>
     <string name="home_hero_sites">Works with YouTube, TikTok, Instagram, Facebook and more.</string>
     <string name="home_earlier">Earlier</string>
     <string name="home_job_open">Show in Downloads</string>
@@ -667,4 +667,12 @@
     </plurals>
     <string name="spotify_search_note">From Spotify. Pick the matching song.</string>
     <string name="spotify_failed">Couldn\'t read this Spotify link</string>
+    <string name="preview_player">Video preview</string>
+    <string name="preview_failed">Couldn\'t play a preview. You can still download it.</string>
+    <string name="preview_close">Close preview</string>
+    <string name="preview_play">Play</string>
+    <string name="preview_pause">Pause</string>
+    <string name="preview_tap">Play preview</string>
+    <string name="preview_fullscreen">Full screen</string>
+    <string name="preview_fullscreen_exit">Exit full screen</string>
 </resources>

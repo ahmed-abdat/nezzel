@@ -82,7 +82,7 @@
     <string name="not_a_post_title">Ce lien ne mène pas à une publication</string>
     <string name="not_a_post_body">Ce lien ouvre l’accueil du site — la publication a peut-être été supprimée\u00A0: copiez à nouveau son lien</string>
     <string name="private_title">Connexion requise</string>
-    <string name="private_body">Ce contenu nécessite une connexion — Nezzel enregistre seulement les vidéos et images publiques</string>
+    <string name="private_body">Ce contenu nécessite une connexion — Nezzel enregistre seulement les publications publiques</string>
     <string name="source_refused_title">Le site refuse l’accès</string>
     <string name="source_refused_body">Le site a bloqué la demande de Nezzel — essayez un autre lien public</string>
     <string name="protected_title">Cette vidéo est protégée</string>
@@ -638,8 +638,8 @@
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>
     <string name="old_downloads_setting_body">Fichiers enregistrés avant de réinstaller Nezzel</string>
     <string name="paste">Coller</string>
-    <string name="home_hero_title">Enregistrez des vidéos sur votre téléphone</string>
-    <string name="home_hero_line">Copiez le lien d’une vidéo dans n’importe quelle application, puis appuyez sur Coller.</string>
+    <string name="home_hero_title">Enregistrez vidéos, musique et photos</string>
+    <string name="home_hero_line">Copiez un lien dans n’importe quelle appli, puis appuyez sur Coller.</string>
     <string name="home_hero_sites">Fonctionne avec YouTube, TikTok, Instagram, Facebook et bien d’autres.</string>
     <string name="home_earlier">Plus tôt</string>
     <string name="home_job_open">Voir dans Fichiers</string>
@@ -683,4 +683,12 @@
     </plurals>
     <string name="spotify_search_note">Depuis Spotify. Choisissez le bon titre.</string>
     <string name="spotify_failed">Impossible de lire ce lien Spotify</string>
+    <string name="preview_player">Aperçu de la vidéo</string>
+    <string name="preview_failed">Impossible de lire l’aperçu. Vous pouvez quand même la télécharger.</string>
+    <string name="preview_close">Fermer l’aperçu</string>
+    <string name="preview_play">Lire</string>
+    <string name="preview_pause">Pause</string>
+    <string name="preview_tap">Lire l’aperçu</string>
+    <string name="preview_fullscreen">Plein écran</string>
+    <string name="preview_fullscreen_exit">Quitter le plein écran</string>
 </resources>
