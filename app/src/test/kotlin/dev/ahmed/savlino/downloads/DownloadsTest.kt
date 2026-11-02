@@ -248,10 +248,10 @@ class DownloadsTest {
         val c = Robolectric.buildActivity(dev.ahmed.savlino.MainActivity::class.java).create().start().resume().visible()
         try {
             c.get().links.navigate("Downloads"); nodes(c.get())
-            assertFalse(texts(nodes(c.get())).contains("Download cancelled"))
+            assertFalse(texts(nodes(c.get())).contains("Download canceled"))
             click(c.get(), "Cancel download")
             compose.waitUntil(5000) { shadowOf(Looper.getMainLooper()).idle(); store.get("cancel-event")!!.stage == JobStage.CANCELLED }
-            compose.waitUntil(5000) { shadowOf(Looper.getMainLooper()).idle(); texts(nodes(c.get())).contains("Download cancelled") }
+            compose.waitUntil(5000) { shadowOf(Looper.getMainLooper()).idle(); texts(nodes(c.get())).contains("Download canceled") }
             assertTrue(coordinator.progress.value.isEmpty())
         } finally { c.pause().stop().destroy(); store.close(); app.coordinatorOverride = null }
     }

@@ -222,7 +222,7 @@
     </plurals>
     <string name="saved_deleted">Supprimé</string>
     <string name="saved_empty_title">Aucun fichier enregistré</string>
-    <string name="saved_empty_body">Copiez un lien dans n’importe quelle app, puis collez-le pour garder la vidéo, le son ou la photo</string>
+    <string name="saved_empty_body">Copiez un lien dans n’importe quelle app, puis collez-le pour garder la vidéo, la musique ou la photo</string>
     <string name="saved_no_matches">Aucun fichier correspondant</string>
     <string name="saved_snackbar">Enregistré dans %1$s</string>
     <string name="saved_action_failed">Impossible d’ouvrir ce fichier ou de terminer l’action — essayez l’application Fichiers</string>
@@ -249,7 +249,7 @@
     <string name="separator">" · "</string>
     <string name="format_kbps">%1$s kbit/s</string>
     <string name="spoken_separator">", "</string>
-    <string name="checking_link">Lecture du lien…</string>
+    <string name="checking_link">Vérification du lien…</string>
     <string name="image_preview_desc">Aperçu de l’image, %1$s</string>
     <string name="image_save">Enregistrer l’image</string>
     <string name="image_save_size">Enregistrer l’image · %1$s</string>
@@ -393,7 +393,7 @@
     <string name="paste_empty">Copiez d’abord un lien</string>
     <string name="clear">Effacer</string>
     <string name="settings_advanced">Avancé</string>
-    <string name="settings_advanced_help">Liens, compatibilité et mises à jour</string>
+    <string name="settings_advanced_help">Téléchargements, confidentialité et mises à jour</string>
     <string name="engine_update_body">Utile quand un site ne permet plus de télécharger</string>
     <string name="settings_support_info">Pour l’assistance : moteur %1$s</string>
     <string name="link_handling">Liens</string>
@@ -425,7 +425,7 @@
     <string name="update_done">Nezzel est à jour</string>
     <string name="settings_updates_heading">Mises à jour de l’application</string>
     <string name="settings_updates_auto">Mises à jour automatiques</string>
-    <string name="settings_updates_auto_body">Vérifie et installe les mises à jour. Désactivez-le pour ne plus être prévenu</string>
+    <string name="settings_updates_auto_body">Vérifie et installe les mises à jour. Désactivez pour ne plus être prévenu</string>
     <string name="settings_updates_check_now">Vérifier</string>
     <string name="update_latest">Nezzel est à jour</string>
     <string name="update_check_failed">Impossible de rechercher les mises à jour — réessayez plus tard</string>
@@ -461,7 +461,7 @@
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">Statuts</string>
     <string name="statuses_intro_title">Enregistrez les statuts que vous avez vus</string>
-    <string name="statuses_intro_body">Regardez un statut dans WhatsApp, puis enregistrez-le ici.</string>
+    <string name="statuses_intro_body">Regardez un statut dans WhatsApp, puis enregistrez-le ici</string>
     <string name="statuses_grant">Autoriser l’accès</string>
     <string name="statuses_grant_hint">Appuyez sur «\u00A0Utiliser ce dossier\u00A0», puis sur «\u00A0Autoriser\u00A0»</string>
     <string name="statuses_no_folder_app">Aucune application sur ce téléphone n’ouvre les dossiers</string>
@@ -476,7 +476,7 @@
     <string name="statuses_filter_photos">Photos</string>
     <string name="statuses_filter_videos">Vidéos</string>
     <string name="statuses_hide_saved">Masquer les enregistrés</string>
-    <string name="statuses_new">Nouveau</string>
+    <string name="statuses_new">Nouveaux</string>
     <string name="statuses_account_n">Compte %1$s</string>
     <string name="statuses_open">Ouvrir</string>
     <plurals name="statuses_count">
@@ -535,7 +535,7 @@
     <string name="share_sheet_open_app">Ouvrir dans Nezzel</string>
     <string name="share_sheet_started">Téléchargement lancé</string>
     <string name="share_sheet_pane">Nezzel, options de téléchargement</string>
-    <string name="share_notify_line">Autorisez les notifications pour suivre la progression. Le téléchargement fonctionne aussi sans.</string>
+    <string name="share_notify_line">Activez les notifications pour suivre la progression</string>
     <string name="download_again">Télécharger à nouveau</string>
     <string name="download_again_size">Télécharger à nouveau · %1$s</string>
     <!-- Playlist notices (0.5). -->
@@ -586,12 +586,12 @@
     <string name="playlist_show_videos">Afficher les vidéos</string>
     <string name="playlist_failed_heading">Non enregistrées</string>
     <string name="playlist_other_videos">Autres vidéos</string>
-    <string name="playlist_item_waiting">À venir</string>
+    <string name="playlist_item_waiting">En attente</string>
     <string name="playlist_item_skipped">Ignorée</string>
     <string name="playlist_notification_progress">Playlist\u00A0: %1$s sur %2$s enregistrées</string>
     <string name="playlist_notification_done">Playlist enregistrée\u00A0: %1$s vidéos, %2$s échecs</string>
     <string name="playlist_stopped">Arrêtée\u00A0: %1$s non démarrées</string>
-    <string name="playlist_load_failed">Impossible de charger la playlist.</string>
+    <string name="playlist_load_failed">Impossible de charger la playlist</string>
     <string name="playlist_submit_failed">L’enregistrement de la playlist n’a pas pu démarrer. Réessayez.</string>
     <string name="playlist_done_saved">Terminé\u00A0: %1$s enregistrées</string>
     <!-- dl-running: Downloads tabs -->
@@ -599,7 +599,7 @@
     <string name="dl_tab_saved">Enregistrés</string>
     <string name="dl_waiting_count">%1$s en attente</string>
     <string name="dl_failed_header">Non enregistrés</string>
-    <string name="dl_failed_count">Non enregistrés : %1$s</string>
+    <string name="dl_failed_count">Non enregistrés\u00A0: %1$s</string>
     <string name="dl_playlist_failed">%1$s sur %2$s non enregistrées</string>
     <string name="dl_batch_saved_of">%1$s sur %2$s enregistrés</string>
     <string name="dl_batch_saved">%1$s enregistrés</string>
@@ -632,7 +632,7 @@
     <string name="multi_link_submit_failed">Impossible de lancer les téléchargements. Réessayez.</string>
     <string name="multi_link_photo_post">Publication photo\u00A0: ouvrez ce lien seul</string>
     <!-- Find my old downloads after a reinstall -->
-    <string name="old_downloads_offer">Déjà utilisé Nezzel\u00A0?</string>
+    <string name="old_downloads_offer">Déjà enregistré avec Nezzel\u00A0?</string>
     <string name="old_downloads_show">Afficher vos fichiers</string>
     <string name="old_downloads_wrong_folder">Choisissez le dossier Nezzel dans Download</string>
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>
@@ -642,9 +642,10 @@
     <string name="home_hero_line">Copiez un lien dans n’importe quelle appli, puis appuyez sur Coller.</string>
     <string name="home_hero_sites">Fonctionne avec YouTube, TikTok, Instagram, Facebook et bien d’autres.</string>
     <string name="home_earlier">Plus tôt</string>
-    <string name="home_job_open">Voir dans Fichiers</string>
+    <string name="home_job_open">Voir dans Téléchargements</string>
 
     <!-- Local feature reminders. -->
+    <string name="settings_notifications_heading">Notifications</string>
     <string name="tips_title">Astuces</string>
     <string name="tips_help">Une astuce en notification après quelques jours sans ouvrir Nezzel</string>
     <string name="tip_links_title">Enregistrez jusqu’à 50 liens</string>
@@ -660,7 +661,7 @@
     <string name="tip_pause_title">Mettez tout en pause d’un geste</string>
     <string name="tip_pause_body">Dans Téléchargements, mettez tout en pause puis reprenez ensemble.</string>
     <string name="download_post_transfer_error">Impossible de finaliser le fichier</string>
-    <string name="search_youtube_for">Chercher « %1$s » sur YouTube</string>
+    <string name="search_youtube_for">Chercher «\u00A0%1$s\u00A0» sur YouTube</string>
     <string name="search_field_label">Chercher sur YouTube</string>
     <string name="search_no_results">Aucun résultat</string>
     <string name="search_no_results_body">Essayez d’autres mots.</string>
@@ -674,7 +675,7 @@
         <item quantity="many">%1$s vidéos</item>
         <item quantity="other">%1$s vidéos</item>
     </plurals>
-    <string name="spotify_search_youtube_for">La chercher sur YouTube : %1$s</string>
+    <string name="spotify_search_youtube_for">La chercher sur YouTube\u00A0: %1$s</string>
     <string name="spotify_choose_song">Choisissez un titre à chercher sur YouTube.</string>
     <plurals name="spotify_first_songs">
         <item quantity="one">Voici le premier titre (%1$d)</item>
@@ -684,7 +685,7 @@
     <string name="spotify_search_note">Depuis Spotify. Choisissez le bon titre.</string>
     <string name="spotify_failed">Impossible de lire ce lien Spotify</string>
     <string name="preview_player">Aperçu de la vidéo</string>
-    <string name="preview_failed">Impossible de lire l’aperçu. Vous pouvez quand même la télécharger.</string>
+    <string name="preview_failed">Impossible de lire l’aperçu. Le téléchargement reste possible.</string>
     <string name="preview_close">Fermer l’aperçu</string>
     <string name="preview_play">Lire</string>
     <string name="preview_pause">Pause</string>

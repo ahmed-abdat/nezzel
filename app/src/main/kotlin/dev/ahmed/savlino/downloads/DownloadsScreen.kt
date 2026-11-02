@@ -53,6 +53,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -423,7 +424,7 @@ fun DownloadsScreen(
                         Spacer(Modifier.height(Space.m))
                         Text(stringResource(R.string.saved_empty_title), style = MaterialTheme.typography.titleLarge)
                         Text(stringResource(R.string.saved_empty_body), Modifier.widthIn(max = 300.dp), textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Heading), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(Space.s))
                         FilledTonalButton(onClick = onPaste, modifier = Modifier.heightIn(min = 48.dp),
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
@@ -652,7 +653,9 @@ internal fun SavedRow(item: SavedMedia, language: String, onOpen: () -> Unit, on
     val selectedState = stringResource(if (selected) R.string.saved_selected_state else R.string.saved_unselected_state)
     val openLabel = stringResource(R.string.open_file)
     val meta = mediaMeta(item, language)
-    val metaStyle = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr)
+    // "720p · 68 MB" reads LTR but sits on the layout's start edge, under an Arabic title too.
+    val metaStyle = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr,
+        textAlign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) TextAlign.Right else TextAlign.Left)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     // Text needs ~9em of body text (em converted first: sp scaling is non-linear) and the whole meta line; below that the thumbnail shrinks, then moves above the text.

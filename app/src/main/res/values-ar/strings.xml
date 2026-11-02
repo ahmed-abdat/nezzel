@@ -296,7 +296,7 @@
     <string name="contact_whatsapp">راسلنا على واتساب</string>
     <string name="contact_whatsapp_intro">مرحبًا 👋 شكرًا على Nezzel!</string>
     <string name="nezzel_close">إغلاق</string>
-    <string name="saved_before">حفظتَ هذا الملف في %1$s</string>
+    <string name="saved_before">حُفظ هذا الملف في %1$s</string>
     <string name="network_title">تعذّر الاتصال</string>
     <string name="network_body">تحقق من اتصالك، ثم أعد المحاولة</string>
     <string name="about">حول Nezzel</string>
@@ -319,7 +319,7 @@
     <string name="image_select_all">تحديد الكل</string>
     <string name="image_select_none">إلغاء تحديد الكل</string>
     <string name="image_thumbnail_desc">الصورة %1$s من %2$s</string>
-    <string name="image_first_limit">تقتصر الخيارات على أول %1$s صورة</string>
+    <string name="image_first_limit">تقتصر على أول %1$s صورة</string>
     <string name="image_available_of">المعروض: %1$s من أصل %2$s</string>
     <string name="image_video_options">عرض خيارات الفيديو</string>
     <string name="image_saving_count">جارٍ حفظ %1$s من %2$s</string>
@@ -433,7 +433,7 @@
     <string name="paste_empty">انسخ رابطًا أولًا</string>
     <string name="clear">مسح</string>
     <string name="settings_advanced">إعدادات متقدمة</string>
-    <string name="settings_advanced_help">الروابط ودعم المواقع والتحديثات</string>
+    <string name="settings_advanced_help">التنزيلات والخصوصية والتحديثات</string>
     <string name="engine_update_body">يساعد عندما يتوقف موقع عن التنزيل</string>
     <string name="settings_support_info">للدعم: المحرّك \u2066%1$s\u2069</string>
     <string name="link_handling">الروابط</string>
@@ -449,7 +449,7 @@
     <string name="update_action">تحديث</string>
     <string name="update_not_now">ليس الآن</string>
     <string name="update_screen_title">تحديث التطبيق</string>
-    <string name="update_current">Nezzel محدّث</string>
+    <string name="update_current">Nezzel على أحدث إصدار</string>
     <string name="update_whats_new">ما الجديد</string>
     <string name="update_keeps_data">تبقى ملفاتك وإعداداتك كما هي</string>
     <string name="update_download">تنزيل التحديث · %1$s</string>
@@ -464,12 +464,12 @@
     <string name="update_failed_space">لا توجد مساحة كافية للتحديث (يلزم %1$s)</string>
     <string name="update_failed_verify">لم نتمكن من التحقق من هذا التحديث، لذا لم نثبّته</string>
     <string name="update_not_installed">لم يُثبَّت التحديث</string>
-    <string name="update_done">Nezzel محدّث</string>
+    <string name="update_done">Nezzel على أحدث إصدار</string>
     <string name="settings_updates_heading">تحديثات التطبيق</string>
     <string name="settings_updates_auto">التحديثات التلقائية</string>
     <string name="settings_updates_auto_body">يفحص التحديثات ويثبّتها لك. أوقفه لتتوقف تنبيهات التحديث</string>
     <string name="settings_updates_check_now">تحقق الآن</string>
-    <string name="update_latest">Nezzel محدّث</string>
+    <string name="update_latest">Nezzel على أحدث إصدار</string>
     <string name="update_check_failed">تعذّر التحقق من التحديثات، أعد المحاولة لاحقًا</string>
     <string name="update_channel">تحديثات التطبيق</string>
     <string name="update_card_hint">اضغط للتحديث</string>
@@ -506,7 +506,7 @@
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">الحالات</string>
     <string name="statuses_intro_title">احفظ الحالات التي شاهدتها</string>
-    <string name="statuses_intro_body">شاهد الحالة في واتساب، ثم احفظها من هنا.</string>
+    <string name="statuses_intro_body">شاهد الحالة في واتساب، ثم احفظها من هنا</string>
     <string name="statuses_grant">السماح بالوصول</string>
     <string name="statuses_grant_hint">اضغط «استخدام هذا المجلد» ثم «سماح»</string>
     <string name="statuses_no_folder_app">لا يوجد تطبيق على هذا الهاتف يفتح المجلدات</string>
@@ -587,12 +587,12 @@
     <string name="change_quality">تغيير الجودة</string>
     <string name="better_quality_action">ابحث عن جودة أفضل</string>
     <string name="better_quality_support">يفحص الرابط مرة أخرى</string>
-    <string name="better_quality_note">حفظتَ بجودة %1$s. الجودة الأعلى تظهر أولًا.</string>
+    <string name="better_quality_note">حُفظ بجودة %1$s. الجودة الأعلى تظهر أولًا.</string>
     <string name="better_quality_none">لم نجد جودة أفضل لهذا الرابط</string>
     <string name="share_sheet_open_app">فتح في Nezzel</string>
     <string name="share_sheet_started">بدأ التنزيل</string>
     <string name="share_sheet_pane">Nezzel، خيارات التنزيل</string>
-    <string name="share_notify_line">اسمح بالإشعارات لمتابعة التقدّم. التنزيل يعمل بدونها.</string>
+    <string name="share_notify_line">اسمح بالإشعارات لترى التقدّم</string>
     <string name="download_again">إعادة التنزيل</string>
     <string name="download_again_size">إعادة التنزيل · %1$s</string>
     <!-- Playlist notices (0.5). -->
@@ -651,7 +651,7 @@
     <string name="playlist_notification_progress">قائمة تشغيل: تم حفظ %1$s من %2$s</string>
     <string name="playlist_notification_done">تم حفظ قائمة التشغيل: %1$s فيديو، وتعذّر حفظ %2$s</string>
     <string name="playlist_stopped">تم الإيقاف: لم يبدأ %1$s</string>
-    <string name="playlist_load_failed">تعذّر فتح قائمة التشغيل.</string>
+    <string name="playlist_load_failed">تعذّر فتح قائمة التشغيل</string>
     <string name="playlist_submit_failed">تعذّر بدء حفظ قائمة التشغيل. أعد المحاولة.</string>
     <string name="playlist_done_saved">اكتمل: تم حفظ %1$s</string>
     <!-- dl-running: Downloads tabs -->
@@ -704,13 +704,14 @@
     <string name="old_downloads_setting">عرض التنزيلات القديمة</string>
     <string name="old_downloads_setting_body">ملفات حفظتها قبل إعادة تثبيت Nezzel</string>
     <string name="paste">لصق</string>
-    <string name="home_hero_title">احفظ الفيديو والصوت والصور</string>
+    <string name="home_hero_title">احفظ الفيديو والموسيقى والصور</string>
     <string name="home_hero_line">انسخ أي رابط من أي تطبيق، ثم اضغط «لصق».</string>
     <string name="home_hero_sites">يعمل مع يوتيوب وتيك توك وإنستغرام وفيسبوك وغيرها.</string>
     <string name="home_earlier">سابقًا</string>
     <string name="home_job_open">عرض في التنزيلات</string>
 
     <!-- Local feature reminders. -->
+    <string name="settings_notifications_heading">الإشعارات</string>
     <string name="tips_title">نصائح</string>
     <string name="tips_help">إشعار بنصيحة قصيرة إن لم تفتح Nezzel منذ أيام</string>
     <string name="tip_links_title">حمّل حتى 50 رابطًا معًا</string>
@@ -733,7 +734,7 @@
     <string name="search_failed">تعذّر البحث الآن</string>
     <string name="search_failed_body">حدث خطأ أثناء البحث. أعد المحاولة بعد قليل.</string>
     <string name="search_more_failed">تعذّر تحميل المزيد من النتائج</string>
-    <string name="search_filter_videos">فيديو</string>
+    <string name="search_filter_videos">فيديوهات</string>
     <string name="search_filter_playlists">قوائم تشغيل</string>
     <plurals name="search_playlist_videos">
         <item quantity="zero">%1$s فيديو</item>
@@ -756,7 +757,7 @@
     <string name="spotify_search_note">من سبوتيفاي. اختر الأغنية المطابقة.</string>
     <string name="spotify_failed">تعذّرت قراءة رابط سبوتيفاي</string>
     <string name="preview_player">معاينة الفيديو</string>
-    <string name="preview_failed">تعذّر تشغيل المعاينة، ويمكنك تنزيله مع ذلك.</string>
+    <string name="preview_failed">تعذّر تشغيل المعاينة، لكن التنزيل متاح.</string>
     <string name="preview_close">إغلاق المعاينة</string>
     <string name="preview_play">تشغيل</string>
     <string name="preview_pause">إيقاف مؤقت</string>

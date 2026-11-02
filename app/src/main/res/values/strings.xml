@@ -30,7 +30,7 @@
     <string name="save_path">Downloads/Nezzel</string>
     <string name="privacy">No ads, no account</string>
     <string name="shared_video">Shared link</string>
-    <string name="checking_qualities">Getting qualities…</string>
+    <string name="checking_qualities">Finding qualities…</string>
     <string name="nothing_downloads">Saving starts only when you tap Download or Save</string>
     <string name="cancel">Cancel</string>
     <string name="video_group">Video</string>
@@ -106,7 +106,7 @@
     <string name="download_finishing">Finishing…</string>
     <string name="download_progress_state">%1$s, %2$s</string>
     <string name="download_saved">Saved</string>
-    <string name="download_cancelled">Download cancelled</string>
+    <string name="download_cancelled">Download canceled</string>
     <string name="download_failed">Download failed</string>
     <string name="download_network_error">No internet connection</string>
     <string name="download_space_error">Not enough free space</string>
@@ -133,7 +133,7 @@
     <string name="engine_update_paused_body">Paused downloads will start over.</string>
     <string name="engine_update_paused_confirm">Update</string>
     <string name="parallel_downloads">Downloads at the same time</string>
-    <string name="parallel_downloads_help">Fewer keeps the phone cooler</string>
+    <string name="parallel_downloads_help">Fewer downloads keep the phone cooler</string>
     <string name="parallel_downloads_option">%1$s at a time</string>
     <string name="engine_update_help">Updates itself every week</string>
     <string name="engine_update_retry">Update site support and try again</string>
@@ -287,12 +287,12 @@
     <string name="company_facebook">Facebook</string>
     <string name="company_open_facebook">Open the %1$s Facebook page</string>
     <string name="about_warranty">Provided as is, without warranty</string>
-    <string name="about_licences">Open-source licences</string>
-    <string name="about_licences_short">Licences</string>
-    <string name="about_show_licence">Show %1$s licence text</string>
-    <string name="about_hide_licence">Hide %1$s licence text</string>
-    <string name="about_view_licence">View licence</string>
-    <string name="about_hide_licence_short">Hide licence</string>
+    <string name="about_licences">Open-source licenses</string>
+    <string name="about_licences_short">Licenses</string>
+    <string name="about_show_licence">Show %1$s license text</string>
+    <string name="about_hide_licence">Hide %1$s license text</string>
+    <string name="about_view_licence">View license</string>
+    <string name="about_hide_licence_short">Hide license</string>
     <string name="image_linked_elsewhere">This post links to something else — open that link in Nezzel</string>
     <string name="image_select_all">Select all</string>
     <string name="image_select_none">Select none</string>
@@ -302,7 +302,7 @@
     <string name="image_video_options">View video options</string>
     <string name="image_saving_count">Saving %1$s of %2$s</string>
     <string name="image_save_partial_count">Saved %1$s of %2$s photos — the rest couldn’t be saved</string>
-    <string name="image_save_cancelled_count">Cancelled — saved %1$s of %2$s photos</string>
+    <string name="image_save_cancelled_count">Canceled — saved %1$s of %2$s photos</string>
     <plurals name="image_save_count">
         <item quantity="one">Save %1$s photo</item>
         <item quantity="other">Save %1$s photos</item>
@@ -383,7 +383,7 @@
     <string name="paste_empty">Copy a link first</string>
     <string name="clear">Clear</string>
     <string name="settings_advanced">Advanced</string>
-    <string name="settings_advanced_help">Links, site support and updates</string>
+    <string name="settings_advanced_help">Downloads, privacy and updates</string>
     <string name="engine_update_body">Helps when a site stops downloading</string>
     <string name="settings_support_info">For support: engine %1$s</string>
     <string name="link_handling">Links</string>
@@ -453,7 +453,7 @@
     <!-- Statuses tab (0.5) -->
     <string name="statuses_tab">Statuses</string>
     <string name="statuses_intro_title">Save statuses you’ve seen</string>
-    <string name="statuses_intro_body">Watch a status in WhatsApp, then save it here.</string>
+    <string name="statuses_intro_body">Watch a status in WhatsApp, then save it here</string>
     <string name="statuses_grant">Allow access</string>
     <string name="statuses_grant_hint">Tap “Use this folder”, then “Allow”</string>
     <string name="statuses_no_folder_app">No app on this phone can open folders</string>
@@ -524,7 +524,7 @@
     <string name="share_sheet_open_app">Open in Nezzel</string>
     <string name="share_sheet_started">Download started</string>
     <string name="share_sheet_pane">Nezzel, download options</string>
-    <string name="share_notify_line">Allow notifications to follow progress. Downloads work without them.</string>
+    <string name="share_notify_line">Allow notifications to see progress</string>
     <string name="download_again">Download again</string>
     <string name="download_again_size">Download again · %1$s</string>
     <!-- Playlist notices (0.5). -->
@@ -579,7 +579,7 @@
     <string name="playlist_notification_progress">Playlist: %1$s of %2$s saved</string>
     <string name="playlist_notification_done">Playlist saved: %1$s videos, %2$s failed</string>
     <string name="playlist_stopped">Stopped: %1$s not started</string>
-    <string name="playlist_load_failed">Couldn’t load the playlist.</string>
+    <string name="playlist_load_failed">Couldn’t load the playlist</string>
     <string name="playlist_submit_failed">Couldn’t start saving the playlist. Try again.</string>
     <string name="playlist_done_saved">Done: %1$s saved</string>
     <!-- dl-running: Downloads tabs -->
@@ -631,8 +631,9 @@
     <string name="home_job_open">Show in Downloads</string>
 
     <!-- Local feature reminders. -->
+    <string name="settings_notifications_heading">Notifications</string>
     <string name="tips_title">Tips</string>
-    <string name="tips_help">A short tip notification if you haven’t opened Nezzel for a few days</string>
+    <string name="tips_help">A short tip if you haven’t opened Nezzel in a few days</string>
     <string name="tip_links_title">Save up to 50 links</string>
     <string name="tip_links_body">Copy your links together, then paste them in Nezzel.</string>
     <string name="tip_playlist_title">Save a whole playlist</string>
@@ -651,7 +652,7 @@
     <string name="search_no_results">No results</string>
     <string name="search_no_results_body">Try other words.</string>
     <string name="search_failed">Couldn’t search right now</string>
-    <string name="search_failed_body">Something went wrong on the way. Try again in a moment.</string>
+    <string name="search_failed_body">Something went wrong. Try again in a moment.</string>
     <string name="search_more_failed">Couldn’t load more results</string>
     <string name="search_filter_videos">Videos</string>
     <string name="search_filter_playlists">Playlists</string>
@@ -668,7 +669,7 @@
     <string name="spotify_search_note">From Spotify. Pick the matching song.</string>
     <string name="spotify_failed">Couldn\'t read this Spotify link</string>
     <string name="preview_player">Video preview</string>
-    <string name="preview_failed">Couldn\'t play a preview. You can still download it.</string>
+    <string name="preview_failed">Couldn’t play the preview. You can still download.</string>
     <string name="preview_close">Close preview</string>
     <string name="preview_play">Play</string>
     <string name="preview_pause">Pause</string>

@@ -560,7 +560,8 @@ private fun FirstRunWords(modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Text(stringResource(R.string.home_hero_title), Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                fontSize = 30.sp, lineHeight = if (arabic) 44.sp else 36.sp))
+                fontSize = 30.sp, lineHeight = if (arabic) 44.sp else 36.sp,
+                lineBreak = androidx.compose.ui.text.style.LineBreak.Heading))
         Text(stringResource(R.string.home_hero_line), style = MaterialTheme.typography.bodyLarge)
         Text(stringResource(R.string.home_hero_sites), style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)

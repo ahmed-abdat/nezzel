@@ -134,7 +134,7 @@ fun NezzelNavigation(
         val direction = LocalLayoutDirection.current
         val labelSize = remember(labels, labelStyle, measurer, direction) { SharedLabelSize(labels, labelStyle, measurer, direction) }
         TabBar(destinations, selected, Modifier.testTag("navigation_bar").then(collection)) { destination, index, isSelected ->
-            Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 54.dp).clip(RoundedCornerShape(27.dp))
+            Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 54.dp).clip(RoundedCornerShape(Dock.CORNER - Space.xs))
                 .selectable(isSelected, role = Role.Tab) { select(destination.route) }.then(itemModifier(destination, index))
                 .padding(horizontal = Space.s, vertical = Space.s),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -165,7 +165,7 @@ private fun TabBar(destinations: List<NavigationDestination>, selected: String, 
             val cell = constraints.maxWidth / count
             val pill = measurable.measure(Constraints.fixed(cell, constraints.maxHeight))
             layout(constraints.maxWidth, constraints.maxHeight) { pill.placeRelative((position.value * cell).roundToInt(), 0) }
-        }.background(colors.surfaceBright, RoundedCornerShape(27.dp)))
+        }.background(colors.surfaceBright, RoundedCornerShape(Dock.CORNER - Space.xs)))
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             destinations.forEachIndexed { i, destination -> item(destination, i, destination.route == selected) }
         }

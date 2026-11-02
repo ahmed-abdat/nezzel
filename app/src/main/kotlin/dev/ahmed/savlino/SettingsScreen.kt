@@ -210,7 +210,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
             if (parallel != null || findOld != null) SettingsGroup(stringResource(R.string.downloads)) {
                 parallel?.let { ParallelSetting(it, language, onParallel) }
                 // Gone once the folder is granted; back if the grant is removed.
-                findOld?.let { SettingsNavRow(stringResource(R.string.old_downloads_setting), R.drawable.ic_folder,
+                findOld?.let { SettingsNavRow(stringResource(R.string.old_downloads_setting), R.drawable.ic_ms_history,
                     body = stringResource(R.string.old_downloads_setting_body), onClick = it.show) }
             }
             PrivacySettings(onClearLinks, helpImprove, onHelpImprove, clearingLinks)
@@ -233,7 +233,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
             updates?.let { updates ->
                 SettingsGroup(stringResource(R.string.settings_updates_heading)) { UpdateAutoSetting(updates) }
             }
-            SettingsGroup(stringResource(R.string.tips_title)) {
+            SettingsGroup(stringResource(R.string.settings_notifications_heading)) {
                 val context = LocalContext.current
                 val preferences = remember(context) { dev.ahmed.savlino.locale.AppPreferences(context) }
                 var tips by remember { mutableStateOf(preferences.tips) }
@@ -244,7 +244,7 @@ internal fun AdvancedSettings(engine: EngineMaintenanceState?, onUpdateEngine: (
                     if (!on) context.getSystemService(android.app.NotificationManager::class.java).cancel(dev.ahmed.savlino.tips.Tips.ID)
                 }
             }
-            Box(Modifier.padding(start = Space.l)) { LicencesLink() }
+            Box(Modifier.padding(start = Space.xs)) { LicencesLink() }
         }
     }
 }

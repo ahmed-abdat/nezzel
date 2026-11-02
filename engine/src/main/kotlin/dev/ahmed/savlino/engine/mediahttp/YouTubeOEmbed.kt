@@ -9,7 +9,7 @@ import kotlin.coroutines.resume
 import okhttp3.HttpUrl
 
 /** Display metadata only; never an inspection or a source of selectable formats. Memory only. */
-class EarlyPreview(val title: String?, val thumbnailUrl: String?) {
+class EarlyPreview(val title: String?, val thumbnailUrl: String?, val uploader: String? = null) {
     override fun toString() = "EarlyPreview(redacted)"
 }
 
@@ -38,7 +38,9 @@ class YouTubeOEmbed internal constructor(private val http: MediaHttpClient,
                                 ?.let(PreviewMetadata::thumbnail)?.takeIf { raw ->
                                     HttpsUrl.parse(raw)?.let { url -> url.host in THUMBNAIL_HOSTS } == true
                                 }
-                            if (title == null && thumbnail == null) null else EarlyPreview(title, thumbnail)
+                            // The channel line shows with the title, so it does not push the choices down when the full check lands.
+                            val uploader = PreviewMetadata.text(root.get("author_name")?.takeIf { it.isTextual }?.asText(), 120)
+                            if (title == null && thumbnail == null) null else EarlyPreview(title, thumbnail, uploader)
                         }
                     } catch (_: Exception) { null } // Optional: no URL-bearing diagnostics or visible failure.
                 }

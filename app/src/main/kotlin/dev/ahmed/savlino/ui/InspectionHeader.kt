@@ -102,7 +102,7 @@ internal fun InspectionHeader(inspection: Inspection?, host: String, checking: B
             }
             // The channel gets its own shortened line, so a long or mixed-direction name never splits the facts or hides the site.
             val small = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content)
-            (if (inspection != null) inspection.uploader else cachedPreview?.uploader)?.let {
+            (if (inspection != null) inspection.uploader else cachedPreview?.uploader ?: earlyPreview?.uploader)?.let {
                 Text(NezzelFormat.firstStrong(it), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

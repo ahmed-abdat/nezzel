@@ -242,7 +242,7 @@ private fun Explainer(apps: List<StatusApp>, media: StatusMedia, onGrant: (() ->
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Text(stringResource(R.string.statuses_intro_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center)
-        Text(stringResource(R.string.statuses_intro_body), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center,
+        Text(stringResource(R.string.statuses_intro_body), style = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Heading), textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (apps.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.l, Alignment.CenterHorizontally),

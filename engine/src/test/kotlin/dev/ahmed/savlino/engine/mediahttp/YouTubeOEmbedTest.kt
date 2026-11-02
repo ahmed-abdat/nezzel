@@ -15,11 +15,12 @@ class YouTubeOEmbedTest {
         MediaHttpClient.create().use { http ->
             val loader = YouTubeOEmbed(http) { token, url ->
                 assertEquals("https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabcdefghijk&format=json", url)
-                response(token, """{"title":"Actual title","thumbnail_url":"$thumbnail","html":"ignored"}""")
+                response(token, """{"title":"Actual title","author_name":"Real channel","thumbnail_url":"$thumbnail","html":"ignored"}""")
             }
             val preview = loader.load(link)!!
             assertEquals("Actual title", preview.title)
             assertEquals(thumbnail, preview.thumbnailUrl)
+            assertEquals("Real channel", preview.uploader)
             assertEquals("EarlyPreview(redacted)", preview.toString())
         }
     }
