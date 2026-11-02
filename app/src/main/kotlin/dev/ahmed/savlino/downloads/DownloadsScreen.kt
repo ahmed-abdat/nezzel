@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -823,13 +825,20 @@ private fun rememberThumbnailLoader(): suspend (SavedMedia) -> android.graphics.
 fun MediaThumbnail(item: SavedMedia, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.medium) {
     val load = rememberThumbnailLoader()
     // Audio shows its embedded cover; the music icon stays only when the file has none.
-    val bitmap = rememberCachedThumbnail(ThumbnailCache.key(item.uri, THUMB_PX, item.size, item.modifiedMillis)) { load(item) }
+    val key = ThumbnailCache.key(item.uri, THUMB_PX, item.size, item.modifiedMillis)
+    val bitmap = rememberCachedThumbnail(key) { load(item) }
+    // A picture already in the cache shows at once; one that arrives later fades in over the icon instead of popping.
+    val late = remember(key) { bitmap == null }
+    val shown by androidx.compose.animation.core.animateFloatAsState(if (bitmap != null) 1f else 0f,
+        androidx.compose.animation.core.tween(if (late && !rememberReducedMotion()) 180 else 0), label = "thumb")
     Surface(modifier.clip(shape), color = if (item.kind == SavedMediaKind.AUDIO) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Box(contentAlignment = Alignment.Center) {
             val loaded = bitmap
-            if(loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else if (item.kind == SavedMediaKind.VIDEO) Icon(Icons.Default.PlayArrow, null)
-            else Icon(painterResource(when(item.kind) { SavedMediaKind.IMAGE -> R.drawable.ic_image; SavedMediaKind.AUDIO -> R.drawable.ic_music; else -> R.drawable.ic_folder }), null, Modifier.size(24.dp))
+            if (loaded == null || shown < 1f) {
+                if (item.kind == SavedMediaKind.VIDEO) Icon(Icons.Default.PlayArrow, null)
+                else Icon(painterResource(when(item.kind) { SavedMediaKind.IMAGE -> R.drawable.ic_image; SavedMediaKind.AUDIO -> R.drawable.ic_music; else -> R.drawable.ic_folder }), null, Modifier.size(24.dp))
+            }
+            if (loaded != null) Image(loaded.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = shown }, contentScale = ContentScale.Crop)
             item.durationMillis?.takeIf { item.kind != SavedMediaKind.IMAGE }?.let { duration ->
                 Surface(Modifier.align(Alignment.BottomEnd).padding(Space.xs), color = androidx.compose.ui.graphics.Color.Black.copy(alpha = .72f),
                     contentColor = androidx.compose.ui.graphics.Color.White, shape = MaterialTheme.shapes.extraSmall) {

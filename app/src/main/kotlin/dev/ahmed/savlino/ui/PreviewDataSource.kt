@@ -38,6 +38,9 @@ internal class PreviewDataSource(private val call: Call.Factory, private val hea
             dataSpec.length == C.LENGTH_UNSET.toLong() -> "bytes=${dataSpec.position}-"
             else -> "bytes=${dataSpec.position}-${dataSpec.position + dataSpec.length - 1}"
         }
+        // HLS playlists name their own segment and key addresses: a plain-HTTP one never gets a request, so headers never leave in clear.
+        if (!dataSpec.uri.scheme.equals("https", ignoreCase = true)) throw HttpDataSource.HttpDataSourceException(dataSpec,
+            PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED, HttpDataSource.HttpDataSourceException.TYPE_OPEN)
         val request = Request.Builder().url(dataSpec.uri.toString()).apply {
             headers.forEach { (name, value) -> header(name, value) }
             range?.let { header("Range", it) }
@@ -96,9 +99,12 @@ internal class PreviewDataSource(private val call: Call.Factory, private val hea
                 .addNetworkInterceptor { chain ->
                     val address = chain.connection()?.route()?.socketAddress?.address
                     if (address == null || !PreviewStream.isPublic(address)) throw IOException("not public")
+                    if (!chain.request().url.isHttps) throw IOException("not https")
                     chain.proceed(chain.request())
                 }
-                .connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).build()
+                .connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS)
+                // Media3 never closes a source mid-open, so a released player's last request ends here at the latest.
+                .callTimeout(20, TimeUnit.SECONDS).build()
         }
     }
 }

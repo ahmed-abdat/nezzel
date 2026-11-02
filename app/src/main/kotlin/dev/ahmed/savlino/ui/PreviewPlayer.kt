@@ -169,6 +169,16 @@ internal fun PreviewPlayer(stream: PreviewStream, poster: Bitmap?, onClose: () -
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.preview_failed), color = Color.White, style = MaterialTheme.typography.bodyMedium,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            // A dropped connection often clears on a second try; the player keeps its source, so prepare() starts it again.
+            TextButton(onClick = { failed = false; buffering = true; player.prepare(); player.play() },
+                Modifier.testTag("preview_retry"), colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
+                Text(stringResource(R.string.try_again))
+            }
+        }
+        // Close stays reachable after a failure, when the other controls are hidden.
+        if (failed) IconButton(onClick = onClose, Modifier.align(Alignment.TopEnd)) {
+            Icon(Icons.Default.Close, stringResource(R.string.preview_close), tint = Color.White)
         }
         else if (buffering && !controls) CircularProgressIndicator(Modifier.size(44.dp), color = Color.White, strokeWidth = 3.dp)
         AnimatedVisibility(controls && !failed, Modifier.fillMaxSize(), enter = fadeIn(), exit = fadeOut()) {
