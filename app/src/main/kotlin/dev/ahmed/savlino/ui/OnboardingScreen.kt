@@ -48,15 +48,16 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
     val scope = rememberCoroutineScope()
     val reduced = rememberReducedMotion()
     val landscape = LocalConfiguration.current.screenHeightDp < 480
-    val direction = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
     fun go(page: Int) { scope.launch {
         if (reduced) pager.scrollToPage(page) else pager.animateScrollToPage(page)
     } }
     BackHandler(pager.currentPage > 0) { go(pager.currentPage - 1) }
     CompositionLocalProvider(LocalOverscrollFactory provides null) {
         Surface(Modifier.fillMaxSize().testTag("onboarding"), color = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = Space.xl)) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.End) {
+            // The pager runs edge to edge with the margin inside each page: a narrower pager clips the incoming
+            // drawing at an invisible line 24 dp in, cutting its rounded corners square until it settles.
+            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = Space.xl), horizontalArrangement = Arrangement.End) {
                     if (pager.currentPage < last) TextButton(onClick = onFinish, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(stringResource(R.string.onboarding_skip))
                     }
@@ -68,11 +69,8 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                     val body = stringResource(bodyRes)
                     val description = stringResource(descriptionRes)
                     val illustration: @Composable (Modifier) -> Unit = { modifier ->
-                        TourIllustration(page, description, active = pager.settledPage == page, modifier =
-                            modifier.graphicsLayer {
-                                translationX = if (reduced) 0f else
-                                    (pager.currentPage - page + pager.currentPageOffsetFraction) * .25f * size.width * direction
-                            })
+                        // The drawing moves with its page: a parallax lag pushed it past the page's scroll clip, cutting it square
+                        TourIllustration(page, description, active = pager.settledPage == page, modifier = modifier)
                     }
                     val copy: @Composable (Modifier) -> Unit = { modifier ->
                         Column(modifier.graphicsLayer {
@@ -86,7 +84,7 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.xl)) {
                         val heroHeight = (maxHeight * .5f).coerceIn(160.dp, 340.dp)
                         // Keep the scaled drawing inside the pager; only long landscape copy scrolls.
                         if (landscape) Row(Modifier.fillMaxSize().padding(vertical = Space.s),
@@ -114,7 +112,7 @@ internal fun OnboardingScreen(onFinish: () -> Unit) {
                             CircleShape))
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(bottom = Space.s),
+                Row(Modifier.fillMaxWidth().padding(horizontal = Space.xl).padding(bottom = Space.s),
                     horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
                     if (pager.currentPage > 0) TextButton(onClick = { go(pager.currentPage - 1) },
                         modifier = Modifier.heightIn(min = 48.dp)) {
