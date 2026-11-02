@@ -82,7 +82,7 @@
     <string name="not_a_post_title">هذا الرابط لا يؤدي إلى منشور</string>
     <string name="not_a_post_body">يفتح الرابط الصفحة الرئيسية للموقع؛ ربما حُذف المنشور، فانسخ رابطه مجددًا</string>
     <string name="private_title">يلزم تسجيل الدخول</string>
-    <string name="private_body">هذا المحتوى يتطلب تسجيل الدخول، ويحفظ Nezzel الفيديوهات والصور العامة فقط</string>
+    <string name="private_body">هذا المحتوى يتطلب تسجيل الدخول، ويحفظ Nezzel المنشورات العامة فقط</string>
     <string name="source_refused_title">الموقع يمنع الوصول</string>
     <string name="source_refused_body">منع الموقع Nezzel من الوصول إلى المحتوى، جرّب رابطًا عامًا آخر</string>
     <string name="protected_title">هذا الفيديو محمي</string>
@@ -704,8 +704,8 @@
     <string name="old_downloads_setting">عرض التنزيلات القديمة</string>
     <string name="old_downloads_setting_body">ملفات حفظتها قبل إعادة تثبيت Nezzel</string>
     <string name="paste">لصق</string>
-    <string name="home_hero_title">احفظ الفيديوهات على هاتفك</string>
-    <string name="home_hero_line">انسخ رابط فيديو من أي تطبيق، ثم اضغط «لصق».</string>
+    <string name="home_hero_title">احفظ الفيديو والصوت والصور</string>
+    <string name="home_hero_line">انسخ أي رابط من أي تطبيق، ثم اضغط «لصق».</string>
     <string name="home_hero_sites">يعمل مع يوتيوب وتيك توك وإنستغرام وفيسبوك وغيرها.</string>
     <string name="home_earlier">سابقًا</string>
     <string name="home_job_open">عرض في التنزيلات</string>
