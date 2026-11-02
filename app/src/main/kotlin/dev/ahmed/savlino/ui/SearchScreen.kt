@@ -192,13 +192,19 @@ private fun ResultRow(result: SearchResult, thumbnail: suspend (String) -> Bitma
             val count = result.videoCount?.takeIf { result.kind == SearchKind.PLAYLIST }?.let { n ->
                 NezzelFormat.firstStrong(pluralStringResource(R.plurals.search_playlist_videos, n, NezzelFormat.count(n, language)))
             }
-            val meta = when (result.kind) {
-                SearchKind.PLAYLIST -> listOfNotNull(result.channel?.let(NezzelFormat::firstStrong), count).joinToString(" · ")
-                SearchKind.VIDEO -> listOfNotNull(result.channel?.let(NezzelFormat::firstStrong),
-                    result.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }).joinToString(" · ")
+            // A long channel shortens; the length or video count after it always shows whole.
+            val tail = when (result.kind) {
+                SearchKind.PLAYLIST -> count
+                SearchKind.VIDEO -> result.durationSeconds?.let { NezzelFormat.isolate(NezzelFormat.duration(it)) }
             }
-            if (meta.isNotEmpty()) Text(meta, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            val channel = result.channel?.let(NezzelFormat::firstStrong)
+            val small = MaterialTheme.typography.bodySmall
+            if (channel != null || tail != null) Row {
+                channel?.let { Text(it, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = small, color = colors.onSurfaceVariant) }
+                tail?.let { Text(if (channel != null) " · $it" else it, maxLines = 1, softWrap = false,
+                    style = small, color = colors.onSurfaceVariant) }
+            }
         }
     }
 }

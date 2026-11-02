@@ -425,7 +425,7 @@
     <string name="update_done">Nezzel est à jour</string>
     <string name="settings_updates_heading">Mises à jour de l’application</string>
     <string name="settings_updates_auto">Mises à jour automatiques</string>
-    <string name="settings_updates_auto_body">Vérifie et installe les mises à jour. Désactivez pour ne plus être prévenu</string>
+    <string name="settings_updates_auto_body">Mises à jour vérifiées et installées automatiquement. Désactivez l’option pour ne plus être prévenu</string>
     <string name="settings_updates_check_now">Vérifier</string>
     <string name="update_latest">Nezzel est à jour</string>
     <string name="update_check_failed">Impossible de rechercher les mises à jour — réessayez plus tard</string>
@@ -476,7 +476,7 @@
     <string name="statuses_filter_photos">Photos</string>
     <string name="statuses_filter_videos">Vidéos</string>
     <string name="statuses_hide_saved">Masquer les enregistrés</string>
-    <string name="statuses_new">Nouveaux</string>
+    <string name="statuses_new">Nouveau</string>
     <string name="statuses_account_n">Compte %1$s</string>
     <string name="statuses_open">Ouvrir</string>
     <plurals name="statuses_count">
@@ -632,7 +632,7 @@
     <string name="multi_link_submit_failed">Impossible de lancer les téléchargements. Réessayez.</string>
     <string name="multi_link_photo_post">Publication photo\u00A0: ouvrez ce lien seul</string>
     <!-- Find my old downloads after a reinstall -->
-    <string name="old_downloads_offer">Déjà enregistré avec Nezzel\u00A0?</string>
+    <string name="old_downloads_offer">Vous avez déjà utilisé Nezzel\u00A0?</string>
     <string name="old_downloads_show">Afficher vos fichiers</string>
     <string name="old_downloads_wrong_folder">Choisissez le dossier Nezzel dans Download</string>
     <string name="old_downloads_setting">Afficher les anciens téléchargements</string>

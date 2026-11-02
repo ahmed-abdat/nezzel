@@ -1058,7 +1058,7 @@ class LinkViewModel(
                 catch (_: Exception) { null }
                 if (preview != null && operationId == id && currentSource()?.matches(origin ?: source) == true) {
                     (optionsState as? OptionsState.Checking)?.takeIf { it.operationId == id }?.let {
-                        optionsState = it.copy(earlyPreview = EarlyPreview(preview.title, preview.thumbnailUrl ?: knownThumbnail))
+                        optionsState = it.copy(earlyPreview = EarlyPreview(preview.title, preview.thumbnailUrl ?: knownThumbnail, preview.uploader))
                         if (preview.title != null) timing.record(InspectionPhase.EARLY_TITLE)
                     }
                 }

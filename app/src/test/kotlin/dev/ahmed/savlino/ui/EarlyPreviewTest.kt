@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33], manifest = Config.NONE)
 class EarlyPreviewTest {
     private val youtube = "https://youtu.be/abcdefghijk"
-    private val preview = EarlyPreview("Real early title", "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg")
+    private val preview = EarlyPreview("Real early title", "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", "Real channel")
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
     private class HeldEngine : EngineAdapter by FakeEngine() {
         val result = CompletableDeferred<InspectResult>()
@@ -31,6 +31,7 @@ class EarlyPreviewTest {
         vm.paste(youtube); idle()
         response.complete(preview); idle()
         assertEquals("Real early title", (vm.optionsState as OptionsState.Checking).earlyPreview?.title)
+        assertEquals("Real channel", (vm.optionsState as OptionsState.Checking).earlyPreview?.uploader)
         val source = (vm.optionsState as OptionsState.Checking).source
         engine.result.complete(InspectResult.Success(Inspection(source, "test-version", listOf(
             Format("18", "mp4", true, true, height = 360)), title = "Final title", thumbnailUrl = "https://i.ytimg.com/final.jpg")))
