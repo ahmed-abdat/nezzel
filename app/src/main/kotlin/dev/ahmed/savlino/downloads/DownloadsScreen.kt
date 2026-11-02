@@ -611,7 +611,9 @@ private fun BatchButton(batch: BatchAction, language: String, enabled: Boolean, 
 @Composable
 fun LibraryLoadStatus(load: LibraryLoadState, onRetry: () -> Unit) {
     when (load) {
-        is LibraryLoadState.Loading -> Column(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        // A quick load (the usual case) shows nothing; the line appears only if reading the files takes a while.
+        is LibraryLoadState.Loading -> if (androidx.compose.runtime.produceState(false) { kotlinx.coroutines.delay(700); value = true }.value)
+            Column(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             Text(stringResource(R.string.saved_loading), style = MaterialTheme.typography.bodyMedium)
             dev.ahmed.savlino.ui.nav.TabProgressBar(Modifier.fillMaxWidth())
         }

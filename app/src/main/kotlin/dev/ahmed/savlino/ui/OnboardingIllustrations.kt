@@ -38,18 +38,24 @@ import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 @Composable
 internal fun TourIllustration(page: Int, description: String, modifier: Modifier, active: Boolean = false) {
     Surface(modifier.clearAndSetSemantics { contentDescription = description; role = Role.Image },
-        shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        // The first page floats its logos on the page itself, like Home; the others sit on a card
+        shape = MaterialTheme.shapes.extraLarge, color = if (page == 0) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow) {
         val colors = MaterialTheme.colorScheme
         val dark = colors.surface.luminance() < 0.5f
         BoxWithConstraints(contentAlignment = Alignment.Center) {
             // The first page shows where links come from; the rest share a soft brand tint from the top start corner
             if (page == 0) {
-                // Same turning rings as Home and App update; drawn larger than the card so the inner ring clears the mark and
-                // the media row, and the card edge clips the outer ring
-                SiteLogoArc(maxWidth * 1.2f, maxHeight * 1.5f, tile = 50.dp)
-                Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(colors.surfaceContainerLow.copy(alpha = 0.85f),
-                    colors.surfaceContainerLow.copy(alpha = if (dark) 0.5f else 0.3f)))))
-            } else Box(Modifier.matchParentSize().background(Brush.linearGradient(
+                // Same turning rings as Home and App update, sized to the space so every site shows; the media row sits below
+                Column(Modifier.fillMaxSize().padding(bottom = Space.m), horizontalAlignment = Alignment.CenterHorizontally) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        SiteLogoArc(maxWidth, maxHeight, tile = 36.dp, mark = 88.dp)
+                        NezzelMark(Modifier.size(88.dp).testTag("tour_mark"), ring = 5.dp)
+                    }
+                    MediaKinds()
+                }
+                return@BoxWithConstraints
+            }
+            Box(Modifier.matchParentSize().background(Brush.linearGradient(
                 listOf(colors.primaryContainer.copy(alpha = if (dark) 0.35f else 0.55f), Color.Transparent))))
             // Only decorative examples scale to fit. Instructions outside the art keep normal font scaling.
             val stage = 320.dp
@@ -57,7 +63,6 @@ internal fun TourIllustration(page: Int, description: String, modifier: Modifier
             Box(Modifier.requiredSize(stage).graphicsLayer { scaleX = scale; scaleY = scale },
                 contentAlignment = Alignment.Center) {
                 when (page) {
-                    0 -> MediaIllustration()
                     1 -> CopyIllustration()
                     2 -> OptionsIllustration()
                     3 -> SavedIllustration(active)
@@ -84,18 +89,14 @@ internal fun NezzelMark(modifier: Modifier = Modifier, ring: Dp = 0.dp,
 }
 
 @Composable
-private fun MediaIllustration() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(36.dp)) {
-        NezzelMark(Modifier.size(112.dp).testTag("tour_mark"), ring = 6.dp)
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-            listOf(R.drawable.ic_movie to "tour_video", R.drawable.ic_music to "tour_audio",
-                R.drawable.ic_image to "tour_photo").forEach { (glyph, tag) ->
-                Surface(Modifier.size(56.dp).testTag(tag), shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
-                    Box(contentAlignment = Alignment.Center) { TourGlyph(glyph) }
-                }
+private fun MediaKinds() {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
+        listOf(R.drawable.ic_movie to "tour_video", R.drawable.ic_music to "tour_audio",
+            R.drawable.ic_image to "tour_photo").forEach { (glyph, tag) ->
+            Surface(Modifier.size(52.dp).testTag(tag), shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+                Box(contentAlignment = Alignment.Center) { TourGlyph(glyph) }
             }
         }
     }
