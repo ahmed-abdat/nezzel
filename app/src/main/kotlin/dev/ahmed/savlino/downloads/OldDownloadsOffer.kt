@@ -4,7 +4,10 @@ import android.content.ActivityNotFoundException
 import android.content.SharedPreferences
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -16,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -25,8 +29,6 @@ import dev.ahmed.savlino.R
 import dev.ahmed.savlino.jobs.NezzelApplication
 import dev.ahmed.savlino.storage.OldDownloads
 import dev.ahmed.savlino.storage.OldDownloadsPick
-import dev.ahmed.savlino.ui.theme.Space
-import dev.ahmed.savlino.ui.theme.isLargeText
 import dev.ahmed.savlino.usage.UsageKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -75,32 +77,25 @@ fun rememberOldDownloadsOffer(snackbar: SnackbarHostState): OldDownloadsOffer {
     return OldDownloadsOffer(state.first, state.second, launch) { old.dismiss() }
 }
 
-/** One quiet tonal block above the library; flat, no divider. */
+/** Same anatomy as the Home update card (round glyph, title, hint, close); the whole card opens the folder picker. */
 @Composable
 fun OldDownloadsCard(onShow: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(modifier.fillMaxWidth().testTag("old_downloads_card"), shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
-        @Composable fun Glyph() = Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(24.dp))
-        @Composable fun Message(m: Modifier) = Text(stringResource(R.string.old_downloads_offer), m, style = MaterialTheme.typography.bodyLarge)
-        @Composable fun Show() = Button(onClick = onShow, modifier = Modifier.heightIn(min = 48.dp).testTag("old_downloads_show")) {
-            Text(stringResource(R.string.old_downloads_show))
-        }
-        @Composable fun Close() = IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp).testTag("old_downloads_dismiss")) {
-            Icon(Icons.Default.Close, stringResource(R.string.dismiss), Modifier.size(20.dp))
-        }
-        // Large text: the words get the full width and the button drops under them.
-        if (isLargeText()) Column(Modifier.padding(start = Space.rowH, end = Space.xs, top = Space.xs, bottom = Space.m)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Glyph(); Spacer(Modifier.weight(1f)); Close() }
-            Message(Modifier.padding(end = Space.m, bottom = Space.s))
-            Show()
-        // Beside the button the question wrapped to four short lines in Arabic: it keeps the row, the button sits under it.
-        } else Column(Modifier.padding(start = Space.rowH, end = Space.xs, top = Space.xs, bottom = Space.m)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.inline)) {
-                Glyph()
-                Message(Modifier.weight(1f))
-                Close()
+    val colors = MaterialTheme.colorScheme
+    Surface(onClick = onShow, modifier = modifier.fillMaxWidth().testTag("old_downloads_card"), shape = RoundedCornerShape(24.dp),
+        color = colors.secondaryContainer, contentColor = colors.onSecondaryContainer) {
+        Row(Modifier.heightIn(min = 72.dp).padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(44.dp).background(colors.secondary, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(22.dp), tint = colors.onSecondary)
             }
-            Box(Modifier.padding(start = 24.dp + Space.inline)) { Show() }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.old_downloads_offer), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.old_downloads_show), style = MaterialTheme.typography.bodyMedium,
+                    color = colors.primary, fontWeight = FontWeight.Medium)
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp).testTag("old_downloads_dismiss")) {
+                Icon(Icons.Default.Close, stringResource(R.string.dismiss), Modifier.size(20.dp))
+            }
         }
     }
 }
