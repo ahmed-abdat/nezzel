@@ -86,7 +86,7 @@ fun OldDownloadsCard(onShow: () -> Unit, onDismiss: () -> Unit, modifier: Modifi
         Row(Modifier.heightIn(min = 72.dp).padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.size(44.dp).background(colors.secondary, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(22.dp), tint = colors.onSecondary)
+                Icon(painterResource(R.drawable.ic_ms_history), null, Modifier.size(24.dp), tint = colors.onSecondary)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(stringResource(R.string.old_downloads_offer), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

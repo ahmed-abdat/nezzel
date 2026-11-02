@@ -222,7 +222,7 @@
     </plurals>
     <string name="saved_deleted">Supprimé</string>
     <string name="saved_empty_title">Aucun fichier enregistré</string>
-    <string name="saved_empty_body">Vos fichiers enregistrés apparaîtront ici</string>
+    <string name="saved_empty_body">Copiez un lien dans n’importe quelle app, puis collez-le pour garder la vidéo, le son ou la photo</string>
     <string name="saved_no_matches">Aucun fichier correspondant</string>
     <string name="saved_snackbar">Enregistré dans %1$s</string>
     <string name="saved_action_failed">Impossible d’ouvrir ce fichier ou de terminer l’action — essayez l’application Fichiers</string>

@@ -9,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
@@ -408,16 +409,28 @@ fun DownloadsScreen(
                         }
                     }
                 } else if (libraryLoad is LibraryLoadState.Ready) item(key = "empty") {
-                    // One quiet block on the page surface: a bare glyph (no tile), what this tab will hold, the one action.
+                    // What this tab will hold (the same video/music/photo trio as the first-run tour), how to fill it, the one action.
                     Column(Modifier.fillMaxWidth().padding(top = Space.xxl * 2, bottom = Space.xxl), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                        Icon(painterResource(R.drawable.ic_download), null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(Space.s))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                            listOf(R.drawable.ic_movie, R.drawable.ic_music, R.drawable.ic_image).forEach { glyph ->
+                                Box(Modifier.size(56.dp).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape), contentAlignment = Alignment.Center) {
+                                    Icon(painterResource(glyph), null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(Space.m))
                         Text(stringResource(R.string.saved_empty_title), style = MaterialTheme.typography.titleLarge)
                         Text(stringResource(R.string.saved_empty_body), Modifier.widthIn(max = 300.dp), textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(Space.s))
-                        FilledTonalButton(onClick = onPaste, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.paste_link)) }
+                        FilledTonalButton(onClick = onPaste, modifier = Modifier.heightIn(min = 48.dp),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                            Icon(painterResource(R.drawable.ic_paste), null, Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                            Text(stringResource(R.string.paste_link))
+                        }
                     }
                 }
             }
