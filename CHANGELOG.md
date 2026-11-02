@@ -16,11 +16,14 @@ Version entries describe existing builds, not public APK availability.
 - Home shows all 17 supported sites on the logo ring; onboarding pages each tell their own short story.
 - Home and the site say videos, music and photos, not only videos.
 - Settings switch descriptions say what each one does.
+- An empty Downloads page shows what it holds and has a Paste button; the old-files card matches the update card.
+- Clearer wording in English, Arabic and French; the share sheet shows the channel name while it loads.
 
 ### Fixed
 
 - The options sheet no longer bounces after a small drag when it is nearly full height.
 - A preview that fails to play shows Try again and Close; preview streams use HTTPS only.
+- Search results keep the video length visible next to long channel names; Arabic file details line up under their title.
 
 ## [0.5.7] - 2026-11-01
 
