@@ -1103,6 +1103,8 @@ private fun JobSlotCard(jobId: String, jobs: () -> List<DownloadProgress>, onCli
 }
 
 private const val RECENT_ROW = 8
+/** True when Home's row holds every saved file, so no «Earlier» list follows it. */
+fun homeRowOnly(media: List<SavedMedia>): Boolean = homeEntries(media).size <= RECENT_ROW
 private const val FILE_JOBS = 64
 private val DownloadProgress.transferDone get() = !terminal && (phase in setOf(DownloadPhase.JOINING, DownloadPhase.CONVERTING,
     DownloadPhase.SAVING) || percent == 100)

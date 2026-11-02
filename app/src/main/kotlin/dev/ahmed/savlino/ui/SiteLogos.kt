@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.ahmed.savlino.R
-import dev.ahmed.savlino.ui.nav.rememberTabLoop
+import dev.ahmed.savlino.ui.nav.rememberTabGlide
 import dev.ahmed.savlino.ui.theme.rememberReducedMotion
 import kotlin.math.cos
 import kotlin.math.sin
@@ -74,11 +74,14 @@ private const val INNER = 6
 /** The ring's entrance plays once per process, not on every return to Home. */
 private var arcShown = false
 
+/** Starts at twice the average speed (a 90 s turn's pace for a sixth of a turn in 30 s) and slows to rest. */
+private val GlideEasing = androidx.compose.animation.core.CubicBezierEasing(0.25f, 0.5f, 0.5f, 1f)
+
 /** A tilted wall of every site tile, larger than its parent so it bleeds off the edges. Purely decorative. */
 @Composable
 internal fun SiteLogoWall(modifier: Modifier = Modifier, tile: Dp = 80.dp) {
-    // A slow drift of about half a tile and back keeps the wall alive; still when animations are off
-    val drift = rememberTabLoop(0f, 1f, tween(14_000, easing = FastOutSlowInEasing), RepeatMode.Reverse, rest = 0f, enabled = !rememberReducedMotion())
+    // One slow drift of about half a tile each time the page shows, then it rests; still when animations are off
+    val drift = rememberTabGlide(1f, tween(14_000, easing = FastOutSlowInEasing), sway = true, enabled = !rememberReducedMotion())
     Column(modifier.requiredSize(tile * 7.5f).graphicsLayer {
         rotationZ = -24f
         val shift = drift.value * tile.toPx() * 0.6f
@@ -113,7 +116,9 @@ internal fun SiteLogoArc(width: Dp, height: Dp, modifier: Modifier = Modifier, t
     val outerY = maxOf(half * 0.86f, innerY + size.value * 1.25f)
     val outerX = maxOf(innerX + size.value * 1.3f, minOf(width.value / 2 - size.value * 0.55f, innerX * 1.5f))
     val reduced = rememberReducedMotion()
-    val turn = rememberTabLoop(0f, 1f, tween(90_000, easing = LinearEasing), RepeatMode.Restart, rest = 0f, enabled = !reduced)
+    // A sixth of a turn each time the page shows, starting at the old steady pace and easing to a stop: alive on arrival,
+    // then still, so an open Home costs no frames
+    val turn = rememberTabGlide(1f / 6, tween(30_000, easing = GlideEasing), enabled = !reduced)
     // First sight only (once per process): the tiles start hidden behind the mark and fan out one after another, inner ring first.
     val entrance = remember { Animatable(if (reduced || arcShown) 1f else 0f) }
     LaunchedEffect(Unit) {

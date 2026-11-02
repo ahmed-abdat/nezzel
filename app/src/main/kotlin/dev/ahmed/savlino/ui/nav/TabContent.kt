@@ -7,6 +7,7 @@ import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalFullyDrawnReporterOwner
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.DurationBasedAnimationSpec
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -92,6 +93,24 @@ fun rememberTabLoop(from: Float, to: Float, spec: DurationBasedAnimationSpec<Flo
         snapshotFlow { active.value && run.value }.collectLatest { running ->
             if (!running) value.snapTo(rest)
             else { value.snapTo(from); value.animateTo(to, infiniteRepeatable(spec, repeatMode)) }
+        }
+    }
+    return value.asState()
+}
+
+/**
+ * A decorative motion that settles: each time the tab shows, the value glides once by [distance] and eases to a stop,
+ * so the screen goes back to asking for no frames. With [sway], it glides to 1 or back to 0 instead of adding up.
+ * Holds still while the tab is hidden or [enabled] is false.
+ */
+@Composable
+fun rememberTabGlide(distance: Float, spec: AnimationSpec<Float>, sway: Boolean = false, enabled: Boolean = true): State<Float> {
+    val active = LocalTabActive.current
+    val value = remember { Animatable(0f) }
+    val run = rememberUpdatedState(enabled)
+    LaunchedEffect(active, distance, spec, sway) {
+        snapshotFlow { active.value && run.value }.collectLatest { running ->
+            if (running) value.animateTo(if (sway) (if (value.value < 0.5f) 1f else 0f) else value.value + distance, spec)
         }
     }
     return value.asState()

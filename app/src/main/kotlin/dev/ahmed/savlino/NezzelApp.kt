@@ -493,7 +493,14 @@ internal fun HomeScreen(links: LinkViewModel, jobs: () -> List<DownloadProgress>
                     NotificationsOffNote(currentJobs, firstRun, onAllowNotifications)
                     if (libraryKnown) Crossfade(firstRun, Modifier.miniPlayerReveal(), animationSpec = easeOut(reduced, 300), label = "first run words") { first ->
                         if (first) FirstRunWords(Modifier.padding(horizontal = Space.xl).padding(top = Space.l))
-                        else dev.ahmed.savlino.ui.HomeFooter(Modifier.padding(horizontal = Space.l).padding(top = Space.xl))
+                        else Column(Modifier.padding(horizontal = Space.l).padding(top = Space.xl), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                            // Still new (no «Earlier» yet): one quiet line just above Paste says how to save the next one
+                            val rowOnly by remember(library.media) { derivedStateOf { dev.ahmed.savlino.downloads.homeRowOnly(library.media) } }
+                            if (rowOnly) Text(stringResource(R.string.home_hero_line), Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            dev.ahmed.savlino.ui.HomeFooter()
+                        }
                     }
                 }
             }

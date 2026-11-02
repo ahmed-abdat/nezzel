@@ -32,7 +32,9 @@ internal fun UpdateHero(compact: Boolean, top: Dp, modifier: Modifier = Modifier
         if (compact) SiteLogoWall(Modifier.offset(y = top / 2))
         else SiteLogoArc(maxWidth, maxHeight, markShift = top / 2, topClear = top)
         if (dark) Box(Modifier.matchParentSize().background(colors.background.copy(alpha = 0.25f)))
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to colors.background)))
+        // Both edges fade into the page, so a tile crossing the top or bottom never shows a hard cut
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to colors.background, 0.14f to Color.Transparent,
+            0.6f to Color.Transparent, 1f to colors.background)))
         Box(Modifier.padding(top = top).size(if (compact) 56.dp else 104.dp)) {
             // A surface ring lifts the mark off the wall without relying on elevation shadows
             // Light mode tints the disc: a white one disappears into the page now the middle is clear
