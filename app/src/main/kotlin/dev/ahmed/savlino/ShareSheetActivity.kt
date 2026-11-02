@@ -15,6 +15,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.lifecycleScope
 import dev.ahmed.savlino.domain.LinkInput
+import dev.ahmed.savlino.engine.spotify.SpotifyLink
 import dev.ahmed.savlino.entry.NotificationAsk
 import dev.ahmed.savlino.entry.ShareInput
 import dev.ahmed.savlino.jobs.NezzelApplication
@@ -109,7 +110,9 @@ class ShareSheetActivity : AppCompatActivity() {
         links.deferShare(input)
     }
 
-    private fun handOffNeeded(input: ShareInput?) = !preferences.onboardingSeen || LinkInput.candidates(input?.text).size > 1
+    // Spotify links search YouTube, which only the full app shows; the sheet would sit on a dead options button.
+    private fun handOffNeeded(input: ShareInput?) = !preferences.onboardingSeen ||
+        LinkInput.candidates(input?.text).let { it.size > 1 || it.any { link -> SpotifyLink.owns(link.rawUrl) } }
 
     /** Handled-link mark for the clipboard: on Download only, never on dismissal. */
     private fun markHandled(link: String) {

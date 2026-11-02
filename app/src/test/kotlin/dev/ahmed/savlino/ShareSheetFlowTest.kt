@@ -289,6 +289,13 @@ class ShareSheetFlowTest {
         assertTrue(engine.inspected.isEmpty())
     }
 
+    @Test fun spotifyLinkGoesToTheFullAppForItsYouTubeSearch() {
+        val engine = Engine(); install(engine)
+        val text = "Listen https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=x"
+        assertHandsOff(launch(share(text)), text)
+        assertTrue(engine.inspected.isEmpty())
+    }
+
     @Test fun allQualitiesGoesToTheFullAppWithTheSameText() {
         val engine = Engine(); install(engine)
         val text = "Great clip $url"
