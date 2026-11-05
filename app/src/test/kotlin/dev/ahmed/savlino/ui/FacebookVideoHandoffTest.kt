@@ -80,6 +80,37 @@ class FacebookVideoHandoffTest {
         assertTrue(vm.downloadEnabled)
     }
 
+    @Test fun videoPageNeedsSignInWhenLegacyCannotFindMedia() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE, videoPage = true) }
+        for (error in listOf(DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported)) {
+            engine.inspected.clear()
+            engine.failure = error
+            check(post)
+            assertEquals(listOf(post), engine.inspected)
+            assertEquals(OptionsState.Error(DownloadError.LoginRequired), vm.optionsState)
+            assertFalse(vm.downloadEnabled)
+        }
+    }
+
+    @Test fun videoPageStillShowsFormatsWhenLegacyFindsAVideo() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE, videoPage = true) }
+        check(post)
+        assertEquals(listOf(post), engine.inspected)
+        val ready = vm.optionsState as OptionsState.Ready
+        assertEquals(listOf("720"), ready.inspection.formats.map { it.id })
+        assertTrue(vm.downloadEnabled)
+    }
+
+    @Test fun facebookSignInWallShowsTheLoginErrorWithoutLegacyInspection() {
+        images.result = { MediaInspectResult.Failure(ImageFailure.PRIVATE, ImagePhase.PAGE) }
+        for (url in listOf(post, "https://www.facebook.com/share/p/1SyntheticAb/", "https://www.facebook.com/share/Synthetic/")) {
+            check(url)
+            assertEquals(OptionsState.Error(DownloadError.LoginRequired), vm.optionsState)
+            assertFalse(vm.downloadEnabled)
+        }
+        assertTrue(engine.inspected.isEmpty())
+    }
+
     @Test fun noMediaPagePreservesNetworkAndAccessErrorsFromLegacy() {
         images.result = { MediaInspectResult.Failure(ImageFailure.NO_MEDIA, ImagePhase.PAGE) }
         for (error in listOf(DownloadError.Network, DownloadError.Offline, DownloadError.EngineUnavailable,

@@ -950,12 +950,15 @@ class LinkViewModel(
                                 (result.reason == ImageFailure.HTTP && result.statusCode in setOf(404, 410)))
                                 ImageFailure.EXPIRED else result.reason,
                             result.statusCode, phase = result.phase)
+                    else if (route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.PRIVATE)
+                        optionsState = OptionsState.Error(DownloadError.LoginRequired)
                     else if (handoff) awaitRace(legacyReaderSource(source, route), origin)
                     else if (readerFallsBack(route, result, source)) {
                         val landing = result.fallback?.takeIf { route == MediaSourceRoute.LINKEDIN &&
                             it.revision == source.revision && CANONICAL_LINKEDIN_POST.matches(it.link.rawUrl) }
                         startLegacyInspection(landing ?: legacyReaderSource(source, route), origin,
                             noMedia = route == MediaSourceRoute.FACEBOOK && result.reason == ImageFailure.NO_MEDIA,
+                            videoPage = result.videoPage,
                             tikTokPhotos = route != MediaSourceRoute.TIKTOK,
                             photoFailure = if (route == MediaSourceRoute.TIKTOK) OptionsState.ImageError(result.reason,
                                 result.statusCode, phase = result.phase) else null)
@@ -1036,7 +1039,7 @@ class LinkViewModel(
         FacebookPostIdentity.parse(source.link.rawUrl)?.kind == FacebookLinkKind.SHARE
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
     private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false,
-        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null) {
+        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null, videoPage: Boolean = false) {
         // A carousel's explicit View video options starts a new inspection without startInspection().
         val timing = inspectionTiming ?: InspectionTiming().also {
             it.record(InspectionPhase.INTAKE_ACCEPTED)
@@ -1064,7 +1067,7 @@ class LinkViewModel(
                 }
             }
         }
-        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia, tikTokPhotos, photoFailure) }
+        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia, tikTokPhotos, photoFailure, videoPage) }
     }
     /** One yt-dlp read under maintenance admission; generations are captured there and applied only by [showLegacy]. */
     private class LegacyRead(val result: InspectResult, val readGeneration: Long? = null,
@@ -1128,7 +1131,7 @@ class LinkViewModel(
         }
     }
     private fun showLegacy(read: LegacyRead, id: String, source: LinkRevision, origin: LinkRevision?, noMedia: Boolean,
-        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null) {
+        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null, videoPage: Boolean = false) {
         read.version?.let { (version, generation) ->
             inspectedEngineVersion = version
             inspectedMaintenanceGeneration = generation
@@ -1141,7 +1144,7 @@ class LinkViewModel(
             is InspectResult.Failure -> {
                 optionsState = if (noMedia && result.error in setOf(
                     DownloadError.Failed, DownloadError.Unavailable, DownloadError.Unsupported))
-                    OptionsState.ImageError(ImageFailure.NO_MEDIA)
+                    if (videoPage) OptionsState.Error(DownloadError.LoginRequired) else OptionsState.ImageError(ImageFailure.NO_MEDIA)
                     // The page already said removed/blocked: a generic yt-dlp failure is that, not "couldn't read".
                     else if (photoFailure?.failure == ImageFailure.GONE && result.error !in setOf(
                         DownloadError.Offline, DownloadError.Network, DownloadError.LoginRequired))

@@ -579,8 +579,8 @@ class FacebookInspectionTest : PublicImageTestBase() {
             failed(f.inspectFacebook(FB_STORY), ImageFailure.PRIVATE, ImagePhase.PAGE)
             assertEquals(1, f.server.requests.size)
         }
-        fixture(respond = facebook("video-post.html")) { f ->
-            failed(f.inspectFacebook(FB_STORY), ImageFailure.NO_MEDIA, ImagePhase.PAGE)
+        for ((page, videoPage) in listOf("video-post.html" to false, "video-og-post.html" to true)) fixture(respond = facebook(page)) { f ->
+            assertEquals(videoPage, failed(f.inspectFacebook(FB_STORY), ImageFailure.NO_MEDIA, ImagePhase.PAGE).videoPage)
             assertEquals(1, f.server.requests.size, "a video thumbnail is never fetched as the image")
         }
     }
