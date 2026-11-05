@@ -496,9 +496,11 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun completionEventIsNewOnlyAndUpdatingAnotherJobKeepsFailedRows() = runBlocking {
+    @Test fun completionEventIsNewOnlyAndClearsOnlyFailuresOfTheSameLink() = runBlocking {
         fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
-            f.store.enqueue(command("failed-first")); f.store.fail("failed-first", DownloadError.Network)
+            f.store.enqueue(command("failed-first", link = "https://example.com/other")); f.store.fail("failed-first", DownloadError.Network)
+            // The same link failed earlier: saving it now clears that row (and the tab's failed badge).
+            f.store.enqueue(command("failed-same")); f.store.fail("failed-same", DownloadError.Network)
             f.coordinator.initialize()
             val received = kotlinx.coroutines.channels.Channel<DownloadProgress>(1)
             val collector = launch(start = CoroutineStart.UNDISPATCHED) { f.coordinator.completed.collect { received.send(it) } }
@@ -510,6 +512,8 @@ class DownloadWorkerTest {
                 assertEquals(DownloadPhase.COMPLETED, finished.phase)
                 assertNotNull(finished.publishedUri)
                 assertTrue(f.coordinator.progress.value.any { it.jobId == "failed-first" && it.phase == DownloadPhase.FAILED })
+                assertFalse(f.coordinator.progress.value.any { it.jobId == "failed-same" })
+                assertNull(f.store.get("failed-same"))
                 assertTrue(f.coordinator.completed.replayCache.isEmpty())
                 assertFalse(f.coordinator.progress.value.any { it.jobId == "finished-next" })
             } finally { collector.cancelAndJoin() }

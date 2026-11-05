@@ -572,6 +572,22 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         }
     }
 
+    /**
+     * Single-link failures of the link [completedId] just saved: same source tag, failed before it completed, and the
+     * same kind (video or audio only), so a saved audio never clears a failed video. Playlist items on either side
+     * keep their own rows.
+     */
+    @Synchronized fun failuresSavedBy(completedId: String): List<String> {
+        val saved = get(completedId)?.takeIf { it.stage == JobStage.COMPLETED } ?: return emptyList()
+        val ids = readableDatabase.rawQuery(
+            "SELECT f.job_id FROM jobs f JOIN jobs c ON c.job_id = ? AND c.source_key IS NOT NULL " +
+                "AND f.source_key = c.source_key WHERE f.stage = 'FAILED' AND f.pending_uri IS NULL " +
+                "AND f.job_id != c.job_id AND f.updated_at <= c.updated_at " +
+                "AND NOT EXISTS (SELECT 1 FROM batch_items b WHERE b.job_id IN (f.job_id, c.job_id))",
+            arrayOf(completedId)).use { buildList { while (it.moveToNext()) add(it.getString(0)) } }
+        return ids.filter { get(it)?.format?.hasVideo == saved.format.hasVideo }
+    }
+
     /** Remove is restricted to failures; a live job or completed publication is never discarded. */
     @Synchronized fun removeFailed(jobId: String): Boolean = (writableDatabase.delete("jobs",
         "job_id = ? AND stage = ?", arrayOf(jobId, JobStage.FAILED.name)) == 1).also { if (it) artwork.delete(jobId) }

@@ -42,8 +42,8 @@ class JobStoreShareLinkTest {
 
     @After fun tearDown() { app.deleteDatabase(JobStore.DATABASE_NAME) }
 
-    private fun command(id: String): DownloadCommand {
-        val format = Format("choice", "mp4", true, true, size = Size.Exact(10))
+    private fun command(id: String, video: Boolean = true): DownloadCommand {
+        val format = Format("choice", if (video) "mp4" else "m4a", video, true, size = Size.Exact(10))
         val source = LinkRevision(LinkInput.parse(link)!!, 1)
         return (DownloadCommand.confirm(id, Inspection(source, "engine", listOf(format)), source, format.id, "clip")
             as ConfirmResult.Confirmed).command
@@ -114,6 +114,21 @@ class JobStoreShareLinkTest {
         assertEquals(LinkCipher.Opened.Gone, cipher.open(oldBlob)) // a DB copy taken before the clear can't be opened
         assertTrue(store.completed("after")) // same process, no restart
         assertEquals(link, store.shareLink("after"))
+    } }
+
+    @Test fun savingALinkFindsOnlyItsEarlierSingleFailures() { JobStore(app, IsolatedTestApplication.FAKE_KEYER, cipher).use { store ->
+        check(store.enqueue(command("gone"))); check(store.fail("gone", DownloadError.FormatExpired))
+        check(store.enqueue(command("refused"))); check(store.fail("refused", DownloadError.ForegroundDenied))
+        check(store.enqueue(command("audio", video = false))); check(store.fail("audio", DownloadError.Network))
+        check(store.enqueue(command("live")))
+        assertTrue(store.completed("saved"))
+        check(store.enqueue(command("after"))); check(store.fail("after", DownloadError.Network))
+        store.writableDatabase.execSQL("UPDATE jobs SET updated_at = updated_at + 60000 WHERE job_id = 'after'")
+        // Not the saved audio's twin, nor a failure written after the save.
+        assertEquals(setOf("gone", "refused"), store.failuresSavedBy("saved").toSet())
+        assertEquals(emptyList<String>(), store.failuresSavedBy("live")) // only a completed row clears failures
+        store.clearShareLinks() // no tags left: nothing matches
+        assertEquals(emptyList<String>(), store.failuresSavedBy("saved"))
     } }
 
     @Test fun clearForgetsSavedBeforeAndRetryLinksButNotActiveJobs() { JobStore(app, IsolatedTestApplication.FAKE_KEYER, cipher).use { store ->

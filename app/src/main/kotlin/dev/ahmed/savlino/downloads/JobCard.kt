@@ -504,12 +504,13 @@ private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, r
             ThumbBadge.Failed, ring)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
             FilenameText(job.filename)
-            // An expired job has no link left: the share-again hint is the whole message.
-            val expired = job.error == dev.ahmed.savlino.domain.DownloadError.FormatExpired && !job.retryable
+            // An expired job with no link left: the share-again hint is the whole message. A quality that is gone
+            // but whose link is kept says so and offers Change quality below.
+            val expired = job.error == dev.ahmed.savlino.domain.DownloadError.FormatExpired && !job.retryable && !canChange
             Text(if (expired) stringResource(R.string.download_retry_hint) else DownloadNotifications.phase(context, job, LocalOffline.current),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            if (!job.awaitingSchedule && !job.retryable && !expired)
+            if (!job.awaitingSchedule && !job.retryable && !expired && !canChange)
                 Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             BatteryHelp(job.error, onBatterySettings = {

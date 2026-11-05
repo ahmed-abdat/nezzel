@@ -1120,8 +1120,8 @@ class DownloadCoordinatorTest {
     }
 }
 
-internal fun command(id: String, size: Size = Size.Exact(4)): DownloadCommand {
-    val source = LinkRevision(LinkInput.parse("https://example.com/clip?token=private")!!, 7)
+internal fun command(id: String, size: Size = Size.Exact(4), link: String = "https://example.com/clip?token=private"): DownloadCommand {
+    val source = LinkRevision(LinkInput.parse(link)!!, 7)
     val format = Format("opaque-choice", "mp4", true, true, height = 720, size = size,
         sourceFormatId = "exact/source")
     return (DownloadCommand.confirm(id, Inspection(source, "engine-42", listOf(format)), source,

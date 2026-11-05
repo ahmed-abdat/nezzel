@@ -968,7 +968,14 @@ class DownloadCoordinator(
         val newlyTerminal = event.terminal && !event.awaitingSchedule &&
             previous != null && (!previous.terminal || previous.awaitingSchedule)
         if (newlyTerminal) {
-            if (event.phase == DownloadPhase.COMPLETED) finishedEvents.tryEmit(event)
+            if (event.phase == DownloadPhase.COMPLETED) {
+                finishedEvents.tryEmit(event)
+                // The same link saved now: its earlier failed rows (and the tab's failed badge) are done.
+                for (stale in store.failuresSavedBy(event.jobId)) if (store.remove(stale)) {
+                    offlineStarts.remove(stale)
+                    mutableProgress.update { it.filterNot { old -> old.jobId == stale } }
+                }
+            }
             if (event.phase == DownloadPhase.CANCELLED) cancellationEvents.tryEmit(event)
             countTerminal(event)
         }
