@@ -92,6 +92,99 @@ class NpeDownloadTest {
     private fun assertPage(args: List<String>, job: String = "job") = assertEquals("$job.json", assertNotNull(info(args)).name)
     private fun ids(file: File) = ObjectMapper().readTree(file).path("formats").map { it.path("format_id").asText() }.toSet()
 
+    private fun video720(id: String = "136", bytes: Int = 10) = """{"id":"fixture","formats":[
+        {"format_id":"$id","ext":"mp4","vcodec":"avc1","acodec":"none","width":1280,"height":720,"filesize":$bytes,"url":"https://example.org/video"},
+        {"format_id":"140","ext":"m4a","vcodec":"none","acodec":"mp4a","filesize":2,"url":"https://example.org/audio"}]}"""
+    private fun command720() = command(row.copy(id = "136+140", sourceFormatId = "136", width = 1280,
+        height = 720, videoCodec = "avc1", audioCodec = "mp4a", size = Size.Exact(12)))
+    private val audioOnly = """{"formats":[{"format_id":"140","ext":"m4a","vcodec":"none","acodec":"mp4a","filesize":2}]}"""
+
+    @Test fun resumed720UsesEquivalentFastJsonWhenYtdlpHasNoVideo() = runBlocking {
+        // The same itag can have a new byte count; a changed itag must also keep the chosen quality.
+        for (id in listOf("136", "new-720")) {
+            val run = Run(command720(), fast = Fast { video720(id, bytes = 11) }, cancellationPollMs = 1)
+            run.partial()
+            run.runtime.page = { audioOnly }
+            run.runtime.action = { args, _ ->
+                assertTrue(run.dir.listFiles()!!.isEmpty())
+                assertEquals(listOf(EngineEvent.Restarting(1)), run.events.filterIsInstance<EngineEvent.Restarting>())
+                val file = assertNotNull(info(args))
+                assertTrue(run.cache.isNpe(file))
+                assertEquals(setOf(id, "140"), ids(file))
+                assertEquals("$id+140", args[args.indexOf("-f") + 1])
+                assertTrue("https://example.org/video" in file.readText())
+                Runtime.output(args)
+            }
+            assertIs<TransferResult.Success>(run.download())
+            assertTrue(run.runtime.pages.isEmpty())
+            assertEquals(1, run.fast!!.calls.size)
+            assertEquals(Size.Exact(13), run.events.filterIsInstance<EngineEvent.FormatResolved>().single().format.size)
+        }
+    }
+
+    @Test fun expired720TransferRetriesFromEquivalentFastJson() = runBlocking {
+        val run = Run(command720(), fast = Fast { video720("new-720") }, cancellationPollMs = 1)
+        run.cache.store("job", video720(), npe = true)
+        run.runtime.page = { audioOnly }
+        run.runtime.action = { args, line ->
+            if (run.runtime.transfers.size == 1) run.failAttempt(line)
+            assertTrue(run.dir.listFiles()!!.isEmpty())
+            assertEquals(listOf(EngineEvent.Restarting(1)), run.events.filterIsInstance<EngineEvent.Restarting>())
+            assertTrue(run.cache.isNpe(assertNotNull(info(args))))
+            assertEquals("new-720+140", args[args.indexOf("-f") + 1])
+            Runtime.output(args)
+        }
+        assertIs<TransferResult.Success>(run.download())
+        assertEquals(2, run.runtime.transfers.size)
+        assertTrue(run.runtime.pages.isEmpty())
+        assertEquals(1, run.fast!!.calls.size)
+    }
+
+    @Test fun equivalentFastJsonRejectionKeepsTheYtdlpFallback() = runBlocking {
+        val run = Run(command720(), fast = Fast { video720("new-720") }, cancellationPollMs = 1)
+        run.runtime.page = { video720("new-720") }
+        run.runtime.action = { args, _ ->
+            if (run.runtime.transfers.size == 1) {
+                assertTrue(run.cache.isNpe(assertNotNull(info(args))))
+                throw YtdlpExecutionFailure(DownloadError.Unsupported)
+            }
+            assertPage(args)
+            assertEquals("new-720+140", args[args.indexOf("-f") + 1])
+            Runtime.output(args)
+        }
+        assertIs<TransferResult.Success>(run.download())
+        assertEquals(2, run.runtime.transfers.size)
+        assertEquals(1, run.runtime.pages.size)
+        assertEquals(1, run.fast!!.calls.size)
+    }
+
+    @Test fun missingFast720FallsBackToYtdlpAndMissingBothNeverTransfers() = runBlocking {
+        for (fastJson in listOf(null, audioOnly)) {
+            val fallback = Run(command720(), fast = Fast { fastJson }, cancellationPollMs = 1)
+            fallback.runtime.page = { video720() }
+            assertIs<TransferResult.Success>(fallback.download())
+            assertPage(fallback.runtime.transfers.single())
+            assertEquals(1, fallback.runtime.pages.size)
+        }
+        val missing = Run(command720(), fast = Fast { audioOnly }, cancellationPollMs = 1)
+        missing.runtime.page = { audioOnly }
+        assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(missing.download()).error)
+        assertEquals(1, missing.runtime.pages.size)
+        assertTrue(missing.runtime.transfers.isEmpty())
+        assertNull(missing.cache.freshFile("job"))
+    }
+
+    @Test fun fastMissing720WithBlankOrBrokenYtdlpReadKeepsReadFailure() = runBlocking {
+        for (page in listOf("", "{")) {
+            val run = Run(command720(), fast = Fast { audioOnly }, cancellationPollMs = 1)
+            run.runtime.page = { page }
+            assertEquals(DownloadError.Failed, assertIs<TransferResult.Failure>(run.download()).error)
+            assertEquals(1, run.runtime.pages.size)
+            assertTrue(run.runtime.transfers.isEmpty())
+            assertNull(run.cache.freshFile("job"))
+        }
+    }
+
     @Test fun missingInfoWipesAndRestartsBeforeRebuildThenUsesOnlyConfirmedIds() = runBlocking {
         val run = Run(cancellationPollMs = 1)
         run.partial()

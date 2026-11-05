@@ -464,7 +464,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
 
     override fun prepareDownload(command: DownloadCommand) { infoCache?.prepare(command) }
 
-    private suspend fun rebuild(current: Operation, command: DownloadCommand): File? {
+    private suspend fun rebuild(current: Operation, command: DownloadCommand, unmatched: (String) -> Unit): File? {
         val fast = fastSource ?: return null
         val cache = infoCache ?: return null
         synchronized(current) {
@@ -478,8 +478,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         // The page URL would wait on the same dead network; TRANSPORT lets the coordinator wait for one.
         if (result is FastResult.Unreachable) throw YtdlpExecutionFailure(DownloadError.Network)
         val json = (result as? FastResult.Json)?.json
-        // A different row under the same id goes to the checked yt-dlp read instead.
-        if (json == null || !offers(json, command)) return null
+        // Let the checked read look for an equivalent quality without spending a second NPE budget.
+        if (json == null) return null
+        if (!offers(json, command)) { unmatched(json); return null }
         val trimmed = try { cache.trim(json, command) }
             catch (_: Exception) { null }
         if (trimmed == null) return null
@@ -496,7 +497,8 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
      * A missing or changed row fails as FormatExpired before any transfer. Without a cache the checked JSON
      * could not be the one transferred, so the URL path stays as it was (null).
      */
-    private suspend fun verifiedInfo(current: Operation, command: DownloadCommand, resolved: (DownloadCommand) -> Unit): File? {
+    private suspend fun verifiedInfo(current: Operation, command: DownloadCommand, fastJson: String?,
+        resolved: (DownloadCommand) -> Unit): File? {
         val cache = infoCache ?: return null
         synchronized(current) {
             checkCancelled(current)
@@ -504,10 +506,16 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             current.expireIn(limits.inspectMs)
         }
         val diagnostics = YtdlpDiagnostics()
+        // rebuildOnce already made the eligible, bounded fast read. A miss (including broken JSON)
+        // keeps the yt-dlp read and its diagnostics; an equivalent row keeps its NPE provenance.
+        val fastFormat = fastJson?.let {
+            try { FormatRecipe.equivalent(command.format, YtdlpMetadataMapper.streams(it)) }
+            catch (_: Exception) { null }
+        }
         val target = redditTarget(current, command.source)
         if (target is RedditTarget.Failed) throw YtdlpExecutionFailure(target.error)
         val read = target as? RedditTarget.Read
-        val json = try { execute(current, YtdlpCommand.inspect(command.source, read?.url), diagnostics::accept)
+        val json = if (fastFormat != null) requireNotNull(fastJson) else try { execute(current, YtdlpCommand.inspect(command.source, read?.url), diagnostics::accept)
             .let { json -> read?.video?.let { RedditInfo.patch(json, it) } ?: json } }
         catch (error: Exception) {
             // A timeout stays the operation's TRANSPORT wait; any other failure keeps its read's diagnostics.
@@ -518,17 +526,19 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
         checkCancelled(current)
         // Only a page that parses can lack the row. A blank or broken read fails as the read did, so a
         // dropped connection waits for the network instead of failing the job as FormatExpired.
-        val streams = try { YtdlpMetadataMapper.streams(json) } catch (_: Exception) { null }
-            ?: throw diagnostics.failure()
-        val format = FormatRecipe.equivalent(command.format, streams)
-            ?: throw YtdlpExecutionFailure(DownloadError.FormatExpired, reextractionBlocked = true)
+        val format = fastFormat ?: run {
+            val streams = try { YtdlpMetadataMapper.streams(json) } catch (_: Exception) { null }
+                ?: throw diagnostics.failure()
+            FormatRecipe.equivalent(command.format, streams)
+                ?: throw YtdlpExecutionFailure(DownloadError.FormatExpired, reextractionBlocked = true)
+        }
         val fresh = if (format == command.format) command else
             (DownloadCommand.confirm(command.jobId, Inspection(command.source, command.engineVersion, listOf(format)),
                 command.source, format.id, command.filename.substringBeforeLast('.')) as ConfirmResult.Confirmed).command
         if (fresh !== command) resolved(fresh)
         val trimmed = try { cache.trim(json, fresh) } catch (_: Exception) { null }
         // A failed cache write returns null: the URL path is kept, since failing the download would be worse.
-        return keep(current, cache, command.jobId, trimmed ?: json, npe = false, signedUntil(json))
+        return keep(current, cache, command.jobId, trimmed ?: json, npe = fastFormat != null, signedUntil(json))
     }
 
     private suspend fun keep(current: Operation, cache: YtdlpInfoCache, jobId: String, json: String,
@@ -575,18 +585,25 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
             val transferEngine = resumeEngine(command, directory)
             val canRebuild = YtdlpCommand.isYouTube(command.source) && fastSource != null
             var rebuilt = false
+            var unmatchedFastJson: String? = null
             suspend fun rebuildOnce(): File? {
                 if (!canRebuild || rebuilt) return null
                 rebuilt = true // A failed, timed-out or cap-skipped call also spends the budget.
-                return rebuild(current, command)
+                return rebuild(current, command) { unmatchedFastJson = it }
             }
             fun discardInfo() {
                 if (infoCache?.remove(command.jobId) == false)
                     throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
             }
-            suspend fun verify(): File? = verifiedInfo(current, command) { fresh ->
-                command = fresh
-                progress(EngineEvent.FormatResolved(fresh.format))
+            // True while infoJson is a checked yt-dlp page read, which keeps the page-URL retry rules.
+            var fromPage = false
+            suspend fun verify(): File? {
+                val info = verifiedInfo(current, command, unmatchedFastJson.also { unmatchedFastJson = null }) { fresh ->
+                    command = fresh
+                    progress(EngineEvent.FormatResolved(fresh.format))
+                }
+                fromPage = info?.let { infoCache?.isNpe(it) } != true
+                return info
             }
             var bytes = -1L
             var restartEpoch = 0L
@@ -596,11 +613,9 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                 restartEpoch++
                 progress(EngineEvent.Restarting(restartEpoch))
             }
-            // True while infoJson is a checked page read, which keeps the page-URL retry rules.
-            var fromPage = false
             if (infoJson == null) {
                 infoJson = rebuildOnce()
-                if (infoJson == null) { discardInfo(); infoJson = verify(); fromPage = true }
+                if (infoJson == null) { discardInfo(); infoJson = verify() }
             }
             var retriedWithoutTags = false
             var preProcessingBytes: Long? = null
@@ -743,7 +758,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                         if (!clearStaging(directory)) throw YtdlpExecutionFailure(DownloadError.ExecutionRestricted, reason = ExecutionFailureReason.STORAGE_STAGING)
                         restartEpoch++; bytes = -1; progress(EngineEvent.Restarting(restartEpoch))
                         if (nativeExpired) {
-                            discardInfo(); infoJson = verify(); fromPage = true
+                            discardInfo(); infoJson = verify()
                         }
                     }
                 }
@@ -795,7 +810,7 @@ class YoutubedlEngine internal constructor(private val runtime: YtdlpRuntime,
                     // The path only moves forward: once using the page URL, never return to NPE.
                     infoJson = if (expiry && inspected != null) rebuildOnce() else null
                     fromPage = false
-                    if (infoJson == null) { discardInfo(); infoJson = verify(); fromPage = true }
+                    if (infoJson == null) { discardInfo(); infoJson = verify() }
                 }
             }
             current.deadline = NO_DEADLINE
