@@ -159,16 +159,25 @@ class JobStoreRetryTest {
                 assertEquals(JobStage.FAILED, row.stage)
                 assertEquals(error, row.error)
                 assertEquals(error.name, error in retryable, row.retryable)
-                assertEquals(error.name, error in retryable, row.sourceUrl != null)
+                assertEquals(error.name, error in retryable || error == DownloadError.FormatExpired, row.sourceUrl != null)
                 assertEquals(error.name, error in retryable, store.retry(id))
             }
+            val expiredId = "failure-FormatExpired"
+            assertEquals(command(expiredId).source.link.rawUrl, store.get(expiredId)!!.sourceUrl)
+            store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1, expiredId))
+            assertNull(store.get(expiredId)!!.sourceUrl)
+            assertFalse(store.retry(expiredId))
             store.enqueue(command("cancelled")); store.cancel("cancelled")
             assertNull(store.get("cancelled")!!.sourceUrl)
             assertFalse(store.retry("cancelled"))
             assertFalse(store.retry("missing"))
             store.enqueue(command("stale-format"))
+            store.writableDatabase.execSQL("UPDATE jobs SET created_at = ? WHERE job_id = ?",
+                arrayOf<Any>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1, "stale-format"))
             store.fail("stale-format", DownloadError.FormatExpired, retryable = true)
             assertNull(store.get("stale-format")!!.sourceUrl)
+            assertFalse(store.get("stale-format")!!.retryable)
             assertFalse(store.retry("stale-format"))
         }
     }

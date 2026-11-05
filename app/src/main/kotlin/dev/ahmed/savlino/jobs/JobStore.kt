@@ -24,7 +24,7 @@ enum class JobStage(val terminal: Boolean = false) {
     COMPLETED(true), FAILED(true), CANCELLED(true)
 }
 
-/** URL has no generated toString; retryable failures retain it until confirmation expiry; a paused expiry keeps it 7 days for Retry. */
+/** URL has no generated toString; retryable/format failures retain it until confirmation expiry; a paused expiry keeps it 7 days for Retry. */
 class JobRecord internal constructor(
     val jobId: String, val stage: JobStage, val sourceUrl: String?, val revision: Long,
     val engineVersion: String, val format: Format, val filename: String, val preset: Preset?,
@@ -54,7 +54,7 @@ class Reopen internal constructor(val link: String, val format: Format, val pres
 /** A completed download of the same link and format: where it was published and when. */
 class SavedBefore(val uri: Uri, val savedAt: Long)
 
-/** Blocking platform SQLite, schema v7. Older rows migrate without losing publication ownership. */
+/** Blocking platform SQLite, schema v9. Older rows migrate without losing publication ownership. */
 /** [sourceKeys]: keyed tags for "saved before"; null (no AndroidKeyStore) stores no tag and finds nothing. */
 class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLinkKeyer.deferred,
     private val links: LinkCipher? = KeystoreLinkCipher.current()) :
@@ -86,6 +86,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
     }
 
     override fun onCreate(db: SQLiteDatabase) {
+        createJobsTable(db)
+        BatchStore.createTables(db)
+    }
+
+    private fun createJobsTable(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE jobs (
                 job_id TEXT PRIMARY KEY NOT NULL,
@@ -103,12 +108,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 $SHARE_LINK_COLUMN,
                 CHECK (has_partial = 0 OR stage IN ('ENQUEUED','TRANSFERRING','PAUSED')),
                 CHECK ((stage IN ('COMPLETED','CANCELLED') AND source_url IS NULL)
-                    OR (stage = 'FAILED' AND (source_url IS NULL OR retryable = 1))
+                    OR (stage = 'FAILED' AND (source_url IS NULL OR retryable = 1 OR error = 'FormatExpired'))
                     OR (stage NOT IN ('COMPLETED','FAILED','CANCELLED') AND source_url IS NOT NULL)),
                 CHECK (stage NOT IN ('PENDING_INSERTED','PUBLISHING','COMPLETED') OR pending_uri IS NOT NULL)
             )
         """.trimIndent())
-        BatchStore.createTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -126,7 +130,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             return
         }
         if (oldVersion !in 4 until DATABASE_VERSION) return recreate(db)
-        // One step per shipped version, in order: a v4 phone runs 4, 5, 6 and 7. A new version adds one step here and
+        // One step per shipped version, in order: a v4 phone runs 4 through 8. A new version adds one step here and
         // never edits an old one. BatchStore.createTables writes the current shape, so later batch steps must tolerate it.
         for (version in oldVersion until DATABASE_VERSION) when (version) {
             4 -> {
@@ -143,6 +147,15 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             }
             // 0.5.0-beta2 shipped v7 batches before the consecutive-failure guard existed.
             7 -> addColumn(db, "batches", "consecutive_failures INTEGER NOT NULL DEFAULT 0")
+            8 -> {
+                // SQLiteOpenHelper owns the transaction. batch_items references batches only, never jobs.
+                db.execSQL("ALTER TABLE jobs RENAME TO jobs_old")
+                createJobsTable(db)
+                val columns = "$V2_COLUMNS, source_key, has_partial, resume_recipe, restart_epoch, " +
+                    "transport_resumes, stall_restarts, resume_reset_bytes, share_link"
+                db.execSQL("INSERT INTO jobs ($columns) SELECT $columns FROM jobs_old")
+                db.execSQL("DROP TABLE jobs_old")
+            }
             else -> error("no upgrade step from database version $version")
         }
     }
@@ -630,7 +643,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         val source = if (to.terminal) readableDatabase.query("jobs", null, "job_id = ?", arrayOf(id), null, null, null)
             .use { if (it.moveToFirst()) read(it) else null } else null
         if (to.terminal) {
-            val retain = to == JobStage.FAILED && values.getAsInteger("retryable") == 1 &&
+            val retain = to == JobStage.FAILED &&
+                (values.getAsInteger("retryable") == 1 || values.getAsString("error") == DownloadError.FormatExpired.name) &&
                 get(id)?.createdAt?.let { System.currentTimeMillis() - it <= CONFIRMATION_LIFETIME_MS } == true
             if (!retain) { values.putNull("source_url"); values.put("retryable", 0) }
         }
@@ -718,7 +732,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         internal fun ownsMediaStoreSave(row: JobRecord) = row.pendingUri?.let { !android.provider.DocumentsContract.isTreeUri(it) } == true
         /** Process-wide, across helpers: jobs whose engine/copy may still write staging. */
         internal val liveWriters: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
-        const val DATABASE_VERSION = 8
+        const val DATABASE_VERSION = 9
         private const val SHARE_LINK_COLUMN = "share_link BLOB CHECK(share_link IS NULL OR stage = 'COMPLETED')"
         internal fun validJobId(id: String) = id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,79}"))
 
