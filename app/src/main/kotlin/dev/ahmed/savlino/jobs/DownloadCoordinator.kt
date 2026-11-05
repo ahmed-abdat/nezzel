@@ -270,12 +270,20 @@ class DownloadCoordinator(
      * WorkManager stop a convert or a save. Cancelling the unique work cancels both links.
      */
     private fun enqueueChain(id: String, policy: ExistingWorkPolicy) {
+        val (gate, runner) = downloadChain(id)
+        workManager().beginUniqueWork(id, policy, gate).then(runner).enqueue().result.get()
+    }
+
+    /** Expedited where quota allows: a runner started after the user left the app can still promote to foreground. */
+    internal fun downloadChain(id: String): Pair<androidx.work.OneTimeWorkRequest, androidx.work.OneTimeWorkRequest> {
         val gate = OneTimeWorkRequestBuilder<NetworkGateWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
         val runner = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, java.util.concurrent.TimeUnit.SECONDS)
             .setInputData(workDataOf(DownloadWorker.JOB_ID to id)).build()
-        workManager().beginUniqueWork(id, policy, gate).then(runner).enqueue().result.get()
+        return gate to runner
     }
 
     private fun schedule(id: String) {
@@ -1001,12 +1009,23 @@ class DownloadCoordinator(
     }
     /** Explicit retry of the original confirmation only; scheduling never substitutes the editor URL. */
     suspend fun retry(id: String): Boolean = retryOne(id).also { if (it) usage.count(UsageKeys.RETRY) }
+
+    /** Once per app foreground entry: retry only this snapshot of already-confirmed, refused downloads. */
+    suspend fun resumeRefusedForeground() = withContext(Dispatchers.IO) {
+        initialize()
+        val refused = store.all().filter(::canResumeRefusedForeground).map { it.jobId }
+        for (id in refused) retryOne(id, foregroundOnly = true)
+    }
+    private fun canResumeRefusedForeground(row: JobRecord) = row.error == DownloadError.ForegroundDenied &&
+        JobStore.keepsPartial(row) && row.jobId !in userCancellation && row.jobId !in pauseRequests
+
     /** A refused Retry still waiting on the provider to finish the last save (a new link would save a 2nd copy). */
     fun retryWaitsForSave(id: String): Boolean = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
-    private suspend fun retryOne(id: String): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun retryOne(id: String, foregroundOnly: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         initialize()
         cancelAsked.remove(id) // A cancel that never reached an end is not this attempt's.
         val row = store.get(id) ?: return@withContext false
+        if (foregroundOnly && !canResumeRefusedForeground(row)) return@withContext false
         if (row.stage == JobStage.ENQUEUED) return@withContext maintenance.withDownload {
             if (store.get(id)?.stage != JobStage.ENQUEUED ||
                 progress.value.none { it.jobId == id && it.awaitingSchedule }) return@withDownload false
@@ -1041,14 +1060,15 @@ class DownloadCoordinator(
                 // CAS rechecks eligibility/expiry after waiting; duplicate taps cannot reset twice.
                 // Re-picked trees can now discard a previously inaccessible partial document. A MediaStore save
                 // the provider now confirms gone requeues its kept finished file: schedule that instead.
-                val owned = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
-                recovery.reconcile(id, retrying = true)
-                if (owned && store.get(id)?.stage == JobStage.ENQUEUED) {
-                    mutableError.value = null
-                    rescheduleUnderMaintenanceGate(id)
-                    return@withDownload true
+                val retried = synchronized(userCancellation) {
+                    // A user control or expiry may have won while the old WorkManager attempt finished.
+                    if (foregroundOnly && store.get(id)?.let(::canResumeRefusedForeground) != true)
+                        return@synchronized false
+                    val owned = store.get(id)?.let { it.stage == JobStage.FAILED && JobStore.ownsMediaStoreSave(it) } == true
+                    recovery.reconcile(id, retrying = true)
+                    (owned && store.get(id)?.stage == JobStage.ENQUEUED) || store.retry(id)
                 }
-                if (!store.retry(id)) {
+                if (!retried) {
                     store.get(id)?.let { updateQueue(fromRecord(it)) }
                     return@withDownload false
                 }

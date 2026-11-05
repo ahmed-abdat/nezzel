@@ -1117,7 +1117,7 @@ class DownloadWorkerTest {
     }
     // F1: after the 6h dataSync timeout the background rerun cannot start a foreground service: keep the hours of
     // partial for Retry from the opened app, never start over.
-    @Test fun refusedForegroundAfterASystemStopKeepsThePartialForRetry() = runBlocking {
+    @Test fun refusedForegroundResumesOnAppOpenOnceAndKeepsTheConfirmedPartial() = runBlocking {
         val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
         fixture(FakeEngine(), script = partialThenWait(seen)).use { f ->
             f.store.enqueue(command("fgs-timeout"))
@@ -1131,10 +1131,52 @@ class DownloadWorkerTest {
             assertEquals("keep", part.readText())
             recovery(f).recover()
             assertEquals("keep", part.readText())
-            assertTrue(f.store.retry("fgs-timeout"))
+            // On a phone the refused worker has returned; here the requeue's chain never ran, so end it like that.
+            WorkManager.getInstance(app).cancelUniqueWork("fgs-timeout").result.get()
+            f.coordinator.resumeRefusedForeground()
+            val resumed = f.store.get("fgs-timeout")!!
+            assertEquals(JobStage.ENQUEUED, resumed.stage)
+            assertEquals(row.sourceUrl, resumed.sourceUrl)
+            assertEquals(row.format, resumed.format)
+            assertEquals(row.engineVersion, resumed.engineVersion)
+            assertEquals(row.filename, resumed.filename)
+            assertEquals(row.createdAt, resumed.createdAt)
+            assertEquals("keep", part.readText())
+            val chain = WorkManager.getInstance(app).getWorkInfosForUniqueWork("fgs-timeout").get()
+            assertEquals(2, chain.size)
+            for (request in f.coordinator.downloadChain("fgs-timeout").toList()) assertTrue(request.workSpec.expedited)
+            val runner = downloadRuns(app, "fgs-timeout").single().id
+            f.coordinator.resumeRefusedForeground()
+            assertEquals(runner, downloadRuns(app, "fgs-timeout").single().id)
             assertEquals(ListenableWorker.Result.success(), f.worker("fgs-timeout").doWork())
             assertEquals(JobStage.COMPLETED, f.store.get("fgs-timeout")!!.stage)
             assertEquals(listOf(null, "keep"), seen)
+        }
+    }
+
+    @Test fun appOpenDoesNotResumeCancelledPausedExpiredOrOtherFailures() = runBlocking {
+        fixture(FakeEngine()).use { f ->
+            f.coordinator.initialize()
+            for (id in listOf("cancelled", "cancel-requested", "paused", "expired", "network-failed")) {
+                assertTrue(f.store.enqueue(command(id)))
+                when (id) {
+                    "cancelled" -> assertTrue(f.store.cancel(id))
+                    "paused" -> assertTrue(f.store.pause(id))
+                    "network-failed" -> assertTrue(f.store.fail(id, DownloadError.Network))
+                    else -> assertTrue(f.store.fail(id, DownloadError.ForegroundDenied, keepPartial = true))
+                }
+            }
+            f.coordinator.requestCancellation("cancel-requested")
+            f.store.writableDatabase.execSQL("UPDATE jobs SET created_at=? WHERE job_id='expired'",
+                arrayOf<Any?>(System.currentTimeMillis() - JobStore.CONFIRMATION_LIFETIME_MS - 1000))
+            f.coordinator.resumeRefusedForeground()
+            assertEquals(JobStage.CANCELLED, f.store.get("cancelled")!!.stage)
+            assertEquals(JobStage.PAUSED, f.store.get("paused")!!.stage)
+            for (id in listOf("cancel-requested", "expired", "network-failed")) {
+                assertEquals(JobStage.FAILED, f.store.get(id)!!.stage)
+            }
+            assertTrue(WorkManager.getInstance(app).getWorkInfosByTag(DownloadWorker::class.java.name).get().isEmpty())
+            assertEquals(0, f.attempts.get())
         }
     }
     private val waiting = java.util.concurrent.atomic.AtomicInteger()

@@ -14,7 +14,10 @@ import kotlinx.coroutines.flow.stateIn
 open class NezzelApplication : Application(), Configuration.Provider {
     val preferences by lazy { dev.ahmed.savlino.locale.AppPreferences(this) }
     internal val tips by lazy { dev.ahmed.savlino.tips.Tips(this) }
-    internal val visibility by lazy { AppVisibility { tips.onOpen() } }
+    internal val visibility by lazy { AppVisibility {
+        tips.onOpen()
+        scope.launch { downloads.resumeRefusedForeground() }
+    } }
     private val thermalStatus = MutableStateFlow(android.os.PowerManager.THERMAL_STATUS_NONE)
     private val thermalListener = android.os.PowerManager.OnThermalStatusChangedListener { thermalStatus.value = it }
     open val downloads by lazy { DownloadCoordinator(this, parallelDownloads = preferences.parallelDownloadsFlow,
