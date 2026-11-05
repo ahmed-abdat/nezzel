@@ -1,5 +1,6 @@
 package dev.ahmed.savlino.ui
 
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.MaterialTheme
@@ -7,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,11 +20,27 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import dev.ahmed.savlino.domain.DownloadError
 import dev.ahmed.savlino.jobs.BatterySettings
+import dev.ahmed.savlino.locale.AppPreferences
+import kotlinx.coroutines.flow.Flow
+
+/** No startup/intake request: consume confirmation events only while this Activity is visible. */
+@Composable
+fun BatteryExemptionEffect(activity: ComponentActivity, preferences: AppPreferences, confirmations: Flow<Unit>) {
+    LaunchedEffect(activity, confirmations) {
+        activity.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            confirmations.collect {
+                if (!preferences.batteryAsked && !BatterySettings.isExempt(activity) && preferences.markBatteryAsked())
+                    BatterySettings.requestExemption(activity)
+            }
+        }
+    }
+}
 
 /**
- * Failed-row extra for an OS battery stop: Samsung hint + Battery settings button.
+ * Failed-row extra for an OS battery stop or refused foreground start: Samsung hint + Battery settings button.
  * Hidden once Nezzel is exempt (re-checked on resume, after the user comes back from Settings).
  */
 @Composable

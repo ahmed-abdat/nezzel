@@ -147,6 +147,24 @@ class ShareSheetFlowTest {
         waitFor("closed by Close") { activity.isFinishing }
     }
 
+    @Test fun batteryDialogKeepsTheShareTaskUntilTheActivityResumes() {
+        val jobs = install(Engine())
+        val activity = launch(share(url))
+        waitFor("options") { activity.links.downloadEnabled }
+        assertFalse(prefs.batteryAsked)
+        assertNull(shadowOf(activity).nextStartedActivity)
+        activity.links.requestDownload()
+        waitFor("battery request and job") { prefs.batteryAsked && jobs.all().size == 1 }
+        val request = shadowOf(activity).nextStartedActivity!!
+        assertEquals(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, request.action)
+        assertEquals("package:${activity.packageName}", request.dataString)
+        controller!!.pause() // Android's system dialog covers the share Activity.
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
+        assertFalse(activity.isFinishing)
+        controller!!.resume()
+        waitFor("sheet closes after returning") { activity.isFinishing }
+    }
+
     @Test fun anAccessibilityServiceWithoutTouchExplorationStillAutoCloses() {
         val engine = Engine(); install(engine)
         val manager = shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java))

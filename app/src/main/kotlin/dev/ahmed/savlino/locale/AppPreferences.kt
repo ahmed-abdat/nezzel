@@ -20,6 +20,9 @@ class AppPreferences(context: Context) {
     private val prefs = context.getSharedPreferences("nezzel", Context.MODE_PRIVATE)
     val onboardingSeen: Boolean get() = prefs.getBoolean("onboarding_seen", false)
     fun markOnboardingSeen(): Boolean = prefs.edit().putBoolean("onboarding_seen", true).commit()
+    /** Per-install: persist before opening Android's battery exemption dialog, including when it is declined. */
+    val batteryAsked: Boolean get() = prefs.getBoolean("battery_asked", false)
+    fun markBatteryAsked(): Boolean = prefs.edit().putBoolean("battery_asked", true).commit()
     /** History marks an upgrade permanently, even if the user later clears every job. */
     fun needsOnboarding(hasJobs: () -> Boolean): Boolean {
         if (onboardingSeen) return false

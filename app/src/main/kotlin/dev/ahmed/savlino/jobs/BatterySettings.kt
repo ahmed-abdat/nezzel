@@ -13,7 +13,7 @@ import androidx.work.WorkInfo
 import dev.ahmed.savlino.R
 import dev.ahmed.savlino.domain.DownloadError
 
-/** Battery-limit stops (OS evidence only) and the settings page that lifts them. Needs no battery permission. */
+/** OS battery stops/foreground denial and the exemption request, with settings fallbacks for unsupported devices. */
 object BatterySettings {
     /**
      * Job quota, background restriction, standby bucket. Never inferred from network errors.
@@ -29,14 +29,26 @@ object BatterySettings {
     /** Stop reasons exist on API 31+ only; older releases report nothing we can trust. */
     fun batteryStopped(reason: Int, sdk: Int = Build.VERSION.SDK_INT): Boolean = sdk >= 31 && reason in batteryStopReasons
 
-    /** Row button: only for an OS battery stop, and only while Nezzel is still battery optimized. */
-    fun offersButton(error: DownloadError?, exempt: Boolean): Boolean = error == DownloadError.StoppedByBattery && !exempt
+    /** Row button: only for a battery stop or refused foreground start, while still battery optimized. */
+    fun offersButton(error: DownloadError?, exempt: Boolean): Boolean = !exempt &&
+        (error == DownloadError.StoppedByBattery || error == DownloadError.ForegroundDenied)
 
     fun isExempt(context: Context): Boolean =
         context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) == true
 
     /** Samsung also sleeps apps outside the system list; its menu names vary, so the hint stays one line. */
     fun showsSamsungHint(manufacturer: String = Build.MANUFACTURER): Boolean = manufacturer.equals("samsung", ignoreCase = true)
+
+    /** System dialog from the visible Activity; requires REQUEST_IGNORE_BATTERY_OPTIMIZATIONS. */
+    fun requestExemption(activity: Activity): Boolean {
+        try {
+            activity.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${activity.packageName}")))
+            return true
+        } catch (_: ActivityNotFoundException) {}
+        catch (_: SecurityException) {}
+        return open(activity)
+    }
 
     /** Optimization list first, then the app info page. False when neither opens. */
     fun open(context: Context): Boolean {

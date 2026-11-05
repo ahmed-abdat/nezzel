@@ -112,6 +112,7 @@ class MainActivity : AppCompatActivity() {
         // Consume the launch envelope; the ViewModel owns accepted/queued user state thereafter.
         setIntent(Intent(this, MainActivity::class.java))
         setContent {
+            dev.ahmed.savlino.ui.BatteryExemptionEffect(this, preferences, links.confirmedDownloads)
             // Guards may clear without a new focus/resume event (e.g. restored Settings -> Home).
             // Re-use the same once-per-entry foreground reader; the ViewModel rechecks eligibility.
             if (!onboarding) ClipboardEntryEffect(links, ::suggestClipboard)

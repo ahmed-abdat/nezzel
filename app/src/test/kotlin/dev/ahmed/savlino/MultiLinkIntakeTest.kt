@@ -78,12 +78,18 @@ class MultiLinkIntakeTest {
         val coordinator = DownloadCoordinator(app, engine = engine, store = store)
         val parent = Job()
         val scope = CoroutineScope(parent + Dispatchers.Main.immediate)
+        var confirmations = 0
         dev.ahmed.savlino.storage.KeystoreLinkCipher.testOverride = batchCipher() // no Android Keystore in the JVM
         try {
             val vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator, coordinatorScope = scope)
+            scope.launch { vm.confirmedDownloads.collect { confirmations++ } }
             vm.onNewShare(share(text)); idle()
             assertEquals(0, engine.calls)
+            assertEquals(0, confirmations)
+            vm.notificationPrompt = {}
             vm.multi.confirm("3 links"); idle()
+            assertEquals(0, confirmations)
+            vm.finishNotificationRequest(); idle()
             runBlocking { withTimeout(5000) { while (vm.multi.submitting) { idle(); delay(10) } } }
             assertFalse(vm.multi.submitError); assertFalse(vm.multi.visible)
             val batch = coordinator.batches.all().single()
@@ -91,6 +97,7 @@ class MultiLinkIntakeTest {
             val rows = coordinator.batches.items(batch.id)
             assertEquals(3, rows.size); assertEquals(links, rows.map { coordinator.batches.source(it) })
             assertEquals(batch.id, vm.acceptedJob)
+            assertEquals(1, confirmations)
         } finally { parent.cancel(); store.close(); dev.ahmed.savlino.storage.KeystoreLinkCipher.testOverride = null }
     }
 }

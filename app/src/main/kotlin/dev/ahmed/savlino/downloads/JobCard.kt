@@ -59,6 +59,7 @@ import dev.ahmed.savlino.domain.Size
 import dev.ahmed.savlino.jobs.*
 import dev.ahmed.savlino.locale.NezzelFormat
 import dev.ahmed.savlino.ui.BatteryHelp
+import dev.ahmed.savlino.viewer.findActivity
 import dev.ahmed.savlino.ui.theme.LocalReducedMotion
 import dev.ahmed.savlino.ui.theme.Motion
 import dev.ahmed.savlino.ui.theme.Space
@@ -511,7 +512,9 @@ private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, r
             if (!job.awaitingSchedule && !job.retryable && !expired)
                 Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-            BatteryHelp(job.error, onBatterySettings = { BatterySettings.open(context) })
+            BatteryHelp(job.error, onBatterySettings = {
+                context.findActivity()?.let(BatterySettings::requestExemption) ?: BatterySettings.open(context)
+            })
             if (canChange && job.error != dev.ahmed.savlino.domain.DownloadError.InsufficientSpace && !job.awaitingSchedule)
                 TextButton(onClick = { quality?.open?.invoke(job.jobId) }, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(stringResource(R.string.change_quality))

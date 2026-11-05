@@ -147,6 +147,9 @@ class LinkViewModel(
     private val previews: LinkPreviews? = null,
     private val readSpotify: suspend (String) -> SpotifyMetadata? = { null },
 ) : ViewModel() {
+    private val confirmedDownloadChannel = Channel<Unit>(Channel.CONFLATED)
+    /** Explicit confirmations only; the visible Activity owns the once-per-install battery request. */
+    val confirmedDownloads: Flow<Unit> = confirmedDownloadChannel.receiveAsFlow()
     var notificationPrompt: (() -> Unit)? = null
     private var pendingPermissionChoice: Pair<Inspection, String>? = null
     private var pendingPlaylistPermission: kotlinx.coroutines.CompletableDeferred<Unit>? = null
@@ -159,6 +162,7 @@ class LinkViewModel(
                 notificationPrompt?.invoke() ?: finishNotificationRequest()
                 permission.await()
             } finally { if (pendingPlaylistPermission === permission) pendingPlaylistPermission = null }
+            confirmedDownloadChannel.trySend(Unit)
             val id = newOperationId()
             playlistSubmissionId = id
             (coordinatorScope ?: viewModelScope).async {
@@ -456,6 +460,7 @@ class LinkViewModel(
                 notificationPrompt?.invoke() ?: finishNotificationRequest()
                 permission.await()
             } finally { if (pendingPlaylistPermission === permission) pendingPlaylistPermission = null }
+            confirmedDownloadChannel.trySend(Unit)
             val id = newOperationId()
             playlistSubmissionId = id
             // Confirmation survives closing the Activity, as the single-video handoff does.
@@ -1349,6 +1354,7 @@ class LinkViewModel(
         val jobSource = if ((optionsState as? OptionsState.Ready)?.resolvedFrom != null) inspected.source else current
         when (val result = DownloadCommand.confirm(UUID.randomUUID().toString(), inspected, jobSource, row.id, "Nezzel")) {
             is ConfirmResult.Confirmed -> {
+                confirmedDownloadChannel.trySend(Unit)
                 usage.count(UsageKeys.FUNNEL_TAPPED)
                 UsageKeys.pick(preselected, row)?.let(usage::count)
                 submitted = true
@@ -1588,6 +1594,7 @@ class LinkViewModel(
             val row = audio?.firstOrNull { it.container == "m4a" } ?: audio?.firstOrNull()
             val command = if (inspected == null || row == null) null else
                 (DownloadCommand.confirm(UUID.randomUUID().toString(), inspected, video, row.id, "Nezzel") as? ConfirmResult.Confirmed)?.command
+            if (command != null) confirmedDownloadChannel.trySend(Unit)
             val queued = command != null && try {
                 coordinator.enqueue(command, inspected?.presets?.firstOrNull { it.formatId == row?.id }?.preset)
             } catch (cancelled: CancellationException) { throw cancelled }

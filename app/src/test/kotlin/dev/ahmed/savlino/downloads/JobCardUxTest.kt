@@ -314,7 +314,16 @@ class JobCardUxTest {
         host(content = { Column(Modifier.width(320.dp).padding(16.dp)) { JobRow(stopped, {}, {}, {}) } }) { a ->
             compose.onNodeWithText(context.getString(R.string.download_battery_error), useUnmergedTree = true).assertExists()
             compose.onNodeWithText(context.getString(R.string.battery_settings)).assertHasClickAction().performClick()
-            assertEquals(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, Shadows.shadowOf(a).nextStartedActivity?.action)
+            assertEquals(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Shadows.shadowOf(a).nextStartedActivity?.action)
+        }
+    }
+    @Test fun foregroundDenialOffersExemptionRequest() {
+        val denied = job.copy(phase = DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.ForegroundDenied, retryable = true)
+        host(content = { JobRow(denied, {}, {}, {}) }) { activity ->
+            compose.onNodeWithText(context.getString(R.string.battery_settings)).assertHasClickAction().performClick()
+            val intent = Shadows.shadowOf(activity).nextStartedActivity!!
+            assertEquals(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, intent.action)
+            assertEquals("package:${activity.packageName}", intent.dataString)
         }
     }
     @Test fun batteryStopHidesButtonWhenExempt() {

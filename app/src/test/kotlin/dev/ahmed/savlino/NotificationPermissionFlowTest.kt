@@ -9,6 +9,7 @@ import androidx.compose.ui.test.*
 import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.jobs.*
+import dev.ahmed.savlino.locale.AppPreferences
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -47,10 +48,23 @@ class NotificationPermissionFlowTest {
         assertDownloadPermission(false, recreateRationale = true)
     @Test fun permissionResultAfterRecreationEnqueuesOriginalChoiceOnce() =
         assertDownloadPermission(true, recreatePermission = true)
+    @Test fun batteryRequestIsNotRepeatedAfterActivityRecreation() =
+        assertDownloadPermission(false, expectsPrompt = false, granted = true, recreateAfterBatteryRequest = true)
+    @Test fun batteryExemptDownloadDoesNotAsk() =
+        assertDownloadPermission(false, expectsPrompt = false, granted = true, batteryExempt = true)
 
     private fun assertDownloadPermission(request: Boolean, expectsPrompt: Boolean = true, granted: Boolean = false,
-        recreateRationale: Boolean = false, recreatePermission: Boolean = false) {
+        recreateRationale: Boolean = false, recreatePermission: Boolean = false,
+        recreateAfterBatteryRequest: Boolean = false, batteryExempt: Boolean = false) {
         val app = RuntimeEnvironment.getApplication() as IsolatedTestApplication
+        shadowOf(app.getSystemService(android.os.PowerManager::class.java))
+            .setIgnoringBatteryOptimizations(app.packageName, batteryExempt)
+        fun batteryRequests(activity: MainActivity): List<android.content.Intent> = buildList {
+            while (true) {
+                val intent = shadowOf(activity).nextStartedActivity ?: break
+                if (intent.action == android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) add(intent)
+            }
+        }
         if (granted) shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         else shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val store = JobStore(app)
@@ -61,13 +75,16 @@ class NotificationPermissionFlowTest {
                     listOf(PresetChoice(Preset.BALANCED, "720")), title = "Real title"))
         }
         app.coordinatorOverride = DownloadCoordinator(app, engine, store, workManager = { error("No background scheduler in UI fixture") })
-        val controller = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
+        val controller = Robolectric.buildActivity(MainActivity::class.java).create().start().resume().visible()
         var activity = controller.get()
         try {
             activity.getPreferences(0).edit().clear().commit()
             activity.links.edit("https://example.com/video"); activity.links.checkLink()
             shadowOf(Looper.getMainLooper()).idle()
             assertTrue(activity.links.optionsState.toString(), activity.links.downloadEnabled)
+            nodes()
+            assertFalse(AppPreferences(app).batteryAsked)
+            assertTrue(batteryRequests(activity).isEmpty()) // Startup and intake never request it.
             activity.links.requestDownload()
             controller.visible()
             if (expectsPrompt) {
@@ -104,6 +121,15 @@ class NotificationPermissionFlowTest {
             waitWhile({ shadowOf(Looper.getMainLooper()).idle() }) { store.all().isEmpty() }
             assertEquals("Real title.mp4", store.all().single().filename)
             assertEquals(JobStage.ENQUEUED, store.all().single().stage)
+            nodes()
+            val battery = batteryRequests(activity)
+            assertEquals(if (batteryExempt) 0 else 1, battery.size)
+            if (!batteryExempt) assertEquals("package:${app.packageName}", battery.single().dataString)
+            assertEquals(!batteryExempt, AppPreferences(app).batteryAsked)
+            if (recreateAfterBatteryRequest) {
+                controller.configurationChange().visible()
+                activity = controller.get()
+            }
             // Further confirmed downloads bypass the first-run explanation even after denial/skip.
             activity.links.edit("https://example.com/second"); activity.links.checkLink()
             shadowOf(Looper.getMainLooper()).idle(); activity.links.requestDownload()
@@ -111,6 +137,8 @@ class NotificationPermissionFlowTest {
                 while (store.all().size < 2) { shadowOf(Looper.getMainLooper()).idle(); delay(5) }
             } }
             assertEquals(2, store.all().size) // A repeated prompt would block the second enqueue.
+            nodes()
+            assertTrue(batteryRequests(activity).isEmpty()) // Denying the first battery dialog must not ask again.
         } finally {
             runBlocking { withTimeout(5000) {
                 while (app.scope.coroutineContext[Job]!!.children.any()) { shadowOf(Looper.getMainLooper()).idle(); delay(5) }

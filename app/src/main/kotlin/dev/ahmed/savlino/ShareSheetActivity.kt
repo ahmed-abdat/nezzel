@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.withResumed
 import dev.ahmed.savlino.domain.LinkInput
 import dev.ahmed.savlino.engine.spotify.SpotifyLink
 import dev.ahmed.savlino.entry.NotificationAsk
@@ -68,6 +69,7 @@ class ShareSheetActivity : AppCompatActivity() {
         enableEdgeToEdge(SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         val language = AppLocale.current(this)
         setContent {
+            dev.ahmed.savlino.ui.BatteryExemptionEffect(this, preferences, links.confirmedDownloads)
             var sentAt by remember(links.shareGeneration) { mutableStateOf<Long?>(null) }
             val haptics = LocalHapticFeedback.current
             val sent = links.confirmed || links.acceptedJob != null
@@ -83,7 +85,9 @@ class ShareSheetActivity : AppCompatActivity() {
                 val generation = links.shareGeneration
                 val shown = android.os.SystemClock.uptimeMillis() - (sentAt ?: android.os.SystemClock.uptimeMillis())
                 delay((STARTED_MILLIS - shown).coerceAtLeast(0))
-                if (generation == links.shareGeneration && links.deferredShare == null) finishAndRemoveTask()
+                lifecycle.withResumed {
+                    if (generation == links.shareGeneration && links.deferredShare == null) finishAndRemoveTask()
+                }
             }
             LaunchedEffect(links.deferredShare, links.confirmed, links.acceptedJob, links.imageSaving, links.hasPendingNotificationChoice) {
                 links.takeDeferredShare()

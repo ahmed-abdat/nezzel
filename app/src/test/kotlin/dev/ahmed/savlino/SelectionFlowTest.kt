@@ -6,6 +6,7 @@ import dev.ahmed.savlino.domain.*
 import dev.ahmed.savlino.engine.*
 import dev.ahmed.savlino.ui.LinkViewModel
 import dev.ahmed.savlino.ui.OptionsState
+import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,6 +18,51 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29])
 class SelectionFlowTest {
     private val url = "https://youtube.com/watch?v=one"
+
+    @Test fun batteryEventOnlyAfterValidConfirmationNeverIntakeOrPermissionWait() {
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun inspect(source: LinkRevision, operationId: String) =
+                InspectResult.Success(inspection(revision = source.revision, link = source.link.rawUrl))
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine, currentEngineVersion = { "fixture-v1" })
+        var confirmations = 0
+        val observer = CoroutineScope(Dispatchers.Main.immediate).launch { vm.confirmedDownloads.collect { confirmations++ } }
+        fun idle() = shadowOf(Looper.getMainLooper()).idle()
+        try {
+            idle(); assertEquals(0, confirmations)
+            vm.suggest(true, true, true) { url }; idle()
+            assertEquals(0, confirmations)
+            vm.dismissOptions(); vm.onNewShare(dev.ahmed.savlino.entry.ShareInput.from(
+                android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, url)))
+            idle(); assertEquals(0, confirmations)
+            vm.dismissOptions(); vm.paste(url); idle()
+            assertEquals(0, confirmations)
+            vm.notificationPrompt = {}
+            vm.requestDownload(); idle(); assertEquals(0, confirmations)
+            vm.finishNotificationRequest(); idle(); assertEquals(1, confirmations)
+            vm.finishNotificationRequest(); vm.confirmDownload(); idle()
+            assertEquals(1, confirmations)
+        } finally { observer.cancel() }
+    }
+
+    @Test fun playlistBatteryEventWaitsForNotificationDecision() {
+        val engine = object : EngineAdapter by FakeEngine() {
+            override suspend fun listPlaylist(source: LinkRevision, operationId: String, page: PlaylistPageToken?) =
+                PlaylistResult.Success(PlaylistPage("List", listOf(PlaylistItem("one", url, "Video", 60)), 1, null))
+        }
+        val vm = LinkViewModel(SavedStateHandle(), engine = engine)
+        var confirmations = 0
+        val observer = CoroutineScope(Dispatchers.Main.immediate).launch { vm.confirmedDownloads.collect { confirmations++ } }
+        fun idle() = shadowOf(Looper.getMainLooper()).idle()
+        try {
+            vm.playlist.open(LinkRevision(LinkInput.parse("https://youtube.com/playlist?list=PLabcdefghij")!!, 1))
+            idle(); assertEquals(0, confirmations)
+            vm.notificationPrompt = {}
+            vm.playlist.confirm(); idle(); assertEquals(0, confirmations)
+            vm.finishNotificationRequest(); idle(); assertEquals(1, confirmations)
+        } finally { observer.cancel(); vm.dismissOptions() }
+    }
     private val video = Format("v720", "mp4", true, true, height = 720, size = Size.Exact(68_000_000))
     private val best = Format("v1080+a", "mp4", true, false, height = 1080, audioFormatId = "audio-source", requiresMerge = true)
     private val audio = Format("m4a", "m4a", false, true, bitrateKbps = 128, size = Size.Estimated(8_100_000))
