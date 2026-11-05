@@ -285,7 +285,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         // URL may name the video. An id-bearing link always needs its own bound story's attachment below.
         if (requested.isShortlink) resolved.videoId?.let { return videoRedirect(operation, it) }
         val parsed = when (val result = facebookParser.parse(html.bytes, resolved, requested, html.length)) {
-            is FacebookParseResult.Failure -> return Fetched.Failed(failure(result.reason, ImagePhase.PAGE))
+            is FacebookParseResult.Failure -> return Fetched.Failed(failure(result.reason, ImagePhase.PAGE, videoPage = result.videoPage))
             is FacebookParseResult.Video -> return videoRedirect(operation, result.videoId)
             is FacebookParseResult.Success -> result
         }
@@ -722,7 +722,8 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         return MediaInspectResult.Failure(reason, phase, if (reason == ImageFailure.HTTP) result.statusCode else null)
     }
 
-    private fun failure(reason: ImageFailure, phase: ImagePhase) = MediaInspectResult.Failure(reason, phase)
+    private fun failure(reason: ImageFailure, phase: ImagePhase, videoPage: Boolean = false) =
+        MediaInspectResult.Failure(reason, phase, videoPage = videoPage)
 
     /**
      * A LinkedIn PAGE failure before any media verdict carries the clean post URL the read reached ([landing]) at the

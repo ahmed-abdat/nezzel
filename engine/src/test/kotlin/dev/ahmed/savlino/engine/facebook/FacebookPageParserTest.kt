@@ -215,6 +215,17 @@ class FacebookPageParserTest {
         rejected(facebookFixture("http400-shell.html"), ImageFailure.NO_MEDIA)
     }
 
+    @Test fun mobileLoginFormWithoutOgTagsNeedsSignInButAnEmptyShellDoesNot() {
+        val shell = "<html><body>%s</body></html>"
+        val form = "<form method=\"post\" action=\"/login/device-based/regular/login/?refsrc=deprecated\">" +
+            "<input name=\"email\"><input name=\"pass\" type=\"password\"></form>"
+        rejected(shell.format(form), ImageFailure.PRIVATE, FB_STORY, "https://www.facebook.com/share/Synthetic/")
+        rejected(shell.format(""), ImageFailure.NO_MEDIA)
+        rejected(shell.format("<a href=\"/login/\">Log in</a>"), ImageFailure.NO_MEDIA)
+        rejected(shell.format(form.replace("/login/device-based/regular/login/", "/login.example/")), ImageFailure.NO_MEDIA)
+        assertEquals(listOf(cdn(1)), parsed(facebookFixture("photo-post.html") + form).candidates.map { it.url })
+    }
+
     @Test fun loginFormNextToRealDataIsNotFailure() {
         val html = facebookFixture("photo-post.html").replace("<div id=\"mount_0_0_placeholder\"></div>",
             "<div id=\"mount_0_0_placeholder\"></div><form id=\"login_form\" action=\"#\"></form>")
@@ -259,6 +270,12 @@ class FacebookPageParserTest {
         val article = parsed(video.replace("video.other", "article"))
         assertEquals(listOf(cdn(1)), article.candidates.map { it.url })
         assertTrue(article.discovery.previewQuality)
+    }
+
+    @Test fun videoOgTypeCarriesTheVideoPageHintForLegacyInspection() {
+        val result = assertIs<FacebookParseResult.Failure>(parse(facebookFixture("video-og-post.html")))
+        assertEquals(ImageFailure.NO_MEDIA, result.reason)
+        assertTrue(result.videoPage)
     }
 
     @Test fun relayVerifiedPhotoWinsEvenWhenOgTypeSaysVideo() {

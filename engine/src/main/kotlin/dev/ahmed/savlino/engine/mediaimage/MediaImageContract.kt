@@ -70,7 +70,7 @@ sealed interface MediaInspectResult {
      * read had reached, at the caller's revision, which the caller may hand once to yt-dlp. Never a media URL.
      */
     data class Failure(val reason: ImageFailure, val phase: ImagePhase,
-        val statusCode: Int? = null, val fallback: LinkRevision? = null) : MediaInspectResult
+        val statusCode: Int? = null, val fallback: LinkRevision? = null, val videoPage: Boolean = false) : MediaInspectResult
     class Legacy(val result: InspectResult, val bridge: MediaLegacyBridge? = null) : MediaInspectResult {
         override fun toString() = "MediaInspectResult.Legacy(redacted)"
     }

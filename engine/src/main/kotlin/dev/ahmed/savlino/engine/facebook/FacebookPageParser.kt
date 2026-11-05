@@ -29,7 +29,7 @@ sealed interface FacebookParseResult {
         val title: String? = null, val author: String? = null, val videoId: String? = null) : FacebookParseResult {
         override fun toString() = "FacebookParseResult.Success(redacted)"
     }
-    data class Failure(val reason: ImageFailure) : FacebookParseResult
+    data class Failure(val reason: ImageFailure, val videoPage: Boolean = false) : FacebookParseResult
     /** The bound post names one video for this request: yt-dlp gets `watch/?v={videoId}`. */
     class Video(val videoId: String) : FacebookParseResult {
         override fun toString() = "FacebookParseResult.Video(redacted)"
@@ -150,13 +150,14 @@ class FacebookPageParser {
         if (photoId == null && (requested ?: page).isPostOrPhoto && bound.others == 0)
             bound.videos.singleOrNull()?.let { return FacebookParseResult.Video(it) }
         if (mediaNodes) return failure(ImageFailure.NO_MEDIA)
-        // No relay media at all plus a login form: the logged-out wall, decided before any og:image.
-        if (document.selectFirst("form#login_form") != null) return failure(ImageFailure.PRIVATE)
+        // Logged-out desktop HTML uses form#login_form; mobile HTML posts to /login/device-based/regular/login/.
+        // Require a form (a plain "Log in" navigation link is not a wall), after real media and before og:image.
+        if (document.selectFirst("form#login_form, form[action^=/login/]") != null) return failure(ImageFailure.PRIVATE)
 
         // A video post's og:image is its thumbnail, never the media: NO_MEDIA lets the app hand it to yt-dlp.
         // (Relay-verified Photo media above still wins even when og:type says video.)
         val ogType = document.selectFirst("meta[property=og:type]")?.attr("content")?.trim()?.lowercase(java.util.Locale.ROOT)
-        if (ogType?.startsWith("video") == true) return failure(ImageFailure.NO_MEDIA)
+        if (ogType?.startsWith("video") == true) return FacebookParseResult.Failure(ImageFailure.NO_MEDIA, videoPage = true)
 
         // No relay media and no wall: the post's own og:image, labelled as preview quality.
         if (page.isPostOrPhoto && photoId == null) {
