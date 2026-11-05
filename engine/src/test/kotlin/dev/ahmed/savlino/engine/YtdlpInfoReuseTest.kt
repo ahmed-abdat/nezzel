@@ -194,6 +194,44 @@ class YtdlpInfoReuseTest {
         assertEquals(listOf(1L), events.filterIsInstance<EngineEvent.Progress>().map { it.restartEpoch })
     }
 
+    @Test fun changedIdsOnResumeAndExpiredUrlRetryNeverContinueOldPartials() = runBlocking {
+        val original = """{"formats":[{"format_id":"18","ext":"mp4","vcodec":"avc1","acodec":"aac","width":1280,"height":720,"filesize":4}]}"""
+        val refreshed = original.replace("\"18\"", "\"22\"").replace("\"filesize\":4", "\"filesize\":5")
+        for (expiredCache in listOf(true, false)) {
+            var now = 10_000_000L
+            val runtime = Runtime(original)
+            val engine = YoutubedlEngine(runtime, infoCache = YtdlpInfoCache(temp.newFolder()) { now }, cancellationPollMs = 1)
+            val command = confirm(assertIs<InspectResult.Success>(engine.inspect(source, "inspect")).inspection)
+            engine.prepareDownload(command)
+            val dir = temp.newFolder()
+            val events = mutableListOf<EngineEvent>()
+            runtime.page = { refreshed }
+            if (expiredCache) {
+                File(dir, "output.f18.mp4.part").writeText("old bytes")
+                File(dir, "output.f18.mp4.ytdl").writeText("old fragment state")
+                now += YtdlpInfoCache.TTL_MS
+            }
+            runtime.action = { args, line ->
+                if (!expiredCache && runtime.transfers.size == 1) {
+                    File(dir, "output.mp4.part").writeText("old bytes")
+                    error("ERROR: unable to download video data: HTTP Error 403")
+                }
+                assertTrue(dir.list()!!.isEmpty(), "old format bytes must be gone before transfer")
+                assertEquals("22", args[args.indexOf("-f") + 1])
+                val checked = File(args[args.indexOf("--load-info-json") + 1]).readText()
+                assertTrue("\"format_id\":\"22\"" in checked)
+                assertFalse("\"format_id\":\"18\"" in checked)
+                assertEquals(Size.Exact(5), events.filterIsInstance<EngineEvent.FormatResolved>().single().format.size)
+                line("nezzel:22:5:5:NA")
+                Runtime.output(args)
+                File(dir, "output.mp4").writeText("fresh")
+            }
+            assertIs<TransferResult.Success>(engine.download(command, dir) { events += it })
+            assertEquals(if (expiredCache) 1 else 2, runtime.transfers.size)
+            assertEquals(listOf(1L), events.filterIsInstance<EngineEvent.Progress>().map { it.restartEpoch })
+        }
+    }
+
     @Test fun httpRateLimitAndServerErrorsNeverResumeEvenAfterTransportDiagnostics() = runBlocking {
         for (code in listOf(429, 500, 503)) {
             val runtime = Runtime(json)

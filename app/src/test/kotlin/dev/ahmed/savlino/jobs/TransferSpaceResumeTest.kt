@@ -26,6 +26,21 @@ class TransferSpaceResumeTest {
             catch (failure: StorageException) { assertEquals(StorageError.InsufficientSpace, failure.error) }
         }
     }
+    @Test fun freshFormatReplacesItsSpaceBudgetWithoutCountingTheOldReservationTwice() {
+        val ledger = TransferSpaceLedger()
+        val row = Format("old", "mp4", true, true, size = Size.Exact(100))
+        fun space(bytes: Long) = SpaceBudget(File("stage"), File("public"), FreeSpace { bytes }, marginBytes = 0)
+        ledger.reserve("job", space(200), row)
+        ledger.reserve("other", space(300), row.copy(size = Size.Exact(50)))
+        ledger.reserve("job", space(500), row.copy(id = "fresh", size = Size.Exact(200)), replace = true)
+        try {
+            ledger.reserve("job", space(500), row.copy(size = Size.Exact(400)), replace = true)
+            fail("fresh size exceeding free space was admitted")
+        } catch (failure: StorageException) { assertEquals(StorageError.InsufficientSpace, failure.error) }
+        // The failed refresh kept the previous 400-byte budget; with the other job, 600 fits exactly.
+        ledger.reserve("third", space(600), row.copy(size = Size.Exact(50)))
+    }
+
     @Test fun moreStagedBytesThanBudgetNeverSubtractPublicationOrGoNegative() {
         val format = Format("single", "mp4", true, true, size = Size.Exact(100))
         TransferSpacePolicy.check(SpaceBudget(File("stage"), File("public"), FreeSpace { 100 }, marginBytes = 0), format, 500)

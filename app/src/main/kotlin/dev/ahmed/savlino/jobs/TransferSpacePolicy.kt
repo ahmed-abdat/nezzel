@@ -56,10 +56,10 @@ internal object TransferSpacePolicy {
  */
 internal class TransferSpaceLedger(private val staged: (String) -> Long = { 0L }) {
     private val reservations = mutableMapOf<String, Format>()
-    @Synchronized fun reserve(id: String, space: SpaceGate, format: Format, stagedBytes: Long = 0) {
-        check(id !in reservations)
+    @Synchronized fun reserve(id: String, space: SpaceGate, format: Format, stagedBytes: Long = 0, replace: Boolean = false) {
+        check(replace || id !in reservations)
         val budget = TransferSpacePolicy.budget(format, stagedBytes)
-        val others = reservations.entries.fold(0L) { sum, (other, otherFormat) ->
+        val others = reservations.entries.filter { it.key != id }.fold(0L) { sum, (other, otherFormat) ->
             Math.addExact(sum, TransferSpacePolicy.budget(otherFormat, staged(other).coerceAtLeast(0)).total)
         }
         space.beforeTransfer(Math.addExact(budget.staging, others), budget.output)

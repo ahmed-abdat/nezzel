@@ -89,6 +89,8 @@ sealed interface EngineEvent {
         val restartEpoch: Long = 0) : EngineEvent
     /** Relative to this download call; the journal adds its durable attempt epoch. */
     data class Restarting(val restartEpoch: Long) : EngineEvent
+    /** A fresh read resolved the already-confirmed choice; persist before any new-format bytes. */
+    data class FormatResolved(val format: Format) : EngineEvent
     /** Unmeasured post-processing, including lossless extraction and explicit audio conversion. */
     data object Merging : EngineEvent
 }

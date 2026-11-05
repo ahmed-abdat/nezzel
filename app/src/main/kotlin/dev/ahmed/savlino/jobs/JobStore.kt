@@ -306,6 +306,11 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
                 if (row?.resumeRecipe != recipe) put("resume_reset_bytes", 0)
             })
     }
+    /** The engine resolved this confirmed job to a fresh row before writing its bytes. */
+    @Synchronized internal fun resolveFormat(jobId: String, format: Format): Boolean =
+        writableDatabase.update("jobs", ContentValues().apply { put("format_json", encodeFormat(format)) },
+            "job_id=? AND stage='TRANSFERRING'", arrayOf(jobId)) == 1
+
     @Synchronized internal fun restartTransfer(jobId: String): Long? {
         if (get(jobId)?.stage != JobStage.TRANSFERRING) return null
         writableDatabase.execSQL("UPDATE jobs SET restart_epoch=restart_epoch+1, has_partial=0, resume_reset_bytes=0 WHERE job_id=? AND stage='TRANSFERRING'", arrayOf(jobId))
@@ -708,6 +713,14 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             put("width", format.width); put("height", format.height); put("bitrate", format.bitrateKbps)
             put("merge", format.requiresMerge); put("conversion", format.conversion?.name)
             format.sourceContainer?.let { put("sourceContainer", it) }
+            if (format.requiresMerge) {
+                put("audioContainer", format.audioContainer); put("audioBitrate", format.audioBitrateKbps)
+                when (val size = format.audioSize) {
+                    is Size.Exact -> { put("audioSizeKind", "exact"); put("audioBytes", size.bytes) }
+                    is Size.Estimated -> { put("audioSizeKind", "estimated"); put("audioBytes", size.bytes) }
+                    Size.Unknown -> put("audioSizeKind", "unknown")
+                }
+            }
             if (format.animatedGif) put("animatedGif", true)
             if (format.sourceHasNoSound) put("sourceHasNoSound", true)
             when (val size = format.size) {
@@ -729,7 +742,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             Format(getString("id"), getString("container"), getBoolean("video"), getBoolean("audio"),
                 string("videoCodec"), string("audioCodec"), int("width"), int("height"), int("bitrate"), size,
                 string("audioId"), getBoolean("merge"), string("conversion")?.let(AudioConversion::valueOf), getString("sourceId"), string("sourceContainer"),
-                optBoolean("animatedGif", false), optBoolean("sourceHasNoSound", false))
+                optBoolean("animatedGif", false), optBoolean("sourceHasNoSound", false),
+                audioContainer = string("audioContainer"), audioBitrateKbps = int("audioBitrate"),
+                audioSize = when (optString("audioSizeKind", "unknown")) {
+                    "exact" -> Size.Exact(getLong("audioBytes"))
+                    "estimated" -> Size.Estimated(getLong("audioBytes"))
+                    else -> Size.Unknown
+                })
         }
     }
 }

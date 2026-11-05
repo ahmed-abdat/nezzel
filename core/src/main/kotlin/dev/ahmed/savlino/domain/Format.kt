@@ -23,7 +23,9 @@ data class Format(val id: String, val container: String, val hasVideo: Boolean, 
     /** X/Twitter animated GIF: the engine's file came from X's `tweet_video/` path, which carries no sound. */
     val animatedGif: Boolean = false,
     /** The engine returned video but no audio anywhere in the source post. */
-    val sourceHasNoSound: Boolean = false) {
+    val sourceHasNoSound: Boolean = false,
+    /** Partner facts retained for resolving this confirmed merge after stream ids change. */
+    val audioContainer: String? = null, val audioSize: Size = Size.Unknown, val audioBitrateKbps: Int? = null) {
     val expectsNoSound: Boolean get() = sourceHasNoSound || animatedGif
     /**
      * A returned complete video with unreported audio facts (direct files or a sole HLS MP4).

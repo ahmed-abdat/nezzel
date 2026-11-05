@@ -1015,6 +1015,38 @@ class DownloadCoordinatorTest {
         }
     }
 
+    @Test fun resolvedFormatIsPersistedDisplayedAndUsedByTheNextAttempt() = runBlocking {
+        heldTransfer().use { f ->
+            val original = command("resolved")
+            val fresh = original.format.copy(id = "fresh", sourceFormatId = "fresh", size = Size.Exact(6))
+            val received = mutableListOf<Format>()
+            val engine = object : EngineAdapter by FakeEngine() {
+                override suspend fun installedVersion() = "engine-42"
+                override suspend fun download(command: DownloadCommand, directory: File, progress: (EngineEvent) -> Unit): TransferResult {
+                    received += command.format
+                    if (received.size == 1) {
+                        progress(EngineEvent.FormatResolved(fresh))
+                        // The journal must change before the engine can write new-format bytes.
+                        assertEquals(fresh, f.store.get(command.jobId)!!.format)
+                        progress(EngineEvent.Progress(1, Size.Exact(6)))
+                        assertEquals(Size.Exact(6), coordinator.progress.value.single { it.jobId == command.jobId }.total)
+                    }
+                    return TransferResult.Failure(DownloadError.Network, resumeAllowed = false)
+                }
+                lateinit var coordinator: DownloadCoordinator
+            }
+            val coordinator = DownloadCoordinator(app, engine, f.store,
+                space = SpaceBudget(app.filesDir, app.cacheDir, FreeSpace { Long.MAX_VALUE }))
+            engine.coordinator = coordinator
+            assertTrue(coordinator.enqueue(original))
+            coordinator.execute(original.jobId, {}, {})
+            assertEquals(fresh, f.store.get(original.jobId)!!.format)
+            assertTrue(f.store.retry(original.jobId))
+            coordinator.execute(original.jobId, {}, {})
+            assertEquals(listOf(original.format, fresh), received)
+        }
+    }
+
     // Resume recipe compatibility.
 
     @Test fun legacyYtdlpRecipeAdoptsItsPartialWithoutRestarting() = checkResume("legacy")

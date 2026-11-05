@@ -84,6 +84,13 @@ class FormatRecipeTest {
         }
     }
 
+    @Test fun ambiguousSameQualityRowsStillExpireBeforeTransfer() {
+        val (result, runtime) = staleDownload(page(row(height = 720)), page(row("a", height = 720), row("b", height = 720)))
+        if (result is TransferResult.Failure) {
+            assertEquals(DownloadError.FormatExpired, result.error); assertTrue(runtime.transfers.isEmpty())
+        } else assertEquals(1, runtime.transfers.size) // The reader folded identical rows: either is the picked quality.
+    }
+
     @Test fun pageReadTimeoutWaitsForTheNetwork() {
         val (result, runtime) = staleDownload(page(row()), page(row()), EngineLimits(inspectMs = 300)) { runtime ->
             { _ -> check(runtime.destroyed.await(5, java.util.concurrent.TimeUnit.SECONDS)); error("process destroyed") }
@@ -94,8 +101,8 @@ class FormatRecipeTest {
         assertTrue(runtime.transfers.isEmpty())
     }
 
-    @Test fun sameIdWithAnotherHeightCodecContainerOrExactSizeFailsWithoutATransfer() {
-        for (changed in listOf(row(height = 720), row(vcodec = "vp09.00.10.08"), row(ext = "webm"), row(size = "\"filesize\":2000"))) {
+    @Test fun sameIdWithAnotherHeightCodecOrContainerFailsWithoutATransfer() {
+        for (changed in listOf(row(height = 720), row(vcodec = "vp09.00.10.08"), row(ext = "webm"))) {
             val (result, runtime) = staleDownload(page(row()), page(changed))
             assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(result).error, changed)
             assertTrue(runtime.transfers.isEmpty(), changed)
@@ -125,6 +132,94 @@ class FormatRecipeTest {
         }
         assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(engine.download(command, temp.newFolder()) {}).error)
         assertEquals(1, runtime.transfers.size)
+    }
+
+    @Test fun equivalentKeepsTheConfirmedRowOrUsesTheUniqueMatchingQuality() {
+        val confirmed = Format("22", "mp4", true, true, videoCodec = "avc1.64001F", audioCodec = "mp4a.40.2",
+            width = 1280, height = 720, size = Size.Exact(1000))
+        assertSame(confirmed, FormatRecipe.equivalent(confirmed, mapOf("22" to confirmed)))
+        val changedId = confirmed.copy(id = "new", sourceFormatId = "new", videoCodec = "h264", size = Size.Exact(1010))
+        val otherCodec = changedId.copy(id = "hevc", sourceFormatId = "hevc", videoCodec = "hvc1.1.6.L93")
+        assertEquals(changedId, FormatRecipe.equivalent(confirmed, mapOf("new" to changedId, "hevc" to otherCodec)))
+        val resized = confirmed.copy(size = Size.Exact(1010))
+        assertEquals(resized, FormatRecipe.equivalent(confirmed, mapOf("22" to resized)))
+        assertNull(FormatRecipe.equivalent(confirmed, mapOf("new" to changedId,
+            "twin" to changedId.copy(id = "twin", sourceFormatId = "twin"))))
+        assertNull(FormatRecipe.equivalent(confirmed, mapOf("1080" to changedId.copy(height = 1080),
+            "480" to changedId.copy(height = 480))))
+        assertNull(FormatRecipe.equivalent(confirmed, mapOf("new" to changedId.copy(width = 960))))
+        assertNull(FormatRecipe.equivalent(confirmed, mapOf("new" to changedId.copy(audioCodec = "opus"))))
+        val silent = confirmed.copy(hasAudio = false, audioCodec = null, sourceHasNoSound = true)
+        val silentFresh = changedId.copy(hasAudio = false, audioCodec = null)
+        assertTrue(assertNotNull(FormatRecipe.equivalent(silent, mapOf("new" to silentFresh))).sourceHasNoSound)
+    }
+
+    @Test fun equivalentAudioKeepsItsFamilyContainerAndConversionRecipe() {
+        val confirmed = Format("140", "m4a", false, true, audioCodec = "mp4a.40.2", size = Size.Exact(100))
+        val fresh = confirmed.copy(id = "140-0", sourceFormatId = "140-0", audioCodec = "aac", size = Size.Exact(110))
+        assertEquals(fresh, FormatRecipe.equivalent(confirmed, mapOf(fresh.id to fresh)))
+        assertNull(FormatRecipe.equivalent(confirmed, mapOf(fresh.id to fresh.copy(container = "webm", audioCodec = "opus"))))
+        val converted = Format("nezzel:mp3:192:140", "mp3", false, true, audioCodec = "mp3", bitrateKbps = 192,
+            conversion = AudioConversion.MP3_192, sourceFormatId = "140", sourceContainer = "m4a")
+        val replacement = assertNotNull(FormatRecipe.equivalent(converted, mapOf(fresh.id to fresh)))
+        assertEquals("140-0", replacement.sourceFormatId)
+        assertEquals(AudioConversion.MP3_192, replacement.conversion)
+        assertEquals("mp3", replacement.container)
+        assertEquals(Size.Unknown, replacement.size) // Source bytes are not an exact converted output size.
+    }
+
+    @Test fun equivalentMergeChoosesClosestAudioAndRejectsTiesAndChangedRecipe() {
+        val video = Format("136", "mp4", true, false, videoCodec = "avc1", width = 1280, height = 720, size = Size.Exact(900))
+        // The metadata mapper's merged rows retain the source's hasAudio=false and video bitrate.
+        val confirmed = video.copy(audioFormatId = "140", requiresMerge = true, size = Size.Exact(1000))
+        val freshVideo = video.copy(id = "136-0", sourceFormatId = "136-0", size = Size.Exact(910))
+        val audio = Format("140-0", "m4a", false, true, audioCodec = "mp4a.40.2", size = Size.Exact(100))
+        val larger = audio.copy(id = "140-drc", sourceFormatId = "140-drc", size = Size.Exact(150))
+        val streams = mapOf(freshVideo.id to freshVideo, audio.id to audio, larger.id to larger)
+        val replacement = assertNotNull(FormatRecipe.equivalent(confirmed, streams))
+        assertEquals("136-0", replacement.sourceFormatId)
+        assertEquals("140-0", replacement.audioFormatId)
+        assertEquals(Size.Exact(1010), replacement.size)
+        assertTrue(replacement.requiresMerge)
+        assertFalse(replacement.hasAudio)
+        assertNull(FormatRecipe.equivalent(confirmed, streams + (larger.id to larger.copy(size = audio.size))))
+        assertNull(FormatRecipe.equivalent(confirmed, mapOf(freshVideo.id to freshVideo,
+            audio.id to audio.copy(container = "webm", audioCodec = "opus"))))
+        assertNull(FormatRecipe.equivalent(confirmed, streams + ("twin" to freshVideo.copy(id = "twin", sourceFormatId = "twin"))))
+        val oldAudio = audio.copy(id = "140", sourceFormatId = "140", size = Size.Unknown, bitrateKbps = 128)
+        val byBitrate = assertNotNull(FormatRecipe.equivalent(confirmed, mapOf(freshVideo.id to freshVideo,
+            oldAudio.id to oldAudio, audio.id to audio.copy(size = Size.Unknown, bitrateKbps = 192))))
+        assertEquals("140", byBitrate.audioFormatId)
+        val recorded = confirmed.copy(audioCodec = "aac", audioContainer = "m4a", audioSize = Size.Exact(100), audioBitrateKbps = 128)
+        val changedVideoSize = freshVideo.copy(size = Size.Exact(100))
+        val byAudioSize = assertNotNull(FormatRecipe.equivalent(recorded, mapOf(changedVideoSize.id to changedVideoSize,
+            audio.id to audio, larger.id to larger.copy(size = Size.Exact(900)))))
+        assertEquals("140-0", byAudioSize.audioFormatId) // Video size changes cannot skew the audio choice.
+        val bitrateOnly = recorded.copy(audioSize = Size.Unknown)
+        val byRecordedBitrate = assertNotNull(FormatRecipe.equivalent(bitrateOnly, mapOf(freshVideo.id to freshVideo,
+            audio.id to audio.copy(size = Size.Unknown, bitrateKbps = 130),
+            larger.id to larger.copy(size = Size.Unknown, bitrateKbps = 192))))
+        assertEquals("140-0", byRecordedBitrate.audioFormatId)
+    }
+
+    @Test fun refreshedIdAndExactSizeTransferFromTheNewTrimmedRow() {
+        for (fresh in listOf(row("22", height = 720), row(height = 720, size = "\"filesize\":1010"))) {
+            val (result, runtime) = staleDownload(page(row(height = 720)), page(fresh))
+            assertIs<TransferResult.Success>(result)
+            val args = runtime.transfers.single()
+            assertEquals(if ("\"22\"" in fresh) "22" else "18", args[args.indexOf("-f") + 1])
+            assertTrue(loaded(args).contains(fresh.substringBefore(",\"url\"")))
+        }
+    }
+
+    @Test fun goneOrAmbiguous720pStillExpiresBeforeTransfer() {
+        // Gone: only other heights, or 720p only in another codec family.
+        for (fresh in listOf(page(row("a", height = 1080), row("b", height = 480)),
+            page(row("a", height = 720, vcodec = "vp9", ext = "webm"), row("b", height = 1080)))) {
+            val (result, runtime) = staleDownload(page(row(height = 720)), fresh)
+            assertEquals(DownloadError.FormatExpired, assertIs<TransferResult.Failure>(result).error)
+            assertTrue(runtime.transfers.isEmpty())
+        }
     }
 
     @Test fun recipeComparesOnlyWhatTheUserPicked() {

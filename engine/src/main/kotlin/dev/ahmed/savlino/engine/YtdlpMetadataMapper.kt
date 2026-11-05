@@ -116,7 +116,8 @@ object YtdlpMetadataMapper {
             val container = if (VideoCodecs.mp4Safe(video.videoCodec) &&
                 (isAac(audioPartner.audioCodec) || pinterestAudio)) "mp4" else "mkv"
             return video.copy(container = container, audioFormatId = audioPartner.id,
-                requiresMerge = true, size = combined(video.size, audioPartner.size))
+                requiresMerge = true, size = combined(video.size, audioPartner.size), audioCodec = audioPartner.audioCodec,
+                audioContainer = audioPartner.container, audioSize = audioPartner.size, audioBitrateKbps = audioPartner.bitrateKbps)
         }
         // A VP9 (or other known non-mp4-safe) row stays only when its height has no usable mp4-safe row.
         fun usable(row: Format) = row.hasAudio || row.expectsNoSound || partner(row) != null

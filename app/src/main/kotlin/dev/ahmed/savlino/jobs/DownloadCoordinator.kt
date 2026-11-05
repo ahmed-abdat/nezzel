@@ -643,7 +643,7 @@ class DownloadCoordinator(
                     var stale = false
                     var engineReturned = false
                     var hasPartial = row.hasPartial && compatibleRecipe
-                    val initial = DownloadProgress(id, row.filename, DownloadPhase.PREPARING,
+                    var initial = DownloadProgress(id, row.filename, DownloadPhase.PREPARING,
                         restartEpoch = epoch, hasPartial = hasPartial,
                         mimeType = mime(command.format), qualityHeight = VideoQuality.of(command.format.width, command.format.height))
                     emit(initial)
@@ -667,6 +667,7 @@ class DownloadCoordinator(
                         downloading += id
                     }
                     attempt.reason = ExecutionFailureReason.ENGINE_RUN
+                    var resolutionFailure: Exception? = null
                     val onEvent: (EngineEvent) -> Unit = { event ->
                         synchronized(delivery) {
                             // Late callbacks from a finished attempt never reach the next one.
@@ -680,6 +681,16 @@ class DownloadCoordinator(
                                 if (current?.error?.confirmationExpired == true) stopEngine(id, cancelUnregistered = false)
                             }
                             if (stale) return@synchronized
+                            if (event is EngineEvent.FormatResolved) {
+                                signal.throwIfCanceled()
+                                check(store.resolveFormat(id, event.format))
+                                command = store.get(id)!!.command() ?: error("Invalid resolved job")
+                                initial = initial.copy(total = event.format.size)
+                                try { spaceLedger.reserve(id, space, event.format, replace = true) }
+                                catch (failure: Exception) { resolutionFailure = failure; throw failure }
+                                emit(initial.copy(restartEpoch = epoch, hasPartial = hasPartial))
+                                return@synchronized
+                            }
                             if (event is EngineEvent.Restarting) {
                                 if (event.restartEpoch <= engineEpoch) return@synchronized
                                 signal.throwIfCanceled()
@@ -716,7 +727,7 @@ class DownloadCoordinator(
                                 }
                                 EngineEvent.Merging -> initial.copy(restartEpoch = epoch, hasPartial = hasPartial, phase = if (command.format.conversion != null)
                                     DownloadPhase.CONVERTING else DownloadPhase.JOINING)
-                                is EngineEvent.Restarting -> error("Restart handled above")
+                                is EngineEvent.Restarting, is EngineEvent.FormatResolved -> error("Handled above")
                             })
                         }
                     }
@@ -731,6 +742,8 @@ class DownloadCoordinator(
                         synchronized(delivery) { engineReturned = true; transferOpen = false }
                         downloading.remove(id)
                     }
+                    // The engine maps callback exceptions to transfer errors; retain local storage classification.
+                    resolutionFailure?.let { throw it }
                     if (result is TransferResult.Failure) attempt.reason = result.reason
                     when (result) {
                         is TransferResult.Failure -> if (signal.isCanceled || result.error == DownloadError.Cancelled) finishStopped()

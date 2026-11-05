@@ -66,7 +66,8 @@ class JobStoreRetryTest {
     }
     @Test fun sourceSilenceGifAndContainerPersistThroughReopenAndRetry() {
         val gif = Format("gif", "mp4", true, true, animatedGif = true)
-        val mkv = Format("vp9", "mkv", true, false, videoCodec = "vp9", height = 848, audioFormatId = "a", requiresMerge = true)
+        val mkv = Format("vp9", "mkv", true, false, videoCodec = "vp9", height = 848, audioFormatId = "a", requiresMerge = true,
+            audioCodec = "opus", audioContainer = "webm", audioSize = Size.Exact(100), audioBitrateKbps = 128)
         val silent = Format("silent", "mp4", true, false, sourceHasNoSound = true)
         for (format in listOf(gif, mkv, silent)) {
             val id = "playback-${format.id}"
