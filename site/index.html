@@ -22,7 +22,7 @@
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Nezzel: انسخ الرابط، واحفظ أي شيء. فيديو وصوت وصور">
+<meta property="og:image:alt" content="Nezzel: حمّل الفيديو من رابطه. هاتف يعرض الجودات المتاحة">
 <meta property="og:locale" content="ar_AR">
 <meta property="og:locale:alternate" content="en_US">
 <meta property="og:locale:alternate" content="fr_FR">
@@ -199,7 +199,6 @@ body.scrolled .bar{max-width:min(980px,100%);min-height:56px;background:color-mi
 }
 @media (max-width:640px){.bar{min-height:58px}body.scrolled .bar{min-height:54px;max-width:none}}
 body.ondark .bar{--muted:#BEC9C5;background:rgb(9 15 14/.82);border-color:rgb(255 255 255/.08);box-shadow:none}
-
 
 /* buttons */
 .btn{position:relative;isolation:isolate;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:60px;padding:0 30px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:19px;box-shadow:0 0 0 4px var(--bg),0 0 0 5px color-mix(in oklab,var(--primary) 30%,transparent),0 6px 16px -8px color-mix(in oklab,var(--primary) 45%,transparent),inset 0 1px 0 rgb(255 255 255/.2);transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
@@ -1772,7 +1771,6 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     vt.finished.finally(() => { delete root.dataset.vt; });
   });
   syncTheme();
-
 
   // ---------- install film: plays itself in view, a tap pauses, the steps beside it follow the recording ----------
   const film = $("#film");
