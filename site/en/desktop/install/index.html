@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Install Nezzel on your computer and open it the first time</title>
+<meta name="description" content="How to open Nezzel the first time on Mac, Windows and Linux, why the warning appears, and how to check the file.">
+<meta name="theme-color" content="#F6F8F5">
+<meta name="color-scheme" content="light">
+<link rel="canonical" href="https://nezzel.hululsoft.mr/en/desktop/install/"><link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/"><link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/"><link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/"><link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/"><link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/beiruti-latin.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/fonts/plex-arabic-400-latin.woff2" crossorigin>
+
+<link rel="stylesheet" href="/css/dk.css">
+<script type="application/json" id="nz-i18n">{"android": "Get it for Android", "mac": "Download for Mac", "mac_intel": "Download for Intel Mac", "windows": "Download for Windows", "windows_arm": "Download for Windows on ARM", "linux": "Download for Linux", "android_meta": "Free · Android 10 or later · Version 0.5.8 · 64.5 MB", "desk_meta": "Free beta · 0.1.0-beta.1", "mac_note": "For Mac computers, not iPad", "other_arch_mac": "Intel Mac?", "other_arch_mac_arm": "Mac with Apple chip?", "other_arch_win": "Windows on ARM?", "other_arch_win_x64": "Regular Windows (x64)?", "first_open": "How do I open it the first time?", "also_desk": "Also on Mac, Windows and Linux", "pkg": "Package type", "deb": "Ubuntu, Debian, Mint", "rpm": "Fedora, openSUSE", "appimage": "Any distribution", "get_pkg": "Download", "ios_title": "Nezzel is for Android and computers", "ios_body": "It doesn’t run on iPhone or iPad. Send this page to your computer and download it there.", "send": "Send the link to my computer", "send_short": "Send link", "copied": "Link copied. Open it on your computer", "pick": "Choose your device", "plat": {"android": "Android", "mac": "Mac", "windows": "Windows", "linux": "Linux"}, "install": "/en/desktop/install/", "page_desktop": "/en/desktop/", "page_android": "/en/"}</script>
+<script src="/js/dk.js" defer></script>
+</head>
+<body data-page="install">
+<svg class="sprite" aria-hidden="true"><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></symbol><symbol id="i-phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2.5"/><path d="M11 18h2"/></symbol><symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol><symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol><symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 2.5a14 14 0 0 0 0 19 14 14 0 0 0 0-19"/><path d="M2.5 12h19"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol><symbol id="i-dl-tray" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></symbol><symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol><symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol><symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></symbol><symbol id="i-pause" viewBox="0 0 24 24"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></symbol><symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol><symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol><symbol id="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 11 5 3-5 3z"/></symbol></svg>
+<a class="skip" href="#main">Skip to content</a><header class="site-head">
+  <div class="wrap head-in">
+    <a class="brand" href="/en/" aria-label="Nezzel home"><img src="/img/icon.svg" width="32" height="32" alt=""><span class="brand-n" dir="ltr">Nezzel</span></a>
+    <nav class="nav" aria-label="Sections"><a href="/en/">Phone</a><a href="/en/desktop/">Computer</a><a href="/en/desktop/install/" aria-current="page">Install</a></nav>
+    <div class="head-end">
+      <details class="lang">
+        <summary aria-label="Language: English"><svg class="i " aria-hidden="true"><use href="#i-globe"/></svg><span>EN</span></summary>
+        <div class="lang-menu"><a href="/desktop/install/" lang="ar" hreflang="ar">العربية</a><a href="/en/desktop/install/" lang="en" hreflang="en" aria-current="true">English</a><a href="/fr/desktop/install/" lang="fr" hreflang="fr">Français</a></div>
+      </details>
+      <a class="btn btn-primary btn-sm" href="#get" data-get-compact="desktop-auto"><svg class="i " aria-hidden="true"><use href="#i-download"/></svg><span>Download</span></a>
+    </div>
+  </div>
+</header>
+<main id="main">
+<section class="doc-hero wrap" aria-labelledby="h1">
+  <h1 id="h1">Open Nezzel the first time</h1>
+  <p class="lede">The beta is free and not yet signed by Apple or Microsoft, so your system warns you the first time you open it. That’s expected, and you only need to allow it once.</p>
+  <nav class="os-tabs" aria-label="Choose your system"><a href="#mac" data-os="mac">Mac</a><a href="#windows" data-os="windows">Windows</a><a href="#linux" data-os="linux">Linux</a></nav>
+</section>
+<div class="doc wrap">
+  <section class="os" id="mac" aria-labelledby="os-mac"><h2 id="os-mac">Mac</h2><ol class="ist-list"><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">1</span><div><h3>Open it, then click “Done”</h3><p>Drag Nezzel to Applications and open it. A message says Apple couldn’t verify it; click “Done”, not “Move to Trash”</p></div></div><figure class="ill ill-mac" aria-label="Illustration: “Nezzel” Not Opened">
+  <div class="mac-desk"><div class="mac-alert" dir="ltr">
+    <img src="/img/icon.svg" width="56" height="56" alt="">
+    <b>“Nezzel” Not Opened</b><p>Apple could not verify “Nezzel” is free of malware that may harm your Mac or compromise your privacy.</p>
+    <span class="mb mb-pri is-hint">Done</span><span class="mb">Move to Trash</span>
+  </div></div><figcaption>Illustration</figcaption></figure></li><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">2</span><div><h3>Open Privacy & Security</h3><p>Apple menu → System Settings → Privacy & Security, then scroll down to Security</p></div></div><figure class="ill ill-mac" aria-label="Illustration: Privacy &amp; Security">
+  <div class="mac-win" dir="ltr">
+    <div class="mw-side"><span class="mw-lights" dir="ltr"><i></i><i></i><i></i></span><span>Wi‑Fi</span><span>Bluetooth</span><span>Network</span><span>General</span><span>Appearance</span><span class=is-on>Privacy & Security</span><span>Desktop & Dock</span></div>
+    <div class="mw-main"><b class="mw-title">Privacy & Security</b>
+      <span class="mw-h">Security</span>
+      <div class="mw-row"><span>“Nezzel” was blocked to protect your Mac.</span><span class="mb is-hint">Open Anyway</span></div>
+      <div class="mw-row mw-dim"><span></span><span></span></div>
+    </div>
+  </div><figcaption>Illustration</figcaption></figure></li><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">3</span><div><h3>Click “Open Anyway”</h3><p>Next to the Nezzel line. Confirm with your password or Touch ID, then click “Open”. You won’t see the message again</p></div></div></li></ol>
+    <p class="os-note">On macOS 15 or later. On older versions: right-click the app and choose “Open”.</p>
+    <div class="cmd"><p>Or in Terminal, one command instead of the steps:</p><pre dir="ltr"><code>xattr -dr com.apple.quarantine /Applications/Nezzel.app</code></pre></div>
+  </section>
+  <section class="os" id="windows" aria-labelledby="os-win"><h2 id="os-win">Windows</h2><ol class="ist-list"><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">1</span><div><h3>Run the installer</h3><p>Open the file you downloaded. A blue screen may appear: “Windows protected your PC”</p></div></div><figure class="ill ill-win" aria-label="Illustration: Windows protected your PC">
+  <div class="ss" dir="ltr"><span class="ss-x"><svg class="i " aria-hidden="true"><use href="#i-x"/></svg></span><b>Windows protected your PC</b><p>Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p><span class="ss-more is-hint">More info</span><div class="ss-btns"><span class="ss-btn">Don’t run</span></div></div>
+  <figcaption>Illustration</figcaption></figure></li><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">2</span><div><h3>Click “More info”</h3><p>The small link under the text. It shows the file name and “Unknown publisher”</p></div></div></li><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">3</span><div><h3>Click “Run anyway”</h3><p>Then finish the install. You won’t see the screen again for this version</p></div></div><figure class="ill ill-win" aria-label="Illustration: Windows protected your PC">
+  <div class="ss" dir="ltr"><span class="ss-x"><svg class="i " aria-hidden="true"><use href="#i-x"/></svg></span><b>Windows protected your PC</b><p>Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p><dl class="ss-dl"><dt>App:</dt><dd dir="ltr">Nezzel_0.1.0-beta.1_x64-setup.exe</dd><dt>Publisher:</dt><dd>Unknown publisher</dd></dl><div class="ss-btns"><span class="ss-btn is-hint">Run anyway</span><span class="ss-btn">Don’t run</span></div></div>
+  <figcaption>Illustration</figcaption></figure></li></ol></section>
+  <section class="os" id="linux" aria-labelledby="os-linux"><h2 id="os-linux">Linux</h2><ol class="ist-list"><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">1</span><div><h3>.deb package</h3><p>For Ubuntu, Debian and Mint: open it in your package manager, or use the terminal</p></div></div><figure class="ill ill-term"><div class="term" dir="ltr"><div class="term-bar"><i></i><i></i><i></i><b>Terminal</b></div><pre><code><span><i>$</i> sudo apt install ./Nezzel_*_amd64.deb</span></code></pre></div></figure></li><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">2</span><div><h3>.rpm package</h3><p>For Fedora and openSUSE: open it in your package manager, or use the terminal</p></div></div><figure class="ill ill-term"><div class="term" dir="ltr"><div class="term-bar"><i></i><i></i><i></i><b>Terminal</b></div><pre><code><span><i>$</i> sudo dnf install ./Nezzel-*.x86_64.rpm</span></code></pre></div></figure></li><li class="ist"><div class="ist-tx"><span class="step-n" aria-hidden="true">3</span><div><h3>Or the AppImage</h3><p>For any distribution: make the file executable, then run it</p></div></div><figure class="ill ill-term"><div class="term" dir="ltr"><div class="term-bar"><i></i><i></i><i></i><b>Terminal</b></div><pre><code><span><i>$</i> chmod +x Nezzel_*_amd64.AppImage</span><span><i>$</i> ./Nezzel_*_amd64.AppImage</span></code></pre></div></figure></li></ol></section>
+  <section class="os os-trust" id="verify" aria-labelledby="v-h">
+    <h2 id="v-h"><svg class="i " aria-hidden="true"><use href="#i-shield"/></svg>Only download it from here</h2>
+    <p>The download links on this site go to the official releases page on GitHub. If you find Nezzel anywhere else, don’t install it. To check the file wasn’t changed, compare its SHA-256 hash with the one listed next to it on the <a href="https://github.com/ahmed-abdat/nezzel-desktop/releases/latest" rel="noopener">release page</a>:</p>
+    <dl class="specs specs-code"><div><dt>Mac</dt><dd><pre dir="ltr"><code>shasum -a 256 ~/Downloads/Nezzel_*.dmg</code></pre></dd></div><div><dt>Windows</dt><dd><pre dir="ltr"><code>Get-FileHash .\Nezzel_*-setup.exe</code></pre></dd></div><div><dt>Linux</dt><dd><pre dir="ltr"><code>sha256sum Nezzel*</code></pre></dd></div></dl>
+    <h2 id="why-h">Why the warning?</h2>
+    <p>Apple and Microsoft charge for a signing certificate, and Nezzel is free. We’ll sign future versions when it leaves beta, and the warning will go away. All the code is open on GitHub for anyone to review.</p>
+  </section>
+  <p class="doc-android">On Android? <a class="go" href="/en/#how-h">Install steps for the phone app<svg class="i i-dir" aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
+</div>
+</main>
+<footer class="site-foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand">
+      <a class="brand" href="/en/"><img src="/img/icon.svg" width="32" height="32" alt=""><span class="brand-n" dir="ltr">Nezzel</span></a>
+      <p>Made by Hululsoft · Free and open source</p>
+    </div>
+    <nav class="foot-nav" aria-label="Nezzel">
+      <div><h2>App</h2><a href="/en/">For Android</a><a href="/en/desktop/">For Mac, Windows and Linux</a><a href="/en/desktop/install/">Install and first launch</a></div>
+      <div><h2>Project</h2><a href="https://github.com/ahmed-abdat/nezzel-desktop">Source: desktop app</a><a href="https://github.com/ahmed-abdat/nezzel">Source: Android app</a><a class="dl-link" data-dl-auto href="/download/desktop?src=desk-footer-en&amp;os=mac">Releases</a><a href="https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md">Privacy</a><a href="https://github.com/ahmed-abdat/nezzel-desktop/blob/main/LICENSE">License</a><a href="https://github.com/ahmed-abdat/nezzel-desktop/issues/new/choose">Report a problem</a></div>
+      <div><h2>Language</h2><a href="/desktop/install/" lang="ar" hreflang="ar">العربية</a><a href="/en/desktop/install/" lang="en" hreflang="en">English</a><a href="/fr/desktop/install/" lang="fr" hreflang="fr">Français</a></div>
+    </nav>
+    <p class="foot-note">Video stills: Big Buck Bunny, Sintel, Tears of Steel © Blender Foundation, CC BY 3.0</p>
+  </div>
+</footer>
+</body>
+</html>
