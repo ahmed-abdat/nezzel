@@ -149,15 +149,17 @@ class FacebookPageParser {
         // No photo, and the bound story's only attachment is one valid Video: yt-dlp reads its watch page.
         if (photoId == null && (requested ?: page).isPostOrPhoto && bound.others == 0)
             bound.videos.singleOrNull()?.let { return FacebookParseResult.Video(it) }
-        if (mediaNodes) return failure(ImageFailure.NO_MEDIA)
+        // A video post's og:image is its thumbnail, never the media: NO_MEDIA lets the app hand it to yt-dlp.
+        // (Relay-verified Photo media above still wins even when og:type says video.)
+        val ogType = document.selectFirst("meta[property=og:type]")?.attr("content")?.trim()?.lowercase(java.util.Locale.ROOT)
+        val videoPage = ogType?.startsWith("video") == true
+        // Unbound media nodes on a video page (e.g. a logged-out share/p/ video post) still mark it as a video page.
+        if (mediaNodes) return FacebookParseResult.Failure(ImageFailure.NO_MEDIA, videoPage = videoPage)
         // Logged-out desktop HTML uses form#login_form; mobile HTML posts to /login/device-based/regular/login/.
         // Require a form (a plain "Log in" navigation link is not a wall), after real media and before og:image.
         if (document.selectFirst("form#login_form, form[action^=/login/]") != null) return failure(ImageFailure.PRIVATE)
 
-        // A video post's og:image is its thumbnail, never the media: NO_MEDIA lets the app hand it to yt-dlp.
-        // (Relay-verified Photo media above still wins even when og:type says video.)
-        val ogType = document.selectFirst("meta[property=og:type]")?.attr("content")?.trim()?.lowercase(java.util.Locale.ROOT)
-        if (ogType?.startsWith("video") == true) return FacebookParseResult.Failure(ImageFailure.NO_MEDIA, videoPage = true)
+        if (videoPage) return FacebookParseResult.Failure(ImageFailure.NO_MEDIA, videoPage = true)
 
         // No relay media and no wall: the post's own og:image, labelled as preview quality.
         if (page.isPostOrPhoto && photoId == null) {

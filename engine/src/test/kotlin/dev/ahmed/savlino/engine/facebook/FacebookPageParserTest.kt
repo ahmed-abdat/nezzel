@@ -276,6 +276,12 @@ class FacebookPageParserTest {
         val result = assertIs<FacebookParseResult.Failure>(parse(facebookFixture("video-og-post.html")))
         assertEquals(ImageFailure.NO_MEDIA, result.reason)
         assertTrue(result.videoPage)
+        // Logged-out share/p/ video posts also carry unbound media nodes; the hint must survive them.
+        val unbound = relayBlock("{\"node_v2\":{\"__typename\":\"Story\",\"post_id\":\"900000000000777\"}}")
+        val withNodes = assertIs<FacebookParseResult.Failure>(
+            parse(facebookFixture("video-og-post.html").replace("</body>", "$unbound</body>"), FB_STORY, FB_SHARE))
+        assertEquals(ImageFailure.NO_MEDIA, withNodes.reason)
+        assertTrue(withNodes.videoPage)
     }
 
     @Test fun relayVerifiedPhotoWinsEvenWhenOgTypeSaysVideo() {
