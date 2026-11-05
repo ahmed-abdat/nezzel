@@ -6,7 +6,7 @@
   const t = JSON.parse(document.getElementById('nz-i18n').textContent);
   const LANG = root.lang;
   // Every download goes through the site's own routes (never straight to GitHub).
-  const KEYS = { 'mac-arm': ['mac', 'arm'], 'mac-intel': ['mac', 'intel'], 'win-x64': ['win', 'x64'], 'win-arm': ['win', 'arm'], deb: ['linux'], rpm: ['linux'], appimage: ['linux'] };
+  const KEYS = { 'mac-arm': ['mac', 'arm64'], 'mac-intel': ['mac', 'x64'], 'win-x64': ['win', 'x64'], 'win-arm': ['win', 'arm64'], deb: ['linux'], rpm: ['linux'], appimage: ['linux'] };
   const apk = (p) => `/download?src=desk-${p}-${LANG}`;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 
