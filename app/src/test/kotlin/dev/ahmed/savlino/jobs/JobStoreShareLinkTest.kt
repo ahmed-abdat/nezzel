@@ -42,17 +42,17 @@ class JobStoreShareLinkTest {
 
     @After fun tearDown() { app.deleteDatabase(JobStore.DATABASE_NAME) }
 
-    private fun command(id: String, video: Boolean = true): DownloadCommand {
+    private fun command(id: String, video: Boolean = true, url: String = link): DownloadCommand {
         val format = Format("choice", if (video) "mp4" else "m4a", video, true, size = Size.Exact(10))
-        val source = LinkRevision(LinkInput.parse(link)!!, 1)
+        val source = LinkRevision(LinkInput.parse(url)!!, 1)
         return (DownloadCommand.confirm(id, Inspection(source, "engine", listOf(format)), source, format.id, "clip")
             as ConfirmResult.Confirmed).command
     }
 
     private fun uri(id: String) = Uri.parse("content://media/external_primary/downloads/${id.hashCode() and 0xffff}")
 
-    private fun JobStore.completed(id: String, at: Uri = uri(id)): Boolean {
-        check(enqueue(command(id))); check(startTransfer(id)); check(markStaged(id))
+    private fun JobStore.completed(id: String, at: Uri = uri(id), url: String = link): Boolean {
+        check(enqueue(command(id, url = url))); check(startTransfer(id)); check(markStaged(id))
         check(recordPending(id, PendingPublication(at, "$id.mp4"))); check(markPublishing(id))
         return complete(id, PublishedFile(at, "$id.mp4"))
     }
@@ -127,6 +127,11 @@ class JobStoreShareLinkTest {
         // Not the saved audio's twin, nor a failure written after the save.
         assertEquals(setOf("gone", "refused"), store.failuresSavedBy("saved").toSet())
         assertEquals(emptyList<String>(), store.failuresSavedBy("live")) // only a completed row clears failures
+        // The same YouTube video saved from another link form (youtu.be vs watch?v=) clears it too.
+        check(store.enqueue(command("yt-failed", url = "https://www.youtube.com/watch?v=Y-rmzh0PI3c")))
+        check(store.fail("yt-failed", DownloadError.FormatExpired))
+        assertTrue(store.completed("yt-saved", url = "https://youtu.be/Y-rmzh0PI3c"))
+        assertEquals(listOf("yt-failed"), store.failuresSavedBy("yt-saved"))
         store.clearShareLinks() // no tags left: nothing matches
         assertEquals(emptyList<String>(), store.failuresSavedBy("saved"))
     } }

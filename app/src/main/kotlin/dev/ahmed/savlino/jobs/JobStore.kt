@@ -433,6 +433,8 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         val row = get(jobId)
         // The link is cleared below; a row from before tags (or a lost backfill) gets its tag now.
         val key = row?.sourceUrl?.let(::sourceKey)
+        // The saved link's lookup tags (same video as youtu.be / watch?v= / m.), read before source_url is scrubbed.
+        val lookup = row?.sourceUrl?.let { LinkInput.parse(it)?.normalizedUrl }?.let { url -> savedLookupUrls(url).mapNotNull(::tag).distinct() }
         // Copy link: only the reviewed intake link, sealed in the same UPDATE that scrubs source_url.
         val link = if (row?.pendingUri == published.uri) row.sourceUrl?.let { links?.seal(it) } else null
         row?.pendingUri == published.uri &&
@@ -441,7 +443,7 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
             transition(jobId, setOf(JobStage.PENDING_INSERTED, JobStage.PUBLISHING, JobStage.FAILED, JobStage.CANCELLED), JobStage.COMPLETED,
                 ContentValues().apply {
                     put("display_name", published.displayName); key?.let { put("source_key", it) }; link?.let { put("share_link", it) }
-                }).also { if (it) supersede(jobId, published.uri) }
+                }).also { if (it) { supersede(jobId, published.uri); lookup?.let { keys -> rememberSaved(jobId, keys) } } }
     }
 
     /** A folder or MediaStore can hand a freed URI to a new file: older rows at that URI lose their link and artwork. */
@@ -592,12 +594,16 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
      */
     @Synchronized fun failuresSavedBy(completedId: String): List<String> {
         val saved = get(completedId)?.takeIf { it.stage == JobStage.COMPLETED } ?: return emptyList()
+        val keys = (synchronized(savedKeys) { savedKeys.remove(completedId) }.orEmpty() + listOfNotNull(readableDatabase.rawQuery(
+            "SELECT source_key FROM jobs WHERE job_id = ?", arrayOf(completedId)).use { if (it.moveToFirst()) it.getString(0) else null })).distinct()
+        if (keys.isEmpty()) return emptyList()
+        val marks = keys.joinToString(",") { "?" }
         val ids = readableDatabase.rawQuery(
-            "SELECT f.job_id FROM jobs f JOIN jobs c ON c.job_id = ? AND c.source_key IS NOT NULL " +
-                "AND f.source_key = c.source_key WHERE f.stage = 'FAILED' AND f.pending_uri IS NULL " +
+            "SELECT f.job_id FROM jobs f JOIN jobs c ON c.job_id = ? " +
+                "WHERE f.source_key IN ($marks) AND f.stage = 'FAILED' AND f.pending_uri IS NULL " +
                 "AND f.job_id != c.job_id AND f.updated_at <= c.updated_at " +
                 "AND NOT EXISTS (SELECT 1 FROM batch_items b WHERE b.job_id IN (f.job_id, c.job_id))",
-            arrayOf(completedId)).use { buildList { while (it.moveToNext()) add(it.getString(0)) } }
+            arrayOf(completedId, *keys.toTypedArray())).use { buildList { while (it.moveToNext()) add(it.getString(0)) } }
         return ids.filter { get(it)?.format?.hasVideo == saved.format.hasVideo }
     }
 
@@ -631,6 +637,13 @@ class JobStore(context: Context, private val sourceKeys: LinkKeyer? = KeystoreLi
         db.rawQuery("SELECT job_id FROM batch_items", null).use { while (it.moveToNext()) kept += it.getString(0) }
         artwork.retainOnly(kept)
     }
+
+    /** Lookup tags of a just-saved link, held in memory until [failuresSavedBy] reads them; never persisted. */
+    /** Bounded: a completion nobody reads (startup recovery) ages out instead of staying for the store's lifetime. */
+    private val savedKeys = object : LinkedHashMap<String, List<String>>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?) = size > 16
+    }
+    private fun rememberSaved(jobId: String, keys: List<String>) = synchronized(savedKeys) { savedKeys[jobId] = keys }
 
     /** In-memory handoff of the pre-scrub source after a successful terminal write; never persisted. */
     internal var onTerminalSource: (JobRecord, JobStage) -> Unit = { _, _ -> }
