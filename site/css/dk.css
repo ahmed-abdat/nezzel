@@ -99,6 +99,7 @@ pre{margin:0;padding:14px 16px;border-radius:12px;background:var(--c-high);color
 .doc-android{padding-block:36px;color:var(--ink-3)}
 .ill{margin:0;display:grid;gap:8px}
 .ill figcaption{font-size:12.5px;color:var(--ink-3)}
+.ill figcaption bdi{white-space:nowrap}
 .is-hint{box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 40%,transparent)!important}
 .mac-desk{display:grid;place-items:center;padding:clamp(20px,4vw,40px);border-radius:var(--r-l);background:linear-gradient(160deg,#BFD9E6,#E9D8C9 60%,#D9C3D8)}
 .mac-alert{display:grid;justify-items:center;gap:8px;inline-size:min(100%,260px);padding:18px 16px 14px;border-radius:14px;background:rgb(246 246 246 / .92);box-shadow:0 20px 40px -12px rgb(0 0 0 / .35),0 0 0 .5px rgb(0 0 0 / .15);text-align:center;font:400 12px/1.45 -apple-system,"SF Pro Text",Inter,"IBM Plex Sans Arabic",sans-serif;color:#1d1d1f}
@@ -225,6 +226,14 @@ html:not([data-mode]) .hero-fig .th-nojs{display:block}
 .how-more{margin-block-start:24px}
 .dk-go{min-block-size:44px}
 .qa-list{max-inline-size:52rem}
+/* details and FAQ: title on the start side, content on the end side, as the homepage FAQ does */
+@media (min-width:960px){
+  #details,#faq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.8fr);gap:48px;align-items:start}
+  #details .sec-head,#faq .sec-head{margin-block-end:0;position:sticky;inset-block-start:110px}
+  #details .specs,#faq .qa-list{max-inline-size:none}
+}
+/* French lede: balanced lines so the last one is never a lone "ni compte." */
+:root[lang=fr] .dk-lede{text-wrap:balance}
 .qa summary{min-block-size:56px;padding-block:14px}
 @media (prefers-reduced-motion:no-preference){.js-io .rv{transition:opacity .35s var(--ease-out),transform .35s var(--ease-out)}
 .js-io .rv.pre{opacity:0;transform:translateY(12px)}

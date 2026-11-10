@@ -57,8 +57,8 @@
 .btn-chip{font-size:12px;line-height:1;padding:5px 8px;border-radius:999px;background:color-mix(in oklab,var(--on-primary) 15%,transparent);color:var(--on-primary)}
 
 /* Floating pill: one row at every width; page links yield below desktop widths. */
-.top{position:sticky;top:12px;z-index:30;margin-top:12px;display:flex;justify-content:center;transition:transform .5s var(--ease)}
-.bar{display:flex;align-items:center;position:relative;flex:1;min-width:0;max-width:1160px;min-height:62px;gap:4px;padding:7px;padding-inline-start:12px;border-radius:999px;background:transparent;border:1px solid transparent;box-shadow:none;font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;transition:max-width .6s var(--ease),min-height .5s var(--ease),background .4s,border-color .4s,box-shadow .5s}
+.top{position:sticky;top:12px;z-index:30;margin-top:12px;display:flex;justify-content:center;width:min(var(--wrap,1160px),100% - 2 * var(--gut,16px));transition:transform .5s var(--ease)}
+.bar{display:flex;align-items:center;position:relative;flex:1;min-width:0;max-width:var(--wrap,1160px);min-height:62px;gap:4px;padding:7px;padding-inline-start:12px;border-radius:999px;background:transparent;border:1px solid transparent;box-shadow:none;font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;transition:max-width .6s var(--ease),min-height .5s var(--ease),background .4s,border-color .4s,box-shadow .5s}
 html[dir=ltr] .bar{font-family:system-ui,-apple-system,"IBM Plex Sans Arabic",sans-serif}
 body.scrolled .bar{max-width:min(980px,100%);min-height:56px;background:color-mix(in oklab,var(--c-lowest) 82%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.6);backdrop-filter:blur(14px) saturate(1.6);border-color:color-mix(in oklab,var(--outline-v) 65%,transparent);box-shadow:0 8px 24px -14px rgb(var(--ink-sh)/.12)}
 :root:not([data-theme=dark]) body.ondark .bar{--on-bg:var(--on-inverse);--muted:var(--on-inverse);--c-high:color-mix(in oklab,var(--inverse) 85%,var(--on-inverse));--c-lowest:var(--inverse);--outline-v:color-mix(in oklab,var(--inverse) 70%,var(--on-inverse));color:var(--on-inverse);background:color-mix(in oklab,var(--inverse) 92%,transparent);box-shadow:none}
@@ -109,10 +109,10 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
   body.scrolled .brand{gap:7px}
   body.scrolled .lang{width:44px;min-width:44px;padding:0}
   body.scrolled .lang #lang-code{display:none}
-  body.scrolled .mini{gap:6px;padding-inline:12px;margin-inline-start:0}
+  body.scrolled .mini{gap:6px;padding-inline:12px;margin-inline-start:0;--dg:10px}
   body.scrolled [data-get-compact] [data-compact-label=long]{display:none}
   body.scrolled [data-get-compact] [data-compact-label=short]{display:inline}
-  .mini::before{content:"";position:absolute;inset-inline-start:-7px;top:50%;width:1px;height:22px;margin-top:-11px;background:var(--outline-v)}
+  .mini::before{content:"";position:absolute;inset-inline-start:calc(var(--dg,18px) / -2 - .5px);top:50%;width:1px;height:22px;margin-top:-11px;background:var(--outline-v)}
 }
 .nl{display:none}
 @media (min-width:1024px){
@@ -136,7 +136,7 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 @media (min-width:641px) and (max-width:1100px){
   [data-get-compact] [data-compact-label=long]{display:none}[data-get-compact] [data-compact-label=short]{display:inline}
   .bar{gap:0;padding-inline:6px}
-  .mini{padding-inline:12px;margin-inline-start:0}.lang{padding-inline:8px}
+  .mini{padding-inline:12px;margin-inline-start:8px;--dg:16px}.lang{padding-inline:8px}
 }
 @media (prefers-reduced-motion:reduce){.top,.bar,.bar *{animation:none!important;transition:none!important}}
 
