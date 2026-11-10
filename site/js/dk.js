@@ -1,4 +1,4 @@
-/* Nezzel site (option A). Device-aware downloads, hero story, walkthrough, reveals.
+/* Nezzel site (option A). Device-aware downloads, copy buttons, entrance reveals.
    Preview overrides: ?device=android|mac|mac-intel|windows|windows-arm|linux|iphone|ipad|unknown */
 (() => {
   const root = document.documentElement;
@@ -121,8 +121,6 @@
     root.dataset.family = family(d);
     gets.forEach((el) => render(el, d, animate));
     document.querySelectorAll('[data-switch]').forEach((b) => b.setAttribute('aria-pressed', String(base(d) === b.dataset.switch)));
-    const stage = document.querySelector('[data-stage]');
-    if (stage) stage.dataset.front = d === 'android' ? 'phone' : 'computer';
     compact();
   }
 
@@ -186,38 +184,6 @@
   const OS = { mac: 'mac', windows: 'win', linux: 'linux' }[base(device)];
   if (OS) document.querySelectorAll('a[data-dl-auto]').forEach((el) => { el.href = el.getAttribute('href').replace(/os=\w+/, 'os=' + OS) + (OS === 'linux' ? '&arch=' + linuxArch : ''); });
 
-  /* ---------------- hero story ---------------- */
-  const stage = document.querySelector('[data-stage]');
-  if (stage) {
-    const play = () => { stage.classList.remove('play'); void stage.offsetWidth; stage.classList.add('play'); };
-    if (!reduce.matches && !q.has('still')) {
-      // Start once the fonts are in, so nothing reflows under the motion.
-      (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(play));
-    }
-    stage.querySelector('[data-replay]').addEventListener('click', play);
-    // Pause the sequence when the stage is off screen.
-    new IntersectionObserver(([en]) => stage.classList.toggle('is-off', !en.isIntersecting)).observe(stage);
-  }
-
-  /* ---------------- walkthrough: one device stays, its screen changes ---------------- */
-  const walk = document.querySelector('.walk');
-  if (walk && 'IntersectionObserver' in window) {
-    const scr = walk.querySelectorAll('[data-screen]');
-    const dots = walk.querySelectorAll('[data-dot]');
-    const stepsEls = walk.querySelectorAll('[data-step]');
-    const io = new IntersectionObserver((es) => {
-      es.forEach((en) => {
-        if (!en.isIntersecting) return;
-        const k = en.target.dataset.step;
-        stepsEls.forEach((s) => (s === en.target ? s.setAttribute('aria-current', 'step') : s.removeAttribute('aria-current')));
-        if (![...scr].some((s) => s.dataset.screen === k)) return; /* steps without a real capture keep the last screen */
-        scr.forEach((s) => s.classList.toggle('is-on', s.dataset.screen === k));
-        dots.forEach((s) => s.classList.toggle('is-on', s.dataset.dot === k));
-      });
-    }, { rootMargin: '-48% 0px -48% 0px' });
-    stepsEls.forEach((s) => io.observe(s));
-  }
-
   /* ---------------- copy buttons on command blocks ---------------- */
   const COPY = { ar: ['نسخ', 'نُسخ'], en: ['Copy', 'Copied'], fr: ['Copier', 'Copié'] }[root.lang] || ['Copy', 'Copied'];
   document.querySelectorAll('pre > code').forEach((code) => {
@@ -235,10 +201,12 @@
   const tab = document.querySelector(`.os-tabs [data-os="${base(device)}"]`);
   if (tab) tab.setAttribute('aria-current', 'true');
 
-  /* ---------------- section reveals (fallback when scroll-driven animations are missing) ---------------- */
+  /* ---------------- entrance (enhancement): only blocks below the first screen, never the hero ---------------- */
   if (!reduce.matches && 'IntersectionObserver' in window) {
-    root.classList.add('io-reveal');
-    const io = new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); } }), { rootMargin: '0px 0px -10% 0px' });
-    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+    root.classList.add('js-io');
+    const items = [...document.querySelectorAll('.rv')].filter((el) => el.getBoundingClientRect().top > innerHeight * 0.9);
+    const io = new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) { en.target.classList.remove('pre'); io.unobserve(en.target); } }), { rootMargin: '0px 0px -8% 0px' });
+    items.forEach((el) => { el.classList.add('pre'); io.observe(el); });
+    addEventListener('beforeprint', () => document.querySelectorAll('.rv.pre').forEach((el) => el.classList.remove('pre')));
   }
 })();
