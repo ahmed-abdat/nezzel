@@ -29,19 +29,22 @@
   const base = (d) => d.replace(/-.*/, '');
   root.dataset.device = device;
   root.dataset.family = family(device);
+  let linuxArch = /aarch64|arm64/i.test(navigator.userAgent) ? 'arm64' : 'x64';
 
   // Refine architecture where the browser tells us (Chromium UA-CH). Never on ?device= previews.
-  if (!q.get('device') && navigator.userAgentData && navigator.userAgentData.getHighEntropyValues && (device === 'mac' || device === 'windows')) {
+  if (!q.get('device') && navigator.userAgentData && navigator.userAgentData.getHighEntropyValues && (device === 'mac' || device === 'windows' || device === 'linux')) {
     navigator.userAgentData.getHighEntropyValues(['architecture']).then((v) => {
       if (device === 'mac' && v.architecture === 'x86') setDevice('mac-intel', false);
       if (device === 'windows' && v.architecture === 'arm') setDevice('windows-arm', false);
+      if (device === 'linux' && v.architecture === 'arm') { linuxArch = 'arm64'; setDevice('linux', false); }
     }).catch(() => {});
   }
 
   /* ---------------- download block ---------------- */
   const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const a = (key, p) => {
-    const [os, arch] = KEYS[key];
+    const [os, k] = KEYS[key];
+    const arch = os === 'linux' ? linuxArch : k;
     return `/download/desktop?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
   };
   const linkTo = (d, p) => (d === 'android' ? apk(p) : a({ mac: 'mac-arm', windows: 'win-x64', linux: 'deb' }[d], p));
@@ -181,7 +184,7 @@
 
   // Footer download link: point it at the visitor's OS.
   const OS = { mac: 'mac', windows: 'win', linux: 'linux' }[base(device)];
-  if (OS) document.querySelectorAll('a[data-dl-auto]').forEach((el) => { el.href = el.getAttribute('href').replace(/os=\w+/, 'os=' + OS); });
+  if (OS) document.querySelectorAll('a[data-dl-auto]').forEach((el) => { el.href = el.getAttribute('href').replace(/os=\w+/, 'os=' + OS) + (OS === 'linux' ? '&arch=' + linuxArch : ''); });
 
   /* ---------------- header ---------------- */
   const head = document.querySelector('.site-head');
