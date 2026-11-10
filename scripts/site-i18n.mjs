@@ -3,6 +3,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { header, replaceHeader, themeHead } from './site-header.mjs';
+import { footer, replaceFooter, downloadStrings } from './site-footer.mjs';
 
 const root = new URL('../', import.meta.url);
 const base = 'https://nezzel.hululsoft.mr';
@@ -122,12 +123,21 @@ try {
   if (missing.length) throw new Error('Missing translation keys:\n' + missing.join('\n'));
   const alternates = [...locales, 'x-default'].map(l => `<link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}">`).join('\n');
   if (!source.includes(alternates)) throw new Error('site/index.html must contain all four hreflang links');
-  const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + themeHead(replaceHeader(translate(source, nodes, dictionaries[l], meta[l], l), header(dictionaries[l], l, '', paths, escape)))]));
+  const schema = nodes.find(n => n.attrs.type === 'application/ld+json');
+  const release = {
+    version: JSON.parse(source.slice(schema.openEnd, schema.close)).softwareVersion,
+    mb: Number(nodes.find(n => n.attrs['data-mb'] && n.attrs.class?.split(' ').includes('size')).attrs['data-mb']),
+  };
+  const chrome = (html, locale, page) => replaceFooter(
+    themeHead(replaceHeader(html, header(dictionaries[locale], locale, page, paths, escape)), page !== ''),
+    footer(dictionaries[locale], locale, page, paths, escape, release));
+  const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(translate(source, nodes, dictionaries[l], meta[l], l), l, '')]));
   for (const page of ['desktop/', 'desktop/install/']) {
     for (const locale of locales) {
       const path = `site${paths[locale]}${page}index.html`;
       const desktop = await readFile(new URL(path, root), 'utf8');
-      const generated = themeHead(replaceHeader(desktop, header(dictionaries[locale], locale, page, paths, escape)), true);
+      const payload = JSON.stringify(downloadStrings(dictionaries[locale], locale, paths)).replaceAll('<', '\\u003c');
+      const generated = chrome(desktop.replace(/(<script type="application\/json" id="nz-i18n">)[\s\S]*?(<\/script>)/, (_, open, close) => open + payload + close), locale, page);
       elements(generated); // Desktop bodies stay hand-authored; validate before writing chrome.
       outputs.set(path, generated);
     }
@@ -150,7 +160,7 @@ try {
     else { await mkdir(new URL('./', url), { recursive: true }); await writeFile(url, expected); console.log(`Wrote ${path}`); }
   }
   if (stale.length) throw new Error('Stale files:\n' + stale.join('\n') + '\nRun node scripts/site-i18n.mjs');
-  console.log(check ? `site-i18n: OK (ar/en/fr; ${keys.size} keys; 9 headers, generated pages and sitemap current)` : 'site-i18n: generated ar/en/fr and sitemap');
+  console.log(check ? `site-i18n: OK (ar/en/fr; ${keys.size} keys; 9 headers/footers, generated pages and sitemap current)` : 'site-i18n: generated ar/en/fr and sitemap');
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

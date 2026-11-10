@@ -41,7 +41,7 @@
   }
 
   /* ---------------- download block ---------------- */
-  const ico = (id) => `<svg class="dk-i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const a = (key, p) => {
     const [os, k] = KEYS[key];
     const arch = os === 'linux' ? linuxArch : k;
@@ -51,23 +51,28 @@
 
   function block(d, ctx) {
     const place = ctx || 'get';
+    const primary = ctx === 'footer' ? 'btn btn-close' : 'btn';
+    const meta = value => ctx === 'footer' ? '' : `<p class="get-meta">${value}</p>`;
+    const content = (label, chip = '', icon = 'download') => ctx === 'footer'
+      ? `<span>${t.closing_label}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg>`
+      : `${ico(icon)}<span class="btn-label">${label}</span>${chip}`;
     switch (d) {
       case 'android':
-        return `<a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${apk(place)}">${ico('download')}<span>${t.android}</span></a>
-          <p class="get-meta">${t.android_meta}</p>
+        return `<a class="${primary} dl-link" data-place="${place}" href="${apk(place)}">${content(t.android)}</a>
+          ${meta(t.android_meta)}
           ${ctx === 'hero' ? `<p class="get-links"><a href="${t.page_desktop}">${t.also_desk}</a></p>` : ''}`;
       case 'mac':
       case 'mac-intel': {
         const intel = d === 'mac-intel';
-        return `<a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${ico('download')}<span>${intel ? t.mac_intel : t.mac}</span>${intel ? '' : '<span class="dk-btn-chip" dir="ltr">Apple Silicon</span>'}</a>
-          <p class="get-meta">${t.desk_meta} · ${t.mac_note}</p>
+        return `<a class="${primary} dl-link" data-place="${place}" href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${content(intel ? t.mac_intel : t.mac, intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>')}</a>
+          ${meta(t.desk_meta + ' · ' + t.mac_note)}
           <p class="get-links"><a href="${a(intel ? 'mac-arm' : 'mac-intel', place)}">${intel ? t.other_arch_mac_arm : t.other_arch_mac}</a><a href="${t.install}#mac">${t.first_open}</a></p>`;
       }
       case 'windows':
       case 'windows-arm': {
         const arm = d === 'windows-arm';
-        return `<a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${ico('download')}<span>${arm ? t.windows_arm : t.windows}</span></a>
-          <p class="get-meta">${t.desk_meta}</p>
+        return `<a class="${primary} dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${content(arm ? t.windows_arm : t.windows)}</a>
+          ${meta(t.desk_meta)}
           <p class="get-links"><a href="${a(arm ? 'win-x64' : 'win-arm', place)}">${arm ? t.other_arch_win_x64 : t.other_arch_win}</a><a href="${t.install}#windows">${t.first_open}</a></p>`;
       }
       case 'linux':
@@ -75,18 +80,28 @@
             ${[['deb', '.deb', t.deb], ['rpm', '.rpm', t.rpm], ['appimage', 'AppImage', t.appimage]].map(([k, n, s], i) =>
               `<button type="button" role="radio" aria-checked="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-pkg="${k}" data-name="${n}"><b dir="ltr">${n}</b><small>${s}</small></button>`).join('')}
           </div>
-          <a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${a('deb', place)}" data-pkg-link>${ico('download')}<span>${t.get_pkg} <bdi dir="ltr">.deb</bdi></span></a>
-          <p class="get-meta">${t.desk_meta}</p>
+          <a class="${primary} dl-link" data-place="${place}" href="${a('deb', place)}" data-pkg-link>${content(t.get_pkg + ' <bdi dir="ltr">.deb</bdi>')}</a>
+          ${meta(t.desk_meta)}
           <p class="get-links"><a href="${t.install}#linux">${t.first_open}</a></p>`;
       case 'iphone':
       case 'ipad':
         return `<p class="get-note"><strong>${t.ios_title}</strong> ${t.ios_body}</p>
-          <button type="button" class="dk-btn dk-btn-primary dk-btn-lg" data-share>${ico('share')}<span>${t.send}</span></button>
+          <button type="button" class="${primary}" data-share>${content(t.send, '', 'share')}</button>
           <p class="get-status" role="status"></p>`;
       default:
         return `<p class="get-note"><strong>${t.pick}</strong></p>
-          <div class="get-row">${['android', 'mac', 'windows', 'linux'].map((x) => `<a class="dk-btn dk-btn-outline dl-link" data-place="${place}" href="${place === 'hero' && x === 'android' ? t.page_android : linkTo(x, place)}">${t.plat[x]}</a>`).join('')}</div>`;
+          <div class="get-row">${['android', 'mac', 'windows', 'linux'].map((x) => `<a class="btn btn-outline dl-link" data-place="${place}" href="${place === 'hero' && x === 'android' ? t.page_android : linkTo(x, place)}">${t.plat[x]}</a>`).join('')}</div>`;
     }
+  }
+
+  function updateClosingMeta(el, d) {
+    const meta = el.closest('.end')?.querySelector('[data-closing-meta]');
+    if (!meta) return;
+    const architecture = { mac: 'Apple Silicon', 'mac-intel': 'Intel', windows: 'x64', 'windows-arm': 'ARM', linux: linuxArch }[d];
+    const parts = [t.plat[base(d)], architecture].filter(Boolean).map(part => `<bdi>${part}</bdi>`);
+    if (d === 'linux') parts.push('<bdi data-closing-package>.deb</bdi>');
+    parts.push(t.desk_meta);
+    meta.innerHTML = parts.join(' · ');
   }
 
   function targetFor(el, d) {
@@ -98,10 +113,12 @@
 
   function render(el, d, animate) {
     const next = targetFor(el, d);
-    if (el.dataset.for === next) return;
+    const signature = next === 'linux' ? next + ':' + linuxArch : next;
+    if (el.dataset.for === signature) return;
     const swap = () => {
-      el.dataset.for = next;
-      el.innerHTML = block(next, el.closest('.get-hero') ? 'hero' : '');
+      el.dataset.for = signature;
+      el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '');
+      if (el.hasAttribute('data-closing')) updateClosingMeta(el, next);
     };
     if (!animate || reduce.matches || !el.animate) { swap(); return; }
     // Device switch: old content leaves fast, new content arrives softly (one object, blur bridges the swap).
@@ -120,7 +137,6 @@
     root.dataset.device = d;
     root.dataset.family = family(d);
     gets.forEach((el) => render(el, d, animate));
-    document.querySelectorAll('[data-switch]').forEach((b) => b.setAttribute('aria-pressed', String(base(d) === b.dataset.switch)));
     compact();
   }
 
@@ -143,12 +159,6 @@
   setDevice(device, false);
 
   document.addEventListener('click', (ev) => {
-    const sw = ev.target.closest('[data-switch]');
-    if (sw) {
-      const k = sw.dataset.switch;
-      setDevice(k === 'mac' && device === 'mac-intel' ? 'mac-intel' : k === 'windows' && device === 'windows-arm' ? 'windows-arm' : k, true);
-      return;
-    }
     const pkg = ev.target.closest('[data-pkg]');
     if (pkg) { choosePkg(pkg); return; }
     const share = ev.target.closest('[data-share]');
@@ -167,7 +177,8 @@
     g.querySelectorAll('[role=radio]').forEach((r) => { const on = r === b; r.setAttribute('aria-checked', String(on)); r.tabIndex = on ? 0 : -1; });
     const link = g.parentElement.querySelector('[data-pkg-link]');
         link.href = a(b.dataset.pkg, link.dataset.place || 'get');
-    link.querySelector('bdi').textContent = b.dataset.name;
+    const label = link.querySelector('bdi') || g.closest('.end')?.querySelector('[data-closing-package]');
+    if (label) label.textContent = b.dataset.name;
   }
   // Radio group keys: arrows move and select (inline direction aware).
   document.addEventListener('keydown', (ev) => {
@@ -188,7 +199,7 @@
   const COPY = { ar: ['نسخ', 'نُسخ'], en: ['Copy', 'Copied'], fr: ['Copier', 'Copié'] }[root.lang] || ['Copy', 'Copied'];
   document.querySelectorAll('pre > code').forEach((code) => {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'copy'; b.textContent = COPY[0];
+    b.type = 'button'; b.className = 'btn btn-sm copy-btn'; b.textContent = COPY[0];
     b.addEventListener('click', () => {
       const text = code.innerText.replace(/^\$ /gm, '').trim();
       const ok = () => { b.textContent = COPY[1]; b.classList.add('is-done'); setTimeout(() => { b.textContent = COPY[0]; b.classList.remove('is-done'); }, 1600); };

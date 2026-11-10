@@ -77,7 +77,7 @@ body{margin:0;background:var(--bg);color:var(--on-bg);font:400 17px/1.75 "IBM Pl
 html[dir=ltr] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"IBM Plex Sans Arabic",sans-serif;line-height:1.6}
 ::selection{background:var(--primary-c);color:var(--on-primary-c)}
 a{color:var(--primary);text-underline-offset:.22em;text-decoration-thickness:1.5px}
-.end :focus-visible,.t-dk :focus-visible{outline-color:#82D5C5}
+.t-dk :focus-visible{outline-color:#82D5C5}
 button{font:inherit;color:inherit}
 img{max-width:100%;display:block}
 [dir=rtl] .flip{transform:scaleX(-1)}
@@ -100,14 +100,14 @@ main{overflow-x:clip}
 @media (min-width:960px){
   .hero{grid-template-columns:minmax(0,1fr) minmax(0,1.04fr);align-items:center;gap:clamp(24px,4vw,64px);min-height:min(calc(100svh - 72px),860px);padding-block:8px 40px;text-align:start}
   .hero .lede{margin-inline:0}
-  .hero .cta{align-items:flex-start}
+  .hero .hero-actions{align-items:flex-start}
 }
 @media (max-width:959px){.ghost{display:none}}
 .ghost{position:absolute;z-index:-1;inset-inline:0;bottom:-.52em;font:800 clamp(120px,26vw,380px)/1 system-ui,-apple-system,Roboto,sans-serif;letter-spacing:-.06em;color:color-mix(in oklab,var(--on-bg) 5%,transparent);direction:ltr;text-align:center;white-space:nowrap;pointer-events:none;user-select:none}
 h1{font-size:clamp(46px,12.6vw,76px);line-height:1.38;font-weight:800;margin:0 auto;font-stretch:92%;text-wrap:balance}
 html[dir=ltr] h1{font-family:ui-serif,"Iowan Old Style",Charter,Georgia,"Noto Serif",serif;font-weight:500;letter-spacing:-.03em;line-height:1.04}
 html[lang=fr] h1{font-size:clamp(40px,10.6vw,68px)}
-html[dir=rtl] :is(h1,h2,h3,.end .go){font-family:Beiruti,"IBM Plex Sans Arabic",system-ui,sans-serif}
+html[dir=rtl] :is(h1,h2,h3){font-family:Beiruti,"IBM Plex Sans Arabic",system-ui,sans-serif}
 html[dir=rtl] h1{font-size:clamp(50px,13.6vw,84px);line-height:1.15;font-weight:900;font-stretch:normal}
 @media (min-width:960px){h1{font-size:clamp(60px,5.8vw,88px);line-height:1.24}html[dir=ltr] h1{line-height:1.04}html[lang=fr] h1{font-size:clamp(50px,4.8vw,72px)}html[dir=rtl] h1{font-size:clamp(68px,6.4vw,100px);line-height:1.1}h1 .ln>span{white-space:nowrap}}
 h1 .ln{display:block;clip-path:inset(-.4em -.6em -.25em)}
@@ -119,10 +119,10 @@ h1 bdi{color:var(--primary)}
 }
 @keyframes rise{to{transform:none}}
 .lede{margin:20px auto 0;max-width:34ch;font-size:clamp(17px,2vw,21px);line-height:1.6;color:var(--muted);text-wrap:balance}
-.cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:32px}
+.hero-actions{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:32px}
 .hm{margin:0;font-size:15px;line-height:1.7;color:var(--muted);text-wrap:balance}
 .hm a{font-weight:600;white-space:nowrap}
-.hm a,details p a,.fm span a{padding:16px 6px;margin:-16px -6px}
+.hm a,details p a{padding:16px 6px;margin:-16px -6px}
 .fan{position:relative;container-type:inline-size;width:min(100%,560px);aspect-ratio:10/8.9;margin-inline:auto}
 @media (min-width:960px){.fan{width:min(100%,520px)}}
 .fph{--w:34;position:absolute;top:14%;width:calc(var(--w) * 1%);padding:calc(var(--w) * .024cqw);border-radius:calc(var(--w) * .135cqw);background:#0c100f;box-shadow:0 28px 44px -26px rgb(0 32 27/.5),0 0 0 1px rgb(255 255 255/.05)}
@@ -498,47 +498,6 @@ details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:16.5px}
 .wa{display:inline-flex;align-items:center;gap:10px;min-height:48px;margin-top:8px;font-weight:700;justify-self:start}
 .wa .i{fill:#25D366;stroke:none}
 
-/* the end: one dark closing section, a huge call, links, the wordmark over a teal glow */
-.end{position:relative;z-index:1;margin-top:clamp(72px,9vw,130px);overflow:hidden;padding:clamp(64px,10vw,150px) 0 clamp(24px,4vw,48px);background:radial-gradient(120% 55% at 50% 112%,#25C7AE 0%,#0A7A6A 28%,#033A33 52%,transparent 78%),#020605;color:#E6EEEB;color-scheme:dark}
-.end a{color:inherit}
-.end h2{font-size:clamp(18px,2vw,22px);font-weight:600;line-height:1.5;opacity:.7;max-width:none}
-.end .go{display:flex;flex-wrap:wrap;align-items:center;min-height:48px;gap:0 .25em;margin-top:10px;text-decoration:none;font-weight:800;font-size:clamp(42px,11vw,168px);line-height:1.15;transition:color .3s}
-html[dir=ltr] .end .go{letter-spacing:-.05em;line-height:1}
-.end .go .i{width:.7em;height:.7em;stroke-width:1.5;transform:scaleX(var(--x));transition:transform .5s var(--spring)}
-@media (hover:hover) and (pointer:fine){.end .go:hover{color:#9EF2E1}.end .go:hover .i{transform:translateX(calc(var(--x) * 16px)) scaleX(var(--x))}}
-.end .go:active{opacity:.8}
-.gm{margin:8px 0 0;font-size:14px;opacity:.6}
-.sep{height:1px;margin:clamp(44px,6vw,80px) 0 28px;border:0;background:rgb(255 255 255/.18);transform-origin:left;transition:transform 1.2s var(--ease) .3s}
-[dir=rtl] .sep{transform-origin:right}
-.frow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 32px}
-.fl{display:flex;flex-wrap:wrap;gap:0 22px}
-.fl a{display:inline-flex;align-items:center;gap:6px;min-height:48px;text-decoration:none;font-size:15px;font-weight:600;opacity:.85;transition:opacity .2s}
-.fl a:hover{opacity:1}
-.fl .ne{width:14px;height:14px;transform:scaleX(var(--x));transition:transform .3s var(--ease)}
-.fl a:hover .ne{transform:translate(calc(var(--x) * 2px),-2px) scaleX(var(--x))}
-.soc{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.soc a{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;border:1px solid rgba(230,238,235,.16);opacity:.8;transition:opacity .2s,background-color .2s,border-color .2s}
-.soc svg{width:20px;height:20px;fill:currentColor}
-.soc .i{fill:none}
-.soc a:hover{opacity:1;background:rgba(230,238,235,.08);border-color:rgba(230,238,235,.32)}
-.fm{display:flex;flex-wrap:wrap;align-items:center;gap:0 22px;font-size:15px;opacity:.7}
-.langs{display:flex;gap:18px}
-.langs a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;min-width:48px;text-decoration:none}
-.langs a:hover{text-decoration:underline}
-.cr{margin:14px 0 0;font-size:13px;opacity:.5}
-.cr bdi:first-child{white-space:normal}
-.mark{display:flex;align-items:flex-end;gap:3%;margin-top:clamp(28px,4vw,56px);direction:ltr;transition:transform 1.2s var(--ease),opacity 1.2s var(--ease)}
-.mark img{width:17%;flex:none;border-radius:22%}
-.mark svg{flex:1;min-width:0;display:block}
-.mark text{font:800 150px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:#F2F7F5}
-.fe{transition:opacity .7s var(--ease),transform .7s var(--ease),filter .7s var(--ease);transition-delay:calc(var(--f,0) * .15s)}
-@media (prefers-reduced-motion:no-preference){
-  .js .end:not(.in) .fe{opacity:0;transform:translateY(16px)}
-  @media (min-width:600px){.js .end:not(.in) .fe{filter:blur(8px)}}
-  .js .end:not(.in) .sep{transform:scaleX(0)}
-  .js .end:not(.in) .mark{opacity:0;transform:translateY(40px)}
-}
-
 /* downloads: the real Downloads tab (search field, filter chips, today's grid); the chips step through
    videos, audio and statuses as the card climbs, and the files that don't match fade back */
 .lbx{width:100%;max-width:420px;display:grid;gap:clamp(8px,2.6cqw,12px);padding:clamp(14px,4cqw,20px);border-radius:clamp(20px,6cqw,28px);background:var(--app);color:var(--on-bg);box-shadow:0 30px 70px -30px rgb(0 0 0/.6);font-size:clamp(12px,3.4cqw,14px)}
@@ -568,7 +527,6 @@ html.ios .ioc{display:grid;justify-items:center;gap:12px}
 html.ios .iob{display:inline-flex}
 .hero .ioc .iob{border:0;font:inherit;font-weight:700;cursor:pointer}
 .iot{margin:0;font-weight:700;font-size:18px}
-html.ios .end .iob{display:flex;margin-top:10px;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:800;font-size:clamp(22px,6vw,96px);flex-wrap:nowrap;white-space:nowrap;text-align:start;cursor:pointer}
 html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16px;border-radius:16px;background:var(--tertiary-c);color:var(--on-tertiary-c);font-size:15px;font-weight:600;text-wrap:balance}
 .iah{font-weight:500;white-space:nowrap}
 .iah b{font-size:1.3em;font-weight:900;line-height:1}
@@ -595,7 +553,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
-  [data-r],.w,.fe,.mark{opacity:1!important;transform:none!important;filter:none!important}
+  [data-r],.w{opacity:1!important;transform:none!important;filter:none!important}
 }
 </style>
 </head>
@@ -644,7 +602,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
         <a href="/fr/" hreflang="fr" lang="fr" data-locale="fr" style="--row:2"><span dir="ltr">Français</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></a>
       </div>
     </details>
-    <a class="mini dl-link" data-place="nav" href="/download?src=nav-ar" aria-label="تنزيل"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span>تنزيل</span></a>
+    <a class="btn btn-sm mini dl-link" data-place="nav" href="/download?src=nav-ar" aria-label="تنزيل"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span>تنزيل</span></a>
   </nav>
 </div>
 <!-- chrome:/header -->
@@ -655,7 +613,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   <div class="copy">
     <h1 id="h1" data-i="h1"><span class="ln" style="--k:0"><span>انسخ الرابط</span></span> <span class="ln" style="--k:1"><span>وخلي الباقي على</span></span> <span class="ln" style="--k:2"><span><bdi>Nezzel</bdi></span></span></h1>
     <p class="lede" data-i="lede">احفظ على هاتفك الفيديوهات والأغاني بصيغة MP3، وحتى صور منشورات إنستغرام وX وتيك توك</p>
-    <div class="cta">
+    <div class="hero-actions">
       <p class="iab" data-i="iab">افتح الصفحة في Chrome<br><span class="iah"><b>⋮</b> ← فتح في المتصفح</span></p>
       <div class="ioc"><p class="iot" data-i="ios-t">Nezzel متوفر على أندرويد فقط</p><button class="btn iob" type="button"><svg class="i"><use href="#share"/></svg><span data-i="ios-share">شاركه مع أصحابك</span></button></div>
       <a class="btn dl-link" data-place="hero" href="/download?src=hero-ar">
@@ -839,35 +797,40 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
 </section>
 </main>
 
-<footer class="end" id="final" data-reach="end" aria-labelledby="fin-h">
+<!-- chrome:footer -->
+<footer class="end" id="final" data-reach="end" data-entrance aria-labelledby="fin-h">
+  <svg class="chrome-icons" aria-hidden="true"><symbol id="footer-arr" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol><symbol id="footer-share" viewBox="0 0 24 24"><path d="M15 5l4 4-4 4M19 9H9a5 5 0 0 0 0 10h1"/></symbol><symbol id="footer-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7.5 7.5 6 7.5-6"/></symbol><symbol id="footer-ne" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol><symbol id="footer-lg-facebook" viewBox="0 0 24 24"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141 .195 v3.325a8.623 8.623 0 0 0 -.653 -.036 26.805 26.805 0 0 0 -.733 -.009 c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0 -.679 .622 c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z "/></symbol><symbol id="footer-lg-tiktok" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z "/></symbol><symbol id="footer-lg-linkedin" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></symbol><symbol id="footer-lg-whatsapp" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1 -5.031 -1.378 l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1 -1.51 -5.26 c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994 c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0 C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448 h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0 -3.48 -8.413 Z "/></symbol></svg>
   <div class="wrap">
-    <h2 id="fin-h" class="fe" data-i="fin-h">مجاني وبلا إعلانات</h2>
-    <a class="go dl-link fe" style="--f:1" data-place="footer" href="/download?src=footer-ar"><span data-i="get-big">حمّل Nezzel</span><svg class="i"><use href="#arr"/></svg></a>
-    <button class="go iob fe" style="--f:1" type="button"><span data-i="ios-share">شاركه مع أصحابك</span><svg class="i"><use href="#share"/></svg></button>
-    <p class="gm fe" style="--f:2"><span data-i="meta">لأندرويد 10 أو أحدث · الإصدار</span> <span class="ltr num vtxt">0.5.8</span> · <span class="ltr num size" data-mb="64.5">64.5 MB</span></p>
+    <h2 id="fin-h" class="fe">مجاني وبلا إعلانات</h2>
+    <a class="btn btn-close dl-link fe" style="--f:1" data-place="footer" href="/download?src=footer-ar"><span>حمّل Nezzel</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg></a>
+    <button class="btn btn-close iob fe" style="--f:1" type="button"><span>شاركه مع أصحابك</span><svg class="i" aria-hidden="true"><use href="#footer-share"/></svg></button>
+    <p class="gm fe" style="--f:2"><span>لأندرويد 10 أو أحدث · الإصدار</span> <span class="ltr num vtxt">0.5.8</span> · <span class="ltr num size" data-mb="64.5">64.5 MB</span></p>
     <hr class="sep">
     <div class="frow fe" style="--f:3">
       <nav class="fl" aria-label="Nezzel">
-        <a data-i-href="desktop-href" data-i="app-desktop" href="/desktop/">تطبيق الحاسوب</a>
-        <a href="https://github.com/ahmed-abdat/nezzel"><span data-i="gh">GitHub</span><svg class="i ne"><use href="#ne"/></svg></a>
-        <a href="https://github.com/ahmed-abdat/nezzel/releases"><span data-i="rel">الإصدارات</span><svg class="i ne"><use href="#ne"/></svg></a>
-        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md"><span data-i="priv">الخصوصية</span><svg class="i ne"><use href="#ne"/></svg></a>
-        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/THIRD_PARTY_NOTICES.md"><span data-i="lic">التراخيص</span><svg class="i ne"><use href="#ne"/></svg></a>
-        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md"><span data-i="sec">الأمان</span><svg class="i ne"><use href="#ne"/></svg></a>
+        <a href="/" aria-current="page">تطبيق أندرويد</a>
+        <a href="/desktop/">تطبيق الحاسوب</a>
+        <a href="/desktop/install/">التثبيت</a>
+        <a href="https://github.com/ahmed-abdat/nezzel">الشيفرة المصدرية<svg class="i ne" aria-hidden="true"><use href="#footer-ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/releases">الإصدارات<svg class="i ne" aria-hidden="true"><use href="#footer-ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md">الخصوصية<svg class="i ne" aria-hidden="true"><use href="#footer-ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/THIRD_PARTY_NOTICES.md">التراخيص<svg class="i ne" aria-hidden="true"><use href="#footer-ne"/></svg></a>
+        <a href="https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md">الأمان<svg class="i ne" aria-hidden="true"><use href="#footer-ne"/></svg></a>
       </nav>
-      <div class="fm"><span class="langs"><a href="/" hreflang="ar" lang="ar" dir="rtl">العربية</a><a href="/fr/" hreflang="fr" lang="fr" dir="ltr">Français</a><a href="/en/" hreflang="en" lang="en" dir="ltr">English</a></span><span data-i="foot">من تطوير <a href="https://hululsoft.mr">Hululsoft</a></span></div>
+      <div class="fm"><span class="langs"><a href="/" hreflang="ar" lang="ar" dir="rtl" aria-current="page">العربية</a><a href="/en/" hreflang="en" lang="en" dir="ltr">English</a><a href="/fr/" hreflang="fr" lang="fr" dir="ltr">Français</a></span><span>من تطوير <a href="https://hululsoft.mr">Hululsoft</a></span></div>
     </div>
     <nav class="soc fe" style="--f:3" aria-label="Hululsoft">
-      <a href="https://web.facebook.com/hululsoft" target="_blank" rel="noopener" aria-label="Hululsoft · Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-facebook"/></svg></a>
-      <a href="https://www.tiktok.com/@hululsofte" target="_blank" rel="noopener" aria-label="Hululsoft · TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-tiktok"/></svg></a>
-      <a href="https://linkedin.com/company/hululsoft" target="_blank" rel="noopener" aria-label="Hululsoft · LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-linkedin"/></svg></a>
-      <a href="https://wa.me/22237928327" target="_blank" rel="noopener" aria-label="Hululsoft · WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-whatsapp"/></svg></a>
-      <a href="mailto:contact@hululsoft.mr" aria-label="contact@hululsoft.mr"><svg class="i" aria-hidden="true"><use href="#mail"/></svg></a>
+      <a href="https://web.facebook.com/hululsoft" target="_blank" rel="noopener" aria-label="Hululsoft · Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#footer-lg-facebook"/></svg></a>
+      <a href="https://www.tiktok.com/@hululsofte" target="_blank" rel="noopener" aria-label="Hululsoft · TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#footer-lg-tiktok"/></svg></a>
+      <a href="https://linkedin.com/company/hululsoft" target="_blank" rel="noopener" aria-label="Hululsoft · LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#footer-lg-linkedin"/></svg></a>
+      <a href="https://wa.me/22237928327" target="_blank" rel="noopener" aria-label="Hululsoft · WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#footer-lg-whatsapp"/></svg></a>
+      <a href="mailto:contact@hululsoft.mr" aria-label="contact@hululsoft.mr"><svg class="i" aria-hidden="true"><use href="#footer-mail"/></svg></a>
     </nav>
-    <p class="cr fe" style="--f:3" data-i="credit">صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation، <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a></bdi></p>
+    <p class="cr fe" style="--f:3">صور الفيديو: <bdi>Big Buck Bunny, Sintel, Tears of Steel</bdi> <bdi>© Blender Foundation، <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a></bdi></p>
     <div class="mark" aria-hidden="true"><img src="/img/icon.svg" alt=""><svg viewBox="0 0 600 150"><text x="0" y="128" textLength="600" lengthAdjust="spacingAndGlyphs">Nezzel</text></svg></div>
   </div>
 </footer>
+<!-- chrome:/footer -->
 <div class="sbar" id="sbar" inert><a class="sbg dl-link" data-place="sticky" href="/download?src=sticky-ar"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="cta-s">تنزيل التطبيق</span></a><a class="sbh" href="#install" data-i="howto">كيف أثبّته؟</a></div>
 <p class="tst" id="tst" role="status" aria-live="polite"></p>
 
@@ -932,6 +895,42 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     }
   } catch (e) {}
   const EN = {
+    "footer-desktop-license":"Licence",
+    "desktop-end-button":"Download Nezzel",
+    "download-android":"Get it for Android",
+    "download-mac":"Download for Mac",
+    "download-mac_intel":"Download for Intel Mac",
+    "download-windows":"Download for Windows",
+    "download-windows_arm":"Download for Windows on ARM",
+    "download-linux":"Download for Linux",
+    "download-android_meta":"Free · Android 10 or later · Version 0.5.8 · 64.5 MB",
+    "download-mac_note":"For Mac computers, not iPad",
+    "download-other_arch_mac":"Intel Mac?",
+    "download-other_arch_mac_arm":"Mac with Apple chip?",
+    "download-other_arch_win":"Windows on ARM?",
+    "download-other_arch_win_x64":"Regular Windows (x64)?",
+    "download-first_open":"How do I open it the first time?",
+    "download-also_desk":"Also on Mac, Windows and Linux",
+    "download-pkg":"Package type",
+    "download-deb":"Ubuntu, Debian, Mint",
+    "download-rpm":"Fedora, openSUSE",
+    "download-appimage":"Any distribution",
+    "download-get_pkg":"Download",
+    "download-ios_title":"Nezzel is for Android and computers",
+    "download-ios_body":"It doesn’t run on iPhone or iPad. Send this page to your computer and download it there.",
+    "download-send":"Send the link to my computer",
+    "download-send_short":"Send link",
+    "download-copied":"Link copied. Open it on your computer",
+    "download-pick":"Choose your device",
+    "download-platform-android":"Android",
+    "download-platform-mac":"Mac",
+    "download-platform-windows":"Windows",
+    "download-platform-linux":"Linux",
+    "desktop-end-h":"Download Nezzel",
+    "desktop-end-p":"Free for Mac, Windows and Linux. No ads, no account.",
+    "desktop-end-meta":"Free beta · 0.1.0-beta.1",
+    "footer-source":"Source code",
+    "footer-report":"Report a problem",
     "app-desktop":"Desktop app", "app-android":"Android app",
     "also-desktop":"Also for Mac, Windows and Linux", "desktop-href":"/en/desktop/",
     "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
@@ -1009,6 +1008,42 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "priv": "Privacy"
   };
   const AR = {
+    "footer-desktop-license":"الرخصة",
+    "desktop-end-button":"نزّل Nezzel",
+    "download-android":"تنزيل لأندرويد",
+    "download-mac":"تنزيل لماك",
+    "download-mac_intel":"تنزيل لماك بمعالج Intel",
+    "download-windows":"تنزيل لويندوز",
+    "download-windows_arm":"تنزيل لويندوز ARM",
+    "download-linux":"تنزيل للينكس",
+    "download-android_meta":"مجاني · أندرويد 10 أو أحدث · الإصدار <bdi>0.5.8</bdi> · <bdi>64.5 MB</bdi>",
+    "download-mac_note":"لأجهزة ماك، وليس للآيباد",
+    "download-other_arch_mac":"ماك بمعالج Intel؟",
+    "download-other_arch_mac_arm":"ماك بمعالج Apple؟",
+    "download-other_arch_win":"ويندوز على ARM؟",
+    "download-other_arch_win_x64":"ويندوز عادي (x64)؟",
+    "download-first_open":"كيف أفتحه أول مرة؟",
+    "download-also_desk":"متوفر أيضًا على ماك وويندوز ولينكس",
+    "download-pkg":"نوع الحزمة",
+    "download-deb":"<bdi>Ubuntu</bdi> و <bdi>Debian</bdi> و <bdi>Mint</bdi>",
+    "download-rpm":"<bdi>Fedora</bdi> و <bdi>openSUSE</bdi>",
+    "download-appimage":"أي توزيعة",
+    "download-get_pkg":"تنزيل حزمة",
+    "download-ios_title":"Nezzel لأندرويد والحواسيب",
+    "download-ios_body":"لا يعمل على الآيفون والآيباد. أرسل هذه الصفحة إلى حاسوبك ونزّله هناك.",
+    "download-send":"أرسل الرابط إلى حاسوبي",
+    "download-send_short":"أرسل الرابط",
+    "download-copied":"نُسخ الرابط. افتحه على حاسوبك",
+    "download-pick":"اختر جهازك",
+    "download-platform-android":"أندرويد",
+    "download-platform-mac":"ماك",
+    "download-platform-windows":"ويندوز",
+    "download-platform-linux":"لينكس",
+    "desktop-end-h":"نزّل Nezzel",
+    "desktop-end-p":"مجاني لماك وويندوز ولينكس، بلا إعلانات ولا حساب.",
+    "desktop-end-meta":"نسخة تجريبية مجانية · <bdi>0.1.0-beta.1</bdi>",
+    "footer-source":"الشيفرة المصدرية",
+    "footer-report":"أبلغ عن مشكلة",
     "app-desktop":"تطبيق الحاسوب", "app-android":"تطبيق أندرويد",
     "also-desktop":"متوفر أيضًا لماك وويندوز ولينكس", "desktop-href":"/desktop/",
     "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
@@ -1144,6 +1179,42 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "priv": "الخصوصية"
   };
   const FR = {
+    "footer-desktop-license":"Licence",
+    "desktop-end-button":"Télécharger Nezzel",
+    "download-android":"Télécharger pour Android",
+    "download-mac":"Télécharger pour Mac",
+    "download-mac_intel":"Télécharger pour Mac Intel",
+    "download-windows":"Télécharger pour Windows",
+    "download-windows_arm":"Télécharger pour Windows ARM",
+    "download-linux":"Télécharger pour Linux",
+    "download-android_meta":"Gratuit · Android 10 ou ultérieur · Version 0.5.8 · 64,5 Mo",
+    "download-mac_note":"Pour les ordinateurs Mac, pas pour iPad",
+    "download-other_arch_mac":"Mac avec processeur Intel ?",
+    "download-other_arch_mac_arm":"Mac avec puce Apple ?",
+    "download-other_arch_win":"Windows sur ARM ?",
+    "download-other_arch_win_x64":"Windows classique (x64) ?",
+    "download-first_open":"Comment l’ouvrir la première fois ?",
+    "download-also_desk":"Aussi sur Mac, Windows et Linux",
+    "download-pkg":"Type de paquet",
+    "download-deb":"Ubuntu, Debian, Mint",
+    "download-rpm":"Fedora, openSUSE",
+    "download-appimage":"Toutes distributions",
+    "download-get_pkg":"Télécharger",
+    "download-ios_title":"Nezzel est fait pour Android et les ordinateurs",
+    "download-ios_body":"Il ne fonctionne ni sur iPhone ni sur iPad. Envoyez cette page à votre ordinateur pour l’y télécharger.",
+    "download-send":"Envoyer le lien à mon ordinateur",
+    "download-send_short":"Envoyer le lien",
+    "download-copied":"Lien copié. Ouvrez-le sur votre ordinateur",
+    "download-pick":"Choisissez votre appareil",
+    "download-platform-android":"Android",
+    "download-platform-mac":"Mac",
+    "download-platform-windows":"Windows",
+    "download-platform-linux":"Linux",
+    "desktop-end-h":"Téléchargez Nezzel",
+    "desktop-end-p":"Gratuit pour Mac, Windows et Linux, sans pub ni compte.",
+    "desktop-end-meta":"Bêta gratuite · 0.1.0-beta.1",
+    "footer-source":"Code source",
+    "footer-report":"Signaler un problème",
     "app-desktop":"Application de bureau", "app-android":"Application Android",
     "also-desktop":"Aussi pour Mac, Windows et Linux", "desktop-href":"/fr/desktop/",
     "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
@@ -1296,7 +1367,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   new IntersectionObserver(([e]) => {
     const past = !e.isIntersecting && e.boundingClientRect.top < 0;
     barPast = past; syncBar();
-  }).observe($(".hero .cta"));
+  }).observe($(".hero .hero-actions"));
   // phones: the bottom bar shows past the hero button and steps aside for the footer's own button
   const sbar = $("#sbar");
   let barPast = false, barEnd = false;

@@ -92,7 +92,7 @@
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
   // Preserve the homepage CTA boundary; desktop landings use their hero download block.
   // Install pages have no hero download, so keep their compact download available.
-  const heroDownload = document.querySelector('.hero .cta, .get-hero');
+  const heroDownload = document.querySelector('.hero .hero-actions, .get-hero');
   if (heroDownload) {
     new IntersectionObserver(([entry]) => {
       document.body.classList.toggle('past', !entry.isIntersecting && entry.boundingClientRect.top < 0);
