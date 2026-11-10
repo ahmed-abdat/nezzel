@@ -41,7 +41,7 @@
   }
 
   /* ---------------- download block ---------------- */
-  const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  const ico = (id) => `<svg class="dk-i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   const a = (key, p) => {
     const [os, k] = KEYS[key];
     const arch = os === 'linux' ? linuxArch : k;
@@ -53,20 +53,20 @@
     const place = ctx || 'get';
     switch (d) {
       case 'android':
-        return `<a class="btn btn-primary btn-lg dl-link" data-place="${place}" href="${apk(place)}">${ico('download')}<span>${t.android}</span></a>
+        return `<a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${apk(place)}">${ico('download')}<span>${t.android}</span></a>
           <p class="get-meta">${t.android_meta}</p>
           ${ctx === 'hero' ? `<p class="get-links"><a href="${t.page_desktop}">${t.also_desk}</a></p>` : ''}`;
       case 'mac':
       case 'mac-intel': {
         const intel = d === 'mac-intel';
-        return `<a class="btn btn-primary btn-lg dl-link" data-place="${place}" href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${ico('download')}<span>${intel ? t.mac_intel : t.mac}</span>${intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>'}</a>
+        return `<a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${ico('download')}<span>${intel ? t.mac_intel : t.mac}</span>${intel ? '' : '<span class="dk-btn-chip" dir="ltr">Apple Silicon</span>'}</a>
           <p class="get-meta">${t.desk_meta} · ${t.mac_note}</p>
           <p class="get-links"><a href="${a(intel ? 'mac-arm' : 'mac-intel', place)}">${intel ? t.other_arch_mac_arm : t.other_arch_mac}</a><a href="${t.install}#mac">${t.first_open}</a></p>`;
       }
       case 'windows':
       case 'windows-arm': {
         const arm = d === 'windows-arm';
-        return `<a class="btn btn-primary btn-lg dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${ico('download')}<span>${arm ? t.windows_arm : t.windows}</span></a>
+        return `<a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${ico('download')}<span>${arm ? t.windows_arm : t.windows}</span></a>
           <p class="get-meta">${t.desk_meta}</p>
           <p class="get-links"><a href="${a(arm ? 'win-x64' : 'win-arm', place)}">${arm ? t.other_arch_win_x64 : t.other_arch_win}</a><a href="${t.install}#windows">${t.first_open}</a></p>`;
       }
@@ -75,17 +75,17 @@
             ${[['deb', '.deb', t.deb], ['rpm', '.rpm', t.rpm], ['appimage', 'AppImage', t.appimage]].map(([k, n, s], i) =>
               `<button type="button" role="radio" aria-checked="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-pkg="${k}" data-name="${n}"><b dir="ltr">${n}</b><small>${s}</small></button>`).join('')}
           </div>
-          <a class="btn btn-primary btn-lg dl-link" data-place="${place}" href="${a('deb', place)}" data-pkg-link>${ico('download')}<span>${t.get_pkg} <bdi dir="ltr">.deb</bdi></span></a>
+          <a class="dk-btn dk-btn-primary dk-btn-lg dl-link" data-place="${place}" href="${a('deb', place)}" data-pkg-link>${ico('download')}<span>${t.get_pkg} <bdi dir="ltr">.deb</bdi></span></a>
           <p class="get-meta">${t.desk_meta}</p>
           <p class="get-links"><a href="${t.install}#linux">${t.first_open}</a></p>`;
       case 'iphone':
       case 'ipad':
         return `<p class="get-note"><strong>${t.ios_title}</strong> ${t.ios_body}</p>
-          <button type="button" class="btn btn-primary btn-lg" data-share>${ico('share')}<span>${t.send}</span></button>
+          <button type="button" class="dk-btn dk-btn-primary dk-btn-lg" data-share>${ico('share')}<span>${t.send}</span></button>
           <p class="get-status" role="status"></p>`;
       default:
         return `<p class="get-note"><strong>${t.pick}</strong></p>
-          <div class="get-row">${['android', 'mac', 'windows', 'linux'].map((x) => `<a class="btn btn-outline dl-link" data-place="${place}" href="${linkTo(x, place)}">${t.plat[x]}</a>`).join('')}</div>`;
+          <div class="get-row">${['android', 'mac', 'windows', 'linux'].map((x) => `<a class="dk-btn dk-btn-outline dl-link" data-place="${place}" href="${place === 'hero' && x === 'android' ? t.page_android : linkTo(x, place)}">${t.plat[x]}</a>`).join('')}</div>`;
     }
   }
 
@@ -133,11 +133,11 @@
       const span = el.querySelector('span');
       el.removeAttribute('data-share');
       const use = el.querySelector('use'); if (use) use.setAttribute('href', d === 'iphone' || d === 'ipad' ? '#i-share' : '#i-download');
-      if (d === 'iphone' || d === 'ipad') { el.href = '#get'; el.setAttribute('data-share', ''); span.innerHTML = `<span class="l-long">${t.send}</span><span class="l-short">${t.send_short}</span>`; el.setAttribute('aria-label', t.send); return; }
+      if (d === 'iphone' || d === 'ipad') { el.href = '#get'; el.setAttribute('data-share', ''); span.innerHTML = `<span data-compact-label="long">${t.send}</span><span data-compact-label="short">${t.send_short}</span>`; el.setAttribute('aria-label', t.send); return; }
       if (d === 'unknown') { el.href = '#get'; return; }
       const label = { android: t.android, mac: t.mac, 'mac-intel': t.mac_intel, windows: t.windows, 'windows-arm': t.windows_arm, linux: t.linux }[d];
       el.href = d === 'android' ? apk('nav') : d === 'linux' ? '#get' : a({ mac: 'mac-arm', 'mac-intel': 'mac-intel', windows: 'win-x64', 'windows-arm': 'win-arm' }[d], 'nav');
-      span.innerHTML = `<span class="l-long">${label}</span><span class="l-short">${t.plat[base(d)]}</span>`;
+      span.innerHTML = `<span data-compact-label="long">${label}</span><span data-compact-label="short">${t.plat[base(d)]}</span>`;
       el.setAttribute('aria-label', label);
     });
   }
@@ -185,20 +185,6 @@
   // Footer download link: point it at the visitor's OS.
   const OS = { mac: 'mac', windows: 'win', linux: 'linux' }[base(device)];
   if (OS) document.querySelectorAll('a[data-dl-auto]').forEach((el) => { el.href = el.getAttribute('href').replace(/os=\w+/, 'os=' + OS) + (OS === 'linux' ? '&arch=' + linuxArch : ''); });
-
-  /* ---------------- header ---------------- */
-  const head = document.querySelector('.site-head');
-  if (head) {
-    const s = document.createElement('i'); s.className = 'head-sentinel'; s.setAttribute('aria-hidden', 'true');
-    document.body.prepend(s);
-    new IntersectionObserver(([en]) => head.classList.toggle('is-scrolled', !en.isIntersecting)).observe(s);
-  }
-  // Close the language menu on outside click / Escape.
-  const lang = document.querySelector('.lang');
-  if (lang) {
-    document.addEventListener('click', (ev) => { if (lang.open && !lang.contains(ev.target)) lang.open = false; });
-    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && lang.open) { lang.open = false; lang.querySelector('summary').focus(); } });
-  }
 
   /* ---------------- hero story ---------------- */
   const stage = document.querySelector('[data-stage]');

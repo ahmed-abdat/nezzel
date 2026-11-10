@@ -46,15 +46,17 @@
 })();
 </script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Nezzel","description":"A free Android app that saves videos, audio and photos from a link. No ads","url":"https://nezzel.hululsoft.mr/en/","image":"https://nezzel.hululsoft.mr/img/og.jpg?v=3","operatingSystem":"Android 10+","applicationCategory":"MultimediaApplication","inLanguage":"en","license":"https://www.gnu.org/licenses/gpl-3.0.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://nezzel.hululsoft.mr/download?src=seo","softwareVersion":"0.5.8","dateModified":"2026-11-02","publisher":{"@type":"Organization","name":"Hululsoft","url":"https://hululsoft.mr","sameAs":["https://hululsoft.mr","https://web.facebook.com/hululsoft","https://www.tiktok.com/@hululsofte","https://linkedin.com/company/hululsoft"]}}</script>
-<script>document.documentElement.classList.add("js");try{const t=localStorage.getItem("nezzel-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>document.documentElement.classList.add("js");try{const t=localStorage.getItem("nezzel-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}document.documentElement.dataset.mode=document.documentElement.dataset.theme||"light"</script>
 <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
 <noscript><style>[data-r]{opacity:1;transform:none;filter:none}.theme{display:none}.mini{display:none}</style></noscript>
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<script defer src="/js/site.js"></script>
 <script defer src="/vendor/gsap.min.js"></script>
 <script defer src="/vendor/ScrollTrigger.min.js"></script>
 <script defer src="/vendor/lenis.min.js"></script>
 <link rel="preload" href="/fonts/beiruti-arabic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/plex-arabic-400-arabic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/site.css">
 <style>
 @font-face{font-family:Beiruti;src:url(/fonts/beiruti-arabic.woff2) format("woff2");font-weight:200 900;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FEFC}
 @font-face{font-family:Beiruti;src:url(/fonts/beiruti-latin.woff2) format("woff2");font-weight:200 900;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
@@ -66,40 +68,6 @@
 @font-face{font-family:"IBM Plex Sans Arabic";src:url(/fonts/plex-arabic-600-latin.woff2) format("woff2");font-weight:600;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"IBM Plex Sans Arabic";src:url(/fonts/plex-arabic-700-arabic.woff2) format("woff2");font-weight:700;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FEFC}
 @font-face{font-family:"IBM Plex Sans Arabic";src:url(/fonts/plex-arabic-700-latin.woff2) format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-:root{
-  --primary:#006B5E;--on-primary:#fff;--primary-c:#9EF2E1;--on-primary-c:#00201B;
-  --secondary-c:#CDE8E1;--on-secondary-c:#051F1B;
-  --tertiary:#7A5520;--tertiary-c:#FFDDB3;--on-tertiary-c:#2A1800;
-  --bg:#F4F5F0;--app:#F5FBF8;--on-bg:#171D1B;--muted:#3F4946;
-  --paper:#FFFEFB;--edge:rgb(20 19 15/.09);
-  --c-low:#EFF5F2;--c:#E9EFEC;--c-high:#E3EAE7;--c-highest:#DEE4E1;--c-lowest:#fff;
-  --outline:#6F7976;--outline-v:#BEC9C5;--inverse:#16302B;--on-inverse:#ECF2EF;--inverse-primary:#82D5C5;
-  --ink-sh:23 29 27;
-  --r-xl:36px;--r-l:24px;
-  --ease:cubic-bezier(.16,1,.3,1);--spring:cubic-bezier(.34,1.56,.64,1);
-  --x:1;color-scheme:light;
-}
-[dir=rtl]{--x:-1}
-@media not all{:root{
-  --primary:#82D5C5;--on-primary:#003731;--primary-c:#005047;--on-primary-c:#9EF2E1;
-  --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
-  --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
-  --bg:#121614;--app:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
-  --paper:#1E2523;--edge:rgb(255 255 255/.07);
-  --c-low:#171D1B;--c:#1B211F;--c-high:#252B2A;--c-highest:#303634;--c-lowest:#090F0E;
-  --outline:#899390;--outline-v:#3F4946;--inverse:#DEE4E1;--on-inverse:#16302B;--inverse-primary:#006B5E;
-  --ink-sh:0 0 0;color-scheme:dark;
-}}
-:root[data-theme=dark]{
-  --primary:#82D5C5;--on-primary:#003731;--primary-c:#005047;--on-primary-c:#9EF2E1;
-  --secondary-c:#334B46;--on-secondary-c:#CDE8E1;
-  --tertiary:#ECBF83;--tertiary-c:#5C3F14;--on-tertiary-c:#FFDDB3;
-  --bg:#121614;--app:#0E1513;--on-bg:#DEE4E1;--muted:#BEC9C5;
-  --paper:#1E2523;--edge:rgb(255 255 255/.07);
-  --c-low:#171D1B;--c:#1B211F;--c-high:#252B2A;--c-highest:#303634;--c-lowest:#090F0E;
-  --outline:#899390;--outline-v:#3F4946;--inverse:#DEE4E1;--on-inverse:#16302B;--inverse-primary:#006B5E;
-  --ink-sh:0 0 0;color-scheme:dark;
-}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:96px;interpolate-size:allow-keywords}
 /* Lenis drives the wheel (touch stays native) */
@@ -110,7 +78,6 @@ body{margin:0;background:var(--bg);color:var(--on-bg);font:400 17px/1.75 "IBM Pl
 html[dir=ltr] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"IBM Plex Sans Arabic",sans-serif;line-height:1.6}
 ::selection{background:var(--primary-c);color:var(--on-primary-c)}
 a{color:var(--primary);text-underline-offset:.22em;text-decoration-thickness:1.5px}
-:focus-visible{outline:3px solid var(--primary);outline-offset:3px;border-radius:12px}
 .end :focus-visible,.t-dk :focus-visible{outline-color:#82D5C5}
 button{font:inherit;color:inherit}
 img{max-width:100%;display:block}
@@ -119,11 +86,7 @@ img{max-width:100%;display:block}
 [dir=rtl] .t>b.ltr{text-align:right}
 bdi{white-space:nowrap}
 .num{font-variant-numeric:tabular-nums}
-.wrap{width:min(1160px,100% - 32px);margin-inline:auto}
 main{overflow-x:clip}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.sr:focus{position:fixed;top:12px;inset-inline-start:12px;width:auto;height:auto;clip:auto;z-index:99;padding:10px 16px;border-radius:12px;background:var(--primary);color:var(--on-primary)}
-.i{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
 /* one quiet entrance for sections; the phone story is the authored moment */
 [data-r]{opacity:0;transform:translateY(10px);transition:opacity .3s var(--ease),transform .3s var(--ease);transition-delay:calc(var(--d,0) * 50ms)}
@@ -131,92 +94,6 @@ main{overflow-x:clip}
 /* the headline rises word by word through a mask, once */
 .w{display:inline-block;transform:translateY(118%);animation:word 1s var(--ease) forwards;animation-delay:calc(100ms + var(--k) * 80ms)}
 @keyframes word{to{transform:none}}
-
-/* header: glass pill that solidifies */
-.top{position:sticky;top:12px;z-index:30;margin-top:12px}
-.bar{display:flex;align-items:center;gap:10px;padding:8px;padding-inline-start:12px;border-radius:999px;border:1px solid transparent;transition:background .4s,box-shadow .4s,border-color .4s}
-body.scrolled .bar{background:color-mix(in oklab,var(--c-lowest) 85%,transparent);backdrop-filter:saturate(1.5) blur(12px);-webkit-backdrop-filter:saturate(1.5) blur(12px);box-shadow:0 10px 30px -14px rgb(var(--ink-sh)/.3);border-color:color-mix(in oklab,var(--outline-v) 55%,transparent)}
-body.ondark .bar{--on-bg:#DEE4E1;--c-high:#252B2A;--c-lowest:#090F0E;--outline-v:#3F4946;--outline:#899390;color:#E6EEEB;background:rgb(9 15 14/.82);border-color:rgb(255 255 255/.08);box-shadow:none}
-.brand{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;min-width:48px;color:inherit;text-decoration:none;font-weight:800;font-size:19px}
-.brand img{width:34px;height:34px;border-radius:10px}
-.bar .sp{flex:1}
-.locale-switch{position:relative;flex:none}
-.locale-switch,.locale-switch[open]{background:transparent;border-radius:999px;transition:none}
-.locale-switch::details-content{height:auto;overflow:visible;transition:none}
-.lang{display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;min-width:76px;padding:0 12px;border-radius:999px;border:0;box-shadow:inset 0 0 0 1px var(--outline-v);background:transparent;font:600 14px/1 system-ui,sans-serif;cursor:pointer;list-style:none;transition:background .15s ease-out,box-shadow .15s ease-out,transform .15s ease-out}
-.lang::-webkit-details-marker{display:none}
-.lang::after{content:none}
-.lang .i{width:20px;height:20px}
-.lang:active{transform:scale(.96)}
-.lang:hover{background:var(--c-high);box-shadow:inset 0 0 0 1px var(--outline)}
-.locale-switch[open] .lang{background:var(--primary-c);color:var(--on-primary-c)}
-.lang-menu{position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:180px;padding:6px;border-radius:18px;background:var(--c-lowest);border:1px solid var(--outline-v);box-shadow:0 10px 30px -10px rgb(var(--ink-sh)/.3);transform-origin:100% 0}
-[dir=rtl] .lang-menu{transform-origin:0 0}
-.lang-menu a{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;padding:8px 12px;border-radius:12px;text-decoration:none;color:var(--on-bg);font-size:15px;transition:background .15s ease-out}
-.lang-menu a:hover,.lang-menu a:focus-visible{background:var(--c-high)}
-.lang-menu a[aria-current=page]{background:var(--primary-c);color:var(--on-primary-c);font-weight:700}
-.lang-menu .i{width:18px;height:18px;visibility:hidden}
-.lang-menu [aria-current=page] .i{visibility:visible}
-@media (prefers-reduced-motion:no-preference){
-  .locale-switch[open] .lang-menu{animation:locale-in .15s ease-out both}
-  .locale-switch[open] .lang-menu a{animation:locale-row .15s ease-out both;animation-delay:calc(var(--row) * 40ms)}
-}
-@keyframes locale-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-@keyframes locale-row{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
-.theme{position:relative;width:48px;height:48px;flex-shrink:0;border:0;border-radius:50%;background:transparent;box-shadow:inset 0 0 0 1px var(--outline-v);cursor:pointer;display:grid;place-items:center;transition:background .2s,box-shadow .2s}
-.theme:hover{background:var(--c-high);box-shadow:inset 0 0 0 1px var(--outline)}
-.theme svg{grid-area:1/1;width:20px;height:20px;transition:transform .6s var(--spring),opacity .3s}
-.theme .sun{opacity:0;transform:rotate(-90deg) scale(.4)}
-:root[data-mode=dark] .theme .sun{opacity:1;transform:none}
-:root[data-mode=dark] .theme .moon{opacity:0;transform:rotate(90deg) scale(.4)}
-::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
-html[data-vt]::view-transition-group(root){animation-duration:.6s}
-.mini{min-height:48px;min-width:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 18px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:15px;opacity:0;transform:translateY(-6px) scale(.96);pointer-events:none;transition:opacity .4s var(--ease),transform .4s var(--ease)}
-.mini .i{width:18px;height:18px}
-body.past .mini{opacity:1;transform:none;pointer-events:auto}
-/* header: open at the top (no box); once the page moves it gathers into a light floating pill: hairline edge, faint shadow,
-   soft blur. Phones tuck it away while reading down and bring it back on the first scroll up */
-.top{display:flex;justify-content:center;transition:transform .5s cubic-bezier(.16,1,.3,1)}
-@media (max-width:1023px){body.tuck .top:not(:focus-within){transform:translateY(calc(-100% - 24px))}}
-.bar{position:relative;flex:1;max-width:1160px;min-height:62px;gap:4px;padding:7px;padding-inline-start:12px;background:transparent;border:1px solid transparent;box-shadow:none;transition:max-width .6s cubic-bezier(.16,1,.3,1),min-height .5s cubic-bezier(.16,1,.3,1),background .4s,border-color .4s,box-shadow .5s}
-body.scrolled .bar{max-width:min(980px,100%);min-height:56px;background:color-mix(in oklab,var(--c-lowest) 82%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.6);backdrop-filter:blur(14px) saturate(1.6);border-color:color-mix(in oklab,var(--outline-v) 65%,transparent);box-shadow:0 8px 24px -14px rgb(var(--ink-sh)/.12)}
-.bar .brand{gap:9px;font-size:18px;letter-spacing:-.01em}
-.bar .brand img{width:32px;height:32px;border-radius:9px}
-.bar .theme,.bar .lang{box-shadow:none;min-height:44px;height:44px;color:var(--muted);background:transparent}
-.bar .theme{width:44px}.bar .lang{min-width:0;padding:0 12px;font-size:13.5px;letter-spacing:.02em}
-.bar .theme:hover,.bar .lang:hover,.locale-switch[open] .lang{background:var(--c-high);box-shadow:none;color:var(--on-bg)}
-.bar .mini{order:9;min-height:44px;padding:0 18px;margin-inline-start:6px;box-shadow:none;transition:transform .2s,background .2s,opacity .35s var(--ease)}
-.bar .mini:hover{background:color-mix(in oklab,var(--primary) 88%,#000)}.bar .mini:active{transform:scale(.97)}
-@media (min-width:641px){.bar .mini{opacity:1;transform:none;pointer-events:auto}.bar .locale-switch{order:8}.bar .theme{order:7}
-  .bar .mini::before{content:"";position:absolute;inset-inline-start:-7px;top:50%;width:1px;height:22px;margin-top:-11px;background:var(--outline-v)}.bar .mini{position:relative}}
-.nl{display:none}
-@media (min-width:1024px){
-  .nl{display:flex;position:relative;flex:none;margin-inline:auto;height:44px;align-items:center}
-  .bar .sp{display:none}
-  .nl a{position:relative;z-index:1;padding:0 clamp(10px,1.1vw,16px);white-space:nowrap;line-height:44px;border-radius:999px;color:var(--muted);font-weight:600;font-size:15px;text-decoration:none;transition:color .25s}
-  .nl a:hover,.nl a:focus-visible,.nl a[aria-current=true]{color:var(--on-bg)}
-  .nl i{position:absolute;top:0;height:44px;inset-inline-start:0;width:var(--w,0);border-radius:999px;background:var(--c-high);transform:translateX(var(--x,0));opacity:0;transition:transform .5s cubic-bezier(.16,1,.3,1),width .5s cubic-bezier(.16,1,.3,1),opacity .3s}
-  .nl.has i{opacity:1}
-}
-@media (max-width:640px){.bar{min-height:58px}body.scrolled .bar{min-height:54px;max-width:none}}
-body.ondark .bar{--muted:#BEC9C5;background:rgb(9 15 14/.82);border-color:rgb(255 255 255/.08);box-shadow:none}
-
-/* buttons */
-.btn{position:relative;isolation:isolate;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:60px;padding:0 30px;border-radius:999px;background:var(--primary);color:var(--on-primary);text-decoration:none;font-weight:700;font-size:19px;box-shadow:0 0 0 4px var(--bg),0 0 0 5px color-mix(in oklab,var(--primary) 30%,transparent),0 6px 16px -8px color-mix(in oklab,var(--primary) 45%,transparent),inset 0 1px 0 rgb(255 255 255/.2);transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
-.btn::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 35%,rgb(255 255 255/.28) 50%,transparent 65%);transform:translateX(calc(var(--x) * -120%));transition:transform .9s var(--ease)}
-@media (hover:hover) and (pointer:fine){
-  .btn:hover{transform:translateY(-2px);box-shadow:0 0 0 4px var(--bg),0 0 0 5px color-mix(in oklab,var(--primary) 60%,transparent),0 10px 22px -10px color-mix(in oklab,var(--primary) 55%,transparent),inset 0 1px 0 rgb(255 255 255/.2)}
-  .btn:hover::after{transform:translateX(calc(var(--x) * 120%))}
-  .btn:hover .i{transform:translateY(4px)}
-  .btn:hover .roll>span{transform:translateY(-1.5em)}
-}
-.btn:active{transform:scale(.97);transition-duration:.12s}
-.btn .sz{font-weight:500;opacity:.82}
-.btn>span{white-space:nowrap}
-/* label roll: the text-shadow copy waits one line below and slides up on hover */
-.roll{display:inline-block;overflow:hidden;line-height:1.5em;height:1.5em}
-.roll>span{display:block;text-shadow:0 1.5em currentColor;transition:transform .3s cubic-bezier(.22,1,.36,1)}
-.btn .i{transition:transform .5s var(--spring)}
 
 /* hero: the headline rises line by line through a mask, once; a ghost wordmark rests behind it.
    Three real screens fan out beside it (under it on phones): home and a download behind, the quality sheet in front */
@@ -231,7 +108,7 @@ body.ondark .bar{--muted:#BEC9C5;background:rgb(9 15 14/.82);border-color:rgb(25
 h1{font-size:clamp(46px,12.6vw,76px);line-height:1.38;font-weight:800;margin:0 auto;font-stretch:92%;text-wrap:balance}
 html[dir=ltr] h1{font-family:ui-serif,"Iowan Old Style",Charter,Georgia,"Noto Serif",serif;font-weight:500;letter-spacing:-.03em;line-height:1.04}
 html[lang=fr] h1{font-size:clamp(40px,10.6vw,68px)}
-html[dir=rtl] :is(h1,h2,h3,.brand,.end .go){font-family:Beiruti,"IBM Plex Sans Arabic",system-ui,sans-serif}
+html[dir=rtl] :is(h1,h2,h3,.end .go){font-family:Beiruti,"IBM Plex Sans Arabic",system-ui,sans-serif}
 html[dir=rtl] h1{font-size:clamp(50px,13.6vw,84px);line-height:1.15;font-weight:900;font-stretch:normal}
 @media (min-width:960px){h1{font-size:clamp(60px,5.8vw,88px);line-height:1.24}html[dir=ltr] h1{line-height:1.04}html[lang=fr] h1{font-size:clamp(50px,4.8vw,72px)}html[dir=rtl] h1{font-size:clamp(68px,6.4vw,100px);line-height:1.1}h1 .ln>span{white-space:nowrap}}
 h1 .ln{display:block;clip-path:inset(-.4em -.6em -.25em)}
@@ -703,7 +580,6 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
    It replaces the small button in the top bar there */
 .sbar{display:none}
 @media (max-width:640px){
-  .bar .mini{display:none}
   .sbar{position:fixed;inset-inline:0;bottom:0;z-index:50;display:flex;align-items:center;gap:8px;padding:10px 16px max(10px,env(safe-area-inset-bottom));background:color-mix(in oklab,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:0 -1px 0 var(--edge);transform:translateY(105%);visibility:hidden;transition:transform .35s var(--ease),visibility 0s .35s}
   .sbar.on{transform:none;visibility:visible;transition:transform .35s var(--ease)}
   html.ios .sbar{display:none}
@@ -715,15 +591,8 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
 
 @media (max-width:520px){
   body{font-size:16.5px}
-  .bar{gap:6px}
-  .bar .sp{min-width:0}
-  .brand{flex-shrink:0;gap:8px}
-  .lang{min-width:70px;padding:0 9px}
-  .mini{padding:0 12px;font-size:14px;gap:6px}
   .flow{padding-top:72px}
 }
-@media (max-width:400px){.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
-@media (max-width:340px){.lang{min-width:0;padding:0 8px}.bar .mini span{display:none}}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
@@ -761,25 +630,25 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   <!-- sample thumbnail: an illustrated summer coast (no real footage, no real people) --><symbol id="clip" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2.5"/><path d="M9 4.5V3.5h6v1"/></symbol><symbol id="scene" viewBox="0 0 160 90"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC98A"/><stop offset=".6" stop-color="#F7A26B"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F8A7B"/><stop offset="1" stop-color="#0B5248"/></linearGradient></defs><rect width="160" height="90" fill="url(#sky)"/><circle cx="104" cy="44" r="15" fill="#FFF1D6"/><path d="M0 54h160v36H0z" fill="url(#sea)"/><path d="M0 58c20-3 38 3 58 0s40-4 62 0 30 2 40 0" stroke="#9EF2E1" stroke-opacity=".45" stroke-width="1.6" fill="none"/><path d="M0 90V68c18-10 40-14 64-6 14 5 22 12 32 22H0Z" fill="#E8C48E"/><path d="M28 70c0-10 2-18 6-24m0 0c-6 0-10 3-13 6m13-6c5-2 10-1 13 2m-13-2c2-4 6-6 10-6" stroke="#2A1800" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
 </svg>
 
-<a class="sr" href="#main" data-i="skip">Skip to content</a>
+<!-- chrome:header -->
+<a class="sr" href="#main">Skip to content</a>
 <div class="wrap top">
-  <nav class="bar" aria-label="Nezzel">
-    <a class="brand" href="#top" aria-label="Nezzel"><img src="/img/icon.svg" alt="" width="34" height="34"><span class="bn">Nezzel</span></a>
-    <div class="nl"><a href="#how" data-i="nl1">How it works</a><a href="#more" data-i="nl2">Features</a><a href="#install" data-i="nl3">Install</a><a href="#faq" data-i="nl4">FAQ</a></div><span class="sp"></span>
-    <a class="mini dl-link" data-place="nav" href="/download?src=nav-ar" tabindex="-1" data-i-aria="get" aria-label="Download"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span data-i="get">Download</span></a>
-    <button class="theme" type="button" id="theme" data-i-aria="to-dark" aria-label="Dark mode"><svg class="moon i" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg><svg class="sun i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
+  <nav class="bar" aria-label="Nezzel" data-product="phone">
+    <a class="brand" href="#top" aria-label="Nezzel"><img src="/img/icon.svg" alt="" width="34" height="34"><span class="bn" dir="ltr">Nezzel</span></a>
+    <div class="nl"><a href="#how">How it works</a><a href="#more">Features</a><a href="#install">Install</a><a href="#faq">FAQ</a><a href="/en/desktop/">Desktop app</a></div><span class="sp"></span>
+    <button class="theme" type="button" id="theme" data-to-dark="Dark mode" data-to-light="Light mode" aria-label="Dark mode"><svg class="moon i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg><svg class="sun i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
     <details class="locale-switch" id="locale-switch">
-      <summary class="lang" id="lang" data-i-aria="language" aria-haspopup="menu" aria-controls="lang-menu" aria-label="Language">
-        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg><span id="lang-code" lang="en" dir="ltr">EN</span>
-      </summary>
-      <div class="lang-menu" id="lang-menu" role="menu" data-i-aria="language" aria-label="Language">
-        <a href="/" hreflang="ar" data-locale="ar" role="menuitem" style="--row:0"><span lang="ar" dir="rtl">العربية</span><svg class="i" aria-hidden="true"><use href="#check"/></svg></a>
-        <a href="/fr/" hreflang="fr" data-locale="fr" role="menuitem" style="--row:1"><span lang="fr" dir="ltr">Français</span><svg class="i" aria-hidden="true"><use href="#check"/></svg></a>
-        <a href="/en/" hreflang="en" data-locale="en" role="menuitem" style="--row:2" aria-current="page"><span lang="en" dir="ltr">English</span><svg class="i" aria-hidden="true"><use href="#check"/></svg></a>
+      <summary class="lang" id="lang" aria-controls="lang-menu" aria-label="Language"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg><span id="lang-code" lang="en" dir="ltr">EN</span></summary>
+      <div class="lang-menu" id="lang-menu">
+        <a href="/" hreflang="ar" lang="ar" data-locale="ar" style="--row:0"><span dir="rtl">العربية</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></a>
+        <a href="/en/" hreflang="en" lang="en" data-locale="en" style="--row:1" aria-current="page"><span dir="ltr">English</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></a>
+        <a href="/fr/" hreflang="fr" lang="fr" data-locale="fr" style="--row:2"><span dir="ltr">Français</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></a>
       </div>
     </details>
+    <a class="mini dl-link" data-place="nav" href="/download?src=nav-en" aria-label="Download"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span>Download</span></a>
   </nav>
 </div>
+<!-- chrome:/header -->
 
 <main id="main">
 <header class="hero wrap" id="top" data-reach="hero">
@@ -794,6 +663,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
         <svg class="i"><use href="#dl"/></svg>
         <span class="roll"><span data-i="cta">Download the app</span></span> <span class="sz ltr num size" data-mb="64.5">64.5 MB</span>
       </a>
+      <p class="hm"><a data-i-href="desktop-href" data-i="also-desktop" href="/en/desktop/">Also for Mac, Windows and Linux</a></p>
       <p class="hm"><span data-i="hm">Free · No ads · Android 10 or newer</span><br><span data-i="ver">Version</span> <span class="ltr num vtxt">0.5.8</span> · <a href="#install" data-i="howto">How to install</a></p>
     </div>
   </div>
@@ -979,6 +849,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     <hr class="sep">
     <div class="frow fe" style="--f:3">
       <nav class="fl" aria-label="Nezzel">
+        <a data-i-href="desktop-href" data-i="app-desktop" href="/en/desktop/">Desktop app</a>
         <a href="https://github.com/ahmed-abdat/nezzel"><span data-i="gh">GitHub</span><svg class="i ne"><use href="#ne"/></svg></a>
         <a href="https://github.com/ahmed-abdat/nezzel/releases"><span data-i="rel">Releases</span><svg class="i ne"><use href="#ne"/></svg></a>
         <a href="https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md"><span data-i="priv">Privacy</span><svg class="i ne"><use href="#ne"/></svg></a>
@@ -1062,6 +933,9 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     }
   } catch (e) {}
   const EN = {
+    "app-desktop":"Desktop app", "app-android":"Android app",
+    "also-desktop":"Also for Mac, Windows and Linux", "desktop-href":"/en/desktop/",
+    "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
     "w-left": "<span class=\"ltr num wt\">0:08</span> left",
     language:"Language", "og-alt":"Nezzel: save videos straight from a link. A phone showing the qualities on offer",
     skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", nl1:"How it works", nl2:"Features", nl3:"Install", nl4:"FAQ", "fp-pause":"Pause the video", "fp-play":"Play the video", get:"Download", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copy the link</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>does the rest</span></span>",
@@ -1136,6 +1010,9 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "priv": "Privacy"
   };
   const AR = {
+    "app-desktop":"تطبيق الحاسوب", "app-android":"تطبيق أندرويد",
+    "also-desktop":"متوفر أيضًا لماك وويندوز ولينكس", "desktop-href":"/desktop/",
+    "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
     "w-left": "متبقٍّ <span class=\"ltr num wt\">0:08</span>",
       "skip": "تخطَّ إلى المحتوى",
       "get": "تنزيل",
@@ -1268,6 +1145,9 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "priv": "الخصوصية"
   };
   const FR = {
+    "app-desktop":"Application de bureau", "app-android":"Application Android",
+    "also-desktop":"Aussi pour Mac, Windows et Linux", "desktop-href":"/fr/desktop/",
+    "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
     "w-left": "<span class=\"ltr num wt\">0:08</span> restant",
     language:"Langue", "og-alt":"Nezzel : la vidéo, il suffit du lien. Un téléphone affiche les qualités proposées",
     skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", nl1:"Fonctionnement", nl2:"Fonctions", nl3:"Installation", nl4:"FAQ", "fp-pause":"Mettre la vidéo en pause", "fp-play":"Lire la vidéo", get:"Télécharger", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copiez le lien</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>s’occupe du reste</span></span>",
@@ -1357,46 +1237,6 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   let rel = null;
   const rig = $(".rig"), desk = $("#desk"), steps = $$(".step"), rtl = document.documentElement.dir === "rtl";
 
-  // ---------- language ----------
-  const localeSwitch = $("#locale-switch"), langButton = $("#lang"), localeLinks = $$(".lang-menu a");
-  localeLinks.forEach(a => { a.tabIndex = -1; });
-  const closeLanguages = (refocus = true) => {
-    localeSwitch.open = false; langButton.setAttribute("aria-expanded", "false");
-    if (refocus) langButton.focus();
-  };
-  const openLanguages = (index = localeLinks.findIndex(a => a.dataset.locale === lang())) => {
-    localeSwitch.open = true; langButton.setAttribute("aria-expanded", "true");
-    localeLinks[index].focus();
-  };
-  langButton.setAttribute("aria-expanded", "false");
-  langButton.addEventListener("click", e => {
-    e.preventDefault();
-    if (localeSwitch.open) closeLanguages(); else openLanguages();
-  });
-  // Native details/summary remains operable without JS; JS adds menu keyboard behaviour.
-  localeSwitch.addEventListener("toggle", () => langButton.setAttribute("aria-expanded", String(localeSwitch.open)));
-  localeSwitch.addEventListener("keydown", e => {
-    const index = localeLinks.indexOf(document.activeElement);
-    if (e.key === "Escape" && localeSwitch.open) { e.preventDefault(); closeLanguages(); }
-    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (!localeSwitch.open || index < 0) openLanguages(e.key === "ArrowDown" ? 0 : localeLinks.length - 1);
-      else localeLinks[(index + (e.key === "ArrowDown" ? 1 : -1) + localeLinks.length) % localeLinks.length].focus();
-    } else if ((e.key === "Home" || e.key === "End") && localeSwitch.open) {
-      e.preventDefault(); localeLinks[e.key === "Home" ? 0 : localeLinks.length - 1].focus();
-    } else if (e.key === "Tab" && localeSwitch.open) closeLanguages();
-    else if (e.key === " " && index >= 0) { e.preventDefault(); localeLinks[index].click(); }
-  });
-  document.addEventListener("click", e => {
-    if (localeSwitch.open && !localeSwitch.contains(e.target)) closeLanguages(false);
-  });
-  const syncLocaleLinks = () => localeLinks.forEach(a => { a.href = (a.dataset.locale === "ar" ? "/" : "/" + a.dataset.locale + "/") + location.hash; });
-  syncLocaleLinks(); addEventListener("hashchange", syncLocaleLinks);
-  localeLinks.forEach(a => a.addEventListener("click", () => {
-    try { localStorage.setItem("nezzel-lang", a.dataset.locale); } catch (e) {}
-    closeLanguages();
-  }));
-
   // ---------- visitor's device (read in the browser only, never sent) ----------
   const ua = navigator.userAgent;
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
@@ -1456,7 +1296,6 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   $$("[data-r], .adlg, .end").forEach(el => io.observe(el));
   new IntersectionObserver(([e]) => {
     const past = !e.isIntersecting && e.boundingClientRect.top < 0;
-    document.body.classList.toggle("past", past); $(".mini").tabIndex = past ? 0 : -1;
     barPast = past; syncBar();
   }).observe($(".hero .cta"));
   // phones: the bottom bar shows past the hero button and steps aside for the footer's own button
@@ -1464,22 +1303,14 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   let barPast = false, barEnd = false;
   function syncBar() { const on = barPast && !barEnd; sbar.classList.toggle("on", on); sbar.inert = !on; }
   new IntersectionObserver(([e]) => { barEnd = e.isIntersecting; syncBar(); }).observe($("#final"));
-  const onScroll = () => document.body.classList.toggle("scrolled", scrollY > 10);
-  addEventListener("scroll", onScroll, { passive: true }); onScroll();
-
-  // header: condense once moving, tuck away while reading down, return on scroll up; the link pill follows the section in view
-  { let lastY = scrollY, acc = 0;
-    addEventListener("scroll", () => {
-      const y = scrollY, d = y - lastY; lastY = y;
-      acc = Math.sign(d) === Math.sign(acc) ? acc + d : d;
-      if (y < 160 || acc < -24 || $("#locale-switch").open) document.body.classList.remove("tuck");
-      else if (acc > 48) document.body.classList.add("tuck");
-    }, { passive: true });
-    const nl = $(".nl"), pill = document.createElement("i"); nl.prepend(pill);
-    const links = $$("a", nl), secs = links.map(a => $(a.getAttribute("href")));
+  // The shared script owns scroll/tuck; homepage scroll-spy uses section links only.
+  {
+    const nl = $(".nl"), pill = document.createElement("i"); nl?.prepend(pill);
+    const links = nl ? $$('a[href^="#"]', nl).filter(a => a.hash.length > 1) : [];
+    const secs = links.map(a => document.getElementById(decodeURIComponent(a.hash.slice(1))));
     const place = a => {
       links.forEach(l => l.toggleAttribute("aria-current", l === a)); if (a) a.setAttribute("aria-current", "true");
-      nl.classList.toggle("has", !!a); if (!a) return;
+      nl?.classList.toggle("has", !!a); if (!a) return;
       const r = a.getBoundingClientRect(), n = nl.getBoundingClientRect();
       pill.style.setProperty("--w", r.width + "px");
       pill.style.setProperty("--x", (document.documentElement.dir === "rtl" ? r.right - n.right : r.left - n.left) + "px");
@@ -1741,37 +1572,17 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
   }, { rootMargin: "0px 0px -92% 0px" });
   $$(".end").forEach(x => hio.observe(x));
 
-  // ---------- theme: light paper by default, a tap switches to dark ----------
-  const root = document.documentElement, themeBtn = $("#theme");
-  const mode = () => root.dataset.theme || "light";
-  function syncTheme() {
-    const m = mode(); root.dataset.mode = m;
+  // ---------- page-specific theme work ----------
+  function syncPageTheme() {
+    const m = document.documentElement.dataset.theme || "light";
     waveTheme();
-    // the Arabic screens exist in both themes; the English set is light only
+    // The Arabic screens exist in both themes; the English set is light only.
     if (lang() === "ar") $$(".shot, .fan img").forEach(i => { const v = i.getAttribute("src").replace(/-(light|dark)-/, "-" + m + "-"); if (v !== i.getAttribute("src")) i.src = v; });
-    themeBtn.dataset.iAria = m === "dark" ? "to-light" : "to-dark";
-    themeBtn.setAttribute("aria-label", t(themeBtn.dataset.iAria));
-    $$('meta[name="theme-color"]').forEach(x => { x.content = m === "dark" ? "#0E1513" : "#F5FBF8"; x.removeAttribute("media"); });
+    const themeButton = $("#theme");
+    if (themeButton) { themeButton.dataset.iAria = m === "dark" ? "to-light" : "to-dark"; themeButton.setAttribute("aria-label", t(themeButton.dataset.iAria)); }
   }
-  themeBtn.addEventListener("click", () => {
-    const next = mode() === "dark" ? "light" : "dark";
-    const apply = () => {
-      root.dataset.theme = next; syncTheme();
-      try { localStorage.setItem("nezzel-theme", next); } catch (e) {}
-    };
-    if (still || !document.startViewTransition) { apply(); return; }
-    // Circle reveal from the button, in percentages of the viewport.
-    const b = themeBtn.getBoundingClientRect(), w = innerWidth, h = innerHeight;
-    const x = b.left + b.width / 2, y = b.top + b.height / 2;
-    const r = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) / (Math.hypot(w, h) / Math.SQRT2) * 100;
-    const at = " at " + (x / w * 100) + "% " + (y / h * 100) + "%";
-    root.dataset.vt = "";
-    const vt = document.startViewTransition(apply);
-    vt.ready.then(() => root.animate({ clipPath: ["circle(0%" + at + ")", "circle(" + r + "%" + at + ")"] },
-      { duration: 600, easing: "cubic-bezier(.16,1,.3,1)", pseudoElement: "::view-transition-new(root)" })).catch(() => {});
-    vt.finished.finally(() => { delete root.dataset.vt; });
-  });
-  syncTheme();
+  document.addEventListener("nezzel:theme", syncPageTheme);
+  syncPageTheme();
 
   // ---------- install film: plays itself in view, a tap pauses, the steps beside it follow the recording ----------
   const film = $("#film");
