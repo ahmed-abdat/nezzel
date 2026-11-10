@@ -254,10 +254,10 @@ pre code{max-inline-size:100%}
 /* Phone picker: back link and the quiet "send the link" action */
 .link-btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0;background:none;border:0;border-block-end:1px solid color-mix(in srgb,currentColor 30%,transparent);border-radius:0;font:inherit;font-weight:500;color:var(--primary);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .get-links .link-btn{border-block-end:1px solid color-mix(in srgb,var(--primary) 30%,transparent)}
-.get-send{margin-block:4px 0}
+.get-send{margin-block:4px 0;display:flex;flex-wrap:wrap;align-items:center;column-gap:20px}
 .get-send .link-btn{color:var(--muted);font-size:15px;font-weight:400;border-block-end:0}
 .get-send .link-btn .i{inline-size:16px;block-size:16px}
-.get-send .link-btn span{text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
+.get-send .link-btn .cp-t{text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
 .end .link-btn,.end .get-send .link-btn{color:inherit}
 .get-status:empty{display:none}
 /* Phones: the primary download button fills the row in every system state and language */
@@ -315,15 +315,27 @@ body[data-page=thanks] .end :is(.fe,.gm):not(.frow,.soc){display:none}
 .th-status .th-direct{display:inline-flex;align-items:center;gap:.4em;font-weight:600;font-size:19px;text-decoration:none}
 .th-direct span{text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
 .th-alt{margin-block-start:18px;font-size:16px;line-height:26px;color:var(--ink-2)}
-.th-phone{margin-block-start:14px;font-size:17px;line-height:26px;color:var(--ink-2);max-inline-size:60ch}
+.th-phone{margin-block-start:0}
 .th-phone p{margin:0}
-.th-phone .th-lead-phone{margin-block-end:14px}
-.th-phone .btn{inline-size:100%;max-inline-size:360px;justify-content:center}
-.th-phone .th-links{margin-block-start:10px}
-.th-phone .th-direct{display:inline-flex;align-items:center;gap:.4em}
-html[data-family=phone] .th-status{display:none}
-.th-sent{margin-block-start:4px;font-size:15px;line-height:22px;color:var(--ink-2)}
-.th-sent:empty{display:none}
+html[data-family=phone] .th-ok .th-head>:not(.th-phone),html[data-family=phone] .th-ok :is(.th-alt,.th-steps){display:none!important}
+html[data-family=phone] .th-ok .th{padding-block-start:clamp(36px,10vw,56px)}
+.th-phone .th-ph{font-size:clamp(34px,10vw,44px);line-height:1.2}
+:root[dir=ltr] .th-phone .th-ph{line-height:1.08}
+.th-lead-phone{margin-block-start:14px!important;text-wrap:balance;font-size:18px;line-height:1.55;color:var(--ink)}
+.th-addr{margin-block:20px 24px!important;font-weight:600;font-size:clamp(17px,5.4vw,22px);line-height:1.35;color:var(--teal-ink);overflow-wrap:anywhere;-webkit-user-select:all;user-select:all}
+.th-addr bdi,.th-addr-fb{unicode-bidi:isolate}
+.th-phone .btn{inline-size:100%;max-inline-size:360px;justify-content:center;padding-inline:16px;font-size:clamp(17px,5vw,19px)}
+.th-hint{margin-block-start:12px!important;font-size:15px;line-height:22px;color:var(--ink-2)}
+.th-acts{display:flex;flex-wrap:wrap;column-gap:22px;margin-block-start:6px!important}
+.th-act{display:inline-flex;align-items:center;min-block-size:44px;padding:0;background:none;border:0;font:inherit;font-size:16px;font-weight:500;color:var(--ink-2);text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.th-phone a.th-act{display:inline-flex;margin-block:0;padding-block:0;color:var(--ink-2);font-weight:500}
+.vh{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.cp{display:grid;justify-items:center;align-items:center}
+.cp>span{grid-area:1/1;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.cp .i{inline-size:1.15em;block-size:1.15em;transform:none!important;transition:none}
+.cp-b,[data-state=done] .cp-a{visibility:hidden}
+[data-state=done] .cp-b{visibility:visible}
+.get-send .link-btn .cp .i{inline-size:16px;block-size:16px}
 @media (hover:hover) and (pointer:fine){.th-status a:hover,.th-alt a:hover,.th-phone a:hover{text-decoration-color:currentColor}.th-direct:hover span{text-decoration-color:currentColor}}
 .th .get-pick{margin-block-start:28px}
 .th-steps{margin-block-start:clamp(44px,6vw,80px);padding-block-start:clamp(36px,5vw,56px);border-block-start:1px solid var(--hair)}

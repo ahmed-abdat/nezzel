@@ -57,7 +57,66 @@
   // Linux package (deb|rpm|appimage): one value for the hero and the closing block.
   let pkg = 'deb';
   const PKGN = { deb: '.deb', rpm: '.rpm', appimage: 'AppImage' };
-  const sendHtml = (ctx) => `<p class="get-send"><button type="button" class="link-btn" data-share>${ico('share')}<span>${t.send}</span></button></p>`;
+  /* ---- copy the clean landing address (hero, closing block and the thank-you page share this) ---- */
+  const cleanUrl = () => location.origin + t.page_desktop;
+  const shortAddr = () => location.host + t.page_desktop.replace(/\/$/, '');
+  const svg = (d) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const ICON_COPY = svg('<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>');
+  const ICON_OK = svg('<path d="m5 12 4 4L19 6"/>');
+  // Both labels sit in one grid cell, so the button is as wide as the longer one and never jumps.
+  const copyInner = () => `<span class="cp"><span class="cp-a">${ICON_COPY}<span class="cp-t">${t.copy_link}</span></span><span class="cp-b" aria-hidden="true">${ICON_OK}<span class="cp-t">${t.link_copied}</span></span></span>`;
+  const sendHtml = () => `<p class="get-send"><button type="button" class="link-btn" data-share>${copyInner()}</button><button type="button" class="link-btn" data-share-native hidden><span class="cp-t">${t.share_more}</span></button><span class="vh" role="status" data-live></span></p>`;
+  function legacyCopy(text) {
+    let ok = false;
+    const prev = document.activeElement;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true');
+      ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;font-size:16px';
+      document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      try { ok = !!document.execCommand('copy'); } catch (e) {}
+      ta.remove();
+    } catch (e) {}
+    try { if (prev && prev.focus) prev.focus({ preventScroll: true }); } catch (e) {}
+    return ok;
+  }
+  function copyText(text) {
+    return new Promise((res) => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => res(true), () => res(legacyCopy(text)));
+          return;
+        }
+      } catch (e) {}
+      res(legacyCopy(text));
+    });
+  }
+  function copyLink(btn) {
+    const scope = btn.closest('[data-get],[data-th-phone]') || document;
+    const live = scope.querySelector('[data-live]');
+    const hint = scope.querySelector('[data-hint]');
+    copyText(cleanUrl()).then((ok) => {
+      clearTimeout(btn._t);
+      if (ok) {
+        if (hint) hint.hidden = true;
+        btn.dataset.state = 'done';
+        if (live) live.textContent = t.link_copied;
+        btn._t = setTimeout(() => { delete btn.dataset.state; if (live) live.textContent = ''; }, 2000);
+        return;
+      }
+      // Nothing worked: show the short address, selected, and tell the visitor how to copy it by hand.
+      if (!hint) return;
+      let addr = scope.querySelector('[data-addr]');
+      if (!addr) { hint.innerHTML = `<bdi dir="ltr" class="th-addr-fb" data-addr></bdi><br><span></span>`; addr = hint.querySelector('[data-addr]'); addr.textContent = shortAddr(); }
+      const note = hint.querySelector('span'); (note || hint).textContent = t.hold_copy;
+      hint.hidden = false;
+      try { const r = document.createRange(); r.selectNodeContents(addr); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {}
+      if (live) live.textContent = t.hold_copy;
+    });
+  }
+  // Share only where the browser can; never a fallback that prints a link.
+  const syncNative = () => document.querySelectorAll('[data-share-native]').forEach((b) => { b.hidden = !navigator.share; });
+  document.querySelectorAll('[data-copy-btn]').forEach((b) => { b.innerHTML = copyInner(); });
 
   function blockBase(d, ctx, back) {
     const place = ctx || 'get';
@@ -103,7 +162,7 @@
 
   // Phone-chosen views keep the quiet "send the link" action under the options.
   function block(d, ctx, back, from) {
-    return blockBase(d, ctx, back) + (back && family(from) === 'phone' ? sendHtml() : '') + '<p class="get-status" role="status"></p>';
+    return blockBase(d, ctx, back) + (back && family(from) === 'phone' ? sendHtml() : '') + '<p class="get-status" data-hint hidden></p>';
   }
 
   function updateClosingMeta(el, d, back) {
@@ -129,6 +188,7 @@
       el.setAttribute('aria-live', family(d) === 'computer' && !back ? 'polite' : 'off');
       el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '', back, d);
       if (el.hasAttribute('data-closing')) updateClosingMeta(el, next, back);
+      syncNative();
     };
     if (!animate || reduce.matches || !el.animate) { swap(); return; }
     // Device switch: old content leaves fast, new content arrives softly (one object, blur bridges the swap).
@@ -164,6 +224,7 @@
   }
 
   setDevice(device, false);
+  syncNative();
 
   document.addEventListener('click', (ev) => {
     const pkg = ev.target.closest('[data-pkg]');
@@ -180,19 +241,9 @@
       return;
     }
     const share = ev.target.closest('[data-share]');
-    if (share) {
-      const url = location.origin + location.pathname;
-      const st = share.closest('[data-get]').querySelector('.get-status');
-      const say = (msg) => { if (st) st.textContent = msg; };
-      // Fallback chain never throws: copy, else show the URL itself.
-      const copy = () => {
-        try { Promise.resolve(navigator.clipboard.writeText(url)).then(() => say(t.copied), () => say(url)); } catch (e) { say(url); }
-      };
-      try {
-        if (!navigator.share) copy();
-        else Promise.resolve(navigator.share({ title: 'Nezzel', url })).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
-      } catch (e) { copy(); }
-    }
+    if (share) { copyLink(share); return; }
+    const native = ev.target.closest('[data-share-native]');
+    if (native) { try { Promise.resolve(navigator.share({ title: 'Nezzel', url: cleanUrl() })).catch(() => {}); } catch (e) {} }
   });
 
   function choosePkg(b) {

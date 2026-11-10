@@ -69,19 +69,12 @@
     /* ---- phones and tablets: the file is for a computer, nothing starts here ---- */
     const phone = root.dataset.family === 'phone';
     if (phone) {
+      // One job: get the address onto the visitor's computer. The copy button itself lives in dk.js (shared with the landing picker).
       const box = $('[data-th-phone]');
       if (box) box.hidden = false;
-      all('[data-th-st]').forEach((el) => { el.hidden = true; });
-      const share = $('[data-th-share]');
-      const say = (m) => { const s = $('[data-th-sent]'); if (s) s.textContent = m; };
-      if (share) share.addEventListener('click', () => {
-        const url = location.origin + location.pathname + '?' + query(req);
-        const copy = () => { try { Promise.resolve(navigator.clipboard.writeText(url)).then(() => say(t.copied), () => say(url)); } catch (e) { say(url); } };
-        try {
-          if (!navigator.share) copy();
-          else Promise.resolve(navigator.share({ title: 'Nezzel', url })).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
-        } catch (e) { copy(); }
-      });
+      const sec = $('.th-ok .th'); if (sec) sec.setAttribute('aria-labelledby', 'th-h1p');
+      const addr = $('[data-addr]');
+      if (addr) addr.textContent = location.host + t.page_desktop.replace(/\/$/, '');
       return;
     }
 
