@@ -263,19 +263,36 @@ pre code{max-inline-size:100%}
 /* Phones: the primary download button fills the row in every system state and language */
 @media (max-width:640px){.get-hero .get>.dl-link{align-self:stretch}}
 /* Package picker: the tray gets an edge so its outer corners read as a whole, not clipped */
-.get-hero .get-choice{box-shadow:inset 0 0 0 1px var(--edge)}
 /* links under the download button: one baseline, underline drawn on the text (not on the 44px tap box).
    inline-block, not flex: a flex link would drop the space next to its <bdi> */
 .get .get-links{align-items:baseline;row-gap:0}
 .get .get-links :is(a,.link-btn){display:inline-block;min-height:0;padding-block:11px;margin-block:-4px;line-height:22px;border-block-end:0;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:.4em}
 @media (hover:hover) and (pointer:fine){.get .get-links :is(a,.link-btn):hover{text-decoration-color:currentColor}}
-/* package choice: tabs sized by their content on wide screens (distro names stay on one line), full-width rows on phones */
-.get-choice{grid-template-columns:repeat(3,auto);inline-size:fit-content;max-inline-size:100%}
-.get-choice button{align-items:center;justify-content:center;text-align:center;min-height:56px;padding-inline:16px}
+/* package choice: plain radio options, no box inside a box. In a line on wide screens, hairline-separated rows on phones */
+.get-choice,.end .get-choice{display:flex;flex-wrap:wrap;gap:4px 28px;inline-size:auto;max-inline-size:100%;padding:0;background:none;border-radius:0;box-shadow:none}
+.get-choice button{display:grid;grid-template-columns:auto auto;justify-content:start;align-items:center;column-gap:10px;min-height:48px;padding:4px 0;border-radius:6px;background:none;text-align:start}
+.get-choice button::before{content:"";grid-row:1 / span 2;box-sizing:border-box;inline-size:18px;block-size:18px;border-radius:50%;border:1.5px solid color-mix(in srgb,currentColor 50%,transparent);transition:border-color .16s var(--ease-out),background-color .16s var(--ease-out)}
+.get-choice b,.get-choice small{grid-column:2}
+.get-choice b{justify-self:start}
+.get-choice{margin-block-end:14px}
+.end .get-choice{margin-block:16px 20px}
+.end .get-links{margin-block-start:12px}
+.get-choice button:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
+.end .get-choice button:focus-visible{outline-color:currentColor}
+.get-choice button::before{transition:border-color .16s var(--ease-out),background-color .16s var(--ease-out),transform .12s var(--ease-out)}
+.get-choice button:active::before{transform:scale(.88)}
+@media (prefers-reduced-motion:reduce){.get-choice button::before{transition:none}}
 .get-choice small{white-space:nowrap}
-:root[data-theme=dark] .get-hero .get-choice [aria-checked=true]{background:color-mix(in oklab,var(--on-bg) 14%,var(--c-low));box-shadow:0 0 0 1px color-mix(in oklab,var(--on-bg) 22%,transparent)}
+.get-choice [aria-checked=true],.end .get-choice [aria-checked=true]{background:none;box-shadow:none}
+.get-choice [aria-checked=true]::before{border-color:var(--primary);background:radial-gradient(circle,var(--primary) 0 4.5px,transparent 5px)}
+.end .get-choice [aria-checked=true]::before{border-color:currentColor;background:radial-gradient(circle,currentColor 0 4.5px,transparent 5px)}
+@media (hover:hover) and (pointer:fine){.get-choice button:hover::before{border-color:var(--primary)}.end .get-choice button:hover::before{border-color:currentColor}}
 @media (max-width:520px){
-  .get-choice{grid-template-columns:minmax(0,1fr);inline-size:100%}
-  .get-choice button{flex-direction:row;align-items:baseline;justify-content:space-between;gap:12px;min-height:48px;padding:13.5px 14px;text-align:start}
-  .get-choice small{text-align:end;font-size:13px}
+  .get-choice,.end .get-choice{flex-direction:column;flex-wrap:nowrap;gap:0;inline-size:100%}
+  .get-choice{margin-block-end:10px}
+  .get .get-links{flex-direction:column;align-items:flex-start}
+  .get-choice button{grid-template-columns:auto 1fr auto;column-gap:12px;min-height:52px;padding:6px 2px;border-radius:0}
+  .get-choice button + button{border-block-start:1px solid color-mix(in srgb,currentColor 16%,transparent)}
+  .get-choice button::before{grid-row:1}
+  .get-choice small{grid-column:3;grid-row:1;text-align:end;font-size:13px}
 }
