@@ -332,6 +332,9 @@ body[data-page=thanks] .end :is(.fe,.gm):not(.frow,.soc){display:none}
 .th-status a.btn{display:inline-flex;margin:0;padding:0 24px;min-block-size:52px;color:var(--on-bg);font-size:17px;font-weight:600;gap:10px;text-decoration:none;transition:transform .14s var(--ease-out),box-shadow .35s var(--ease)}
 .th-status a.btn:active{transform:scale(.97)}
 .th-status a.btn span{text-decoration:none}
+.th-status a.btn{padding:10px 24px;border-radius:26px}
+.th-status a.btn>span{white-space:normal;min-inline-size:0;overflow-wrap:anywhere}
+.th-status>[data-th-st],.th-links{row-gap:16px}
 .th-direct span{text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
 .th-alt{margin-block-start:18px;font-size:16px;line-height:26px;color:var(--ink-2)}
 .th-phone{margin-block-start:0}
