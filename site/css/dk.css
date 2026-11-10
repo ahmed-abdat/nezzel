@@ -189,7 +189,7 @@ html:not([data-mode]) .hero-fig .th-nojs{display:block}
 :root[dir=ltr] .hero .dk-lede{line-height:1.55}
 .hero-fig{min-inline-size:0}
 .hero-fig .shot{max-inline-size:750px;border-radius:0;box-shadow:var(--shadow-shot),0 0 0 1px var(--hair)}
-@media (min-width:641px){.hero-fig .shot{border-radius:1.333% / 1.852%}
+@media (min-width:641px){.hero-fig .shot{border-radius:1.333% / 1.538%}
 }
 @media (min-width:1101px){.hero{grid-template-columns:minmax(0,.4fr) minmax(0,.6fr);gap:40px;padding-block-start:clamp(40px,5vw,72px)}
 .hero h1{font-size:clamp(44px,4vw,58px)}
