@@ -2,6 +2,8 @@
 // Node >=18, no dependencies. Run after editing site/index.html; --check never writes.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import { header, replaceHeader, themeHead } from './site-header.mjs';
+import { footer, replaceFooter, downloadStrings } from './site-footer.mjs';
 
 const root = new URL('../', import.meta.url);
 const base = 'https://nezzel.hululsoft.mr';
@@ -121,12 +123,34 @@ try {
   if (missing.length) throw new Error('Missing translation keys:\n' + missing.join('\n'));
   const alternates = [...locales, 'x-default'].map(l => `<link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}">`).join('\n');
   if (!source.includes(alternates)) throw new Error('site/index.html must contain all four hreflang links');
-  const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + translate(source, nodes, dictionaries[l], meta[l], l)]));
+  const schema = nodes.find(n => n.attrs.type === 'application/ld+json');
+  const release = {
+    version: JSON.parse(source.slice(schema.openEnd, schema.close)).softwareVersion,
+    mb: Number(nodes.find(n => n.attrs['data-mb'] && n.attrs.class?.split(' ').includes('size')).attrs['data-mb']),
+  };
+  const chrome = (html, locale, page) => replaceFooter(
+    themeHead(replaceHeader(html, header(dictionaries[locale], locale, page, paths, escape)), page !== ''),
+    footer(dictionaries[locale], locale, page, paths, escape, release));
+  const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(translate(source, nodes, dictionaries[l], meta[l], l), l, '')]));
+  for (const page of ['desktop/', 'desktop/install/']) {
+    for (const locale of locales) {
+      const path = `site${paths[locale]}${page}index.html`;
+      const desktop = await readFile(new URL(path, root), 'utf8');
+      const payload = JSON.stringify(downloadStrings(dictionaries[locale], locale, paths)).replaceAll('<', '\\u003c');
+      const generated = chrome(desktop.replace(/(<script type="application\/json" id="nz-i18n">)[\s\S]*?(<\/script>)/, (_, open, close) => open + payload + close), locale, page);
+      elements(generated); // Desktop bodies stay hand-authored; validate before writing chrome.
+      outputs.set(path, generated);
+    }
+  }
   // lastmod = the page's ld+json dateModified, so the sitemap stays reproducible
   const lastmod = /"dateModified":"(\d{4}-\d{2}-\d{2})"/.exec(source)?.[1];
   if (!lastmod) throw new Error('site/index.html ld+json needs dateModified (YYYY-MM-DD)');
-  const sitemapLinks = [...locales, 'x-default'].map(l => `    <xhtml:link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}"/>`).join('\n');
-  outputs.set('site/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' + locales.map(l => `  <url>\n    <loc>${base}${paths[l]}</loc>\n    <lastmod>${lastmod}</lastmod>\n${sitemapLinks}\n  </url>`).join('\n') + '\n</urlset>\n');
+  const sitemapPages = [ ['', lastmod], ['desktop/', '2026-11-10'], ['desktop/install/', '2026-11-10'] ];
+  const sitemapRows = sitemapPages.flatMap(([page, modified]) => {
+    const links = [...locales, 'x-default'].map(l => `    <xhtml:link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}${page}"/>`).join('\n');
+    return locales.map(l => `  <url>\n    <loc>${base}${paths[l]}${page}</loc>\n    <lastmod>${modified}</lastmod>\n${links}\n  </url>`);
+  });
+  outputs.set('site/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' + sitemapRows.join('\n') + '\n</urlset>\n');
   const stale = [];
   for (const [path, expected] of outputs) {
     const url = new URL(path, root);
@@ -136,7 +160,7 @@ try {
     else { await mkdir(new URL('./', url), { recursive: true }); await writeFile(url, expected); console.log(`Wrote ${path}`); }
   }
   if (stale.length) throw new Error('Stale files:\n' + stale.join('\n') + '\nRun node scripts/site-i18n.mjs');
-  console.log(check ? `site-i18n: OK (ar/en/fr; ${keys.size} keys; generated pages and sitemap current)` : 'site-i18n: generated ar/en/fr and sitemap');
+  console.log(check ? `site-i18n: OK (ar/en/fr; ${keys.size} keys; 9 headers/footers, generated pages and sitemap current)` : 'site-i18n: generated ar/en/fr and sitemap');
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
