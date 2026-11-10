@@ -32,8 +32,12 @@
   let linuxArch = /aarch64|arm64/i.test(navigator.userAgent) ? 'arm64' : 'x64';
 
   // Refine architecture where the browser tells us (Chromium UA-CH). Never on ?device= previews.
+  // A Mac's chip is only known once the client-hints lookup has answered (Safari and Firefox have none, so it stays a guess).
+  // A ?device= preview counts as known. Until it is known, a link to the Apple-chip file carries g=1 (set at click time).
+  let macKnown = !!q.get('device');
   if (!q.get('device') && navigator.userAgentData && navigator.userAgentData.getHighEntropyValues && (device === 'mac' || device === 'windows' || device === 'linux')) {
     navigator.userAgentData.getHighEntropyValues(['architecture']).then((v) => {
+      if (device === 'mac' && v.architecture) macKnown = true;
       if (device === 'mac' && v.architecture === 'x86') setDevice('mac-intel', false);
       if (device === 'windows' && v.architecture === 'arm') setDevice('windows-arm', false);
       if (device === 'linux' && v.architecture === 'arm') { linuxArch = 'arm64'; setDevice('linux', false); }
@@ -44,12 +48,25 @@
   const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
   // Download buttons lead to the thank-you page of this language, which starts the file through /download/desktop.
   // The static links in the HTML keep pointing at /download/desktop, so they still work without JavaScript.
+  // No token here: it is added when the link is used (see stampLinks), so coming Back and choosing again is a new request.
   const a = (key, p, linuxA) => {
     const [os, k] = KEYS[key];
     const arch = os === 'linux' ? (linuxA || linuxArch) : k;
-    // t = per-click token: the thank-you page starts a download once per token, so a duplicated tab never repeats it.
-    return `${t.page_desktop}thanks/?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '') + '&t=' + Date.now().toString(36);
+    return `${t.page_desktop}thanks/?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
   };
+  // Primary Apple-chip links (not the explicit "Mac with Apple chip?" choice) are marked: they get g=1 while the chip is a guess.
+  const GUESS = ' data-guess';
+  const newToken = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const stampLinks = (ev) => {
+    const l = ev.target.closest && ev.target.closest('a[href*="/thanks/?"]');
+    if (!l) return;
+    const u = new URL(l.getAttribute('href'), location.href);
+    u.searchParams.set('t', newToken());
+    if (l.hasAttribute('data-guess')) { if (macKnown) u.searchParams.delete('g'); else u.searchParams.set('g', '1'); }
+    l.setAttribute('href', u.pathname + u.search);
+  };
+  // Press, key activation (fires click), middle-click and the context menu ("open in new tab", "copy link address").
+  ['pointerdown', 'click', 'auxclick', 'contextmenu'].forEach((ev) => document.addEventListener(ev, stampLinks, true));
 
   // Phones, tablets, unknown devices: the visitor picks a system; both download controls share the choice.
   let picked = null;
@@ -64,38 +81,42 @@
   const ICON_COPY = svg('<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>');
   const ICON_OK = svg('<path d="m5 12 4 4L19 6"/>');
   // Both labels sit in one grid cell, so the button is as wide as the longer one and never jumps.
-  const copyInner = () => `<span class="cp"><span class="cp-a">${ICON_COPY}<span class="cp-t">${t.copy_link}</span></span><span class="cp-b" aria-hidden="true">${ICON_OK}<span class="cp-t">${t.link_copied}</span></span></span>`;
-  const sendHtml = () => `<p class="get-send"><button type="button" class="link-btn" data-share>${copyInner()}</button><button type="button" class="link-btn" data-share-native hidden><span class="cp-t">${t.share_more}</span></button><span class="vh" role="status" data-live></span></p>`;
-  function legacyCopy(text) {
+  const copyInner = () => `<span class="cp"><span class="cp-a">${ICON_COPY}<span class="cp-t">${t.copy_link}</span></span><span class="cp-b">${ICON_OK}<span class="cp-t">${t.link_copied}</span></span></span>`;
+  const sendHtml = () => `<p class="get-send"><button type="button" class="link-btn" data-share>${copyInner()}</button><button type="button" class="link-btn" data-share-native hidden><span class="cp-t">${t.share_more}</span></button><span class="vh" role="status" aria-live="polite" data-live></span></p>`;
+  // iOS-safe fallback: a read-only 16px textarea (no zoom, no keyboard) fixed off-screen, focused without scrolling;
+  // focus goes back to the button afterwards.
+  function legacyCopy(text, btn) {
     let ok = false;
-    const prev = document.activeElement;
+    const prev = btn || document.activeElement;
     try {
       const ta = document.createElement('textarea');
-      ta.value = text; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true');
-      ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;font-size:16px';
-      document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      ta.value = text; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true'); ta.tabIndex = -1;
+      ta.style.cssText = 'position:fixed;top:0;left:-9999px;inline-size:1px;block-size:1px;padding:0;border:0;opacity:0;font-size:16px';
+      document.body.append(ta);
+      try { ta.focus({ preventScroll: true }); } catch (e) {}
+      ta.select(); ta.setSelectionRange(0, text.length);
       try { ok = !!document.execCommand('copy'); } catch (e) {}
       ta.remove();
     } catch (e) {}
     try { if (prev && prev.focus) prev.focus({ preventScroll: true }); } catch (e) {}
     return ok;
   }
-  function copyText(text) {
+  function copyText(text, btn) {
     return new Promise((res) => {
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(() => res(true), () => res(legacyCopy(text)));
+          navigator.clipboard.writeText(text).then(() => res(true), () => res(legacyCopy(text, btn)));
           return;
         }
       } catch (e) {}
-      res(legacyCopy(text));
+      res(legacyCopy(text, btn));
     });
   }
   function copyLink(btn) {
     const scope = btn.closest('[data-get],[data-th-phone]') || document;
     const live = scope.querySelector('[data-live]');
     const hint = scope.querySelector('[data-hint]');
-    copyText(cleanUrl()).then((ok) => {
+    copyText(cleanUrl(), btn).then((ok) => {
       clearTimeout(btn._t);
       if (ok) {
         if (hint) hint.hidden = true;
@@ -132,7 +153,7 @@
       case 'mac':
       case 'mac-intel': {
         const intel = d === 'mac-intel';
-        return `<a class="${primary} dl-link" data-place="${place}" href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${content(intel ? t.mac_intel : t.mac, intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>')}</a>
+        return `<a class="${primary} dl-link" data-place="${place}"${intel ? '' : GUESS} href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${content(intel ? t.mac_intel : t.mac, intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>')}</a>
           ${meta(t.desk_meta + ' · ' + t.mac_note)}
           <p class="get-links"><a href="${a(intel ? 'mac-arm' : 'mac-intel', place)}">${intel ? t.other_arch_mac_arm : t.other_arch_mac}</a><a href="${t.install}#mac">${t.first_open}</a>${extra}</p>`;
       }
@@ -218,6 +239,7 @@
       const span = el.querySelector('span');
       const label = { mac: t.mac, 'mac-intel': t.mac_intel, windows: t.windows, 'windows-arm': t.windows_arm, linux: t.linux }[d];
       el.href = d === 'linux' ? '#get' : a({ mac: 'mac-arm', 'mac-intel': 'mac-intel', windows: 'win-x64', 'windows-arm': 'win-arm' }[d], 'nav');
+      if (d === 'mac') el.setAttribute('data-guess', ''); else el.removeAttribute('data-guess');
       span.innerHTML = `<span data-compact-label="long">${label}</span><span data-compact-label="short">${t.plat[base(d)]}</span>`;
       el.setAttribute('aria-label', label);
     });

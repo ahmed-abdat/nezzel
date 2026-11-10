@@ -308,14 +308,21 @@ body[data-page=thanks] .end :is(.fe,.gm):not(.frow,.soc){display:none}
 :root[dir=ltr] .th h1{line-height:1.06}
 .th-what{margin-block-start:clamp(14px,2vw,20px);font-size:clamp(18px,1.6vw,21px);line-height:1.55;color:var(--ink);max-inline-size:58ch}
 .th-meta{margin-block-start:2px;font-size:15px;line-height:24px;color:var(--ink-2)}
-.th-meta:empty{display:none}
+.th-meta:empty{display:block;min-block-size:24px}
+.th-what:empty{min-block-size:1.55em}
+.th-guess{margin-block-start:8px;font-size:16px;line-height:26px;color:var(--ink-2);max-inline-size:44rem}
+.th-guess[hidden]{display:none!important}
+.th-guess a,.th-ok .th-head .th-guess a{display:inline;padding-block:0;margin-block:0}
+.th-guess :is(a,bdi){line-height:0}
+.th-guess+.th-meta{margin-block-start:8px}
 .th-ok .th-alt{margin-block-start:14px}
 .th-mark{display:block;inline-size:60px;block-size:auto;margin-block-end:clamp(18px,2.4vw,26px);overflow:visible}
 .th-tray{stroke:var(--primary);transform-box:fill-box;transform-origin:center}
 .th-status{display:grid;align-items:center;margin-block-start:clamp(18px,2vw,24px);min-block-size:52px;font-size:18px;line-height:26px;color:var(--ink-2);max-inline-size:64ch}
 .th-status>[data-th-st]{grid-area:1/1;display:flex;flex-wrap:wrap;align-items:center;column-gap:18px;row-gap:10px;opacity:0;visibility:hidden}
-.th-status[data-now=a]>[data-th-st=a],.th-status[data-now=m]>[data-th-st=m],.th-status[data-now=b]>[data-th-st=b],.th-status[data-now=c]>[data-th-st=c]{opacity:1;visibility:visible}
-.th-status a,.th-alt a,.th-phone a{display:inline-block;padding-block:9px;margin-block:-9px;color:var(--teal-ink);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
+.th-status[data-now=a]>[data-th-st=a],.th-status[data-now=m]>[data-th-st=m],.th-status[data-now=b]>[data-th-st=b],.th-status[data-now=c]>[data-th-st=c],.th-status[data-now=d]>[data-th-st=d]{opacity:1;visibility:visible}
+:root[data-th-nt] .th-status[data-now=a]>[data-th-st=a]{opacity:0;visibility:hidden}
+.th-status a,.th-alt a,.th-phone a,.th-guess a{display:inline-block;padding-block:9px;margin-block:-9px;color:var(--teal-ink);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
 .th-links{display:inline-flex;flex-wrap:wrap;column-gap:18px;vertical-align:top}
 .th-links{align-items:center}
 .th-status a.btn{display:inline-flex;margin:0;padding:0 24px;min-block-size:52px;color:var(--on-bg);font-size:17px;font-weight:600;gap:10px;text-decoration:none;transition:transform .14s var(--ease-out),box-shadow .35s var(--ease)}
@@ -344,7 +351,7 @@ html[data-family=phone] .th-ok .th{padding-block-start:clamp(36px,10vw,56px)}
 .cp-b,[data-state=done] .cp-a{visibility:hidden}
 [data-state=done] .cp-b{visibility:visible}
 .get-send .link-btn .cp .i{inline-size:16px;block-size:16px}
-@media (hover:hover) and (pointer:fine){.th-status a:hover,.th-alt a:hover,.th-phone a:hover{text-decoration-color:currentColor}.th-direct:hover span{text-decoration-color:currentColor}}
+@media (hover:hover) and (pointer:fine){.th-status a:hover,.th-alt a:hover,.th-phone a:hover,.th-guess a:hover{text-decoration-color:currentColor}.th-direct:hover span{text-decoration-color:currentColor}}
 .th .get-pick{margin-block-start:28px}
 .th-steps{margin-block-start:clamp(48px,6vw,84px);padding-block-start:clamp(36px,5vw,56px);border-block-start:1px solid var(--hair)}
 .th-steps h2{font-size:clamp(26px,3vw,38px);line-height:1.3}
