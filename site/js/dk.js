@@ -223,9 +223,10 @@
       es.forEach((en) => {
         if (!en.isIntersecting) return;
         const k = en.target.dataset.step;
+        stepsEls.forEach((s) => (s === en.target ? s.setAttribute('aria-current', 'step') : s.removeAttribute('aria-current')));
+        if (![...scr].some((s) => s.dataset.screen === k)) return; /* steps without a real capture keep the last screen */
         scr.forEach((s) => s.classList.toggle('is-on', s.dataset.screen === k));
         dots.forEach((s) => s.classList.toggle('is-on', s.dataset.dot === k));
-        stepsEls.forEach((s) => (s === en.target ? s.setAttribute('aria-current', 'step') : s.removeAttribute('aria-current')));
       });
     }, { rootMargin: '-48% 0px -48% 0px' });
     stepsEls.forEach((s) => io.observe(s));
