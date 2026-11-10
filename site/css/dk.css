@@ -325,6 +325,10 @@ body[data-page=thanks] .end :is(.fe,.gm):not(.frow,.soc){display:none}
 .th-status a,.th-alt a,.th-phone a,.th-guess a{display:inline-block;padding-block:9px;margin-block:-9px;color:var(--teal-ink);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
 .th-links{display:inline-flex;flex-wrap:wrap;column-gap:18px;vertical-align:top}
 .th-links{align-items:center}
+/* narrow windows: the stacked states share one column that may not grow past the page; a long button label wraps */
+.th-status{grid-template-columns:minmax(0,1fr)}
+.th-status>[data-th-st],.th-links{min-inline-size:0;max-inline-size:100%}
+.th-status a.btn{max-inline-size:100%;white-space:normal;text-align:start;padding-block:10px;line-height:1.35}
 .th-status a.btn{display:inline-flex;margin:0;padding:0 24px;min-block-size:52px;color:var(--on-bg);font-size:17px;font-weight:600;gap:10px;text-decoration:none;transition:transform .14s var(--ease-out),box-shadow .35s var(--ease)}
 .th-status a.btn:active{transform:scale(.97)}
 .th-status a.btn span{text-decoration:none}
