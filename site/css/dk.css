@@ -188,8 +188,8 @@ html:not([data-mode]) .hero-fig .th-nojs{display:block}
 .hero .dk-lede{margin-block:clamp(14px,2vw,22px) clamp(20px,3vw,32px);font-size:clamp(17px,1.5vw,20px);color:var(--ink-2);max-inline-size:36ch}
 :root[dir=ltr] .hero .dk-lede{line-height:1.55}
 .hero-fig{min-inline-size:0}
-.hero-fig .shot{max-inline-size:750px;box-shadow:var(--shadow-shot),0 0 0 1px var(--hair)}
-@media (min-width:641px){.hero-fig .shot{border-radius:16px}
+.hero-fig .shot{max-inline-size:750px;border-radius:0;box-shadow:var(--shadow-shot),0 0 0 1px var(--hair)}
+@media (min-width:641px){.hero-fig .shot{border-radius:1.333% / 1.852%}
 }
 @media (min-width:1101px){.hero{grid-template-columns:minmax(0,.4fr) minmax(0,.6fr);gap:40px;padding-block-start:clamp(40px,5vw,72px)}
 .hero h1{font-size:clamp(44px,4vw,58px)}
@@ -209,7 +209,7 @@ html:not([data-mode]) .hero-fig .th-nojs{display:block}
 .tour-tx p{margin-block-start:8px;font-size:17px;color:var(--ink-2);max-inline-size:36ch}
 .tour-fig{display:grid;place-items:center;padding:clamp(12px,3vw,32px);border-radius:20px;background:var(--sunk);min-inline-size:0}
 .tour-fig .shot{max-inline-size:100%}
-.tour-fig .shot-card{max-inline-size:460px;border-radius:3.5% / 7.8%;box-shadow:none}
+.tour-fig .shot-card{max-inline-size:460px;border-radius:3.333% / 7.5%;box-shadow:var(--shadow-shot)}
 .tour-fig .shot-sheet{max-inline-size:340px}
 @media (min-width:900px){.tour-step{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(32px,5vw,72px)}
 .tour-fig{min-block-size:380px}
