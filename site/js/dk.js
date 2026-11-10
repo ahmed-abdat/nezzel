@@ -56,7 +56,7 @@
   // Linux package (deb|rpm|appimage): one value for the hero and the closing block.
   let pkg = 'deb';
   const PKGN = { deb: '.deb', rpm: '.rpm', appimage: 'AppImage' };
-  const sendHtml = (ctx) => `<p class="get-send"><button type="button" class="link-btn" data-share>${ico('share')}<span>${t.send}</span></button></p><p class="get-status" role="status"></p>`;
+  const sendHtml = (ctx) => `<p class="get-send"><button type="button" class="link-btn" data-share>${ico('share')}<span>${t.send}</span></button></p>`;
 
   function blockBase(d, ctx, back) {
     const place = ctx || 'get';
@@ -102,7 +102,7 @@
 
   // Phone-chosen views keep the quiet "send the link" action under the options.
   function block(d, ctx, back, from) {
-    return blockBase(d, ctx, back) + (back && from !== 'unknown' ? sendHtml() : '');
+    return blockBase(d, ctx, back) + (back && from !== 'unknown' ? sendHtml() : '') + '<p class="get-status" role="status"></p>';
   }
 
   function updateClosingMeta(el, d, back) {
@@ -174,6 +174,18 @@
       gets.forEach((el) => render(el, device, false));
       const next = host && host.querySelector(pick ? '.dl-link' : '[data-pick]');
       if (next) next.focus();
+      return;
+    }
+    // Download started: the click itself is untouched (no preventDefault); the block just says so.
+    const dl = ev.target.closest('.dl-link');
+    if (dl) {
+      const host = dl.closest('[data-get]');
+      const st = host && host.querySelector('.get-status');
+      const next = host && host.querySelector('.get-links a[href^="' + t.install + '"]');
+      if (st) {
+        const url = dl.getAttribute('href');
+        st.innerHTML = `<span class="dl-note"><span>${t.dl_started}</span><span>${t.dl_nothing} <a data-dl-retry href="${url}" target="_blank" rel="noopener">${t.dl_retry}</a> · <a href="https://github.com/ahmed-abdat/nezzel-desktop/releases/latest" target="_blank" rel="noopener">${t.dl_release}</a></span>${next ? `<a data-dl-next href="${next.getAttribute('href')}">${t.first_open}</a>` : ''}</span>`;
+      }
       return;
     }
     const share = ev.target.closest('[data-share]');

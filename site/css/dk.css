@@ -260,6 +260,16 @@ pre code{max-inline-size:100%}
 .get-send .link-btn span{text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
 .end .link-btn,.end .get-send .link-btn{color:inherit}
 .get-status:empty{display:none}
+/* download started note: quiet, same underline as .get-links */
+.dl-note{display:flex;flex-direction:column;align-items:flex-start;gap:0;margin-block-start:10px;font-size:15px;line-height:22px;color:var(--muted);animation:dl-note-in .18s var(--ease-out)}
+.dl-note>span:first-child{color:var(--ink)}
+.dl-note a{display:inline-block;padding-block:11px;margin-block:-4px;color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:.4em}
+.dl-note>span+span a,.dl-note>a{padding-block:11px}
+.dl-note>a{margin-block:-4px}
+@media (hover:hover) and (pointer:fine){.dl-note a:hover{text-decoration-color:currentColor}}
+.end .dl-note,.end .dl-note>span:first-child{color:inherit}
+@keyframes dl-note-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.dl-note{animation:none}}
 /* Phones: the primary download button fills the row in every system state and language */
 @media (max-width:640px){.get-hero .get>.dl-link{align-self:stretch}}
 /* Package picker: the tray gets an edge so its outer corners read as a whole, not clipped */
