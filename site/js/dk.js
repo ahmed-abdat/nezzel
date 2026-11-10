@@ -42,10 +42,12 @@
 
   /* ---------------- download block ---------------- */
   const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  // Download buttons lead to the thank-you page of this language, which starts the file through /download/desktop.
+  // The static links in the HTML keep pointing at /download/desktop, so they still work without JavaScript.
   const a = (key, p, linuxA) => {
     const [os, k] = KEYS[key];
     const arch = os === 'linux' ? (linuxA || linuxArch) : k;
-    return `/download/desktop?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
+    return `${t.page_desktop}thanks/?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
   };
   const OSQ = { mac: 'mac', windows: 'win', linux: 'linux' };
   // Plain per-system route (no arch): the visitor picks the exact file there.
@@ -174,18 +176,6 @@
       gets.forEach((el) => render(el, device, false));
       const next = host && host.querySelector(pick ? '.dl-link' : '[data-pick]');
       if (next) next.focus();
-      return;
-    }
-    // Download started: the click itself is untouched (no preventDefault); the block just says so.
-    const dl = ev.target.closest('.dl-link');
-    if (dl) {
-      const host = dl.closest('[data-get]');
-      const st = host && host.querySelector('.get-status');
-      const next = host && host.querySelector('.get-links a[href^="' + t.install + '"]');
-      if (st) {
-        const url = dl.getAttribute('href');
-        st.innerHTML = `<span class="dl-note"><span>${t.dl_started}</span><span>${t.dl_nothing} <a data-dl-retry href="${url}" target="_blank" rel="noopener">${t.dl_retry}</a> · <a href="https://github.com/ahmed-abdat/nezzel-desktop/releases/latest" target="_blank" rel="noopener">${t.dl_release}</a></span></span>`;
-      }
       return;
     }
     const share = ev.target.closest('[data-share]');

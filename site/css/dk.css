@@ -260,16 +260,6 @@ pre code{max-inline-size:100%}
 .get-send .link-btn span{text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
 .end .link-btn,.end .get-send .link-btn{color:inherit}
 .get-status:empty{display:none}
-/* download started note: quiet, same underline as .get-links */
-.dl-note{display:flex;flex-direction:column;align-items:flex-start;gap:0;margin-block-start:10px;font-size:15px;line-height:22px;color:var(--muted);animation:dl-note-in .18s var(--ease-out)}
-.dl-note>span:first-child{color:var(--ink)}
-.dl-note a{display:inline-block;padding-block:11px;margin-block:-4px;color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:.4em}
-.dl-note>span+span a,.dl-note>a{padding-block:11px}
-.dl-note>a{margin-block:-4px}
-@media (hover:hover) and (pointer:fine){.dl-note a:hover{text-decoration-color:currentColor}}
-.end .dl-note,.end .dl-note>span:first-child{color:inherit}
-@keyframes dl-note-in{from{opacity:0}to{opacity:1}}
-@media (prefers-reduced-motion:reduce){.dl-note{animation:none}}
 /* Phones: the primary download button fills the row in every system state and language */
 @media (max-width:640px){.get-hero .get>.dl-link{align-self:stretch}}
 /* Package picker: the tray gets an edge so its outer corners read as a whole, not clipped */
@@ -306,3 +296,46 @@ pre code{max-inline-size:100%}
   .get-choice button::before{grid-row:1}
   .get-choice small{grid-column:3;grid-row:1;text-align:end;font-size:13px}
 }
+/* ---- thank-you page (/desktop/thanks/): head, status line, first-open steps for one system ---- */
+.th [hidden],.th-steps [hidden]{display:none!important}
+.th-ok{display:none}
+:root[data-th=ok] .th-ok{display:block}
+:root[data-th=ok] .th-pick{display:none}
+body[data-page=thanks] .bar .mini{display:none!important}
+body[data-page=thanks] .end :is(.fe,.gm):not(.frow,.soc){display:none}
+.th{padding-block-start:clamp(44px,7vw,96px)}
+.th h1{font-size:clamp(36px,5.4vw,64px);line-height:1.2;max-inline-size:17em}
+:root[dir=ltr] .th h1{line-height:1.06}
+.th-what{margin-block-start:clamp(14px,2vw,20px);font-size:clamp(18px,1.6vw,21px);line-height:1.55;color:var(--ink);max-inline-size:58ch}
+.th-meta{margin-block-start:2px;font-size:15px;line-height:24px;color:var(--ink-2)}
+.th-meta:empty{display:none}
+.th-status{margin-block-start:14px;font-size:17px;line-height:26px;color:var(--ink-2);max-inline-size:60ch}
+.th-status a,.th-alt a{display:inline-block;padding-block:9px;margin-block:-9px;color:var(--teal-ink);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
+.th-links{display:inline-flex;flex-wrap:wrap;column-gap:18px;vertical-align:top}
+.th-status .th-direct{display:inline-flex;align-items:center;gap:.4em;font-weight:600;font-size:19px;text-decoration:none}
+.th-direct span{text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
+.th-alt{margin-block-start:18px;font-size:16px;line-height:26px;color:var(--ink-2)}
+.th-send{margin-block-start:6px}
+.th-sent{margin-block-start:4px;font-size:15px;line-height:22px;color:var(--ink-2)}
+.th-sent:empty{display:none}
+@media (hover:hover) and (pointer:fine){.th-status a:hover,.th-alt a:hover{text-decoration-color:currentColor}.th-direct:hover span{text-decoration-color:currentColor}}
+.th .get-pick{margin-block-start:28px}
+.th-steps{margin-block-start:clamp(44px,6vw,80px);padding-block-start:clamp(36px,5vw,56px);border-block-start:1px solid var(--hair)}
+.th-steps h2{font-size:clamp(26px,3vw,38px);line-height:1.3}
+.th-lead{margin-block-start:14px;font-size:17px;color:var(--ink-2);max-inline-size:60ch}
+.th-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;margin-block-start:28px;align-items:start}
+.th-list{display:grid;gap:26px}
+.th-list li{display:flex;gap:16px;align-items:flex-start}
+.th-list bdi{white-space:nowrap}
+body[data-page=thanks] .end{margin-block-start:clamp(24px,4vw,48px);padding-block-start:clamp(36px,5vw,56px)}
+body[data-page=thanks] .end .sep{margin-block-start:0}
+.th-list h3,.th-pkg h3{font:600 19px/1.5 var(--f-body);margin-block:3px 4px}
+.th-list p,.th-pkg p{font-size:16.5px;color:var(--ink-2)}
+.th-pkgs{margin-block-start:24px}
+.th-pkg .cmd{margin-block-start:14px}
+.th-more{margin-block-start:26px}
+@media (max-width:640px){.th-status{min-block-size:52px}}
+@media (min-width:900px){.th-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,72px)}}
+@media (prefers-reduced-motion:no-preference){.js .th-head{animation:th-in .45s var(--ease-out) both}@keyframes th-in{from{opacity:0;transform:translateY(8px)}}}
+body[data-page=thanks]{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+body[data-page=thanks] main{flex:1 0 auto}

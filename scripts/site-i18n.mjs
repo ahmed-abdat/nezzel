@@ -132,7 +132,7 @@ try {
     themeHead(replaceHeader(html, header(dictionaries[locale], locale, page, paths, escape)), page !== ''),
     footer(dictionaries[locale], locale, page, paths, escape, release));
   const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(translate(source, nodes, dictionaries[l], meta[l], l), l, '')]));
-  for (const page of ['desktop/', 'desktop/install/']) {
+  for (const page of ['desktop/', 'desktop/install/', 'desktop/thanks/']) {
     for (const locale of locales) {
       const path = `site${paths[locale]}${page}index.html`;
       const desktop = await readFile(new URL(path, root), 'utf8');
@@ -160,7 +160,7 @@ try {
     else { await mkdir(new URL('./', url), { recursive: true }); await writeFile(url, expected); console.log(`Wrote ${path}`); }
   }
   if (stale.length) throw new Error('Stale files:\n' + stale.join('\n') + '\nRun node scripts/site-i18n.mjs');
-  console.log(check ? `site-i18n: OK (ar/en/fr; ${keys.size} keys; 9 headers/footers, generated pages and sitemap current)` : 'site-i18n: generated ar/en/fr and sitemap');
+  console.log(check ? `site-i18n: OK (ar/en/fr; ${keys.size} keys; 12 headers/footers, generated pages and sitemap current)` : 'site-i18n: generated ar/en/fr and sitemap');
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
