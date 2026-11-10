@@ -184,7 +184,7 @@
       const next = host && host.querySelector('.get-links a[href^="' + t.install + '"]');
       if (st) {
         const url = dl.getAttribute('href');
-        st.innerHTML = `<span class="dl-note"><span>${t.dl_started}</span><span>${t.dl_nothing} <a data-dl-retry href="${url}" target="_blank" rel="noopener">${t.dl_retry}</a> · <a href="https://github.com/ahmed-abdat/nezzel-desktop/releases/latest" target="_blank" rel="noopener">${t.dl_release}</a></span>${next ? `<a data-dl-next href="${next.getAttribute('href')}">${t.first_open}</a>` : ''}</span>`;
+        st.innerHTML = `<span class="dl-note"><span>${t.dl_started}</span><span>${t.dl_nothing} <a data-dl-retry href="${url}" target="_blank" rel="noopener">${t.dl_retry}</a> · <a href="https://github.com/ahmed-abdat/nezzel-desktop/releases/latest" target="_blank" rel="noopener">${t.dl_release}</a></span></span>`;
       }
       return;
     }
