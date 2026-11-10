@@ -31,6 +31,15 @@
   const key = 'nz-thanks:' + query(req) + (tok ? '&t=' + tok : '');
   let started = false;
 
+  // The stored marker wins over the navigation type, so a duplicated tab (same sessionStorage, type 'navigate')
+  // never downloads again. Reload and back/forward never start either. A fresh click carries a new token.
+  const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+  let seen = false;
+  try { seen = sessionStorage.getItem(key) === '1'; } catch (e) {}
+  const fresh = !q.has('again') && !seen && !(nav && (nav.type === 'reload' || nav.type === 'back_forward'));
+  // Arrival moment on the mark: 'wait' (tray not drawn yet) -> 'go' (plays once) -> 'done'. Without a download attempt the page is simply settled.
+  root.dataset.thAn = fresh ? 'wait' : 'done';
+
   document.addEventListener('DOMContentLoaded', () => {
     const t = JSON.parse(document.getElementById('nz-i18n').textContent);
     const $ = (s) => document.querySelector(s);
@@ -78,16 +87,10 @@
       return;
     }
 
-    /* ---- status line: a = starting, b = three seconds after the attempt, c = no attempt (reload, back, language switch) ---- */
-    const show = (k) => all('[data-th-st]').forEach((el) => { el.hidden = el.dataset.thSt !== k; });
+    /* ---- status line: a = starts automatically, m = download fired, b = three seconds later, c = no attempt (reload, back, language switch) ---- */
+    const st = $('.th-status');
+    const show = (k) => { if (st) st.dataset.now = k; };
     show('a');
-
-    // The stored marker wins over the navigation type, so a duplicated tab (same sessionStorage, type 'navigate')
-    // never downloads again. Reload and back/forward never start either. A fresh click carries a new token.
-    const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
-    let seen = false;
-    try { seen = sessionStorage.getItem(key) === '1'; } catch (e) {}
-    const fresh = !q.has('again') && !seen && !(nav && (nav.type === 'reload' || nav.type === 'back_forward'));
     if (!fresh) { show('c'); return; }
 
     // Count the second only while the page is on screen (not prerendered, not in a hidden tab).
@@ -97,6 +100,11 @@
       started = true;
       try { sessionStorage.setItem(key, '1'); } catch (e) {}
       location.assign(fileUrl);
+      // The arrival moment starts with the download; it never blocks anything and is released once it has played.
+      if (st) st.classList.add('fx');
+      root.dataset.thAn = 'go';
+      show('m');
+      setTimeout(() => { root.dataset.thAn = 'done'; }, 900);
       setTimeout(() => show('b'), 3000);
     }, 1000);
     if (ready()) go();
