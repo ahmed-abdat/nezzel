@@ -47,33 +47,32 @@
     const arch = os === 'linux' ? linuxArch : k;
     return `/download/desktop?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
   };
-  const linkTo = (d, p) => (d === 'android' ? apk(p) : a({ mac: 'mac-arm', windows: 'win-x64', linux: 'deb' }[d], p));
+  const OSQ = { mac: 'mac', windows: 'win', linux: 'linux' };
+  // Plain per-system route (no arch): the visitor picks the exact file there.
+  const osHref = (x, p) => `/download/desktop?src=desk-${p}-${LANG}&os=${OSQ[x]}`;
 
   function block(d, ctx) {
     const place = ctx || 'get';
     const primary = ctx === 'footer' ? 'btn btn-close' : 'btn';
+    const extra = ctx === 'hero' ? `<a href="#get">${t.other_systems}</a>` : ctx === 'footer' ? ['mac', 'windows', 'linux'].filter(x => x !== base(d)).map(x => `<a href="${osHref(x, place)}">${t[x]}</a>`).join('') : '';
     const meta = value => ctx === 'footer' ? '' : `<p class="get-meta">${value}</p>`;
     const content = (label, chip = '', icon = 'download') => ctx === 'footer'
       ? `<span>${t.closing_label}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg>`
       : `${ico(icon)}<span class="btn-label">${label}</span>${chip}`;
     switch (d) {
-      case 'android':
-        return `<a class="${primary} dl-link" data-place="${place}" href="${apk(place)}">${content(t.android)}</a>
-          ${meta(t.android_meta)}
-          ${ctx === 'hero' ? `<p class="get-links"><a href="${t.page_desktop}">${t.also_desk}</a></p>` : ''}`;
       case 'mac':
       case 'mac-intel': {
         const intel = d === 'mac-intel';
         return `<a class="${primary} dl-link" data-place="${place}" href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${content(intel ? t.mac_intel : t.mac, intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>')}</a>
           ${meta(t.desk_meta + ' · ' + t.mac_note)}
-          <p class="get-links"><a href="${a(intel ? 'mac-arm' : 'mac-intel', place)}">${intel ? t.other_arch_mac_arm : t.other_arch_mac}</a><a href="${t.install}#mac">${t.first_open}</a></p>`;
+          <p class="get-links"><a href="${a(intel ? 'mac-arm' : 'mac-intel', place)}">${intel ? t.other_arch_mac_arm : t.other_arch_mac}</a><a href="${t.install}#mac">${t.first_open}</a>${extra}</p>`;
       }
       case 'windows':
       case 'windows-arm': {
         const arm = d === 'windows-arm';
         return `<a class="${primary} dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${content(arm ? t.windows_arm : t.windows)}</a>
           ${meta(t.desk_meta)}
-          <p class="get-links"><a href="${a(arm ? 'win-x64' : 'win-arm', place)}">${arm ? t.other_arch_win_x64 : t.other_arch_win}</a><a href="${t.install}#windows">${t.first_open}</a></p>`;
+          <p class="get-links"><a href="${a(arm ? 'win-x64' : 'win-arm', place)}">${arm ? t.other_arch_win_x64 : t.other_arch_win}</a><a href="${t.install}#windows">${t.first_open}</a>${extra}</p>`;
       }
       case 'linux':
         return `<div class="get-choice" role="radiogroup" aria-label="${t.pkg}">
@@ -82,21 +81,19 @@
           </div>
           <a class="${primary} dl-link" data-place="${place}" href="${a('deb', place)}" data-pkg-link>${content(t.get_pkg + ' <bdi dir="ltr">.deb</bdi>')}</a>
           ${meta(t.desk_meta)}
-          <p class="get-links"><a href="${t.install}#linux">${t.first_open}</a></p>`;
-      case 'iphone':
-      case 'ipad':
-        return `<p class="get-note"><strong>${t.ios_title}</strong> ${t.ios_body}</p>
-          <button type="button" class="${primary}" data-share>${content(t.send, '', 'share')}</button>
-          <p class="get-status" role="status"></p>`;
+          <p class="get-links"><a href="${t.install}#linux">${t.first_open}</a>${extra}</p>`;
       default:
-        return `<p class="get-note"><strong>${t.pick}</strong></p>
-          <div class="get-row">${['android', 'mac', 'windows', 'linux'].map((x) => `<a class="btn btn-outline dl-link" data-place="${place}" href="${place === 'hero' && x === 'android' ? t.page_android : linkTo(x, place)}">${t.plat[x]}</a>`).join('')}</div>`;
+        // Phone, tablet or unknown device: no default system, three equal choices.
+        return `<p class="get-for">${t.for_computers}</p>
+          <div class="get-pick" role="group" aria-label="${t.pick}">${['mac', 'windows', 'linux'].map((x) => `<a class="${ctx === 'footer' ? 'btn btn-close' : 'btn btn-outline'} dl-link" data-place="${place}" href="${osHref(x, place)}" aria-label="${t[x]}">${t.plat[x]}</a>`).join('')}</div>
+          ${d === 'android' ? `<p class="get-links"><a href="${t.page_android}">${t.android_link}</a></p>` : ''}`;
     }
   }
 
   function updateClosingMeta(el, d) {
     const meta = el.closest('.end')?.querySelector('[data-closing-meta]');
     if (!meta) return;
+    if (family(d) !== 'computer') { meta.innerHTML = t.desk_meta; return; }
     const architecture = { mac: 'Apple Silicon', 'mac-intel': 'Intel', windows: 'x64', 'windows-arm': 'ARM', linux: linuxArch }[d];
     const parts = [t.plat[base(d)], architecture].filter(Boolean).map(part => `<bdi>${part}</bdi>`);
     if (d === 'linux') parts.push('<bdi data-closing-package>.deb</bdi>');
@@ -104,15 +101,8 @@
     meta.innerHTML = parts.join(' · ');
   }
 
-  function targetFor(el, d) {
-    const fixed = el.dataset.get;
-    if (fixed === 'android') return 'android';
-    if (fixed === 'desktop') return family(d) === 'computer' ? d : 'mac';
-    return d;
-  }
-
   function render(el, d, animate) {
-    const next = targetFor(el, d);
+    const next = d;
     const signature = next === 'linux' ? next + ':' + linuxArch : next;
     if (el.dataset.for === signature) return;
     const swap = () => {
@@ -142,15 +132,12 @@
 
   function compact() {
     document.querySelectorAll('[data-get-compact]').forEach((el) => {
-      const fixed = el.dataset.getCompact;
-      let d = fixed === 'android' ? 'android' : fixed === 'desktop-auto' ? (family(device) === 'computer' ? device : 'mac') : device;
+      // Phones, tablets and unknown devices: no system in the label, the button goes to the choices.
+      if (family(device) !== 'computer') { el.href = '#get'; return; }
+      const d = device;
       const span = el.querySelector('span');
-      el.removeAttribute('data-share');
-      const use = el.querySelector('use'); if (use) use.setAttribute('href', d === 'iphone' || d === 'ipad' ? '#i-share' : '#i-download');
-      if (d === 'iphone' || d === 'ipad') { el.href = '#get'; el.setAttribute('data-share', ''); span.innerHTML = `<span data-compact-label="long">${t.send}</span><span data-compact-label="short">${t.send_short}</span>`; el.setAttribute('aria-label', t.send); return; }
-      if (d === 'unknown') { el.href = '#get'; return; }
-      const label = { android: t.android, mac: t.mac, 'mac-intel': t.mac_intel, windows: t.windows, 'windows-arm': t.windows_arm, linux: t.linux }[d];
-      el.href = d === 'android' ? apk('nav') : d === 'linux' ? '#get' : a({ mac: 'mac-arm', 'mac-intel': 'mac-intel', windows: 'win-x64', 'windows-arm': 'win-arm' }[d], 'nav');
+      const label = { mac: t.mac, 'mac-intel': t.mac_intel, windows: t.windows, 'windows-arm': t.windows_arm, linux: t.linux }[d];
+      el.href = d === 'linux' ? '#get' : a({ mac: 'mac-arm', 'mac-intel': 'mac-intel', windows: 'win-x64', 'windows-arm': 'win-arm' }[d], 'nav');
       span.innerHTML = `<span data-compact-label="long">${label}</span><span data-compact-label="short">${t.plat[base(d)]}</span>`;
       el.setAttribute('aria-label', label);
     });
@@ -161,15 +148,6 @@
   document.addEventListener('click', (ev) => {
     const pkg = ev.target.closest('[data-pkg]');
     if (pkg) { choosePkg(pkg); return; }
-    const share = ev.target.closest('[data-share]');
-    if (share) {
-      ev.preventDefault();
-      const url = location.origin + location.pathname.replace(/[^/]*$/, '');
-      const done = () => { const st = share.parentElement.querySelector('.get-status'); if (st) st.textContent = t.copied; };
-      if (navigator.share) navigator.share({ title: 'Nezzel', url }).catch(() => {});
-      else if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, done);
-      else done();
-    }
   });
 
   function choosePkg(b) {

@@ -71,7 +71,7 @@ export function downloadStrings(dict, locale, paths) {
     if (typeof dict[key] !== 'string' || !dict[key].trim()) throw new Error(`Missing footer translation: ${locale}: ${key}`);
     return dict[key];
   };
-  const keys = ["android", "mac", "mac_intel", "windows", "windows_arm", "linux", "android_meta", "mac_note", "other_arch_mac", "other_arch_mac_arm", "other_arch_win", "other_arch_win_x64", "first_open", "also_desk", "pkg", "deb", "rpm", "appimage", "get_pkg", "ios_title", "ios_body", "send", "send_short", "copied", "pick"];
+  const keys = ["android", "mac", "mac_intel", "windows", "windows_arm", "linux", "android_meta", "mac_note", "other_arch_mac", "other_arch_mac_arm", "other_arch_win", "other_arch_win_x64", "first_open", "also_desk", "pkg", "deb", "rpm", "appimage", "get_pkg", "ios_title", "ios_body", "send", "send_short", "copied", "pick", "for_computers", "android_link", "other_systems"];
   return {
     ...Object.fromEntries(keys.map(key => [key, value('download-' + key)])),
     desk_meta: value('desktop-end-meta'),

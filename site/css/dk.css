@@ -244,3 +244,10 @@ html:not([data-mode]) .hero-fig .th-nojs{display:block}
 @media (max-width:640px){.specs > div{grid-template-columns:minmax(0,1fr);gap:2px}
 }
 pre code{max-inline-size:100%}
+/* Phones, tablets, unknown devices: three equal system choices instead of a Mac default */
+.get .get-for{max-inline-size:36ch;font-size:16px;line-height:1.55}
+.get-pick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;inline-size:min(100%,460px)}
+.get-pick .btn{min-height:52px;padding:0 8px;font-size:16px;gap:0}
+.end .get-for{color:inherit;max-inline-size:none}
+.end .get-pick{inline-size:100%;max-inline-size:520px}
+.end .get-pick .btn{min-height:56px;justify-content:flex-start;font-size:clamp(22px,5vw,40px)}
