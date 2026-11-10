@@ -251,3 +251,12 @@ pre code{max-inline-size:100%}
 .end .get-for{color:inherit;max-inline-size:none}
 .end .get-pick{inline-size:100%;max-inline-size:520px}
 .end .get-pick .btn{min-height:56px;justify-content:flex-start;font-size:clamp(22px,5vw,40px)}
+/* Phone picker: back link and the quiet "send the link" action */
+.link-btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0;background:none;border:0;border-block-end:1px solid color-mix(in srgb,currentColor 30%,transparent);border-radius:0;font:inherit;font-weight:500;color:var(--primary);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.get-links .link-btn{border-block-end:1px solid color-mix(in srgb,var(--primary) 30%,transparent)}
+.get-send{margin-block:4px 0}
+.get-send .link-btn{color:var(--muted);font-size:15px;font-weight:400;border-block-end:0}
+.get-send .link-btn .i{inline-size:16px;block-size:16px}
+.get-send .link-btn span{text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
+.end .link-btn,.end .get-send .link-btn{color:inherit}
+.get-status:empty{display:none}

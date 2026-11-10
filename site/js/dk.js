@@ -51,10 +51,13 @@
   // Plain per-system route (no arch): the visitor picks the exact file there.
   const osHref = (x, p) => `/download/desktop?src=desk-${p}-${LANG}&os=${OSQ[x]}`;
 
-  function block(d, ctx) {
+  // Phones, tablets, unknown devices: the visitor picks a system; both download controls share the choice.
+  let picked = null;
+
+  function block(d, ctx, back) {
     const place = ctx || 'get';
     const primary = ctx === 'footer' ? 'btn btn-close' : 'btn';
-    const extra = ctx === 'hero' ? `<a href="#get">${t.other_systems}</a>` : ctx === 'footer' ? ['mac', 'windows', 'linux'].filter(x => x !== base(d)).map(x => `<a href="${osHref(x, place)}">${t[x]}</a>`).join('') : '';
+    const extra = back ? `<button type="button" class="link-btn" data-unpick>${t.other_systems}</button>` : ctx === 'hero' ? `<a href="#get">${t.other_systems}</a>` : ctx === 'footer' ? ['mac', 'windows', 'linux'].filter(x => x !== base(d)).map(x => `<a href="${osHref(x, place)}">${t[x]}</a>`).join('') : '';
     const meta = value => ctx === 'footer' ? '' : `<p class="get-meta">${value}</p>`;
     const content = (label, chip = '', icon = 'download') => ctx === 'footer'
       ? `<span>${t.closing_label}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg>`
@@ -85,8 +88,9 @@
       default:
         // Phone, tablet or unknown device: no default system, three equal choices.
         return `<p class="get-for">${t.for_computers}</p>
-          <div class="get-pick" role="group" aria-label="${t.pick}">${['mac', 'windows', 'linux'].map((x) => `<a class="${ctx === 'footer' ? 'btn btn-close' : 'btn btn-outline'} dl-link" data-place="${place}" href="${osHref(x, place)}" aria-label="${t[x]}">${t.plat[x]}</a>`).join('')}</div>
-          ${d === 'android' ? `<p class="get-links"><a href="${t.page_android}">${t.android_link}</a></p>` : ''}`;
+          <div class="get-pick" role="group" aria-label="${t.pick}">${['mac', 'windows', 'linux'].map((x) => `<button type="button" class="${ctx === 'footer' ? 'btn btn-close' : 'btn btn-outline'}" data-pick="${x}" data-place="${place}" aria-label="${t[x]}">${t.plat[x]}</button>`).join('')}</div>
+          ${d === 'android' ? `<p class="get-links"><a href="${t.page_android}">${t.android_link}</a></p>` : ''}
+          ${d === 'unknown' ? '' : `<p class="get-send"><button type="button" class="link-btn" data-share>${ico('share')}<span>${t.send}</span></button></p><p class="get-status" role="status"></p>`}`;
     }
   }
 
@@ -102,12 +106,15 @@
   }
 
   function render(el, d, animate) {
-    const next = d;
-    const signature = next === 'linux' ? next + ':' + linuxArch : next;
+    const back = family(d) !== 'computer' && !!picked;
+    const next = back ? picked : d;
+    const signature = (next === 'linux' ? next + ':' + linuxArch : next) + (back ? ':back' : '');
     if (el.dataset.for === signature) return;
     const swap = () => {
       el.dataset.for = signature;
-      el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '');
+      // Choosing re-renders the control and moves focus itself; announcing the whole block on top would double up.
+      el.setAttribute('aria-live', family(d) === 'computer' ? 'polite' : 'off');
+      el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '', back);
       if (el.hasAttribute('data-closing')) updateClosingMeta(el, next);
     };
     if (!animate || reduce.matches || !el.animate) { swap(); return; }
@@ -148,6 +155,25 @@
   document.addEventListener('click', (ev) => {
     const pkg = ev.target.closest('[data-pkg]');
     if (pkg) { choosePkg(pkg); return; }
+    const pick = ev.target.closest('[data-pick]');
+    const unpick = ev.target.closest('[data-unpick]');
+    if (pick || unpick) {
+      const host = (pick || unpick).closest('[data-get]');
+      picked = pick ? pick.dataset.pick : null;
+      gets.forEach((el) => render(el, device, false));
+      const next = host && host.querySelector(pick ? '.dl-link' : '[data-pick]');
+      if (next) next.focus();
+      return;
+    }
+    const share = ev.target.closest('[data-share]');
+    if (share) {
+      const url = location.origin + location.pathname;
+      const st = share.closest('[data-get]').querySelector('.get-status');
+      const say = (msg) => { if (st) st.textContent = msg; };
+      const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => say(t.copied), () => say(url));
+      if (navigator.share) navigator.share({ title: 'Nezzel', url }).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
+      else copy();
+    }
   });
 
   function choosePkg(b) {
