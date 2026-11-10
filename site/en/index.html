@@ -610,6 +610,8 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
       </div>
     </details>
     <a class="btn btn-sm mini dl-link" data-place="nav" href="/download?src=nav-en" aria-label="Download"><svg class="i" aria-hidden="true"><use href="#dl"/></svg><span>Download</span></a>
+    <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="menu-panel" aria-label="Menu"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path class="ma" d="M5 8.5h14"/><path class="mb" d="M5 15.5h14"/></svg></button>
+    <div class="menu-panel" id="menu-panel"><a href="#how">How it works</a><a href="#more">Features</a><a href="#install">Install</a><a href="#faq">FAQ</a><a href="/en/desktop/">Desktop app</a></div>
   </nav>
 </div>
 <!-- chrome:/header -->
@@ -946,7 +948,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
     "w-left": "<span class=\"ltr num wt\">0:08</span> left",
     language:"Language", "og-alt":"Nezzel: save videos straight from a link. A phone showing the qualities on offer",
-    skip:"Skip to content", "to-dark":"Dark mode", "to-light":"Light mode", nl1:"How it works", nl2:"Features", nl3:"Install", nl4:"FAQ", "fp-pause":"Pause the video", "fp-play":"Play the video", get:"Download", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copy the link</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>does the rest</span></span>",
+    skip:"Skip to content", menu:"Menu", "to-dark":"Dark mode", "to-light":"Light mode", nl1:"How it works", nl2:"Features", nl3:"Install", nl4:"FAQ", "fp-pause":"Pause the video", "fp-play":"Play the video", get:"Download", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copy the link</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>does the rest</span></span>",
     cta:"Download the app", meta:"Android 10 or newer · version", howto:"How to install", hm:"Free · No ads · Android 10 or newer", ver:"Version",
     "fan-aria":"Nezzel’s screens: picking a quality, a download on its way and a saved file",
     "hero-shots":"<div class=\"fph s\"><img src=\"/img/screens/en-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",
@@ -1062,6 +1064,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
     "w-left": "متبقٍّ <span class=\"ltr num wt\">0:08</span>",
       "skip": "تخطَّ إلى المحتوى",
+      "menu": "القائمة",
       "get": "تنزيل",
       "to-dark": "الوضع الداكن",
       "nl1": "كيف يعمل",
@@ -1236,7 +1239,7 @@ html.inapp:not(.ios) .iab{display:block;margin:0;max-width:34ch;padding:10px 16p
     "lang-ar":"العربية", "lang-en":"English", "lang-fr":"Français",
     "w-left": "<span class=\"ltr num wt\">0:08</span> restant",
     language:"Langue", "og-alt":"Nezzel : la vidéo, il suffit du lien. Un téléphone affiche les qualités proposées",
-    skip:"Aller au contenu", "to-dark":"Mode sombre", "to-light":"Mode clair", nl1:"Fonctionnement", nl2:"Fonctions", nl3:"Installation", nl4:"FAQ", "fp-pause":"Mettre la vidéo en pause", "fp-play":"Lire la vidéo", get:"Télécharger", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copiez le lien</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>s’occupe du reste</span></span>",
+    skip:"Aller au contenu", menu:"Menu", "to-dark":"Mode sombre", "to-light":"Mode clair", nl1:"Fonctionnement", nl2:"Fonctions", nl3:"Installation", nl4:"FAQ", "fp-pause":"Mettre la vidéo en pause", "fp-play":"Lire la vidéo", get:"Télécharger", h1:"<span class=\"ln\" style=\"--k:0\"><span>Copiez le lien</span></span> <span class=\"ln\" style=\"--k:1\"><span><bdi>Nezzel</bdi></span></span> <span class=\"ln\" style=\"--k:2\"><span>s’occupe du reste</span></span>",
     cta:"Télécharger l’application", meta:"Android 10 ou plus récent · version", howto:"Comment l’installer ?", hm:"Gratuit · Sans pub · Android 10 ou plus récent", ver:"Version",
     "fan-aria":"Les écrans de Nezzel : le choix de la qualité, un téléchargement en cours et un fichier enregistré",
     "hero-shots":"<div class=\"fph s\"><img src=\"/img/screens/en-light-recent.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph e\"><img src=\"/img/screens/en-light-saved.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div><div class=\"fph m\"><img src=\"/img/screens/en-light-sheet.webp\" alt=\"\" width=\"640\" height=\"1387\" decoding=\"async\"></div>",

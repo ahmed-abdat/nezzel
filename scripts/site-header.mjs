@@ -27,6 +27,8 @@ export function header(dict, locale, page, paths, escape) {
       </div>
     </details>
     <a class="btn btn-sm mini${computer ? '' : ' dl-link'}" ${computer ? 'data-get-compact="desktop-auto" href="#get"' : `data-place="nav" href="/download?src=nav-${locale}"`} aria-label="${text('get')}"><svg class="i" aria-hidden="true"><use href="#${computer ? 'i-download' : 'dl'}"/></svg><span>${text('get')}</span></a>
+    <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="menu-panel" aria-label="${text('menu')}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path class="ma" d="M5 8.5h14"/><path class="mb" d="M5 15.5h14"/></svg></button>
+    <div class="menu-panel" id="menu-panel">${pages.map(([href, key]) => link(href, key)).join('')}</div>
   </nav>
 </div>
 <!-- chrome:/header -->`;

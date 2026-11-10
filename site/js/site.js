@@ -81,12 +81,36 @@
       closeLanguages();
     }));
   }
+  // Narrow-screen menu: a disclosure button; closes on Esc, outside tap, link tap, focus leaving, and when the wide header takes over.
+  const menuBtn = document.getElementById('menu-btn');
+  const menuPanel = document.getElementById('menu-panel');
+  const setMenu = (open, refocus = false) => {
+    if (!menuBtn || !header) return;
+    header.classList.toggle('menu-open', open);
+    menuBtn.setAttribute('aria-expanded', String(open));
+    if (open) { closeLanguages(); document.body.classList.remove('tuck'); }
+    if (!open && refocus) menuBtn.focus();
+  };
+  if (menuBtn && menuPanel) {
+    const wide = matchMedia('(min-width:1024px)');
+    menuBtn.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
+    menuPanel.addEventListener('click', event => { if (event.target.closest('a')) setMenu(false); });
+    document.addEventListener('pointerdown', event => { if (!header.contains(event.target)) setMenu(false); });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && menuBtn.getAttribute('aria-expanded') === 'true') { event.preventDefault(); setMenu(false, true); }
+    });
+    header.addEventListener('focusout', event => {
+      if (event.relatedTarget && !menuBtn.contains(event.relatedTarget) && !menuPanel.contains(event.relatedTarget)) setMenu(false);
+    });
+    wide.addEventListener('change', () => { if (wide.matches) setMenu(false); });
+    languages?.addEventListener('toggle', () => { if (languages.open) setMenu(false); });
+  }
   let lastY = scrollY, accumulated = 0;
   const onScroll = () => {
     const y = scrollY, delta = y - lastY; lastY = y;
     accumulated = Math.sign(delta) === Math.sign(accumulated) ? accumulated + delta : delta;
     document.body.classList.toggle('scrolled', y > 10);
-    if (y < 160 || accumulated < -24 || languages?.open || header?.contains(document.activeElement)) document.body.classList.remove('tuck');
+    if (y < 160 || accumulated < -24 || languages?.open || header?.classList.contains('menu-open') || header?.contains(document.activeElement)) document.body.classList.remove('tuck');
     else if (accumulated > 48) document.body.classList.add('tuck');
   };
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
