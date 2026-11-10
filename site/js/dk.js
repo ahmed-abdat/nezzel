@@ -42,9 +42,9 @@
 
   /* ---------------- download block ---------------- */
   const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
-  const a = (key, p) => {
+  const a = (key, p, linuxA) => {
     const [os, k] = KEYS[key];
-    const arch = os === 'linux' ? linuxArch : k;
+    const arch = os === 'linux' ? (linuxA || linuxArch) : k;
     return `/download/desktop?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
   };
   const OSQ = { mac: 'mac', windows: 'win', linux: 'linux' };
@@ -53,9 +53,15 @@
 
   // Phones, tablets, unknown devices: the visitor picks a system; both download controls share the choice.
   let picked = null;
+  // Linux package (deb|rpm|appimage): one value for the hero and the closing block.
+  let pkg = 'deb';
+  const PKGN = { deb: '.deb', rpm: '.rpm', appimage: 'AppImage' };
+  const sendHtml = (ctx) => `<p class="get-send"><button type="button" class="link-btn" data-share>${ico('share')}<span>${t.send}</span></button></p><p class="get-status" role="status"></p>`;
 
-  function block(d, ctx, back) {
+  function blockBase(d, ctx, back) {
     const place = ctx || 'get';
+    // A phone's own CPU says nothing about the computer it is choosing for: fixed x64 plus a visible ARM link.
+    const la = back ? 'x64' : linuxArch;
     const primary = ctx === 'footer' ? 'btn btn-close' : 'btn';
     const extra = back ? `<button type="button" class="link-btn" data-unpick>${t.other_systems}</button>` : ctx === 'hero' ? `<a href="#get">${t.other_systems}</a>` : ctx === 'footer' ? ['mac', 'windows', 'linux'].filter(x => x !== base(d)).map(x => `<a href="${osHref(x, place)}">${t[x]}</a>`).join('') : '';
     const meta = value => ctx === 'footer' ? '' : `<p class="get-meta">${value}</p>`;
@@ -80,27 +86,32 @@
       case 'linux':
         return `<div class="get-choice" role="radiogroup" aria-label="${t.pkg}">
             ${[['deb', '.deb', t.deb], ['rpm', '.rpm', t.rpm], ['appimage', 'AppImage', t.appimage]].map(([k, n, s], i) =>
-              `<button type="button" role="radio" aria-checked="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-pkg="${k}" data-name="${n}"><b dir="ltr">${n}</b><small>${s}</small></button>`).join('')}
+              `<button type="button" role="radio" aria-checked="${k === pkg}" tabindex="${k === pkg ? 0 : -1}" data-pkg="${k}" data-name="${n}"><b dir="ltr">${n}</b><small>${s}</small></button>`).join('')}
           </div>
-          <a class="${primary} dl-link" data-place="${place}" href="${a('deb', place)}" data-pkg-link>${content(t.get_pkg + ' <bdi dir="ltr">.deb</bdi>')}</a>
+          <a class="${primary} dl-link" data-place="${place}" href="${a(pkg, place, la)}" data-pkg-link data-arch="${la}">${content(t.get_pkg + ` <bdi dir="ltr">${PKGN[pkg]}</bdi>`)}</a>
           ${meta(t.desk_meta)}
-          <p class="get-links"><a href="${t.install}#linux">${t.first_open}</a>${extra}</p>`;
+          <p class="get-links">${back ? `<a href="${a(pkg, place, 'arm64')}" data-arm-link>${t.other_arch_linux}</a>` : ''}<a href="${t.install}#linux">${t.first_open}</a>${extra}</p>`;
       default:
         // Phone, tablet or unknown device: no default system, three equal choices.
         return `<p class="get-for">${t.for_computers}</p>
           <div class="get-pick" role="group" aria-label="${t.pick}">${['mac', 'windows', 'linux'].map((x) => `<button type="button" class="${ctx === 'footer' ? 'btn btn-close' : 'btn btn-outline'}" data-pick="${x}" data-place="${place}" aria-label="${t[x]}">${t.plat[x]}</button>`).join('')}</div>
           ${d === 'android' ? `<p class="get-links"><a href="${t.page_android}">${t.android_link}</a></p>` : ''}
-          ${d === 'unknown' ? '' : `<p class="get-send"><button type="button" class="link-btn" data-share>${ico('share')}<span>${t.send}</span></button></p><p class="get-status" role="status"></p>`}`;
+          ${d === 'unknown' ? '' : sendHtml()}`;
     }
   }
 
-  function updateClosingMeta(el, d) {
+  // Phone-chosen views keep the quiet "send the link" action under the options.
+  function block(d, ctx, back, from) {
+    return blockBase(d, ctx, back) + (back && from !== 'unknown' ? sendHtml() : '');
+  }
+
+  function updateClosingMeta(el, d, back) {
     const meta = el.closest('.end')?.querySelector('[data-closing-meta]');
     if (!meta) return;
     if (family(d) !== 'computer') { meta.innerHTML = t.desk_meta; return; }
-    const architecture = { mac: 'Apple Silicon', 'mac-intel': 'Intel', windows: 'x64', 'windows-arm': 'ARM', linux: linuxArch }[d];
+    const architecture = { mac: 'Apple Silicon', 'mac-intel': 'Intel', windows: 'x64', 'windows-arm': 'ARM', linux: back ? 'x64' : linuxArch }[d];
     const parts = [t.plat[base(d)], architecture].filter(Boolean).map(part => `<bdi>${part}</bdi>`);
-    if (d === 'linux') parts.push('<bdi data-closing-package>.deb</bdi>');
+    if (d === 'linux') parts.push(`<bdi data-closing-package>${PKGN[pkg]}</bdi>`);
     parts.push(t.desk_meta);
     meta.innerHTML = parts.join(' · ');
   }
@@ -114,8 +125,8 @@
       el.dataset.for = signature;
       // Choosing re-renders the control and moves focus itself; announcing the whole block on top would double up.
       el.setAttribute('aria-live', family(d) === 'computer' ? 'polite' : 'off');
-      el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '', back);
-      if (el.hasAttribute('data-closing')) updateClosingMeta(el, next);
+      el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '', back, d);
+      if (el.hasAttribute('data-closing')) updateClosingMeta(el, next, back);
     };
     if (!animate || reduce.matches || !el.animate) { swap(); return; }
     // Device switch: old content leaves fast, new content arrives softly (one object, blur bridges the swap).
@@ -170,19 +181,30 @@
       const url = location.origin + location.pathname;
       const st = share.closest('[data-get]').querySelector('.get-status');
       const say = (msg) => { if (st) st.textContent = msg; };
-      const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => say(t.copied), () => say(url));
-      if (navigator.share) navigator.share({ title: 'Nezzel', url }).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
-      else copy();
+      // Fallback chain never throws: copy, else show the URL itself.
+      const copy = () => {
+        try { Promise.resolve(navigator.clipboard.writeText(url)).then(() => say(t.copied), () => say(url)); } catch (e) { say(url); }
+      };
+      try {
+        if (!navigator.share) copy();
+        else Promise.resolve(navigator.share({ title: 'Nezzel', url })).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
+      } catch (e) { copy(); }
     }
   });
 
   function choosePkg(b) {
-    const g = b.parentElement;
-    g.querySelectorAll('[role=radio]').forEach((r) => { const on = r === b; r.setAttribute('aria-checked', String(on)); r.tabIndex = on ? 0 : -1; });
-    const link = g.parentElement.querySelector('[data-pkg-link]');
-        link.href = a(b.dataset.pkg, link.dataset.place || 'get');
-    const label = link.querySelector('bdi') || g.closest('.end')?.querySelector('[data-closing-package]');
-    if (label) label.textContent = b.dataset.name;
+    pkg = b.dataset.pkg;
+    gets.forEach((el) => {
+      el.querySelectorAll('[role=radio]').forEach((r) => { const on = r.dataset.pkg === pkg; r.setAttribute('aria-checked', String(on)); r.tabIndex = on ? 0 : -1; });
+      const link = el.querySelector('[data-pkg-link]');
+      if (link) {
+        link.href = a(pkg, link.dataset.place || 'get', link.dataset.arch);
+        const label = link.querySelector('bdi'); if (label) label.textContent = PKGN[pkg];
+      }
+      const arm = el.querySelector('[data-arm-link]');
+      if (arm) arm.href = a(pkg, link ? link.dataset.place || 'get' : 'get', 'arm64');
+      const cl = el.closest('.end')?.querySelector('[data-closing-package]'); if (cl) cl.textContent = PKGN[pkg];
+    });
   }
   // Radio group keys: arrows move and select (inline direction aware).
   document.addEventListener('keydown', (ev) => {
