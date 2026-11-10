@@ -96,6 +96,7 @@ pre{margin:0;padding:14px 16px;border-radius:12px;background:var(--c-high);color
 .specs-code{margin-block-start:24px;max-inline-size:760px}
 .specs-code > div{align-items:center}
 .specs-code pre{padding:8px 12px;font-size:13px}
+@media (min-width:641px){.specs-code pre:has(.copy-btn){padding-block:17px}}
 .doc-android{padding-block:36px;color:var(--ink-3)}
 .ill{margin:0;display:grid;gap:8px}
 .ill figcaption{font-size:12.5px;color:var(--ink-3)}

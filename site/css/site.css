@@ -160,6 +160,8 @@ body.past .mini{opacity:1;transform:none;pointer-events:auto}
 .copy-btn{position:absolute;inset-block-start:6px;inset-inline-end:6px;min-height:44px;min-width:72px}
 .copy-btn.is-done{background:var(--primary-c);color:var(--on-primary-c);border-color:var(--primary)}
 pre:has(.copy-btn) code{display:block;padding-inline-end:84px}
+/* the box is always taller than the 44px button plus its 6px inset, and one line of code centres on it */
+@media (min-width:641px){pre:has(.copy-btn){padding-block:16px;min-block-size:56px}}
 .get-note strong{font-family:inherit;font-weight:600;font-size:17px;line-height:1.45;margin-block-end:4px}
 .get-note{padding-block:14px;border-block:1px solid var(--edge)}
 .get-hero .get{min-block-size:0}
