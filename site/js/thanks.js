@@ -26,7 +26,9 @@
   if (!req) return;
 
   const fileUrl = '/download/desktop?' + query(req);
-  const key = 'nz-thanks:' + query(req);
+  // Per-click token from the button that led here (validated, used only inside the storage key; never shown).
+  const tok = /^[a-z0-9]{1,12}$/.test(q.get('t') || '') ? q.get('t') : null;
+  const key = 'nz-thanks:' + query(req) + (tok ? '&t=' + tok : '');
   let started = false;
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -61,14 +63,18 @@
     }
 
     /* ---- language switch keeps the request, and never starts a second download ---- */
+    if (chip && !chip.hidden) chip.href += '&t=' + Date.now().toString(36);
     all('a[hreflang]').forEach((a) => { a.href = a.getAttribute('href').split('?')[0] + '?' + query(req) + '&again=1'; });
 
-    /* ---- phones and tablets: the file is for a computer ---- */
-    const share = $('[data-th-share]');
-    if (share && root.dataset.family === 'phone') {
-      share.closest('[data-th-send]').hidden = false;
+    /* ---- phones and tablets: the file is for a computer, nothing starts here ---- */
+    const phone = root.dataset.family === 'phone';
+    if (phone) {
+      const box = $('[data-th-phone]');
+      if (box) box.hidden = false;
+      all('[data-th-st]').forEach((el) => { el.hidden = true; });
+      const share = $('[data-th-share]');
       const say = (m) => { const s = $('[data-th-sent]'); if (s) s.textContent = m; };
-      share.addEventListener('click', () => {
+      if (share) share.addEventListener('click', () => {
         const url = location.origin + location.pathname + '?' + query(req);
         const copy = () => { try { Promise.resolve(navigator.clipboard.writeText(url)).then(() => say(t.copied), () => say(url)); } catch (e) { say(url); } };
         try {
@@ -76,27 +82,41 @@
           else Promise.resolve(navigator.share({ title: 'Nezzel', url })).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
         } catch (e) { copy(); }
       });
+      return;
     }
 
     /* ---- status line: a = starting, b = three seconds after the attempt, c = no attempt (reload, back, language switch) ---- */
     const show = (k) => all('[data-th-st]').forEach((el) => { el.hidden = el.dataset.thSt !== k; });
     show('a');
 
-    // Navigation type is the main guard: reload and back/forward never start. sessionStorage backs it up where the
-    // Navigation Timing entry is missing. A fresh visit to the same URL (clicking the button again) does start.
+    // The stored marker wins over the navigation type, so a duplicated tab (same sessionStorage, type 'navigate')
+    // never downloads again. Reload and back/forward never start either. A fresh click carries a new token.
     const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
     let seen = false;
     try { seen = sessionStorage.getItem(key) === '1'; } catch (e) {}
-    const fresh = !q.has('again') && (nav ? nav.type === 'navigate' : !seen);
+    const fresh = !q.has('again') && !seen && !(nav && (nav.type === 'reload' || nav.type === 'back_forward'));
     if (!fresh) { show('c'); return; }
 
-    setTimeout(() => {
+    // Count the second only while the page is on screen (not prerendered, not in a hidden tab).
+    const ready = () => !document.prerendering && !document.hidden && document.visibilityState !== 'hidden';
+    const go = () => setTimeout(() => {
       if (started) return;
       started = true;
       try { sessionStorage.setItem(key, '1'); } catch (e) {}
       location.assign(fileUrl);
       setTimeout(() => show('b'), 3000);
     }, 1000);
+    if (ready()) go();
+    else {
+      const wake = () => {
+        if (!ready()) return;
+        document.removeEventListener('visibilitychange', wake);
+        document.removeEventListener('prerenderingchange', wake);
+        go();
+      };
+      document.addEventListener('visibilitychange', wake);
+      document.addEventListener('prerenderingchange', wake);
+    }
   });
 
   // Restored from the back/forward cache: the page is exactly as it was left; nothing starts again.

@@ -47,14 +47,13 @@
   const a = (key, p, linuxA) => {
     const [os, k] = KEYS[key];
     const arch = os === 'linux' ? (linuxA || linuxArch) : k;
-    return `${t.page_desktop}thanks/?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '');
+    // t = per-click token: the thank-you page starts a download once per token, so a duplicated tab never repeats it.
+    return `${t.page_desktop}thanks/?src=desk-${p}-${LANG}&os=${os}` + (arch ? `&arch=${arch}` : '') + (os === 'linux' ? `&pkg=${key}` : '') + '&t=' + Date.now().toString(36);
   };
-  const OSQ = { mac: 'mac', windows: 'win', linux: 'linux' };
-  // Plain per-system route (no arch): the visitor picks the exact file there.
-  const osHref = (x, p) => `/download/desktop?src=desk-${p}-${LANG}&os=${OSQ[x]}`;
 
   // Phones, tablets, unknown devices: the visitor picks a system; both download controls share the choice.
   let picked = null;
+  // Computers: the closing block's "other system" choice belongs to that control only (el._pk).
   // Linux package (deb|rpm|appimage): one value for the hero and the closing block.
   let pkg = 'deb';
   const PKGN = { deb: '.deb', rpm: '.rpm', appimage: 'AppImage' };
@@ -65,7 +64,7 @@
     // A phone's own CPU says nothing about the computer it is choosing for: fixed x64 plus a visible ARM link.
     const la = back ? 'x64' : linuxArch;
     const primary = ctx === 'footer' ? 'btn btn-close' : 'btn';
-    const extra = back ? `<button type="button" class="link-btn" data-unpick>${t.other_systems}</button>` : ctx === 'hero' ? `<a href="#get">${t.other_systems}</a>` : ctx === 'footer' ? ['mac', 'windows', 'linux'].filter(x => x !== base(d)).map(x => `<a href="${osHref(x, place)}">${t[x]}</a>`).join('') : '';
+    const extra = back ? `<button type="button" class="link-btn" data-unpick>${t.other_systems}</button>` : ctx === 'hero' ? `<a href="#get">${t.other_systems}</a>` : ctx === 'footer' ? ['mac', 'windows', 'linux'].filter(x => x !== base(d)).map(x => `<button type="button" class="link-btn" data-pick="${x}" data-place="${place}">${t[x]}</button>`).join('') : '';
     const meta = value => ctx === 'footer' ? '' : `<p class="get-meta">${value}</p>`;
     const content = (label, chip = '', icon = 'download') => ctx === 'footer'
       ? `<span>${t.closing_label}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg>`
@@ -104,7 +103,7 @@
 
   // Phone-chosen views keep the quiet "send the link" action under the options.
   function block(d, ctx, back, from) {
-    return blockBase(d, ctx, back) + (back && from !== 'unknown' ? sendHtml() : '') + '<p class="get-status" role="status"></p>';
+    return blockBase(d, ctx, back) + (back && family(from) === 'phone' ? sendHtml() : '') + '<p class="get-status" role="status"></p>';
   }
 
   function updateClosingMeta(el, d, back) {
@@ -119,14 +118,15 @@
   }
 
   function render(el, d, animate) {
-    const back = family(d) !== 'computer' && !!picked;
-    const next = back ? picked : d;
+    const pk = family(d) === 'computer' ? el._pk : picked;
+    const back = !!pk;
+    const next = back ? pk : d;
     const signature = (next === 'linux' ? next + ':' + linuxArch : next) + (back ? ':back' : '');
     if (el.dataset.for === signature) return;
     const swap = () => {
       el.dataset.for = signature;
       // Choosing re-renders the control and moves focus itself; announcing the whole block on top would double up.
-      el.setAttribute('aria-live', family(d) === 'computer' ? 'polite' : 'off');
+      el.setAttribute('aria-live', family(d) === 'computer' && !back ? 'polite' : 'off');
       el.innerHTML = block(next, el.hasAttribute('data-closing') ? 'footer' : el.closest('.get-hero') ? 'hero' : '', back, d);
       if (el.hasAttribute('data-closing')) updateClosingMeta(el, next, back);
     };
@@ -172,8 +172,9 @@
     const unpick = ev.target.closest('[data-unpick]');
     if (pick || unpick) {
       const host = (pick || unpick).closest('[data-get]');
-      picked = pick ? pick.dataset.pick : null;
-      gets.forEach((el) => render(el, device, false));
+      const val = pick ? pick.dataset.pick : null;
+      if (family(device) === 'computer') { if (host) { host._pk = val; render(host, device, false); } }
+      else { picked = val; gets.forEach((el) => render(el, device, false)); }
       const next = host && host.querySelector(pick ? '.dl-link' : '[data-pick]');
       if (next) next.focus();
       return;
