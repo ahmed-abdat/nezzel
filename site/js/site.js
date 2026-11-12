@@ -105,6 +105,14 @@
     wide.addEventListener('change', () => { if (wide.matches) setMenu(false); });
     languages?.addEventListener('toggle', () => { if (languages.open) setMenu(false); });
   }
+  // The header goes dark while a dark section sits under it.
+  const under = new Set();
+  const hio = new IntersectionObserver(es => {
+    es.forEach(e => e.isIntersecting ? under.add(e.target) : under.delete(e.target));
+    document.body.classList.toggle("ondark", under.size > 0);
+  }, { rootMargin: "0px 0px -92% 0px" });
+  document.querySelectorAll(".end").forEach(x => hio.observe(x));
+
   let lastY = scrollY, accumulated = 0;
   const onScroll = () => {
     const y = scrollY, delta = y - lastY; lastY = y;

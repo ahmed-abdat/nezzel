@@ -7,7 +7,6 @@
   const LANG = root.lang;
   // Every download goes through the site's own routes (never straight to GitHub).
   const KEYS = { 'mac-arm': ['mac', 'arm64'], 'mac-intel': ['mac', 'x64'], 'win-x64': ['win', 'x64'], 'win-arm': ['win', 'arm64'], deb: ['linux'], rpm: ['linux'], appimage: ['linux'] };
-  const apk = (p) => `/download?src=desk-${p}-${LANG}`;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 
   /* ---------------- device ---------------- */
@@ -171,7 +170,7 @@
           </div>
           <a class="${primary} dl-link" data-place="${place}" href="${a(pkg, place, la)}" data-pkg-link data-arch="${la}">${content(t.get_pkg + ` <bdi dir="ltr">${PKGN[pkg]}</bdi>`)}</a>
           ${meta(t.desk_meta)}
-          <p class="get-links">${back ? `<a href="${a(pkg, place, 'arm64')}" data-arm-link>${t.other_arch_linux}</a>` : ''}<a href="${t.install}#linux">${t.first_open}</a>${extra}</p>`;
+          <p class="get-links">${back || ctx === 'footer' ? `<a href="${a(pkg, place, la === 'arm64' ? 'x64' : 'arm64')}" data-alt-arch-link data-arch="${la === 'arm64' ? 'x64' : 'arm64'}">${la === 'arm64' ? t.other_arch_linux_x64 : t.other_arch_linux}</a>` : ''}<a href="${t.install}#linux">${t.first_open}</a>${extra}</p>`;
       default:
         // Phone, tablet or unknown device: no default system, three equal choices.
         return `<p class="get-for">${t.for_computers}</p>
@@ -277,8 +276,8 @@
         link.href = a(pkg, link.dataset.place || 'get', link.dataset.arch);
         const label = link.querySelector('bdi'); if (label) label.textContent = PKGN[pkg];
       }
-      const arm = el.querySelector('[data-arm-link]');
-      if (arm) arm.href = a(pkg, link ? link.dataset.place || 'get' : 'get', 'arm64');
+      const alt = el.querySelector('[data-alt-arch-link]');
+      if (alt) alt.href = a(pkg, link ? link.dataset.place || 'get' : 'get', alt.dataset.arch);
       const cl = el.closest('.end')?.querySelector('[data-closing-package]'); if (cl) cl.textContent = PKGN[pkg];
     });
   }

@@ -71,12 +71,12 @@ export function downloadStrings(dict, locale, paths) {
     if (typeof dict[key] !== 'string' || !dict[key].trim()) throw new Error(`Missing footer translation: ${locale}: ${key}`);
     return dict[key];
   };
-  const keys = ["android", "mac", "mac_intel", "windows", "windows_arm", "linux", "android_meta", "mac_note", "other_arch_mac", "other_arch_mac_arm", "other_arch_win", "other_arch_win_x64", "other_arch_linux", "first_open", "also_desk", "pkg", "deb", "rpm", "appimage", "get_pkg", "ios_title", "ios_body", "send", "send_short", "copied", "copy_link", "link_copied", "share_more", "hold_copy", "pick", "for_computers", "android_link", "other_systems", "thanks_what", "thanks_sys_mac_arm", "thanks_sys_mac_intel", "thanks_sys_win_arm", "thanks_sys_linux", "thanks_sys_linux_arm", "thanks_get", "thanks_guess", "thanks_guess_intel", "thanks_guess_how"];
+  const keys = ["mac", "mac_intel", "windows", "windows_arm", "linux", "mac_note", "other_arch_mac", "other_arch_mac_arm", "other_arch_win", "other_arch_win_x64", "other_arch_linux", "other_arch_linux_x64", "first_open", "pkg", "deb", "rpm", "appimage", "get_pkg", "send", "copy_link", "link_copied", "share_more", "hold_copy", "pick", "for_computers", "android_link", "other_systems", "thanks_what", "thanks_sys_mac_arm", "thanks_sys_mac_intel", "thanks_sys_win_arm", "thanks_sys_linux", "thanks_sys_linux_arm", "thanks_get", "thanks_guess", "thanks_guess_intel", "thanks_guess_how"];
   return {
     ...Object.fromEntries(keys.map(key => [key, value('download-' + key)])),
     desk_meta: value('desktop-end-meta'),
     closing_label: value('desktop-end-button'),
-    plat: Object.fromEntries(['android', 'mac', 'windows', 'linux'].map(key => [key, value('download-platform-' + key)])),
+    plat: Object.fromEntries(['mac', 'windows', 'linux'].map(key => [key, value('download-platform-' + key)])),
     install: paths[locale] + 'desktop/install/', page_desktop: paths[locale] + 'desktop/', page_android: paths[locale],
   };
 }

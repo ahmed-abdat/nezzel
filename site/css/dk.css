@@ -71,7 +71,7 @@ bdi{unicode-bidi:isolate}
 .qa-i{inline-size:20px;block-size:20px;color:var(--ink-3);transition:transform .22s var(--ease-out)}
 .qa[open] .qa-i{transform:rotate(45deg)}
 .qa p{padding-block-end:22px;color:var(--ink-2);max-inline-size:62ch}
-.doc-hero{padding-block:clamp(48px,7vw,96px) 0;max-inline-size:900px}
+.doc-hero{padding-block:clamp(48px,7vw,96px) 0}
 .doc-hero h1{font-size:clamp(44px,6vw,80px);line-height:1.18}
 :root[dir=ltr] .doc-hero h1{line-height:1.05}
 .doc-hero .dk-lede{margin-block-start:18px;font-size:clamp(18px,1.6vw,21px);color:var(--ink-2);max-inline-size:58ch}
@@ -277,6 +277,10 @@ pre code{max-inline-size:100%}
 .get-choice{margin-block-end:14px}
 .end .get-choice{margin-block:16px 20px}
 .end .get-links{margin-block-start:12px}
+.end [data-closing]{display:flex;flex-direction:column;align-items:flex-start;gap:20px;margin-block:clamp(24px,4vw,40px) 24px}
+.end [data-closing]>*{margin-block:0}
+.end [data-closing] .get-links{align-items:baseline}
+.end [data-closing] .get-links a{display:inline-block}
 .get-choice button:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
 .end .get-choice button:focus-visible{outline-color:currentColor}
 .get-choice button::before{transition:border-color .16s var(--ease-out),background-color .16s var(--ease-out),transform .12s var(--ease-out)}
