@@ -274,15 +274,16 @@ private fun PlaylistItemRow(item: BatchItemRecord, job: DownloadProgress?, total
     val offline = LocalOffline.current
     fun reason(error: DownloadError?) = DownloadNotifications.phase(context, DownloadProgress(item.jobId, "", DownloadPhase.FAILED, error = error), offline)
     val active = job?.running == true
+    val deferred = (if (item.state == BatchItemState.FAILED) item.error else job?.error) == DownloadError.ForegroundDenied
     val (word, tone) = when (item.state) {
         BatchItemState.DONE -> stringResource(R.string.download_saved) to colors.onSurfaceVariant
         BatchItemState.QUEUED -> (job?.let { DownloadNotifications.phase(context, it, offline) } ?: stringResource(R.string.download_waiting)) to when {
-            job?.phase == DownloadPhase.FAILED -> colors.error
+            job?.phase == DownloadPhase.FAILED -> if (deferred) colors.onSurfaceVariant else colors.error
             active -> colors.primary
             else -> colors.onSurfaceVariant
         }
         BatchItemState.WAITING -> stringResource(R.string.playlist_item_waiting) to colors.onSurfaceVariant
-        BatchItemState.FAILED -> reason(item.error) to colors.error
+        BatchItemState.FAILED -> reason(item.error) to if (deferred) colors.onSurfaceVariant else colors.error
         BatchItemState.SKIPPED -> (if (item.error == null || item.error == DownloadError.Cancelled) stringResource(R.string.playlist_item_skipped)
             else reason(item.error)) to colors.onSurfaceVariant
     }
@@ -294,6 +295,7 @@ private fun PlaylistItemRow(item: BatchItemRecord, job: DownloadProgress?, total
         Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
             when {
                 item.state == BatchItemState.DONE -> Icon(Icons.Default.CheckCircle, null, Modifier.size(20.dp), tint = colors.primary)
+                deferred -> Dot(colors.onSurfaceVariant, filled = true)
                 item.state == BatchItemState.FAILED || job?.phase == DownloadPhase.FAILED ->
                     Icon(painterResource(R.drawable.ic_error), null, Modifier.size(20.dp), tint = colors.error)
                 item.state == BatchItemState.SKIPPED -> Icon(Icons.Default.Close, null, Modifier.size(18.dp), tint = colors.outline)

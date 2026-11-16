@@ -152,7 +152,9 @@ class DownloadNotifications(private val base: Context,
     private fun notification(progress: DownloadProgress): Notification {
         val ctx = context
         val offline = connectivity.snapshot.offline
-        val description = text(ctx, progress, offline, dev.ahmed.savlino.downloads.isHeatLimited(base))
+        val description = if (progress.phase == DownloadPhase.FAILED && progress.error == DownloadError.ForegroundDenied)
+            ctx.getString(R.string.download_resume_on_open_notification)
+        else text(ctx, progress, offline, dev.ahmed.savlino.downloads.isHeatLimited(base))
         val builder = NotificationCompat.Builder(ctx, if (progress.terminal) COMPLETED_CHANNEL else CHANNEL).setSmallIcon(R.drawable.ic_stat_nezzel)
             .setContentTitle(progress.filename).setContentText(description)
             .setStyle(NotificationCompat.BigTextStyle().bigText(description)).setOnlyAlertOnce(true)
@@ -348,7 +350,8 @@ class DownloadNotifications(private val base: Context,
             DownloadError.MergeFailed -> R.string.download_merge_error
             DownloadError.ConvertFailed -> R.string.download_convert_mp3_error
             DownloadError.PostTransferFailed -> R.string.download_post_transfer_error
-            DownloadError.ExecutionRestricted, DownloadError.ForegroundDenied -> R.string.download_restricted_error
+            DownloadError.ExecutionRestricted -> R.string.download_restricted_error
+            DownloadError.ForegroundDenied -> R.string.download_resume_on_open
             DownloadError.LoginRequired -> R.string.private_title
             DownloadError.SourceRefused -> R.string.source_refused_title
             DownloadError.DrmProtected -> R.string.protected_title

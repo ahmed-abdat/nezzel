@@ -229,6 +229,8 @@
     <string name="download_merge_error">Couldn’t join audio and video</string>
     <string name="download_convert_mp3_error">Couldn’t convert to MP3</string>
     <string name="download_restricted_error">Couldn’t complete this download</string>
+    <string name="download_resume_on_open">Continues when you open Nezzel</string>
+    <string name="download_resume_on_open_notification">Tap to continue the download</string>
     <plurals name="downloads_running">
         <item quantity="one">%1$s download running</item>
         <item quantity="other">%1$s downloads running</item>

@@ -13,6 +13,24 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], manifest = Config.NONE)
 class DownloadNotificationsTest {
+    @Test fun refusedForegroundNotificationOpensTheAppWithWaitingCopy() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val refused = DownloadProgress("refused", "Video", DownloadPhase.FAILED,
+            error = dev.ahmed.savlino.domain.DownloadError.ForegroundDenied)
+        for ((language, expected) in listOf("en" to "Tap to continue the download",
+            "ar" to "اضغط لإكمال التنزيل", "fr" to "Touchez pour continuer le téléchargement")) {
+            dev.ahmed.savlino.locale.AppLocale.choose(app, language)
+            DownloadNotifications(app).finished(refused)
+            val notification = app.getSystemService(NotificationManager::class.java).activeNotifications
+                .single { it.notification.channelId == DownloadNotifications.COMPLETED_CHANNEL }.notification
+            assertEquals(expected, notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
+            assertEquals(dev.ahmed.savlino.R.drawable.ic_stat_nezzel, notification.smallIcon.resId)
+            val intent = shadowOf(notification.contentIntent).savedIntent
+            assertEquals(dev.ahmed.savlino.MainActivity::class.java.name, intent.component!!.className)
+        }
+    }
+
     @Test fun offlineQueuedRowsShowConnectionWaitWithOnlyRealFrozenNumbers() {
         val app = RuntimeEnvironment.getApplication()
         for (language in listOf("en", "ar", "fr")) {

@@ -457,6 +457,36 @@ class BatchFeederTest {
         assertEquals(BatchItemState.DONE, batches.items("batch").single().state)
     }
 
+    @Test fun refusedJobResumingDirectlyRequeuesItsFailedItemAndUsesItsRealEnd() = runBlocking {
+        for (stage in listOf(JobStage.ENQUEUED, JobStage.TRANSFERRING, JobStage.FAILED)) {
+            close(); warmSQLite()
+            create(1)
+            val f = feeder(); f.tick()
+            val item = batches.items("batch").single()
+            assertTrue(jobs.fail(item.jobId, DownloadError.ForegroundDenied, keepPartial = true))
+            f.tick()
+            assertEquals(BatchItemState.FAILED, batches.items("batch").single().state)
+            assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
+            assertTrue(jobs.retry(item.jobId)) // Same path as the coordinator's app-foreground resume.
+            if (stage == JobStage.TRANSFERRING) assertTrue(jobs.startTransfer(item.jobId))
+            if (stage == JobStage.FAILED) assertTrue(jobs.fail(item.jobId, DownloadError.Unsupported))
+            f.tick()
+            val resumed = batches.items("batch").single()
+            if (stage == JobStage.FAILED) {
+                assertEquals(BatchItemState.FAILED, resumed.state)
+                assertEquals(DownloadError.Unsupported, resumed.error)
+                assertFalse(resumed.retryable)
+            } else {
+                assertEquals(BatchItemState.QUEUED, resumed.state)
+                assertNull(resumed.error)
+                assertEquals(BatchState.ACTIVE, batches.get("batch")!!.state)
+                complete(item.jobId); f.tick()
+                assertEquals(BatchItemState.DONE, batches.items("batch").single().state)
+                assertEquals(BatchState.COMPLETED, batches.get("batch")!!.state)
+            }
+        }
+    }
+
     @Test fun individuallyRetriedFailureBecomesDoneWhenItsJobCompletes() = runBlocking {
         create(1)
         val f = feeder(); f.tick()

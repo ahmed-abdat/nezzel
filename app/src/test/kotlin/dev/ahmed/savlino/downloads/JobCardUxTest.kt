@@ -320,6 +320,8 @@ class JobCardUxTest {
     @Test fun foregroundDenialOffersExemptionRequest() {
         val denied = job.copy(phase = DownloadPhase.FAILED, error = dev.ahmed.savlino.domain.DownloadError.ForegroundDenied, retryable = true)
         host(content = { JobRow(denied, {}, {}, {}) }) { activity ->
+            compose.onNodeWithText("Continues when you open Nezzel", useUnmergedTree = true).assertExists()
+            compose.onNodeWithText(context.getString(R.string.download_restricted_error), useUnmergedTree = true).assertDoesNotExist()
             compose.onNodeWithText(context.getString(R.string.battery_settings)).assertHasClickAction().performClick()
             val intent = Shadows.shadowOf(activity).nextStartedActivity!!
             assertEquals(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, intent.action)

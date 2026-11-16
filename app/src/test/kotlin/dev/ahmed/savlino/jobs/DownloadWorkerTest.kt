@@ -32,6 +32,113 @@ import java.io.File
 class DownloadWorkerTest {
     private val app get() = RuntimeEnvironment.getApplication()
 
+    @Test fun cancelledDuplicateCannotConsumeTheResumedWorkersRealEnd() = runBlocking {
+        val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+        val usage = actualUsage(posts)
+        val limit = kotlinx.coroutines.flow.MutableStateFlow(1)
+        val blockerEntered = CompletableDeferred<Unit>()
+        val releaseBlocker = CompletableDeferred<Unit>()
+        val resumedEntered = CompletableDeferred<Unit>()
+        val releaseResumed = CompletableDeferred<Unit>()
+        val terminalReady = CompletableDeferred<Unit>()
+        val deliverEnd = CompletableDeferred<Unit>()
+        val holdEnd = java.util.concurrent.atomic.AtomicBoolean()
+        val network = object : NetworkWatch {
+            override fun online() = true
+            override fun watch(lost: () -> Unit) = AutoCloseable {
+                if (holdEnd.compareAndSet(true, false)) {
+                    terminalReady.complete(Unit)
+                    runBlocking { deliverEnd.await() }
+                }
+            }
+        }
+        fixture(FakeEngine(), usage = usage, network = network, parallelDownloads = limit, script = { command, dir, _ ->
+            if (command.jobId == "slot-blocker") {
+                blockerEntered.complete(Unit); releaseBlocker.await()
+                val output = dir.resolve("output.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+                TransferResult.Success(StagedOutput.validate(dir, listOf(output)))
+            } else {
+                resumedEntered.complete(Unit); releaseResumed.await()
+                error("transfer failure")
+            }
+        }).use { f ->
+            f.coordinator.enqueue(command("duplicate-refused"))
+            f.coordinator.execute("duplicate-refused", { error("denied") }, {})
+            WorkManager.getInstance(app).cancelUniqueWork("duplicate-refused").result.get()
+            f.coordinator.resumeRefusedForeground()
+            f.coordinator.enqueue(command("slot-blocker", link = "https://example.com/blocker"))
+            val blocker = async(Dispatchers.Default) { f.coordinator.execute("slot-blocker", {}, {}) }
+            var resumed: Deferred<JobRecord?>? = null
+            var duplicate: Deferred<JobRecord?>? = null
+            try {
+                withTimeout(5000) { blockerEntered.await() }
+                resumed = async(Dispatchers.Default) { f.coordinator.execute("duplicate-refused", {}, {}) }
+                withTimeout(5000) { limit.subscriptionCount.first { it == 2 } }
+                duplicate = async(Dispatchers.Default) { f.coordinator.execute("duplicate-refused", {}, {}) }
+                withTimeout(5000) { limit.subscriptionCount.first { it == 3 } }
+                releaseBlocker.complete(Unit)
+                withTimeout(5000) { resumedEntered.await() }
+                withTimeout(5000) { blocker.await() }
+                holdEnd.set(true)
+                releaseResumed.complete(Unit)
+                withTimeout(5000) { terminalReady.await() }
+                // The row has ended, but its real terminal accounting has not been delivered yet.
+                checkNotNull(duplicate).cancelAndJoin()
+                deliverEnd.complete(Unit)
+                withTimeout(5000) { checkNotNull(resumed).await() }
+                assertEquals(DownloadError.ExecutionRestricted, f.store.get("duplicate-refused")!!.error)
+                val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
+                assertEquals("ExecutionRestricted_ENGINE_RUN", report.getString("code"))
+                usage.sendDaily()
+                val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+                assertEquals(1, counts.getInt("download.deferred"))
+                assertEquals(1, counts.getInt("dl.failed.video.hd"))
+            } finally {
+                releaseBlocker.complete(Unit); releaseResumed.complete(Unit); deliverEnd.complete(Unit)
+                duplicate?.cancelAndJoin(); resumed?.cancelAndJoin(); blocker.cancelAndJoin()
+            }
+        }
+    }
+
+    @Test fun resumedRefusalReportsAnEarlyExceptionAsUnknownExecutionFailure() = runBlocking {
+        val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+        val usage = actualUsage(posts)
+        var broken = false
+        val network = object : NetworkWatch {
+            override fun online(): Boolean { check(!broken); return true }
+            override fun watch(lost: () -> Unit) = AutoCloseable { }
+        }
+        fixture(FakeEngine(), usage = usage, network = network).use { f ->
+            f.coordinator.enqueue(command("early-resume-failure"))
+            f.coordinator.execute("early-resume-failure", { error("denied") }, {})
+            assertEquals(DownloadError.ForegroundDenied, f.store.get("early-resume-failure")!!.error)
+            WorkManager.getInstance(app).cancelUniqueWork("early-resume-failure").result.get()
+            f.coordinator.resumeRefusedForeground()
+            broken = true
+            f.coordinator.execute("early-resume-failure", {}, {})
+            assertEquals(DownloadError.ExecutionRestricted, f.store.get("early-resume-failure")!!.error)
+            val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
+            assertEquals("ExecutionRestricted_UNKNOWN", report.getString("code"))
+            usage.sendDaily()
+            val counts = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+            assertEquals(1, counts.getInt("download.deferred"))
+            assertEquals(1, counts.getInt("dl.failed.video.hd"))
+        }
+    }
+
+    @Test fun savingTheSameLinkDropsTheRefusedAttemptsRetainedSource() = runBlocking {
+        fixture(FakeEngine(steps = listOf(FakeEngine.Step.Output("output.mp4", byteArrayOf(1, 2, 3, 4))))).use { f ->
+            f.coordinator.enqueue(command("refused-stale"))
+            f.coordinator.execute("refused-stale", { error("denied") }, {})
+            f.coordinator.enqueue(command("saved-replacement"))
+            f.coordinator.execute("saved-replacement", {}, {})
+            assertNull(f.store.get("refused-stale"))
+            // Resource-retention check: removed jobs must leave no in-memory report source behind.
+            val field = DownloadCoordinator::class.java.getDeclaredField("accounting").apply { isAccessible = true }
+            assertTrue((field.get(f.coordinator) as Map<*, *>).isEmpty())
+        }
+    }
+
     @Test fun repeatedProgressCountsOnlyOneFinishedEnd() = runBlocking {
         val usage = UsageRecorder()
         val clock = java.util.concurrent.atomic.AtomicLong()
@@ -54,7 +161,7 @@ class DownloadWorkerTest {
         }
     }
 
-    @Test fun repeatedUserCancellationCountsOneEnd() = runBlocking {
+    @Test fun repeatedUserCancellationAfterRefusedStartCountsOneEnd() = runBlocking {
         val usage = UsageRecorder()
         val entered = CompletableDeferred<Unit>()
         val stopped = CompletableDeferred<Unit>()
@@ -65,6 +172,11 @@ class DownloadWorkerTest {
             TransferResult.Failure(DownloadError.Cancelled)
         }).use { f ->
             assertTrue(f.coordinator.enqueue(command("usage-cancel")))
+            f.coordinator.execute("usage-cancel", { throw IllegalStateException("denied") }, {})
+            assertEquals(DownloadError.ForegroundDenied, f.store.get("usage-cancel")!!.error)
+            assertTrue(usage.ends().isEmpty())
+            WorkManager.getInstance(app).cancelUniqueWork("usage-cancel").result.get()
+            f.coordinator.resumeRefusedForeground()
             val running = async(Dispatchers.Default) { f.worker("usage-cancel").doWork() }
             try {
                 withTimeout(5000) { entered.await() }
@@ -340,9 +452,16 @@ class DownloadWorkerTest {
                 f.coordinator.enqueue(command(id))
                 f.coordinator.execute(id, { if (foregroundFailure) throw IllegalStateException("denied") }, {})
                 assertEquals(if (foregroundFailure) DownloadError.ForegroundDenied else DownloadError.ExecutionRestricted, f.store.get(id)!!.error)
-                val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
-                assertEquals(if (foregroundFailure) "ExecutionRestricted_FOREGROUND_DENIED" else "ExecutionRestricted_ENGINE_RUN", report.getString("code"))
-                assertFalse(report.toString().contains("private details"))
+                if (foregroundFailure) {
+                    assertTrue(posts.none { it.first == dev.ahmed.savlino.report.InboxClient.REPORT })
+                    val notification = DownloadNotifications(app).foreground(
+                        f.coordinator.progress.value.single { it.jobId == id }).notification
+                    assertEquals("Tap to continue the download", notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
+                } else {
+                    val report = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.REPORT }.second)
+                    assertEquals("ExecutionRestricted_ENGINE_RUN", report.getString("code"))
+                    assertFalse(report.toString().contains("private details"))
+                }
             }
         }
         for (lang in listOf("en", "ar", "fr")) {
@@ -442,14 +561,15 @@ class DownloadWorkerTest {
         }
     }
 
-    private fun actualUsage(posts: MutableList<Pair<String, String>>, on: Boolean = true) = dev.ahmed.savlino.usage.Usage(
+    private fun actualUsage(posts: MutableList<Pair<String, String>>, on: Boolean = true,
+        now: () -> Long = System::currentTimeMillis) = dev.ahmed.savlino.usage.Usage(
         app.getSharedPreferences("coordinator-counts", Context.MODE_PRIVATE).apply { edit().clear().commit() }, { on },
         { path, json -> posts += path to json; true }, CoroutineScope(Dispatchers.Unconfined), "0.5.1", 800, 35,
         { emptyList() }, object : dev.ahmed.savlino.usage.Usage.Crashes {
             override fun pending(): String? = null
             override fun delete() = Unit
             override fun engineVersion(): String? = null
-        })
+        }, now)
 
     private class UsageRecorder : UsageEvents {
         val keys = java.util.concurrent.CopyOnWriteArrayList<String>()
@@ -1123,7 +1243,10 @@ class DownloadWorkerTest {
     // partial for Retry from the opened app, never start over.
     @Test fun refusedForegroundResumesOnAppOpenOnceAndKeepsTheConfirmedPartial() = runBlocking {
         val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
-        fixture(FakeEngine(), script = partialThenWait(seen)).use { f ->
+        val posts = java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>()
+        var now = System.currentTimeMillis()
+        val usage = actualUsage(posts, now = { now })
+        fixture(FakeEngine(), usage = usage, script = partialThenWait(seen)).use { f ->
             f.store.enqueue(command("fgs-timeout"))
             stopMidTransfer(f, "fgs-timeout", -128)
             assertEquals(JobStage.ENQUEUED, f.store.get("fgs-timeout")!!.stage)
@@ -1131,6 +1254,12 @@ class DownloadWorkerTest {
             val row = f.store.get("fgs-timeout")!!
             assertEquals(JobStage.FAILED, row.stage); assertEquals(DownloadError.ForegroundDenied, row.error)
             assertTrue(row.retryable)
+            usage.sendDaily()
+            assertTrue(posts.none { it.first == dev.ahmed.savlino.report.InboxClient.REPORT })
+            val deferred = org.json.JSONObject(posts.single { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+            assertFalse(deferred.has("dl.failed.video.hd"))
+            assertFalse(deferred.has("funnel.failed"))
+            assertEquals(1, deferred.getInt("download.deferred"))
             val part = File(app.filesDir, "downloads/fgs-timeout/output.mp4.part")
             assertEquals("keep", part.readText())
             recovery(f).recover()
@@ -1155,6 +1284,16 @@ class DownloadWorkerTest {
             assertEquals(ListenableWorker.Result.success(), f.worker("fgs-timeout").doWork())
             assertEquals(JobStage.COMPLETED, f.store.get("fgs-timeout")!!.stage)
             assertEquals(listOf(null, "keep"), seen)
+            now += 86_400_000L
+            usage.sendDaily()
+            assertTrue(posts.none { it.first == dev.ahmed.savlino.report.InboxClient.REPORT })
+            val counts = org.json.JSONObject(posts.last { it.first == dev.ahmed.savlino.report.InboxClient.USAGE }.second).getJSONObject("counts")
+            assertEquals(1, counts.getInt("dl.finished.video.hd"))
+            assertEquals(1, counts.getInt("funnel.finished"))
+            assertEquals(1, counts.getInt("site:example.com"))
+            assertFalse(counts.has("download.deferred"))
+            assertFalse(counts.has("dl.failed.video.hd"))
+            assertFalse(counts.has("funnel.failed"))
         }
     }
 
@@ -2719,6 +2858,7 @@ class DownloadWorkerTest {
         version: suspend () -> String? = { null },
         usage: UsageEvents = UsageEvents.None,
         network: NetworkWatch = TestNetwork(),
+        parallelDownloads: kotlinx.coroutines.flow.StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(2),
         staleSurvivors: (File) -> Int = { 0 },
         script: (suspend (DownloadCommand, File, (EngineEvent) -> Unit) -> TransferResult)? = null): Fixture {
         WorkManagerTestInitHelper.initializeTestWorkManager(app, Configuration.Builder()
@@ -2749,7 +2889,7 @@ class DownloadWorkerTest {
             }
         }
         val coordinator = DownloadCoordinator(app, observedEngine, store, publisher, space = space, monotonicMillis = clock, nextProgressTick = nextTick,
-            probe = { null }, usage = usage, network = network) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
+            probe = { null }, usage = usage, network = network, parallelDownloads = parallelDownloads) // fake 4-byte output is not media; the check has DownloadCoordinatorCheckTest
         (app as IsolatedTestApplication).coordinatorOverride = coordinator
         return Fixture(engine, provider, store, coordinator, engineStopped, attempts, staleScans)
     }

@@ -214,7 +214,12 @@ class BatchFeeder internal constructor(private val batches: BatchStore, private 
                     actions.removeFailed(item.jobId)
                     continue
                 }
-                if (item.state == BatchItemState.FAILED && job.stage != JobStage.COMPLETED) continue
+                if (item.state == BatchItemState.FAILED) {
+                    // App foreground resumes refused jobs directly, possibly through their next end between ticks.
+                    if (item.error == DownloadError.ForegroundDenied && job.error != DownloadError.ForegroundDenied)
+                        batches.queued(item, job.preset != batch.preset)
+                    else if (job.stage != JobStage.COMPLETED) continue
+                }
                 // A requested retry waits for a lookahead vacancy instead of requeueing N jobs at once.
                 if (item.state == BatchItemState.WAITING && item.retryable && job.stage == JobStage.FAILED) continue
                 if (item.state == BatchItemState.WAITING) batches.queued(item, job.preset != batch.preset)

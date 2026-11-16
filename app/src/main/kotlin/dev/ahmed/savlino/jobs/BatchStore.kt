@@ -163,9 +163,15 @@ class BatchStore internal constructor(internal val jobs: JobStore, private val c
     }
 
     @Synchronized internal fun queued(item: BatchItemRecord, fallback: Boolean = false) {
-        db.update("batch_items", ContentValues().apply {
-            put("state", BatchItemState.QUEUED.name); put("fallback", if (fallback) 1 else 0); putNull("error"); put("retryable", 0)
-        }, "batch_id=? AND position=? AND state='WAITING'", args(item))
+        db.beginTransaction()
+        try {
+            val changed = db.update("batch_items", ContentValues().apply {
+                put("state", BatchItemState.QUEUED.name); put("fallback", if (fallback) 1 else 0); putNull("error"); put("retryable", 0)
+            }, "batch_id=? AND position=? AND (state='WAITING' OR (state='FAILED' AND error='ForegroundDenied'))", args(item)) == 1
+            if (changed && item.state == BatchItemState.FAILED && get(item.batchId)?.state == BatchState.COMPLETED)
+                state(item.batchId, BatchState.ACTIVE)
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
     }
 
     /** Exactly-once terminal reconciliation also persists breaker streaks across process death. */
