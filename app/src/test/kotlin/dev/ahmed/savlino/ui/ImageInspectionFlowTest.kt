@@ -319,7 +319,7 @@ class ImageInspectionFlowTest {
         check(vm, "https://www.facebook.com/photo/?fbid=42")
         assertEquals(listOf(MediaSourceRoute.FACEBOOK, MediaSourceRoute.FACEBOOK), images.routes)
         assertEquals(1, legacyInspections)
-        assertEquals(OptionsState.ImageError(ImageFailure.PRIVATE, phase = ImagePhase.PAGE), vm.optionsState)
+        assertEquals(OptionsState.Error(DownloadError.LoginRequired), vm.optionsState)
     }
 
     @Test fun facebookReelGoesStraightToTheLegacyEngine() {

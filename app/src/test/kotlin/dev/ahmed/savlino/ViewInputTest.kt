@@ -12,6 +12,7 @@ import dev.ahmed.savlino.engine.mediahttp.AcceptedLinkHosts
 import dev.ahmed.savlino.engine.mediahttp.ShortLinks
 import dev.ahmed.savlino.engine.reddit.RedditPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
+import dev.ahmed.savlino.engine.threads.ThreadsPostIdentity
 import dev.ahmed.savlino.engine.tiktok.TikTokPostIdentity
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.entry.ShareInput
@@ -103,7 +104,7 @@ class ViewInputTest {
     @Test fun everyAcceptedAliasHasAnEngineOrUrlLayerRoute() {
         val youtube = setOf("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be")
         val paths = listOf("/token", "/p/Abc12", "/user/status/123", "/comments/abc", "/reel/123",
-            "/@user/video/123", "/posts/user-activity-123", "/channel/123", "/profile/user.example/post/abc",
+            "/@user/video/123", "/@user/post/Abc12", "/posts/user-activity-123", "/channel/123", "/profile/user.example/post/abc",
             "/url_shortener/token/redirect/", "/l.php?u=https%3A%2F%2Fyoutu.be%2Fone")
         assertEquals(AcceptedLinkHosts.exactHosts, ShareInput.VIEW_HOSTS)
         for (host in ShareInput.VIEW_HOSTS - youtube) {
@@ -111,7 +112,7 @@ class ViewInputTest {
                 val link = LinkInput.parse(raw)
                 XPostIdentity.parse(raw) != null || InstagramPostIdentity.parse(raw) != null ||
                     FacebookPostIdentity.parse(raw) != null || RedditPostIdentity.parse(raw) != null ||
-                    TikTokPostIdentity.parse(raw) != null || TelegramPostIdentity.parse(raw) != null ||
+                    TikTokPostIdentity.parse(raw) != null || TelegramPostIdentity.parse(raw) != null || ThreadsPostIdentity.parse(raw) != null ||
                     BlueskyPostIdentity.parse(raw) != null || LinkedInPostIdentity.parse(raw) != null ||
                     (link != null && (ShortLinks.isShortLink(link) ||
                         (link.rawUrl != raw && (link.host == Host.YOUTUBE || FacebookPostIdentity.parse(link.rawUrl) != null))))

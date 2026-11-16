@@ -60,11 +60,25 @@ class DownloadsLayoutTest {
         DownloadsScreen(emptyList(), language, {}, {}, {}, {}, {}, null, {}, paste,
             libraryLoad = load, onLibraryRetry = retry)
     }
-    @Test fun initialLoadingDoesNotClaimAbsenceOrOfferInactiveSearch() = render({ screen(LibraryLoadState.Loading()) }) { a ->
-        val all = nodes(a)
-        assertFalse(texts(all).contains(context.getString(R.string.saved_empty_title)))
-        assertFalse(all.any { context.getString(R.string.saved_search) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
-        assertTrue(all.any { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate })
+    @Test fun initialLoadingDoesNotClaimAbsenceOrOfferInactiveSearch() {
+        compose.mainClock.autoAdvance = false
+        try {
+            renderThemed({ compose.mainClock.advanceTimeByFrame(); nodes(it) }, { screen(LibraryLoadState.Loading()) }) { a ->
+                val initial = nodes(a)
+                assertFalse(texts(initial).contains(context.getString(R.string.saved_empty_title)))
+                assertFalse(initial.any { context.getString(R.string.saved_search) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
+                // Quick loads stay quiet; an unresolved load gets its status after 700 ms.
+                assertFalse(texts(initial).contains(context.getString(R.string.saved_loading)))
+                assertFalse(initial.any { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) != null })
+                compose.mainClock.advanceTimeBy(700)
+                compose.mainClock.advanceTimeByFrame()
+                val loading = nodes(a)
+                assertTrue(texts(loading).contains(context.getString(R.string.saved_loading)))
+                assertTrue(loading.any { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate })
+                assertFalse(texts(loading).contains(context.getString(R.string.saved_empty_title)))
+                assertFalse(loading.any { context.getString(R.string.saved_search) in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() })
+            }
+        } finally { compose.mainClock.autoAdvance = true }
     }
     @Test fun firstErrorOffersRetryWithoutEmptyOnboarding() {
         var retries = 0

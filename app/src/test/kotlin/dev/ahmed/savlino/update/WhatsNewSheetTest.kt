@@ -130,14 +130,18 @@ class WhatsNewSheetTest {
     private fun homeWithoutNotes(updated: Boolean) {
         if (updated) record(count = 0)
         val links = LinkViewModel(SavedStateHandle())
-        renderThemed({ nodes(it) }, {
-            NezzelApp(links, language, ThemePref.Light, false, false, {}, {}, {}, {}, {}, {}, {})
-        }) { a ->
-            val all = nodes(a)
-            assertFalse(all.any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" })
-            val message = app.getString(R.string.update_done, dev.ahmed.savlino.locale.NezzelFormat.isolate(BuildConfig.VERSION_NAME))
-            assertEquals(updated, texts(all).contains(message))
-        }
+        // Waiting for Home's 30-second logo glide would also expire the short snackbar.
+        compose.mainClock.autoAdvance = false
+        try {
+            renderThemed({ compose.mainClock.advanceTimeBy(1_000); nodes(it) }, {
+                NezzelApp(links, language, ThemePref.Light, false, false, {}, {}, {}, {}, {}, {}, {})
+            }) { a ->
+                val all = nodes(a)
+                assertFalse(all.any { it.config.getOrNull(SemanticsProperties.TestTag) == "whats_new_sheet" })
+                assertEquals(updated, texts(all).contains(app.getString(R.string.update_done)))
+                assertFalse(app.appUpdates.consumeUpdated())
+            }
+        } finally { compose.mainClock.autoAdvance = true }
     }
     @Test fun freshInstallHasNoSheetOrUpdatedSnackbar() = homeWithoutNotes(false)
     @Test fun updateWithoutNotesKeepsUpdatedSnackbar() = homeWithoutNotes(true)

@@ -45,11 +45,11 @@ class AutomaticIntakeTest {
         }).apply { automaticOptions = false }
         vm.paste(spotify); idle()
         assertEquals(0, reads); assertTrue(engine.inspected.isEmpty())
+        assertFalse(vm.search.visible)
         vm.checkLink(); idle()
         assertEquals("Artist Song", vm.searchWords)
         assertEquals(1, reads); assertTrue(engine.inspected.isEmpty()); assertFalse(vm.downloadEnabled)
-        assertFalse(vm.search.visible)
-        vm.openSearch(); idle()
+        // A single song opens its YouTube search after consent; only choosing a result inspects media.
         assertTrue(vm.search.visible); assertEquals("Artist Song", vm.search.query)
         assertTrue(engine.inspected.isEmpty())
         val chosen = SearchResult("abcdefghijk", "YouTube title", "Channel", 123)

@@ -87,8 +87,9 @@ class SelectionSemanticsTest {
                 assertFalse(texts(descendants(balanced)).contains(context.getString(R.string.preset_best)))
                 assertTrue(labels.contains("رحلة بحرية 🌊"))
                 assertTrue(labels.any { it.contains("قناة البحر") })
-                assertTrue(labels.any { it.contains("3:45") && it.contains("youtube.com") })
-                assertTrue(labels.any { it.contains("youtube.com") })
+                // The wide preview carries the duration chip; the site has its own LTR facts line.
+                assertTrue(labels.contains(dev.ahmed.savlino.locale.NezzelFormat.isolate("3:45")))
+                assertTrue(labels.contains(dev.ahmed.savlino.locale.NezzelFormat.isolate("youtube.com")))
                 assertFalse(labels.any { it.contains("MP3") })
                 assertTrue(labels.any { it.contains("68\u00a0MB") })
                 // Owner 2026-10-25: estimates show no size and no "≈", in text or for TalkBack.
