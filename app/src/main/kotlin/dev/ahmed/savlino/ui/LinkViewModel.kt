@@ -1006,7 +1006,8 @@ class LinkViewModel(
                         else -> null
                     }
                     if (canonical != null && watch.revision == source.revision &&
-                        canonical.matches(watch.link.rawUrl)) startLegacyInspection(watch, origin)
+                        canonical.matches(watch.link.rawUrl)) startLegacyInspection(watch, origin,
+                            facebookPage = if (route == MediaSourceRoute.FACEBOOK) result.facebookPage ?: watch else null)
                     else optionsState = OptionsState.ImageError(ImageFailure.UNSUPPORTED)
                 }
             }
@@ -1044,7 +1045,8 @@ class LinkViewModel(
         FacebookPostIdentity.parse(source.link.rawUrl)?.kind == FacebookLinkKind.SHARE
     /** Keep staleness bound to the intake link when the reader or canonicalization changes the engine URL. */
     private fun startLegacyInspection(input: LinkRevision, readerOrigin: LinkRevision? = null, noMedia: Boolean = false,
-        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null, videoPage: Boolean = false) {
+        tikTokPhotos: Boolean = true, photoFailure: OptionsState.ImageError? = null, videoPage: Boolean = false,
+        facebookPage: LinkRevision? = null) {
         // A carousel's explicit View video options starts a new inspection without startInspection().
         val timing = inspectionTiming ?: InspectionTiming().also {
             it.record(InspectionPhase.INTAKE_ACCEPTED)
@@ -1072,7 +1074,24 @@ class LinkViewModel(
                 }
             }
         }
-        inspectionJob = viewModelScope.launch(timing.context()) { showLegacy(readLegacy(source, id), id, source, origin, noMedia, tikTokPhotos, photoFailure, videoPage) }
+        inspectionJob = viewModelScope.launch(timing.context()) {
+            var read = readLegacy(source, id)
+            if (facebookPage != null && (read.result as? InspectResult.Failure)?.error in setOf(
+                    DownloadError.Failed, DownloadError.NoFormats, DownloadError.Unsupported) &&
+                operationId == id && currentSource()?.matches(origin ?: source) == true) {
+                imageOperation = true
+                val failure = try { images?.facebookVideoPageFailure(facebookPage, id) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+                catch (_: LinkageError) { null }
+                catch (_: OutOfMemoryError) { null }
+                if (operationId != id || currentSource()?.matches(origin ?: source) != true) return@launch
+                imageOperation = false
+                if (failure == ImageFailure.PRIVATE)
+                    read = LegacyRead(InspectResult.Failure(DownloadError.LoginRequired), read.readGeneration)
+            }
+            showLegacy(read, id, source, origin, noMedia, tikTokPhotos, photoFailure, videoPage)
+        }
     }
     /** One yt-dlp read under maintenance admission; generations are captured there and applied only by [showLegacy]. */
     private class LegacyRead(val result: InspectResult, val readGeneration: Long? = null,

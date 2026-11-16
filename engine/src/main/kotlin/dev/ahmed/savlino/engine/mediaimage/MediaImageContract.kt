@@ -79,7 +79,9 @@ sealed interface MediaInspectResult {
      * (Facebook `watch/?v=`, LinkedIn's clean post URL, X and Instagram: the caller's own link unchanged), for the audiovisual
      * engine. No preview, no reference, no media URL.
      */
-    class VideoRedirect(val source: LinkRevision, val photosUnavailable: Boolean = false) : MediaInspectResult {
+    class VideoRedirect(val source: LinkRevision, val photosUnavailable: Boolean = false,
+        /** The shortlink's landing page, retained only for a failed audiovisual read's wall check. */
+        val facebookPage: LinkRevision? = null) : MediaInspectResult {
         override fun toString() = "MediaInspectResult.VideoRedirect(redacted)"
     }
 }

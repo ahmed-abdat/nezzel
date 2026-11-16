@@ -42,13 +42,23 @@ class FacebookVideoHandoffTest {
     }
     private val engine = RecordingEngine()
     private val images = FakeImages { MediaInspectResult.VideoRedirect(LinkRevision(LinkInput.parse(watch)!!, it.revision)) }
+    private val pageChecks = mutableListOf<LinkRevision>()
+    private var pageFailure: ImageFailure? = null
+    private var pageGate: CompletableDeferred<Unit>? = null
 
     @Before fun setUp() {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("engine-maintenance", 0).edit().clear().commit()
         store = JobStore(app)
         val coordinator = DownloadCoordinator(app, engine, store, workManager = { error("No background scheduler in this fixture") })
-        vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator, images = images,
+        val reader = object : dev.ahmed.savlino.media.ImageInspect by images {
+            override suspend fun facebookVideoPageFailure(source: LinkRevision, operationId: String): ImageFailure? {
+                pageChecks += source
+                pageGate?.await()
+                return pageFailure
+            }
+        }
+        vm = LinkViewModel(SavedStateHandle(), engine = engine, downloads = coordinator, images = reader,
             previewDispatcher = kotlinx.coroutines.Dispatchers.Unconfined, previewImage = ::testBitmap)
     }
     @After fun tearDown() { vm.dismissOptions(); store.close() }
@@ -99,6 +109,58 @@ class FacebookVideoHandoffTest {
         val ready = vm.optionsState as OptionsState.Ready
         assertEquals(listOf("720"), ready.inspection.formats.map { it.id })
         assertTrue(vm.downloadEnabled)
+    }
+
+    @Test fun redirectedReelWallNeedsSignInOnlyAfterAGenericLegacyFailure() {
+        val reel = "https://www.facebook.com/reel/900000000000002"
+        images.result = { MediaInspectResult.VideoRedirect(LinkRevision(LinkInput.parse(watch)!!, it.revision),
+            facebookPage = LinkRevision(LinkInput.parse(reel)!!, it.revision)) }
+        pageFailure = ImageFailure.PRIVATE
+        for (error in listOf(DownloadError.Failed, DownloadError.NoFormats, DownloadError.Unsupported)) {
+            pageChecks.clear()
+            engine.failure = error
+            check("https://www.facebook.com/share/r/Synthetic/")
+            assertEquals(OptionsState.Error(DownloadError.LoginRequired), vm.optionsState)
+            assertEquals(listOf(reel), pageChecks.map { it.link.rawUrl })
+            assertFalse(vm.downloadEnabled)
+        }
+    }
+
+    @Test fun redirectedVideoKeepsLegacyErrorUnlessThePageIsPrivate() {
+        engine.failure = DownloadError.Failed
+        for (failure in listOf(null, ImageFailure.NO_MEDIA, ImageFailure.NETWORK)) {
+            pageChecks.clear()
+            pageFailure = failure
+            check(post)
+            assertEquals(OptionsState.Error(DownloadError.Failed), vm.optionsState)
+            assertEquals(1, pageChecks.size)
+        }
+    }
+
+    @Test fun redirectedVideoSuccessAndSpecificErrorsNeverReadThePage() {
+        pageFailure = ImageFailure.PRIVATE
+        check(post)
+        assertTrue(vm.optionsState is OptionsState.Ready)
+        for (error in listOf(DownloadError.Network, DownloadError.Offline, DownloadError.Unavailable,
+            DownloadError.EngineUnavailable, DownloadError.LoginRequired)) {
+            engine.failure = error
+            check(post)
+            assertEquals(OptionsState.Error(error), vm.optionsState)
+        }
+        assertTrue(pageChecks.isEmpty())
+    }
+
+    @Test fun editingDuringTheWallCheckDiscardsItsResult() {
+        pageFailure = ImageFailure.PRIVATE
+        pageGate = CompletableDeferred()
+        engine.failure = DownloadError.Failed
+        check(post)
+        assertEquals(1, pageChecks.size)
+        assertTrue(vm.optionsState is OptionsState.Checking)
+        vm.edit("https://www.facebook.com/somepage/posts/900000000000009")
+        pageGate!!.complete(Unit); pump()
+        assertEquals(OptionsState.Hidden, vm.optionsState)
+        assertTrue(images.cancelled.isNotEmpty())
     }
 
     @Test fun facebookSignInWallShowsTheLoginErrorWithoutLegacyInspection() {

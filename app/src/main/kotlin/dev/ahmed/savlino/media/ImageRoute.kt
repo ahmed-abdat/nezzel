@@ -9,6 +9,7 @@ import dev.ahmed.savlino.engine.instagram.InstagramLinkKind
 import dev.ahmed.savlino.engine.instagram.InstagramPostIdentity
 import dev.ahmed.savlino.engine.linkedin.LinkedInPostIdentity
 import dev.ahmed.savlino.engine.mediaimage.MediaInspectResult
+import dev.ahmed.savlino.engine.mediaimage.ImageFailure
 import dev.ahmed.savlino.engine.x.XPostIdentity
 import dev.ahmed.savlino.engine.telegram.TelegramPostIdentity
 import dev.ahmed.savlino.engine.bluesky.BlueskyPostIdentity
@@ -73,5 +74,6 @@ object ImageRoute {
 /** App seam over U5b's MediaSourceInspector, used for image routes only. */
 interface ImageInspect {
     suspend fun inspect(source: LinkRevision, operationId: String, route: MediaSourceRoute): MediaInspectResult
+    suspend fun facebookVideoPageFailure(source: LinkRevision, operationId: String): ImageFailure? = null
     fun cancel(operationId: String)
 }

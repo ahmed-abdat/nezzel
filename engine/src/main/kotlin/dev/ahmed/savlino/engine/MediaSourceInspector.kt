@@ -44,6 +44,13 @@ class MediaSourceInspector(private val images: PublicImageInspector, private val
         } finally { operations.remove(operationId, operation) }
     }
 
+    suspend fun facebookVideoPageFailure(source: LinkRevision, operationId: String): ImageFailure? {
+        val operation = images.newOperation(source, imageIdentity)
+        operations[operationId] = operation
+        return try { images.facebookVideoPageFailure(operation) }
+        finally { operations.remove(operationId, operation) }
+    }
+
     fun cancel(operationId: String) {
         operations[operationId]?.let(images::cancel)
         legacy.cancel(operationId)

@@ -41,6 +41,8 @@ class MediaServices(context: Context, engine: () -> EngineAdapter, scope: Corout
     val inspect: ImageInspect = object : ImageInspect {
         override suspend fun inspect(source: LinkRevision, operationId: String, route: MediaSourceRoute) =
             inspector.inspect(source, operationId, route)
+        override suspend fun facebookVideoPageFailure(source: LinkRevision, operationId: String) =
+            inspector.facebookVideoPageFailure(source, operationId)
         override fun cancel(operationId: String) { inspector.cancel(operationId) }
     }
     private val statusSaver = dev.ahmed.savlino.statuses.StatusSaver(context)

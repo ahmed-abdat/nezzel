@@ -85,6 +85,7 @@ class FacebookInspectionTest : PublicImageTestBase() {
             val id = if (kind == "r") "900000000000007" else "900000000000008"
             assertEquals("https://www.facebook.com/watch/?v=$id", result.source.link.rawUrl)
             assertEquals(7, result.source.revision)
+            assertEquals(hops.last().substringBefore('?'), result.facebookPage?.link?.rawUrl?.substringBefore('?'))
             // Only the redirects were requested: no reel/video page, so no page body was read.
             assertEquals(hops.size, f.server.requests.size)
             assertTrue(f.server.requests.none { it.target.startsWith("/reel/") || "/videos/" in it.target })
@@ -100,6 +101,31 @@ class FacebookInspectionTest : PublicImageTestBase() {
             val result = assertIs<MediaInspectResult.VideoRedirect>(f.inspectFacebook("https://www.facebook.com/share/r/Synthetic/"))
             assertEquals("https://www.facebook.com/watch/?v=900000000000007", result.source.link.rawUrl)
             assertEquals(listOf("/share/r/Synthetic/", "/reel/900000000000007"), f.server.requests.map { it.target })
+        }
+    }
+
+    @Test fun videoPageCheckReadsOnlyThePageAndTypesTheLoggedOutWall() {
+        val reel = "https://www.facebook.com/reel/900000000000002"
+        val wall = facebookFixture("unavailable.html")
+            .replace("CometErrorRoot.react", "CometAgeInappropriateLoggedOutErrorRoot.react")
+        for ((body, privatePage) in listOf(wall to true, facebookFixture("video-post.html") to false)) {
+            fixture(respond = { _, socket -> socket.reply(body = body.toByteArray(), headers = html) }) { f ->
+                val operation = f.inspector.newOperation(imageSource(reel), IMAGE_IDENTITY)
+                val failure = runBlocking { f.inspector.facebookVideoPageFailure(operation) }
+                assertEquals(privatePage, failure == ImageFailure.PRIVATE)
+                assertEquals(listOf("/reel/900000000000002"), f.server.requests.map { it.target })
+            }
+        }
+    }
+
+    @Test fun videoPageCheckDoesNotReplaceTheLegacyErrorForATransportRefusal() {
+        fixture(respond = { _, socket ->
+            socket.reply(302, headers = mapOf("Location" to "https://www.facebook.com/login.php"))
+        }) { f ->
+            val operation = f.inspector.newOperation(imageSource("https://www.facebook.com/reel/900000000000002"), IMAGE_IDENTITY)
+            val failure = runBlocking { f.inspector.facebookVideoPageFailure(operation) }
+            assertNotEquals(ImageFailure.PRIVATE, failure)
+            assertEquals(1, f.server.requests.size)
         }
     }
 

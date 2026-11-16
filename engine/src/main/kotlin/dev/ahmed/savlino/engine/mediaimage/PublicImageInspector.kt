@@ -183,6 +183,34 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         }
     }
 
+    /** Failure-only video check: page bytes only, with the same bounded, cookies-free Facebook fetch. */
+    suspend fun facebookVideoPageFailure(operation: ImageInspectionOperation): ImageFailure? {
+        if (!operation.started.compareAndSet(false, true)) return ImageFailure.UNAVAILABLE
+        try {
+            return withContext(Dispatchers.IO) {
+                terminal(operation)?.let { return@withContext it }
+                val requested = FacebookPostIdentity.parse(operation.source.link.rawUrl)
+                    ?.takeIf { !it.isShortlink && it.videoId != null }
+                    ?: return@withContext ImageFailure.UNSUPPORTED
+                val page = when (val fetched = http.fetchFacebookPage(operation.token, requested.fetchUrl)) {
+                    // Only a parsed wall changes the audiovisual error, never a transport refusal.
+                    is MediaHttpResult.Failure -> return@withContext ImageFailure.UNAVAILABLE
+                    is MediaHttpResult.Success -> fetched.response
+                }
+                try {
+                    val body = page.takeBody()
+                    val resolved = FacebookPostIdentity.parse(page.target.url())
+                        ?: return@withContext ImageFailure.UNSUPPORTED
+                    terminal(operation)?.let { return@withContext it }
+                    val parsed = facebookParser.parse(body.bytes, resolved, requested, body.length)
+                    terminal(operation) ?: (parsed as? FacebookParseResult.Failure)?.reason
+                } finally { page.close() }
+            }
+        } catch (_: java.io.IOException) {
+            return terminal(operation) ?: ImageFailure.NETWORK
+        } finally { operation.token.close() }
+    }
+
     fun cancel(operation: ImageInspectionOperation) {
         synchronized(lock) {
             if (operation.state == ImageInspectionOperation.State.ACTIVE)
@@ -269,7 +297,9 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         val page = when (val result = http.fetchFacebookPage(operation.token, requested.fetchUrl)) {
             // A shortlink's redirect already named its video: no page body is read (speed-6).
             is MediaHttpResult.Failure -> return result.takeIf { it.reason == MediaHttpFailure.LANDED && requested.isShortlink }
-                ?.landing?.let(FacebookPostIdentity::parse)?.videoId?.let { videoRedirect(operation, it) }
+                ?.landing?.let(FacebookPostIdentity::parse)?.let { landing ->
+                    landing.videoId?.let { videoRedirect(operation, it, landing.fetchUrl) }
+                }
                 ?: Fetched.Failed(transportFailure(operation, result, ImagePhase.PAGE))
             is MediaHttpResult.Success -> result.response
         }
@@ -283,7 +313,7 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
         } finally { page.close() }
         // Only a shortlink (share/, share/{p,v,r}, fb.watch) carries no id of its own, so only its landing reel/watch/video
         // URL may name the video. An id-bearing link always needs its own bound story's attachment below.
-        if (requested.isShortlink) resolved.videoId?.let { return videoRedirect(operation, it) }
+        if (requested.isShortlink) resolved.videoId?.let { return videoRedirect(operation, it, resolved.fetchUrl) }
         val parsed = when (val result = facebookParser.parse(html.bytes, resolved, requested, html.length)) {
             is FacebookParseResult.Failure -> return Fetched.Failed(failure(result.reason, ImagePhase.PAGE, videoPage = result.videoPage))
             is FacebookParseResult.Video -> return videoRedirect(operation, result.videoId)
@@ -562,9 +592,11 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
     }
 
     /** Canonical `watch/?v={id}` at the caller's revision; no media URL, preview or reference is produced. */
-    private fun videoRedirect(operation: ImageInspectionOperation, videoId: String): Fetched {
+    private fun videoRedirect(operation: ImageInspectionOperation, videoId: String,
+        pageUrl: String? = null): Fetched {
         operation.fetchPhase = ImagePhase.IMAGE
-        return redirectTo(operation, facebookWatchLink(videoId))
+        return redirectTo(operation, facebookWatchLink(videoId),
+            facebookPage = pageUrl?.let(LinkInput::parse)?.let { LinkRevision(it, operation.source.revision) })
     }
 
     private fun facebookWatchLink(videoId: String): ValidatedLink? =
@@ -572,11 +604,12 @@ class PublicImageInspector(private val http: MediaHttpClient, private val decode
             ?.let { LinkInput.parse("https://www.facebook.com/watch/?v=$it") }
 
     /** A canonical post/watch link for yt-dlp at the caller's revision; no media URL, preview or reference. */
-    private fun redirectTo(operation: ImageInspectionOperation, link: ValidatedLink?, photosUnavailable: Boolean = false): Fetched {
+    private fun redirectTo(operation: ImageInspectionOperation, link: ValidatedLink?, photosUnavailable: Boolean = false,
+        facebookPage: LinkRevision? = null): Fetched {
         operation.fetchPhase = ImagePhase.IMAGE
         terminal(operation)?.let { return Fetched.Failed(failure(it, ImagePhase.PAGE)) }
         link ?: return Fetched.Failed(failure(ImageFailure.UNSUPPORTED, ImagePhase.PAGE))
-        return Fetched.Video(MediaInspectResult.VideoRedirect(LinkRevision(link, operation.source.revision), photosUnavailable))
+        return Fetched.Video(MediaInspectResult.VideoRedirect(LinkRevision(link, operation.source.revision), photosUnavailable, facebookPage))
     }
 
     /**
