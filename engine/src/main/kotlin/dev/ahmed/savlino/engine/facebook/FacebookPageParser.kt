@@ -73,7 +73,9 @@ class FacebookPageParser {
             val text = script.data()
             if (!text.contains("\"rootView\"")) continue
             val route = routeName(readJson(text, tokens) ?: continue) ?: continue
-            if (route == ERROR_ROUTE || route.startsWith("CometLogin")) return failure(ImageFailure.PRIVATE)
+            // Logged-out walls (age-gated reels: CometAgeInappropriateLoggedOutErrorRoot.react) are sign-in, not "no media".
+            if (route == ERROR_ROUTE || route.startsWith("CometLogin") || LOGGED_OUT_WALL.matches(route))
+                return failure(ImageFailure.PRIVATE)
             break
         }
 
@@ -366,6 +368,7 @@ class FacebookPageParser {
         const val MAX_JSON_DEPTH = 192
         const val MAX_JSON_STRING = 512 * 1024
         const val ERROR_ROUTE = "CometErrorRoot.react"
+        val LOGGED_OUT_WALL = Regex("Comet\\w*LoggedOut\\w*ErrorRoot\\.react")
         val MEDIA_TYPES = setOf("Photo", "Video", "Story")
         val json: JsonFactory = JsonFactory().disable(JsonParser.Feature.AUTO_CLOSE_SOURCE)
     }

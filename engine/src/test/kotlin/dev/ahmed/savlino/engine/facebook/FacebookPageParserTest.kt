@@ -211,6 +211,11 @@ class FacebookPageParserTest {
 
     @Test fun unavailableAndLoginWallAreTypedPrivateNotParseErrors() {
         rejected(facebookFixture("unavailable.html"), ImageFailure.PRIVATE)
+        // Age-gated reel (share/r/ → /reel/) for logged-out visitors: same wall, its own route name.
+        rejected(facebookFixture("unavailable.html").replace("CometErrorRoot.react", "CometAgeInappropriateLoggedOutErrorRoot.react"),
+            ImageFailure.PRIVATE)
+        rejected(facebookFixture("unavailable.html").replace("CometErrorRoot.react", "CometSomethingElseRoot.react"),
+            ImageFailure.NO_MEDIA)
         rejected(facebookFixture("login-page.html"), ImageFailure.PRIVATE)
         rejected(facebookFixture("http400-shell.html"), ImageFailure.NO_MEDIA)
     }
