@@ -239,6 +239,46 @@ class PublicImageValidationTest {
         reject(webpHeader(width = 1).also { it[4] = 0 }, "image/webp", ImageFailure.INVALID_IMAGE)
     }
 
+    @Test fun mpfJpegAcceptsOnlyBoundedCompleteSecondaryImagesAndKeepsPrimaryDimensions() {
+        val primary = raster(80, 59, "jpeg")
+        val secondary = raster(16, 12, "jpeg")
+        // APP2 length includes its two length bytes, followed by the MPF signature.
+        val mpf = primary.copyOf(2) + byteArrayOf(0xFF.toByte(), 0xE2.toByte(), 0, 6, 77, 80, 70, 0) +
+            primary.copyOfRange(2, primary.size)
+        val fourImages = mpf + secondary + secondary + secondary
+        for ((bytes, accepted) in listOf(
+            (mpf + secondary) to true,
+            fourImages to true,
+            (mpf + secondary.copyOf(secondary.size - 1)) to false,
+            (primary + secondary) to false,
+            (mpf + byteArrayOf(1, 2, 3)) to false,
+            (mpf + secondary + byteArrayOf(1)) to false,
+            (fourImages + secondary) to false,
+            (mpf + byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xD9.toByte())) to false,
+            (mpf.copyOf().also { it[3] = 0xE1.toByte() } + secondary) to false,
+            // A near-match signature must not authorize appended JPEGs.
+            (mpf.copyOf().also { it[9] = 1 } + secondary) to false
+        )) {
+            for (chunk in listOf(bytes.size, 1)) {
+                val stream = validator.newStream("image/jpeg")
+                for (offset in bytes.indices step chunk) {
+                    if (stream.accept(bytes, offset, minOf(chunk, bytes.size - offset)) != null) break
+                }
+                val result = stream.finish()
+                if (accepted) {
+                    val image = assertIs<ImageValidationResult.Valid>(result).image
+                    assertEquals(80, image.width); assertEquals(59, image.height)
+                    assertEquals(MediaImageFormat.JPEG, image.format)
+                    assertEquals(Size.Exact(bytes.size.toLong()), image.size)
+                    assertEquals(bytes.size.toLong(), assertNotNull(image.proof).measuredBytes)
+                    assertEquals(imageDigest(bytes), assertNotNull(image.proof).completeBodySha256)
+                } else {
+                    assertEquals(ImageFailure.INVALID_IMAGE, assertIs<ImageValidationResult.Failure>(result).reason)
+                }
+            }
+        }
+    }
+
     @Test fun proofOfDifferentEncodedRepresentationCannotBeSubstitutedByMatchingDimensions() {
         val a = valid(raster(color = 0x123456))
         val b = valid(raster(color = 0x654321))
