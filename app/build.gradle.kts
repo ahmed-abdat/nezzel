@@ -64,6 +64,10 @@ android {
         // scripts/release.sh passes both; local builds keep the scaffold values.
         versionCode = providers.gradleProperty("nezzel.versionCode").orNull?.toInt() ?: 1
         versionName = providers.gradleProperty("nezzel.versionName").orNull ?: "0.1.0-scaffold"
+        // Crash reporting address (owner 2026-11-16), passed at release time; a build without it, and any debug build, never starts Sentry.
+        buildConfigField("String", "SENTRY_DSN", "\"" + (providers.gradleProperty("nezzel.sentryDsn").orNull ?: "") + "\"")
+        // Names the R8 mapping uploaded for this build, so obfuscated stack traces read as source names.
+        buildConfigField("String", "SENTRY_PROGUARD_UUID", "\"" + (providers.gradleProperty("nezzel.sentryProguardUuid").orNull ?: "") + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Foundation verification contract targets arm64, matching the spike.
         ndk { abiFilters += "arm64-v8a" }
@@ -306,6 +310,8 @@ dependencies {
     implementation(libs.media3.ui.compose)
     // Installs the bundled baseline profile on sideloaded installs, where no store does it.
     implementation(libs.profileinstaller)
+    // Crash reports only (core, no NDK, no auto-init); started by hand while Help improve Nezzel is on.
+    implementation(libs.sentry.android.core)
     baselineProfile(project(":baselineprofile"))
 
     // Resolve test Android jars through Gradle locking + SHA-256 verification; no runtime fetches.

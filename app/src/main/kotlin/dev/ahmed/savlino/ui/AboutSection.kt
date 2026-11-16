@@ -67,6 +67,7 @@ internal object OpenSourceNotices {
             "licenses/jsr305-APACHE-2.0.txt"),
         NoticeComponent("OkHttp", "Apache License 2.0", "Apache-2.0", "https://github.com/square/okhttp", "licenses/okhttp-APACHE-2.0.txt"),
         NoticeComponent("Okio", "Apache License 2.0", "Apache-2.0", "https://github.com/square/okio", "licenses/okio-APACHE-2.0.txt"),
+        NoticeComponent("Sentry SDK for Android", "MIT License", "MIT", "https://github.com/getsentry/sentry-java", "licenses/sentry-MIT.txt"),
         NoticeComponent("AndroidX Media3", "Apache License 2.0", "Apache-2.0", "https://github.com/androidx/media",
             "licenses/okhttp-APACHE-2.0.txt"),
         NoticeComponent("Guava", "Apache License 2.0", "Apache-2.0", "https://github.com/google/guava", "licenses/okhttp-APACHE-2.0.txt"),

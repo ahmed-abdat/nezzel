@@ -49,6 +49,7 @@ open class NezzelApplication : Application(), Configuration.Provider {
         preferences.helpImprove = on
         // Off: drop counters, queued reports and the crash file. On again: a crash recorded while off is never sent.
         scope.launch { if (on) usageStore.dropCrash() else usageStore.clear() }
+        dev.ahmed.savlino.diagnostics.SentryReports.apply(this, on && dev.ahmed.savlino.update.UpdatePolicy.enabled(packageName))
         appUpdates.reschedule()
     }
     val widgets by lazy { dev.ahmed.savlino.shortcuts.WidgetUpdater(this, downloads.progress, playlistBatches, artwork = { downloads.artwork.load(it) }) }
@@ -79,6 +80,8 @@ open class NezzelApplication : Application(), Configuration.Provider {
             }
         }
         dev.ahmed.savlino.diagnostics.CrashReports.install(this)
+        // After our own handler, so Sentry's wraps it and both see a crash.
+        dev.ahmed.savlino.diagnostics.SentryReports.apply(this, preferences.helpImprove && dev.ahmed.savlino.update.UpdatePolicy.enabled(packageName))
         dev.ahmed.savlino.DebugStrictMode.install()
         collectors.launch { widgets.start(this) }
         collectors.launch {
