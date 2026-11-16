@@ -493,6 +493,7 @@ internal fun SavedCheck(size: androidx.compose.ui.unit.Dp) {
 @Composable
 private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, ring: Color, onCancel: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit) {
     val context = LocalContext.current
+    val deferred = job.error == dev.ahmed.savlino.domain.DownloadError.ForegroundDenied
     val quality = LocalFailedQuality.current
     val canChange by produceState(false, job.jobId, job.error, job.awaitingSchedule, quality) {
         value = !job.awaitingSchedule && job.error != dev.ahmed.savlino.domain.DownloadError.InsufficientSpace &&
@@ -500,15 +501,17 @@ private fun FailedRow(job: DownloadProgress, tile: Boolean, art: ImageBitmap?, r
     }
     Row(Modifier.fillMaxWidth().heightIn(min = JobRowHeight).padding(horizontal = Space.rowH, vertical = Space.s),
         horizontalArrangement = Arrangement.spacedBy(Space.inline), verticalAlignment = Alignment.CenterVertically) {
-        if (tile) JobThumb(art, R.drawable.ic_error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer,
-            ThumbBadge.Failed, ring)
+        if (tile) JobThumb(art, if (deferred) R.drawable.ic_download else R.drawable.ic_error,
+            if (deferred) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.errorContainer,
+            if (deferred) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onErrorContainer,
+            if (deferred) null else ThumbBadge.Failed, ring)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.textPair)) {
             FilenameText(job.filename)
             // An expired job with no link left: the share-again hint is the whole message. A quality that is gone
             // but whose link is kept says so and offers Change quality below.
             val expired = job.error == dev.ahmed.savlino.domain.DownloadError.FormatExpired && !job.retryable && !canChange
             Text(if (expired) stringResource(R.string.download_retry_hint) else DownloadNotifications.phase(context, job, LocalOffline.current),
-                color = MaterialTheme.colorScheme.error,
+                color = if (deferred) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             if (!job.awaitingSchedule && !job.retryable && !expired && !canChange)
                 Text(stringResource(R.string.download_retry_hint), style = MaterialTheme.typography.bodySmall,

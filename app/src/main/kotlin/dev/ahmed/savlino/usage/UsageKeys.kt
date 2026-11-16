@@ -25,6 +25,7 @@ object UsageKeys {
     const val RESUME = "resume"
     const val PAUSE_ALL = "pause_all"
     const val RETRY = "retry"
+    const val DOWNLOAD_DEFERRED = "download.deferred"
     const val STATUSES_OPENED = "statuses.opened"
     const val STATUSES_SAVED = "statuses.saved"
     /** A Download/Nezzel grant after a reinstall; no count of files or names. */
@@ -78,7 +79,7 @@ object UsageKeys {
     /** Every fixed key; [SITE], [OPTIONS_SITE], [SDK] and [BRAND] are the only patterned ones. */
     val fixed: Set<String> = buildSet {
         addAll(listOf(SPOTIFY_TRACK, SPOTIFY_LIST, SPOTIFY_FAILED, PREVIEW_PLAY, PREVIEW_FAILED))
-        addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY,
+        addAll(listOf(OPEN, ACTIVE, SHARE, PASTE, CLIP_SHOWN, CLIP_ACCEPTED, PAUSE, RESUME, PAUSE_ALL, RETRY, DOWNLOAD_DEFERRED,
             STATUSES_OPENED, STATUSES_SAVED, OLD_DOWNLOADS_FOUND, WIDGET_ADDED, UPDATE_INSTALLED, UPDATE_OFFERED, UPDATE_TAPPED, UPDATE_READY,
             UPDATE_INSTALL_MANUAL, UPDATE_INSTALL_SILENT, SITE_OTHER,
             FUNNEL_LINK, FUNNEL_OPTIONS, FUNNEL_TAPPED, FUNNEL_FINISHED, FUNNEL_FAILED, FUNNEL_BATCH, PICK_KEPT, PICK_UP, PICK_DOWN, PICK_AUDIO,

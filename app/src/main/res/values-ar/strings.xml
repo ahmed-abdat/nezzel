@@ -249,6 +249,8 @@
     <string name="download_merge_error">تعذّر دمج الصوت والفيديو</string>
     <string name="download_convert_mp3_error">تعذّر التحويل إلى MP3</string>
     <string name="download_restricted_error">تعذّر إكمال التنزيل</string>
+    <string name="download_resume_on_open">يكمل عند فتح \u2066Nezzel\u2069</string>
+    <string name="download_resume_on_open_notification">اضغط لإكمال التنزيل</string>
     <plurals name="downloads_running">
         <item quantity="zero">لا توجد تنزيلات جارية</item>
         <item quantity="one">تنزيل واحد جارٍ</item>

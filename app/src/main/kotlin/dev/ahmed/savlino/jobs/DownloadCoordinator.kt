@@ -455,6 +455,7 @@ class DownloadCoordinator(
                     finished(final)
                 } }
             } finally {
+                // Refused starts keep their confirmation in the journal; each worker owns fresh accounting.
                 accounting.remove(id, attempt)
                 attempt.reportLink = null
             }
@@ -991,11 +992,15 @@ class DownloadCoordinator(
     /**
      * One count per job (per playlist video across the new ids its retries get), at its first end: later ends count
      * nothing (Retry has its own key); a cancel counts only when the person asked ([cancel]) and the job ends cancelled.
-     * funnel.* only for a single link's job; playlist videos count under dl.*. Every failed attempt still goes out
-     * as a report with its exact link (only while Help improve is on).
+     * funnel.* only for a single link's job; playlist videos count under dl.*. Refused starts defer the end;
+     * real failures go out as reports with their exact link (only while Help improve is on).
      */
     private fun countTerminal(event: DownloadProgress) {
         val row = store.get(event.jobId) ?: return
+        if (event.phase == DownloadPhase.FAILED && (event.error ?: row.error) == DownloadError.ForegroundDenied) {
+            usage.count(UsageKeys.DOWNLOAD_DEFERRED)
+            return
+        }
         val outcome = when (event.phase) {
             DownloadPhase.COMPLETED -> UsageKeys.Download.FINISHED
             DownloadPhase.FAILED -> UsageKeys.Download.FAILED
@@ -1020,9 +1025,7 @@ class DownloadCoordinator(
         if (outcome == UsageKeys.Download.FINISHED) attempt.transfer.bytesPerSecond()?.let { usage.count(UsageKeys.speed(it)) }
         if (outcome == UsageKeys.Download.FAILED) {
             val error = event.error ?: row.error ?: DownloadError.Failed
-            // ForegroundDenied keeps the code it was reported under before it had its own value.
-            val code = if (error == DownloadError.ForegroundDenied) "ExecutionRestricted_FOREGROUND_DENIED"
-                else error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
+            val code = error.name + if (error == DownloadError.ExecutionRestricted) "_" + attempt.reason.name else ""
             usage.failed(Report.DOWNLOAD, code, attempt.reportLink ?: row.sourceUrl, row.engineVersion)
         }
         attempt.reportLink = null
@@ -1108,6 +1111,7 @@ class DownloadCoordinator(
         recovery.release(id)
         val row = store.get(id)
         val removed = row?.stage == JobStage.FAILED && store.remove(id)
+        if (removed) accounting.remove(id)?.reportLink = null
         if (removed) offlineStarts.remove(id)
         if (removed || store.get(id) == null) mutableProgress.update { it.filterNot { event -> event.jobId == id } }
     }
