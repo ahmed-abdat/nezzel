@@ -306,6 +306,9 @@ private class JpegParser : FormatParser {
     private var marker = 0
     private val length = ByteArray(2)
     private val frame = ByteArray(5)
+    private val mpf = ByteArray(4)
+    private var primaryHasMpf = false
+    private var imageCount = 1
     private var remaining = 0
     private var segmentLength = 0
     private var sawFrame = false
@@ -346,9 +349,14 @@ private class JpegParser : FormatParser {
                 }
                 State.SEGMENT -> {
                     val take = minOf(remaining, end - index)
-                    if (isFrame(marker)) {
-                        val copy = minOf(take, frame.size - position).coerceAtLeast(0)
-                        bytes.copyInto(frame, position, index, index + copy)
+                    val prefix = when {
+                        isFrame(marker) -> frame
+                        marker == 0xE2 && imageCount == 1 -> mpf
+                        else -> null
+                    }
+                    if (prefix != null) {
+                        val copy = minOf(take, prefix.size - position).coerceAtLeast(0)
+                        bytes.copyInto(prefix, position, index, index + copy)
                         position += copy
                     }
                     index += take
@@ -369,7 +377,14 @@ private class JpegParser : FormatParser {
                         else -> marker(value)?.let { return it }
                     }
                 }
-                State.DONE -> return ImageFailure.INVALID_IMAGE // Appended bytes after EOI.
+                State.DONE -> {
+                    // MPF permits complete appended JPEGs; keep the same bounded parser for each.
+                    if (!primaryHasMpf || imageCount >= 4) return ImageFailure.INVALID_IMAGE
+                    imageCount++
+                    sawFrame = false; sawScan = false
+                    position = 0
+                    state = State.SOI
+                }
             }
         }
         return null
@@ -394,11 +409,14 @@ private class JpegParser : FormatParser {
     }
 
     private fun endSegment(): ImageFailure? {
+        if (marker == 0xE2 && imageCount == 1 && position == mpf.size && u32(mpf, 0) == 0x4D504600L)
+            primaryHasMpf = true
         if (isFrame(marker)) {
             if (sawFrame || segmentLength < 8 || position < frame.size) return ImageFailure.INVALID_IMAGE
-            height = (((frame[1].toInt() and 255) shl 8) or (frame[2].toInt() and 255)).toLong()
-            width = (((frame[3].toInt() and 255) shl 8) or (frame[4].toInt() and 255)).toLong()
-            dimensionFailure(width, height)?.let { return it }
+            val frameHeight = (((frame[1].toInt() and 255) shl 8) or (frame[2].toInt() and 255)).toLong()
+            val frameWidth = (((frame[3].toInt() and 255) shl 8) or (frame[4].toInt() and 255)).toLong()
+            dimensionFailure(frameWidth, frameHeight)?.let { return it }
+            if (imageCount == 1) { width = frameWidth; height = frameHeight }
             sawFrame = true
         }
         position = 0
