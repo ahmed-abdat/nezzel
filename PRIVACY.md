@@ -38,7 +38,7 @@ While Settings → Advanced → Help improve Nezzel is on:
 
 - Once a day, Nezzel sends anonymous totals: features used, how far links got (opened, options shown, downloaded, failed), rough quality, speed and wait-time buckets, your settings, and the sites you saved from (domain only). Each send also names the app version, Android version, phone brand (never the model), screen size class, app language and a rough install age. No ID, links, titles or file names. The server adds your country and keeps daily totals only.
 - When a download or link read fails, Nezzel sends a report with the site, the error code, the app and engine versions and the exact link. If the app crashed, the crash details (no personal data) are sent too. Links in reports are deleted after 30 days.
-- Crashes also go to Sentry (sentry.io), a crash-reporting service: the error type and the code path that led to it (a stack trace), the app version, the Android version and the phone brand. No ID, links, titles, file names, error text or phone model.
+- Crashes also go to Sentry (sentry.io), a crash-reporting service: the error type and the code path that led to it (a stack trace), the app version, the Android version and the phone brand. No ID, links, titles, file names, error text or phone model. Sentry adds your country.
 - Your IP address is never stored.
 
 Turn it off and nothing is sent; anything not yet sent is deleted.
