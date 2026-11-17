@@ -4,6 +4,26 @@ Notable changes are recorded here in Keep a Changelog style, newest first.
 Earlier entries were reconstructed from tags, commit history and recorded build notes.
 Version entries describe existing builds, not public APK availability.
 
+## [0.5.9] - 2026-11-17
+
+### Added
+
+- After the first download, Nezzel asks Android once to let it keep downloading in the background; a download Android stopped offers the same request.
+
+### Changed
+
+- A download Android refuses to start in the background says "Continues when you open Nezzel" instead of failing, and resumes when you open the app; its notification opens Nezzel.
+- A quality that is no longer available keeps its link for 24 hours, so the card offers Change quality.
+- Home: the logo ring turns on arrival, then rests.
+- While Help improve Nezzel is on, crashes also go to Sentry (error type, stack trace, app and Android version, phone brand; no ID, links or phone model). See PRIVACY.md.
+
+### Fixed
+
+- A resumed or retried download keeps going when the same quality is still there under new stream ids (YouTube included).
+- Saving a link clears its earlier failed cards, including other YouTube link forms (youtu.be, m.youtube.com).
+- Facebook: shared posts and age-restricted reels that need sign-in say so instead of "no media" or "couldn't read this link".
+- Instagram: Ultra HDR photos are accepted instead of failing as an invalid image.
+
 ## [0.5.8] - 2026-11-02
 
 ### Added
