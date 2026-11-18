@@ -72,12 +72,26 @@
         timer = setTimeout(() => { delete b.dataset.state; live.textContent = ''; }, 2000);
       };
       b.addEventListener('click', () => {
-        const text = code.innerText.replace(/^\$ /gm, '').trim();
+        const text = code.dataset.copy || code.innerText.replace(/^\$ /gm, '').trim();
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => settle(true), () => settle(legacy(text)));
         else settle(legacy(text));
       });
       wrap.append(b);
     });
+  }
+
+  /* ---- a system's page: its animated scene runs only while on screen and loops by restarting its one clock ---- */
+  const scenes = all('[data-scene]');
+  if (scenes.length && !reduce && 'IntersectionObserver' in window) {
+    scenes.forEach((sc) => sc.addEventListener('animationend', (e) => {
+      if (e.animationName !== 'sc-clock') return;
+      sc.classList.remove('is-run'); void sc.offsetWidth; sc.classList.add('is-run');
+    }));
+    const sio = new IntersectionObserver((es) => es.forEach((en) => {
+      en.target.classList.toggle('is-live', en.isIntersecting);
+      if (en.isIntersecting) en.target.classList.add('is-run');
+    }), { threshold: 0.35 });
+    scenes.forEach((sc) => sio.observe(sc));
   }
 
   /* ---- thank-you: the folder's files rise into view once, when the drawing is on screen ---- */
