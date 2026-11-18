@@ -132,7 +132,7 @@ try {
     themeHead(replaceHeader(html, header(dictionaries[locale], locale, page, paths, escape)), page !== ''),
     footer(dictionaries[locale], locale, page, paths, escape, release));
   const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(translate(source, nodes, dictionaries[l], meta[l], l), l, '')]));
-  for (const page of ['desktop/', 'desktop/install/', 'desktop/thanks/']) {
+  for (const page of ['desktop/', 'desktop/install/', 'desktop/install/mac/', 'desktop/install/windows/', 'desktop/install/linux/', 'desktop/thanks/']) {
     for (const locale of locales) {
       const path = `site${paths[locale]}${page}index.html`;
       const desktop = await readFile(new URL(path, root), 'utf8');
@@ -145,7 +145,7 @@ try {
   // lastmod = the page's ld+json dateModified, so the sitemap stays reproducible
   const lastmod = /"dateModified":"(\d{4}-\d{2}-\d{2})"/.exec(source)?.[1];
   if (!lastmod) throw new Error('site/index.html ld+json needs dateModified (YYYY-MM-DD)');
-  const sitemapPages = [ ['', lastmod], ['desktop/', '2026-11-10'], ['desktop/install/', '2026-11-10'] ];
+  const sitemapPages = [ ['', lastmod], ['desktop/', '2026-11-10'], ['desktop/install/', '2026-11-18'], ['desktop/install/mac/', '2026-11-18'], ['desktop/install/windows/', '2026-11-18'], ['desktop/install/linux/', '2026-11-18'] ];
   const sitemapRows = sitemapPages.flatMap(([page, modified]) => {
     const links = [...locales, 'x-default'].map(l => `    <xhtml:link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}${page}"/>`).join('\n');
     return locales.map(l => `  <url>\n    <loc>${base}${paths[l]}${page}</loc>\n    <lastmod>${modified}</lastmod>\n${links}\n  </url>`);
