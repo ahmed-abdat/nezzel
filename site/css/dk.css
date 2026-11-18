@@ -209,7 +209,7 @@ html:not([data-mode]) .hero-fig .th-nojs{display:block}
 .tour-tx .step-n{margin-block-end:14px}
 .tour-tx h3{font:600 clamp(21px,2.1vw,26px)/1.3 var(--f-body);text-wrap:balance}
 .tour-tx p{margin-block-start:8px;font-size:17px;color:var(--ink-2);max-inline-size:36ch}
-.tour-fig{display:grid;place-items:center;padding:clamp(12px,3vw,32px);border-radius:20px;background:var(--sunk);min-inline-size:0}
+.tour-fig{display:grid;place-items:center;padding:clamp(12px,3vw,32px);min-inline-size:0}
 .tour-fig .shot{max-inline-size:100%}
 .tour-fig .shot-card{max-inline-size:460px;border-radius:3.333% / 7.5%;box-shadow:var(--shadow-shot)}
 .tour-fig .shot-sheet{max-inline-size:340px}
