@@ -8,6 +8,9 @@
   // Every download goes through the site's own routes (never straight to GitHub).
   const KEYS = { 'mac-arm': ['mac', 'arm64'], 'mac-intel': ['mac', 'x64'], 'win-x64': ['win', 'x64'], 'win-arm': ['win', 'arm64'], deb: ['linux'], rpm: ['linux'], appimage: ['linux'] };
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  // Design comparison switch: ?alt=crop shows the cropped hero capture on phones instead of the whole window.
+  if (q.get('alt')) root.dataset.alt = q.get('alt');
+  if (q.get('alt') === 'crop') document.querySelectorAll('.hero-fig img').forEach((img) => { const s = document.createElement('source'); s.media = '(max-width:640px)'; s.srcset = img.getAttribute('src').replace(/-750\.webp$/, '-m.webp'); img.before(s); });
 
   /* ---------------- device ---------------- */
   function detect() {
@@ -300,10 +303,12 @@
   const COPY = { ar: ['نسخ', 'نُسخ'], en: ['Copy', 'Copied'], fr: ['Copier', 'Copié'] }[root.lang] || ['Copy', 'Copied'];
   document.querySelectorAll('pre > code').forEach((code) => {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'btn btn-sm copy-btn'; b.textContent = COPY[0];
+    b.type = 'button'; b.className = 'btn btn-sm copy-btn';
+    b.innerHTML = `<span class="cb-a">${COPY[0]}</span><span class="cb-b" aria-hidden="true">${COPY[1]}</span>`;
+    const flip = (done) => { b.classList.toggle('is-done', done); b.firstChild.setAttribute('aria-hidden', String(done)); b.lastChild.setAttribute('aria-hidden', String(!done)); };
     b.addEventListener('click', () => {
       const text = code.innerText.replace(/^\$ /gm, '').trim();
-      const ok = () => { b.textContent = COPY[1]; b.classList.add('is-done'); setTimeout(() => { b.textContent = COPY[0]; b.classList.remove('is-done'); }, 1600); };
+      const ok = () => { flip(true); clearTimeout(b.t); b.t = setTimeout(() => flip(false), 1600); };
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(ok, ok);
     });
     code.parentElement.append(b);
