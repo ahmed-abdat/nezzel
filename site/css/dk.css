@@ -370,7 +370,7 @@ html[data-family=phone] .th-ok .th{padding-block-start:clamp(36px,10vw,56px)}
 .th-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;margin-block-start:28px;align-items:start}
 .th-list{display:grid;gap:26px}
 .th-list li{display:flex;gap:16px;align-items:flex-start}
-.th-list bdi{white-space:nowrap}
+.th-list bdi,.ist-tx bdi[dir=ltr]{white-space:nowrap}
 body[data-page=thanks] .end{margin-block-start:clamp(24px,4vw,48px);padding-block-start:clamp(36px,5vw,56px)}
 body[data-page=thanks] .end .sep{margin-block-start:0}
 .th-list h3,.th-pkg h3{font:600 19px/1.5 var(--f-body);margin-block:3px 4px}
