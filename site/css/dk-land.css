@@ -34,7 +34,7 @@
 @media (max-width:1100px){.hero-fig{margin-inline:calc(-.5 * var(--gut))}}
 /* a recording, when present, covers the still it was made from (js/dk-land.js, data-rec-on) */
 .rec-v{position:absolute;inset:0;inline-size:100%;block-size:100%;object-fit:contain;border-radius:inherit}
-.tour-fig.rec-on picture,.tour-fig.rec-on .rows{display:none}
+.tour-fig.rec-on picture,.tour-fig.rec-on .rows{display:none!important}
 .tour-fig.rec-on .rec-v{position:static;max-inline-size:100%;block-size:auto;border-radius:var(--r-shot)}
 
 /* ---- "available for" row under the hero button ---- */
@@ -43,7 +43,10 @@
 .also-os .dk-i{inline-size:17px;block-size:17px;color:var(--ink-3)}
 .also a{display:inline-block;padding-block:10px;margin-block:-10px;color:var(--ink);font-weight:500;text-decoration:none}
 @media (hover:hover) and (pointer:fine){.also a:hover{text-decoration:underline;text-decoration-thickness:1px}}
-html:not(.js) .also,html.js:not([data-family=computer]) .also{display:none}
+/* shown once dk.js knows this is a computer; its place is kept on wide screens so nothing shifts */
+html:not(.js) .also{display:none}
+html.js:not([data-family=computer]) .also{visibility:hidden}
+@media (max-width:1100px){html.js:not([data-family=computer]) .also{display:none}}
 
 /* ---- hero entrance: one gesture. headline 0, lede 80, button 140, device 200 with more travel ---- */
 @media (prefers-reduced-motion:no-preference){
@@ -53,7 +56,8 @@ html:not(.js) .also,html.js:not([data-family=computer]) .also{display:none}
   .js .hero-copy>:nth-child(4){animation-delay:.18s}
   .js .hero-fig{animation:rise-far .9s var(--ease-rise) .2s backwards}
   @keyframes rise{from{opacity:0;transform:translateY(10px)}}
-  @keyframes rise-far{from{opacity:0;transform:translateY(34px)}}
+  /* transform only: the capture inside is the largest paint and must not wait for a fade */
+  @keyframes rise-far{from{transform:translateY(34px)}}
   /* headline word by word (never per letter: Arabic letters must stay joined) */
   .js .hero h1.h1-split{animation:none}
   .h1-split .w{display:inline-block;animation:word .6s var(--ease-rise) backwards;animation-delay:calc(var(--i) * 50ms)}
@@ -61,8 +65,12 @@ html:not(.js) .also,html.js:not([data-family=computer]) .also{display:none}
 }
 /* the lid settles as the page starts to scroll: 8 degrees at most, wide screens only */
 @media (prefers-reduced-motion:no-preference) and (min-width:1101px){@supports (animation-timeline:scroll()){
-  .lpf-lid{animation:lid-open linear both;animation-timeline:scroll(root block);animation-range:0 380px}
-  @keyframes lid-open{from{transform:rotateX(8deg)}to{transform:none}}
+  .lpf-lid{animation:lid-move linear both;animation-timeline:scroll(root block);animation-range:0 480px}
+  @keyframes lid-move{0%{transform:rotateX(8deg)}20%,42%{transform:none}100%{transform:rotateX(-62deg)}}
+  .lpf{animation:lpf-out linear both;animation-timeline:scroll(root block);animation-range:220px 640px}
+  @keyframes lpf-out{to{transform:translateY(70px) scale(.94)}}
+  .hero-copy{animation:copy-out linear both;animation-timeline:scroll(root block);animation-range:160px 560px}
+  @keyframes copy-out{to{transform:translateY(-36px);opacity:.25}}
 }}
 
 /* ---- hero and header download buttons: press, then "Starting download" before the thank-you page ---- */
@@ -112,10 +120,14 @@ html:is([data-device^=windows],[data-device=linux]) .k-pc{display:inline}
   .tour-step.is-on .key{animation:key-press .9s var(--ease-out) backwards}
   .tour-step.is-on .key>i{animation:key-lit .9s var(--ease-out) backwards}
   .tour-step.is-on .key+.key,.tour-step.is-on .key+.key>i{animation-delay:.12s}
-  .tour-step.is-on .shot-card{animation:card-in .4s var(--ease-out) .42s backwards}
+  .tour-step.is-on .shot-card{animation:card-in .5s var(--ease-out) .42s backwards}
+  [dir=rtl] .tour-step .shot-card{--cx:-32px}
   @keyframes key-press{0%,100%{transform:none}14%,58%{transform:translateY(2px)}}
   @keyframes key-lit{14%,58%{opacity:1}}
-  @keyframes card-in{from{opacity:0;transform:translateY(10px) scale(.98);filter:blur(2px)}}
+  @keyframes card-in{from{opacity:0;transform:translate(var(--cx,32px),32px) scale(.95)}}
+  /* step two: the options sheet rises into place */
+  .tour-step.is-on .shot-sheet{animation:sheet-up .55s var(--ease-out) .1s backwards}
+  @keyframes sheet-up{from{opacity:0;transform:translateY(44px);clip-path:inset(0 0 46% 0 round 12px)}to{clip-path:inset(0 0 0 0 round 12px)}}
 }
 
 /* ---- tour, step three: the real list capture cut into its rows; each row arrives and pushes the rest down ---- */
@@ -125,7 +137,7 @@ html:is([data-device^=windows],[data-device=linux]) .k-pc{display:inline}
 .rows img{display:block;inline-size:100%;max-inline-size:none;block-size:auto}
 .rows .row{transition:transform .55s cubic-bezier(.22,1,.36,1),opacity .3s ease-out;will-change:transform}
 .rows .row.off{opacity:0}
-.tour-fig.has-rows picture{display:none}
+.tour-fig.has-rows picture{display:none!important}
 
 /* ---- tour on wide screens: the text scrolls, the capture stays and swaps (set by js/dk-land.js) ---- */
 @media (min-width:1100px){
@@ -180,3 +192,39 @@ html[data-device^=mac] .plat[data-os=mac] .plat-dev,html[data-device^=windows] .
 #details .sec-head .tt{margin-inline:0}}
 @media (max-width:640px){.facts{grid-template-columns:minmax(0,1fr);gap:18px}
 .plat{padding-inline-end:8px}.plat:nth-child(even){padding-inline-start:16px}}
+
+/* ---- second pass (2026-11-18): the page moves. transform, opacity and clip-path only ---- */
+/* step three: each row's Open button shows up after the row has landed (a patch of the row's own background uncovers it) */
+.rows .oc{position:absolute;inset-block:10%;inset-inline-end:1%;inline-size:12%;background:#FAFCFC;opacity:0;transition:opacity .35s ease-out .6s}
+:root[data-theme=dark] .rows .oc{background:#0B100E}
+.rows .row.off .oc{opacity:1;transition:none}
+/* hero poster, until the recording exists: slices of the real captures. The copied link's card arrives in the window corner,
+   then the running row's bar fills to the 42% the capture shows. Positions are physical: the device drawing is always left-to-right. */
+.hs{position:absolute;background-repeat:no-repeat;pointer-events:none}
+.hs-fill{transform-origin:0 50%}
+:root[dir=rtl] .hs-fill{transform-origin:100% 50%}
+.hero-card{position:absolute;bottom:7%;right:3%;inline-size:46%;block-size:auto;opacity:0;border-radius:3.333% / 7.5%;box-shadow:0 0 0 1px rgb(0 0 0/.16);pointer-events:none;--hx:10%}
+:root[dir=rtl] .hero-card{right:auto;left:3%;--hx:-10%}
+@media (prefers-reduced-motion:no-preference){
+  .lpf.is-live .hero-card{animation:hero-card 9s var(--ease-out) infinite}
+  .lpf.is-live .hs-fill{animation:hero-bar 9s cubic-bezier(.3,.6,.3,1) infinite}
+  @keyframes hero-card{0%{opacity:0;transform:translate(var(--hx),18%) scale(.95)}7%,30%{opacity:1;transform:none}35%,100%{opacity:0;transform:translateY(8%) scale(.98)}}
+  @keyframes hero-bar{0%,35%{transform:scaleX(1)}35.1%{transform:scaleX(0)}80%,100%{transform:scaleX(1)}}
+  /* details: the four apps arrive one after another, then the facts */
+  .js-io .plats.rv>li,.js-io .facts.rv>div{transition:opacity .45s var(--ease-out),transform .45s var(--ease-out);transition-delay:calc(var(--n,0) * 70ms + 80ms)}
+  .js-io .plats.rv.pre>li,.js-io .facts.rv.pre>div{opacity:0;transform:translateY(14px)}
+  .js-io .plats.rv>li .plat-dev{transition:transform .6s var(--ease-out);transition-delay:calc(var(--n,0) * 70ms + 140ms)}
+  .js-io .plats.rv.pre>li .plat-dev{transform:translateY(8px) scale(.9)}
+  .plats>li:nth-child(2),.facts>div:nth-child(2){--n:1}.plats>li:nth-child(3),.facts>div:nth-child(3){--n:2}.plats>li:nth-child(4){--n:3}
+}
+/* scroll-driven section transitions where the browser has view timelines; elsewhere the blur-fade above (IntersectionObserver) stays */
+@media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
+  .js-io .sec-head.rv{animation:sec-in linear both;animation-timeline:view();animation-range:cover 0% cover 26%}
+  @keyframes sec-in{from{opacity:0;transform:translateY(40px);filter:blur(6px)}}
+  .js-io :is(.steps-iso,.plats){animation:media-in linear both;animation-timeline:view();animation-range:cover 0% cover 30%}
+  @keyframes media-in{from{clip-path:inset(5% 3% 5% 3% round 24px);transform:scale(.965) translateY(28px)}to{clip-path:inset(0 0 0 0 round 0)}}
+  .js-io :is(.steps-iso,.plats).rv.pre{opacity:1;filter:none}
+  @media (max-width:1099px){.js-io .tour-fig{animation:media-in linear both;animation-timeline:view();animation-range:cover 0% cover 32%}}
+  .end .wrap>h2,.end .closing-download{animation:end-in linear both;animation-timeline:view();animation-range:cover 0% cover 22%}
+  @keyframes end-in{from{transform:translateY(46px)}}
+}}

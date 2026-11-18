@@ -58,6 +58,30 @@
     new MutationObserver(() => recs.forEach(build)).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
+  /* ---- hero poster sequence (only while there is no recording): slices of the real captures ---- */
+  const lpf = document.querySelector('.lpf[data-rec]'), win = lpf && lpf.querySelector('.lpf-win');
+  if (win && !lpf.hasAttribute('data-rec-on') && !still() && 'IntersectionObserver' in window) {
+    const W = 1500, H = 1300, ar = root.lang === 'ar';
+    // Measured in the 1500 px captures: the running row's bar fill, and a piece of its empty track.
+    const geo = () => { const d = theme() === 'dark'; return { fill: { x: ar ? 1005 : 345, y: (ar ? 328 : 318) + (d ? 1 : 0), w: 150, h: d ? 6 : 8 }, track: { x: ar ? 830 : 530, w: 150 } }; };
+    const slice = (cls, box, src, url) => {
+      const e = document.createElement('i'); e.className = 'hs ' + cls;
+      e.style.cssText = `left:${box.x / W * 100}%;top:${box.y / H * 100}%;width:${box.w / W * 100}%;height:${box.h / H * 100}%;background-image:url("${url}");background-size:${W / src.w * 100}% ${H / box.h * 100}%;background-position:${src.x / (W - src.w) * 100}% ${box.y / (H - box.h) * 100}%`;
+      return e;
+    };
+    const build = () => {
+      win.querySelectorAll('.hs,.hero-card').forEach((e) => e.remove());
+      const img = win.querySelector('picture.th-' + theme() + ' img'); if (!img) return;
+      const url = img.currentSrc || img.getAttribute('src'), g = geo();
+      const card = new Image(); card.className = 'hero-card'; card.alt = ''; card.decoding = 'async'; card.width = 720; card.height = 320;
+      card.src = `/img/desktop/step-card-${root.lang}-${theme()}.webp`;
+      win.append(slice('hs-cover', g.fill, { x: g.track.x, w: g.track.w }, url), slice('hs-fill', g.fill, g.fill, url), card);
+    };
+    build();
+    new MutationObserver(build).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    new IntersectionObserver((es) => es.forEach((en) => lpf.classList.toggle('is-live', en.isIntersecting)), { threshold: 0.5 }).observe(lpf);
+  }
+
   /* ---- tour ---- */
   const steps = [...document.querySelectorAll('.tour-step')];
   const wide = matchMedia('(min-width:1100px)');
@@ -87,6 +111,8 @@
     cut(0, HEAD, 'head');
     for (let j = 0; j < N; j++) cut(HEAD + j * ROW, ROW, 'row');
     cut(HEAD + N * ROW, Math.max(0, m.h - HEAD - N * ROW), 'head');
+    // Wide capture only: the Open buttons sit at the end of each row and can be uncovered after it lands.
+    if (m.w > 1000) rows.querySelectorAll('.row').forEach((r) => { const c = document.createElement('i'); c.className = 'oc'; r.append(c); });
     listFig.append(rows); listFig.classList.add('has-rows');
     show(played ? N : 0, false);
   }
