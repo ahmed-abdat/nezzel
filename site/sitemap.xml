@@ -50,7 +50,7 @@
   </url>
   <url>
     <loc>https://nezzel.hululsoft.mr/desktop/install/</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/"/>
@@ -58,7 +58,7 @@
   </url>
   <url>
     <loc>https://nezzel.hululsoft.mr/en/desktop/install/</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/"/>
@@ -66,10 +66,82 @@
   </url>
   <url>
     <loc>https://nezzel.hululsoft.mr/fr/desktop/install/</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/desktop/install/mac/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/mac/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/en/desktop/install/mac/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/mac/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/fr/desktop/install/mac/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/mac/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/mac/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/desktop/install/windows/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/windows/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/en/desktop/install/windows/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/windows/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/fr/desktop/install/windows/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/windows/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/windows/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/desktop/install/linux/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/linux/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/en/desktop/install/linux/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/linux/"/>
+  </url>
+  <url>
+    <loc>https://nezzel.hululsoft.mr/fr/desktop/install/linux/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://nezzel.hululsoft.mr/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://nezzel.hululsoft.mr/en/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://nezzel.hululsoft.mr/fr/desktop/install/linux/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://nezzel.hululsoft.mr/desktop/install/linux/"/>
   </url>
 </urlset>

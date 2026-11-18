@@ -1,0 +1,208 @@
+/* Nezzel desktop: install and thank-you pages only (loaded after dk.css).
+   Motion is transform/opacity (+ a 2px blur on icon swaps); dk.css makes every animation and transition instant under prefers-reduced-motion. */
+
+/* ---- install: system tabs (links between the three system pages) with one background that slides under the chosen tab.
+        The slide runs across the page change as a view transition where the browser has it; elsewhere the page just changes. ---- */
+.os-tabs.is-tabs{position:relative;display:block}
+.os-tl{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.os-tabs.is-tabs a{text-align:center;white-space:nowrap;background:none;box-shadow:none}
+.os-tabs.is-tabs a[aria-current]{color:var(--ink)}
+.os-ind{position:absolute;inset-block:4px;inset-inline-start:4px;inline-size:calc((100% - 8px) / 3);border-radius:999px;background:var(--paper);box-shadow:0 0 0 1px var(--hair);transform:translateX(calc(var(--i,0) * 100% * var(--dir,1)));pointer-events:none}
+:root[dir=rtl] .os-ind{--dir:-1}
+@media (prefers-reduced-motion:no-preference){
+  @view-transition{navigation:auto}
+  .os-ind{view-transition-name:os-ind}
+  .os-tl{view-transition-name:os-tl}
+  ::view-transition-group(os-ind){animation-duration:.3s;animation-timing-function:cubic-bezier(.3,.7,.2,1)}
+  ::view-transition-old(root),::view-transition-new(root),::view-transition-old(os-tl),::view-transition-new(os-tl){animation-duration:.2s}
+}
+
+/* ---- install chooser: one hairline row per system ---- */
+.os-pick{display:grid;margin-block-start:clamp(28px,4vw,44px);border-block-end:1px solid var(--hair-2)}
+.doc .os-pick a.os-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 20px;padding-block:20px;border-block-start:1px solid var(--hair-2);color:var(--ink);text-decoration:none;scroll-margin-block-start:96px;-webkit-tap-highlight-color:transparent}
+.os-row-n{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;font:700 clamp(26px,3.2vw,38px)/1.3 var(--f-display)}
+.os-row-s{grid-column:1;justify-self:start;font-size:15.5px;color:var(--ink-2)}
+.os-row-go{grid-column:2;grid-row:1 / span 2;display:inline-flex;align-items:center;gap:.45em;color:var(--teal-ink);font-weight:600;font-size:16px}
+.os-row-go .dk-i{transition:transform .2s var(--ease-out)}
+.os-row:active .os-row-n{opacity:.7}
+.os-row:focus-visible{outline-offset:-2px;border-radius:10px}
+@media (hover:hover) and (pointer:fine){.os-row:hover .os-row-go .dk-i{transform:translateX(3px)}[dir=rtl] .os-row:hover .os-row-go .dk-i{transform:scaleX(-1) translateX(3px)}}
+@media (min-width:860px){.doc .os-pick a.os-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;padding-block:26px}.os-row-s{grid-column:2;grid-row:1}.os-row-go{grid-column:3;grid-row:1}}
+@media (max-width:420px){.os-row-go{font-size:0;gap:0}.os-row-go .dk-i{font-size:18px}}
+
+/* ---- a system's page: file choice as the first step, help folded at the end ---- */
+.os-one{padding-block:44px 28px}
+.doc-hero + .doc .os-one{border-block-end:0}
+.ist-files{padding:0;align-self:start;border-block-end:1px solid var(--hair)}
+.doc .ist-files a{display:flex;align-items:center;gap:12px;min-block-size:52px;color:var(--ink);font-weight:500;text-decoration:none;-webkit-tap-highlight-color:transparent}
+@media (max-width:960px){.ist .ist-files{margin-inline-start:48px}}
+.os-help{border-block-end:0;padding-block-end:16px}
+.os-help .qa-list{max-inline-size:52rem}
+.os-help .qa p:has(+ .qa-cmd){padding-block-end:12px}
+.qa-cmd{padding-block-end:22px}
+
+/* ---- closing block on these pages takes the homepage's form: one quiet line, then the large action ---- */
+.end #fin-h{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.end .end-desc{margin:0;max-width:none;font-size:clamp(18px,2vw,22px);font-weight:600;line-height:1.5}
+.end [data-closing]{margin-block-start:10px}
+.end [data-closing] .btn-close{font-size:clamp(34px,8.6vw,124px);flex-wrap:wrap}
+.end [data-closing] .btn-close>span{white-space:normal}
+html[dir=ltr] .end [data-closing] .btn-close{letter-spacing:-.05em}
+
+/* ---- install: steps joined by a line; the line fills with the scroll and a finished step becomes a check ---- */
+.ist-list{gap:0}
+.ist{position:relative;padding-block-end:44px}
+.ist:last-child{padding-block-end:0}
+.ist:not(:last-child)::before,.stp .ist:not(:last-child)::after{content:"";position:absolute;inset-inline-start:15px;inset-block:40px 8px;inline-size:2px;border-radius:2px;background:var(--hair)}
+.stp .ist:not(:last-child)::after{background:var(--teal);transform:scaleY(var(--f,0));transform-origin:50% 0}
+@media (max-width:960px){.ist .ill{margin-inline-start:48px}}
+.stp .step-n{position:relative;background:var(--bg);color:var(--ink-2);box-shadow:inset 0 0 0 1px var(--hair-2);transition:color .2s var(--ease-out)}
+.stp .step-n::before{content:"";position:absolute;inset:0;border-radius:50%;background:var(--teal);opacity:0;transform:scale(.6);transition:opacity .2s var(--ease-out),transform .28s var(--ease-out)}
+.stp .is-on .step-n{color:var(--on-primary)}
+.stp .is-on .step-n::before{opacity:1;transform:none}
+.sn-n,.sn-c{position:relative;grid-area:1/1;transition:opacity .2s var(--ease-out),transform .2s var(--ease-out)}
+.sn-c{inline-size:16px;block-size:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform:scale(.6)}
+.stp .is-done .sn-n{opacity:0;transform:scale(.6)}
+.stp .is-done .sn-c{opacity:1;transform:none}
+
+/* ---- copy button on commands: the icon turns into a check for two seconds ---- */
+.cpy-wrap{display:flex;align-items:flex-start;direction:ltr;border-radius:12px;background:var(--c-high)}
+.cpy-wrap pre{flex:1 1 auto;min-inline-size:0;background:transparent}
+.term .cpy-wrap{background:transparent;border-radius:0}
+/* phones: a long command wraps instead of running under the edge, so it can be read whole */
+@media (max-width:640px){.cpy-wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}}
+.specs-code .cpy-wrap pre{padding-block:11px}
+.cpy{flex:none;position:relative;display:grid;place-items:center;inline-size:36px;block-size:36px;margin:8px;margin-inline-start:0;padding:0;border:0;border-radius:10px;background:transparent;color:var(--ink-2);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s var(--ease-out),background-color .16s var(--ease-out),color .16s var(--ease-out)}
+.specs-code .cpy{margin:4px;margin-inline-start:0}
+.cpy::after{content:"";position:absolute;inset:-4px}
+.cpy:active{transform:scale(.97)}
+.cpy:focus-visible{outline-offset:0;border-radius:10px}
+@media (hover:hover) and (pointer:fine){.cpy:hover{background:color-mix(in srgb,currentColor 10%,transparent);color:var(--ink)}}
+.cpy svg{grid-area:1/1;inline-size:18px;block-size:18px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s var(--ease-out),transform .2s var(--ease-out),filter .2s var(--ease-out)}
+.cpy .cpy-b,.cpy .cpy-c,.cpy[data-state] .cpy-a{opacity:0;transform:scale(.6);filter:blur(2px)}
+.cpy[data-state=done] .cpy-b,.cpy[data-state=error] .cpy-c{opacity:1;transform:none;filter:none}
+.cpy[data-state=done]{color:var(--teal)}
+.term .cpy{color:#8FA6A0}
+.term .cpy[data-state=done]{color:#6FD8C2}
+@media (hover:hover) and (pointer:fine){.term .cpy:hover{color:#CFEDE5}}
+@media (prefers-reduced-transparency:reduce){.cpy svg{filter:none!important}}
+
+/* ---- all files: one hairline column per system, one row per file ---- */
+.files-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 24px;margin-block-end:22px}
+.files .files-head h2{margin:0}
+.files-ver{font-size:15.5px;color:var(--ink-2)}
+.files .files-ver a{color:var(--teal-ink);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
+.files-cols{display:grid;grid-template-columns:minmax(0,1fr);border-block-start:1px solid var(--hair-2)}
+.files-col{padding-block:22px 6px}
+.files-cols>.files-col + .files-col{border-block-start:1px solid var(--hair-2)}
+.files-col h3{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;font:600 19px/1.5 var(--f-body);word-spacing:normal}
+.files-you{display:none;font:500 14px/1.5 var(--f-body);color:var(--teal-ink)}
+:root[data-device^=mac] [data-files-os=mac] .files-you,:root[data-device^=windows] [data-files-os=win] .files-you,:root[data-device^=linux] [data-files-os=linux] .files-you{display:inline}
+.files-req{margin-block:0 10px;font-size:15px;line-height:1.6;color:var(--ink-2)}
+.files-col li{border-block-start:1px solid var(--hair)}
+.files .files-col a{display:flex;align-items:center;gap:12px;min-block-size:52px;color:var(--ink);font-weight:500;text-decoration:none;-webkit-tap-highlight-color:transparent}
+.files-col a:focus-visible{outline-offset:-2px;border-radius:8px}
+.f-k{flex:none;min-inline-size:5.4em;font:500 14px/1.4 var(--f-mono);color:var(--ink-2);text-align:start}
+:root[dir=rtl] :is(.f-k,.f-a){text-align:end}
+.f-a{flex:1 1 auto;min-inline-size:0;font-size:16px}
+.files-col a .dk-i{color:var(--ink-2);transition:transform .2s var(--ease-out),color .16s var(--ease-out)}
+.files-col a:active .dk-i{transform:translateY(2px)}
+@media (hover:hover) and (pointer:fine){.files-col a:hover .dk-i{transform:translateY(2px);color:var(--teal)}.files .files-ver a:hover{text-decoration-color:currentColor}}
+@media (min-width:860px){
+  .files-cols{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .files-cols>.files-col{padding:24px 28px 8px}
+  .files-cols>.files-col:first-child{padding-inline-start:0}
+  .files-cols>.files-col:last-child{padding-inline-end:0}
+  .files-cols>.files-col + .files-col{border-block-start:0;border-inline-start:1px solid var(--hair-2)}
+}
+/* thank-you page: the same table as its own block under the steps */
+.files-th{margin-block-start:clamp(48px,6vw,84px);padding-block-start:clamp(36px,5vw,56px);border-block-start:1px solid var(--hair)}
+.files-th h2{font-size:clamp(26px,3vw,38px);line-height:1.3}
+html[data-family=phone][data-th=ok] .files-th,html[data-family=phone] .th-ok .th-folder{display:none}
+
+/* ---- thank-you header: a status bar that carries the download on, then the next instruction as the headline ---- */
+.th-bar{position:relative;grid-template-columns:auto minmax(0,1fr);column-gap:12px;margin-block:0 clamp(24px,3.4vw,38px);padding-block-end:14px;min-block-size:44px;max-inline-size:44rem;font-size:16px;line-height:24px}
+.th-bar::before,.th-prog{content:"";position:absolute;inset-inline:0;inset-block-end:0;block-size:2px;border-radius:2px;background:var(--hair)}
+.th-prog{background:var(--teal);transform:scaleX(0);transform-origin:0 50%}
+:root[dir=rtl] .th-prog{transform-origin:100% 50%}
+:root[data-th-an=wait] .th-prog{animation:thb-fill 1s linear forwards}
+:root:is([data-th-an=go],[data-th-an=done]) .th-prog{transform:none}
+@keyframes thb-fill{to{transform:none}}
+:root[data-th-nt] .th-bar{display:none}
+.th-bar>[data-th-st]{grid-area:1/2;column-gap:14px;row-gap:2px}
+.th-bar .th-links{column-gap:14px;row-gap:2px}
+.th-ico{grid-area:1/1;position:relative;display:block;inline-size:22px;block-size:22px;color:var(--teal)}
+.th-ico svg{position:absolute;inset:0;inline-size:100%;block-size:100%;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s var(--ease-out),transform .2s var(--ease-out),filter .2s var(--ease-out)}
+.th-ico .th-tray{stroke:currentColor}
+.th-i-ok,:root[data-th-an=done] .th-i-dl{opacity:0;transform:scale(.6);filter:blur(2px)}
+:root[data-th-an=done] .th-i-ok{opacity:1;transform:none;filter:none}
+:root[data-th-an=go] .th-ico .th-arrow{animation:thb-drop .48s linear backwards}
+@keyframes thb-drop{0%{transform:none;animation-timing-function:var(--ease-out)}38%{transform:translateY(2.5px);animation-timing-function:var(--ease-out)}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){:root[data-th-an=go] .th-ico .th-arrow{animation:none}}
+@media (prefers-reduced-transparency:reduce){.th-ico svg{filter:none!important}}
+.th-h-get,:root[data-th-nt] .th-h-go{display:none}
+:root[data-th-nt] .th-h-get{display:inline}
+.th-u{position:relative;display:inline-block;white-space:nowrap}
+.th-u svg{position:absolute;inset-inline:-3%;inset-block-end:-.13em;inline-size:106%;block-size:.2em;overflow:visible;fill:none;stroke:var(--teal);stroke-width:3;stroke-linecap:round;transform-origin:0 50%}
+:root[dir=rtl] .th-u svg{transform-origin:100% 50%}
+@media (prefers-reduced-motion:no-preference){.js .th-u svg{animation:th-u .5s var(--ease-out) .45s backwards}@keyframes th-u{from{opacity:0;transform:scaleX(0)}}}
+.th-get{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;margin-block-start:clamp(20px,2.4vw,28px)}
+:root:not([data-th-nt]) .th-get{display:none}
+.th-get .btn,.th-get .btn:hover{box-shadow:none}
+.th-get .btn{max-inline-size:100%;padding:12px 28px;border-radius:30px;text-align:start;line-height:1.35}
+.th-get .btn>span{white-space:normal;min-inline-size:0;overflow-wrap:anywhere}
+.th-get a:not(.btn){display:inline-block;padding-block:9px;color:var(--teal-ink);font-weight:500;text-decoration:underline;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:.22em}
+@media (hover:hover) and (pointer:fine){.th-get a:not(.btn):hover{text-decoration-color:currentColor}}
+
+/* ---- thank-you: pictured steps, each with what will be on screen; arrows between them on wide screens ---- */
+.th3{display:grid;grid-template-columns:minmax(0,1fr);gap:40px;margin-block-start:30px}
+.th3-s{position:relative;display:grid;gap:18px;align-content:start;min-inline-size:0}
+.th3-tx{display:flex;gap:14px;align-items:flex-start}
+.th3-tx h3{font:600 19px/1.5 var(--f-body);margin-block:3px 4px;word-spacing:normal}
+.th3-tx p{font-size:16.5px;color:var(--ink-2)}
+.th3-tx bdi[dir=ltr]{white-space:nowrap}
+.th3-pic{display:grid;align-items:center;min-inline-size:0}
+.th3-pic .ill{min-inline-size:0}
+.th3-pic .shot{max-inline-size:440px;border-radius:3.333% / 7.5%;box-shadow:none}
+.th3-pic picture{inline-size:100%}
+.th3-arr{display:none}
+.th3 .mac-win{font-size:12.5px;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+.th3 .mw-side span{white-space:normal}
+.th3 .mw-main{padding-inline:12px}
+.th3 .mw-row{flex-direction:column;align-items:stretch;padding-inline:10px}
+.th3 .mw-row .mb{font-size:12.5px;max-inline-size:none}
+.th3 .ss b{font-size:22px}
+.th3 .ss{font-size:14px;padding:22px 22px 18px}
+@media (min-width:900px){
+  .th3{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;gap:0 clamp(44px,5vw,64px)}
+  .th3[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr));max-inline-size:calc(66.666% - 10px)}
+  .th3-s{grid-row:span 2;grid-template-rows:subgrid;gap:22px}
+  .th3-pic{align-items:start}
+  .th3-s:not(:last-child) .th3-arr{display:block;position:absolute;inset-block-start:5px;inset-inline-end:calc(clamp(44px,5vw,64px) / -2 - 11px);inline-size:22px;block-size:22px;color:var(--outline)}
+}
+
+/* ---- thank-you: where the files land. A flat hairline folder; the sheets are real thumbnails from the app's list ---- */
+.th-folder{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;align-items:center;margin-block-start:clamp(48px,6vw,84px);padding-block-start:clamp(36px,5vw,56px);border-block-start:1px solid var(--hair)}
+.th-folder h2{font-size:clamp(26px,3vw,38px);line-height:1.3}
+.th-folder p{margin-block-start:12px;font-size:17px;color:var(--ink-2);max-inline-size:52ch}
+.fold{margin:0;display:grid;justify-items:center;gap:14px;justify-self:start}
+.fold-art{position:relative;inline-size:260px;block-size:186px;direction:ltr;margin-block-start:14px}
+.fold-art>svg{position:absolute;inset:0;inline-size:100%;block-size:100%;overflow:visible;fill:var(--bg);stroke-width:1.5;stroke-linejoin:round}
+.fold-back{stroke:var(--hair-2)}
+.fold-front{stroke:var(--teal)}
+.fold-f{position:absolute;inset-block-start:34px;inset-inline-start:calc(22px + var(--n) * 56px);inline-size:104px;padding:4px;border-radius:7px;background:var(--paper);box-shadow:0 0 0 1px var(--hair-2);transform:translateY(var(--y,0)) rotate(var(--r,0deg));transition:transform .3s var(--ease-out);transition-delay:calc(var(--n) * 40ms)}
+.fold-f img{display:block;inline-size:100%;block-size:auto;border-radius:4px}
+.fold-f1{--n:0;--r:-8deg;--y:4px}
+.fold-f2{--n:1;--r:0deg;--y:-10px}
+.fold-f3{--n:2;--r:8deg;--y:4px}
+.js .fold:not(.is-in) .fold-f{--y:44px;--r:0deg}
+@media (hover:hover) and (pointer:fine){
+  .fold.is-in:hover .fold-f1{--y:-12px;--r:-11deg}
+  .fold.is-in:hover .fold-f2{--y:-28px}
+  .fold.is-in:hover .fold-f3{--y:-12px;--r:11deg}
+}
+.fold-name{position:absolute;inset-block-end:14px;inset-inline-start:16px;font:500 13px/1 var(--f-mono);color:var(--ink-2)}
+.fold figcaption{display:grid;justify-items:center;gap:0;text-align:center}
+.fold figcaption bdi{font:500 15px/1.6 var(--f-mono);color:var(--ink)}
+.fold figcaption span{font-size:14.5px;color:var(--ink-2)}
+@media (min-width:900px){.th-folder{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,5vw,72px)}.fold{justify-self:center}}
