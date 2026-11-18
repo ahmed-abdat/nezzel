@@ -136,8 +136,4 @@
     // Keyboard focus inside a step makes it the current one, so a focused link is never dimmed.
     document.addEventListener('focusin', (e) => { const s = e.target.closest && e.target.closest('.tour-step'); if (s && wide.matches) on(s, true); });
   }
-
-  /* ---- closing wordmark: the name starts behind the app icon ---- */
-  const mark = document.querySelector('.end .mark');
-  if (mark) mark.classList.add('mark-behind');
 })();

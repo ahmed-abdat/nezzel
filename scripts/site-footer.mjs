@@ -18,11 +18,13 @@ export function footer(dict, locale, page, paths, escape, release) {
   const text = key => escape(raw(key));
   const home = paths[locale], desktop = page !== '';
   // Only destinations already present in this site's product pages are included.
+  // Same links, labels and order on every page; desktop pages point at the desktop repository.
   const repos = desktop ? {
     'footer-source': 'https://github.com/ahmed-abdat/nezzel-desktop',
+    rel: 'https://github.com/ahmed-abdat/nezzel-desktop/releases',
     priv: 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/PRIVACY.md',
-    'footer-desktop-license': 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/LICENSE',
-    'footer-report': 'https://github.com/ahmed-abdat/nezzel-desktop/issues/new/choose',
+    lic: 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/THIRD_PARTY.md',
+    sec: 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/SECURITY.md',
   } : {
     'footer-source': 'https://github.com/ahmed-abdat/nezzel',
     rel: 'https://github.com/ahmed-abdat/nezzel/releases',
@@ -54,7 +56,8 @@ export function footer(dict, locale, page, paths, escape, release) {
       <div class="fm"><span class="langs">${['ar', 'en', 'fr'].map(language => `<a href="${paths[language]}${page}" hreflang="${language}" lang="${language}" dir="${language === 'ar' ? 'rtl' : 'ltr'}"${locale === language ? ' aria-current="page"' : ''}>${text('lang-' + language)}</a>`).join('')}</span><span>${raw('foot')}</span></div>
     </div>
 ${social}
-${desktop ? '' : `    <p class="cr fe" style="--f:3">${raw('credit')}</p>\n`}${wordmark}
+    <p class="cr fe" style="--f:3">${raw('credit')}</p>
+${wordmark}
   </div>
 </footer>
 <!-- chrome:/footer -->`;

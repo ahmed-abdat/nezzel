@@ -180,8 +180,3 @@ html[data-device^=mac] .plat[data-os=mac] .plat-dev,html[data-device^=windows] .
 #details .sec-head .tt{margin-inline:0}}
 @media (max-width:640px){.facts{grid-template-columns:minmax(0,1fr);gap:18px}
 .plat{padding-inline-end:8px}.plat:nth-child(even){padding-inline-start:16px}}
-
-/* ---- closing: the wordmark passes behind the app icon (set by js/dk-land.js) ---- */
-.mark.mark-behind{gap:0}
-.mark.mark-behind img{position:relative;z-index:1}
-.mark.mark-behind svg{margin-inline-start:-3%;-webkit-mask-image:linear-gradient(90deg,transparent 2.5%,#000 8%);mask-image:linear-gradient(90deg,transparent 2.5%,#000 8%)}
