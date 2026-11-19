@@ -328,4 +328,7 @@
     // Keyboard focus must never land on something still hidden.
     document.addEventListener('focusin', (e) => { const el = e.target.closest && e.target.closest('.rv.pre'); if (el) { el.classList.remove('pre'); io.unobserve(el); } });
   }
+  // Faces only the mock windows and bold labels need: after load, so they don't compete with first paint.
+  const late = () => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/css/dk-late.css'; document.head.appendChild(l); };
+  if (document.readyState === 'complete') late(); else addEventListener('load', () => setTimeout(late, 0), { once: true });
 })();
