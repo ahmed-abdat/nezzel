@@ -194,6 +194,9 @@ html[data-family=phone][data-th=ok] .files-th,html[data-family=phone] .th-ok .th
 .os-hero{display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(28px,5vw,48px);align-items:center}
 .os-hero .dk-lede{max-inline-size:52ch}
 @media (min-width:961px){.os-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(20px,4vw,56px)}.os-hero h1{font-size:clamp(44px,5vw,68px)}}
+.clip{margin:0;display:grid;gap:10px;min-inline-size:0}
+.clip video{display:block;inline-size:100%;block-size:auto;aspect-ratio:16/10;border-radius:var(--r-shot);box-shadow:0 0 0 1px var(--hair);background:var(--sunk)}
+.clip figcaption{font-size:13.5px;color:var(--ink-3)}
 .scene{margin:0;display:grid;gap:10px;min-inline-size:0}
 .scene figcaption{font-size:13.5px;color:var(--ink-3)}
 .sc-stage{position:relative;display:grid;place-items:center}
