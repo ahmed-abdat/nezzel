@@ -13,6 +13,9 @@
   const tok = /^[a-z0-9]{1,12}$/.test(q.get('t') || '') ? q.get('t') : null;
   const key = 'nz-thanks:android:' + src + (tok ? '&t=' + tok : '');
   let started = false;
+  // The install recording waits for the APK request on a fresh visit, so its 0.5 MB never competes with the download.
+  let armFilm = () => {};
+  const filmReady = fresh => fresh ? new Promise((r) => { armFilm = r; }) : Promise.resolve();
 
   if (!tok) root.dataset.thNt = '1';
   // The stored marker wins over the navigation type, so a duplicated tab (same sessionStorage, type 'navigate')
@@ -71,6 +74,7 @@
       started = true;
       try { sessionStorage.setItem(key, '1'); } catch (e) {}
       location.assign(fileUrl);
+      armFilm();
       const s = st();
       if (s) s.classList.add('fx');
       root.dataset.thAn = 'go';
@@ -89,6 +93,35 @@
       document.addEventListener('prerenderingchange', wake);
     }
     if (ready()) go(); else wait();
+  });
+
+  /* ---- install recording: the home page's film pattern (plays itself in view, a tap pauses; reduced motion = poster + play button).
+         No JavaScript: the poster stays and the play button is hidden by CSS. ---- */
+  const gate = filmReady(fresh);
+  document.addEventListener('DOMContentLoaded', () => {
+    const film = $('#film');
+    if (!film) return;
+    const v = $('video', film), pl = $('.fpl', film);
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let held = still, inView = false, armed = false;
+    const label = () => { pl.setAttribute('aria-label', film.classList.contains('paused') ? pl.dataset.play : pl.dataset.pause); };
+    const run = () => {
+      if (!armed) return;
+      film.classList.remove('paused'); label();
+      v.play().catch(() => { film.classList.add('paused'); label(); });
+    };
+    v.addEventListener('pause', () => { if (held) { film.classList.add('paused'); label(); } });
+    pl.addEventListener('click', () => {
+      if (v.paused) { held = false; armed = true; run(); film.classList.add('blip'); setTimeout(() => film.classList.remove('blip'), 500); }
+      else { held = true; v.pause(); }
+    });
+    if (still) { film.classList.add('paused'); label(); }
+    gate.then(() => { armed = true; if (inView && !held && !document.hidden) run(); });
+    new IntersectionObserver(([e]) => {
+      inView = e.isIntersecting;
+      if (inView) { if (!held) run(); } else if (!v.paused) v.pause();
+    }, { threshold: .35 }).observe(film);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) v.pause(); else if (inView && !held) run(); });
   });
 
   // Restored from the back/forward cache: the page is exactly as it was left; nothing starts again.

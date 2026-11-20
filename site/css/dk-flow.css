@@ -158,6 +158,35 @@ html[data-family=phone][data-th=ok] .files-th,html[data-family=phone] .th-ok .th
   .th3-s:not(:last-child) .th3-arr{display:block;position:absolute;inset-block-start:5px;inset-inline-end:calc(clamp(44px,5vw,64px) / -2 - 11px);inline-size:22px;block-size:22px;color:var(--outline)}
 }
 
+/* ---- Android thank-you: the home page's install recording (.insv/.fpl/.fgl, same rules as site/index.html) beside the steps;
+   on phones it sits under them, so the status line and step 1 stay in the first screen ---- */
+.thv{display:grid;grid-template-columns:minmax(0,1fr);gap:48px;margin-block-start:30px}
+.th-steps:has(.thv){overflow-x:clip} /* the film's glow (.insv::before) reaches past a 390 px screen */
+.thv .th3{margin-block-start:0}
+.thv figcaption{margin-block-start:16px;font-size:14.5px;line-height:1.5;color:var(--ink-2);text-align:center;text-wrap:balance;max-inline-size:min(24em,100%)}
+.insv{--W:min(260px,68vw);position:relative;margin:0;justify-self:center;width:var(--W);padding:7px;border-radius:calc(var(--W) * .135);background:#0c100f;box-shadow:0 40px 60px -40px rgb(0 32 27/.55),0 0 0 1px rgb(255 255 255/.05)}
+.thv figure{margin:0;justify-self:center;display:grid;justify-items:center;max-inline-size:100%}
+.insv::before{content:"";position:absolute;z-index:-1;inset:8% -30% 0;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--primary) 16%,transparent),transparent);pointer-events:none}
+.insv video{display:block;width:100%;height:auto;aspect-ratio:540/1170;border-radius:calc(var(--W) * .135 - 7px);object-fit:cover;background:#F7F8F6}
+.fpl{position:absolute;inset:7px;margin:0;padding:0;border:0;border-radius:calc(var(--W) * .135 - 7px);background:none;cursor:pointer;display:grid;place-items:center;color:#fff;-webkit-tap-highlight-color:transparent}
+html:not(.js) .fpl{display:none}
+.fpl:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
+.fgl{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:rgb(12 16 15/.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;transform:scale(.8);transition:opacity .35s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
+.fgl .i{grid-area:1/1;width:28px;height:28px}.fgl .fpy{fill:currentColor;stroke:none}
+.insv .fpz,.insv.paused .fpy{display:block}.insv .fpy,.insv.paused .fpz{display:none}
+.insv.paused .fgl,.insv.blip .fgl{opacity:1;transform:none}
+@media (min-width:900px){
+  .th-steps:has(.thv){display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto 1fr;column-gap:clamp(56px,8vw,128px);align-content:start}
+  .th-steps:has(.thv)>:not(.thv),.thv>.th3{grid-column:1}
+  .thv{display:contents}
+  .thv>figure{grid-column:2;grid-row:1 / span 3;align-self:start}
+  .thv .th3{margin-block-start:30px;align-self:start;grid-template-columns:minmax(0,1fr);grid-template-rows:none;gap:36px;max-inline-size:34em}
+  .thv .th3-s{grid-row:auto;grid-template-rows:none}
+  .thv .th3-s .th3-arr{display:none}
+  .insv{--W:min(300px,calc((100svh - 160px) / 2.17))}
+  .thv figcaption{max-inline-size:300px}
+}
+
 /* ---- thank-you: where the files land. A flat hairline folder; the sheets are real thumbnails from the app's list ---- */
 .th-folder{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;align-items:center;margin-block-start:clamp(48px,6vw,84px);padding-block-start:clamp(36px,5vw,56px);border-block-start:1px solid var(--hair)}
 .th-folder h2{font-size:clamp(26px,3vw,38px);line-height:1.3}
