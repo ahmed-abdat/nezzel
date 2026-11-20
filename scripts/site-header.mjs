@@ -6,18 +6,20 @@ export function header(dict, locale, page, paths, escape) {
     return escape(value);
   };
   const home = paths[locale];
-  const computer = page !== '';
+  // Desktop pages get the computer header; the Android thank-you page (thanks/) keeps the phone header.
+  const computer = page.startsWith('desktop/');
   const link = (href, key, current = false) => `<a href="${escape(href)}"${current ? ' aria-current="page"' : ''}>${text(key)}</a>`;
   const pages = page === ''
     ? [['#how', 'nl1'], ['#more', 'nl2'], ['#install', 'nl3'], ['#faq', 'nl4']]
     : page === 'desktop/' ? [[home + 'desktop/install/', 'nl3'], ['#faq', 'nl4']]
+    : page === 'thanks/' ? [[home + '#install', 'nl3'], [home + '#faq', 'nl4']]
     : [[home + 'desktop/#faq', 'nl4']];
   pages.push(computer ? [home, 'app-android'] : [home + 'desktop/', 'app-desktop']);
   return `<!-- chrome:header -->
 <a class="sr" href="#main">${text('skip')}</a>
 <div class="wrap top">
   <nav class="bar" aria-label="Nezzel" data-product="${computer ? 'computer' : 'phone'}">
-    <a class="brand" href="${computer ? home : '#top'}" aria-label="Nezzel"><img src="/img/icon.svg" alt="" width="34" height="34"><span class="bn" dir="ltr">Nezzel</span></a>
+    <a class="brand" href="${page === '' ? '#top' : home}" aria-label="Nezzel"><img src="/img/icon.svg" alt="" width="34" height="34"><span class="bn" dir="ltr">Nezzel</span></a>
     <div class="nl">${pages.map(([href, key]) => link(href, key)).join('')}</div><span class="sp"></span>
     <button class="theme" type="button" id="theme" data-to-dark="${text('to-dark')}" data-to-light="${text('to-light')}" aria-label="${text('to-dark')}"><svg class="moon i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></svg><svg class="sun i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></button>
     <details class="locale-switch" id="locale-switch">
@@ -26,7 +28,7 @@ export function header(dict, locale, page, paths, escape) {
         <a href="${paths[language]}${page}" hreflang="${language}" lang="${language}" data-locale="${language}" style="--row:${row}"${language === locale ? ' aria-current="page"' : ''}><span dir="${language === 'ar' ? 'rtl' : 'ltr'}">${text('lang-' + language)}</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></a>`).join('')}
       </div>
     </details>
-    <a class="btn btn-sm mini${computer ? '' : ' dl-link'}" ${computer ? 'data-get-compact="desktop-auto" href="#get"' : `data-place="nav" href="/download?src=nav-${locale}"`} aria-label="${text('get')}">${computer ? '<svg class="i" aria-hidden="true"><use href="#i-download"/></svg>' : '<svg class="i om" aria-hidden="true"><use href="/img/os.svg#android"/></svg>'}<span>${text('get')}</span></a>
+    <a class="btn btn-sm mini${computer ? '' : ' dl-link'}" ${computer ? 'data-get-compact="desktop-auto" href="#get"' : `data-place="nav" href="${home}thanks/?src=nav-${locale}"`} aria-label="${text('get')}">${computer ? '<svg class="i" aria-hidden="true"><use href="#i-download"/></svg>' : '<svg class="i om" aria-hidden="true"><use href="/img/os.svg#android"/></svg>'}<span>${text('get')}</span></a>
     <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="menu-panel" aria-label="${text('menu')}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path class="ma" d="M5 8.5h14"/><path class="mb" d="M5 15.5h14"/></svg></button>
     <div class="menu-panel" id="menu-panel">${pages.map(([href, key]) => link(href, key)).join('')}</div>
   </nav>

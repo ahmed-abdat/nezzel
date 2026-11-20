@@ -16,7 +16,7 @@ export function footer(dict, locale, page, paths, escape, release) {
     return value;
   };
   const text = key => escape(raw(key));
-  const home = paths[locale], desktop = page !== '';
+  const home = paths[locale], desktop = page.startsWith('desktop/');
   // Only destinations already present in this site's product pages are included.
   // Same links, labels and order on every page; desktop pages point at the desktop repository.
   const repos = desktop ? {
@@ -37,11 +37,11 @@ export function footer(dict, locale, page, paths, escape, release) {
   const size = new Intl.NumberFormat(locale + '-u-nu-latn', { maximumFractionDigits: 1 }).format(release.mb) + (locale === 'fr' ? '\u00a0Mo' : ' MB');
   const controls = desktop
     ? `<div class="closing-download fe" data-get="desktop" data-closing aria-live="polite" style="--f:1"><a class="btn btn-close" data-place="footer" href="/download/desktop?src=desk-cta-${locale}&amp;os=mac"><span>${text('desktop-end-button')}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg></a></div>`
-    : `<a class="btn btn-close dl-link fe" style="--f:1" data-place="footer" href="/download?src=footer-${locale}"><span>${text('get-big')}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg></a>
+    : `<a class="btn btn-close dl-link fe" style="--f:1" data-place="footer" href="${home}thanks/?src=footer-${locale}"><span>${text('get-big')}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg></a>
     <button class="btn btn-close iob fe" style="--f:1" type="button"><span>${text('ios-share')}</span><svg class="i" aria-hidden="true"><use href="#footer-share"/></svg></button>`;
   const meta = desktop ? `<bdi>${text('download-platform-mac')}</bdi> · <bdi>Apple Silicon</bdi> · ${raw('desktop-end-meta')}` : `<span>${text('meta')}</span> <span class="ltr num vtxt">${escape(release.version)}</span> · <span class="ltr num size" data-mb="${release.mb}">${size}</span>`;
   return `<!-- chrome:footer -->
-<footer class="end" id="${desktop ? 'get' : 'final'}"${desktop ? '' : ' data-reach="end" data-entrance'} aria-labelledby="fin-h">
+<footer class="end" id="${desktop ? 'get' : 'final'}"${page === '' ? ' data-reach="end" data-entrance' : ''} aria-labelledby="fin-h">
   <svg class="chrome-icons" aria-hidden="true">${icons}</svg>
   <div class="wrap">
     <h2 id="fin-h" class="fe">${text(desktop ? 'desktop-end-h' : 'fin-h')}</h2>${desktop ? `

@@ -144,11 +144,11 @@ try {
     themeHead(replaceHeader(html, header(dictionaries[locale], locale, page, paths, escape)), page !== ''),
     footer(dictionaries[locale], locale, page, paths, escape, release));
   // The source is the Arabic page: other languages get their own campaign tags (?src=…-ar → -en) and desktop paths in the static HTML.
-  const localize = (html, l) => l === 'ar' ? html : html.replace(/([?&]src=[a-z0-9-]+)-ar(?=["&#])/g, `$1-${l}`).replace(/href="\/desktop\//g, `href="${paths[l]}desktop/`);
+  const localize = (html, l) => l === 'ar' ? html : html.replace(/([?&]src=[a-z0-9-]+)-ar(?=["&#])/g, `$1-${l}`).replace(/href="\/(desktop|thanks)\//g, `href="${paths[l]}$1/`);
   const faqKeys = nodes.filter(n => n.name === 'summary' && /^f\d+$/.test(n.attrs['data-i'] || '')).map(n => n.attrs['data-i']);
   const homeFaq = l => faqLd(faqKeys.map(k => [plain(dictionaries[l][k]), plain(dictionaries[l][k + 'a'])]));
   const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(withLd(localize(translate(source, nodes, dictionaries[l], meta[l], l), l), [homeFaq(l)]), l, '')]));
-  for (const page of ['desktop/', 'desktop/install/', 'desktop/install/mac/', 'desktop/install/windows/', 'desktop/install/linux/', 'desktop/thanks/']) {
+  for (const page of ['desktop/', 'desktop/install/', 'desktop/install/mac/', 'desktop/install/windows/', 'desktop/install/linux/', 'desktop/thanks/', 'thanks/']) {
     for (const locale of locales) {
       const path = `site${paths[locale]}${page}index.html`;
       const desktop = await readFile(new URL(path, root), 'utf8');
