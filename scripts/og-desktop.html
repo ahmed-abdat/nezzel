@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Template for site/img/og-desktop*.jpg. Rendered by scripts/render-og-desktop.mjs (fills {{...}}); not served. -->
+<html lang="{{lang}}" dir="{{dir}}"><head><meta charset="utf-8">
+<style>
+@font-face{font-family:Beiruti;src:url({{fonts}}/beiruti-arabic.woff2) format("woff2");font-weight:200 900;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:Beiruti;src:url({{fonts}}/beiruti-latin.woff2) format("woff2");font-weight:200 900;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:Plex;src:url({{fonts}}/plex-arabic-500-arabic.woff2) format("woff2");font-weight:500;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:Plex;src:url({{fonts}}/plex-arabic-500-latin.woff2) format("woff2");font-weight:500;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:Plex;src:url({{fonts}}/plex-arabic-700-arabic.woff2) format("woff2");font-weight:700;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:Plex;src:url({{fonts}}/plex-arabic-700-latin.woff2) format("woff2");font-weight:700;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:Inter;src:url({{fonts}}/inter-latin.woff2) format("woff2");font-weight:400 700}
+*{box-sizing:border-box;margin:0}
+html,body{width:1200px;height:630px;overflow:hidden}
+body{background:#0E1513;color:#DEE4E1;font-family:Plex,Inter,system-ui,sans-serif;position:relative}
+.win{position:absolute;top:64px;width:560px;height:485px;border-radius:14px;overflow:hidden;background:#F5FBF8;box-shadow:0 26px 60px -14px rgba(0,0,0,.7)}
+.win img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
+html[dir=rtl] .win{left:56px}html[dir=ltr] .win{right:56px}
+.copy{position:absolute;top:64px;bottom:64px;width:480px;display:flex;flex-direction:column;justify-content:space-between}
+html[dir=rtl] .copy{right:64px}html[dir=ltr] .copy{left:64px}
+.brand{display:flex;align-items:center;gap:14px;direction:ltr}
+html[dir=rtl] .brand{justify-content:flex-end}
+.brand img{width:52px;height:52px}
+.brand b{font:700 38px/1 Inter,sans-serif;letter-spacing:-.5px;color:#fff}
+h1{font:700 58px/1.22 Beiruti,Plex,sans-serif;color:#9EF2E1}
+html[lang=en] h1,html[lang=fr] h1{font-size:50px;line-height:1.12;letter-spacing:-.5px;word-spacing:.1em}
+.sub{font:500 25px/1.4 Plex,sans-serif;color:#BEC9C5;margin-top:22px}
+.os{display:flex;gap:24px;align-items:center;font:500 23px/1 Plex,sans-serif;color:#DEE4E1;direction:ltr}
+html[dir=rtl] .os{justify-content:flex-end}
+.os span{display:flex;align-items:center;gap:9px}
+.os svg{width:26px;height:26px;fill:#9EF2E1}
+.os .d{width:5px;height:5px;border-radius:50%;background:#6F7976}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute">{{symbols}}</svg>
+<div class="win"><img src="{{img}}" alt=""></div>
+<div class="copy">
+  <div class="brand"><b>Nezzel</b><img src="{{icon}}" alt=""></div>
+  <div><h1>{{headline}}</h1><p class="sub">{{sub}}</p></div>
+  <div class="os"><span><svg viewBox="0 0 24 24"><use href="#apple"/></svg>Mac</span><i class="d"></i><span><svg viewBox="0 0 24 24"><use href="#windows"/></svg>Windows</span><i class="d"></i><span><svg viewBox="0 0 24 24"><use href="#linux"/></svg>Linux</span></div>
+</div>
+</body></html>

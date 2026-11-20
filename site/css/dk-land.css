@@ -39,9 +39,10 @@
 
 /* ---- "available for" row under the hero button ---- */
 .also{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-block-start:18px;padding-block-start:14px;border-block-start:1px solid var(--hair);font-size:14.5px;color:var(--ink-2);inline-size:fit-content;max-inline-size:100%}
-.also-os{display:inline-flex;align-items:center;gap:10px}
-.also-os .dk-i{inline-size:17px;block-size:17px;color:var(--ink-3)}
-.also a{display:inline-block;padding-block:10px;margin-block:-10px;color:var(--ink);font-weight:500;text-decoration:none}
+.also a{display:inline-flex;align-items:center;gap:7px;padding-block:10px;margin-block:-10px;color:var(--ink);font-weight:500;text-decoration:none}
+.also .om{inline-size:17px;block-size:17px;color:var(--ink-3)}
+/* "Also on": the systems the hero button does not name (same line as the homepage) */
+html[data-device^=mac] .also .ao-mac,html[data-device^=windows] .also .ao-windows,html[data-device^=linux] .also .ao-linux{display:none}
 @media (hover:hover) and (pointer:fine){.also a:hover{text-decoration:underline;text-decoration-thickness:1px}}
 /* shown once dk.js knows this is a computer; its place is kept on wide screens so nothing shifts */
 html:not(.js) .also{display:none}

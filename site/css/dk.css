@@ -243,7 +243,7 @@ pre code{max-inline-size:100%}
 /* Phones, tablets, unknown devices: three equal system choices instead of a Mac default */
 .get .get-for{max-inline-size:36ch;font-size:16px;line-height:1.55}
 .get-pick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;inline-size:min(100%,460px)}
-.get-pick .btn{min-height:52px;padding:0 8px;font-size:16px;gap:0}
+.get-pick .btn{min-height:52px;padding:0 8px;font-size:16px;gap:8px}
 .end .get-for{color:inherit;max-inline-size:none}
 .end .get-pick{inline-size:100%;max-inline-size:520px}
 .end .get-pick .btn{min-height:56px;justify-content:flex-start;font-size:clamp(22px,5vw,40px)}
@@ -305,8 +305,8 @@ body[data-page=thanks] .bar .mini{display:none!important}
 body[data-page=thanks] .end :is(.fe,.gm):not(.frow,.soc){display:none}
 /* section only: the themed <picture class="th"> on the landing page must not inherit this padding */
 section.th{padding-block-start:clamp(44px,7vw,96px)}
-.th h1{font-size:clamp(36px,5.4vw,64px);line-height:1.2;max-inline-size:17em}
-:root[dir=ltr] .th h1{line-height:1.06}
+.th :is(h1,h2){font-weight:800;font-size:clamp(36px,5.4vw,64px);line-height:1.2;max-inline-size:17em}
+:root[dir=ltr] .th :is(h1,h2){line-height:1.06}
 .th-what{margin-block-start:clamp(14px,2vw,20px);font-size:clamp(18px,1.6vw,21px);line-height:1.55;color:var(--ink);max-inline-size:58ch}
 .th-meta{margin-block-start:2px;font-size:15px;line-height:24px;color:var(--ink-2)}
 .th-meta:empty{display:block;min-block-size:24px}

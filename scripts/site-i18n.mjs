@@ -61,6 +61,18 @@ function attr(tag, name, value) {
   return value === null ? clean : clean.replace(/\s*\/?>$/, end => ` ${name}="${escape(value)}"${end}`);
 }
 
+// Structured data that must mirror visible text is built from that text at generation time, so it cannot drift.
+const plain = html => html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+const ldBlock = (id, data) => `<script type="application/ld+json" id="${id}">${JSON.stringify(data).replaceAll('<', '\\u003c')}</script>`;
+function withLd(html, blocks) {
+  const old = /<script type="application\/ld\+json" id="nz-ld-[a-z]+">[\s\S]*?<\/script>\n?/g;
+  return html.replace(old, '').replace('</head>', () => blocks.join('\n') + '\n</head>');
+}
+const faqLd = pairs => ldBlock('nz-ld-faq', { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: pairs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
+const desktopVersion = '0.1.0';
+const modified = '2026-11-20';
+const publisher = { '@type': 'Organization', name: 'Hululsoft', url: 'https://hululsoft.mr' };
+
 function translate(source, nodes, dict, meta, locale) {
   const edits = [];
   for (const node of nodes) {
@@ -90,7 +102,7 @@ function translate(source, nodes, dict, meta, locale) {
       const number = new Intl.NumberFormat(locale + '-u-nu-latn', { maximumFractionDigits: 1 }).format(+a['data-mb']);
       edits.push([node.openEnd, node.close, (Object.hasOwn(a, 'data-est') ? '≈ ' : '') + number + (locale === 'fr' ? '\u00a0Mo' : ' MB')]);
     }
-    if (a.type === 'application/ld+json') {
+    if (a.type === 'application/ld+json' && !a.id) {
       const schema = JSON.parse(source.slice(node.openEnd, node.close));
       schema.description = meta[1]; schema.url = base + paths[locale]; schema.inLanguage = locale;
       edits.push([node.openEnd, node.close, JSON.stringify(schema).replaceAll('<', '\\u003c')]);
@@ -123,7 +135,7 @@ try {
   if (missing.length) throw new Error('Missing translation keys:\n' + missing.join('\n'));
   const alternates = [...locales, 'x-default'].map(l => `<link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}">`).join('\n');
   if (!source.includes(alternates)) throw new Error('site/index.html must contain all four hreflang links');
-  const schema = nodes.find(n => n.attrs.type === 'application/ld+json');
+  const schema = nodes.find(n => n.attrs.type === 'application/ld+json' && !n.attrs.id);
   const release = {
     version: JSON.parse(source.slice(schema.openEnd, schema.close)).softwareVersion,
     mb: Number(nodes.find(n => n.attrs['data-mb'] && n.attrs.class?.split(' ').includes('size')).attrs['data-mb']),
@@ -131,7 +143,11 @@ try {
   const chrome = (html, locale, page) => replaceFooter(
     themeHead(replaceHeader(html, header(dictionaries[locale], locale, page, paths, escape)), page !== ''),
     footer(dictionaries[locale], locale, page, paths, escape, release));
-  const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(translate(source, nodes, dictionaries[l], meta[l], l), l, '')]));
+  // The source is the Arabic page: other languages get their own campaign tags (?src=…-ar → -en) and desktop paths in the static HTML.
+  const localize = (html, l) => l === 'ar' ? html : html.replace(/([?&]src=[a-z0-9-]+)-ar(?=["&#])/g, `$1-${l}`).replace(/href="\/desktop\//g, `href="${paths[l]}desktop/`);
+  const faqKeys = nodes.filter(n => n.name === 'summary' && /^f\d+$/.test(n.attrs['data-i'] || '')).map(n => n.attrs['data-i']);
+  const homeFaq = l => faqLd(faqKeys.map(k => [plain(dictionaries[l][k]), plain(dictionaries[l][k + 'a'])]));
+  const outputs = new Map(locales.map(l => [`site${paths[l]}index.html`, (l === 'ar' ? '' : banner) + chrome(withLd(localize(translate(source, nodes, dictionaries[l], meta[l], l), l), [homeFaq(l)]), l, '')]));
   for (const page of ['desktop/', 'desktop/install/', 'desktop/install/mac/', 'desktop/install/windows/', 'desktop/install/linux/', 'desktop/thanks/']) {
     for (const locale of locales) {
       const path = `site${paths[locale]}${page}index.html`;
@@ -139,13 +155,20 @@ try {
       const payload = JSON.stringify(downloadStrings(dictionaries[locale], locale, paths)).replaceAll('<', '\\u003c');
       const generated = chrome(desktop.replace(/(<script type="application\/json" id="nz-i18n">)[\s\S]*?(<\/script>)/, (_, open, close) => open + payload + close), locale, page);
       elements(generated); // Desktop bodies stay hand-authored; validate before writing chrome.
-      outputs.set(path, generated);
+      if (page === 'desktop/') {
+        const description = plain(/<meta name="description" content="([^"]*)"/.exec(generated)[1]);
+        const url = base + paths[locale] + page;
+        const pairs = [...generated.matchAll(/<details class="qa"><summary><span>([\s\S]*?)<\/span>[\s\S]*?<\/summary><p>([\s\S]*?)<\/p><\/details>/g)].map(m => [plain(m[1]), plain(m[2])]);
+        if (!pairs.length) throw new Error(`No FAQ found in ${path}`);
+        const app = ldBlock('nz-ld-app', { '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Nezzel', description, url, image: `${base}/img/og-desktop${{ ar: '', en: '-en', fr: '-fr' }[locale]}.jpg?v=1`, operatingSystem: 'macOS, Windows, Linux', applicationCategory: 'MultimediaApplication', inLanguage: locale, isAccessibleForFree: true, offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, downloadUrl: url, softwareVersion: desktopVersion, publisher });
+        outputs.set(path, withLd(generated, [app, faqLd(pairs)]));
+      } else outputs.set(path, generated);
     }
   }
   // lastmod = the page's ld+json dateModified, so the sitemap stays reproducible
   const lastmod = /"dateModified":"(\d{4}-\d{2}-\d{2})"/.exec(source)?.[1];
   if (!lastmod) throw new Error('site/index.html ld+json needs dateModified (YYYY-MM-DD)');
-  const sitemapPages = [ ['', lastmod], ['desktop/', '2026-11-10'], ['desktop/install/', '2026-11-18'], ['desktop/install/mac/', '2026-11-18'], ['desktop/install/windows/', '2026-11-18'], ['desktop/install/linux/', '2026-11-18'] ];
+  const sitemapPages = [ ['', lastmod], ...['desktop/', 'desktop/install/', 'desktop/install/mac/', 'desktop/install/windows/', 'desktop/install/linux/'].map(page => [page, modified]) ];
   const sitemapRows = sitemapPages.flatMap(([page, modified]) => {
     const links = [...locales, 'x-default'].map(l => `    <xhtml:link rel="alternate" hreflang="${l}" href="${base}${paths[l] || '/'}${page}"/>`).join('\n');
     return locales.map(l => `  <url>\n    <loc>${base}${paths[l]}${page}</loc>\n    <lastmod>${modified}</lastmod>\n${links}\n  </url>`);

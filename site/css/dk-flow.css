@@ -5,6 +5,7 @@
 .os-pick{display:grid;margin-block-start:clamp(28px,4vw,44px);border-block-end:1px solid var(--hair-2)}
 .doc .os-pick a.os-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 20px;padding-block:20px;border-block-start:1px solid var(--hair-2);color:var(--ink);text-decoration:none;scroll-margin-block-start:96px;-webkit-tap-highlight-color:transparent}
 .os-row-n{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;font:700 clamp(26px,3.2vw,38px)/1.3 var(--f-display)}
+.os-row-n .om{align-self:center;inline-size:.78em;block-size:.78em;margin-inline-end:-4px;color:var(--ink-2)}
 .os-row-s{grid-column:1;justify-self:start;font-size:15.5px;color:var(--ink-2)}
 .os-row-go{grid-column:2;grid-row:1 / span 2;display:inline-flex;align-items:center;gap:.45em;color:var(--teal-ink);font-weight:600;font-size:16px}
 .os-row-go .dk-i{transition:transform .2s var(--ease-out)}

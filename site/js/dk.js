@@ -48,6 +48,9 @@
 
   /* ---------------- download block ---------------- */
   const ico = (id) => `<svg class="i" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  // System marks (/img/os.svg): the same mark + label (+ chip) on every "Download for <system>" button of the site.
+  const MARK = { mac: 'apple', windows: 'windows', linux: 'linux', android: 'android' };
+  const mark = (sys) => `<svg class="i om" aria-hidden="true"><use href="/img/os.svg#${MARK[sys]}"/></svg>`;
   // Download buttons lead to the thank-you page of this language, which starts the file through /download/desktop.
   // The static links in the HTML keep pointing at /download/desktop, so they still work without JavaScript.
   // No token here: it is added when the link is used (see stampLinks), so coming Back and choosing again is a new request.
@@ -150,19 +153,19 @@
     const meta = value => ctx === 'footer' ? '' : `<p class="get-meta">${value}</p>`;
     const content = (label, chip = '', icon = 'download') => ctx === 'footer'
       ? `<span>${t.closing_label}</span><svg class="i" aria-hidden="true"><use href="#footer-arr"/></svg>`
-      : `${ico(icon)}<span class="btn-label">${label}</span>${chip}`;
+      : `${MARK[icon] ? mark(icon) : ico(icon)}<span class="btn-label">${label}</span>${chip}`;
     switch (d) {
       case 'mac':
       case 'mac-intel': {
         const intel = d === 'mac-intel';
-        return `<a class="${primary} dl-link" data-place="${place}"${intel ? '' : GUESS} href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${content(intel ? t.mac_intel : t.mac, intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>')}</a>
+        return `<a class="${primary} dl-link" data-place="${place}"${intel ? '' : GUESS} href="${a(intel ? 'mac-intel' : 'mac-arm', place)}">${content(intel ? t.mac_intel : t.mac, intel ? '' : '<span class="btn-chip" dir="ltr">Apple Silicon</span>', 'mac')}</a>
           ${meta(t.desk_meta + ' · ' + t.mac_note)}
           <p class="get-links"><a href="${a(intel ? 'mac-arm' : 'mac-intel', place)}">${intel ? t.other_arch_mac_arm : t.other_arch_mac}</a><a href="${t.install}#mac">${t.first_open}</a>${extra}</p>`;
       }
       case 'windows':
       case 'windows-arm': {
         const arm = d === 'windows-arm';
-        return `<a class="${primary} dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${content(arm ? t.windows_arm : t.windows)}</a>
+        return `<a class="${primary} dl-link" data-place="${place}" href="${a(arm ? 'win-arm' : 'win-x64', place)}">${content(arm ? t.windows_arm : t.windows, '', 'windows')}</a>
           ${meta(t.desk_meta)}
           <p class="get-links"><a href="${a(arm ? 'win-x64' : 'win-arm', place)}">${arm ? t.other_arch_win_x64 : t.other_arch_win}</a><a href="${t.install}#windows">${t.first_open}</a>${extra}</p>`;
       }
@@ -171,13 +174,13 @@
             ${[['deb', '.deb', t.deb], ['rpm', '.rpm', t.rpm], ['appimage', 'AppImage', t.appimage]].map(([k, n, s], i) =>
               `<button type="button" role="radio" aria-checked="${k === pkg}" tabindex="${k === pkg ? 0 : -1}" data-pkg="${k}" data-name="${n}"><b dir="ltr">${n}</b><small>${s}</small></button>`).join('')}
           </div>
-          <a class="${primary} dl-link" data-place="${place}" href="${a(pkg, place, la)}" data-pkg-link data-arch="${la}">${content(t.get_pkg + ` <bdi dir="ltr">${PKGN[pkg]}</bdi>`)}</a>
+          <a class="${primary} dl-link" data-place="${place}" href="${a(pkg, place, la)}" data-pkg-link data-arch="${la}">${content(t.get_pkg + ` <bdi dir="ltr">${PKGN[pkg]}</bdi>`, '', 'linux')}</a>
           ${meta(t.desk_meta)}
           <p class="get-links">${back || ctx === 'footer' ? `<a href="${a(pkg, place, la === 'arm64' ? 'x64' : 'arm64')}" data-alt-arch-link data-arch="${la === 'arm64' ? 'x64' : 'arm64'}">${la === 'arm64' ? t.other_arch_linux_x64 : t.other_arch_linux}</a>` : ''}<a href="${t.install}#linux">${t.first_open}</a>${extra}</p>`;
       default:
         // Phone, tablet or unknown device: no default system, three equal choices.
         return `<p class="get-for">${t.for_computers}</p>
-          <div class="get-pick" role="group" aria-label="${t.pick}">${['mac', 'windows', 'linux'].map((x) => `<button type="button" class="${ctx === 'footer' ? 'btn btn-close' : 'btn btn-outline'}" data-pick="${x}" data-place="${place}" aria-label="${t[x]}">${t.plat[x]}</button>`).join('')}</div>
+          <div class="get-pick" role="group" aria-label="${t.pick}">${['mac', 'windows', 'linux'].map((x) => `<button type="button" class="${ctx === 'footer' ? 'btn btn-close' : 'btn btn-outline'}" data-pick="${x}" data-place="${place}" aria-label="${t[x]}">${ctx === 'footer' ? '' : mark(x)}${t.plat[x]}</button>`).join('')}</div>
           ${d === 'android' ? `<p class="get-links"><a href="${t.page_android}">${t.android_link}</a></p>` : ''}
           ${d === 'unknown' ? '' : sendHtml()}`;
     }
@@ -236,7 +239,9 @@
   function compact() {
     document.querySelectorAll('[data-get-compact]').forEach((el) => {
       // Phones, tablets and unknown devices: no system in the label, the button goes to the choices.
-      if (family(device) !== 'computer') { el.href = '#get'; return; }
+      const use = el.querySelector('svg use'), svgEl = use && use.parentNode;
+      if (family(device) !== 'computer') { el.href = '#get'; if (use) { use.setAttribute('href', '#i-download'); svgEl.setAttribute('class', 'i'); } return; }
+      if (use) { use.setAttribute('href', '/img/os.svg#' + MARK[base(device)]); svgEl.setAttribute('class', 'i om'); }
       const d = device;
       const span = el.querySelector('span');
       const label = { mac: t.mac, 'mac-intel': t.mac_intel, windows: t.windows, 'windows-arm': t.windows_arm, linux: t.linux }[d];

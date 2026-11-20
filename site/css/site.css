@@ -37,6 +37,7 @@
   .btn:not(.btn-sm):not(.btn-close):hover{transform:translateY(-2px);box-shadow:0 0 0 4px var(--bg),0 0 0 5px color-mix(in oklab,var(--primary) 60%,transparent),0 10px 22px -10px color-mix(in oklab,var(--primary) 55%,transparent),inset 0 1px 0 rgb(255 255 255/.2)}
   .btn:not(.btn-sm):not(.btn-close):hover::after{transform:translateX(calc(var(--x) * 120%))}
   .btn:not(.btn-sm):not(.btn-close):hover .i{transform:translateY(4px)}
+  .btn:not(.btn-sm):not(.btn-close):hover .i.om{transform:none}
   .btn:not(.btn-sm):not(.btn-close):hover .roll>span{transform:translateY(-1.5em)}
 }
 .btn:not(.btn-sm):not(.btn-close):active{transform:scale(.97);transition-duration:.12s}
@@ -46,6 +47,10 @@
 .roll{display:inline-block;overflow:hidden;line-height:1.5em;height:1.5em}
 .roll>span{display:block;text-shadow:0 1.5em currentColor;transition:transform .3s cubic-bezier(.22,1,.36,1)}
 .btn .i{transition:transform .5s var(--spring)}
+/* system marks (/img/os.svg, Simple Icons CC0): filled, one size smaller than the line icons; mark + label (+ chip) is the "Download for <system>" anatomy */
+.om{fill:currentColor;stroke:none}
+.btn .om{width:20px;height:20px}
+.btn-sm .om{width:18px;height:18px}
 
 @media (max-width:400px){.btn{gap:10px;padding:0 22px;font-size:clamp(15px,4.6vw,19px)}}
 
