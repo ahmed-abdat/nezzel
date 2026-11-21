@@ -69,8 +69,8 @@ function withLd(html, blocks) {
   return html.replace(old, '').replace('</head>', () => blocks.join('\n') + '\n</head>');
 }
 const faqLd = pairs => ldBlock('nz-ld-faq', { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: pairs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
-const desktopVersion = '0.1.0';
-const modified = '2026-11-20';
+const desktopVersion = '0.1.1';
+const modified = '2026-11-21';
 const publisher = { '@type': 'Organization', name: 'Hululsoft', url: 'https://hululsoft.mr' };
 
 function translate(source, nodes, dict, meta, locale) {

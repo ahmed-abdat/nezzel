@@ -20,17 +20,17 @@ export function footer(dict, locale, page, paths, escape, release) {
   // Only destinations already present in this site's product pages are included.
   // Same links, labels and order on every page; desktop pages point at the desktop repository.
   const repos = desktop ? {
-    'footer-source': 'https://github.com/ahmed-abdat/nezzel-desktop',
-    rel: 'https://github.com/ahmed-abdat/nezzel-desktop/releases',
-    priv: 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/PRIVACY.md',
-    lic: 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/THIRD_PARTY.md',
-    sec: 'https://github.com/ahmed-abdat/nezzel-desktop/blob/main/SECURITY.md',
+    'footer-source': 'https://github.com/hululsofthq/nezzel-desktop',
+    rel: 'https://github.com/hululsofthq/nezzel-desktop/releases',
+    priv: 'https://github.com/hululsofthq/nezzel-desktop/blob/main/PRIVACY.md',
+    lic: 'https://github.com/hululsofthq/nezzel-desktop/blob/main/THIRD_PARTY.md',
+    sec: 'https://github.com/hululsofthq/nezzel-desktop/blob/main/SECURITY.md',
   } : {
-    'footer-source': 'https://github.com/ahmed-abdat/nezzel',
-    rel: 'https://github.com/ahmed-abdat/nezzel/releases',
-    priv: 'https://github.com/ahmed-abdat/nezzel/blob/main/PRIVACY.md',
-    lic: 'https://github.com/ahmed-abdat/nezzel/blob/main/THIRD_PARTY_NOTICES.md',
-    sec: 'https://github.com/ahmed-abdat/nezzel/blob/main/SECURITY.md',
+    'footer-source': 'https://github.com/hululsofthq/nezzel',
+    rel: 'https://github.com/hululsofthq/nezzel/releases',
+    priv: 'https://github.com/hululsofthq/nezzel/blob/main/PRIVACY.md',
+    lic: 'https://github.com/hululsofthq/nezzel/blob/main/THIRD_PARTY_NOTICES.md',
+    sec: 'https://github.com/hululsofthq/nezzel/blob/main/SECURITY.md',
   };
   const links = [[home, 'app-android', page === ''], [home + 'desktop/', 'app-desktop', page === 'desktop/'], [home + 'desktop/install/', 'nl3', page === 'desktop/install/'],
     ...Object.entries(repos).map(([key, url]) => [url, key, false])];
