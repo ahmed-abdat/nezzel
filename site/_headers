@@ -1,4 +1,5 @@
 # Response headers for every page of the site (read by Cloudflare Pages).
+# /download, /update, /api and /admin are answered by the nezzel-inbox Worker, not by these files.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
